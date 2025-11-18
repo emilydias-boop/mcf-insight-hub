@@ -126,7 +126,7 @@ const Overview = () => {
                     </div>
                     {contact.tags && contact.tags.length > 0 && (
                       <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
-                        {contact.tags[0]}
+                        {typeof contact.tags[0] === 'string' ? contact.tags[0] : contact.tags[0]?.name || 'Tag'}
                       </span>
                     )}
                   </div>

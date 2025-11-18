@@ -6,10 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useClintContacts } from '@/hooks/useClintAPI';
 import { Search, Plus, Mail, Phone, User } from 'lucide-react';
+import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 
 const Contatos = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: contacts, isLoading } = useClintContacts();
+  
+  const handleContactClick = (contactId: string) => {
+    setSelectedContactId(contactId);
+    setDrawerOpen(true);
+  };
 
   const contactsData = contacts?.data || [];
   const filteredContacts = contactsData.filter((contact: any) =>
@@ -49,7 +57,11 @@ const Contatos = () => {
       ) : filteredContacts.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredContacts.map((contact: any) => (
-            <Card key={contact.id} className="bg-card border-border hover:border-primary/50 transition-colors">
+            <Card 
+              key={contact.id} 
+              className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => handleContactClick(contact.id)}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -80,9 +92,9 @@ const Contatos = () => {
 
                 {contact.tags && contact.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
-                    {contact.tags.slice(0, 3).map((tag: string, idx: number) => (
+                    {contact.tags.slice(0, 3).map((tag: any, idx: number) => (
                       <Badge key={idx} variant="secondary" className="bg-primary/10 text-primary border-0">
-                        {tag}
+                        {typeof tag === 'string' ? tag : tag.name || 'Tag'}
                       </Badge>
                     ))}
                     {contact.tags.length > 3 && (
@@ -117,6 +129,12 @@ const Contatos = () => {
           </CardContent>
         </Card>
       )}
+      
+      <ContactDetailsDrawer
+        contactId={selectedContactId}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
     </div>
   );
 };

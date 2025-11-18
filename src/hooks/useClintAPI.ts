@@ -120,6 +120,53 @@ export const useCreateClintDeal = () => {
   });
 };
 
+export const useUpdateClintDealStage = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, stage }: { id: string; stage: string }) =>
+      callClintAPI({ resource: `deals/${id}`, method: 'PATCH', data: { stage } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clint-deals'] });
+      toast.success('Negócio atualizado');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar negócio');
+      console.error(error);
+    },
+  });
+};
+
+export const useUpdateClintDeal = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      callClintAPI({ resource: `deals/${id}`, method: 'PUT', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clint-deals'] });
+      toast.success('Negócio atualizado com sucesso');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar negócio');
+      console.error(error);
+    },
+  });
+};
+
+export const useDeleteClintDeal = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => callClintAPI({ resource: `deals/${id}`, method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clint-deals'] });
+      toast.success('Negócio excluído com sucesso');
+    },
+    onError: (error) => {
+      toast.error('Erro ao excluir negócio');
+      console.error(error);
+    },
+  });
+};
+
 // Groups
 export const useClintGroups = () => {
   return useQuery<any>({
