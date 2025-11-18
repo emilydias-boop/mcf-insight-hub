@@ -11,7 +11,8 @@ import {
   Settings,
   Users,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  UserCircle
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,7 +41,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useLocation } from "react-router-dom";
 
-type AppRole = 'admin' | 'manager' | 'viewer';
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador';
 
 interface MenuItem {
   title: string;
@@ -76,6 +77,7 @@ const menuItems: MenuItem[] = [
   { title: "Projetos", url: "/projetos", icon: FolderKanban },
   { title: "Crédito", url: "/credito", icon: CreditCard, requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, requiredRoles: ['admin', 'manager'] },
+  { title: "CRM", url: "/crm", icon: UserCircle, requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { title: "Usuários", url: "/usuarios", icon: Users, requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, requiredRoles: ['admin'] },
 ];
