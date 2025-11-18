@@ -35,6 +35,7 @@ export default function GerenciamentoUsuarios() {
   const getRoleBadgeVariant = (role: string | null) => {
     if (role === "admin") return "default";
     if (role === "manager") return "secondary";
+    if (role === "sdr" || role === "closer" || role === "coordenador") return "secondary";
     return "outline";
   };
 
@@ -76,6 +77,9 @@ export default function GerenciamentoUsuarios() {
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="sdr">SDR</SelectItem>
+                    <SelectItem value="closer">Closer</SelectItem>
+                    <SelectItem value="coordenador">Coordenador</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
