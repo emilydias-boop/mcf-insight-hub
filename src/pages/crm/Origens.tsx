@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useClintOrigins } from '@/hooks/useClintAPI';
 import { Search, Plus, MapPin, TrendingUp, Target, Edit, BarChart3 } from 'lucide-react';
+import { OriginFormDialog } from '@/components/crm/OriginFormDialog';
 
 const Origens = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,10 +27,7 @@ const Origens = () => {
           <h2 className="text-2xl font-bold text-foreground">Gerenciamento de Origens</h2>
           <p className="text-muted-foreground">Gerencie os canais de captação de leads</p>
         </div>
-        <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Origem
-        </Button>
+        <OriginFormDialog />
       </div>
 
       {/* Stats Cards */}
@@ -148,10 +146,15 @@ const Origens = () => {
                       <BarChart3 className="h-4 w-4 mr-2" />
                       Stats
                     </Button>
-                    <Button variant="outline" size="sm" className="border-border">
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar
-                    </Button>
+                    <OriginFormDialog
+                      origin={origin}
+                      trigger={
+                        <Button variant="outline" size="sm" className="border-border">
+                          <Edit className="h-4 w-4 mr-2" />
+                          Editar
+                        </Button>
+                      }
+                    />
                   </div>
                 </div>
               </CardContent>
