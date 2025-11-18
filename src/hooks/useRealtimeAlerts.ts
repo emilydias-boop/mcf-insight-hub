@@ -23,8 +23,14 @@ export function useRealtimeAlerts(userId?: string) {
 
       if (error) throw error;
 
-      setAlerts(data || []);
-      setUnreadCount(data?.filter(a => !a.lido).length || 0);
+      const typedData = (data || []).map(alert => ({
+        ...alert,
+        tipo: alert.tipo as 'critico' | 'aviso' | 'info',
+        descricao: alert.descricao || null,
+        metadata: (alert.metadata || null) as Record<string, any> | null,
+      }));
+      setAlerts(typedData);
+      setUnreadCount(typedData.filter(a => !a.lido).length || 0);
     } catch (error) {
       console.error('Erro ao buscar alertas:', error);
     } finally {
@@ -82,7 +88,11 @@ export function useRealtimeAlerts(userId?: string) {
           filter: `user_id=eq.${userId}`
         },
         (payload) => {
-          const newAlert = payload.new as Alert;
+          const newAlert = {
+            ...payload.new,
+            tipo: (payload.new as any).tipo as 'critico' | 'aviso' | 'info',
+            descricao: (payload.new as any).descricao || null,
+          } as Alert;
           
           setAlerts(prev => [newAlert, ...prev]);
           setUnreadCount(prev => prev + 1);

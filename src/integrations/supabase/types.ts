@@ -363,6 +363,45 @@ export type Database = {
           },
         ]
       }
+      dashboard_preferences: {
+        Row: {
+          auto_refresh: boolean
+          created_at: string
+          default_canal: string
+          default_period: string
+          id: string
+          refresh_interval: number
+          updated_at: string
+          user_id: string
+          visible_widgets: string[]
+          widgets_order: string[]
+        }
+        Insert: {
+          auto_refresh?: boolean
+          created_at?: string
+          default_canal?: string
+          default_period?: string
+          id?: string
+          refresh_interval?: number
+          updated_at?: string
+          user_id: string
+          visible_widgets?: string[]
+          widgets_order?: string[]
+        }
+        Update: {
+          auto_refresh?: boolean
+          created_at?: string
+          default_canal?: string
+          default_period?: string
+          id?: string
+          refresh_interval?: number
+          updated_at?: string
+          user_id?: string
+          visible_widgets?: string[]
+          widgets_order?: string[]
+        }
+        Relationships: []
+      }
       funnel_data: {
         Row: {
           conversion_rate: number | null
