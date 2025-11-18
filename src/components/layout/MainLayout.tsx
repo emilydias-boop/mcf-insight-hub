@@ -1,13 +1,21 @@
 import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 
 export function MainLayout() {
   return (
-    <div className="min-h-screen w-full bg-background">
-      <AppSidebar />
-      <main className="ml-60 p-8">
-        <Outlet />
-      </main>
-    </div>
+    <SidebarProvider defaultOpen={false}>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar />
+        <SidebarInset className="flex-1">
+          <header className="flex h-14 items-center gap-4 border-b border-border bg-background px-6">
+            <SidebarTrigger className="text-foreground" />
+          </header>
+          <main className="p-8">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }

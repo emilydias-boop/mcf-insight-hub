@@ -68,6 +68,28 @@ export type Alerta = {
   resolvido: boolean;
 };
 
+export type SemanaMes = {
+  dataInicio: string;
+  dataFim: string;
+  faturamentoA010: number;
+  vendasA010: number;
+  valorVendidoOBEvento: number;
+  vendasOBEvento: number;
+  faturamentoContrato: number;
+  vendasContratos: number;
+  faturamentoOBConstruir: number;
+  vendasOBConstruir: number;
+  faturamentoOBVitalicio: number;
+  vendasOBVitalicio: number;
+};
+
+export type Ultrameta = {
+  ultrametaClint: number;
+  faturamentoIncorporador50k: number;
+  faturamentoClintBruto: number;
+  ultrametaLiquido: number;
+};
+
 export const MOCK_KPIS: KPI[] = [
   { id: '1', title: 'Faturamento Total', value: 'R$ 180.000,00', change: 12.5, variant: 'success' },
   { id: '2', title: 'Custo Total', value: 'R$ 120.000,00', change: 8.2, variant: 'danger' },
@@ -99,52 +121,44 @@ export const MOCK_CUSTOS: Despesa[] = [
   { id: '4', data: '2024-01-18', descricao: 'Google Ads', categoria: 'Marketing', valor: 12000, tipo: 'variável' },
   { id: '5', data: '2024-01-19', descricao: 'Material Construção', categoria: 'Operacional', valor: 18000, tipo: 'variável' },
   { id: '6', data: '2024-01-20', descricao: 'Software e Licenças', categoria: 'Administrativo', valor: 2500, tipo: 'fixo' },
-  { id: '7', data: '2024-01-21', descricao: 'Comissões Vendas', categoria: 'Pessoal', valor: 8500, tipo: 'variável' },
-  { id: '8', data: '2024-01-22', descricao: 'Instagram Ads', categoria: 'Marketing', valor: 5000, tipo: 'variável' },
-  { id: '9', data: '2024-01-23', descricao: 'Manutenção Equipamentos', categoria: 'Operacional', valor: 3200, tipo: 'variável' },
-  { id: '10', data: '2024-01-24', descricao: 'Consultorias', categoria: 'Administrativo', valor: 4500, tipo: 'fixo' },
+  { id: '7', data: '2024-01-21', descricao: 'Instagram Ads', categoria: 'Marketing', valor: 15000, tipo: 'variável' },
+  { id: '8', data: '2024-01-22', descricao: 'Comissões Vendedores', categoria: 'Pessoal', valor: 7000, tipo: 'variável' },
+  { id: '9', data: '2024-01-23', descricao: 'Consultorias', categoria: 'Operacional', valor: 4500, tipo: 'variável' },
+  { id: '10', data: '2024-01-24', descricao: 'Água, Luz e Internet', categoria: 'Administrativo', valor: 1800, tipo: 'fixo' },
 ];
 
 export const MOCK_FUNIL_A010: FunilEtapa[] = [
-  { etapa: 'Etapa 01', leads: 100, conversao: 100, meta: 100 },
-  { etapa: 'Etapa 02', leads: 75, conversao: 75, meta: 80 },
-  { etapa: 'Etapa 03', leads: 41, conversao: 55, meta: 60 },
-  { etapa: 'Etapa 04', leads: 16, conversao: 38, meta: 40 },
-  { etapa: 'Etapa 05', leads: 11, conversao: 68, meta: 70 },
+  { etapa: 'Etapa 01 — Novo Lead', leads: 35, conversao: 10.5, meta: 10 },
+  { etapa: 'Etapa 03 — R1 Agendada', leads: 57, conversao: 29.7, meta: 30 },
+  { etapa: 'Etapa 04 — R1 Realizada', leads: 21, conversao: 10.9, meta: 15 },
+  { etapa: 'Etapa 05 — Contrato Pago', leads: 15, conversao: 7.8, meta: 10 },
 ];
 
 export const MOCK_FUNIL_INSTAGRAM: FunilEtapa[] = [
-  { etapa: 'Etapa 01', leads: 80, conversao: 100, meta: 100 },
-  { etapa: 'Etapa 02', leads: 38, conversao: 48, meta: 50 },
-  { etapa: 'Etapa 03', leads: 16, conversao: 42, meta: 40 },
-  { etapa: 'Etapa 04', leads: 4, conversao: 28, meta: 30 },
-  { etapa: 'Etapa 05', leads: 2, conversao: 62, meta: 60 },
+  { etapa: 'Etapa 01 — Engajamento', leads: 120, conversao: 8.5, meta: 10 },
+  { etapa: 'Etapa 02 — Interesse', leads: 48, conversao: 40.0, meta: 35 },
+  { etapa: 'Etapa 03 — Qualificado', leads: 28, conversao: 58.3, meta: 50 },
+  { etapa: 'Etapa 04 — Convertido', leads: 12, conversao: 42.9, meta: 40 },
 ];
 
 export const MOCK_PROJETOS: Projeto[] = [
-  { id: '1', nome: 'Edifício Solar', status: 'concluido', progresso: 100, prazo: '2024-01-30', responsavel: 'João Silva' },
-  { id: '2', nome: 'Residencial Green Park', status: 'em-andamento', progresso: 60, prazo: '2024-03-15', responsavel: 'Maria Santos' },
-  { id: '3', nome: 'Condomínio Vista Mar', status: 'em-andamento', progresso: 40, prazo: '2024-04-20', responsavel: 'Pedro Costa' },
-  { id: '4', nome: 'Torre Empresarial MCF', status: 'a-fazer', progresso: 0, prazo: '2024-06-01', responsavel: 'Ana Lima' },
-  { id: '5', nome: 'Residencial Parque das Flores', status: 'em-andamento', progresso: 25, prazo: '2024-05-10', responsavel: 'Carlos Mendes' },
-  { id: '6', nome: 'Edifício Comercial Centro', status: 'concluido', progresso: 100, prazo: '2024-01-15', responsavel: 'Lucia Ferreira' },
-  { id: '7', nome: 'Condomínio Jardim Tropical', status: 'em-andamento', progresso: 80, prazo: '2024-02-28', responsavel: 'Roberto Alves' },
-  { id: '8', nome: 'Residencial Bela Vista', status: 'a-fazer', progresso: 0, prazo: '2024-07-15', responsavel: 'Fernanda Rocha' },
-  { id: '9', nome: 'Torre Residencial Premium', status: 'em-andamento', progresso: 55, prazo: '2024-04-05', responsavel: 'Marcos Oliveira' },
-  { id: '10', nome: 'Edifício Smart Office', status: 'concluido', progresso: 100, prazo: '2024-01-20', responsavel: 'Paula Cardoso' },
+  { id: '1', nome: 'Edifício Solar', status: 'em-andamento', progresso: 65, prazo: '2024-06-30', responsavel: 'João Silva' },
+  { id: '2', nome: 'Residencial Green', status: 'a-fazer', progresso: 0, prazo: '2024-08-15', responsavel: 'Maria Santos' },
+  { id: '3', nome: 'Torre MCF', status: 'concluido', progresso: 100, prazo: '2024-01-20', responsavel: 'Pedro Costa' },
+  { id: '4', nome: 'Condomínio Vista Mar', status: 'em-andamento', progresso: 45, prazo: '2024-09-30', responsavel: 'Ana Paula' },
+  { id: '5', nome: 'Edifício Comercial Central', status: 'a-fazer', progresso: 0, prazo: '2024-12-31', responsavel: 'Carlos Eduardo' },
 ];
 
 export const MOCK_CLIENTES_CREDITO: ClienteCredito[] = [
-  { id: '1', nome: 'Carlos Silva', cpf: '123.456.789-00', valorDevido: 15000, diasAtraso: 45, score: 620 },
-  { id: '2', nome: 'Maria Oliveira', cpf: '234.567.890-11', valorDevido: 8500, diasAtraso: 30, score: 680 },
-  { id: '3', nome: 'João Santos', cpf: '345.678.901-22', valorDevido: 22000, diasAtraso: 60, score: 550 },
-  { id: '4', nome: 'Ana Costa', cpf: '456.789.012-33', valorDevido: 5000, diasAtraso: 15, score: 720 },
-  { id: '5', nome: 'Pedro Lima', cpf: '567.890.123-44', valorDevido: 12000, diasAtraso: 50, score: 590 },
+  { id: '1', nome: 'Roberto Almeida', cpf: '123.456.789-00', valorDevido: 45000, diasAtraso: 15, score: 720 },
+  { id: '2', nome: 'Fernanda Souza', cpf: '987.654.321-00', valorDevido: 32000, diasAtraso: 5, score: 680 },
+  { id: '3', nome: 'Lucas Oliveira', cpf: '456.789.123-00', valorDevido: 78000, diasAtraso: 30, score: 650 },
+  { id: '4', nome: 'Patricia Lima', cpf: '321.654.987-00', valorDevido: 25000, diasAtraso: 0, score: 750 },
 ];
 
 export const MOCK_LEILOES: Leilao[] = [
-  { id: '1', imovel: 'Apartamento 3 quartos', endereco: 'Rua das Flores, 123', valorInicial: 250000, lanceAtual: 280000, tempoRestante: '2d 5h', status: 'ativo' },
-  { id: '2', imovel: 'Casa em condomínio', endereco: 'Av. Central, 456', valorInicial: 450000, lanceAtual: 480000, tempoRestante: '1d 12h', status: 'ativo' },
+  { id: '1', imovel: 'Apartamento 3 quartos', endereco: 'Rua das Flores, 123', valorInicial: 320000, lanceAtual: 340000, tempoRestante: '2d 5h', status: 'ativo' },
+  { id: '2', imovel: 'Casa em condomínio', endereco: 'Av. Principal, 456', valorInicial: 650000, lanceAtual: 710000, tempoRestante: '1d 12h', status: 'ativo' },
   { id: '3', imovel: 'Sala comercial', endereco: 'Rua Comercial, 789', valorInicial: 180000, lanceAtual: 195000, tempoRestante: '3d 8h', status: 'ativo' },
   { id: '4', imovel: 'Cobertura duplex', endereco: 'Av. Beira Mar, 321', valorInicial: 850000, lanceAtual: 920000, tempoRestante: '4d 2h', status: 'ativo' },
 ];
@@ -179,3 +193,83 @@ export const MOCK_SEMANAS = [
   { semana: 'Semana 3', a010: 16500, contratos: 9500, custos: 31000, lucro: -5000, roi: -16.1 },
   { semana: 'Semana 4', a010: 17820, contratos: 8480, custos: 31000, lucro: -4700, roi: -15.2 },
 ];
+
+export const MOCK_SEMANAS_DETALHADO: SemanaMes[] = [
+  {
+    dataInicio: '01/01/2025',
+    dataFim: '07/01/2025',
+    faturamentoA010: 125000,
+    vendasA010: 15,
+    valorVendidoOBEvento: 45000,
+    vendasOBEvento: 30,
+    faturamentoContrato: 85000,
+    vendasContratos: 8,
+    faturamentoOBConstruir: 32000,
+    vendasOBConstruir: 20,
+    faturamentoOBVitalicio: 18000,
+    vendasOBVitalicio: 12,
+  },
+  {
+    dataInicio: '08/01/2025',
+    dataFim: '14/01/2025',
+    faturamentoA010: 142000,
+    vendasA010: 18,
+    valorVendidoOBEvento: 52000,
+    vendasOBEvento: 35,
+    faturamentoContrato: 95000,
+    vendasContratos: 10,
+    faturamentoOBConstruir: 38000,
+    vendasOBConstruir: 25,
+    faturamentoOBVitalicio: 22000,
+    vendasOBVitalicio: 15,
+  },
+  {
+    dataInicio: '15/01/2025',
+    dataFim: '21/01/2025',
+    faturamentoA010: 138000,
+    vendasA010: 17,
+    valorVendidoOBEvento: 48000,
+    vendasOBEvento: 32,
+    faturamentoContrato: 92000,
+    vendasContratos: 9,
+    faturamentoOBConstruir: 35000,
+    vendasOBConstruir: 22,
+    faturamentoOBVitalicio: 20000,
+    vendasOBVitalicio: 14,
+  },
+  {
+    dataInicio: '22/01/2025',
+    dataFim: '28/01/2025',
+    faturamentoA010: 155000,
+    vendasA010: 20,
+    valorVendidoOBEvento: 58000,
+    vendasOBEvento: 38,
+    faturamentoContrato: 105000,
+    vendasContratos: 12,
+    faturamentoOBConstruir: 42000,
+    vendasOBConstruir: 28,
+    faturamentoOBVitalicio: 25000,
+    vendasOBVitalicio: 18,
+  },
+  {
+    dataInicio: '29/01/2025',
+    dataFim: '31/01/2025',
+    faturamentoA010: 95000,
+    vendasA010: 12,
+    valorVendidoOBEvento: 35000,
+    vendasOBEvento: 22,
+    faturamentoContrato: 68000,
+    vendasContratos: 7,
+    faturamentoOBConstruir: 25000,
+    vendasOBConstruir: 16,
+    faturamentoOBVitalicio: 15000,
+    vendasOBVitalicio: 10,
+  },
+];
+
+export const MOCK_ULTRAMETA: Ultrameta = {
+  ultrametaClint: 6081715.41,
+  faturamentoIncorporador50k: 10526.41,
+  faturamentoClintBruto: 6081715.41,
+  ultrametaLiquido: 5097044144.45,
+};
