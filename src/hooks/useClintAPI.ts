@@ -78,11 +78,12 @@ export const useDeleteClintContact = () => {
   });
 };
 
-// Organizations
+// Organizations (companies in Clint API)
 export const useClintOrganizations = (params?: Record<string, string>) => {
   return useQuery<any>({
     queryKey: ['clint-organizations', params],
-    queryFn: () => callClintAPI({ resource: 'organizations', params }),
+    queryFn: () => callClintAPI({ resource: 'companies', params }),
+    retry: 1,
   });
 };
 
