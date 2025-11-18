@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-type AppRole = 'admin' | 'manager' | 'viewer';
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer';
 
 interface AuthState {
   user: User | null;

@@ -402,6 +402,72 @@ export type Database = {
         }
         Relationships: []
       }
+      deal_activities: {
+        Row: {
+          activity_type: string
+          created_at: string | null
+          deal_id: string
+          description: string | null
+          from_stage: string | null
+          id: string
+          metadata: Json | null
+          to_stage: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string | null
+          deal_id: string
+          description?: string | null
+          from_stage?: string | null
+          id?: string
+          metadata?: Json | null
+          to_stage?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string | null
+          deal_id?: string
+          description?: string | null
+          from_stage?: string | null
+          id?: string
+          metadata?: Json | null
+          to_stage?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      deal_stages: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          stage_id: string
+          stage_name: string
+          stage_order: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          stage_id: string
+          stage_name: string
+          stage_order: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          stage_id?: string
+          stage_name?: string
+          stage_order?: number
+        }
+        Relationships: []
+      }
       funnel_data: {
         Row: {
           conversion_rate: number | null
@@ -697,6 +763,47 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      stage_permissions: {
+        Row: {
+          can_edit: boolean | null
+          can_move_from: boolean | null
+          can_move_to: boolean | null
+          can_view: boolean | null
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          stage_id: string
+        }
+        Insert: {
+          can_edit?: boolean | null
+          can_move_from?: boolean | null
+          can_move_to?: boolean | null
+          can_view?: boolean | null
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          stage_id: string
+        }
+        Update: {
+          can_edit?: boolean | null
+          can_move_from?: boolean | null
+          can_move_to?: boolean | null
+          can_view?: boolean | null
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          stage_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_permissions_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "deal_stages"
+            referencedColumns: ["stage_id"]
+          },
+        ]
       }
       transactions: {
         Row: {
