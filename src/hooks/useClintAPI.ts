@@ -144,6 +144,52 @@ export const useClintOrigins = () => {
   });
 };
 
+export const useCreateClintOrigin = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => callClintAPI({ resource: 'origins', method: 'POST', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clint-origins'] });
+      toast.success('Origem criada com sucesso');
+    },
+    onError: (error) => {
+      toast.error('Erro ao criar origem');
+      console.error(error);
+    },
+  });
+};
+
+export const useUpdateClintOrigin = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      callClintAPI({ resource: `origins/${id}`, method: 'PUT', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clint-origins'] });
+      toast.success('Origem atualizada com sucesso');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar origem');
+      console.error(error);
+    },
+  });
+};
+
+export const useDeleteClintOrigin = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => callClintAPI({ resource: `origins/${id}`, method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clint-origins'] });
+      toast.success('Origem excluída com sucesso');
+    },
+    onError: (error) => {
+      toast.error('Erro ao excluir origem');
+      console.error(error);
+    },
+  });
+};
+
 // Tags
 export const useClintTags = () => {
   return useQuery<any>({

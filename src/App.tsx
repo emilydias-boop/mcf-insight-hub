@@ -25,6 +25,13 @@ import Leilao from "./pages/Leilao";
 import Configuracoes from "./pages/Configuracoes";
 import GerenciamentoUsuarios from "./pages/GerenciamentoUsuarios";
 import CRM from "./pages/CRM";
+import CRMOverview from "./pages/crm/Overview";
+import Contatos from "./pages/crm/Contatos";
+import Negocios from "./pages/crm/Negocios";
+import Origens from "./pages/crm/Origens";
+import Grupos from "./pages/crm/Grupos";
+import Tags from "./pages/crm/Tags";
+import ConfiguracoesCRM from "./pages/crm/Configuracoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -68,7 +75,15 @@ const App = () => (
               <Route path="leilao" element={<Leilao />} />
               <Route path="configuracoes" element={<Configuracoes />} />
               <Route path="usuarios" element={<GerenciamentoUsuarios />} />
-              <Route path="crm" element={<CRM />} />
+              <Route path="crm" element={<CRM />}>
+                <Route index element={<CRMOverview />} />
+                <Route path="contatos" element={<Contatos />} />
+                <Route path="negocios" element={<Negocios />} />
+                <Route path="origens" element={<Origens />} />
+                <Route path="grupos" element={<Grupos />} />
+                <Route path="tags" element={<Tags />} />
+                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
+              </Route>
             </Route>
             
             <Route path="*" element={<NotFound />} />

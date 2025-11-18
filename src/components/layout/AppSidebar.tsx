@@ -77,7 +77,20 @@ const menuItems: MenuItem[] = [
   { title: "Projetos", url: "/projetos", icon: FolderKanban },
   { title: "Crédito", url: "/credito", icon: CreditCard, requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, requiredRoles: ['admin', 'manager'] },
-  { title: "CRM", url: "/crm", icon: UserCircle, requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  { 
+    title: "CRM", 
+    icon: UserCircle, 
+    requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'],
+    items: [
+      { title: "Visão Geral", url: "/crm" },
+      { title: "Contatos", url: "/crm/contatos" },
+      { title: "Negócios", url: "/crm/negocios" },
+      { title: "Origens", url: "/crm/origens" },
+      { title: "Grupos", url: "/crm/grupos" },
+      { title: "Tags", url: "/crm/tags" },
+      { title: "Configurações", url: "/crm/configuracoes" },
+    ]
+  },
   { title: "Usuários", url: "/usuarios", icon: Users, requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, requiredRoles: ['admin'] },
 ];
@@ -106,7 +119,12 @@ export function AppSidebar() {
 
   const isRouteActive = (item: MenuItem) => {
     if (item.url) return location.pathname === item.url;
-    if (item.items) return item.items.some(sub => location.pathname === sub.url);
+    if (item.items) {
+      return item.items.some(sub => 
+        location.pathname === sub.url || 
+        (sub.url !== '/' && location.pathname.startsWith(sub.url + '/'))
+      );
+    }
     return false;
   };
 
