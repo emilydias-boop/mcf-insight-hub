@@ -1,8 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ShieldAlert } from 'lucide-react';
-
-type AppRole = 'admin' | 'manager' | 'viewer';
+import { AppRole } from '@/types/user-management';
 
 interface RoleGuardProps {
   allowedRoles: AppRole[];

@@ -189,6 +189,9 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="manager">Manager</SelectItem>
                         <SelectItem value="viewer">Viewer</SelectItem>
+                        <SelectItem value="sdr">SDR</SelectItem>
+                        <SelectItem value="closer">Closer</SelectItem>
+                        <SelectItem value="coordenador">Coordenador</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
