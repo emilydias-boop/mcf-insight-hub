@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { formatCustomWeekRange } from "./dateHelpers";
 
 export interface ExportData {
   kpis: any[];
@@ -16,7 +17,13 @@ export function exportDashboardData(data: ExportData) {
   
   // Cabeçalho do relatório
   csvContent += `Dashboard MCF - Relatório Exportado\n`;
-  csvContent += `Período:,${format(periodo.inicio, "dd/MM/yyyy")} - ${format(periodo.fim, "dd/MM/yyyy")}\n`;
+  
+  if (periodo.tipo === 'semana') {
+    csvContent += `Período:,${formatCustomWeekRange(periodo.inicio)} (Semana customizada: Sábado a Sexta)\n`;
+  } else {
+    csvContent += `Período:,${format(periodo.inicio, "dd/MM/yyyy")} - ${format(periodo.fim, "dd/MM/yyyy")}\n`;
+  }
+  
   csvContent += `Tipo:,${periodo.tipo === 'mes' ? 'Mensal' : 'Semanal'}\n`;
   csvContent += `Canal:,${canal === 'todos' ? 'Todos os canais' : canal}\n`;
   csvContent += `Data de Exportação:,${format(new Date(), "dd/MM/yyyy HH:mm")}\n\n`;
