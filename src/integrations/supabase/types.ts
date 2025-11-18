@@ -50,6 +50,45 @@ export type Database = {
         }
         Relationships: []
       }
+      alertas: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          id: string
+          lido: boolean
+          metadata: Json | null
+          resolvido: boolean
+          tipo: string
+          titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          lido?: boolean
+          metadata?: Json | null
+          resolvido?: boolean
+          tipo: string
+          titulo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          lido?: boolean
+          metadata?: Json | null
+          resolvido?: boolean
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       alerts: {
         Row: {
           created_at: string | null
