@@ -68,89 +68,93 @@ export function DashboardCustomizer() {
           Personalizar Dashboard
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Personalizar Dashboard</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Templates */}
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Templates Pré-definidos</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Object.entries(DASHBOARD_TEMPLATES).map(([key, template]) => (
-                <Card 
-                  key={key}
-                  className="cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => handleApplyTemplate(key)}
-                >
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm">{template.name}</CardTitle>
-                    <CardDescription className="text-xs">{template.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-xs text-muted-foreground">
-                      {template.widgets.length} widgets
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+        <ScrollArea className="flex-1 pr-4">
+          <div className="space-y-6 pb-6">
+            {/* Templates */}
+            <div>
+              <h3 className="text-sm font-semibold mb-3">Templates Pré-definidos</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {Object.entries(DASHBOARD_TEMPLATES).map(([key, template]) => (
+                  <Card 
+                    key={key}
+                    className="cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => handleApplyTemplate(key)}
+                  >
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">{template.name}</CardTitle>
+                      <CardDescription className="text-xs">{template.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pb-3">
+                      <div className="flex flex-wrap gap-1">
+                        {template.widgets.slice(0, 4).map(widgetId => {
+                          const widget = AVAILABLE_WIDGETS.find(w => w.id === widgetId);
+                          if (!widget) return null;
+                          const Icon = widget.icon;
+                          return (
+                            <div key={widgetId} className="flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded">
+                              <Icon className="h-3 w-3" />
+                              <span className="text-xs">{widget.name.split(' ')[0]}</span>
+                            </div>
+                          );
+                        })}
+                        {template.widgets.length > 4 && (
+                          <span className="text-xs text-muted-foreground">+{template.widgets.length - 4}</span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <Separator />
-
-          {/* Widgets Disponíveis */}
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Widgets Disponíveis</h3>
-            <ScrollArea className="h-[300px] pr-4">
-              <div className="space-y-3">
+            {/* Widgets Disponíveis */}
+            <div>
+              <h3 className="text-sm font-semibold mb-3">Widgets Disponíveis</h3>
+              <div className="space-y-2">
                 {AVAILABLE_WIDGETS.map((widget) => {
                   const Icon = widget.icon;
                   return (
                     <div
                       key={widget.id}
-                      className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                      className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent cursor-pointer"
+                      onClick={() => handleToggleWidget(widget.id)}
                     >
                       <Checkbox
-                        id={widget.id}
                         checked={selectedWidgets.includes(widget.id)}
                         onCheckedChange={() => handleToggleWidget(widget.id)}
                       />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                          <Label
-                            htmlFor={widget.id}
-                            className="text-sm font-medium cursor-pointer"
-                          >
-                            {widget.name}
-                          </Label>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {widget.description}
-                        </p>
+                      <Icon className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex-1">
+                        <Label className="text-sm font-medium cursor-pointer">
+                          {widget.name}
+                        </Label>
+                        <p className="text-xs text-muted-foreground">{widget.description}</p>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </ScrollArea>
-          </div>
-
-          {/* Ações */}
-          <div className="flex items-center justify-between pt-4 border-t">
-            <Button variant="outline" onClick={handleReset}>
-              Resetar para Padrão
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setOpen(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSave} disabled={isUpdating}>
-                {isUpdating ? 'Salvando...' : 'Salvar Preferências'}
-              </Button>
             </div>
+          </div>
+        </ScrollArea>
+
+        {/* Ações */}
+        <div className="flex items-center justify-between pt-4 border-t">
+          <Button variant="outline" onClick={handleReset}>
+            Resetar para Padrão
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={isUpdating}>
+              {isUpdating ? 'Salvando...' : 'Salvar Preferências'}
+            </Button>
           </div>
         </div>
       </DialogContent>

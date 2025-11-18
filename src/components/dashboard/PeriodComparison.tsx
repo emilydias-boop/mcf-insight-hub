@@ -14,19 +14,20 @@ import { cn } from "@/lib/utils";
 
 export function PeriodComparison() {
   const [open, setOpen] = useState(false);
+  const hoje = new Date();
   
   // Período A (referência)
   const [periodoA, setPeriodoA] = useState({
     label: 'Período A',
-    inicio: getCustomWeekStart(new Date()),
-    fim: getCustomWeekEnd(new Date()),
+    inicio: new Date(hoje.getFullYear(), hoje.getMonth(), 1),
+    fim: new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0),
   });
 
   // Período B (comparação)
   const [periodoB, setPeriodoB] = useState({
     label: 'Período B',
-    inicio: getCustomWeekStart(new Date()),
-    fim: getCustomWeekEnd(new Date()),
+    inicio: new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1),
+    fim: new Date(hoje.getFullYear(), hoje.getMonth(), 0),
   });
 
   const handleComparar = () => {
@@ -53,21 +54,15 @@ export function PeriodComparison() {
             {/* Período A */}
             <Card className="bg-primary/5 border-primary/20">
               <CardHeader>
-                <CardTitle className="text-lg">Período A (Referência)</CardTitle>
+                <CardTitle className="text-sm">Período A (Referência)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "flex-1 justify-start text-left font-normal",
-                          !periodoA.inicio && "text-muted-foreground"
-                        )}
-                      >
+                      <Button variant="outline" className="justify-start">
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {periodoA.inicio ? format(periodoA.inicio, "PPP", { locale: ptBR }) : "Início"}
+                        {format(periodoA.inicio, "dd/MM/yy", { locale: ptBR })}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -76,18 +71,41 @@ export function PeriodComparison() {
                         selected={periodoA.inicio}
                         onSelect={(date) => {
                           if (date) {
-                            const inicio = getCustomWeekStart(date);
-                            const fim = getCustomWeekEnd(date);
-                            setPeriodoA({ label: 'Período A', inicio, fim });
+                            setPeriodoA(prev => ({ ...prev, inicio: date }));
                           }
                         }}
                         locale={ptBR}
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="justify-start">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(periodoA.fim, "dd/MM/yy", { locale: ptBR })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={periodoA.fim}
+                        onSelect={(date) => {
+                          if (date) {
+                            setPeriodoA(prev => ({ ...prev, fim: date }));
+                          }
+                        }}
+                        locale={ptBR}
+                        className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Semana: {formatCustomWeekRange(periodoA.inicio)}
+                
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div>Data Início</div>
+                  <div>Data Fim</div>
                 </div>
               </CardContent>
             </Card>
@@ -95,21 +113,15 @@ export function PeriodComparison() {
             {/* Período B */}
             <Card className="bg-success/5 border-success/20">
               <CardHeader>
-                <CardTitle className="text-lg">Período B (Comparação)</CardTitle>
+                <CardTitle className="text-sm">Período B (Comparação)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "flex-1 justify-start text-left font-normal",
-                          !periodoB.inicio && "text-muted-foreground"
-                        )}
-                      >
+                      <Button variant="outline" className="justify-start">
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {periodoB.inicio ? format(periodoB.inicio, "PPP", { locale: ptBR }) : "Início"}
+                        {format(periodoB.inicio, "dd/MM/yy", { locale: ptBR })}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -118,18 +130,41 @@ export function PeriodComparison() {
                         selected={periodoB.inicio}
                         onSelect={(date) => {
                           if (date) {
-                            const inicio = getCustomWeekStart(date);
-                            const fim = getCustomWeekEnd(date);
-                            setPeriodoB({ label: 'Período B', inicio, fim });
+                            setPeriodoB(prev => ({ ...prev, inicio: date }));
                           }
                         }}
                         locale={ptBR}
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="justify-start">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(periodoB.fim, "dd/MM/yy", { locale: ptBR })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={periodoB.fim}
+                        onSelect={(date) => {
+                          if (date) {
+                            setPeriodoB(prev => ({ ...prev, fim: date }));
+                          }
+                        }}
+                        locale={ptBR}
+                        className={cn("p-3 pointer-events-auto")}
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Semana: {formatCustomWeekRange(periodoB.inicio)}
+                
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div>Data Início</div>
+                  <div>Data Fim</div>
                 </div>
               </CardContent>
             </Card>

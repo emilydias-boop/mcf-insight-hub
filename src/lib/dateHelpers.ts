@@ -65,6 +65,16 @@ export function formatCustomWeekRange(date: Date): string {
 }
 
 /**
+ * Formata o range de uma semana customizada em formato CURTO
+ * @param date - Data de referência
+ * @returns String formatada "DD/MM/YY"
+ */
+export function formatCustomWeekRangeShort(date: Date): string {
+  const start = getCustomWeekStart(date);
+  return format(start, "dd/MM/yy", { locale: ptBR });
+}
+
+/**
  * Verifica se uma data está na semana customizada atual
  * @param date - Data para verificar
  * @returns true se a data está na semana atual
