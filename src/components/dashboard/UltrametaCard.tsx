@@ -9,31 +9,34 @@ interface UltrametaCardProps {
 
 export function UltrametaCard({ data }: UltrametaCardProps) {
   return (
-    <Card className="bg-card border-border col-span-2">
+    <Card className="bg-gradient-to-r from-success/5 to-success/10 border-success/20 col-span-2">
       <CardContent className="p-6">
-        <div className="flex items-start gap-4">
-          <div className="p-3 rounded-lg bg-success/10">
+        <div className="flex items-center gap-6">
+          <div className="p-3 rounded-lg bg-success/10 shrink-0">
             <TrendingUp className="h-6 w-6 text-success" />
           </div>
-          <div className="flex-1 space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Ultrameta Clint - Hubla</p>
-              <p className="text-3xl font-bold text-success">{formatCurrency(data.ultrametaClint)}</p>
+          
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6 divide-x divide-border">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ultrameta Clint</p>
+              <p className="text-xl font-bold text-success">{formatCurrency(data.ultrametaClint)}</p>
             </div>
             
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-border">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Faturamento Incorporador 50k (Líquido)</p>
-                <p className="text-lg font-semibold text-foreground">{formatCurrency(data.faturamentoIncorporador50k)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Faturamento Clint (Bruto)</p>
-                <p className="text-lg font-semibold text-foreground">{formatCurrency(data.faturamentoClintBruto)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Ultrameta Líquido</p>
-                <p className="text-lg font-semibold text-success">{formatCurrency(data.ultrametaLiquido)}</p>
-              </div>
+            <div className="space-y-1 md:pl-6">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Faturamento 50k</p>
+              <p className="text-xl font-bold text-foreground">{formatCurrency(data.faturamentoIncorporador50k)}</p>
+              <p className="text-[10px] text-muted-foreground">(Líquido)</p>
+            </div>
+            
+            <div className="space-y-1 md:pl-6">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Faturamento Clint</p>
+              <p className="text-xl font-bold text-foreground">{formatCurrency(data.faturamentoClintBruto)}</p>
+              <p className="text-[10px] text-muted-foreground">(Bruto)</p>
+            </div>
+            
+            <div className="space-y-1 md:pl-6">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ultrameta Líquido</p>
+              <p className="text-xl font-bold text-success">{formatCurrency(data.ultrametaLiquido)}</p>
             </div>
           </div>
         </div>

@@ -18,23 +18,29 @@ export function KPICard({ title, value, change, icon: Icon, variant = 'neutral' 
   };
 
   return (
-    <Card className="bg-card border-border">
+    <Card className="bg-card border-border hover:shadow-md transition-shadow">
       <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-sm text-muted-foreground mb-2">{title}</p>
-            <p className="text-3xl font-bold text-foreground">{value}</p>
-            {change !== undefined && (
-              <p className={cn("text-sm mt-2 font-medium", change >= 0 ? 'text-success' : 'text-destructive')}>
-                {change > 0 ? '+' : ''}{change.toFixed(1)}%
-              </p>
-            )}
-          </div>
-          {Icon && (
-            <div className={cn("p-2 rounded-lg", variant === 'success' ? 'bg-success/10' : variant === 'danger' ? 'bg-destructive/10' : 'bg-muted')}>
-              <Icon className={cn("h-5 w-5", variantStyles[variant])} />
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-3">
+            <div className="flex items-center gap-2">
+              {Icon && (
+                <div className={cn("p-2 rounded-lg", variant === 'success' ? 'bg-success/10' : variant === 'danger' ? 'bg-destructive/10' : 'bg-muted')}>
+                  <Icon className={cn("h-5 w-5", variantStyles[variant])} />
+                </div>
+              )}
+              <p className="text-base font-semibold text-foreground">{title}</p>
             </div>
-          )}
+            
+            <div className="space-y-1">
+              <p className="text-2xl font-bold text-foreground">{value}</p>
+              {change !== undefined && (
+                <p className={cn("text-sm font-medium flex items-center gap-1", change >= 0 ? 'text-success' : 'text-destructive')}>
+                  <span>{change > 0 ? '+' : ''}{change.toFixed(1)}%</span>
+                  <span className="text-xs text-muted-foreground">vs período anterior</span>
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

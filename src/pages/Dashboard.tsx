@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_KPIS, MOCK_FUNIL_A010, MOCK_FUNIL_INSTAGRAM, MOCK_SEMANAS_DETALHADO, MOCK_ULTRAMETA } from "@/data/mockData";
 import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle } from "lucide-react";
-import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FunilLista } from "@/components/dashboard/FunilLista";
 import { ResumoFinanceiro } from "@/components/dashboard/ResumoFinanceiro";
 import { UltrametaCard } from "@/components/dashboard/UltrametaCard";
+import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
+import { exportDashboardData } from "@/lib/exportHelpers";
+import { useToast } from "@/hooks/use-toast";
+import { startOfMonth, endOfMonth } from "date-fns";
 
 const iconMap = {
   '1': DollarSign,
@@ -20,28 +23,65 @@ const iconMap = {
 };
 
 export default function Dashboard() {
+  const { toast } = useToast();
+  const [periodo, setPeriodo] = useState({
+    tipo: 'mes' as 'semana' | 'mes',
+    inicio: startOfMonth(new Date()),
+    fim: endOfMonth(new Date()),
+  });
+  const [canal, setCanal] = useState('todos');
+
+  const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
+    setPeriodo(filters.periodo);
+    setCanal(filters.canal);
+    toast({
+      title: "Filtros aplicados",
+      description: "Os dados do dashboard foram atualizados com os filtros selecionados.",
+    });
+  };
+
+  const handleClearFilters = () => {
+    setPeriodo({
+      tipo: 'mes',
+      inicio: startOfMonth(new Date()),
+      fim: endOfMonth(new Date()),
+    });
+    setCanal('todos');
+    toast({
+      title: "Filtros limpos",
+      description: "Os filtros foram resetados para os valores padrão.",
+    });
+  };
+
+  const handleExport = () => {
+    exportDashboardData({
+      kpis: MOCK_KPIS,
+      funis: [
+        { titulo: 'Funil A010', etapas: MOCK_FUNIL_A010 },
+        { titulo: 'Funil Instagram', etapas: MOCK_FUNIL_INSTAGRAM }
+      ],
+      semanas: MOCK_SEMANAS_DETALHADO,
+      periodo,
+      canal,
+    });
+    toast({
+      title: "Dados exportados",
+      description: "O arquivo CSV foi baixado com sucesso.",
+    });
+  };
+
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
-        </div>
-        <div className="flex gap-4">
-          <DatePickerCustom mode="range" placeholder="Selecione o período" />
-          <Select defaultValue="todos">
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Canal" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos os canais</SelectItem>
-              <SelectItem value="a010">A010</SelectItem>
-              <SelectItem value="instagram">Instagram</SelectItem>
-              <SelectItem value="contratos">Contratos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+        <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
       </div>
+
+      <PeriodSelector 
+        onApply={handleApplyFilters}
+        onClear={handleClearFilters}
+        onExport={handleExport}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {MOCK_KPIS.slice(0, 3).map((kpi) => {
