@@ -107,9 +107,9 @@ export default function CRM() {
                               )}
                             </div>
                             <div className="flex gap-2">
-                              {contact.tags?.map((tag: string) => (
-                                <Badge key={tag} variant="secondary">
-                                  {tag}
+                              {Array.isArray(contact.tags) && contact.tags.map((tag: any) => (
+                                <Badge key={typeof tag === 'string' ? tag : tag.id} variant="secondary">
+                                  {typeof tag === 'string' ? tag : tag.name}
                                 </Badge>
                               ))}
                             </div>
@@ -137,7 +137,7 @@ export default function CRM() {
             <CardHeader>
               <CardTitle>Organizações</CardTitle>
               <CardDescription>
-                Lista de todas as organizações
+                Lista de todas as organizações (empresas)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -146,9 +146,9 @@ export default function CRM() {
                   <Skeleton className="h-20 w-full" />
                   <Skeleton className="h-20 w-full" />
                 </div>
-              ) : organizations?.data && Array.isArray(organizations.data) ? (
+              ) : (organizations as any)?.data && Array.isArray((organizations as any).data) && (organizations as any).data.length > 0 ? (
                 <div className="space-y-4">
-                  {organizations.data.map((org: any) => (
+                  {(organizations as any).data.map((org: any) => (
                     <Card key={org.id}>
                       <CardContent className="pt-6">
                         <div className="flex items-center justify-between">
@@ -169,9 +169,11 @@ export default function CRM() {
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhuma organização encontrada
-                </p>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    {organizations ? 'Nenhuma organização encontrada' : 'Erro ao carregar organizações - verifique se o endpoint está correto na API Clint'}
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -272,8 +274,8 @@ export default function CRM() {
               ) : tags?.data && Array.isArray(tags.data) ? (
                 <div className="flex flex-wrap gap-2">
                   {tags.data.map((tag: any) => (
-                    <Badge key={tag.id} variant="secondary">
-                      {tag.name}
+                    <Badge key={tag.id || tag.name} variant="secondary">
+                      {typeof tag === 'string' ? tag : (tag.name || JSON.stringify(tag))}
                     </Badge>
                   ))}
                 </div>
