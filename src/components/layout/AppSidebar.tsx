@@ -10,27 +10,66 @@ import {
   Gavel, 
   Settings,
   Users,
-  LogOut
+  LogOut,
+  ChevronDown
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { useLocation } from "react-router-dom";
 
 type AppRole = 'admin' | 'manager' | 'viewer';
 
 interface MenuItem {
   title: string;
-  url: string;
+  url?: string;
   icon: any;
   requiredRoles?: AppRole[];
+  items?: { title: string; url: string; }[];
 }
 
 const menuItems: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Receita", url: "/receita", icon: DollarSign },
-  { title: "Custos", url: "/custos", icon: TrendingDown },
+  { 
+    title: "Receita", 
+    icon: DollarSign,
+    items: [
+      { title: "Overview", url: "/receita" },
+      { title: "Transações", url: "/receita/transacoes" },
+      { title: "Por Canal", url: "/receita/por-canal" },
+    ]
+  },
+  { 
+    title: "Custos", 
+    icon: TrendingDown,
+    items: [
+      { title: "Overview", url: "/custos" },
+      { title: "Despesas", url: "/custos/despesas" },
+      { title: "Por Categoria", url: "/custos/por-categoria" },
+    ]
+  },
   { title: "Relatórios", url: "/relatorios", icon: FileText },
   { title: "Alertas", url: "/alertas", icon: Bell },
   { title: "Efeito Alavanca", url: "/efeito-alavanca", icon: Zap },
@@ -43,6 +82,9 @@ const menuItems: MenuItem[] = [
 
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
+  const { state } = useSidebar();
+  const location = useLocation();
+  const isCollapsed = state === "collapsed";
 
   const getRoleBadgeVariant = (userRole: AppRole | null) => {
     if (userRole === 'admin') return 'default';
@@ -60,57 +102,121 @@ export function AppSidebar() {
     (item) => !item.requiredRoles || (role && item.requiredRoles.includes(role))
   );
 
-  return (
-    <div className="w-60 h-screen bg-sidebar border-r border-sidebar-border fixed left-0 top-0 flex flex-col">
-      <div className="p-6 border-b border-sidebar-border">
-        <h1 className="text-2xl font-bold text-primary">MCF</h1>
-        <p className="text-xs text-sidebar-foreground mt-1">Dashboard Executivo</p>
-      </div>
-      
-      <nav className="flex-1 p-4 overflow-y-auto">
-        <ul className="space-y-2">
-          {filteredMenuItems.map((item) => (
-            <li key={item.url}>
-              <NavLink
-                to={item.url}
-                end={item.url === "/"}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                activeClassName="bg-primary/10 text-primary font-medium"
-              >
-                <item.icon className="h-5 w-5" />
-                <span>{item.title}</span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+  const isRouteActive = (item: MenuItem) => {
+    if (item.url) return location.pathname === item.url;
+    if (item.items) return item.items.some(sub => location.pathname === sub.url);
+    return false;
+  };
 
-      <div className="p-4 border-t border-sidebar-border space-y-3">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary/10 text-primary text-xs">
-              {user?.email?.[0]?.toUpperCase() || 'U'}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-sidebar-foreground truncate">
-              {user?.email || 'Usuário'}
-            </p>
-            <Badge variant={getRoleBadgeVariant(role)} className="text-[10px] px-1.5 py-0 h-4 mt-1">
-              {getRoleLabel(role)}
-            </Badge>
-          </div>
+  return (
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel className="px-2 py-4">
+            <span className="text-xl font-bold text-primary">MCF</span>
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {filteredMenuItems.map((item) => {
+                const isActive = isRouteActive(item);
+                
+                if (item.items) {
+                  return (
+                    <Collapsible
+                      key={item.title}
+                      asChild
+                      defaultOpen={isActive}
+                      className="group/collapsible"
+                    >
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            tooltip={item.title}
+                            className={isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}
+                          >
+                            <item.icon className="h-5 w-5" />
+                            {!isCollapsed && (
+                              <>
+                                <span>{item.title}</span>
+                                <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                              </>
+                            )}
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.items.map((subItem) => (
+                              <SidebarMenuSubItem key={subItem.url}>
+                                <SidebarMenuSubButton asChild>
+                                  <NavLink
+                                    to={subItem.url}
+                                    className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                    activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                  >
+                                    <span>{subItem.title}</span>
+                                  </NavLink>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  );
+                }
+
+                return (
+                  <SidebarMenuItem key={item.url}>
+                    <SidebarMenuButton asChild tooltip={item.title}>
+                      <NavLink
+                        to={item.url!}
+                        end={item.url === "/"}
+                        className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      >
+                        <item.icon className="h-5 w-5" />
+                        {!isCollapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border p-4">
+        <div className="space-y-3">
+          {!isCollapsed && (
+            <div className="flex items-center gap-3">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                  {user?.email?.[0]?.toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-sidebar-foreground truncate">
+                  {user?.email || 'Usuário'}
+                </p>
+                <Badge variant={getRoleBadgeVariant(role)} className="text-[10px] px-1.5 py-0 h-4 mt-1">
+                  {getRoleLabel(role)}
+                </Badge>
+              </div>
+            </div>
+          )}
+          <Button 
+            variant="ghost" 
+            size={isCollapsed ? "icon" : "sm"}
+            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent"
+            onClick={signOut}
+            title="Sair"
+          >
+            <LogOut className="h-4 w-4" />
+            {!isCollapsed && <span className="ml-2">Sair</span>}
+          </Button>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm"
-          className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent"
-          onClick={signOut}
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sair
-        </Button>
-      </div>
-    </div>
+      </SidebarFooter>
+    </Sidebar>
   );
 }
