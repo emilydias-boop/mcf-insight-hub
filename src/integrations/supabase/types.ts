@@ -48,15 +48,7 @@ export type Database = {
           name?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "alert_rules_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       alerts: {
         Row: {
@@ -89,15 +81,7 @@ export type Database = {
           resolved_by?: string | null
           title?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "alerts_resolved_by_fkey"
-            columns: ["resolved_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       auction_bids: {
         Row: {
@@ -174,15 +158,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["auction_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "auctions_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       audit_logs: {
         Row: {
@@ -221,15 +197,7 @@ export type Database = {
           user_agent?: string | null
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "audit_logs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       categories: {
         Row: {
@@ -353,13 +321,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "credit_clients"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "credit_history_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -499,20 +460,13 @@ export type Database = {
           type?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "integrations_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string | null
+          email: string | null
           full_name: string | null
           id: string
           updated_at: string | null
@@ -520,6 +474,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          email?: string | null
           full_name?: string | null
           id: string
           updated_at?: string | null
@@ -527,19 +482,12 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string | null
+          email?: string | null
           full_name?: string | null
           id?: string
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_id_fkey"
-            columns: ["id"]
-            isOneToOne: true
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       project_comments: {
         Row: {
@@ -570,13 +518,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_comments_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -620,22 +561,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "projects_responsible_id_fkey"
-            columns: ["responsible_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       reports: {
         Row: {
@@ -668,15 +594,7 @@ export type Database = {
           start_date?: string | null
           type?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "reports_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       settings: {
         Row: {
@@ -700,15 +618,7 @@ export type Database = {
           updated_by?: string | null
           value?: Json
         }
-        Relationships: [
-          {
-            foreignKeyName: "settings_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       transactions: {
         Row: {
@@ -765,13 +675,6 @@ export type Database = {
             referencedRelation: "channels"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
         ]
       }
       user_employment_data: {
@@ -817,15 +720,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_employment_data_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       user_flags: {
         Row: {
@@ -876,29 +771,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_flags_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "user_flags_resolved_by_fkey"
-            columns: ["resolved_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "user_flags_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       user_observations: {
         Row: {
@@ -934,22 +807,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_observations_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "user_observations_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       user_permissions: {
         Row: {
@@ -979,15 +837,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_permissions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -1008,15 +858,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_roles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
       user_targets: {
         Row: {
@@ -1061,15 +903,7 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_targets_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_performance_summary"
-            referencedColumns: ["user_id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
