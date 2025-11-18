@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Plus, Users, Building2, Briefcase, Tag, UserCircle, Settings } from 'lucide-react';
 import {
   useClintContacts,
-  useClintOrganizations,
   useClintDeals,
   useClintGroups,
   useClintTags,
@@ -19,7 +18,6 @@ export default function CRM() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const { data: contacts, isLoading: loadingContacts } = useClintContacts();
-  const { data: organizations, isLoading: loadingOrgs } = useClintOrganizations();
   const { data: deals, isLoading: loadingDeals } = useClintDeals();
   const { data: groups, isLoading: loadingGroups } = useClintGroups();
   const { data: tags, isLoading: loadingTags } = useClintTags();
