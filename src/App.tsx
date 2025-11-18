@@ -23,6 +23,7 @@ import Projetos from "./pages/Projetos";
 import Credito from "./pages/Credito";
 import Leilao from "./pages/Leilao";
 import Configuracoes from "./pages/Configuracoes";
+import GerenciamentoUsuarios from "./pages/GerenciamentoUsuarios";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -65,6 +66,7 @@ const App = () => (
               <Route path="credito" element={<Credito />} />
               <Route path="leilao" element={<Leilao />} />
               <Route path="configuracoes" element={<Configuracoes />} />
+              <Route path="usuarios" element={<GerenciamentoUsuarios />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />

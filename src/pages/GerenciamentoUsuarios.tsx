@@ -1,0 +1,204 @@
+import { useState } from "react";
+import { RoleGuard } from "@/components/auth/RoleGuard";
+import { useUsers } from "@/hooks/useUsers";
+import { UserStatsCards } from "@/components/user-management/UserStatsCards";
+import { UserDetailsDrawer } from "@/components/user-management/UserDetailsDrawer";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Search, AlertCircle, CheckCircle, Eye, Loader2 } from "lucide-react";
+import { formatCurrency } from "@/lib/formatters";
+import { format } from "date-fns";
+
+export default function GerenciamentoUsuarios() {
+  const { data: users = [], isLoading } = useUsers();
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "active" && user.is_active) ||
+      (statusFilter === "inactive" && !user.is_active);
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
+  const getRoleBadgeVariant = (role: string | null) => {
+    if (role === "admin") return "default";
+    if (role === "manager") return "secondary";
+    return "outline";
+  };
+
+  return (
+    <RoleGuard allowedRoles={["admin"]}>
+      <div className="space-y-6 p-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Gerenciamento de Usuários</h1>
+          <p className="text-muted-foreground">
+            Gerencie usuários, roles, metas, flags e permissões
+          </p>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <>
+            <UserStatsCards users={users} />
+
+            <div className="bg-card rounded-lg border border-border p-6 space-y-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome ou email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filtrar por role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full md:w-[180px]">
+                    <SelectValue placeholder="Filtrar por status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="active">Ativos</SelectItem>
+                    <SelectItem value="inactive">Inativos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="rounded-md border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Usuário</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Entrada</TableHead>
+                      <TableHead>Salário</TableHead>
+                      <TableHead>Flags</TableHead>
+                      <TableHead>Metas</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUsers.map((user) => (
+                      <TableRow key={user.user_id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar>
+                              <AvatarFallback className="bg-primary/10 text-primary">
+                                {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">{user.full_name || "Sem nome"}</p>
+                              <p className="text-sm text-muted-foreground">{user.email}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getRoleBadgeVariant(user.role)}>
+                            {user.role || "viewer"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{user.position || "-"}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={user.is_active ? "default" : "secondary"}>
+                            {user.is_active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">
+                            {user.hire_date ? format(new Date(user.hire_date), "dd/MM/yyyy") : "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm font-medium">
+                            {user.fixed_salary ? formatCurrency(user.fixed_salary) : "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {(user.red_flags_count || 0) > 0 && (
+                              <Badge variant="destructive" className="flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {user.red_flags_count}
+                              </Badge>
+                            )}
+                            {(user.yellow_flags_count || 0) > 0 && (
+                              <Badge className="bg-warning text-warning-foreground flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {user.yellow_flags_count}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 text-sm">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>
+                              {user.targets_achieved || 0}/{user.total_targets || 0}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedUserId(user.user_id)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver Detalhes
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {filteredUsers.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">Nenhum usuário encontrado</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <UserDetailsDrawer
+        userId={selectedUserId}
+        open={!!selectedUserId}
+        onOpenChange={(open) => !open && setSelectedUserId(null)}
+      />
+    </RoleGuard>
+  );
+}

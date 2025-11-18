@@ -9,6 +9,7 @@ import {
   CreditCard, 
   Gavel, 
   Settings,
+  Users,
   LogOut
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -36,6 +37,7 @@ const menuItems: MenuItem[] = [
   { title: "Projetos", url: "/projetos", icon: FolderKanban },
   { title: "Crédito", url: "/credito", icon: CreditCard, requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, requiredRoles: ['admin', 'manager'] },
+  { title: "Usuários", url: "/usuarios", icon: Users, requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, requiredRoles: ['admin'] },
 ];
 
