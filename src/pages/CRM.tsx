@@ -48,14 +48,10 @@ export default function CRM() {
       </div>
 
       <Tabs defaultValue="contacts" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="contacts">
             <Users className="h-4 w-4 mr-2" />
             Contatos
-          </TabsTrigger>
-          <TabsTrigger value="organizations">
-            <Building2 className="h-4 w-4 mr-2" />
-            Organizações
           </TabsTrigger>
           <TabsTrigger value="deals">
             <Briefcase className="h-4 w-4 mr-2" />
@@ -127,53 +123,6 @@ export default function CRM() {
                 <p className="text-center text-muted-foreground py-8">
                   Nenhum contato encontrado
                 </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="organizations" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Organizações</CardTitle>
-              <CardDescription>
-                Lista de todas as organizações (empresas)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingOrgs ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-20 w-full" />
-                  <Skeleton className="h-20 w-full" />
-                </div>
-              ) : (organizations as any)?.data && Array.isArray((organizations as any).data) && (organizations as any).data.length > 0 ? (
-                <div className="space-y-4">
-                  {(organizations as any).data.map((org: any) => (
-                    <Card key={org.id}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold">{org.name}</h3>
-                            {org.domain && (
-                              <p className="text-sm text-muted-foreground">{org.domain}</p>
-                            )}
-                            {org.industry && (
-                              <Badge variant="outline" className="mt-2">
-                                {org.industry}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    {organizations ? 'Nenhuma organização encontrada' : 'Erro ao carregar organizações - verifique se o endpoint está correto na API Clint'}
-                  </p>
-                </div>
               )}
             </CardContent>
           </Card>

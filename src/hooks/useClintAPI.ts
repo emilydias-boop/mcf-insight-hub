@@ -78,12 +78,15 @@ export const useDeleteClintContact = () => {
   });
 };
 
-// Organizations (companies in Clint API)
+// Organizations - endpoint may not exist in Clint API, disabled for now
 export const useClintOrganizations = (params?: Record<string, string>) => {
   return useQuery<any>({
     queryKey: ['clint-organizations', params],
-    queryFn: () => callClintAPI({ resource: 'companies', params }),
-    retry: 1,
+    queryFn: async () => {
+      // Return empty data instead of calling non-existent endpoint
+      return { data: [] };
+    },
+    enabled: false, // Disable this query
   });
 };
 
