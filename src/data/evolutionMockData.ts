@@ -1,5 +1,5 @@
 import { EvolutionData } from "@/types/dashboard";
-import { getCustomWeeksInRange, addCustomWeeks } from "@/lib/dateHelpers";
+import { getCustomWeeksInRange, addCustomWeeks, formatCustomWeekRangeShort } from "@/lib/dateHelpers";
 
 /**
  * Gerar dados mock de evolução temporal
@@ -25,7 +25,7 @@ function generateEvolutionMockData(): EvolutionData[] {
     
     return {
       periodo: week.weekNumber,
-      semanaLabel: week.weekLabel,
+      semanaLabel: formatCustomWeekRangeShort(week.startDate),
       faturamento,
       custos,
       lucro,

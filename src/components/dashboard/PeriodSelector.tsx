@@ -72,9 +72,6 @@ export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorPro
   };
 
   const proximaSemanaBloqueada = isAfter(addCustomWeeks(dataInicio, 1), new Date());
-  
-  // Formatar display da semana customizada
-  const weekDisplay = tipo === 'semana' ? formatCustomWeekRange(dataInicio) : null;
 
   return (
     <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
@@ -86,9 +83,8 @@ export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorPro
             size="sm"
             onClick={handleSemanaAtual}
             className="h-9"
-            title={weekDisplay || "Semana Atual"}
           >
-            {tipo === 'semana' && weekDisplay ? weekDisplay : 'Semana Atual'}
+            Semana Atual
           </Button>
           
           <Button
