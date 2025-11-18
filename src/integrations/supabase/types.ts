@@ -48,7 +48,15 @@ export type Database = {
           name?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "alert_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       alerts: {
         Row: {
@@ -81,7 +89,15 @@ export type Database = {
           resolved_by?: string | null
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "alerts_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       auction_bids: {
         Row: {
@@ -158,7 +174,15 @@ export type Database = {
           status?: Database["public"]["Enums"]["auction_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "auctions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       audit_logs: {
         Row: {
@@ -197,7 +221,15 @@ export type Database = {
           user_agent?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       categories: {
         Row: {
@@ -321,6 +353,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "credit_clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_history_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -460,7 +499,15 @@ export type Database = {
           type?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "integrations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -484,7 +531,15 @@ export type Database = {
           id?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       project_comments: {
         Row: {
@@ -515,6 +570,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -558,7 +620,22 @@ export type Database = {
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "projects_responsible_id_fkey"
+            columns: ["responsible_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       reports: {
         Row: {
@@ -591,7 +668,15 @@ export type Database = {
           start_date?: string | null
           type?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       settings: {
         Row: {
@@ -615,7 +700,15 @@ export type Database = {
           updated_by?: string | null
           value?: Json
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       transactions: {
         Row: {
@@ -672,6 +765,228 @@ export type Database = {
             referencedRelation: "channels"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_employment_data: {
+        Row: {
+          commission_rate: number | null
+          created_at: string | null
+          department: string | null
+          fixed_salary: number | null
+          hire_date: string | null
+          id: string
+          is_active: boolean | null
+          ote: number | null
+          position: string | null
+          termination_date: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          commission_rate?: number | null
+          created_at?: string | null
+          department?: string | null
+          fixed_salary?: number | null
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          ote?: number | null
+          position?: string | null
+          termination_date?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          commission_rate?: number | null
+          created_at?: string | null
+          department?: string | null
+          fixed_salary?: number | null
+          hire_date?: string | null
+          id?: string
+          is_active?: boolean | null
+          ote?: number | null
+          position?: string | null
+          termination_date?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_employment_data_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_flags: {
+        Row: {
+          category: Database["public"]["Enums"]["flag_category"]
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          flag_type: Database["public"]["Enums"]["flag_type"]
+          id: string
+          is_resolved: boolean | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: number | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["flag_category"]
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          flag_type: Database["public"]["Enums"]["flag_type"]
+          id?: string
+          is_resolved?: boolean | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: number | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["flag_category"]
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          flag_type?: Database["public"]["Enums"]["flag_type"]
+          id?: string
+          is_resolved?: boolean | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: number | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_flags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_flags_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_flags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_observations: {
+        Row: {
+          category: string | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_important: boolean | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_important?: boolean | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_important?: boolean | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_observations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_observations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_permissions: {
+        Row: {
+          created_at: string | null
+          id: string
+          permission_level: Database["public"]["Enums"]["permission_level"]
+          resource: Database["public"]["Enums"]["resource_type"]
+          restrictions: Json | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          permission_level?: Database["public"]["Enums"]["permission_level"]
+          resource: Database["public"]["Enums"]["resource_type"]
+          restrictions?: Json | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          permission_level?: Database["public"]["Enums"]["permission_level"]
+          resource?: Database["public"]["Enums"]["resource_type"]
+          restrictions?: Json | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       user_roles: {
@@ -693,11 +1008,90 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_targets: {
+        Row: {
+          created_at: string | null
+          current_value: number | null
+          end_date: string
+          id: string
+          is_achieved: boolean | null
+          name: string
+          period: Database["public"]["Enums"]["target_period"]
+          start_date: string
+          target_value: number
+          type: Database["public"]["Enums"]["target_type"]
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current_value?: number | null
+          end_date: string
+          id?: string
+          is_achieved?: boolean | null
+          name: string
+          period: Database["public"]["Enums"]["target_period"]
+          start_date: string
+          target_value: number
+          type: Database["public"]["Enums"]["target_type"]
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current_value?: number | null
+          end_date?: string
+          id?: string
+          is_achieved?: boolean | null
+          name?: string
+          period?: Database["public"]["Enums"]["target_period"]
+          start_date?: string
+          target_value?: number
+          type?: Database["public"]["Enums"]["target_type"]
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_targets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
     }
     Views: {
-      [_ in never]: never
+      user_performance_summary: {
+        Row: {
+          avg_performance_3m: number | null
+          email: string | null
+          fixed_salary: number | null
+          full_name: string | null
+          hire_date: string | null
+          is_active: boolean | null
+          ote: number | null
+          position: string | null
+          red_flags_count: number | null
+          role: Database["public"]["Enums"]["app_role"] | null
+          targets_achieved: number | null
+          total_targets: number | null
+          user_id: string | null
+          yellow_flags_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_user_role: {
@@ -711,12 +1105,42 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_has_permission: {
+        Args: {
+          _required_level: Database["public"]["Enums"]["permission_level"]
+          _resource: Database["public"]["Enums"]["resource_type"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       alert_level: "info" | "warning" | "critical"
       app_role: "admin" | "manager" | "viewer"
       auction_status: "ativo" | "encerrado" | "cancelado"
+      flag_category:
+        | "desempenho"
+        | "comportamento"
+        | "frequencia"
+        | "financeiro"
+        | "compliance"
+        | "outros"
+      flag_type: "red" | "yellow" | "green"
+      permission_level: "none" | "view" | "edit" | "full"
       project_status: "a_fazer" | "em_andamento" | "concluido" | "cancelado"
+      resource_type:
+        | "dashboard"
+        | "receita"
+        | "custos"
+        | "projetos"
+        | "credito"
+        | "leilao"
+        | "alertas"
+        | "relatorios"
+        | "configuracoes"
+        | "efeito_alavanca"
+      target_period: "mensal" | "trimestral" | "anual"
+      target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
       transaction_type: "receita" | "custo"
     }
@@ -849,7 +1273,31 @@ export const Constants = {
       alert_level: ["info", "warning", "critical"],
       app_role: ["admin", "manager", "viewer"],
       auction_status: ["ativo", "encerrado", "cancelado"],
+      flag_category: [
+        "desempenho",
+        "comportamento",
+        "frequencia",
+        "financeiro",
+        "compliance",
+        "outros",
+      ],
+      flag_type: ["red", "yellow", "green"],
+      permission_level: ["none", "view", "edit", "full"],
       project_status: ["a_fazer", "em_andamento", "concluido", "cancelado"],
+      resource_type: [
+        "dashboard",
+        "receita",
+        "custos",
+        "projetos",
+        "credito",
+        "leilao",
+        "alertas",
+        "relatorios",
+        "configuracoes",
+        "efeito_alavanca",
+      ],
+      target_period: ["mensal", "trimestral", "anual"],
+      target_type: ["receita", "vendas", "leads", "conversao", "custom"],
       transaction_status: ["pago", "pendente", "cancelado"],
       transaction_type: ["receita", "custo"],
     },
