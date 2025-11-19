@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 const CLINT_API_KEY = Deno.env.get('CLINT_API_KEY');
-const CLINT_API_BASE = 'https://api.clintcrm.com/v1';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -20,20 +19,21 @@ interface ClintAPIResponse<T> {
 }
 
 async function callClintAPI<T = any>(resource: string, params?: Record<string, string>): Promise<ClintAPIResponse<T>> {
-  const url = new URL(`${CLINT_API_BASE}/${resource}`);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => url.searchParams.append(key, value));
-  }
+  const queryParams = new URLSearchParams(params || {});
+  const url = `https://api.clint.digital/v1/${resource}${
+    queryParams.toString() ? '?' + queryParams.toString() : ''
+  }`;
 
-  const response = await fetch(url.toString(), {
+  const response = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${CLINT_API_KEY}`,
+      'api-token': CLINT_API_KEY!,
       'Content-Type': 'application/json',
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Clint API error: ${response.status} ${response.statusText}`);
+    const error = await response.text();
+    throw new Error(`Clint API error: ${response.status} - ${error}`);
   }
 
   return await response.json();
