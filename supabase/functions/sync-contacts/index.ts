@@ -58,46 +58,56 @@ Deno.serve(async (req) => {
     let page = 1;
     let totalProcessed = 0;
     const MAX_PAGES = 1000;
+    const CONTACTS_PER_PAGE = 200;
+    const BATCH_SIZE = 500; // Bulk upsert de 500 contatos por vez
 
     while (page <= MAX_PAGES) {
       const response = await callClintAPI('contacts', {
         page: page.toString(),
-        per_page: '200',
+        per_page: CONTACTS_PER_PAGE.toString(),
       });
 
       const contacts = response.data || [];
       if (contacts.length === 0) break;
 
-      // Processar em batch de 100
-      for (let i = 0; i < contacts.length; i += 100) {
-        const batch = contacts.slice(i, i + 100);
+      // Processar em batches maiores com bulk upsert
+      for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
+        const batch = contacts.slice(i, i + BATCH_SIZE);
 
-        for (const contact of batch) {
-          // Note: origin_id será preenchido posteriormente via sync-link-contacts
-          // A API Clint não retorna origin_id diretamente nos contatos
-          await supabase.from('crm_contacts').upsert(
-            {
-              clint_id: contact.id,
-              name: contact.name,
-              email: contact.email || null,
-              phone: contact.phone || null,
-              organization_name: contact.organization?.name || null,
-              origin_id: null, // Será preenchido depois via deals
-              tags: contact.tags || [],
-              custom_fields: contact.custom_fields || {},
-            },
-            { onConflict: 'clint_id' }
-          );
+        // Preparar todos os contatos do batch para bulk upsert
+        const contactsToUpsert = batch.map((contact: any) => ({
+          clint_id: contact.id,
+          name: contact.name,
+          email: contact.email || null,
+          phone: contact.phone || null,
+          organization_name: contact.organization?.name || null,
+          origin_id: null, // Será preenchido posteriormente via sync-link-contacts
+          tags: contact.tags || [],
+          custom_fields: contact.custom_fields || {},
+        }));
+
+        // Bulk upsert de todos os contatos do batch de uma vez
+        const { error } = await supabase
+          .from('crm_contacts')
+          .upsert(contactsToUpsert, { onConflict: 'clint_id' });
+
+        if (error) {
+          console.error(`❌ Erro no batch ${i}-${i + batch.length}:`, error);
+          throw error;
         }
+
+        totalProcessed += batch.length;
+        const percentage = response.meta?.total 
+          ? ((totalProcessed / response.meta.total) * 100).toFixed(1)
+          : 'N/A';
+        
+        console.log(`📄 Processados: ${totalProcessed} contatos (${percentage}% - página ${page}, batch ${Math.floor(i / BATCH_SIZE) + 1})`);
       }
 
-      totalProcessed += contacts.length;
-      console.log(`📄 Contatos processados: ${totalProcessed} (página ${page})`);
-
-      await new Promise((r) => setTimeout(r, 100)); // Reduzido para 100ms
+      await new Promise((r) => setTimeout(r, 50)); // Rate limiting reduzido
       page++;
 
-      if (contacts.length < 200) break;
+      if (contacts.length < CONTACTS_PER_PAGE) break;
     }
 
     const duration = Date.now() - startTime;
