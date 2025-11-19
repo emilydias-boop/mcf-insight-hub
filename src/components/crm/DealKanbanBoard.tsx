@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUpdateClintDealStage } from '@/hooks/useClintAPI';
+import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useMemo } from 'react';
@@ -28,38 +28,19 @@ interface DealKanbanBoardProps {
 
 export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
-  const updateStageMutation = useUpdateClintDealStage();
+  const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
-  
-  // Extrair stages únicos dos deals (a API Clint não expõe /stages)
-  const stages = useMemo(() => {
-    const stageMap = new Map();
-    
-    deals.forEach((deal) => {
-      if (deal.stage_id && !stageMap.has(deal.stage_id)) {
-        stageMap.set(deal.stage_id, {
-          id: deal.stage_id,
-          stage_id: deal.stage_id,
-          stage_name: deal.stage || 'Sem nome',
-          stage_order: stageMap.size,
-          color: null,
-          is_active: true
-        });
-      }
-    });
-    
-    return Array.from(stageMap.values());
-  }, [deals]);
+  const { data: stages } = useCRMStages();
   
   const visibleStageIds = getVisibleStages();
-  const visibleStages = stages.filter(s => visibleStageIds.includes(s.stage_id) && s.stage_order < 90);
+  const visibleStages = (stages || []).filter((s: any) => s.is_active);
   
   const getDealsByStage = (stageId: string) => {
     return deals.filter(deal => 
       deal && 
       deal.id && 
       deal.name && 
-      deal.stage_id === stageId  // Usar stage_id para comparação
+      deal.stage_id === stageId
     );
   };
 
@@ -93,14 +74,14 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
       return;
     }
     
-    updateStageMutation.mutate(
-      { id: dealId, stage: newStage },
+    updateDealMutation.mutate(
+      { id: dealId, stage_id: newStage },
       {
         onSuccess: () => {
           createActivity.mutate({
             deal_id: dealId,
             activity_type: 'stage_change',
-            description: `Negócio movido de ${oldStage} para ${newStage}`,
+            description: `Negócio movido entre estágios`,
             from_stage: oldStage,
             to_stage: newStage,
           });
@@ -116,8 +97,8 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {visibleStages.map((stage) => {
-          const stageDeals = getDealsByStage(stage.stage_id);
+        {visibleStages.map((stage: any) => {
+          const stageDeals = getDealsByStage(stage.id);
           
           return (
             <div key={stage.id} className="flex-shrink-0 w-80">
@@ -129,7 +110,7 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
                   </CardTitle>
                 </CardHeader>
                 
-                <Droppable droppableId={stage.stage_id}>
+                <Droppable droppableId={stage.id}>
                   {(provided) => (
                     <div
                       ref={provided.innerRef}

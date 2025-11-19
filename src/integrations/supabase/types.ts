@@ -363,6 +363,203 @@ export type Database = {
           },
         ]
       }
+      crm_contacts: {
+        Row: {
+          clint_id: string
+          created_at: string | null
+          custom_fields: Json | null
+          email: string | null
+          id: string
+          name: string
+          organization_name: string | null
+          origin_id: string | null
+          phone: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          clint_id: string
+          created_at?: string | null
+          custom_fields?: Json | null
+          email?: string | null
+          id?: string
+          name: string
+          organization_name?: string | null
+          origin_id?: string | null
+          phone?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          clint_id?: string
+          created_at?: string | null
+          custom_fields?: Json | null
+          email?: string | null
+          id?: string
+          name?: string
+          organization_name?: string | null
+          origin_id?: string | null
+          phone?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_contacts_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_deals: {
+        Row: {
+          clint_id: string
+          contact_id: string | null
+          created_at: string | null
+          custom_fields: Json | null
+          expected_close_date: string | null
+          id: string
+          name: string
+          origin_id: string | null
+          owner_id: string | null
+          probability: number | null
+          stage_id: string | null
+          tags: string[] | null
+          updated_at: string | null
+          value: number | null
+        }
+        Insert: {
+          clint_id: string
+          contact_id?: string | null
+          created_at?: string | null
+          custom_fields?: Json | null
+          expected_close_date?: string | null
+          id?: string
+          name: string
+          origin_id?: string | null
+          owner_id?: string | null
+          probability?: number | null
+          stage_id?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Update: {
+          clint_id?: string
+          contact_id?: string | null
+          created_at?: string | null
+          custom_fields?: Json | null
+          expected_close_date?: string | null
+          id?: string
+          name?: string
+          origin_id?: string | null
+          owner_id?: string | null
+          probability?: number | null
+          stage_id?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_deals_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_deals_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_deals_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_origins: {
+        Row: {
+          clint_id: string
+          contact_count: number | null
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          clint_id: string
+          contact_count?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          clint_id?: string
+          contact_count?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_origins_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_stages: {
+        Row: {
+          clint_id: string
+          color: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          stage_name: string
+          stage_order: number
+          updated_at: string | null
+        }
+        Insert: {
+          clint_id: string
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          stage_name: string
+          stage_order: number
+          updated_at?: string | null
+        }
+        Update: {
+          clint_id?: string
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          stage_name?: string
+          stage_order?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       dashboard_preferences: {
         Row: {
           auto_refresh: boolean

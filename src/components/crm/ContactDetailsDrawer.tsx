@@ -2,7 +2,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useClintContact, useClintDeals } from '@/hooks/useClintAPI';
+import { useCRMContacts, useCRMDeals } from '@/hooks/useCRMData';
 import { Mail, Phone, MapPin, Layers, Calendar, Briefcase, Edit } from 'lucide-react';
 
 interface ContactDetailsDrawerProps {
@@ -12,11 +12,11 @@ interface ContactDetailsDrawerProps {
 }
 
 export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactDetailsDrawerProps) => {
-  const { data: contact, isLoading } = useClintContact(contactId || '');
-  const { data: deals } = useClintDeals();
+  const { data: contacts, isLoading } = useCRMContacts();
+  const { data: deals } = useCRMDeals({});
   
-  const contactData = contact?.data;
-  const relatedDeals = deals?.data?.filter((deal: any) => deal.contact_id === contactId) || [];
+  const contactData = contacts?.find((c: any) => c.id === contactId);
+  const relatedDeals = deals?.filter((deal: any) => deal.contact_id === contactId) || [];
   
   if (!contactId) return null;
   
@@ -67,10 +67,10 @@ export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactD
                   📋 Informações Gerais
                 </h3>
                 <div className="space-y-2 pl-2">
-                  {contactData.organization_id && (
+                  {contactData.organization_name && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="h-4 w-4" />
-                      <span>Organização: {contactData.organization_id}</span>
+                      <span>Organização: {contactData.organization_name}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">

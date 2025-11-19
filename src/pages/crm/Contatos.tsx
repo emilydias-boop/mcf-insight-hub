@@ -4,22 +4,32 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAllClintContacts } from '@/hooks/useClintAPI';
-import { Search, Plus, Mail, Phone, User } from 'lucide-react';
+import { useCRMContacts, useSyncClintData } from '@/hooks/useCRMData';
+import { Search, Plus, Mail, Phone, User, RefreshCw } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
+import { toast } from 'sonner';
 
 const Contatos = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { data: contacts, isLoading } = useAllClintContacts();
+  const { data: contacts, isLoading } = useCRMContacts();
+  const syncMutation = useSyncClintData();
   
   const handleContactClick = (contactId: string) => {
     setSelectedContactId(contactId);
     setDrawerOpen(true);
   };
 
-  const contactsData = contacts?.data || [];
+  const handleSync = () => {
+    toast.info('Sincronizando dados do Clint...');
+    syncMutation.mutate(undefined, {
+      onSuccess: () => toast.success('Dados sincronizados com sucesso!'),
+      onError: () => toast.error('Erro ao sincronizar dados'),
+    });
+  };
+
+  const contactsData = contacts || [];
   const filteredContacts = contactsData.filter((contact: any) =>
     contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     contact.email?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -39,10 +49,20 @@ const Contatos = () => {
             )}
           </p>
         </div>
-        <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Contato
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleSync}
+            disabled={syncMutation.isPending}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+            Sincronizar
+          </Button>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Contato
+          </Button>
+        </div>
       </div>
 
       <div className="relative">
@@ -58,9 +78,9 @@ const Contatos = () => {
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-          <p className="text-lg font-semibold text-foreground">Carregando todos os contatos...</p>
+          <p className="text-lg font-semibold text-foreground">Carregando contatos...</p>
           <p className="text-sm text-muted-foreground mt-2">
-            Aguarde enquanto buscamos todas as páginas
+            Dados carregados do banco local
           </p>
         </div>
       ) : filteredContacts.length > 0 ? (
