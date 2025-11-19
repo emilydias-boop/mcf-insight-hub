@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAllClintDeals } from '@/hooks/useClintAPI';
+import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
+import { toast } from 'sonner';
 
 const Negocios = () => {
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
@@ -21,28 +22,25 @@ const Negocios = () => {
     maxValue: null,
   });
   
-  const { data: dealsData, isLoading, error } = useAllClintDeals(
-    selectedOriginId ? { origin_id: selectedOriginId } : undefined
-  );
+  const { data: deals, isLoading, error } = useCRMDeals({
+    originId: selectedOriginId || undefined,
+  });
   const { getVisibleStages } = useStagePermissions();
+  const syncMutation = useSyncClintData();
   
-  const deals = dealsData?.data || [];
+  const dealsData = deals || [];
   const visibleStages = getVisibleStages();
   
-  // Debug: Log para ver dados recebidos
-  console.log('📊 Debug Negócios:', {
-    totalDeals: deals.length,
-    selectedOriginId,
-    visibleStages,
-    deals: deals.slice(0, 3) // Mostra primeiros 3 deals
-  });
+  const handleSync = () => {
+    toast.info('Sincronizando dados do Clint...');
+    syncMutation.mutate(undefined, {
+      onSuccess: () => toast.success('Dados sincronizados com sucesso!'),
+      onError: () => toast.error('Erro ao sincronizar dados'),
+    });
+  };
   
-  const filteredDeals = deals.filter((deal: any) => {
-    // Validar dados essenciais do deal - usar stage_id em vez de stage
-    if (!deal || !deal.id || !deal.name || !deal.stage_id) {
-      console.log('❌ Deal inválido (faltam dados básicos):', deal);
-      return false;
-    }
+  const filteredDeals = dealsData.filter((deal: any) => {
+    if (!deal || !deal.id || !deal.name) return false;
     
     if (filters.search && !deal.name.toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
@@ -51,34 +49,14 @@ const Negocios = () => {
     if (filters.minValue && deal.value < filters.minValue) return false;
     if (filters.maxValue && deal.value > filters.maxValue) return false;
     
-    if (filters.tags.length > 0) {
-      const dealTags = deal.tags?.map((t: any) => t.id) || [];
+    if (filters.tags && filters.tags.length > 0) {
+      const dealTags = deal.tags || [];
       if (!filters.tags.some(tag => dealTags.includes(tag))) return false;
     }
     
     if (filters.owner && deal.owner_id !== filters.owner) return false;
     
-    // TEMPORÁRIO: Desabilitar filtro de permissões até migrar para banco próprio
-    // O problema: visibleStages usa UUIDs do Supabase, mas deal.stage_id vem da API Clint
-    /*
-    if (!visibleStages.includes(deal.stage_id)) {
-      console.log('⚠️ Deal filtrado por permissão de estágio:', { 
-        dealName: deal.name, 
-        stageId: deal.stage_id,
-        stageName: deal.stage,
-        visibleStages 
-      });
-      return false;
-    }
-    */
-    
     return true;
-  });
-  
-  // Debug: Log resultado final
-  console.log('✅ Deals após filtros:', {
-    total: filteredDeals.length,
-    filteredOut: deals.length - filteredDeals.length
   });
   
   const clearFilters = () => {
@@ -107,15 +85,25 @@ const Negocios = () => {
               {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''} de negócio
             </p>
           </div>
-          <DealFormDialog
-            defaultOriginId={selectedOriginId || undefined}
-            trigger={
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Novo Negócio
-              </Button>
-            }
-          />
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleSync}
+              disabled={syncMutation.isPending}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+              Sincronizar
+            </Button>
+            <DealFormDialog
+              defaultOriginId={selectedOriginId || undefined}
+              trigger={
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Negócio
+                </Button>
+              }
+            />
+          </div>
         </div>
         
         <DealFilters
@@ -160,7 +148,12 @@ const Negocios = () => {
               </div>
             </div>
           ) : (
-            <DealKanbanBoard deals={filteredDeals} />
+            <DealKanbanBoard 
+              deals={filteredDeals.map((deal: any) => ({
+                ...deal,
+                stage: deal.crm_stages?.stage_name || 'Sem estágio',
+              }))} 
+            />
           )}
         </div>
       </div>
