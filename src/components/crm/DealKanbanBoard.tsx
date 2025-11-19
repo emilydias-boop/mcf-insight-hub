@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUpdateClintDealStage, useClintStages } from '@/hooks/useClintAPI';
+import { useUpdateClintDealStage } from '@/hooks/useClintAPI';
 import { toast } from 'sonner';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
+import { useMemo } from 'react';
 import { DealKanbanCard } from './DealKanbanCard';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { AlertCircle, Inbox } from 'lucide-react';
@@ -26,20 +27,29 @@ interface DealKanbanBoardProps {
 }
 
 export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
-  const { data: stagesData, isLoading: stagesLoading, error: stagesError } = useClintStages();
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateStageMutation = useUpdateClintDealStage();
   const createActivity = useCreateDealActivity();
   
-  // Mapear stages da API Clint para formato esperado
-  const stages = (stagesData?.data || []).map((s: any) => ({
-    id: s.id,
-    stage_id: s.id,
-    stage_name: s.name,
-    stage_order: s.order || 0,
-    color: s.color || null,
-    is_active: true
-  }));
+  // Extrair stages únicos dos deals (a API Clint não expõe /stages)
+  const stages = useMemo(() => {
+    const stageMap = new Map();
+    
+    deals.forEach((deal) => {
+      if (deal.stage_id && !stageMap.has(deal.stage_id)) {
+        stageMap.set(deal.stage_id, {
+          id: deal.stage_id,
+          stage_id: deal.stage_id,
+          stage_name: deal.stage || 'Sem nome',
+          stage_order: stageMap.size,
+          color: null,
+          is_active: true
+        });
+      }
+    });
+    
+    return Array.from(stageMap.values());
+  }, [deals]);
   
   const visibleStageIds = getVisibleStages();
   const visibleStages = stages.filter(s => visibleStageIds.includes(s.stage_id) && s.stage_order < 90);
@@ -52,39 +62,6 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
       deal.stage_id === stageId  // Usar stage_id para comparação
     );
   };
-
-  // Loading state
-  if (stagesLoading) {
-    return (
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex-shrink-0 w-80">
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-              </CardContent>
-            </Card>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // Error state
-  if (stagesError) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Erro ao carregar os estágios do pipeline. Tente recarregar a página.
-        </AlertDescription>
-      </Alert>
-    );
-  }
 
   // Empty state
   if (!stages || stages.length === 0) {
