@@ -134,19 +134,21 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
       </Popover>
       
       <Select
-        value={filters.owner || ''}
-        onValueChange={(value) => onChange({ ...filters, owner: value || null })}
+        value={filters.owner || 'all'}
+        onValueChange={(value) => onChange({ ...filters, owner: value === 'all' ? null : value })}
       >
         <SelectTrigger className="w-[180px]">
           <SelectValue placeholder="Dono do negócio" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Todos</SelectItem>
-          {users.map((user: any) => (
-            <SelectItem key={user.id} value={user.id}>
-              {user.name}
-            </SelectItem>
-          ))}
+          <SelectItem value="all">Todos</SelectItem>
+          {users
+            .filter((user: any) => user.id && user.id.trim() !== '' && user.name && user.name.trim() !== '')
+            .map((user: any) => (
+              <SelectItem key={user.id} value={user.id}>
+                {user.name}
+              </SelectItem>
+            ))}
         </SelectContent>
       </Select>
       
