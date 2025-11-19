@@ -534,6 +534,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          origin_id: string | null
           stage_name: string
           stage_order: number
           updated_at: string | null
@@ -544,6 +545,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          origin_id?: string | null
           stage_name: string
           stage_order: number
           updated_at?: string | null
@@ -554,11 +556,20 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          origin_id?: string | null
           stage_name?: string
           stage_order?: number
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "crm_stages_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       dashboard_preferences: {
         Row: {
