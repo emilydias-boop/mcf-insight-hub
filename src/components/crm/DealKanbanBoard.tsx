@@ -3,9 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUpdateClintDealStage } from '@/hooks/useClintAPI';
+import { useUpdateClintDealStage, useClintStages } from '@/hooks/useClintAPI';
 import { toast } from 'sonner';
-import { useDealStages } from '@/hooks/useDealStages';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
@@ -27,10 +26,20 @@ interface DealKanbanBoardProps {
 }
 
 export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
-  const { data: stages = [], isLoading: stagesLoading, error: stagesError } = useDealStages();
+  const { data: stagesData, isLoading: stagesLoading, error: stagesError } = useClintStages();
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateStageMutation = useUpdateClintDealStage();
   const createActivity = useCreateDealActivity();
+  
+  // Mapear stages da API Clint para formato esperado
+  const stages = (stagesData?.data || []).map((s: any) => ({
+    id: s.id,
+    stage_id: s.id,
+    stage_name: s.name,
+    stage_order: s.order || 0,
+    color: s.color || null,
+    is_active: true
+  }));
   
   const visibleStageIds = getVisibleStages();
   const visibleStages = stages.filter(s => visibleStageIds.includes(s.stage_id) && s.stage_order < 90);
