@@ -127,7 +127,7 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
               clint_id: origin.id,
               name: origin.name,
               description: origin.description || null,
-              parent_id: null, // Temporariamente null, será atualizado no Pass 2
+              group_id: groupDbId,
               contact_count: 0,
             },
             { onConflict: 'clint_id' }
