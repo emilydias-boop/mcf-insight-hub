@@ -27,52 +27,51 @@ export const useCRMStages = (originId?: string) => {
 
 // ==================== ORIGINS ====================
 
-interface Origin {
+interface Group {
   id: string;
-  clint_id: string;
   name: string;
-  parent_id: string | null;
-  contact_count: number;
-  children?: Origin[];
+  children: Origin[];
 }
 
-const buildOriginTree = (origins: any[]): Origin[] => {
-  const originMap = new Map<string, Origin>();
-  const rootOrigins: Origin[] = [];
+interface Origin {
+  id: string;
+  name: string;
+  group_id?: string | null;
+  contact_count?: number;
+}
 
-  origins.forEach((origin) => {
-    originMap.set(origin.id, { ...origin, children: [] });
+// Função para construir árvore de origens agrupadas
+const buildOriginTree = (origins: any[], groups: any[]): Group[] => {
+  // Criar mapa de grupos
+  const groupsMap = new Map<string, Group>();
+  groups.forEach(g => {
+    groupsMap.set(g.id, { ...g, children: [] });
   });
-
-  origins.forEach((origin) => {
-    const node = originMap.get(origin.id);
-    if (!node) return;
-
-    if (origin.parent_id) {
-      const parent = originMap.get(origin.parent_id);
-      if (parent) {
-        parent.children = parent.children || [];
-        parent.children.push(node);
-      }
-    } else {
-      rootOrigins.push(node);
+  
+  // Adicionar origins aos seus grupos
+  origins.forEach(origin => {
+    if (origin.group_id && groupsMap.has(origin.group_id)) {
+      groupsMap.get(origin.group_id)!.children.push(origin);
     }
   });
-
-  return rootOrigins;
+  
+  // Retornar apenas grupos que têm origins
+  return Array.from(groupsMap.values()).filter(g => g.children.length > 0);
 };
 
 export const useCRMOrigins = () => {
   return useQuery({
-    queryKey: ['crm-origins'],
+    queryKey: ['crm-origins-with-groups'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_origins')
-        .select('*')
-        .order('name');
+      const [originsRes, groupsRes] = await Promise.all([
+        supabase.from('crm_origins').select('*').order('name'),
+        supabase.from('crm_groups').select('*').order('name')
+      ]);
       
-      if (error) throw error;
-      return buildOriginTree(data || []);
+      if (originsRes.error) throw originsRes.error;
+      if (groupsRes.error) throw groupsRes.error;
+      
+      return buildOriginTree(originsRes.data || [], groupsRes.data || []);
     },
   });
 };
