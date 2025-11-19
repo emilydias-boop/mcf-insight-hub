@@ -62,8 +62,17 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
   let totalOrigins = 0;
   let totalStages = 0;
   const MAX_PAGES = 1000;
+  
+  // Mapa para armazenar clint_id → database UUID
+  const originIdMap = new Map<string, string>();
+  
+  // Armazenar informações de hierarquia para o Pass 2
+  const hierarchyData: Array<{ clintId: string; parentClintId: string | null }> = [];
 
   try {
+    // ========== PASS 1: Criar/Atualizar Origens ==========
+    console.log('📥 Pass 1: Sincronizando origens...');
+    
     while (page <= MAX_PAGES) {
       const response = await callClintAPI('origins', { 
         page: page.toString(), 
@@ -74,7 +83,13 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
       if (origins.length === 0) break;
 
       for (const origin of origins) {
-        // 1. Salvar a origin
+        // Armazenar hierarquia para o Pass 2
+        hierarchyData.push({
+          clintId: origin.id,
+          parentClintId: origin.parent_id || origin.parent || null
+        });
+        
+        // 1. Salvar a origin SEM parent_id por enquanto
         const { data: savedOrigin, error: originError } = await supabase
           .from('crm_origins')
           .upsert(
@@ -82,7 +97,7 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
               clint_id: origin.id,
               name: origin.name,
               description: origin.description || null,
-              parent_id: null,
+              parent_id: null, // Temporariamente null, será atualizado no Pass 2
               contact_count: 0,
             },
             { onConflict: 'clint_id' }
@@ -94,46 +109,71 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
           console.error(`❌ Erro ao salvar origin ${origin.name}:`, originError);
           continue;
         }
+        
+        // Armazenar mapeamento clint_id → database UUID
+        originIdMap.set(origin.id, savedOrigin.id);
+        totalOrigins++;
 
         // 2. Salvar os stages desta origin - BATCH UPSERT
         if (origin.stages && Array.isArray(origin.stages) && origin.stages.length > 0) {
           const stagesToUpsert = origin.stages.map((stage: any) => ({
             clint_id: stage.id,
-            stage_name: stage.label || stage.name,
+            stage_name: stage.name,
             stage_order: stage.order || 0,
-            origin_id: savedOrigin.id,
             color: getColorFromType(stage.type),
-            is_active: stage.active !== false,
+            is_active: true,
+            origin_id: savedOrigin.id,
           }));
 
-          const { error: stageError } = await supabase
+          const { error: stagesError } = await supabase
             .from('crm_stages')
             .upsert(stagesToUpsert, { onConflict: 'clint_id' });
 
-          if (stageError) {
-            console.error(`❌ Erro ao salvar stages da origin ${origin.name}:`, stageError);
+          if (stagesError) {
+            console.error(`❌ Erro ao salvar stages para ${origin.name}:`, stagesError);
           } else {
-            totalStages += origin.stages.length;
-            console.log(`✅ Origin "${origin.name}" sincronizada com ${origin.stages.length} stages`);
+            totalStages += stagesToUpsert.length;
           }
-        } else {
-          console.log(`⚠️ Origin "${origin.name}" sem stages`);
         }
-
-        totalOrigins++;
       }
 
       console.log(`📄 Origins processadas: ${totalOrigins} | Stages: ${totalStages} (página ${page})`);
-
-      await new Promise((r) => setTimeout(r, 200));
       page++;
 
-      if (origins.length < 200) break;
+      if (!response.meta || page > response.meta.total / 200) {
+        break;
+      }
     }
-
-    console.log(`✅ Origins sincronizadas: ${totalOrigins} em ${Date.now() - startTime}ms`);
-    console.log(`✅ Stages sincronizados: ${totalStages}`);
     
+    // ========== PASS 2: Atualizar Hierarquia ==========
+    console.log('🔗 Pass 2: Atualizando hierarquia de origens...');
+    let hierarchyUpdates = 0;
+    
+    for (const { clintId, parentClintId } of hierarchyData) {
+      if (!parentClintId) continue; // Pular origens raiz
+      
+      const childDbId = originIdMap.get(clintId);
+      const parentDbId = originIdMap.get(parentClintId);
+      
+      if (childDbId && parentDbId) {
+        const { error } = await supabase
+          .from('crm_origins')
+          .update({ parent_id: parentDbId })
+          .eq('id', childDbId);
+          
+        if (error) {
+          console.error(`❌ Erro ao atualizar parent_id para ${clintId}:`, error);
+        } else {
+          hierarchyUpdates++;
+        }
+      }
+    }
+    
+    console.log(`✅ Hierarquia atualizada: ${hierarchyUpdates} relações pai-filho`);
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ Origins sincronizadas: ${totalOrigins} em ${duration}ms`);
+    console.log(`✅ Stages sincronizados: ${totalStages}`);
     return { origins: totalOrigins, stages: totalStages };
   } catch (error) {
     console.error('❌ Erro ao sincronizar origins:', error);
