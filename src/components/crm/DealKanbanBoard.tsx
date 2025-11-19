@@ -24,13 +24,14 @@ interface Deal {
 
 interface DealKanbanBoardProps {
   deals: Deal[];
+  originId?: string;
 }
 
-export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
+export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
-  const { data: stages } = useCRMStages();
+  const { data: stages } = useCRMStages(originId);
   
   const visibleStageIds = getVisibleStages();
   const visibleStages = (stages || []).filter((s: any) => s.is_active);

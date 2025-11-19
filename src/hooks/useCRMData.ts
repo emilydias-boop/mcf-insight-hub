@@ -4,15 +4,20 @@ import { toast } from 'sonner';
 
 // ==================== STAGES ====================
 
-export const useCRMStages = () => {
+export const useCRMStages = (originId?: string) => {
   return useQuery({
-    queryKey: ['crm-stages'],
+    queryKey: ['crm-stages', originId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('crm_stages')
         .select('*')
-        .eq('is_active', true)
-        .order('stage_order');
+        .eq('is_active', true);
+      
+      if (originId) {
+        query = query.eq('origin_id', originId);
+      }
+      
+      const { data, error } = await query.order('stage_order');
       
       if (error) throw error;
       return data;
