@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useClintDeals } from '@/hooks/useClintAPI';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
@@ -18,7 +20,7 @@ const Negocios = () => {
     maxValue: null,
   });
   
-  const { data: dealsData, isLoading } = useClintDeals(
+  const { data: dealsData, isLoading, error } = useClintDeals(
     selectedOriginId ? { origin_id: selectedOriginId } : undefined
   );
   const { getVisibleStages } = useStagePermissions();
@@ -85,8 +87,21 @@ const Negocios = () => {
         />
         
         <div className="flex-1 overflow-auto p-4">
-          {isLoading ? (
-            <div>Carregando...</div>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Erro ao carregar negócios. Tente recarregar a página.
+              </AlertDescription>
+            </Alert>
+          ) : isLoading ? (
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex-shrink-0 w-80">
+                  <Skeleton className="h-[400px] w-full" />
+                </div>
+              ))}
+            </div>
           ) : (
             <DealKanbanBoard deals={filteredDeals} />
           )}
