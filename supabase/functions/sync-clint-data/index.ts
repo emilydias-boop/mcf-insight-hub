@@ -19,14 +19,18 @@ interface SyncResult {
 
 // Função auxiliar para chamar API do Clint
 async function callClintAPI(resource: string, params?: Record<string, string>) {
+  if (!CLINT_API_KEY) {
+    throw new Error('CLINT_API_KEY não configurada');
+  }
+  
   const queryParams = new URLSearchParams(params || {});
-  const url = `https://api.clintcrm.com.br/v1/${resource}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+  const url = `https://api.clint.digital/v1/${resource}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
   
   console.log(`🔍 Calling Clint API: ${url}`);
   
   const response = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${CLINT_API_KEY}`,
+      'api-token': CLINT_API_KEY,
       'Content-Type': 'application/json',
     },
   });
@@ -477,17 +481,18 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
+    console.log('🚀 Iniciando sincronização SIMPLIFICADA com Clint CRM...');
+    console.log('📌 Apenas sincronizando STAGES para teste inicial');
+    
     const results: SyncResult[] = [];
 
-    // Ordem de sincronização: stages → origins → contacts → deals
+    // Sync apenas stages para teste
     results.push(await syncStages(supabase));
-    results.push(await syncOrigins(supabase));
-    results.push(await syncContacts(supabase));
-    results.push(await syncDeals(supabase));
 
     const summary = {
       success: true,
       timestamp: new Date().toISOString(),
+      note: 'Sincronização simplificada - apenas stages',
       results,
       total: {
         created: results.reduce((sum, r) => sum + r.created, 0),
@@ -497,7 +502,7 @@ Deno.serve(async (req) => {
       }
     };
 
-    console.log('✅ Sincronização concluída:', summary);
+    console.log('✅ Sincronização de stages concluída:', summary);
 
     return new Response(JSON.stringify(summary), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
