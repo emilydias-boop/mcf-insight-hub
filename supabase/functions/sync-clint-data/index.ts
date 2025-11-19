@@ -194,6 +194,7 @@ async function syncContacts(supabase: any): Promise<number> {
   let page = 1;
   let totalProcessed = 0;
   const MAX_PAGES = 1000;
+  let firstContactLogged = false;
 
   try {
     while (page <= MAX_PAGES) {
@@ -205,10 +206,48 @@ async function syncContacts(supabase: any): Promise<number> {
       const contacts = response.data || [];
       if (contacts.length === 0) break;
 
+      // 🔍 Log detalhado do primeiro contato para inspeção
+      if (!firstContactLogged && contacts.length > 0) {
+        console.log('🔍 ESTRUTURA DO PRIMEIRO CONTATO:');
+        console.log(JSON.stringify(contacts[0], null, 2));
+        firstContactLogged = true;
+      }
+
       for (let i = 0; i < contacts.length; i += 100) {
         const batch = contacts.slice(i, i + 100);
 
         for (const contact of batch) {
+          // 🆕 Buscar origin_id do contato
+          let originId = null;
+          
+          // Opção 1: Se contact.origin_id existe na API
+          if (contact.origin_id) {
+            const { data: origin } = await supabase
+              .from('crm_origins')
+              .select('id')
+              .eq('clint_id', contact.origin_id)
+              .maybeSingle();
+            originId = origin?.id || null;
+            
+            if (!originId) {
+              console.warn(`⚠️ Contact "${contact.name}" → Origin ${contact.origin_id} não encontrado`);
+            }
+          }
+          
+          // Opção 2: Se contact.stage_id existe (inferir origin através do stage)
+          if (!originId && contact.stage_id) {
+            const { data: stage } = await supabase
+              .from('crm_stages')
+              .select('id, origin_id')
+              .eq('clint_id', contact.stage_id)
+              .maybeSingle();
+            originId = stage?.origin_id || null;
+            
+            if (!originId) {
+              console.warn(`⚠️ Contact "${contact.name}" → Stage ${contact.stage_id} não encontrado`);
+            }
+          }
+
           await supabase.from('crm_contacts').upsert(
             {
               clint_id: contact.id,
@@ -216,7 +255,7 @@ async function syncContacts(supabase: any): Promise<number> {
               email: contact.email || null,
               phone: contact.phone || null,
               organization_name: contact.organization?.name || null,
-              origin_id: null,
+              origin_id: originId, // ✅ Agora mapeia corretamente
               tags: contact.tags || [],
               custom_fields: contact.custom_fields || {},
             },
@@ -357,14 +396,12 @@ Deno.serve(async (req) => {
       results.errors.push(`Origins: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
 
-    // 🚧 TEMPORARIAMENTE DESABILITADO: Sync de Contacts causa CPU timeout
-    // Contacts serão sincronizados em edge function separada no futuro
-    // try {
-    //   results.contacts = await syncContacts(supabase);
-    // } catch (error) {
-    //   results.errors.push(`Contacts: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-    // }
-    console.log('⏭️ Pulando sincronização de Contacts (desabilitada temporariamente)');
+    // ✅ Sincronização de Contacts REATIVADA com mapeamento de origin_id
+    try {
+      results.contacts = await syncContacts(supabase);
+    } catch (error) {
+      results.errors.push(`Contacts: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
 
     try {
       results.deals = await syncDeals(supabase);
