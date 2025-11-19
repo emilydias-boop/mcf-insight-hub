@@ -83,10 +83,39 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
       if (origins.length === 0) break;
 
       for (const origin of origins) {
+        // LOG PARA DIAGNÓSTICO - Primeira origin processada
+        if (totalOrigins === 0) {
+          console.log('🔍 DEBUG - Estrutura completa da primeira Origin:');
+          console.log(JSON.stringify(origin, null, 2));
+          console.log('🔍 DEBUG - Campos de hierarquia encontrados:');
+          console.log('  - origin.parent_id:', origin.parent_id);
+          console.log('  - origin.parent:', origin.parent);
+          console.log('  - origin.parentId:', origin.parentId);
+          console.log('  - origin.parent_origin_id:', origin.parent_origin_id);
+          console.log('  - typeof origin.parent:', typeof origin.parent);
+          if (origin.parent && typeof origin.parent === 'object') {
+            console.log('  - origin.parent.id:', origin.parent.id);
+          }
+        }
+        
         // Armazenar hierarquia para o Pass 2
+        // Tentar múltiplos formatos possíveis
+        let parentClintId = null;
+        if (origin.parent_id) {
+          parentClintId = origin.parent_id;
+        } else if (origin.parentId) {
+          parentClintId = origin.parentId;
+        } else if (origin.parent_origin_id) {
+          parentClintId = origin.parent_origin_id;
+        } else if (origin.parent && typeof origin.parent === 'string') {
+          parentClintId = origin.parent;
+        } else if (origin.parent && typeof origin.parent === 'object' && origin.parent.id) {
+          parentClintId = origin.parent.id;
+        }
+        
         hierarchyData.push({
           clintId: origin.id,
-          parentClintId: origin.parent_id || origin.parent || null
+          parentClintId: parentClintId
         });
         
         // 1. Salvar a origin SEM parent_id por enquanto
@@ -147,13 +176,29 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
     
     // ========== PASS 2: Atualizar Hierarquia ==========
     console.log('🔗 Pass 2: Atualizando hierarquia de origens...');
+    const totalRelations = hierarchyData.filter(h => h.parentClintId !== null).length;
+    console.log(`📊 Total de relações encontradas nos dados: ${totalRelations}`);
+    
     let hierarchyUpdates = 0;
+    let hierarchyErrors = 0;
     
     for (const { clintId, parentClintId } of hierarchyData) {
       if (!parentClintId) continue; // Pular origens raiz
       
       const childDbId = originIdMap.get(clintId);
       const parentDbId = originIdMap.get(parentClintId);
+      
+      if (!childDbId) {
+        console.warn(`⚠️ Child origin não encontrado no mapa: ${clintId}`);
+        hierarchyErrors++;
+        continue;
+      }
+      
+      if (!parentDbId) {
+        console.warn(`⚠️ Parent origin não encontrado no mapa: ${parentClintId} (child: ${clintId})`);
+        hierarchyErrors++;
+        continue;
+      }
       
       if (childDbId && parentDbId) {
         const { error } = await supabase
@@ -163,6 +208,7 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
           
         if (error) {
           console.error(`❌ Erro ao atualizar parent_id para ${clintId}:`, error);
+          hierarchyErrors++;
         } else {
           hierarchyUpdates++;
         }
@@ -170,6 +216,9 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
     }
     
     console.log(`✅ Hierarquia atualizada: ${hierarchyUpdates} relações pai-filho`);
+    if (hierarchyErrors > 0) {
+      console.log(`⚠️ Erros na hierarquia: ${hierarchyErrors}`);
+    }
 
     const duration = Date.now() - startTime;
     console.log(`✅ Origins sincronizadas: ${totalOrigins} em ${duration}ms`);
