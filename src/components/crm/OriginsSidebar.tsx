@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Search, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useAllClintOrigins } from '@/hooks/useClintAPI';
+import { useCRMOrigins } from '@/hooks/useCRMData';
 import { cn } from '@/lib/utils';
 
 interface OriginsSidebarProps {
@@ -109,15 +109,11 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  const { data: originsData, isLoading } = useAllClintOrigins();
-  const origins = originsData?.data || [];
-  
-  // Construir árvore de origens
-  const originTree = buildOriginTree(origins);
+  const { data: originTree, isLoading } = useCRMOrigins();
   
   // Filtrar origens por busca (busca em grupos e origens)
   const filteredTree = searchTerm 
-    ? originTree.filter((item: any) => {
+    ? (originTree || []).filter((item: any) => {
         const isGroup = 'children' in item && Array.isArray(item.children);
         if (isGroup) {
           // Se o grupo match ou algum filho match
@@ -129,7 +125,7 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
           return item.name.toLowerCase().includes(searchTerm.toLowerCase());
         }
       })
-    : originTree;
+    : (originTree || []);
   
   return (
     <div className={cn(
