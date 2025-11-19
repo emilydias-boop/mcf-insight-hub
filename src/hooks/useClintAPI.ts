@@ -78,6 +78,62 @@ export const useDeleteClintContact = () => {
   });
 };
 
+// Buscar TODOS os contatos com paginação completa
+export const useAllClintContacts = (params?: Record<string, string>) => {
+  return useQuery<any>({
+    queryKey: ['clint-all-contacts', params],
+    queryFn: async () => {
+      let allContacts: any[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      
+      console.log('🔄 Iniciando busca paginada de contatos...');
+      
+      // Buscar todas as páginas recursivamente
+      while (currentPage <= totalPages) {
+        const response = await callClintAPI<ClintAPIResponse<any[]>>({ 
+          resource: 'contacts', 
+          params: {
+            ...params,
+            page: currentPage.toString(),
+            per_page: '200',  // Máximo por página
+          }
+        });
+        
+        const contacts = response.data || [];
+        allContacts = [...allContacts, ...contacts];
+        
+        // Atualizar informações de paginação
+        if (response.meta) {
+          totalPages = Math.ceil(response.meta.total / response.meta.per_page);
+          console.log(`📄 Página ${currentPage}/${totalPages} - ${contacts.length} contatos carregados (${allContacts.length}/${response.meta.total} total)`);
+        }
+        
+        currentPage++;
+        
+        // Limite de segurança (máximo 100 páginas = 20.000 contatos)
+        if (currentPage > 100) {
+          console.warn('⚠️ Limite de 100 páginas atingido');
+          break;
+        }
+      }
+      
+      console.log(`✅ Total de ${allContacts.length} contatos carregados`);
+      
+      return { 
+        data: allContacts,
+        meta: {
+          total: allContacts.length,
+          page: 1,
+          per_page: allContacts.length
+        }
+      };
+    },
+    staleTime: 5 * 60 * 1000,  // Cache por 5 minutos
+    gcTime: 10 * 60 * 1000,     // Manter em cache por 10 minutos
+  });
+};
+
 // Organizations - endpoint may not exist in Clint API, disabled for now
 export const useClintOrganizations = (params?: Record<string, string>) => {
   return useQuery<any>({

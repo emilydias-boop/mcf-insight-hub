@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useClintContacts } from '@/hooks/useClintAPI';
+import { useAllClintContacts } from '@/hooks/useClintAPI';
 import { Search, Plus, Mail, Phone, User } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
 
@@ -12,7 +12,7 @@ const Contatos = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { data: contacts, isLoading } = useClintContacts();
+  const { data: contacts, isLoading } = useAllClintContacts();
   
   const handleContactClick = (contactId: string) => {
     setSelectedContactId(contactId);
@@ -30,7 +30,14 @@ const Contatos = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Contatos</h2>
-          <p className="text-muted-foreground">Gerencie todos os seus contatos</p>
+          <p className="text-muted-foreground">
+            Gerencie todos os seus contatos
+            {contactsData.length > 0 && (
+              <span className="ml-2 font-semibold text-foreground">
+                ({contactsData.length} total)
+              </span>
+            )}
+          </p>
         </div>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="h-4 w-4 mr-2" />
@@ -49,10 +56,12 @@ const Contatos = () => {
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-40" />
-          ))}
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <p className="text-lg font-semibold text-foreground">Carregando todos os contatos...</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Aguarde enquanto buscamos todas as páginas
+          </p>
         </div>
       ) : filteredContacts.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
