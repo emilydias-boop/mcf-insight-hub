@@ -78,44 +78,61 @@ export const useDeleteClintContact = () => {
   });
 };
 
-// Buscar TODOS os contatos com paginação completa
+// Buscar TODOS os contatos com paginação completa (VERSÃO ROBUSTA)
 export const useAllClintContacts = (params?: Record<string, string>) => {
   return useQuery<any>({
     queryKey: ['clint-all-contacts', params],
     queryFn: async () => {
       let allContacts: any[] = [];
       let currentPage = 1;
-      let totalPages = 1;
+      let hasMorePages = true;
       
       console.log('🔄 Iniciando busca paginada de contatos...');
       
-      // Buscar todas as páginas recursivamente
-      while (currentPage <= totalPages) {
-        const response = await callClintAPI<ClintAPIResponse<any[]>>({ 
+      while (hasMorePages && currentPage <= 100) {
+        const response = await callClintAPI<any>({ 
           resource: 'contacts', 
           params: {
             ...params,
             page: currentPage.toString(),
-            per_page: '200',  // Máximo por página
+            per_page: '200',
           }
         });
         
-        const contacts = response.data || [];
+        // DEBUG: Inspecionar estrutura completa da resposta
+        console.log('🔍 DEBUG - Resposta da API:', {
+          hasData: !!response.data,
+          dataLength: response.data?.length || 0,
+          hasMeta: !!response.meta,
+          meta: response.meta,
+          allKeys: Object.keys(response),
+        });
+        
+        const contacts = response.data || response.contacts || [];
+        
+        if (contacts.length === 0) {
+          console.log('✅ Sem mais contatos para carregar');
+          break;
+        }
+        
         allContacts = [...allContacts, ...contacts];
         
-        // Atualizar informações de paginação
-        if (response.meta) {
-          totalPages = Math.ceil(response.meta.total / response.meta.per_page);
-          console.log(`📄 Página ${currentPage}/${totalPages} - ${contacts.length} contatos carregados (${allContacts.length}/${response.meta.total} total)`);
+        // Tentar extrair informações de paginação (suporta múltiplos formatos)
+        const meta = response.meta || response.pagination || {};
+        const total = meta.total || meta.total_count || meta.count;
+        const perPage = meta.per_page || meta.page_size || meta.items_per_page || 200;
+        const totalPages = total ? Math.ceil(total / perPage) : null;
+        
+        if (totalPages) {
+          console.log(`📄 Página ${currentPage}/${totalPages} - ${contacts.length} contatos carregados (${allContacts.length}/${total} total)`);
+          hasMorePages = currentPage < totalPages;
+        } else {
+          // Se não tem metadata, continuar enquanto retornar registros completos
+          console.log(`📄 Página ${currentPage} - ${contacts.length} contatos carregados (${allContacts.length} total até agora)`);
+          hasMorePages = contacts.length >= 200;
         }
         
         currentPage++;
-        
-        // Limite de segurança (máximo 100 páginas = 20.000 contatos)
-        if (currentPage > 100) {
-          console.warn('⚠️ Limite de 100 páginas atingido');
-          break;
-        }
       }
       
       console.log(`✅ Total de ${allContacts.length} contatos carregados`);
@@ -129,8 +146,8 @@ export const useAllClintContacts = (params?: Record<string, string>) => {
         }
       };
     },
-    staleTime: 5 * 60 * 1000,  // Cache por 5 minutos
-    gcTime: 10 * 60 * 1000,     // Manter em cache por 10 minutos
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 };
 
