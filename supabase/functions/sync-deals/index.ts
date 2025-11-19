@@ -8,6 +8,7 @@ const corsHeaders = {
 const CLINT_API_KEY = Deno.env.get('CLINT_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const BATCH_SIZE = 100;
 
 interface ClintAPIResponse<T> {
   data: T;
@@ -49,19 +50,58 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+  let jobId: string | undefined;
+
   try {
-    console.log('🚀 Sincronizando Deals do Clint CRM');
+    const body = await req.json().catch(() => ({}));
+    const autoMode = body.auto_mode === true;
+    
+    console.log('🚀 Sincronizando Deals do Clint CRM', autoMode ? '(Modo Automático)' : '');
     const startTime = Date.now();
 
-    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    // Criar ou recuperar job de sincronização
+    let startPage = 1;
+    
+    if (autoMode) {
+      // Verificar se há job em execução
+      const { data: runningJob } = await supabase
+        .from('sync_jobs')
+        .select('*')
+        .eq('job_type', 'sync-deals')
+        .eq('status', 'running')
+        .single();
 
-    let page = 1;
+      if (runningJob) {
+        console.log('⏸️ Job já em execução, continuando...');
+        jobId = runningJob.id;
+        startPage = (runningJob.last_page || 0) + 1;
+      } else {
+        // Criar novo job
+        const { data: newJob, error: jobError } = await supabase
+          .from('sync_jobs')
+          .insert({
+            job_type: 'sync-deals',
+            status: 'running',
+            started_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (jobError) throw jobError;
+        jobId = newJob.id;
+      }
+    }
+
+    let page = startPage;
     let totalProcessed = 0;
-    const MAX_PAGES = 1000;
+    const MAX_PAGES = autoMode ? 5 : 1000; // Limitar em modo automático
 
     // 📊 Cache de mapeamentos para otimização (bulk queries)
     const contactMap = new Map<string, string>();
     const stageMap = new Map<string, { id: string; origin_id: string | null }>();
+    let lastResponse: any;
+    let lastDeals: any[] = [];
 
     while (page <= MAX_PAGES) {
       const response = await callClintAPI('deals', {
@@ -69,7 +109,9 @@ Deno.serve(async (req) => {
         per_page: '200',
       });
 
+      lastResponse = response;
       const deals = response.data || [];
+      lastDeals = deals;
       if (deals.length === 0) break;
 
       // 🔧 OTIMIZAÇÃO: Buscar todos contact_ids e stage_ids de uma vez
@@ -101,8 +143,8 @@ Deno.serve(async (req) => {
       }
 
       // Processar deals em batch
-      for (let i = 0; i < deals.length; i += 100) {
-        const batch = deals.slice(i, i + 100);
+      for (let i = 0; i < deals.length; i += BATCH_SIZE) {
+        const batch = deals.slice(i, i + BATCH_SIZE);
 
         for (const deal of batch) {
           const contactId = deal.contact_id ? contactMap.get(deal.contact_id) || null : null;
@@ -132,24 +174,59 @@ Deno.serve(async (req) => {
       totalProcessed += deals.length;
       console.log(`💼 Deals processados: ${totalProcessed} (página ${page})`);
 
+      // Salvar checkpoint em modo automático
+      if (autoMode && jobId) {
+        await supabase
+          .from('sync_jobs')
+          .update({
+            last_page: page,
+            total_processed: totalProcessed,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', jobId);
+      }
+
       await new Promise((r) => setTimeout(r, 100));
       page++;
 
       if (!response.meta || deals.length < 200) break;
+      
+      // Em modo automático, parar após MAX_PAGES para não bloquear
+      if (autoMode && page > startPage + MAX_PAGES) {
+        console.log(`⏸️ Pausando após ${MAX_PAGES} páginas em modo automático`);
+        break;
+      }
     }
 
     const duration = Date.now() - startTime;
+    const isComplete = page > startPage && (!lastResponse?.meta || lastDeals?.length < 200);
+
+    // Atualizar status do job
+    if (autoMode && jobId!) {
+      await supabase
+        .from('sync_jobs')
+        .update({
+          status: isComplete ? 'completed' : 'running',
+          completed_at: isComplete ? new Date().toISOString() : null,
+          total_processed: totalProcessed,
+          last_page: page - 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId);
+    }
 
     const summary = {
       success: true,
       timestamp: new Date().toISOString(),
       duration_ms: duration,
+      is_complete: isComplete,
       results: {
         deals_synced: totalProcessed,
+        last_page: page - 1,
       },
     };
 
-    console.log('✅ Sincronização completa:');
+    console.log(isComplete ? '✅ Sincronização completa:' : '⏸️ Sincronização pausada:');
     console.log(JSON.stringify(summary, null, 2));
 
     return new Response(JSON.stringify(summary), {
@@ -158,6 +235,23 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('❌ Erro na sincronização:', error);
+    
+    // Marcar job como failed em modo automático
+    if (jobId) {
+      try {
+        await supabase
+          .from('sync_jobs')
+          .update({
+            status: 'failed',
+            error_message: error instanceof Error ? error.message : 'Erro desconhecido',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', jobId);
+      } catch (e) {
+        console.error('Erro ao atualizar job:', e);
+      }
+    }
+    
     return new Response(
       JSON.stringify({
         success: false,
