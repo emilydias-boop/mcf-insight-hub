@@ -95,31 +95,27 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
           continue;
         }
 
-        // 2. Salvar os stages desta origin
+        // 2. Salvar os stages desta origin - BATCH UPSERT
         if (origin.stages && Array.isArray(origin.stages) && origin.stages.length > 0) {
-          for (const stage of origin.stages) {
-            const { error: stageError } = await supabase
-              .from('crm_stages')
-              .upsert(
-                {
-                  clint_id: stage.id,
-                  stage_name: stage.label || stage.name,
-                  stage_order: stage.order || 0,
-                  origin_id: savedOrigin.id,
-                  color: getColorFromType(stage.type),
-                  is_active: stage.active !== false,
-                },
-                { onConflict: 'clint_id' }
-              );
+          const stagesToUpsert = origin.stages.map((stage: any) => ({
+            clint_id: stage.id,
+            stage_name: stage.label || stage.name,
+            stage_order: stage.order || 0,
+            origin_id: savedOrigin.id,
+            color: getColorFromType(stage.type),
+            is_active: stage.active !== false,
+          }));
 
-            if (stageError) {
-              console.error(`❌ Erro ao salvar stage ${stage.label}:`, stageError);
-            } else {
-              totalStages++;
-            }
+          const { error: stageError } = await supabase
+            .from('crm_stages')
+            .upsert(stagesToUpsert, { onConflict: 'clint_id' });
+
+          if (stageError) {
+            console.error(`❌ Erro ao salvar stages da origin ${origin.name}:`, stageError);
+          } else {
+            totalStages += origin.stages.length;
+            console.log(`✅ Origin "${origin.name}" sincronizada com ${origin.stages.length} stages`);
           }
-          
-          console.log(`✅ Origin "${origin.name}" sincronizada com ${origin.stages.length} stages`);
         } else {
           console.log(`⚠️ Origin "${origin.name}" sem stages`);
         }

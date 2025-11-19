@@ -152,7 +152,8 @@ const Negocios = () => {
               deals={filteredDeals.map((deal: any) => ({
                 ...deal,
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
-              }))} 
+              }))}
+              originId={selectedOriginId || undefined}
             />
           )}
         </div>
