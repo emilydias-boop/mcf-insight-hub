@@ -486,12 +486,40 @@ export type Database = {
           },
         ]
       }
+      crm_groups: {
+        Row: {
+          clint_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          clint_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          clint_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       crm_origins: {
         Row: {
           clint_id: string
           contact_count: number | null
           created_at: string | null
           description: string | null
+          group_id: string | null
           id: string
           name: string
           parent_id: string | null
@@ -502,6 +530,7 @@ export type Database = {
           contact_count?: number | null
           created_at?: string | null
           description?: string | null
+          group_id?: string | null
           id?: string
           name: string
           parent_id?: string | null
@@ -512,12 +541,20 @@ export type Database = {
           contact_count?: number | null
           created_at?: string | null
           description?: string | null
+          group_id?: string | null
           id?: string
           name?: string
           parent_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_origins_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "crm_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_origins_parent_id_fkey"
             columns: ["parent_id"]

@@ -12,63 +12,53 @@ interface OriginsSidebarProps {
   onSelectOrigin: (originId: string | null) => void;
 }
 
+interface Group {
+  id: string;
+  name: string;
+  children: Origin[];
+}
+
 interface Origin {
   id: string;
   name: string;
-  parent_id?: string | null;
+  group_id?: string | null;
   contact_count?: number;
-  children?: Origin[];
 }
 
-// Função para construir árvore de origens
-const buildOriginTree = (origins: any[]): Origin[] => {
-  const originMap = new Map<string, Origin>();
-  const roots: Origin[] = [];
-  
-  // Criar map e adicionar array de children
-  origins.forEach((origin: any) => {
-    originMap.set(origin.id, { ...origin, children: [] });
-  });
-  
-  // Construir árvore
-  origins.forEach((origin: any) => {
-    const node = originMap.get(origin.id)!;
-    if (origin.parent_id && originMap.has(origin.parent_id)) {
-      const parent = originMap.get(origin.parent_id)!;
-      parent.children!.push(node);
-    } else {
-      roots.push(node);
-    }
-  });
-  
-  return roots;
+// Função para construir árvore de origens agrupadas
+const buildOriginTree = (data: any[]): (Group | Origin)[] => {
+  // Grupos são identificados por terem 'children' já definidos do hook
+  return data;
 };
 
 // Componente recursivo para renderizar árvore
 const OriginTreeItem = ({ 
-  origin, 
+  item, 
   level = 0,
   selectedId,
   onSelect 
 }: { 
-  origin: Origin; 
+  item: Group | Origin; 
   level?: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const hasChildren = origin.children && origin.children.length > 0;
+  const isGroup = 'children' in item && Array.isArray(item.children);
+  const hasChildren = isGroup && item.children.length > 0;
   
   return (
     <div>
       <Button
-        variant={selectedId === origin.id ? "secondary" : "ghost"}
+        variant={!isGroup && selectedId === item.id ? "secondary" : "ghost"}
         className={cn(
           "w-full justify-between mb-1 h-auto py-2",
-          selectedId === origin.id && "bg-primary/10"
+          !isGroup && selectedId === item.id && "bg-primary/10",
+          isGroup && "font-semibold"
         )}
         style={{ paddingLeft: `${(level * 12) + 8}px` }}
-        onClick={() => onSelect(origin.id)}
+        onClick={() => !isGroup && onSelect(item.id)}
+        disabled={isGroup}
       >
         <span className="flex items-center gap-2 min-w-0 flex-1">
           {hasChildren && (
@@ -84,22 +74,26 @@ const OriginTreeItem = ({
             />
           )}
           {!hasChildren && <div className="w-3" />}
-          <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-          <span className="truncate text-xs">{origin.name}</span>
+          {isGroup ? (
+            <Layers className="h-3 w-3 flex-shrink-0" />
+          ) : (
+            <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+          )}
+          <span className="truncate text-xs">{item.name}</span>
         </span>
-        {origin.contact_count !== undefined && (
+        {!isGroup && 'contact_count' in item && item.contact_count !== undefined && (
           <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
-            {origin.contact_count}
+            {item.contact_count}
           </Badge>
         )}
       </Button>
       
-      {hasChildren && isExpanded && (
+      {hasChildren && isExpanded && isGroup && (
         <div>
-          {origin.children!.map(child => (
+          {item.children.map(child => (
             <OriginTreeItem
               key={child.id}
-              origin={child}
+              item={child}
               level={level + 1}
               selectedId={selectedId}
               onSelect={onSelect}
@@ -121,14 +115,19 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
   // Construir árvore de origens
   const originTree = buildOriginTree(origins);
   
-  // Filtrar origens por busca (busca em toda a árvore)
+  // Filtrar origens por busca (busca em grupos e origens)
   const filteredTree = searchTerm 
-    ? originTree.filter((origin: Origin) => {
-        const matchesSearch = (o: Origin): boolean => {
-          if (o.name.toLowerCase().includes(searchTerm.toLowerCase())) return true;
-          return o.children?.some(matchesSearch) || false;
-        };
-        return matchesSearch(origin);
+    ? originTree.filter((item: any) => {
+        const isGroup = 'children' in item && Array.isArray(item.children);
+        if (isGroup) {
+          // Se o grupo match ou algum filho match
+          if (item.name.toLowerCase().includes(searchTerm.toLowerCase())) return true;
+          return item.children.some((child: Origin) => 
+            child.name.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        } else {
+          return item.name.toLowerCase().includes(searchTerm.toLowerCase());
+        }
       })
     : originTree;
   
@@ -192,10 +191,10 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
                   {searchTerm ? 'Nenhuma origem encontrada' : 'Nenhuma origem cadastrada'}
                 </div>
               ) : (
-                filteredTree.map((origin: Origin) => (
+                filteredTree.map((item: any) => (
                   <OriginTreeItem
-                    key={origin.id}
-                    origin={origin}
+                    key={item.id}
+                    item={item}
                     selectedId={selectedOriginId}
                     onSelect={onSelectOrigin}
                   />

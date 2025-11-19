@@ -55,23 +55,22 @@ function getColorFromType(type: string): string {
   return colorMap[type] || '#6b7280'; // Cinza como padrão
 }
 
-async function syncOrigins(supabase: any): Promise<{ origins: number; stages: number }> {
-  console.log('🔄 Sincronizando Origins...');
+async function syncOrigins(supabase: any): Promise<{ origins: number; stages: number; groups: number }> {
+  console.log('🔄 Sincronizando Groups e Origins...');
   const startTime = Date.now();
   let page = 1;
   let totalOrigins = 0;
   let totalStages = 0;
+  let totalGroups = 0;
   const MAX_PAGES = 1000;
   
-  // Mapa para armazenar clint_id → database UUID
+  // Mapas para relacionamentos
+  const groupIdMap = new Map<string, string>(); // clint_id → db UUID
   const originIdMap = new Map<string, string>();
-  
-  // Armazenar informações de hierarquia para o Pass 2
-  const hierarchyData: Array<{ clintId: string; parentClintId: string | null }> = [];
 
   try {
-    // ========== PASS 1: Criar/Atualizar Origens ==========
-    console.log('📥 Pass 1: Sincronizando origens...');
+    // ========== PASS 1: Sincronizar Groups e Origins ==========
+    console.log('📥 Pass 1: Sincronizando dados...');
     
     while (page <= MAX_PAGES) {
       const response = await callClintAPI('origins', { 
@@ -83,42 +82,44 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
       if (origins.length === 0) break;
 
       for (const origin of origins) {
-        // LOG PARA DIAGNÓSTICO - Primeira origin processada
+        // LOG PARA PRIMEIRA ORIGIN (DEBUG)
         if (totalOrigins === 0) {
-          console.log('🔍 DEBUG - Estrutura completa da primeira Origin:');
-          console.log(JSON.stringify(origin, null, 2));
-          console.log('🔍 DEBUG - Campos de hierarquia encontrados:');
-          console.log('  - origin.parent_id:', origin.parent_id);
-          console.log('  - origin.parent:', origin.parent);
-          console.log('  - origin.parentId:', origin.parentId);
-          console.log('  - origin.parent_origin_id:', origin.parent_origin_id);
-          console.log('  - typeof origin.parent:', typeof origin.parent);
-          if (origin.parent && typeof origin.parent === 'object') {
-            console.log('  - origin.parent.id:', origin.parent.id);
+          console.log('🔍 DEBUG - Primeira Origin:', JSON.stringify(origin, null, 2));
+        }
+        
+        // 1. Processar GROUP (se existir)
+        let groupDbId = null;
+        if (origin.group && origin.group.id) {
+          const groupClintId = origin.group.id;
+          
+          // Verificar se já processamos este group
+          if (!groupIdMap.has(groupClintId)) {
+            const { data: savedGroup, error: groupError } = await supabase
+              .from('crm_groups')
+              .upsert(
+                {
+                  clint_id: groupClintId,
+                  name: origin.group.name,
+                  description: null,
+                },
+                { onConflict: 'clint_id' }
+              )
+              .select()
+              .single();
+
+            if (groupError) {
+              console.error(`❌ Erro ao salvar group ${origin.group.name}:`, groupError);
+            } else {
+              groupIdMap.set(groupClintId, savedGroup.id);
+              groupDbId = savedGroup.id;
+              totalGroups++;
+            }
+          } else {
+            groupDbId = groupIdMap.get(groupClintId);
           }
         }
         
-        // Armazenar hierarquia para o Pass 2
-        // Tentar múltiplos formatos possíveis
-        let parentClintId = null;
-        if (origin.parent_id) {
-          parentClintId = origin.parent_id;
-        } else if (origin.parentId) {
-          parentClintId = origin.parentId;
-        } else if (origin.parent_origin_id) {
-          parentClintId = origin.parent_origin_id;
-        } else if (origin.parent && typeof origin.parent === 'string') {
-          parentClintId = origin.parent;
-        } else if (origin.parent && typeof origin.parent === 'object' && origin.parent.id) {
-          parentClintId = origin.parent.id;
-        }
-        
-        hierarchyData.push({
-          clintId: origin.id,
-          parentClintId: parentClintId
-        });
-        
-        // 1. Salvar a origin SEM parent_id por enquanto
+        // 2. Salvar ORIGIN com group_id
         const { data: savedOrigin, error: originError } = await supabase
           .from('crm_origins')
           .upsert(
@@ -166,7 +167,7 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
         }
       }
 
-      console.log(`📄 Origins processadas: ${totalOrigins} | Stages: ${totalStages} (página ${page})`);
+      console.log(`📄 Página ${page} processada: Groups: ${totalGroups} | Origins: ${totalOrigins} | Stages: ${totalStages}`);
       page++;
 
       if (!response.meta || page > response.meta.total / 200) {
@@ -174,56 +175,13 @@ async function syncOrigins(supabase: any): Promise<{ origins: number; stages: nu
       }
     }
     
-    // ========== PASS 2: Atualizar Hierarquia ==========
-    console.log('🔗 Pass 2: Atualizando hierarquia de origens...');
-    const totalRelations = hierarchyData.filter(h => h.parentClintId !== null).length;
-    console.log(`📊 Total de relações encontradas nos dados: ${totalRelations}`);
-    
-    let hierarchyUpdates = 0;
-    let hierarchyErrors = 0;
-    
-    for (const { clintId, parentClintId } of hierarchyData) {
-      if (!parentClintId) continue; // Pular origens raiz
-      
-      const childDbId = originIdMap.get(clintId);
-      const parentDbId = originIdMap.get(parentClintId);
-      
-      if (!childDbId) {
-        console.warn(`⚠️ Child origin não encontrado no mapa: ${clintId}`);
-        hierarchyErrors++;
-        continue;
-      }
-      
-      if (!parentDbId) {
-        console.warn(`⚠️ Parent origin não encontrado no mapa: ${parentClintId} (child: ${clintId})`);
-        hierarchyErrors++;
-        continue;
-      }
-      
-      if (childDbId && parentDbId) {
-        const { error } = await supabase
-          .from('crm_origins')
-          .update({ parent_id: parentDbId })
-          .eq('id', childDbId);
-          
-        if (error) {
-          console.error(`❌ Erro ao atualizar parent_id para ${clintId}:`, error);
-          hierarchyErrors++;
-        } else {
-          hierarchyUpdates++;
-        }
-      }
-    }
-    
-    console.log(`✅ Hierarquia atualizada: ${hierarchyUpdates} relações pai-filho`);
-    if (hierarchyErrors > 0) {
-      console.log(`⚠️ Erros na hierarquia: ${hierarchyErrors}`);
-    }
-
     const duration = Date.now() - startTime;
-    console.log(`✅ Origins sincronizadas: ${totalOrigins} em ${duration}ms`);
-    console.log(`✅ Stages sincronizados: ${totalStages}`);
-    return { origins: totalOrigins, stages: totalStages };
+    console.log(`✅ Sincronização completa em ${duration}ms:`);
+    console.log(`   - Groups: ${totalGroups}`);
+    console.log(`   - Origins: ${totalOrigins}`);
+    console.log(`   - Stages: ${totalStages}`);
+    
+    return { origins: totalOrigins, stages: totalStages, groups: totalGroups };
   } catch (error) {
     console.error('❌ Erro ao sincronizar origins:', error);
     throw error;
