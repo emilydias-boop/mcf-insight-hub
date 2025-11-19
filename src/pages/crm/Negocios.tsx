@@ -96,7 +96,7 @@ const Negocios = () => {
         onSelectOrigin={setSelectedOriginId}
       />
       
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="flex items-center justify-between p-4 border-b">
           <div>
             <h2 className="text-2xl font-bold">Pipeline de Vendas</h2>

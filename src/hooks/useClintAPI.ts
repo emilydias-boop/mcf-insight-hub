@@ -109,6 +109,15 @@ export const useClintDeals = (params?: Record<string, string>) => {
   });
 };
 
+// Buscar stages/etapas da API Clint
+export const useClintStages = () => {
+  return useQuery<ClintAPIResponse<any[]>>({
+    queryKey: ['clint-stages'],
+    queryFn: () => callClintAPI({ resource: 'stages' }),
+    staleTime: 10 * 60 * 1000, // Cache por 10 minutos (stages mudam raramente)
+  });
+};
+
 // Buscar TODOS os deals com paginação completa
 export const useAllClintDeals = (params?: Record<string, string>) => {
   return useQuery<any>({
