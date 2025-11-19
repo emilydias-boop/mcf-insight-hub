@@ -55,33 +55,107 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    let page = 1;
+    // Verificar se é modo automático (cron) ou manual
+    const body = req.method === 'POST' ? await req.json() : {};
+    const autoMode = body.auto_mode === true;
+    
+    // Configurações para modo automático vs manual
+    const CONTACTS_PER_PAGE = 200;
+    const BATCH_SIZE = 1000; // Aumentado para melhor performance
+    const MAX_PAGES_PER_RUN = autoMode ? 50 : 1000; // Processar 50 páginas por vez no cron (10k contatos)
+    const RATE_LIMIT_MS = 10; // Reduzido para 10ms
+
     let totalProcessed = 0;
     let totalSkipped = 0;
-    const MAX_PAGES = 1000;
-    const CONTACTS_PER_PAGE = 200;
-    const BATCH_SIZE = 500; // Bulk upsert de 500 contatos por vez
+    let startPage = 1;
+    let jobId = null;
 
-    while (page <= MAX_PAGES) {
+    // Se modo automático, buscar ou criar job
+    if (autoMode) {
+      // Buscar job em andamento ou criar novo
+      const { data: existingJobs } = await supabase
+        .from('sync_jobs')
+        .select('*')
+        .eq('job_type', 'contacts')
+        .in('status', ['running', 'pending'])
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (existingJobs && existingJobs.length > 0) {
+        const job = existingJobs[0];
+        jobId = job.id;
+        startPage = (job.last_page || 0) + 1;
+        totalProcessed = job.total_processed || 0;
+        totalSkipped = job.total_skipped || 0;
+        
+        console.log(`📂 Continuando job ${jobId} da página ${startPage}`);
+        
+        // Atualizar status para running
+        await supabase
+          .from('sync_jobs')
+          .update({ 
+            status: 'running',
+            started_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+      } else {
+        // Criar novo job
+        const { data: newJob, error } = await supabase
+          .from('sync_jobs')
+          .insert({
+            job_type: 'contacts',
+            status: 'running',
+            started_at: new Date().toISOString(),
+            last_page: 0,
+            total_processed: 0,
+            total_skipped: 0
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        jobId = newJob.id;
+        console.log(`📝 Novo job criado: ${jobId}`);
+      }
+    }
+
+    let page = startPage;
+
+    const endPage = autoMode ? Math.min(startPage + MAX_PAGES_PER_RUN - 1, 1000) : 1000;
+    
+    let lastContactsLength = 0;
+    
+    while (page <= endPage) {
       const response = await callClintAPI('contacts', {
         page: page.toString(),
         per_page: CONTACTS_PER_PAGE.toString(),
       });
 
       const contacts = response.data || [];
-      if (contacts.length === 0) break;
+      lastContactsLength = contacts.length;
+      
+      if (contacts.length === 0) {
+        console.log('✅ Todos os contatos foram processados');
+        break;
+      }
 
       // Processar em batches maiores com bulk upsert
       for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
         const batch = contacts.slice(i, i + BATCH_SIZE);
 
         // Preparar todos os contatos do batch para bulk upsert
-        // IMPORTANTE: Filtrar contatos sem nome (violaria constraint NOT NULL)
+        // IMPORTANTE: Usar email como fallback se não houver nome
         const contactsToUpsert = batch
           .filter((contact: any) => {
+            // Se não tem nome, tenta usar email como fallback
             if (!contact.name || contact.name.trim() === '') {
+              if (contact.email && contact.email.trim() !== '') {
+                contact.name = contact.email.trim(); // Usar email como nome
+                return true;
+              }
+              // Só descarta se não tiver nem nome nem email
               totalSkipped++;
-              console.log(`⚠️ Contato sem nome descartado - ID: ${contact.id}`);
+              console.log(`⚠️ Contato sem nome/email descartado - ID: ${contact.id}`);
               return false;
             }
             return true;
@@ -118,29 +192,68 @@ Deno.serve(async (req) => {
           ? ((totalProcessed / response.meta.total) * 100).toFixed(1)
           : 'N/A';
         
-        console.log(`📄 Processados: ${totalProcessed} contatos válidos | ${totalSkipped} sem nome (${percentage}% - página ${page}, batch ${Math.floor(i / BATCH_SIZE) + 1})`);
+        console.log(`📄 Processados: ${totalProcessed} contatos válidos | ${totalSkipped} sem nome/email (${percentage}% - página ${page}, batch ${Math.floor(i / BATCH_SIZE) + 1})`);
       }
 
-      await new Promise((r) => setTimeout(r, 50)); // Rate limiting reduzido
+      // Atualizar checkpoint do job após cada página
+      if (autoMode && jobId) {
+        await supabase
+          .from('sync_jobs')
+          .update({ 
+            last_page: page,
+            total_processed: totalProcessed,
+            total_skipped: totalSkipped,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+      }
+
+      await new Promise((r) => setTimeout(r, RATE_LIMIT_MS));
       page++;
 
-      if (contacts.length < CONTACTS_PER_PAGE) break;
+      if (lastContactsLength < CONTACTS_PER_PAGE) {
+        console.log('✅ Última página alcançada');
+        break;
+      }
     }
 
     const duration = Date.now() - startTime;
+    const isComplete = (page > endPage && lastContactsLength >= CONTACTS_PER_PAGE) ? false : true;
+
+    // Atualizar job com status final
+    if (autoMode && jobId) {
+      await supabase
+        .from('sync_jobs')
+        .update({ 
+          status: isComplete ? 'completed' : 'paused',
+          completed_at: isComplete ? new Date().toISOString() : null,
+          total_processed: totalProcessed,
+          total_skipped: totalSkipped,
+          metadata: {
+            last_page: page - 1,
+            duration_ms: duration,
+            mode: 'auto'
+          }
+        })
+        .eq('id', jobId);
+    }
 
     const summary = {
       success: true,
       timestamp: new Date().toISOString(),
       duration_ms: duration,
+      mode: autoMode ? 'auto' : 'manual',
+      job_id: jobId,
+      is_complete: isComplete,
       results: {
         contacts_synced: totalProcessed,
         contacts_skipped: totalSkipped,
-        reason_skipped: 'Contatos sem nome (violaria constraint NOT NULL)',
+        pages_processed: `${startPage}-${page - 1}`,
+        reason_skipped: 'Contatos sem nome e email (violaria constraint NOT NULL)',
       },
     };
 
-    console.log('✅ Sincronização completa:');
+    console.log(`✅ Sincronização ${isComplete ? 'completa' : 'pausada'}:`);
     console.log(JSON.stringify(summary, null, 2));
 
     return new Response(JSON.stringify(summary), {

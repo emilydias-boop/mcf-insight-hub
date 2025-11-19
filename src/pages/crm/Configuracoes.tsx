@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Settings, Users, Zap, Database, Shield } from 'lucide-react';
-import { SyncControls } from '@/components/crm/SyncControls';
+import { SyncMonitor } from '@/components/crm/SyncMonitor';
 
 const Configuracoes = () => {
   const settingsSections = [
@@ -38,7 +38,7 @@ const Configuracoes = () => {
         <p className="text-muted-foreground">Personalize e configure seu sistema de CRM</p>
       </div>
 
-      <SyncControls />
+      <SyncMonitor />
 
       <div className="grid gap-6 md:grid-cols-2">
         {settingsSections.map((section) => {
