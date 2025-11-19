@@ -24,7 +24,13 @@ serve(async (req) => {
     
     // Add query parameters if provided
     if (params) {
-      const queryString = new URLSearchParams(params).toString();
+      // Adicionar defaults para paginação se não fornecidos
+      const paginationParams = {
+        page: params.page || '1',
+        per_page: params.per_page || '200',  // Máximo por página
+        ...params,
+      };
+      const queryString = new URLSearchParams(paginationParams).toString();
       url = `${url}?${queryString}`;
     }
 

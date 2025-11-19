@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useClintDeals } from '@/hooks/useClintAPI';
+import { useAllClintDeals } from '@/hooks/useClintAPI';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
@@ -21,7 +21,7 @@ const Negocios = () => {
     maxValue: null,
   });
   
-  const { data: dealsData, isLoading, error } = useClintDeals(
+  const { data: dealsData, isLoading, error } = useAllClintDeals(
     selectedOriginId ? { origin_id: selectedOriginId } : undefined
   );
   const { getVisibleStages } = useStagePermissions();
@@ -130,12 +130,14 @@ const Negocios = () => {
               </AlertDescription>
             </Alert>
           ) : isLoading ? (
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex-shrink-0 w-80">
-                  <Skeleton className="h-[400px] w-full" />
-                </div>
-              ))}
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <div className="text-center">
+                <p className="text-lg font-semibold">Carregando negócios...</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Isso pode levar alguns segundos
+                </p>
+              </div>
             </div>
           ) : (
             <DealKanbanBoard deals={filteredDeals} />
