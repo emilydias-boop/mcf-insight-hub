@@ -1,12 +1,15 @@
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUpdateClintDealStage } from '@/hooks/useClintAPI';
 import { toast } from 'sonner';
 import { useDealStages } from '@/hooks/useDealStages';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
+import { AlertCircle, Inbox } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -22,17 +25,8 @@ interface DealKanbanBoardProps {
   deals: Deal[];
 }
 
-const stages = [
-  { id: 'lead', name: 'Lead', color: 'bg-muted' },
-  { id: 'qualified', name: 'Qualificado', color: 'bg-primary/10' },
-  { id: 'proposal', name: 'Proposta', color: 'bg-warning/10' },
-  { id: 'negotiation', name: 'Negociação', color: 'bg-warning/20' },
-  { id: 'won', name: 'Ganho', color: 'bg-success/10' },
-  { id: 'lost', name: 'Perdido', color: 'bg-destructive/10' },
-];
-
 export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
-  const { data: stages = [] } = useDealStages();
+  const { data: stages = [], isLoading: stagesLoading, error: stagesError } = useDealStages();
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateStageMutation = useUpdateClintDealStage();
   const createActivity = useCreateDealActivity();
@@ -43,6 +37,52 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
   const getDealsByStage = (stageId: string) => {
     return deals.filter(deal => deal.stage === stageId);
   };
+
+  // Loading state
+  if (stagesLoading) {
+    return (
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex-shrink-0 w-80">
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </CardContent>
+            </Card>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Error state
+  if (stagesError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Erro ao carregar os estágios do pipeline. Tente recarregar a página.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  // Empty state
+  if (!stages || stages.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <Inbox className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-semibold mb-2">Nenhum estágio configurado</h3>
+        <p className="text-sm text-muted-foreground">
+          Configure os estágios do pipeline nas configurações do CRM.
+        </p>
+      </div>
+    );
+  }
 
   const onDragEnd = (result: any) => {
     if (!result.destination) return;
@@ -104,17 +144,26 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
                       {...provided.droppableProps}
                       className="p-4 space-y-3 min-h-[200px]"
                     >
-                      {stageDeals.map((deal, index) => (
-                        <Draggable key={deal.id} draggableId={deal.id} index={index}>
-                          {(provided, snapshot) => (
-                            <DealKanbanCard
-                              deal={deal}
-                              isDragging={snapshot.isDragging}
-                              provided={provided}
-                            />
-                          )}
-                        </Draggable>
-                      ))}
+                      {stageDeals.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                          <Inbox className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            Nenhum negócio neste estágio
+                          </p>
+                        </div>
+                      ) : (
+                        stageDeals.map((deal, index) => (
+                          <Draggable key={deal.id} draggableId={deal.id} index={index}>
+                            {(provided, snapshot) => (
+                              <DealKanbanCard
+                                deal={deal}
+                                isDragging={snapshot.isDragging}
+                                provided={provided}
+                              />
+                            )}
+                          </Draggable>
+                        ))
+                      )}
                       {provided.placeholder}
                     </div>
                   )}
