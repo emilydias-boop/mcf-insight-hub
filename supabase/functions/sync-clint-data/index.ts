@@ -405,6 +405,17 @@ Deno.serve(async (req) => {
 
     try {
       results.deals = await syncDeals(supabase);
+      
+      // 🔗 Vincular contacts com origin_id baseado nos deals
+      console.log('🔗 Vinculando contacts com origins via deals...');
+      const { data: linkResult, error: linkError } = await supabase.rpc('link_contacts_to_origins_via_deals');
+      
+      if (linkError) {
+        console.error('❌ Erro ao vincular contacts:', linkError);
+        results.errors.push(`Link contacts: ${linkError.message}`);
+      } else {
+        console.log(`✅ Contacts vinculados: ${linkResult || 0}`);
+      }
     } catch (error) {
       results.errors.push(`Deals: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
