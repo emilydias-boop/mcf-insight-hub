@@ -99,7 +99,9 @@ const Contatos = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-foreground">{contact.name}</h3>
-                      <p className="text-xs text-muted-foreground">ID: {contact.id.slice(0, 8)}</p>
+                      {contact.organization_name && (
+                        <p className="text-xs text-muted-foreground">{contact.organization_name}</p>
+                      )}
                     </div>
                   </div>
                 </div>
