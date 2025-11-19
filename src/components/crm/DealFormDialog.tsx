@@ -215,11 +215,13 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {availableStages.map((stage) => (
-                          <SelectItem key={stage.stage_id} value={stage.stage_id}>
-                            {stage.stage_name}
-                          </SelectItem>
-                        ))}
+                        {availableStages
+                          .filter(stage => stage.stage_id && stage.stage_id.trim() !== '')
+                          .map((stage) => (
+                            <SelectItem key={stage.stage_id} value={stage.stage_id}>
+                              {stage.stage_name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -322,11 +324,13 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {origins.map((origin) => (
-                          <SelectItem key={origin.id} value={origin.id}>
-                            {origin.name}
-                          </SelectItem>
-                        ))}
+                        {origins
+                          .filter(origin => origin.id && origin.id.trim() !== '')
+                          .map((origin) => (
+                            <SelectItem key={origin.id} value={origin.id}>
+                              {origin.name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -348,11 +352,13 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.name}
-                          </SelectItem>
-                        ))}
+                        {users
+                          .filter(user => user.id && user.id.trim() !== '')
+                          .map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.name}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
