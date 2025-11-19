@@ -310,11 +310,14 @@ Deno.serve(async (req) => {
       results.errors.push(`Origins: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
 
-    try {
-      results.contacts = await syncContacts(supabase);
-    } catch (error) {
-      results.errors.push(`Contacts: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-    }
+    // 🚧 TEMPORARIAMENTE DESABILITADO: Sync de Contacts causa CPU timeout
+    // Contacts serão sincronizados em edge function separada no futuro
+    // try {
+    //   results.contacts = await syncContacts(supabase);
+    // } catch (error) {
+    //   results.errors.push(`Contacts: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    // }
+    console.log('⏭️ Pulando sincronização de Contacts (desabilitada temporariamente)');
 
     try {
       results.deals = await syncDeals(supabase);
