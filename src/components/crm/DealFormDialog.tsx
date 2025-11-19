@@ -216,7 +216,12 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                       </FormControl>
                       <SelectContent>
                         {availableStages
-                          .filter(stage => stage.stage_id && stage.stage_id.trim() !== '')
+                          .filter(stage => 
+                            stage.stage_id && 
+                            stage.stage_id.trim() !== '' && 
+                            stage.stage_name && 
+                            stage.stage_name.trim() !== ''
+                          )
                           .map((stage) => (
                             <SelectItem key={stage.stage_id} value={stage.stage_id}>
                               {stage.stage_name}
@@ -325,7 +330,12 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                       </FormControl>
                       <SelectContent>
                         {origins
-                          .filter(origin => origin.id && origin.id.trim() !== '')
+                          .filter(origin => 
+                            origin.id && 
+                            origin.id.trim() !== '' && 
+                            origin.name && 
+                            origin.name.trim() !== ''
+                          )
                           .map((origin) => (
                             <SelectItem key={origin.id} value={origin.id}>
                               {origin.name}
@@ -353,7 +363,12 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                       </FormControl>
                       <SelectContent>
                         {users
-                          .filter(user => user.id && user.id.trim() !== '')
+                          .filter(user => 
+                            user.id && 
+                            user.id.trim() !== '' && 
+                            user.name && 
+                            user.name.trim() !== ''
+                          )
                           .map((user) => (
                             <SelectItem key={user.id} value={user.id}>
                               {user.name}

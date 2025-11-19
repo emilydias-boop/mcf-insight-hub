@@ -30,6 +30,11 @@ const Negocios = () => {
   const visibleStages = getVisibleStages();
   
   const filteredDeals = deals.filter((deal: any) => {
+    // Validar dados essenciais do deal
+    if (!deal || !deal.id || !deal.name || !deal.stage) {
+      return false;
+    }
+    
     if (filters.search && !deal.name.toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
     }

@@ -35,7 +35,12 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
   const visibleStages = stages.filter(s => visibleStageIds.includes(s.stage_id) && s.stage_order < 90);
   
   const getDealsByStage = (stageId: string) => {
-    return deals.filter(deal => deal.stage === stageId);
+    return deals.filter(deal => 
+      deal && 
+      deal.id && 
+      deal.name && 
+      deal.stage === stageId
+    );
   };
 
   // Loading state
