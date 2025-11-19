@@ -38,8 +38,8 @@ const Negocios = () => {
   });
   
   const filteredDeals = deals.filter((deal: any) => {
-    // Validar dados essenciais do deal
-    if (!deal || !deal.id || !deal.name || !deal.stage) {
+    // Validar dados essenciais do deal - usar stage_id em vez de stage
+    if (!deal || !deal.id || !deal.name || !deal.stage_id) {
       console.log('❌ Deal inválido (faltam dados básicos):', deal);
       return false;
     }
@@ -58,10 +58,12 @@ const Negocios = () => {
     
     if (filters.owner && deal.owner_id !== filters.owner) return false;
     
-    if (!visibleStages.includes(deal.stage)) {
+    // Comparar usando stage_id (UUID) em vez de stage (nome)
+    if (!visibleStages.includes(deal.stage_id)) {
       console.log('⚠️ Deal filtrado por permissão de estágio:', { 
         dealName: deal.name, 
-        stage: deal.stage, 
+        stageId: deal.stage_id,
+        stageName: deal.stage,
         visibleStages 
       });
       return false;

@@ -15,7 +15,8 @@ interface Deal {
   id: string;
   name: string;
   value: number;
-  stage: string;
+  stage_id: string;  // ID do estágio (UUID)
+  stage: string;      // Nome do estágio (para exibição)
   probability?: number;
   expected_close_date?: string;
   contact_id?: string;
@@ -39,7 +40,7 @@ export const DealKanbanBoard = ({ deals }: DealKanbanBoardProps) => {
       deal && 
       deal.id && 
       deal.name && 
-      deal.stage === stageId
+      deal.stage_id === stageId  // Usar stage_id para comparação
     );
   };
 
