@@ -109,6 +109,62 @@ export const useClintDeals = (params?: Record<string, string>) => {
   });
 };
 
+// Buscar TODOS os deals com paginação completa
+export const useAllClintDeals = (params?: Record<string, string>) => {
+  return useQuery<any>({
+    queryKey: ['clint-all-deals', params],
+    queryFn: async () => {
+      let allDeals: any[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      
+      console.log('🔄 Iniciando busca paginada de deals...');
+      
+      // Buscar todas as páginas recursivamente
+      while (currentPage <= totalPages) {
+        const response = await callClintAPI<ClintAPIResponse<any[]>>({ 
+          resource: 'deals', 
+          params: {
+            ...params,
+            page: currentPage.toString(),
+            per_page: '200',  // Máximo por página
+          }
+        });
+        
+        const deals = response.data || [];
+        allDeals = [...allDeals, ...deals];
+        
+        // Atualizar informações de paginação
+        if (response.meta) {
+          totalPages = Math.ceil(response.meta.total / response.meta.per_page);
+          console.log(`📄 Página ${currentPage}/${totalPages} - ${deals.length} deals carregados (${allDeals.length}/${response.meta.total} total)`);
+        }
+        
+        currentPage++;
+        
+        // Limite de segurança (máximo 100 páginas = 20.000 deals)
+        if (currentPage > 100) {
+          console.warn('⚠️ Limite de 100 páginas atingido');
+          break;
+        }
+      }
+      
+      console.log(`✅ Total de ${allDeals.length} deals carregados`);
+      
+      return { 
+        data: allDeals,
+        meta: {
+          total: allDeals.length,
+          page: 1,
+          per_page: allDeals.length
+        }
+      };
+    },
+    staleTime: 5 * 60 * 1000,  // Cache por 5 minutos
+    gcTime: 10 * 60 * 1000,     // Manter em cache por 10 minutos
+  });
+};
+
 export const useCreateClintDeal = () => {
   const queryClient = useQueryClient();
   return useMutation({
