@@ -81,20 +81,32 @@ export const SyncControls = () => {
     setCurrentStep(0);
 
     try {
-      toast.info('Iniciando sincronização...');
+      toast.info('Iniciando sincronização completa...');
 
       // Passo 1: Sincronizar origins e stages
-      setSteps([{ 
-        name: 'Origens e Estágios', 
-        endpoint: 'sync-origins-stages', 
-        status: 'pending', 
-        type: 'global' 
-      }]);
+      setSteps([
+        { 
+          name: 'Origens e Estágios', 
+          endpoint: 'sync-origins-stages', 
+          status: 'pending', 
+          type: 'global' 
+        },
+        { 
+          name: 'Todos os Contatos', 
+          endpoint: 'sync-contacts', 
+          status: 'pending', 
+          type: 'global' 
+        }
+      ]);
 
       await runSyncStep(steps[0], 0);
       toast.success('Origens e estágios sincronizados!');
 
-      // Passo 2: Buscar lista de origins
+      // Passo 2: Sincronizar TODOS os contatos (100k+)
+      await runSyncStep(steps[1], 1);
+      toast.success('Contatos sincronizados!');
+
+      // Passo 3: Buscar lista de origins
       const { data: origins, error: originsError } = await supabase
         .from('crm_origins')
         .select('id, name')
@@ -107,7 +119,7 @@ export const SyncControls = () => {
         return;
       }
 
-      // Passo 3: Criar steps para cada origin
+      // Passo 4: Criar steps para cada origin
       const originSteps: SyncStep[] = origins.map(origin => ({
         name: origin.name,
         status: 'pending',
@@ -117,23 +129,24 @@ export const SyncControls = () => {
 
       setSteps(prev => [...prev, ...originSteps]);
 
-      // Passo 4: Sincronizar cada origin
+      // Passo 5: Sincronizar cada origin
       for (let i = 0; i < originSteps.length; i++) {
-        const stepIndex = 1 + i; // +1 porque já temos o step global
+        const stepIndex = 2 + i; // +2 porque temos 2 steps globais agora
         await runSyncStep(originSteps[i], stepIndex);
         toast.success(`${originSteps[i].name} sincronizado!`);
       }
 
-      // Passo 5: Vincular contacts
+      // Passo 6: Vincular contacts aos deals
       const linkStep: SyncStep = {
-        name: 'Vincular Contatos',
+        name: 'Vincular Contatos aos Deals',
         endpoint: 'sync-link-contacts',
         status: 'pending',
         type: 'global',
       };
 
       setSteps(prev => [...prev, linkStep]);
-      await runSyncStep(linkStep, steps.length);
+      const linkIndex = 2 + originSteps.length;
+      await runSyncStep(linkStep, linkIndex);
 
       toast.success('Sincronização completa! 🎉');
     } catch (error: any) {
