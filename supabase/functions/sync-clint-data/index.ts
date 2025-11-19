@@ -44,11 +44,23 @@ async function callClintAPI<T = any>(
   return await response.json();
 }
 
-async function syncOrigins(supabase: any): Promise<number> {
+// Função auxiliar para determinar cor baseada no tipo de stage
+function getColorFromType(type: string): string {
+  const colorMap: Record<string, string> = {
+    'BASE': '#3b82f6',      // Azul
+    'CUSTOM': '#8b5cf6',    // Roxo
+    'CLOSING': '#10b981',   // Verde
+    'LOST': '#ef4444',      // Vermelho
+  };
+  return colorMap[type] || '#6b7280'; // Cinza como padrão
+}
+
+async function syncOrigins(supabase: any): Promise<{ origins: number; stages: number }> {
   console.log('🔄 Sincronizando Origins...');
   const startTime = Date.now();
   let page = 1;
-  let totalProcessed = 0;
+  let totalOrigins = 0;
+  let totalStages = 0;
   const MAX_PAGES = 1000;
 
   try {
@@ -62,20 +74,60 @@ async function syncOrigins(supabase: any): Promise<number> {
       if (origins.length === 0) break;
 
       for (const origin of origins) {
-        await supabase.from('crm_origins').upsert(
-          {
-            clint_id: origin.id,
-            name: origin.name,
-            description: origin.description || null,
-            parent_id: null,
-            contact_count: 0,
-          },
-          { onConflict: 'clint_id' }
-        );
+        // 1. Salvar a origin
+        const { data: savedOrigin, error: originError } = await supabase
+          .from('crm_origins')
+          .upsert(
+            {
+              clint_id: origin.id,
+              name: origin.name,
+              description: origin.description || null,
+              parent_id: null,
+              contact_count: 0,
+            },
+            { onConflict: 'clint_id' }
+          )
+          .select()
+          .single();
+
+        if (originError) {
+          console.error(`❌ Erro ao salvar origin ${origin.name}:`, originError);
+          continue;
+        }
+
+        // 2. Salvar os stages desta origin
+        if (origin.stages && Array.isArray(origin.stages) && origin.stages.length > 0) {
+          for (const stage of origin.stages) {
+            const { error: stageError } = await supabase
+              .from('crm_stages')
+              .upsert(
+                {
+                  clint_id: stage.id,
+                  stage_name: stage.label || stage.name,
+                  stage_order: stage.order || 0,
+                  origin_id: savedOrigin.id,
+                  color: getColorFromType(stage.type),
+                  is_active: stage.active !== false,
+                },
+                { onConflict: 'clint_id' }
+              );
+
+            if (stageError) {
+              console.error(`❌ Erro ao salvar stage ${stage.label}:`, stageError);
+            } else {
+              totalStages++;
+            }
+          }
+          
+          console.log(`✅ Origin "${origin.name}" sincronizada com ${origin.stages.length} stages`);
+        } else {
+          console.log(`⚠️ Origin "${origin.name}" sem stages`);
+        }
+
+        totalOrigins++;
       }
 
-      totalProcessed += origins.length;
-      console.log(`📄 Origins processadas: ${totalProcessed} (página ${page})`);
+      console.log(`📄 Origins processadas: ${totalOrigins} | Stages: ${totalStages} (página ${page})`);
 
       await new Promise((r) => setTimeout(r, 200));
       page++;
@@ -83,8 +135,10 @@ async function syncOrigins(supabase: any): Promise<number> {
       if (origins.length < 200) break;
     }
 
-    console.log(`✅ Origins sincronizadas: ${totalProcessed} em ${Date.now() - startTime}ms`);
-    return totalProcessed;
+    console.log(`✅ Origins sincronizadas: ${totalOrigins} em ${Date.now() - startTime}ms`);
+    console.log(`✅ Stages sincronizados: ${totalStages}`);
+    
+    return { origins: totalOrigins, stages: totalStages };
   } catch (error) {
     console.error('❌ Erro ao sincronizar origins:', error);
     throw error;
@@ -166,6 +220,7 @@ async function syncDeals(supabase: any): Promise<number> {
         const batch = deals.slice(i, i + 100);
 
         for (const deal of batch) {
+          // Buscar contact_id
           let contactId = null;
           if (deal.contact_id) {
             const { data: contact } = await supabase
@@ -176,14 +231,23 @@ async function syncDeals(supabase: any): Promise<number> {
             contactId = contact?.id || null;
           }
 
+          // Buscar stage_id E origin_id
           let stageId = null;
+          let originId = null;
+          
           if (deal.stage_id) {
             const { data: stage } = await supabase
               .from('crm_stages')
-              .select('id')
+              .select('id, origin_id')
               .eq('clint_id', deal.stage_id)
               .maybeSingle();
-            stageId = stage?.id || null;
+            
+            if (stage) {
+              stageId = stage.id;
+              originId = stage.origin_id;
+            } else {
+              console.warn(`⚠️ Deal "${deal.name}" → Stage ${deal.stage_id} não encontrado`);
+            }
           }
 
           await supabase.from('crm_deals').upsert(
@@ -193,7 +257,7 @@ async function syncDeals(supabase: any): Promise<number> {
               value: deal.value || 0,
               stage_id: stageId,
               contact_id: contactId,
-              origin_id: null,
+              origin_id: originId,
               owner_id: deal.owner_id || null,
               probability: deal.probability || null,
               expected_close_date: deal.expected_close_date || null,
@@ -235,14 +299,17 @@ Deno.serve(async (req) => {
 
     const results = {
       origins: 0,
+      stages: 0,
       contacts: 0,
       deals: 0,
       errors: [] as string[],
     };
 
-    // Sincronizar na ordem: Origins → Contacts → Deals
+    // Sincronizar na ordem: Origins+Stages → Contacts → Deals
     try {
-      results.origins = await syncOrigins(supabase);
+      const originResult = await syncOrigins(supabase);
+      results.origins = originResult.origins;
+      results.stages = originResult.stages;
     } catch (error) {
       results.errors.push(`Origins: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
@@ -267,9 +334,10 @@ Deno.serve(async (req) => {
       duration_ms: totalTime,
       results: {
         origins_synced: results.origins,
+        stages_synced: results.stages,
         contacts_synced: results.contacts,
         deals_synced: results.deals,
-        total_synced: results.origins + results.contacts + results.deals,
+        total_synced: results.origins + results.stages + results.contacts + results.deals,
       },
       errors: results.errors.length > 0 ? results.errors : undefined,
     };
