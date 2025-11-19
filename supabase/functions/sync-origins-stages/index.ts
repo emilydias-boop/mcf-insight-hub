@@ -137,27 +137,11 @@ Deno.serve(async (req) => {
         
         totalOrigins++;
 
-        // 3. Salvar STAGES - COM LOG TEMPORÁRIO PARA DEBUG
+        // 3. Salvar STAGES
         if (origin.stages && Array.isArray(origin.stages) && origin.stages.length > 0) {
-          // 🔍 DEBUG: Log completo da primeira stage para descobrir estrutura
-          if (origin.stages.length > 0) {
-            console.log('🔍 DEBUG - Origin:', origin.name);
-            console.log('🔍 DEBUG - Estrutura completa da primeira stage:');
-            console.log(JSON.stringify(origin.stages[0], null, 2));
-            console.log('🔍 DEBUG - Todas as stages deste origin:');
-            origin.stages.forEach((s: any, idx: number) => {
-              console.log(`  Stage ${idx}: type="${s.type}", order="${s.order}", name="${s.name}", id="${s.id}"`);
-              console.log(`  Campos disponíveis: ${Object.keys(s).join(', ')}`);
-            });
-          }
-
           const stagesToUpsert = origin.stages.map((stage: any, index: number) => {
-            // 🔧 FIX: Gerar nome genérico se stage.name for null/undefined
-            let stageName = stage.name;
-            if (!stageName) {
-              stageName = `Stage ${stage.type || 'CUSTOM'} - ${origin.name}`;
-              console.warn(`⚠️ Stage sem nome detectado em "${origin.name}", usando: "${stageName}"`);
-            }
+            // Usar stage.label como fonte principal do nome
+            const stageName = stage.label || stage.name || `${origin.name} - ${stage.type} #${stage.order}`;
 
             return {
               clint_id: stage.id,
