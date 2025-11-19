@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Search, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useClintOrigins } from '@/hooks/useClintAPI';
+import { useAllClintOrigins } from '@/hooks/useClintAPI';
 import { cn } from '@/lib/utils';
 
 interface OriginsSidebarProps {
@@ -115,7 +115,7 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
-  const { data: originsData, isLoading } = useClintOrigins();
+  const { data: originsData, isLoading } = useAllClintOrigins();
   const origins = originsData?.data || [];
   
   // Construir árvore de origens

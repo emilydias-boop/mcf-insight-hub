@@ -349,6 +349,61 @@ export const useDeleteClintOrigin = () => {
   });
 };
 
+// Buscar TODAS as origens com paginação completa
+export const useAllClintOrigins = () => {
+  return useQuery<any>({
+    queryKey: ['clint-all-origins'],
+    queryFn: async () => {
+      let allOrigins: any[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      
+      console.log('🔄 Iniciando busca paginada de origens...');
+      
+      // Buscar todas as páginas recursivamente
+      while (currentPage <= totalPages) {
+        const response = await callClintAPI<ClintAPIResponse<any[]>>({ 
+          resource: 'origins', 
+          params: {
+            page: currentPage.toString(),
+            per_page: '200',  // Máximo por página
+          }
+        });
+        
+        const origins = response.data || [];
+        allOrigins = [...allOrigins, ...origins];
+        
+        // Atualizar informações de paginação
+        if (response.meta) {
+          totalPages = Math.ceil(response.meta.total / response.meta.per_page);
+          console.log(`📄 Origens página ${currentPage}/${totalPages} - ${origins.length} carregadas (${allOrigins.length}/${response.meta.total} total)`);
+        }
+        
+        currentPage++;
+        
+        // Limite de segurança (máximo 50 páginas = 10.000 origens)
+        if (currentPage > 50) {
+          console.warn('⚠️ Limite de 50 páginas atingido');
+          break;
+        }
+      }
+      
+      console.log(`✅ Total de ${allOrigins.length} origens carregadas`);
+      
+      return { 
+        data: allOrigins,
+        meta: {
+          total: allOrigins.length,
+          page: 1,
+          per_page: allOrigins.length
+        }
+      };
+    },
+    staleTime: 10 * 60 * 1000,  // Cache por 10 minutos
+    gcTime: 15 * 60 * 1000,     // Manter em cache por 15 minutos
+  });
+};
+
 // Tags
 export const useClintTags = () => {
   return useQuery<any>({

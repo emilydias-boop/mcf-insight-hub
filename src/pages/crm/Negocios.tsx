@@ -58,7 +58,9 @@ const Negocios = () => {
     
     if (filters.owner && deal.owner_id !== filters.owner) return false;
     
-    // Comparar usando stage_id (UUID) em vez de stage (nome)
+    // TEMPORÁRIO: Desabilitar filtro de permissões até migrar para banco próprio
+    // O problema: visibleStages usa UUIDs do Supabase, mas deal.stage_id vem da API Clint
+    /*
     if (!visibleStages.includes(deal.stage_id)) {
       console.log('⚠️ Deal filtrado por permissão de estágio:', { 
         dealName: deal.name, 
@@ -68,6 +70,7 @@ const Negocios = () => {
       });
       return false;
     }
+    */
     
     return true;
   });
@@ -126,7 +129,24 @@ const Negocios = () => {
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Erro ao carregar negócios. Tente recarregar a página.
+                <div>
+                  <strong className="block mb-2">Erro ao carregar negócios da API Clint</strong>
+                  <p className="text-sm mb-1">
+                    {error instanceof Error && error.message.includes('504') 
+                      ? 'A API não respondeu a tempo (timeout 504). O servidor pode estar sobrecarregado.'
+                      : 'Ocorreu um erro ao buscar os dados.'}
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Tente recarregar a página ou aguarde alguns minutos.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => window.location.reload()}
+                  >
+                    Recarregar Página
+                  </Button>
+                </div>
               </AlertDescription>
             </Alert>
           ) : isLoading ? (
