@@ -7,6 +7,7 @@ import { useClintDeals } from '@/hooks/useClintAPI';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
+import { DealFormDialog } from '@/components/crm/DealFormDialog';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 
 const Negocios = () => {
@@ -74,10 +75,15 @@ const Negocios = () => {
               {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''} de negócio
             </p>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Negócio
-          </Button>
+          <DealFormDialog
+            defaultOriginId={selectedOriginId || undefined}
+            trigger={
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Negócio
+              </Button>
+            }
+          />
         </div>
         
         <DealFilters
