@@ -18,5 +18,8 @@ verify_jwt = false
 [functions.sync-link-contacts]
 verify_jwt = false
 
+[functions.sync-by-origin]
+verify_jwt = false
+
 [functions.import-contacts-csv]
 verify_jwt = false

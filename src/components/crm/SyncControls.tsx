@@ -8,21 +8,20 @@ import { toast } from 'sonner';
 
 interface SyncStep {
   name: string;
-  endpoint: string;
+  endpoint?: string;
   status: 'pending' | 'running' | 'success' | 'error';
   result?: any;
   error?: string;
   duration?: number;
+  origin_id?: string;
+  type?: 'global' | 'origin';
 }
 
 export const SyncControls = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<SyncStep[]>([
-    { name: 'Origens e Estágios', endpoint: 'sync-origins-stages', status: 'pending' },
-    { name: 'Contatos', endpoint: 'sync-contacts', status: 'pending' },
-    { name: 'Negócios', endpoint: 'sync-deals', status: 'pending' },
-    { name: 'Vincular Contatos', endpoint: 'sync-link-contacts', status: 'pending' },
+    { name: 'Origens e Estágios', endpoint: 'sync-origins-stages', status: 'pending', type: 'global' },
   ]);
 
   const runSyncStep = async (step: SyncStep, index: number) => {
@@ -36,9 +35,21 @@ export const SyncControls = () => {
     const startTime = Date.now();
 
     try {
-      const { data, error } = await supabase.functions.invoke(step.endpoint);
-
-      if (error) throw error;
+      let data;
+      
+      if (step.type === 'origin' && step.origin_id) {
+        // Sincronizar origin específica
+        const result = await supabase.functions.invoke('sync-by-origin', {
+          body: { origin_id: step.origin_id }
+        });
+        if (result.error) throw result.error;
+        data = result.data;
+      } else if (step.endpoint) {
+        // Sincronizar endpoint global
+        const result = await supabase.functions.invoke(step.endpoint);
+        if (result.error) throw result.error;
+        data = result.data;
+      }
 
       const duration = Date.now() - startTime;
 
@@ -67,19 +78,62 @@ export const SyncControls = () => {
 
   const handleFullSync = async () => {
     setIsSyncing(true);
-    
-    // Reset todos os steps
-    setSteps(prev => prev.map(s => ({ ...s, status: 'pending', result: undefined, error: undefined })));
     setCurrentStep(0);
 
     try {
-      toast.info('Iniciando sincronização completa...');
+      toast.info('Iniciando sincronização...');
 
-      // Executar cada step em sequência
-      for (let i = 0; i < steps.length; i++) {
-        await runSyncStep(steps[i], i);
-        toast.success(`${steps[i].name} concluído!`);
+      // Passo 1: Sincronizar origins e stages
+      setSteps([{ 
+        name: 'Origens e Estágios', 
+        endpoint: 'sync-origins-stages', 
+        status: 'pending', 
+        type: 'global' 
+      }]);
+
+      await runSyncStep(steps[0], 0);
+      toast.success('Origens e estágios sincronizados!');
+
+      // Passo 2: Buscar lista de origins
+      const { data: origins, error: originsError } = await supabase
+        .from('crm_origins')
+        .select('id, name')
+        .order('name');
+
+      if (originsError) throw originsError;
+
+      if (!origins || origins.length === 0) {
+        toast.warning('Nenhuma origem encontrada');
+        return;
       }
+
+      // Passo 3: Criar steps para cada origin
+      const originSteps: SyncStep[] = origins.map(origin => ({
+        name: origin.name,
+        status: 'pending',
+        type: 'origin',
+        origin_id: origin.id,
+      }));
+
+      setSteps(prev => [...prev, ...originSteps]);
+
+      // Passo 4: Sincronizar cada origin
+      for (let i = 0; i < originSteps.length; i++) {
+        const stepIndex = 1 + i; // +1 porque já temos o step global
+        await runSyncStep(originSteps[i], stepIndex);
+        toast.success(`${originSteps[i].name} sincronizado!`);
+      }
+
+      // Passo 5: Vincular contacts
+      const linkStep: SyncStep = {
+        name: 'Vincular Contatos',
+        endpoint: 'sync-link-contacts',
+        status: 'pending',
+        type: 'global',
+      };
+
+      setSteps(prev => [...prev, linkStep]);
+      await runSyncStep(linkStep, steps.length);
 
       toast.success('Sincronização completa! 🎉');
     } catch (error: any) {
@@ -161,12 +215,18 @@ export const SyncControls = () => {
                   <p className="font-medium text-foreground">{step.name}</p>
                   {step.result && (
                     <p className="text-xs text-muted-foreground">
-                      {step.result.results?.groups_synced && `${step.result.results.groups_synced} grupos, `}
-                      {step.result.results?.origins_synced && `${step.result.results.origins_synced} origens, `}
-                      {step.result.results?.stages_synced && `${step.result.results.stages_synced} estágios`}
-                      {step.result.results?.contacts_synced && `${step.result.results.contacts_synced} contatos`}
-                      {step.result.results?.deals_synced && `${step.result.results.deals_synced} negócios`}
-                      {step.result.results?.contacts_linked !== undefined && `${step.result.results.contacts_linked} vínculos`}
+                      {step.type === 'origin' ? (
+                        <>
+                          {step.result.results?.contacts_synced || 0} contatos, {step.result.results?.deals_synced || 0} negócios
+                        </>
+                      ) : (
+                        <>
+                          {step.result.results?.groups_synced && `${step.result.results.groups_synced} grupos, `}
+                          {step.result.results?.origins_synced && `${step.result.results.origins_synced} origens, `}
+                          {step.result.results?.stages_synced && `${step.result.results.stages_synced} estágios`}
+                          {step.result.results?.contacts_linked !== undefined && `${step.result.results.contacts_linked} vínculos`}
+                        </>
+                      )}
                     </p>
                   )}
                   {step.error && (
