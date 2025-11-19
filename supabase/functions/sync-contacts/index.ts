@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
 
     let page = 1;
     let totalProcessed = 0;
+    let totalSkipped = 0;
     const MAX_PAGES = 1000;
     const CONTACTS_PER_PAGE = 200;
     const BATCH_SIZE = 500; // Bulk upsert de 500 contatos por vez
@@ -75,16 +76,32 @@ Deno.serve(async (req) => {
         const batch = contacts.slice(i, i + BATCH_SIZE);
 
         // Preparar todos os contatos do batch para bulk upsert
-        const contactsToUpsert = batch.map((contact: any) => ({
-          clint_id: contact.id,
-          name: contact.name,
-          email: contact.email || null,
-          phone: contact.phone || null,
-          organization_name: contact.organization?.name || null,
-          origin_id: null, // Será preenchido posteriormente via sync-link-contacts
-          tags: contact.tags || [],
-          custom_fields: contact.custom_fields || {},
-        }));
+        // IMPORTANTE: Filtrar contatos sem nome (violaria constraint NOT NULL)
+        const contactsToUpsert = batch
+          .filter((contact: any) => {
+            if (!contact.name || contact.name.trim() === '') {
+              totalSkipped++;
+              console.log(`⚠️ Contato sem nome descartado - ID: ${contact.id}`);
+              return false;
+            }
+            return true;
+          })
+          .map((contact: any) => ({
+            clint_id: contact.id,
+            name: contact.name.trim(),
+            email: contact.email || null,
+            phone: contact.phone || null,
+            organization_name: contact.organization?.name || null,
+            origin_id: null, // Será preenchido posteriormente via sync-link-contacts
+            tags: contact.tags || [],
+            custom_fields: contact.custom_fields || {},
+          }));
+
+        // Só fazer upsert se houver contatos válidos no batch
+        if (contactsToUpsert.length === 0) {
+          console.log(`⏭️ Batch ${i}-${i + batch.length} pulado: nenhum contato válido`);
+          continue;
+        }
 
         // Bulk upsert de todos os contatos do batch de uma vez
         const { error } = await supabase
@@ -96,12 +113,12 @@ Deno.serve(async (req) => {
           throw error;
         }
 
-        totalProcessed += batch.length;
+        totalProcessed += contactsToUpsert.length;
         const percentage = response.meta?.total 
           ? ((totalProcessed / response.meta.total) * 100).toFixed(1)
           : 'N/A';
         
-        console.log(`📄 Processados: ${totalProcessed} contatos (${percentage}% - página ${page}, batch ${Math.floor(i / BATCH_SIZE) + 1})`);
+        console.log(`📄 Processados: ${totalProcessed} contatos válidos | ${totalSkipped} sem nome (${percentage}% - página ${page}, batch ${Math.floor(i / BATCH_SIZE) + 1})`);
       }
 
       await new Promise((r) => setTimeout(r, 50)); // Rate limiting reduzido
@@ -118,6 +135,8 @@ Deno.serve(async (req) => {
       duration_ms: duration,
       results: {
         contacts_synced: totalProcessed,
+        contacts_skipped: totalSkipped,
+        reason_skipped: 'Contatos sem nome (violaria constraint NOT NULL)',
       },
     };
 
