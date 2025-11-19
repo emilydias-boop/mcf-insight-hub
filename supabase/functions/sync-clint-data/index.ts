@@ -47,28 +47,43 @@ async function callClintAPI<T = any>(
 async function syncOrigins(supabase: any): Promise<number> {
   console.log('🔄 Sincronizando Origins...');
   const startTime = Date.now();
+  let page = 1;
   let totalProcessed = 0;
+  const MAX_PAGES = 1000;
 
   try {
-    const response = await callClintAPI('origins', { page: '1', per_page: '200' });
-    const origins = response.data || [];
+    while (page <= MAX_PAGES) {
+      const response = await callClintAPI('origins', { 
+        page: page.toString(), 
+        per_page: '200' 
+      });
+      const origins = response.data || [];
 
-    for (const origin of origins) {
-      await supabase.from('crm_origins').upsert(
-        {
-          clint_id: origin.id,
-          name: origin.name,
-          description: origin.description || null,
-          parent_id: null,
-          contact_count: 0,
-        },
-        { onConflict: 'clint_id' }
-      );
+      if (origins.length === 0) break;
+
+      for (const origin of origins) {
+        await supabase.from('crm_origins').upsert(
+          {
+            clint_id: origin.id,
+            name: origin.name,
+            description: origin.description || null,
+            parent_id: null,
+            contact_count: 0,
+          },
+          { onConflict: 'clint_id' }
+        );
+      }
+
+      totalProcessed += origins.length;
+      console.log(`📄 Origins processadas: ${totalProcessed} (página ${page})`);
+
+      await new Promise((r) => setTimeout(r, 200));
+      page++;
+
+      if (origins.length < 200) break;
     }
 
-    totalProcessed = origins.length;
     console.log(`✅ Origins sincronizadas: ${totalProcessed} em ${Date.now() - startTime}ms`);
-    
     return totalProcessed;
   } catch (error) {
     console.error('❌ Erro ao sincronizar origins:', error);
@@ -119,7 +134,7 @@ async function syncContacts(supabase: any): Promise<number> {
       await new Promise((r) => setTimeout(r, 200));
       page++;
 
-      if (!response.meta || contacts.length < 200) break;
+      if (contacts.length < 200) break;
     }
 
     console.log(`✅ Contacts sincronizados: ${totalProcessed} em ${Date.now() - startTime}ms`);
