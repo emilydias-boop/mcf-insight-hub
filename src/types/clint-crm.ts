@@ -26,7 +26,8 @@ export interface ClintDeal {
   id: string;
   name: string;
   value: number;
-  stage: string;
+  stage_id: string;  // ID do estágio (UUID)
+  stage: string;      // Nome do estágio (para exibição)
   probability?: number;
   contact_id?: string;
   organization_id?: string;
