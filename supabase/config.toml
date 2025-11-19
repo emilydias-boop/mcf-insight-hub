@@ -1,1 +1,7 @@
 project_id = "rehcfgqvigfcekiipqkc"
+
+[functions.clint-api]
+verify_jwt = false
+
+[functions.sync-clint-data]
+verify_jwt = false
