@@ -1050,6 +1050,51 @@ export type Database = {
           },
         ]
       }
+      sync_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          last_page: number | null
+          metadata: Json | null
+          started_at: string | null
+          status: string
+          total_processed: number | null
+          total_skipped: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_type: string
+          last_page?: number | null
+          metadata?: Json | null
+          started_at?: string | null
+          status?: string
+          total_processed?: number | null
+          total_skipped?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          last_page?: number | null
+          metadata?: Json | null
+          started_at?: string | null
+          status?: string
+          total_processed?: number | null
+          total_skipped?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount: number
