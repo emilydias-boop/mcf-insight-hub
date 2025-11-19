@@ -29,9 +29,18 @@ const Negocios = () => {
   const deals = dealsData?.data || [];
   const visibleStages = getVisibleStages();
   
+  // Debug: Log para ver dados recebidos
+  console.log('📊 Debug Negócios:', {
+    totalDeals: deals.length,
+    selectedOriginId,
+    visibleStages,
+    deals: deals.slice(0, 3) // Mostra primeiros 3 deals
+  });
+  
   const filteredDeals = deals.filter((deal: any) => {
     // Validar dados essenciais do deal
     if (!deal || !deal.id || !deal.name || !deal.stage) {
+      console.log('❌ Deal inválido (faltam dados básicos):', deal);
       return false;
     }
     
@@ -49,9 +58,22 @@ const Negocios = () => {
     
     if (filters.owner && deal.owner_id !== filters.owner) return false;
     
-    if (!visibleStages.includes(deal.stage)) return false;
+    if (!visibleStages.includes(deal.stage)) {
+      console.log('⚠️ Deal filtrado por permissão de estágio:', { 
+        dealName: deal.name, 
+        stage: deal.stage, 
+        visibleStages 
+      });
+      return false;
+    }
     
     return true;
+  });
+  
+  // Debug: Log resultado final
+  console.log('✅ Deals após filtros:', {
+    total: filteredDeals.length,
+    filteredOut: deals.length - filteredDeals.length
   });
   
   const clearFilters = () => {
