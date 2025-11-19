@@ -9,16 +9,16 @@ const CLINT_API_KEY = Deno.env.get('CLINT_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-interface SyncResult {
+interface TestResult {
+  method: 'DIRECT' | 'PROXY';
   resource: string;
-  created: number;
-  updated: number;
-  errors: number;
-  total: number;
+  count?: number;
+  time: number;
+  error?: string;
 }
 
-// Função auxiliar para chamar API do Clint
-async function callClintAPI(resource: string, params?: Record<string, string>) {
+// VERSÃO A: Chamada Direta à API Clint
+async function callClintAPIDirect(resource: string, params?: Record<string, string>) {
   if (!CLINT_API_KEY) {
     throw new Error('CLINT_API_KEY não configurada');
   }
@@ -26,7 +26,7 @@ async function callClintAPI(resource: string, params?: Record<string, string>) {
   const queryParams = new URLSearchParams(params || {});
   const url = `https://api.clint.digital/v1/${resource}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
   
-  console.log(`🔍 Calling Clint API: ${url}`);
+  console.log(`🔵 [DIRECT] Calling: ${url}`);
   
   const response = await fetch(url, {
     headers: {
@@ -34,493 +34,329 @@ async function callClintAPI(resource: string, params?: Record<string, string>) {
       'Content-Type': 'application/json',
     },
   });
-
+  
   if (!response.ok) {
     const error = await response.text();
-    console.error(`❌ Clint API Error (${response.status}):`, error);
-    throw new Error(`Clint API error: ${response.status} - ${error}`);
+    throw new Error(`Direct API error: ${response.status} - ${error}`);
   }
-
-  const body = await response.json();
   
-  // Log estrutura da resposta para debugging
-  console.log('🔍 Response Structure:', {
-    hasData: !!body.data,
-    hasMeta: !!body.meta,
-    dataLength: Array.isArray(body.data) ? body.data.length : 'not-array',
-    metaKeys: body.meta ? Object.keys(body.meta) : [],
+  return await response.json();
+}
+
+// VERSÃO B: Via Proxy clint-api
+async function callClintAPIProxy(resource: string, params?: Record<string, string>) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configurados');
+  }
+  
+  const url = `${SUPABASE_URL}/functions/v1/clint-api`;
+  
+  console.log(`🟢 [PROXY] Calling clint-api for: ${resource}`);
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({
+      resource,
+      method: 'GET',
+      params,
+    }),
   });
-
-  return body;
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Proxy API error: ${response.status} - ${error}`);
+  }
+  
+  return await response.json();
 }
 
-// Função de paginação robusta
-async function fetchAllPaginated(resource: string, baseParams: Record<string, string> = {}) {
-  const allRecords: any[] = [];
-  const seenIds = new Set<string>();
-  let page = 1;
-  const maxPages = 500; // Limite de segurança
-  let consecutiveEmptyPages = 0;
-  let lastRecordCount = 0;
+// TESTE A1: Origins via DIRECT
+async function testOriginsDirect(supabase: any): Promise<TestResult> {
+  console.log('\n🧪 TEST A1: Sincronizando Origins via DIRECT');
+  const startTime = Date.now();
+  
+  try {
+    const response = await callClintAPIDirect('origins', { page: '1', per_page: '200' });
+    const origins = response.data || [];
+    
+    console.log(`✅ [DIRECT] Origins: ${origins.length} registros`);
+    
+    // Inserir no Supabase
+    let inserted = 0;
+    for (const origin of origins) {
+      const { error } = await supabase.from('crm_origins').upsert({
+        clint_id: origin.id,
+        name: origin.name,
+        description: origin.description || null,
+        parent_id: null, // Será mapeado em segundo passo
+      }, { onConflict: 'clint_id' });
+      
+      if (!error) inserted++;
+    }
+    
+    const time = Date.now() - startTime;
+    console.log(`✅ [DIRECT] Origins inseridos: ${inserted}/${origins.length} em ${time}ms`);
+    
+    return { method: 'DIRECT', resource: 'origins', count: origins.length, time };
+  } catch (error) {
+    const time = Date.now() - startTime;
+    console.error('❌ [DIRECT] Erro:', error);
+    return { method: 'DIRECT', resource: 'origins', error: String(error), time };
+  }
+}
 
-  console.log(`🔄 Iniciando paginação para ${resource}...`);
+// TESTE A2: Origins via PROXY
+async function testOriginsProxy(supabase: any): Promise<TestResult> {
+  console.log('\n🧪 TEST A2: Sincronizando Origins via PROXY');
+  const startTime = Date.now();
+  
+  try {
+    const response = await callClintAPIProxy('origins', { page: '1', per_page: '200' });
+    const origins = response.data || [];
+    
+    console.log(`✅ [PROXY] Origins: ${origins.length} registros`);
+    
+    // Inserir no Supabase
+    let inserted = 0;
+    for (const origin of origins) {
+      const { error } = await supabase.from('crm_origins').upsert({
+        clint_id: origin.id,
+        name: origin.name,
+        description: origin.description || null,
+        parent_id: null,
+      }, { onConflict: 'clint_id' });
+      
+      if (!error) inserted++;
+    }
+    
+    const time = Date.now() - startTime;
+    console.log(`✅ [PROXY] Origins inseridos: ${inserted}/${origins.length} em ${time}ms`);
+    
+    return { method: 'PROXY', resource: 'origins', count: origins.length, time };
+  } catch (error) {
+    const time = Date.now() - startTime;
+    console.error('❌ [PROXY] Erro:', error);
+    return { method: 'PROXY', resource: 'origins', error: String(error), time };
+  }
+}
 
-  while (page <= maxPages) {
-    try {
-      // Estratégia 1: Usar parâmetro 'page'
-      const params = { ...baseParams, page: page.toString(), per_page: '200' };
-      const response = await callClintAPI(resource, params);
-
-      const records = response.data || [];
-      console.log(`📄 Página ${page}: ${records.length} registros`);
-
-      // Estratégia 2: Detectar página vazia
-      if (records.length === 0) {
-        consecutiveEmptyPages++;
-        if (consecutiveEmptyPages >= 2) {
-          console.log(`✅ Páginas vazias consecutivas detectadas. Finalizando paginação.`);
-          break;
-        }
-      } else {
-        consecutiveEmptyPages = 0;
-      }
-
-      // Estratégia 3: Detectar duplicatas
-      let newRecords = 0;
-      for (const record of records) {
-        if (record.id && !seenIds.has(record.id)) {
-          seenIds.add(record.id);
-          allRecords.push(record);
-          newRecords++;
-        }
-      }
-
-      console.log(`📊 Novos registros únicos: ${newRecords} (total acumulado: ${allRecords.length})`);
-
-      // Se não há novos registros únicos, pode ser duplicação
-      if (newRecords === 0 && records.length > 0) {
-        console.log(`⚠️ Nenhum registro novo na página ${page}. Possível duplicação detectada.`);
-        break;
-      }
-
-      // Estratégia 4: Usar metadados se disponível
-      if (response.meta) {
-        const meta = response.meta;
-        console.log('📊 Metadados da página:', meta);
+// TESTE B1: Contacts (3 páginas) via DIRECT
+async function testContactsDirect(supabase: any): Promise<TestResult> {
+  console.log('\n🧪 TEST B1: Sincronizando Contacts (3 páginas) via DIRECT');
+  const startTime = Date.now();
+  let totalContacts = 0;
+  
+  try {
+    for (let page = 1; page <= 3; page++) {
+      const response = await callClintAPIDirect('contacts', { 
+        page: page.toString(), 
+        per_page: '200' 
+      });
+      const contacts = response.data || [];
+      
+      console.log(`📄 [DIRECT] Página ${page}: ${contacts.length} contatos`);
+      
+      if (contacts.length === 0) break;
+      
+      totalContacts += contacts.length;
+      
+      // Inserir batch no Supabase (100 registros por vez)
+      for (let i = 0; i < contacts.length; i += 100) {
+        const batch = contacts.slice(i, i + 100);
         
-        if (meta.total !== undefined) {
-          console.log(`📈 Total de registros na API: ${meta.total}`);
-          if (allRecords.length >= meta.total) {
-            console.log(`✅ Todos os ${meta.total} registros foram coletados.`);
-            break;
-          }
-        }
-
-        if (meta.total_pages !== undefined && page >= meta.total_pages) {
-          console.log(`✅ Última página (${page}/${meta.total_pages}) alcançada.`);
-          break;
-        }
-
-        if (meta.page !== undefined && meta.per_page !== undefined) {
-          const expectedMax = meta.page * meta.per_page;
-          if (allRecords.length >= expectedMax && records.length < meta.per_page) {
-            console.log(`✅ Última página parcial detectada.`);
-            break;
-          }
-        }
-      }
-
-      // Se recebeu menos que o esperado e é consistente, provavelmente é a última página
-      if (records.length < 200 && records.length === lastRecordCount) {
-        console.log(`✅ Página parcial consistente detectada. Última página.`);
-        break;
-      }
-
-      lastRecordCount = records.length;
-
-      // Delay para evitar rate limiting
-      if (page % 10 === 0) {
-        console.log(`⏳ Aguardando 500ms após 10 páginas...`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      page++;
-
-    } catch (error) {
-      console.error(`❌ Erro na página ${page}:`, error);
-      
-      // Se for rate limit, aguardar mais tempo
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('429')) {
-        console.log(`⏳ Rate limit detectado. Aguardando 5 segundos...`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        continue;
-      }
-      
-      throw error;
-    }
-  }
-
-  if (page > maxPages) {
-    console.warn(`⚠️ Limite de ${maxPages} páginas atingido. Pode haver mais registros.`);
-  }
-
-  console.log(`✅ Paginação concluída: ${allRecords.length} registros únicos coletados.`);
-  return allRecords;
-}
-
-// Sincronizar Stages
-async function syncStages(supabase: any): Promise<SyncResult> {
-  console.log('🔄 Sincronizando stages...');
-  
-  try {
-    const stages = await fetchAllPaginated('stages');
-    
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
-
-    for (const stage of stages) {
-      try {
-        const { error } = await supabase
-          .from('crm_stages')
-          .upsert({
-            clint_id: stage.id,
-            stage_name: stage.name,
-            stage_order: stage.order || 0,
-            color: stage.color || null,
-            is_active: stage.is_active !== false,
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'clint_id',
-          });
-
-        if (error) {
-          console.error(`❌ Erro ao inserir stage ${stage.id}:`, error);
-          errors++;
-        } else {
-          // Verificar se foi criado ou atualizado
-          const { data: existing } = await supabase
-            .from('crm_stages')
-            .select('id')
-            .eq('clint_id', stage.id)
-            .single();
-          
-          if (existing) {
-            updated++;
-          } else {
-            created++;
-          }
-        }
-      } catch (err) {
-        console.error(`❌ Exceção ao processar stage ${stage.id}:`, err);
-        errors++;
-      }
-    }
-
-    console.log(`✅ Stages: ${created} criados, ${updated} atualizados, ${errors} erros`);
-    return { resource: 'stages', created, updated, errors, total: stages.length };
-  } catch (error) {
-    console.error('❌ Erro ao sincronizar stages:', error);
-    throw error;
-  }
-}
-
-// Sincronizar Origins
-async function syncOrigins(supabase: any): Promise<SyncResult> {
-  console.log('🔄 Sincronizando origins...');
-  
-  try {
-    const origins = await fetchAllPaginated('origins');
-    
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
-
-    // Primeira passagem: criar/atualizar sem parent_id
-    for (const origin of origins) {
-      try {
-        const { error } = await supabase
-          .from('crm_origins')
-          .upsert({
-            clint_id: origin.id,
-            name: origin.name,
-            description: origin.description || null,
-            contact_count: origin.contact_count || 0,
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'clint_id',
-          });
-
-        if (error) {
-          console.error(`❌ Erro ao inserir origin ${origin.id}:`, error);
-          errors++;
-        } else {
-          created++;
-        }
-      } catch (err) {
-        console.error(`❌ Exceção ao processar origin ${origin.id}:`, err);
-        errors++;
-      }
-    }
-
-    // Segunda passagem: mapear parent_id hierárquico
-    for (const origin of origins) {
-      if (origin.parent_id) {
-        try {
-          // Buscar o UUID do parent no Supabase
-          const { data: parentRecord } = await supabase
-            .from('crm_origins')
-            .select('id')
-            .eq('clint_id', origin.parent_id)
-            .single();
-
-          if (parentRecord) {
-            await supabase
-              .from('crm_origins')
-              .update({ parent_id: parentRecord.id })
-              .eq('clint_id', origin.id);
-          }
-        } catch (err) {
-          console.error(`❌ Erro ao mapear parent_id para origin ${origin.id}:`, err);
-        }
-      }
-    }
-
-    console.log(`✅ Origins: ${created} criados, ${updated} atualizados, ${errors} erros`);
-    return { resource: 'origins', created, updated, errors, total: origins.length };
-  } catch (error) {
-    console.error('❌ Erro ao sincronizar origins:', error);
-    throw error;
-  }
-}
-
-// Sincronizar Contacts
-async function syncContacts(supabase: any): Promise<SyncResult> {
-  console.log('🔄 Sincronizando contacts...');
-  
-  try {
-    const contacts = await fetchAllPaginated('contacts');
-    
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
-    let processed = 0;
-
-    for (const contact of contacts) {
-      try {
-        // Mapear origin_id se existir
-        let originUuid = null;
-        if (contact.origin_id) {
-          const { data: originRecord } = await supabase
-            .from('crm_origins')
-            .select('id')
-            .eq('clint_id', contact.origin_id)
-            .single();
-          
-          if (originRecord) {
-            originUuid = originRecord.id;
-          }
-        }
-
-        const { error } = await supabase
-          .from('crm_contacts')
-          .upsert({
+        for (const contact of batch) {
+          await supabase.from('crm_contacts').upsert({
             clint_id: contact.id,
             name: contact.name,
             email: contact.email || null,
             phone: contact.phone || null,
             organization_name: contact.organization?.name || null,
-            origin_id: originUuid,
             tags: contact.tags || [],
-            custom_fields: contact.custom_fields || {},
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'clint_id',
-          });
-
-        if (error) {
-          console.error(`❌ Erro ao inserir contact ${contact.id}:`, error);
-          errors++;
-        } else {
-          created++;
+          }, { onConflict: 'clint_id' });
         }
-
-        processed++;
-        if (processed % 1000 === 0) {
-          console.log(`📊 Progresso: ${processed}/${contacts.length} contatos processados`);
-        }
-      } catch (err) {
-        console.error(`❌ Exceção ao processar contact ${contact.id}:`, err);
-        errors++;
       }
     }
-
-    console.log(`✅ Contacts: ${created} criados, ${updated} atualizados, ${errors} erros`);
-    return { resource: 'contacts', created, updated, errors, total: contacts.length };
+    
+    const time = Date.now() - startTime;
+    console.log(`✅ [DIRECT] Total de contatos: ${totalContacts} em ${time}ms`);
+    
+    return { method: 'DIRECT', resource: 'contacts', count: totalContacts, time };
   } catch (error) {
-    console.error('❌ Erro ao sincronizar contacts:', error);
-    throw error;
+    const time = Date.now() - startTime;
+    console.error('❌ [DIRECT] Erro:', error);
+    return { method: 'DIRECT', resource: 'contacts', error: String(error), time };
   }
 }
 
-// Sincronizar Deals
-async function syncDeals(supabase: any): Promise<SyncResult> {
-  console.log('🔄 Sincronizando deals...');
+// TESTE B2: Contacts (3 páginas) via PROXY
+async function testContactsProxy(supabase: any): Promise<TestResult> {
+  console.log('\n🧪 TEST B2: Sincronizando Contacts (3 páginas) via PROXY');
+  const startTime = Date.now();
+  let totalContacts = 0;
   
   try {
-    const deals = await fetchAllPaginated('deals');
-    
-    let created = 0;
-    let updated = 0;
-    let errors = 0;
-    let processed = 0;
-
-    for (const deal of deals) {
-      try {
-        // Mapear stage_id
-        let stageUuid = null;
-        if (deal.stage_id) {
-          const { data: stageRecord } = await supabase
-            .from('crm_stages')
-            .select('id')
-            .eq('clint_id', deal.stage_id)
-            .single();
-          
-          if (stageRecord) {
-            stageUuid = stageRecord.id;
-          }
+    for (let page = 1; page <= 3; page++) {
+      const response = await callClintAPIProxy('contacts', { 
+        page: page.toString(), 
+        per_page: '200' 
+      });
+      const contacts = response.data || [];
+      
+      console.log(`📄 [PROXY] Página ${page}: ${contacts.length} contatos`);
+      
+      if (contacts.length === 0) break;
+      
+      totalContacts += contacts.length;
+      
+      // Inserir batch no Supabase (100 registros por vez)
+      for (let i = 0; i < contacts.length; i += 100) {
+        const batch = contacts.slice(i, i + 100);
+        
+        for (const contact of batch) {
+          await supabase.from('crm_contacts').upsert({
+            clint_id: contact.id,
+            name: contact.name,
+            email: contact.email || null,
+            phone: contact.phone || null,
+            organization_name: contact.organization?.name || null,
+            tags: contact.tags || [],
+          }, { onConflict: 'clint_id' });
         }
-
-        // Mapear contact_id
-        let contactUuid = null;
-        if (deal.contact_id) {
-          const { data: contactRecord } = await supabase
-            .from('crm_contacts')
-            .select('id')
-            .eq('clint_id', deal.contact_id)
-            .single();
-          
-          if (contactRecord) {
-            contactUuid = contactRecord.id;
-          }
-        }
-
-        // Mapear origin_id
-        let originUuid = null;
-        if (deal.origin_id) {
-          const { data: originRecord } = await supabase
-            .from('crm_origins')
-            .select('id')
-            .eq('clint_id', deal.origin_id)
-            .single();
-          
-          if (originRecord) {
-            originUuid = originRecord.id;
-          }
-        }
-
-        const { error } = await supabase
-          .from('crm_deals')
-          .upsert({
-            clint_id: deal.id,
-            name: deal.name,
-            value: deal.value || 0,
-            stage_id: stageUuid,
-            contact_id: contactUuid,
-            origin_id: originUuid,
-            owner_id: deal.owner_id || null,
-            probability: deal.probability || null,
-            expected_close_date: deal.expected_close_date || null,
-            tags: deal.tags || [],
-            custom_fields: deal.custom_fields || {},
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'clint_id',
-          });
-
-        if (error) {
-          console.error(`❌ Erro ao inserir deal ${deal.id}:`, error);
-          errors++;
-        } else {
-          created++;
-        }
-
-        processed++;
-        if (processed % 1000 === 0) {
-          console.log(`📊 Progresso: ${processed}/${deals.length} deals processados`);
-        }
-      } catch (err) {
-        console.error(`❌ Exceção ao processar deal ${deal.id}:`, err);
-        errors++;
       }
     }
-
-    console.log(`✅ Deals: ${created} criados, ${updated} atualizados, ${errors} erros`);
-    return { resource: 'deals', created, updated, errors, total: deals.length };
+    
+    const time = Date.now() - startTime;
+    console.log(`✅ [PROXY] Total de contatos: ${totalContacts} em ${time}ms`);
+    
+    return { method: 'PROXY', resource: 'contacts', count: totalContacts, time };
   } catch (error) {
-    console.error('❌ Erro ao sincronizar deals:', error);
-    throw error;
+    const time = Date.now() - startTime;
+    console.error('❌ [PROXY] Erro:', error);
+    return { method: 'PROXY', resource: 'contacts', error: String(error), time };
   }
 }
 
+// Função para analisar resultados
+function analyzeResults(results: TestResult[]) {
+  const directResults = results.filter(r => r.method === 'DIRECT');
+  const proxyResults = results.filter(r => r.method === 'PROXY');
+  
+  const directSuccess = directResults.filter(r => !r.error).length;
+  const proxySuccess = proxyResults.filter(r => !r.error).length;
+  
+  const directAvgTime = directResults.reduce((sum, r) => sum + r.time, 0) / directResults.length;
+  const proxyAvgTime = proxyResults.reduce((sum, r) => sum + r.time, 0) / proxyResults.length;
+  
+  let recommendation = '';
+  let winner = '';
+  
+  if (directSuccess > proxySuccess) {
+    recommendation = 'DIRECT: Mais confiável (menos erros)';
+    winner = 'DIRECT';
+  } else if (proxySuccess > directSuccess) {
+    recommendation = 'PROXY: Mais confiável (menos erros)';
+    winner = 'PROXY';
+  } else if (directAvgTime < proxyAvgTime) {
+    recommendation = 'DIRECT: Mais rápido (ambas confiáveis)';
+    winner = 'DIRECT';
+  } else {
+    recommendation = 'PROXY: Melhor para manutenção (código centralizado)';
+    winner = 'PROXY';
+  }
+  
+  return {
+    directSuccess: `${directSuccess}/${directResults.length}`,
+    proxySuccess: `${proxySuccess}/${proxyResults.length}`,
+    directAvgTime: `${directAvgTime.toFixed(0)}ms`,
+    proxyAvgTime: `${proxyAvgTime.toFixed(0)}ms`,
+    recommendation,
+    winner,
+  };
+}
+
+// Handler principal
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('🚀 Iniciando sincronização com Clint CRM...');
-
-    if (!CLINT_API_KEY) {
-      throw new Error('CLINT_API_KEY não configurada');
-    }
-
-    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-
-    console.log('🚀 Iniciando sincronização SIMPLIFICADA com Clint CRM...');
-    console.log('📌 Apenas sincronizando STAGES para teste inicial');
+    console.log('🧪 INICIANDO TESTES COMPARATIVOS: DIRECT vs PROXY');
+    console.log('📌 Recursos testados: origins (1 página) + contacts (3 páginas)');
+    console.log('⏱️  Estimativa: 30-60 segundos\n');
     
-    const results: SyncResult[] = [];
-
-    // Sync apenas stages para teste
-    results.push(await syncStages(supabase));
-
+    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    
+    const results: TestResult[] = [];
+    
+    // Teste A: Origins (poucos registros)
+    console.log('═══════════════════════════════════════');
+    console.log('🔬 TESTE A: ORIGINS (Poucos Registros)');
+    console.log('═══════════════════════════════════════');
+    
+    results.push(await testOriginsDirect(supabase));
+    await new Promise(r => setTimeout(r, 1000)); // Aguardar 1s entre testes
+    results.push(await testOriginsProxy(supabase));
+    
+    // Teste B: Contacts (muitos registros - 3 páginas)
+    console.log('\n═══════════════════════════════════════');
+    console.log('🔬 TESTE B: CONTACTS (3 Páginas)');
+    console.log('═══════════════════════════════════════');
+    
+    await new Promise(r => setTimeout(r, 2000)); // Aguardar 2s
+    results.push(await testContactsDirect(supabase));
+    await new Promise(r => setTimeout(r, 2000));
+    results.push(await testContactsProxy(supabase));
+    
+    // Análise dos resultados
+    console.log('\n═══════════════════════════════════════');
+    console.log('📊 RESULTADOS COMPARATIVOS');
+    console.log('═══════════════════════════════════════');
+    console.log(JSON.stringify(results, null, 2));
+    
+    const analysis = analyzeResults(results);
+    
+    console.log('\n═══════════════════════════════════════');
+    console.log('🏆 ANÁLISE FINAL');
+    console.log('═══════════════════════════════════════');
+    console.log(`✅ Sucessos DIRECT: ${analysis.directSuccess}`);
+    console.log(`✅ Sucessos PROXY: ${analysis.proxySuccess}`);
+    console.log(`⚡ Tempo médio DIRECT: ${analysis.directAvgTime}`);
+    console.log(`⚡ Tempo médio PROXY: ${analysis.proxyAvgTime}`);
+    console.log(`\n🏆 RECOMENDAÇÃO: ${analysis.recommendation}`);
+    
     const summary = {
       success: true,
       timestamp: new Date().toISOString(),
-      note: 'Sincronização simplificada - apenas stages',
-      results,
-      total: {
-        created: results.reduce((sum, r) => sum + r.created, 0),
-        updated: results.reduce((sum, r) => sum + r.updated, 0),
-        errors: results.reduce((sum, r) => sum + r.errors, 0),
-        total: results.reduce((sum, r) => sum + r.total, 0),
-      }
+      tests: results,
+      analysis,
+      nextSteps: [
+        `Implementar a abordagem vencedora: ${analysis.winner}`,
+        'Remover código da abordagem não escolhida',
+        'Expandir para sincronização completa: origins → contacts → deals',
+        'Preparar Edge Function import-csv-data para quando CSV estiver pronto',
+      ],
     };
-
-    console.log('✅ Sincronização de stages concluída:', summary);
-
-    return new Response(JSON.stringify(summary), {
+    
+    return new Response(JSON.stringify(summary, null, 2), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
     });
-
+    
   } catch (error) {
-    console.error('❌ Erro fatal na sincronização:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    return new Response(JSON.stringify({
-      success: false,
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    });
+    console.error('❌ Erro fatal nos testes:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });
