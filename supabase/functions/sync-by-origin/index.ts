@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
     if (allDeals.length > 0) {
       const dealsToUpsert = allDeals.map(deal => ({
         clint_id: deal.id,
-        name: deal.name,
+        name: deal.name || 'Negócio sem título',
         value: deal.value || 0,
         stage_id: stageMap.get(deal.stage_id) || null,
         contact_id: contactMap.get(deal.contact_id) || null,
