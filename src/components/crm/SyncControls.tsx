@@ -83,8 +83,8 @@ export const SyncControls = () => {
     try {
       toast.info('Iniciando sincronização completa...');
 
-      // Passo 1: Sincronizar origins e stages
-      setSteps([
+      // Passo 1: Criar steps iniciais globais
+      const initialSteps: SyncStep[] = [
         { 
           name: 'Origens e Estágios', 
           endpoint: 'sync-origins-stages', 
@@ -97,13 +97,16 @@ export const SyncControls = () => {
           status: 'pending', 
           type: 'global' 
         }
-      ]);
+      ];
 
-      await runSyncStep(steps[0], 0);
+      setSteps(initialSteps);
+
+      // Passo 1: Sincronizar origins e stages
+      await runSyncStep(initialSteps[0], 0);
       toast.success('Origens e estágios sincronizados!');
 
       // Passo 2: Sincronizar TODOS os contatos (100k+)
-      await runSyncStep(steps[1], 1);
+      await runSyncStep(initialSteps[1], 1);
       toast.success('Contatos sincronizados!');
 
       // Passo 3: Buscar lista de origins
