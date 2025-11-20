@@ -59,11 +59,11 @@ Deno.serve(async (req) => {
     const body = req.method === 'POST' ? await req.json() : {};
     const autoMode = body.auto_mode === true;
     
-    // Configurações para modo automático vs manual
+    // Configurações otimizadas para processar 100k+ contatos
     const CONTACTS_PER_PAGE = 200;
-    const BATCH_SIZE = 1000; // Aumentado para melhor performance
-    const MAX_PAGES_PER_RUN = autoMode ? 50 : 1000; // Processar 50 páginas por vez no cron (10k contatos)
-    const RATE_LIMIT_MS = 10; // Reduzido para 10ms
+    const BATCH_SIZE = 1500; // Otimizado para ~20k contatos por execução
+    const MAX_PAGES_PER_RUN = autoMode ? 100 : 1000; // 100 páginas = 20k contatos por execução
+    const RATE_LIMIT_MS = 5; // Otimizado para velocidade máxima
 
     let totalProcessed = 0;
     let totalSkipped = 0;
@@ -188,11 +188,23 @@ Deno.serve(async (req) => {
         }
 
         totalProcessed += contactsToUpsert.length;
+        
+        // Calcular estatísticas de progresso
+        const elapsedMs = Date.now() - startTime;
+        const contactsPerMin = Math.round((totalProcessed / elapsedMs) * 60000);
         const percentage = response.meta?.total 
           ? ((totalProcessed / response.meta.total) * 100).toFixed(1)
           : 'N/A';
         
-        console.log(`📄 Processados: ${totalProcessed} contatos válidos | ${totalSkipped} sem nome/email (${percentage}% - página ${page}, batch ${Math.floor(i / BATCH_SIZE) + 1})`);
+        // Estimativa de tempo restante
+        let estimatedTimeLeft = '';
+        if (response.meta?.total && totalProcessed > 0) {
+          const remainingContacts = response.meta.total - totalProcessed;
+          const remainingMinutes = Math.round(remainingContacts / contactsPerMin);
+          estimatedTimeLeft = ` | ETA: ~${remainingMinutes}min`;
+        }
+        
+        console.log(`📄 ${totalProcessed.toLocaleString()} contatos (${contactsPerMin}/min) | ${totalSkipped} ignorados | ${percentage}% | pág ${page}${estimatedTimeLeft}`);
       }
 
       // Atualizar checkpoint do job após cada página
