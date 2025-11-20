@@ -53,16 +53,34 @@ export function SyncMonitor() {
   });
 
   const estimateProgress = (job: SyncJob) => {
-    // Estimativa baseada em ~117 páginas totais (23.400 contatos / 200 por página)
-    const estimatedTotalPages = 117;
+    // Estimativa baseada em 100k+ contatos = 500+ páginas (200 contatos/página)
+    const estimatedTotalPages = 500;
     if (job.job_type === 'contacts') {
       return Math.min((job.last_page / estimatedTotalPages) * 100, 100);
     }
-    // Para deals, estimativa similar
     if (job.job_type === 'deals') {
-      return Math.min((job.last_page / 100) * 100, 100);
+      return Math.min((job.last_page / estimatedTotalPages) * 100, 100);
     }
     return 0;
+  };
+
+  const calculateStats = (job: SyncJob) => {
+    if (!job.started_at) return null;
+    
+    const startTime = new Date(job.started_at).getTime();
+    const currentTime = job.completed_at ? new Date(job.completed_at).getTime() : Date.now();
+    const elapsedMinutes = (currentTime - startTime) / 60000;
+    
+    if (elapsedMinutes < 0.1) return null; // Muito cedo para estatísticas
+    
+    const contactsPerMin = Math.round(job.total_processed / elapsedMinutes);
+    
+    // Estimar tempo restante baseado em 100k contatos totais
+    const estimatedTotal = 100000;
+    const remaining = Math.max(0, estimatedTotal - job.total_processed);
+    const etaMinutes = contactsPerMin > 0 ? Math.round(remaining / contactsPerMin) : null;
+    
+    return { contactsPerMin, etaMinutes, elapsedMinutes: Math.round(elapsedMinutes) };
   };
 
   if (isLoading) {
@@ -95,9 +113,10 @@ export function SyncMonitor() {
               const config = statusConfig[job.status as keyof typeof statusConfig];
               const Icon = config.icon;
               const progress = estimateProgress(job);
+              const stats = calculateStats(job);
 
               return (
-                <div key={job.id} className="space-y-2 p-4 border rounded-lg bg-card">
+                <div key={job.id} className="space-y-3 p-4 border rounded-lg bg-card">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Icon className={`h-4 w-4 ${job.status === 'running' ? 'animate-spin' : ''}`} />
@@ -106,22 +125,43 @@ export function SyncMonitor() {
                     <Badge variant={config.variant}>{config.label}</Badge>
                   </div>
                   
-                  <Progress value={progress} className="h-2" />
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span>{progress.toFixed(0)}% completo</span>
+                      {stats?.etaMinutes && job.status === 'running' && (
+                        <span className="font-medium text-primary">
+                          ETA: ~{stats.etaMinutes}min
+                        </span>
+                      )}
+                    </div>
+                    <Progress value={progress} className="h-2" />
+                  </div>
                   
-                  <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                    <div>
-                      <span className="font-medium">Processados:</span> {job.total_processed.toLocaleString()}
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="text-muted-foreground">Processados</div>
+                      <div className="font-medium">{job.total_processed.toLocaleString()} contatos</div>
                     </div>
-                    <div>
-                      <span className="font-medium">Página:</span> {job.last_page}
+                    {stats && (
+                      <div className="space-y-1">
+                        <div className="text-muted-foreground">Velocidade</div>
+                        <div className="font-medium text-green-600">{stats.contactsPerMin.toLocaleString()}/min</div>
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <div className="text-muted-foreground">Página atual</div>
+                      <div className="font-medium">{job.last_page} / ~500</div>
                     </div>
-                    <div>
-                      <span className="font-medium">Progresso:</span> {progress.toFixed(0)}%
-                    </div>
+                    {stats && (
+                      <div className="space-y-1">
+                        <div className="text-muted-foreground">Tempo decorrido</div>
+                        <div className="font-medium">{stats.elapsedMinutes}min</div>
+                      </div>
+                    )}
                   </div>
 
                   {job.updated_at && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground pt-2 border-t">
                       Última atualização: {formatDistanceToNow(new Date(job.updated_at), { 
                         addSuffix: true, 
                         locale: ptBR 
