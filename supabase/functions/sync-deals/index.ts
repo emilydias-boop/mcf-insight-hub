@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       const { data: runningJob } = await supabase
         .from('sync_jobs')
         .select('*')
-        .eq('job_type', 'sync-deals')
+        .eq('job_type', 'deals')
         .eq('status', 'running')
         .single();
 
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
         const { data: newJob, error: jobError } = await supabase
           .from('sync_jobs')
           .insert({
-            job_type: 'sync-deals',
+            job_type: 'deals',
             status: 'running',
             started_at: new Date().toISOString(),
           })
