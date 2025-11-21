@@ -19,10 +19,18 @@ interface SyncStep {
 
 export const SyncControls = () => {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isMultiSyncing, setIsMultiSyncing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<SyncStep[]>([
     { name: 'Origens e Estágios', endpoint: 'sync-origins-stages', status: 'pending', type: 'global' },
   ]);
+  const [multiSyncRuns, setMultiSyncRuns] = useState<Array<{
+    run: number;
+    status: 'pending' | 'running' | 'success' | 'error';
+    result?: any;
+    error?: string;
+    duration?: number;
+  }>>([]);
 
   const runSyncStep = async (step: SyncStep, index: number) => {
     setCurrentStep(index);
@@ -73,6 +81,75 @@ export const SyncControls = () => {
       ));
 
       throw error;
+    }
+  };
+
+  const handleMultiSync = async () => {
+    setIsMultiSyncing(true);
+    const runs = [
+      { run: 1, status: 'pending' as const },
+      { run: 2, status: 'pending' as const },
+      { run: 3, status: 'pending' as const }
+    ];
+    setMultiSyncRuns(runs);
+
+    try {
+      toast.info('Iniciando 3 sincronizações completas para importar todos os contatos...');
+
+      for (let i = 0; i < 3; i++) {
+        const runNumber = i + 1;
+        const startTime = Date.now();
+
+        // Atualizar status para running
+        setMultiSyncRuns(prev => prev.map(r => 
+          r.run === runNumber ? { ...r, status: 'running' } : r
+        ));
+
+        try {
+          toast.info(`Executando sincronização ${runNumber}/3...`);
+          
+          const { data, error } = await supabase.functions.invoke('sync-clint-data', {
+            body: {}
+          });
+
+          if (error) throw error;
+
+          const duration = Date.now() - startTime;
+
+          // Atualizar com sucesso
+          setMultiSyncRuns(prev => prev.map(r => 
+            r.run === runNumber ? { ...r, status: 'success', result: data, duration } : r
+          ));
+
+          toast.success(`Sincronização ${runNumber}/3 completa! (${(duration/1000).toFixed(1)}s)`);
+          
+          // Aguardar 2 segundos entre sincronizações
+          if (i < 2) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } catch (error: any) {
+          const duration = Date.now() - startTime;
+          
+          // Atualizar com erro
+          setMultiSyncRuns(prev => prev.map(r => 
+            r.run === runNumber ? { 
+              ...r, 
+              status: 'error', 
+              error: error.message || 'Erro desconhecido',
+              duration 
+            } : r
+          ));
+
+          toast.error(`Erro na sincronização ${runNumber}/3: ${error.message}`);
+          throw error; // Para parar o loop
+        }
+      }
+
+      toast.success('🎉 Todas as 3 sincronizações completas! Todos os 102.250 contatos devem estar importados.');
+    } catch (error: any) {
+      console.error('Erro nas sincronizações múltiplas:', error);
+    } finally {
+      setIsMultiSyncing(false);
     }
   };
 
@@ -190,23 +267,68 @@ export const SyncControls = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button 
-          onClick={handleFullSync} 
-          disabled={isSyncing}
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          {isSyncing ? (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Sincronizando...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Iniciar Sincronização Completa
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleMultiSync} 
+            disabled={isSyncing || isMultiSyncing}
+            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            {isMultiSyncing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Importando Tudo...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Importar Todos (102k)
+              </>
+            )}
+          </Button>
+          
+          <Button 
+            onClick={handleFullSync} 
+            disabled={isSyncing || isMultiSyncing}
+            variant="outline"
+            className="flex-1"
+          >
+            {isSyncing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync Manual
+              </>
+            )}
+          </Button>
+        </div>
+
+        {isMultiSyncing && multiSyncRuns.length > 0 && (
+          <div className="space-y-2 p-4 border border-border rounded-lg bg-muted/30">
+            <p className="text-sm font-medium text-foreground mb-2">Progresso da Importação Completa:</p>
+            {multiSyncRuns.map((run) => (
+              <div
+                key={run.run}
+                className={`flex items-center justify-between p-2 border rounded ${
+                  run.status === 'running' ? 'border-primary bg-primary/5' : 'border-border'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {getStepIcon(run.status)}
+                  <span className="text-sm text-foreground">Sincronização {run.run}/3</span>
+                </div>
+                {run.duration && (
+                  <span className="text-xs text-muted-foreground">
+                    {(run.duration / 1000).toFixed(1)}s
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {isSyncing && (
           <div className="space-y-2">
