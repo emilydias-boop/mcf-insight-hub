@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
         .from('sync_jobs')
         .select('*')
         .eq('job_type', 'contacts')
-        .in('status', ['running', 'pending'])
+        .in('status', ['running', 'pending', 'paused'])
         .order('updated_at', { ascending: false })
         .limit(1);
 
