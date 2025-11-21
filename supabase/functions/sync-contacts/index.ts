@@ -125,6 +125,18 @@ Deno.serve(async (req) => {
     
     let lastContactsLength = 0;
     
+    // Buscar mapa de origins (clint_id -> supabase_id) para vincular origins diretamente
+    const { data: originsData } = await supabase
+      .from('crm_origins')
+      .select('id, clint_id');
+    
+    const originsMap = new Map<string, string>();
+    originsData?.forEach(origin => {
+      originsMap.set(origin.clint_id, origin.id);
+    });
+    
+    console.log(`📍 ${originsMap.size} origins carregadas para mapeamento`);
+    
     while (page <= endPage) {
       const response = await callClintAPI('contacts', {
         page: page.toString(),
@@ -144,38 +156,42 @@ Deno.serve(async (req) => {
         const batch = contacts.slice(i, i + BATCH_SIZE);
 
         // Preparar todos os contatos do batch para bulk upsert
-        // IMPORTANTE: Usar email como fallback se não houver nome
         const contactsToUpsert = batch
-          .filter((contact: any) => {
-            // Se não tem nome, tenta usar email como fallback
-            if (!contact.name || contact.name.trim() === '') {
-              if (contact.email && contact.email.trim() !== '') {
-                contact.name = contact.email.trim(); // Usar email como nome
-                return true;
-              }
-              // Só descarta se não tiver nem nome nem email
+          .map((contact: any) => {
+            // Determinar nome: prioridade 1) name, 2) email, 3) fallback gerado
+            let contactName = '';
+            if (contact.name && contact.name.trim() !== '') {
+              contactName = contact.name.trim();
+            } else if (contact.email && contact.email.trim() !== '') {
+              contactName = contact.email.trim();
+            } else {
+              // Gerar nome padrão para não violar constraint NOT NULL
+              contactName = `Contato sem nome (ID: ${contact.id})`;
               totalSkipped++;
-              console.log(`⚠️ Contato sem nome/email descartado - ID: ${contact.id}`);
-              return false;
+              console.log(`⚠️ Contato sem nome/email - gerando fallback: ${contactName}`);
             }
-            return true;
-          })
-          .map((contact: any) => ({
-            clint_id: contact.id,
-            name: contact.name.trim(),
-            email: contact.email || null,
-            phone: contact.phone || null,
-            organization_name: contact.organization?.name || null,
-            origin_id: null, // Será preenchido posteriormente via sync-link-contacts
-            tags: contact.tags || [],
-            custom_fields: contact.custom_fields || {},
-          }));
 
-        // Só fazer upsert se houver contatos válidos no batch
-        if (contactsToUpsert.length === 0) {
-          console.log(`⏭️ Batch ${i}-${i + batch.length} pulado: nenhum contato válido`);
-          continue;
-        }
+            // Tentar vincular origin diretamente da API
+            let originId = null;
+            const contactOriginClintId = contact.origin_id || contact.origin?.id;
+            if (contactOriginClintId) {
+              originId = originsMap.get(contactOriginClintId) || null;
+              if (originId) {
+                console.log(`✅ Origem vinculada diretamente: ${contactOriginClintId} -> ${originId}`);
+              }
+            }
+
+            return {
+              clint_id: contact.id,
+              name: contactName,
+              email: contact.email || null,
+              phone: contact.phone || null,
+              organization_name: contact.organization?.name || null,
+              origin_id: originId, // Pode ser null se não vier da API
+              tags: contact.tags || [],
+              custom_fields: contact.custom_fields || {},
+            };
+          });
 
         // Bulk upsert de todos os contatos do batch de uma vez
         const { error } = await supabase
@@ -204,7 +220,7 @@ Deno.serve(async (req) => {
           estimatedTimeLeft = ` | ETA: ~${remainingMinutes}min`;
         }
         
-        console.log(`📄 ${totalProcessed.toLocaleString()} contatos (${contactsPerMin}/min) | ${totalSkipped} ignorados | ${percentage}% | pág ${page}${estimatedTimeLeft}`);
+        console.log(`📄 ${totalProcessed.toLocaleString()} contatos (${contactsPerMin}/min) | ${totalSkipped} sem nome/email | ${percentage}% | pág ${page}${estimatedTimeLeft}`);
       }
 
       // Atualizar checkpoint do job após cada página
@@ -261,7 +277,7 @@ Deno.serve(async (req) => {
         contacts_synced: totalProcessed,
         contacts_skipped: totalSkipped,
         pages_processed: `${startPage}-${page - 1}`,
-        reason_skipped: 'Contatos sem nome e email (violaria constraint NOT NULL)',
+        reason_skipped: 'Contatos sem nome e email receberam nome padrão gerado',
       },
     };
 
