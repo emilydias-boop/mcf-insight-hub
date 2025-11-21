@@ -5,6 +5,8 @@ export interface ClintContact {
   email?: string;
   phone?: string;
   organization_id?: string;
+  origin_id?: string;
+  origin?: { id: string; name: string };
   tags?: string[];
   custom_fields?: Record<string, any>;
   created_at: string;
@@ -58,6 +60,11 @@ export interface ClintOrigin {
   id: string;
   name: string;
   description?: string;
+  parent_id?: string;
+  parent?: { id: string; name: string };
+  parent_origin_id?: string;
+  group?: { id: string; name: string };
+  stages?: any[];
   created_at: string;
 }
 

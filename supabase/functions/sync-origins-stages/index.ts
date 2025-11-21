@@ -72,7 +72,10 @@ Deno.serve(async (req) => {
     const MAX_PAGES = 1000;
     
     const groupIdMap = new Map<string, string>();
+    const originIdMap = new Map<string, string>();
+    const originsWithParent: any[] = [];
 
+    // PRIMEIRA PASSADA: Salvar groups e origins (sem parent_id ainda)
     while (page <= MAX_PAGES) {
       const response = await callClintAPI('origins', { 
         page: page.toString(), 
@@ -114,7 +117,7 @@ Deno.serve(async (req) => {
           }
         }
         
-        // 2. Salvar ORIGIN
+        // 2. Salvar ORIGIN (sem parent_id por enquanto)
         const { data: savedOrigin, error: originError } = await supabase
           .from('crm_origins')
           .upsert(
@@ -124,6 +127,7 @@ Deno.serve(async (req) => {
               description: origin.description || null,
               group_id: groupDbId,
               contact_count: 0,
+              parent_id: null, // Será atualizado na segunda passada
             },
             { onConflict: 'clint_id' }
           )
@@ -135,12 +139,23 @@ Deno.serve(async (req) => {
           continue;
         }
         
+        // Mapear clint_id -> supabase_id
+        originIdMap.set(origin.id, savedOrigin.id);
         totalOrigins++;
+
+        // Se tem parent, guardar para segunda passada
+        if (origin.parent_id || origin.parent || origin.parent_origin_id) {
+          const parentClintId = origin.parent_id || origin.parent?.id || origin.parent_origin_id;
+          originsWithParent.push({
+            clint_id: origin.id,
+            supabase_id: savedOrigin.id,
+            parent_clint_id: parentClintId,
+          });
+        }
 
         // 3. Salvar STAGES
         if (origin.stages && Array.isArray(origin.stages) && origin.stages.length > 0) {
           const stagesToUpsert = origin.stages.map((stage: any, index: number) => {
-            // Usar stage.label como fonte principal do nome
             const stageName = stage.label || stage.name || `${origin.name} - ${stage.type} #${stage.order}`;
 
             return {
@@ -172,6 +187,31 @@ Deno.serve(async (req) => {
         break;
       }
     }
+
+    // SEGUNDA PASSADA: Atualizar parent_id das origins filhas
+    console.log(`🔗 Atualizando hierarquia de ${originsWithParent.length} origins filhas...`);
+    let linkedOrigins = 0;
+    
+    for (const childOrigin of originsWithParent) {
+      const parentSupabaseId = originIdMap.get(childOrigin.parent_clint_id);
+      
+      if (parentSupabaseId) {
+        const { error: updateError } = await supabase
+          .from('crm_origins')
+          .update({ parent_id: parentSupabaseId })
+          .eq('id', childOrigin.supabase_id);
+
+        if (updateError) {
+          console.error(`❌ Erro ao atualizar parent_id para origin ${childOrigin.clint_id}:`, updateError);
+        } else {
+          linkedOrigins++;
+        }
+      } else {
+        console.warn(`⚠️ Parent origin ${childOrigin.parent_clint_id} não encontrado para origin ${childOrigin.clint_id}`);
+      }
+    }
+    
+    console.log(`✅ ${linkedOrigins} origins vinculadas às suas origins pai`);
     
     const duration = Date.now() - startTime;
 
@@ -182,6 +222,7 @@ Deno.serve(async (req) => {
       results: {
         groups_synced: totalGroups,
         origins_synced: totalOrigins,
+        origins_with_parent: linkedOrigins,
         stages_synced: totalStages,
       },
     };
