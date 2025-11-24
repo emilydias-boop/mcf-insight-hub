@@ -1,5 +1,8 @@
-// Version: 2025-11-24T17:50:00Z
+// Version: 2025-11-24T18:00:00Z - Background processing
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
+
+// @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
+declare const EdgeRuntime: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -290,12 +293,13 @@ async function loadStagesCache(supabase: any): Promise<Map<string, string>> {
   return cache;
 }
 
-// Processar deals em batches
+// Processar deals em batches com atualização de progresso
 async function processDeals(
   supabase: any,
   csvDeals: CSVDeal[],
   contactsCache: Map<string, string>,
-  stagesCache: Map<string, string>
+  stagesCache: Map<string, string>,
+  jobId?: string
 ): Promise<ImportStats> {
   const stats: ImportStats = {
     total: csvDeals.length,
@@ -356,7 +360,6 @@ async function processDeals(
             });
           });
         } else {
-          // Verificar se foram atualizações ou inserções
           const insertedCount = data?.length || 0;
           stats.imported += insertedCount;
           
@@ -368,9 +371,23 @@ async function processDeals(
       }
     }
 
+    // Atualizar progresso do job
+    if (jobId) {
+      const processedSoFar = Math.min(i + BATCH_SIZE, csvDeals.length);
+      await supabase
+        .from('sync_jobs')
+        .update({
+          total_processed: stats.imported,
+          total_skipped: stats.errors,
+          last_page: Math.floor(i / BATCH_SIZE) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId);
+    }
+
     // Pequeno delay para não sobrecarregar
     if (i + BATCH_SIZE < csvDeals.length) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
 
@@ -379,13 +396,87 @@ async function processDeals(
   return stats;
 }
 
+// Função de processamento em background
+async function processInBackground(
+  csvDeals: CSVDeal[],
+  jobId: string,
+  supabaseUrl: string,
+  supabaseKey: string
+) {
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  try {
+    // Atualizar job para started
+    await supabase
+      .from('sync_jobs')
+      .update({
+        status: 'processing',
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', jobId);
+
+    // Carregar caches
+    console.log('🔄 Carregando caches...');
+    const [contactsCache, stagesCache] = await Promise.all([
+      loadContactsCache(supabase),
+      loadStagesCache(supabase),
+    ]);
+
+    // Processar deals
+    console.log('⚙️ Processando deals...');
+    const stats = await processDeals(supabase, csvDeals, contactsCache, stagesCache, jobId);
+
+    // Executar link de contacts a origins via deals
+    console.log('🔗 Vinculando contacts a origins...');
+    try {
+      const { data: linkCount } = await supabase.rpc('link_contacts_to_origins_via_deals');
+      console.log(`✅ ${linkCount || 0} contacts vinculados a origins`);
+    } catch (linkError) {
+      console.error('⚠️ Erro ao vincular contacts:', linkError);
+    }
+
+    // Atualizar job para completed
+    await supabase
+      .from('sync_jobs')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        total_processed: stats.imported,
+        total_skipped: stats.errors,
+        metadata: {
+          stats,
+          errorDetails: stats.errorDetails.slice(0, 100), // Limitar a 100 erros
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', jobId);
+
+    console.log('✅ Importação concluída!');
+    console.log(`📊 Estatísticas:`, stats);
+  } catch (error) {
+    console.error('❌ Erro no processamento background:', error);
+    
+    // Atualizar job para failed
+    await supabase
+      .from('sync_jobs')
+      .update({
+        status: 'failed',
+        error_message: error instanceof Error ? error.message : 'Erro desconhecido',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', jobId);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('[IMPORT-DEALS-CSV] Version: 2025-11-24T17:50:00Z');
+    console.log('[IMPORT-DEALS-CSV] Version: 2025-11-24T18:00:00Z');
     console.log('📥 Iniciando importação de deals via CSV');
     
     const formData = await req.formData();
@@ -407,8 +498,8 @@ Deno.serve(async (req) => {
     }
     
     // Validar que os deals têm os campos necessários
-    const dealsWithoutId = csvDeals.filter(d => !d.id).length;
-    const dealsWithoutName = csvDeals.filter(d => !d.name).length;
+    const dealsWithoutId = csvDeals.filter(d => !d.id || d.id.trim() === '').length;
+    const dealsWithoutName = csvDeals.filter(d => !d.name || d.name.trim() === '').length;
     
     if (dealsWithoutId > 0 || dealsWithoutName > 0) {
       console.warn(`⚠️ Validação: ${dealsWithoutId} deals sem ID, ${dealsWithoutName} deals sem nome`);
@@ -419,34 +510,38 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Carregar caches
-    console.log('🔄 Carregando caches...');
-    const [contactsCache, stagesCache] = await Promise.all([
-      loadContactsCache(supabase),
-      loadStagesCache(supabase),
-    ]);
+    // Criar job de sync
+    const { data: job, error: jobError } = await supabase
+      .from('sync_jobs')
+      .insert({
+        job_type: 'import_deals_csv',
+        status: 'pending',
+        metadata: {
+          filename: file.name,
+          total_deals: csvDeals.length,
+        },
+      })
+      .select()
+      .single();
 
-    // Processar deals
-    console.log('⚙️ Processando deals...');
-    const stats = await processDeals(supabase, csvDeals, contactsCache, stagesCache);
-
-    // Executar link de contacts a origins via deals
-    console.log('🔗 Vinculando contacts a origins...');
-    try {
-      const { data: linkCount } = await supabase.rpc('link_contacts_to_origins_via_deals');
-      console.log(`✅ ${linkCount || 0} contacts vinculados a origins`);
-    } catch (linkError) {
-      console.error('⚠️ Erro ao vincular contacts:', linkError);
+    if (jobError || !job) {
+      throw new Error(`Erro ao criar job: ${jobError?.message}`);
     }
 
-    console.log('✅ Importação concluída!');
-    console.log(`📊 Estatísticas:`, stats);
+    console.log(`✅ Job criado: ${job.id}`);
 
+    // Processar em background
+    EdgeRuntime.waitUntil(
+      processInBackground(csvDeals, job.id, supabaseUrl, supabaseKey)
+    );
+
+    // Retornar resposta imediata
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Importação concluída com sucesso',
-        stats,
+        message: 'Importação iniciada. Processamento em andamento.',
+        job_id: job.id,
+        total_deals: csvDeals.length,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
