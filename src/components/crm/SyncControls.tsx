@@ -20,11 +20,20 @@ interface SyncStep {
 export const SyncControls = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMultiSyncing, setIsMultiSyncing] = useState(false);
+  const [isDealsSyncing, setIsDealsSyncing] = useState(false);
+  const [isLinkingSyncing, setIsLinkingSyncing] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<SyncStep[]>([
     { name: 'Origens e Estágios', endpoint: 'sync-origins-stages', status: 'pending', type: 'global' },
   ]);
   const [multiSyncRuns, setMultiSyncRuns] = useState<Array<{
+    run: number;
+    status: 'pending' | 'running' | 'success' | 'error';
+    result?: any;
+    error?: string;
+    duration?: number;
+  }>>([]);
+  const [dealsRuns, setDealsRuns] = useState<Array<{
     run: number;
     status: 'pending' | 'running' | 'success' | 'error';
     result?: any;
@@ -153,6 +162,103 @@ export const SyncControls = () => {
     }
   };
 
+  const handleImportAllDeals = async () => {
+    setIsDealsSyncing(true);
+    const runs = Array.from({ length: 10 }, (_, i) => ({ 
+      run: i + 1, 
+      status: 'pending' as const 
+    }));
+    setDealsRuns(runs);
+
+    try {
+      toast.info('Iniciando importação de TODOS os deals (pode demorar)...');
+
+      for (let i = 0; i < 10; i++) {
+        const runNumber = i + 1;
+        const startTime = Date.now();
+
+        // Atualizar status para running
+        setDealsRuns(prev => prev.map(r => 
+          r.run === runNumber ? { ...r, status: 'running' } : r
+        ));
+
+        try {
+          toast.info(`Importando lote ${runNumber}/10 de deals...`);
+          
+          const { data, error } = await supabase.functions.invoke('sync-deals', {
+            body: { auto_mode: true }
+          });
+
+          if (error) throw error;
+
+          const duration = Date.now() - startTime;
+
+          // Atualizar com sucesso
+          setDealsRuns(prev => prev.map(r => 
+            r.run === runNumber ? { ...r, status: 'success', result: data, duration } : r
+          ));
+
+          toast.success(`Lote ${runNumber}/10 completo! ${data.results?.deals_synced || 0} deals (${(duration/1000).toFixed(1)}s)`);
+          
+          // Se completou, parar
+          if (data.is_complete) {
+            toast.success(`🎉 Importação completa! Total processado até agora.`);
+            break;
+          }
+          
+          // Aguardar 1 segundo entre lotes
+          if (i < 9) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (error: any) {
+          const duration = Date.now() - startTime;
+          
+          // Atualizar com erro
+          setDealsRuns(prev => prev.map(r => 
+            r.run === runNumber ? { 
+              ...r, 
+              status: 'error', 
+              error: error.message || 'Erro desconhecido',
+              duration 
+            } : r
+          ));
+
+          toast.error(`Erro no lote ${runNumber}/10: ${error.message}`);
+          throw error; // Para parar o loop
+        }
+      }
+
+      toast.success('🎉 Importação de deals completa!');
+    } catch (error: any) {
+      console.error('Erro na importação de deals:', error);
+    } finally {
+      setIsDealsSyncing(false);
+    }
+  };
+
+  const handleLinkContacts = async () => {
+    setIsLinkingSyncing(true);
+
+    try {
+      toast.info('Vinculando contatos às origens (pode demorar)...');
+      
+      const startTime = Date.now();
+      const { data, error } = await supabase.functions.invoke('sync-link-contacts');
+
+      if (error) throw error;
+
+      const duration = Date.now() - startTime;
+      const contactsLinked = data?.results?.contacts_linked || 0;
+
+      toast.success(`✅ ${contactsLinked.toLocaleString()} contatos vinculados às suas origens! (${(duration/1000).toFixed(1)}s)`);
+    } catch (error: any) {
+      console.error('Erro ao vincular contatos:', error);
+      toast.error(`Erro: ${error.message || 'Falha ao vincular contatos'}`);
+    } finally {
+      setIsLinkingSyncing(false);
+    }
+  };
+
   const handleFullSync = async () => {
     setIsSyncing(true);
     setCurrentStep(0);
@@ -267,30 +373,65 @@ export const SyncControls = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button 
             onClick={handleMultiSync} 
-            disabled={isSyncing || isMultiSyncing}
-            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {isMultiSyncing ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Importando Tudo...
+                Importando...
               </>
             ) : (
               <>
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Importar Todos (102k)
+                Importar Contatos
+              </>
+            )}
+          </Button>
+
+          <Button 
+            onClick={handleImportAllDeals} 
+            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            {isDealsSyncing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Importando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Importar Deals
+              </>
+            )}
+          </Button>
+
+          <Button 
+            onClick={handleLinkContacts} 
+            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
+            variant="secondary"
+          >
+            {isLinkingSyncing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Vinculando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Vincular Contatos
               </>
             )}
           </Button>
           
           <Button 
             onClick={handleFullSync} 
-            disabled={isSyncing || isMultiSyncing}
+            disabled={isSyncing || isMultiSyncing || isDealsSyncing || isLinkingSyncing}
             variant="outline"
-            className="flex-1"
           >
             {isSyncing ? (
               <>
@@ -308,7 +449,7 @@ export const SyncControls = () => {
 
         {isMultiSyncing && multiSyncRuns.length > 0 && (
           <div className="space-y-2 p-4 border border-border rounded-lg bg-muted/30">
-            <p className="text-sm font-medium text-foreground mb-2">Progresso da Importação Completa:</p>
+            <p className="text-sm font-medium text-foreground mb-2">Progresso da Importação de Contatos:</p>
             {multiSyncRuns.map((run) => (
               <div
                 key={run.run}
@@ -318,7 +459,34 @@ export const SyncControls = () => {
               >
                 <div className="flex items-center gap-2">
                   {getStepIcon(run.status)}
-                  <span className="text-sm text-foreground">Sincronização {run.run}/3</span>
+                  <span className="text-sm text-foreground">Lote {run.run}/3</span>
+                </div>
+                {run.duration && (
+                  <span className="text-xs text-muted-foreground">
+                    {(run.duration / 1000).toFixed(1)}s
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isDealsSyncing && dealsRuns.length > 0 && (
+          <div className="space-y-2 p-4 border border-border rounded-lg bg-muted/30">
+            <p className="text-sm font-medium text-foreground mb-2">Progresso da Importação de Deals:</p>
+            {dealsRuns.map((run) => (
+              <div
+                key={run.run}
+                className={`flex items-center justify-between p-2 border rounded ${
+                  run.status === 'running' ? 'border-primary bg-primary/5' : 'border-border'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {getStepIcon(run.status)}
+                  <span className="text-sm text-foreground">
+                    Lote {run.run}/10 
+                    {run.result?.results?.deals_synced && ` - ${run.result.results.deals_synced} deals`}
+                  </span>
                 </div>
                 {run.duration && (
                   <span className="text-xs text-muted-foreground">

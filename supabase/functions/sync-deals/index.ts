@@ -64,12 +64,14 @@ Deno.serve(async (req) => {
     let startPage = 1;
     
     if (autoMode) {
-      // Verificar se há job em execução
+      // Verificar se há job em execução ou pausado
       const { data: runningJob } = await supabase
         .from('sync_jobs')
         .select('*')
         .eq('job_type', 'deals')
-        .eq('status', 'running')
+        .in('status', ['running', 'pending', 'paused'])
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .single();
 
       if (runningJob) {
@@ -206,7 +208,7 @@ Deno.serve(async (req) => {
       await supabase
         .from('sync_jobs')
         .update({
-          status: isComplete ? 'completed' : 'running',
+          status: isComplete ? 'completed' : 'paused',
           completed_at: isComplete ? new Date().toISOString() : null,
           total_processed: totalProcessed,
           last_page: page - 1,
