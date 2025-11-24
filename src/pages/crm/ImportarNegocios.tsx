@@ -11,6 +11,7 @@ interface ImportStats {
   total: number;
   imported: number;
   updated: number;
+  skipped: number;
   errors: number;
   duration_seconds: number;
   errorDetails?: Array<{ line: number; clint_id: string; error: string }>;
@@ -27,9 +28,11 @@ interface ChunkJob {
 interface AggregatedStats {
   totalDeals: number;
   totalImported: number;
+  totalSkipped: number;
   totalErrors: number;
   completedChunks: number;
   totalChunks: number;
+  currentChunk: number;
   allErrorDetails: Array<{ line: number; clint_id: string; error: string }>;
 }
 
@@ -115,14 +118,21 @@ const ImportarNegocios = () => {
 
         // Calcular estatísticas agregadas
         let totalImported = 0;
+        let totalSkipped = 0;
         let totalErrors = 0;
         let totalDeals = 0;
+        let currentChunk = 0;
         const allErrorDetails: Array<{ line: number; clint_id: string; error: string }> = [];
 
-        chunkJobs.forEach(job => {
-          totalImported += job.total_processed || 0;
-          totalErrors += job.total_skipped || 0;
-          totalDeals += job.metadata?.total_deals || 0;
+        chunkJobs.forEach((job, idx) => {
+          totalImported += job.metadata?.imported || job.total_processed || 0;
+          totalSkipped += job.metadata?.skipped || 0;
+          totalErrors += job.metadata?.errors || 0;
+          totalDeals += job.metadata?.stats?.total || 0;
+          
+          if (job.status === 'processing') {
+            currentChunk = idx + 1;
+          }
           
           if (job.metadata?.errorDetails) {
             allErrorDetails.push(...job.metadata.errorDetails);
@@ -132,9 +142,11 @@ const ImportarNegocios = () => {
         setAggregatedStats({
           totalDeals,
           totalImported,
+          totalSkipped,
           totalErrors,
           completedChunks: completed,
           totalChunks,
+          currentChunk: currentChunk || completed,
           allErrorDetails,
         });
 
@@ -243,17 +255,31 @@ const ImportarNegocios = () => {
           </div>
 
           {isImporting && aggregatedStats && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Processando chunk {aggregatedStats.completedChunks} de {aggregatedStats.totalChunks}...
+                  Chunk {aggregatedStats.currentChunk}/{aggregatedStats.totalChunks} em progresso...
                 </span>
                 <span className="font-medium text-foreground">{progress}%</span>
               </div>
               <Progress value={progress} />
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{aggregatedStats.totalImported} deals importados até agora</span>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="flex items-center gap-2 text-green-600">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>{aggregatedStats.totalImported} importados</span>
+                </div>
+                {aggregatedStats.totalSkipped > 0 && (
+                  <div className="flex items-center gap-2 text-yellow-600">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{aggregatedStats.totalSkipped} protegidos</span>
+                  </div>
+                )}
+                {aggregatedStats.totalErrors > 0 && (
+                  <div className="flex items-center gap-2 text-red-600">
+                    <XCircle className="h-4 w-4" />
+                    <span>{aggregatedStats.totalErrors} erros</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -295,7 +321,16 @@ const ImportarNegocios = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {aggregatedStats.totalSkipped > 0 && (
+              <Alert className="border-yellow-500/50 bg-yellow-500/10">
+                <AlertCircle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                  <strong>{aggregatedStats.totalSkipped} deals foram protegidos</strong> porque já existem com dados mais recentes vindos do webhook (ao vivo). Isso evita sobrescrever dados atualizados.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="text-center p-4 bg-muted rounded-lg">
                 <div className="text-2xl font-bold text-foreground">{aggregatedStats.totalDeals}</div>
                 <div className="text-sm text-muted-foreground">Total Processado</div>
@@ -303,6 +338,10 @@ const ImportarNegocios = () => {
               <div className="text-center p-4 bg-green-500/10 rounded-lg">
                 <div className="text-2xl font-bold text-green-600">{aggregatedStats.totalImported}</div>
                 <div className="text-sm text-muted-foreground">Importados</div>
+              </div>
+              <div className="text-center p-4 bg-yellow-500/10 rounded-lg">
+                <div className="text-2xl font-bold text-yellow-600">{aggregatedStats.totalSkipped}</div>
+                <div className="text-sm text-muted-foreground">Protegidos</div>
               </div>
               <div className="text-center p-4 bg-blue-500/10 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">{aggregatedStats.totalChunks}</div>

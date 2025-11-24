@@ -1,4 +1,4 @@
-// Version: 2025-11-24T18:00:00Z - Background processing
+// Version: 2025-11-24T20:30:00Z - Smart import with timestamp checking
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
 
 // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
@@ -42,6 +42,7 @@ interface ImportStats {
   total: number;
   imported: number;
   updated: number;
+  skipped: number;
   errors: number;
   duration_seconds: number;
   errorDetails: Array<{ line: number; clint_id: string; error: string }>;
@@ -122,6 +123,44 @@ function parseCSV(csvText: string): CSVDeal[] {
   console.log(`✅ Total de deals parseados: ${deals.length}`);
   
   return deals;
+}
+
+// Campos custom prioritários (top 30)
+const PRIORITY_CUSTOM_FIELDS = [
+  'estado', 'profissao', 'renda_media', 'faixa_de_renda', 'perfil',
+  'tags', 'notes', 'utm_source', 'utm_campaign', 'utm_medium', 'utm_content',
+  'data_agendamento', 'data_reuniao_01', 'resumo', 'closer', 'atendente',
+  'motivacao', 'solucao_que_busca', 'feedback_da_reuniao', 'telefone',
+  'faixa_etaria', 'valor_imovel', 'tipo_do_imovel', 'contexto',
+  'historico', 'capacidade_de_invest', 'fonte_de_renda', 'endereco',
+  'user_email', 'user_name'
+];
+
+// Verificar se deve importar deal (compara timestamps)
+async function shouldImportDeal(
+  supabase: any,
+  clintId: string,
+  csvUpdatedAt?: string
+): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from('crm_deals')
+    .select('updated_at')
+    .eq('clint_id', clintId)
+    .single();
+  
+  if (!existing) return true; // Deal novo, importar
+  
+  // Se CSV não tem updated_at, não importar (protege dados existentes)
+  if (!csvUpdatedAt) return false;
+  
+  // Comparar datas - apenas importar se CSV for mais recente
+  try {
+    const csvDate = new Date(csvUpdatedAt);
+    const dbDate = new Date(existing.updated_at);
+    return csvDate > dbDate;
+  } catch {
+    return false; // Erro ao parsear data, não importar
+  }
 }
 
 // Função auxiliar para parsear uma linha CSV respeitando aspas duplas
@@ -219,12 +258,12 @@ function convertToDBFormat(
     tags = csvDeal.tags.split(',').map(t => t.trim()).filter(Boolean);
   }
 
-  // Custom fields - todos os campos que não são padrão
-  const standardFields = ['id', 'name', 'email', 'phone', 'complete_phone', 'stage', 'origin', 'value', 'user_email', 'tags'];
+  // Custom fields - apenas os 30 mais importantes
+  const standardFields = ['id', 'name', 'email', 'phone', 'complete_phone', 'stage', 'origin', 'value', 'user_email', 'tags', 'created_at', 'updated_at'];
   const customFields: Record<string, any> = {};
   
   Object.keys(csvDeal).forEach(key => {
-    if (!standardFields.includes(key) && csvDeal[key]) {
+    if (!standardFields.includes(key) && csvDeal[key] && PRIORITY_CUSTOM_FIELDS.includes(key)) {
       customFields[key] = csvDeal[key];
     }
   });
@@ -305,19 +344,36 @@ async function processDeals(
     total: csvDeals.length,
     imported: 0,
     updated: 0,
+    skipped: 0,
     errors: 0,
     duration_seconds: 0,
     errorDetails: [],
   };
 
-  const BATCH_SIZE = 50; // Reduzido de 100 para 50
+  const BATCH_SIZE = 25; // Reduzido para 25
+  const DELAY_BETWEEN_BATCHES = 50; // 50ms entre batches
   const startTime = Date.now();
+
+  // Pré-carregar todos os clint_ids existentes para verificação em batch
+  const allClintIds = csvDeals.map(d => d.id).filter(Boolean);
+  const { data: existingDeals } = await supabase
+    .from('crm_deals')
+    .select('clint_id, updated_at')
+    .in('clint_id', allClintIds);
+  
+  const existingDealsMap = new Map<string, string>();
+  existingDeals?.forEach((deal: any) => {
+    existingDealsMap.set(deal.clint_id, deal.updated_at);
+  });
+  
+  console.log(`📊 Verificação de existência: ${existingDealsMap.size} deals já existem no banco`);
 
   for (let i = 0; i < csvDeals.length; i += BATCH_SIZE) {
     const batch = csvDeals.slice(i, i + BATCH_SIZE);
     const dealsToInsert: any[] = [];
 
-    batch.forEach((csvDeal, index) => {
+    for (let index = 0; index < batch.length; index++) {
+      const csvDeal = batch[index];
       const lineNumber = i + index + 2; // +2 porque linha 1 é header e array começa em 0
       
       const dealData = convertToDBFormat(csvDeal, contactsCache, stagesCache);
@@ -333,11 +389,40 @@ async function processDeals(
           clint_id: csvDeal.id || 'unknown',
           error: `Campos faltando: ${missingFields.join(', ')}. Headers disponíveis: ${Object.keys(csvDeal).slice(0, 5).join(', ')}...`,
         });
-        return;
+        continue;
+      }
+
+      // Verificação inteligente: só importar se for novo ou mais recente
+      const existingUpdatedAt = existingDealsMap.get(csvDeal.id);
+      
+      if (existingUpdatedAt) {
+        // Deal já existe, verificar timestamp
+        const csvUpdatedAt = csvDeal.updated_at || csvDeal.updated_stage_at;
+        
+        if (!csvUpdatedAt) {
+          // CSV não tem timestamp, proteger dados existentes (do webhook)
+          stats.skipped++;
+          continue;
+        }
+        
+        try {
+          const csvDate = new Date(csvUpdatedAt);
+          const dbDate = new Date(existingUpdatedAt);
+          
+          if (csvDate <= dbDate) {
+            // CSV é mais antigo ou igual, não sobrescrever
+            stats.skipped++;
+            continue;
+          }
+        } catch {
+          // Erro ao parsear data, proteger dados existentes
+          stats.skipped++;
+          continue;
+        }
       }
 
       dealsToInsert.push(dealData);
-    });
+    }
 
     if (dealsToInsert.length > 0) {
       try {
@@ -373,19 +458,24 @@ async function processDeals(
 
     // Atualizar progresso do job
     if (jobId) {
-      const processedSoFar = Math.min(i + BATCH_SIZE, csvDeals.length);
       await supabase
         .from('sync_jobs')
         .update({
           total_processed: stats.imported,
-          total_skipped: stats.errors,
+          total_skipped: stats.skipped + stats.errors,
           last_page: Math.floor(i / BATCH_SIZE) + 1,
+          metadata: {
+            imported: stats.imported,
+            skipped: stats.skipped,
+            errors: stats.errors,
+          },
           updated_at: new Date().toISOString(),
         })
         .eq('id', jobId);
     }
 
-    // Removido delay entre batches para otimização
+    // Pequeno delay para não sobrecarregar CPU
+    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
   }
 
   stats.duration_seconds = Math.floor((Date.now() - startTime) / 1000);
@@ -393,7 +483,7 @@ async function processDeals(
   return stats;
 }
 
-// Função de processamento de chunks em background
+// Função de processamento de chunks em background (SEQUENCIAL)
 async function processChunksInBackground(
   allDeals: CSVDeal[],
   jobIds: string[],
@@ -410,7 +500,9 @@ async function processChunksInBackground(
     loadStagesCache(supabase),
   ]);
   
-  // Processar cada chunk sequencialmente
+  console.log(`📦 Iniciando processamento SEQUENCIAL de ${jobIds.length} chunks...`);
+  
+  // Processar cada chunk UM POR VEZ, em ordem
   for (let i = 0; i < jobIds.length; i++) {
     const jobId = jobIds[i];
     const chunkStart = i * chunkSize;
@@ -440,16 +532,19 @@ async function processChunksInBackground(
           status: 'completed',
           completed_at: new Date().toISOString(),
           total_processed: stats.imported,
-          total_skipped: stats.errors,
+          total_skipped: stats.skipped + stats.errors,
           metadata: {
             stats,
+            imported: stats.imported,
+            skipped: stats.skipped,
+            errors: stats.errors,
             errorDetails: stats.errorDetails.slice(0, 100),
           },
           updated_at: new Date().toISOString(),
         })
         .eq('id', jobId);
 
-      console.log(`✅ Chunk ${i + 1}/${jobIds.length} concluído: ${stats.imported} importados, ${stats.errors} erros`);
+      console.log(`✅ Chunk ${i + 1}/${jobIds.length} concluído: ${stats.imported} importados, ${stats.skipped} pulados, ${stats.errors} erros`);
     } catch (error) {
       console.error(`❌ Erro no chunk ${i + 1}:`, error);
       
