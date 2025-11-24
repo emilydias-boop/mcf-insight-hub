@@ -82,6 +82,33 @@ const ImportarNegocios = () => {
     }
   };
 
+  const cancelJob = async () => {
+    if (!jobId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('sync_jobs')
+        .update({ 
+          status: 'cancelled',
+          completed_at: new Date().toISOString(),
+          error_message: 'Cancelado manualmente pelo usuário'
+        })
+        .eq('id', jobId);
+      
+      if (error) throw error;
+      
+      toast.success('Importação cancelada com sucesso');
+      setIsImporting(false);
+      setJobStatus(null);
+      setJobId(null);
+      setFile(null);
+      setProgress(0);
+    } catch (error: any) {
+      console.error('Erro ao cancelar job:', error);
+      toast.error('Erro ao cancelar importação: ' + error.message);
+    }
+  };
+
   // Monitorar progresso do job
   useEffect(() => {
     if (!jobId) return;
@@ -244,8 +271,24 @@ const ImportarNegocios = () => {
               disabled={!file || isImporting}
               className="flex-1"
             >
-              {isImporting ? 'Processando...' : 'Iniciar Importação'}
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                'Iniciar Importação'
+              )}
             </Button>
+            {isImporting && (
+              <Button
+                onClick={cancelJob}
+                variant="destructive"
+              >
+                <XCircle className="h-4 w-4 mr-2" />
+                Cancelar
+              </Button>
+            )}
             {file && !isImporting && (
               <Button
                 variant="outline"
