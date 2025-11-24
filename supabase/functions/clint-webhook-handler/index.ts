@@ -231,6 +231,9 @@ function normalizeClintPayload(rawPayload: any): WebhookEvent {
       origin: {
         name: raw.origin_name
       },
+      // Campos extras importantes
+      deal_origin: raw.deal_origin, // Nome da origem do deal
+      deal_old_stage: raw.deal_old_stage, // Estágio anterior
       // Manter outros campos
       ...raw
     }
@@ -448,27 +451,51 @@ async function handleDealStageChanged(supabase: any, data: any) {
   
   const dealData = data.deal || {};
   const contactData = data.contact || {};
-  const newStageName = dealData.stage || data.stage;
+  const newStageName = dealData.stage || data.deal_stage;
+  const originName = data.deal_origin;
 
   console.log('[DEAL.STAGE_CHANGED] Contact:', contactData.email);
   console.log('[DEAL.STAGE_CHANGED] New stage:', newStageName);
+  console.log('[DEAL.STAGE_CHANGED] Origin:', originName);
 
   if (!newStageName) {
     throw new Error('Stage name not provided in webhook');
   }
 
-  // 1. Buscar o estágio novo pelo NOME
-  const { data: newStage } = await supabase
-    .from('crm_stages')
-    .select('id, stage_name')
-    .ilike('stage_name', newStageName)
-    .maybeSingle();
-
-  if (!newStage) {
-    throw new Error(`Stage not found: ${newStageName}`);
+  // 1. Buscar origem pelo nome (se fornecida)
+  let originId = null;
+  if (originName) {
+    const { data: origin } = await supabase
+      .from('crm_origins')
+      .select('id, name')
+      .ilike('name', originName)
+      .maybeSingle();
+    
+    originId = origin?.id;
+    console.log('[DEAL.STAGE_CHANGED] Origin found:', origin?.name, originId);
   }
 
-  console.log('[DEAL.STAGE_CHANGED] Found stage:', newStage.stage_name, newStage.id);
+  // 2. Buscar o estágio novo pelo NOME e ORIGEM
+  const stageQuery = supabase
+    .from('crm_stages')
+    .select('id, stage_name, origin_id')
+    .ilike('stage_name', newStageName);
+  
+  // Se encontrou a origem, filtrar por ela para evitar ambiguidade
+  if (originId) {
+    stageQuery.eq('origin_id', originId);
+  }
+  
+  const { data: newStage } = await stageQuery.maybeSingle();
+
+  if (!newStage) {
+    const errorMsg = originId 
+      ? `Stage not found: ${newStageName} for origin ${originName}`
+      : `Stage not found: ${newStageName}`;
+    throw new Error(errorMsg);
+  }
+
+  console.log('[DEAL.STAGE_CHANGED] Found stage:', newStage.stage_name, newStage.id, 'origin_id:', newStage.origin_id);
 
   // 2. Buscar o deal pelo email do contato
   let dealId = null;
@@ -517,13 +544,20 @@ async function handleDealStageChanged(supabase: any, data: any) {
     throw new Error('Deal not found for contact');
   }
 
-  // 3. Atualizar o estágio do deal
+  // 3. Atualizar o estágio do deal (e origem se encontrada)
+  const updateData: any = {
+    stage_id: newStage.id,
+    updated_at: new Date().toISOString()
+  };
+  
+  // Se temos origin_id do webhook, atualizar também
+  if (originId) {
+    updateData.origin_id = originId;
+  }
+
   const { error: updateError } = await supabase
     .from('crm_deals')
-    .update({
-      stage_id: newStage.id,
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq('id', dealId);
 
   if (updateError) throw updateError;
