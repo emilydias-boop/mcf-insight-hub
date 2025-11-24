@@ -45,13 +45,33 @@ interface ImportStats {
 
 const PIPELINE_INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
 
-// Parse CSV com separador de vírgula
+// Parser CSV robusto que lida com aspas duplas e valores com vírgulas
 function parseCSV(csvText: string): CSVDeal[] {
   const lines = csvText.trim().split('\n');
-  if (lines.length < 2) return [];
+  if (lines.length < 2) {
+    console.log('❌ CSV vazio ou com apenas header');
+    return [];
+  }
 
-  // Primeira linha é o cabeçalho
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  // Detecta o delimitador (vírgula ou ponto-e-vírgula)
+  const firstLine = lines[0];
+  const delimiter = firstLine.includes(',') ? ',' : ';';
+  console.log(`🔍 Delimitador detectado: "${delimiter}"`);
+
+  // Parse da primeira linha (headers) respeitando aspas
+  const headers = parseLine(firstLine, delimiter).map(h => h.trim().toLowerCase());
+  console.log(`📋 Headers detectados (${headers.length}):`, headers);
+  
+  // Mapeamento flexível de colunas principais
+  const idColumnIndex = headers.findIndex(h => h.match(/^(id|clint_id|deal_id)$/i));
+  const nameColumnIndex = headers.findIndex(h => h.match(/^(name|nome|deal_name|title|titulo)$/i));
+  
+  if (idColumnIndex === -1) {
+    console.warn('⚠️ Coluna de ID não encontrada. Headers disponíveis:', headers);
+  }
+  if (nameColumnIndex === -1) {
+    console.warn('⚠️ Coluna de nome não encontrada. Headers disponíveis:', headers);
+  }
   
   const deals: CSVDeal[] = [];
   
@@ -59,7 +79,14 @@ function parseCSV(csvText: string): CSVDeal[] {
     const line = lines[i].trim();
     if (!line) continue;
     
-    const values = line.split(',');
+    const values = parseLine(line, delimiter);
+    
+    // Validar estrutura da linha
+    if (values.length !== headers.length) {
+      console.warn(`⚠️ Linha ${i + 1} tem ${values.length} colunas, esperado ${headers.length}. Pulando.`);
+      continue;
+    }
+    
     const deal: CSVDeal = { id: '', name: '' };
     
     headers.forEach((header, index) => {
@@ -67,10 +94,65 @@ function parseCSV(csvText: string): CSVDeal[] {
       deal[header] = value;
     });
     
+    // Mapear colunas flexíveis para campos padrão
+    if (idColumnIndex !== -1 && !deal.id) {
+      deal.id = values[idColumnIndex]?.trim() || '';
+    }
+    if (nameColumnIndex !== -1 && !deal.name) {
+      deal.name = values[nameColumnIndex]?.trim() || '';
+    }
+    
     deals.push(deal);
   }
   
+  // Log de exemplo
+  if (deals.length > 0) {
+    console.log('📊 Primeira linha de exemplo:', deals[0]);
+  }
+  
+  console.log(`✅ Total de deals parseados: ${deals.length}`);
+  
   return deals;
+}
+
+// Função auxiliar para parsear uma linha CSV respeitando aspas duplas
+function parseLine(line: string, delimiter: string): string[] {
+  const values: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+    
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        // Aspas duplas escapadas ""
+        current += '"';
+        i++; // Pular próximo char
+      } else {
+        // Início ou fim de aspas
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      // Delimitador fora de aspas - fim do valor
+      values.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  // Adicionar último valor
+  values.push(current.trim());
+  
+  return values.map(v => {
+    // Remover aspas duplas no início e fim
+    if (v.startsWith('"') && v.endsWith('"')) {
+      return v.slice(1, -1);
+    }
+    return v;
+  });
 }
 
 // Normalizar telefone
@@ -91,7 +173,13 @@ function convertToDBFormat(
   contactsCache: Map<string, string>,
   stagesCache: Map<string, string>
 ): Partial<CRMDeal> | null {
-  if (!csvDeal.id || !csvDeal.name) {
+  // Validação melhorada com mensagens específicas
+  if (!csvDeal.id) {
+    console.warn('⚠️ Deal sem ID. Campos disponíveis:', Object.keys(csvDeal));
+    return null;
+  }
+  if (!csvDeal.name) {
+    console.warn(`⚠️ Deal ${csvDeal.id} sem nome. Campos disponíveis:`, Object.keys(csvDeal));
     return null;
   }
 
@@ -226,10 +314,14 @@ async function processDeals(
       
       if (!dealData) {
         stats.errors++;
+        const missingFields = [];
+        if (!csvDeal.id) missingFields.push('id');
+        if (!csvDeal.name) missingFields.push('name');
+        
         stats.errorDetails.push({
           line: lineNumber,
           clint_id: csvDeal.id || 'unknown',
-          error: 'Campos obrigatórios faltando (id ou name)',
+          error: `Campos faltando: ${missingFields.join(', ')}. Headers disponíveis: ${Object.keys(csvDeal).slice(0, 5).join(', ')}...`,
         });
         return;
       }
@@ -304,7 +396,15 @@ Deno.serve(async (req) => {
     console.log(`📊 Total de deals no CSV: ${csvDeals.length}`);
 
     if (csvDeals.length === 0) {
-      throw new Error('CSV vazio ou inválido');
+      throw new Error('CSV vazio ou inválido. Verifique se o arquivo tem pelo menos 2 linhas (header + dados).');
+    }
+    
+    // Validar que os deals têm os campos necessários
+    const dealsWithoutId = csvDeals.filter(d => !d.id).length;
+    const dealsWithoutName = csvDeals.filter(d => !d.name).length;
+    
+    if (dealsWithoutId > 0 || dealsWithoutName > 0) {
+      console.warn(`⚠️ Validação: ${dealsWithoutId} deals sem ID, ${dealsWithoutName} deals sem nome`);
     }
 
     // Conectar ao Supabase
