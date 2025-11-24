@@ -514,11 +514,12 @@ Deno.serve(async (req) => {
     const { data: job, error: jobError } = await supabase
       .from('sync_jobs')
       .insert({
-        job_type: 'import_deals_csv',
+        job_type: 'deals',
         status: 'pending',
         metadata: {
           filename: file.name,
           total_deals: csvDeals.length,
+          import_type: 'csv',
         },
       })
       .select()
