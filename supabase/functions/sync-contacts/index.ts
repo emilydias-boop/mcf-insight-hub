@@ -102,8 +102,37 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Verificar se é modo automático (cron) ou manual
-    const body = req.method === 'POST' ? await req.json() : {};
+    // Verificar se é modo automático (cron) ou manual - com tratamento robusto
+    let body: any = {};
+    
+    if (req.method === 'POST') {
+      try {
+        const contentType = req.headers.get('content-type');
+        
+        if (!contentType?.includes('application/json')) {
+          console.log('⚠️ POST request sem content-type JSON, usando body vazio');
+          body = {};
+        } else {
+          const text = await req.text();
+          
+          if (!text || text.trim().length === 0) {
+            console.log('⚠️ POST request com body vazio, usando body vazio');
+            body = {};
+          } else {
+            try {
+              body = JSON.parse(text);
+            } catch (e) {
+              console.error('⚠️ Erro ao fazer parse do body, usando body vazio:', e);
+              body = {};
+            }
+          }
+        }
+      } catch (e) {
+        console.error('⚠️ Erro ao processar request body, usando body vazio:', e);
+        body = {};
+      }
+    }
+    
     const autoMode = body.auto_mode === true;
     
     // Configurações otimizadas para processar 100k+ contatos

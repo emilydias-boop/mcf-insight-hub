@@ -101,7 +101,37 @@ Deno.serve(async (req) => {
   let jobId: string | undefined;
 
   try {
-    const body = await req.json().catch(() => ({}));
+    // Tratamento robusto do body da requisição
+    let body: any = {};
+    
+    if (req.method === 'POST') {
+      try {
+        const contentType = req.headers.get('content-type');
+        
+        if (!contentType?.includes('application/json')) {
+          console.log('⚠️ POST request sem content-type JSON, usando body vazio');
+          body = {};
+        } else {
+          const text = await req.text();
+          
+          if (!text || text.trim().length === 0) {
+            console.log('⚠️ POST request com body vazio, usando body vazio');
+            body = {};
+          } else {
+            try {
+              body = JSON.parse(text);
+            } catch (e) {
+              console.error('⚠️ Erro ao fazer parse do body, usando body vazio:', e);
+              body = {};
+            }
+          }
+        }
+      } catch (e) {
+        console.error('⚠️ Erro ao processar request body, usando body vazio:', e);
+        body = {};
+      }
+    }
+    
     const autoMode = body.auto_mode === true;
     
     console.log('🚀 Sincronizando Deals do Clint CRM', autoMode ? '(Modo Automático)' : '');
