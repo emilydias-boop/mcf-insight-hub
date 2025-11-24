@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.import-contacts-csv]
 verify_jwt = false
+
+[functions.clint-webhook-handler]
+verify_jwt = false

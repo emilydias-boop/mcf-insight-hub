@@ -1380,6 +1380,39 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_events: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          event_data: Json
+          event_type: string
+          id: string
+          processed_at: string | null
+          processing_time_ms: number | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          event_data: Json
+          event_type: string
+          id?: string
+          processed_at?: string | null
+          processing_time_ms?: number | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          event_data?: Json
+          event_type?: string
+          id?: string
+          processed_at?: string | null
+          processing_time_ms?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       user_performance_summary: {
