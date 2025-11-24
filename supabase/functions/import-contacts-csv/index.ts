@@ -34,9 +34,26 @@ interface ImportStats {
 // Parse CSV with semicolon separator
 function parseCSV(csvText: string): CSVContact[] {
   const lines = csvText.split('\n').filter(line => line.trim());
-  if (lines.length === 0) return [];
+  if (lines.length === 0) {
+    console.log('❌ CSV vazio');
+    return [];
+  }
   
   const headers = lines[0].split(';').map(h => h.trim().replace(/"/g, ''));
+  console.log('📋 Cabeçalhos do CSV:', headers);
+  
+  // Detectar qual coluna contém o nome (flexível para português/inglês)
+  const nameColumnIndex = headers.findIndex(h => 
+    h.toLowerCase() === 'name' || 
+    h.toLowerCase() === 'nome' || 
+    h.toLowerCase() === 'name ' ||
+    h.toLowerCase() === 'nome '
+  );
+  
+  if (nameColumnIndex === -1) {
+    console.log('⚠️ Coluna de nome não encontrada. Cabeçalhos disponíveis:', headers);
+  }
+  
   const contacts: CSVContact[] = [];
   
   for (let i = 1; i < lines.length; i++) {
@@ -49,11 +66,24 @@ function parseCSV(csvText: string): CSVContact[] {
       }
     });
     
-    if (contact.name) {
+    // Tentar pegar o nome de várias formas
+    const name = contact.name || contact.Name || contact.nome || contact.Nome || 
+                 (nameColumnIndex >= 0 ? values[nameColumnIndex] : '');
+    
+    if (name && name.trim()) {
+      contact.name = name.trim();
       contacts.push(contact);
+      if (i <= 3) {
+        console.log(`✅ Linha ${i} válida:`, contact);
+      }
+    } else {
+      if (i <= 3) {
+        console.log(`⚠️ Linha ${i} sem nome:`, contact);
+      }
     }
   }
   
+  console.log(`📊 Total de contatos válidos: ${contacts.length} de ${lines.length - 1} linhas`);
   return contacts;
 }
 
