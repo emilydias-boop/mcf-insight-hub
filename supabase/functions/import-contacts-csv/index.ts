@@ -39,7 +39,11 @@ function parseCSV(csvText: string): CSVContact[] {
     return [];
   }
   
-  const headers = lines[0].split(';').map(h => h.trim().replace(/"/g, ''));
+  // Detecta o delimitador (vírgula ou ponto-e-vírgula)
+  const delimiter = lines[0].includes(',') ? ',' : ';';
+  console.log(`🔍 Delimitador detectado: "${delimiter}"`);
+  
+  const headers = lines[0].split(delimiter).map(h => h.trim().replace(/"/g, ''));
   console.log('📋 Cabeçalhos do CSV:', headers);
   
   // Detectar qual coluna contém o nome (flexível para português/inglês)
@@ -57,7 +61,7 @@ function parseCSV(csvText: string): CSVContact[] {
   const contacts: CSVContact[] = [];
   
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(';').map(v => v.trim().replace(/"/g, ''));
+    const values = lines[i].split(delimiter).map(v => v.trim().replace(/"/g, ''));
     const contact: CSVContact = { name: '' };
     
     headers.forEach((header, index) => {
