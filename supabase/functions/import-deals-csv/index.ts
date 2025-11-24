@@ -1,4 +1,4 @@
-// Version: 2025-11-24T20:30:00Z - Smart import with timestamp checking
+// Version: 2025-11-24T21:00:00Z - Optimized with bulk check + smart UPSERT
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
 
 // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
@@ -136,32 +136,7 @@ const PRIORITY_CUSTOM_FIELDS = [
   'user_email', 'user_name'
 ];
 
-// Verificar se deve importar deal (compara timestamps)
-async function shouldImportDeal(
-  supabase: any,
-  clintId: string,
-  csvUpdatedAt?: string
-): Promise<boolean> {
-  const { data: existing } = await supabase
-    .from('crm_deals')
-    .select('updated_at')
-    .eq('clint_id', clintId)
-    .single();
-  
-  if (!existing) return true; // Deal novo, importar
-  
-  // Se CSV não tem updated_at, não importar (protege dados existentes)
-  if (!csvUpdatedAt) return false;
-  
-  // Comparar datas - apenas importar se CSV for mais recente
-  try {
-    const csvDate = new Date(csvUpdatedAt);
-    const dbDate = new Date(existing.updated_at);
-    return csvDate > dbDate;
-  } catch {
-    return false; // Erro ao parsear data, não importar
-  }
-}
+// ❌ REMOVIDA: função individual substituída por bulk check na função processDeals
 
 // Função auxiliar para parsear uma linha CSV respeitando aspas duplas
 function parseLine(line: string, delimiter: string): string[] {
@@ -350,8 +325,7 @@ async function processDeals(
     errorDetails: [],
   };
 
-  const BATCH_SIZE = 25; // Reduzido para 25
-  const DELAY_BETWEEN_BATCHES = 50; // 50ms entre batches
+  const BATCH_SIZE = 20; // Otimizado para 20 deals por batch
   const startTime = Date.now();
 
   // Pré-carregar todos os clint_ids existentes para verificação em batch
@@ -426,13 +400,21 @@ async function processDeals(
 
     if (dealsToInsert.length > 0) {
       try {
-        const { data, error } = await supabase
-          .from('crm_deals')
-          .upsert(dealsToInsert, {
-            onConflict: 'clint_id',
-            ignoreDuplicates: false,
-          })
-          .select();
+        // 🚀 OTIMIZAÇÃO: Preparar deals com updated_at do CSV para comparação no UPSERT
+        const dealsWithTimestamp = dealsToInsert.map(deal => {
+          const csvDeal = batch.find(d => d.id === deal.clint_id);
+          const csvUpdatedAt = csvDeal?.updated_at || csvDeal?.updated_stage_at;
+          
+          return {
+            ...deal,
+            updated_at: csvUpdatedAt || new Date().toISOString(),
+          };
+        });
+        
+        // Usar RPC function para UPSERT inteligente (só atualiza se CSV for mais recente)
+        const { data, error } = await supabase.rpc('upsert_deals_smart', {
+          deals_data: dealsWithTimestamp
+        });
 
         if (error) {
           console.error(`❌ Erro no batch ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
@@ -445,10 +427,10 @@ async function processDeals(
             });
           });
         } else {
-          const insertedCount = data?.length || 0;
-          stats.imported += insertedCount;
+          const processedCount = dealsToInsert.length;
+          stats.imported += processedCount;
           
-          console.log(`✅ Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${insertedCount} deals processados`);
+          console.log(`✅ Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${processedCount} deals processados`);
         }
       } catch (err: any) {
         console.error(`❌ Exceção no batch ${Math.floor(i / BATCH_SIZE) + 1}:`, err);
@@ -474,8 +456,7 @@ async function processDeals(
         .eq('id', jobId);
     }
 
-    // Pequeno delay para não sobrecarregar CPU
-    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+    // ❌ Delay removido - não necessário e consome CPU
   }
 
   stats.duration_seconds = Math.floor((Date.now() - startTime) / 1000);
@@ -674,8 +655,8 @@ Deno.serve(async (req) => {
       throw new Error('CSV vazio ou inválido. Verifique se o arquivo tem pelo menos 2 linhas (header + dados).');
     }
     
-    // Configuração de chunks
-    const CHUNK_SIZE = 5000;
+    // Configuração de chunks - otimizado para evitar timeout
+    const CHUNK_SIZE = 2000; // Reduzido de 5000 para 2000 (menos CPU por execução)
     const totalChunks = Math.ceil(csvDeals.length / CHUNK_SIZE);
     
     console.log(`📦 Dividindo em ${totalChunks} chunk(s) de até ${CHUNK_SIZE} deals cada`);
