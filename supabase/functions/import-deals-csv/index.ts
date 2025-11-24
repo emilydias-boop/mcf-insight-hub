@@ -1,3 +1,4 @@
+// Version: 2025-11-24T17:50:00Z
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
 
 const corsHeaders = {
@@ -60,7 +61,7 @@ function parseCSV(csvText: string): CSVDeal[] {
 
   // Parse da primeira linha (headers) respeitando aspas
   const headers = parseLine(firstLine, delimiter).map(h => h.trim().toLowerCase());
-  console.log(`📋 Headers detectados (${headers.length}):`, headers);
+  console.log(`📋 Headers detectados (${headers.length}):`, headers.slice(0, 5), headers.length > 5 ? '...' : '');
   
   // Mapeamento flexível de colunas principais
   const idColumnIndex = headers.findIndex(h => h.match(/^(id|clint_id|deal_id)$/i));
@@ -107,7 +108,12 @@ function parseCSV(csvText: string): CSVDeal[] {
   
   // Log de exemplo
   if (deals.length > 0) {
-    console.log('📊 Primeira linha de exemplo:', deals[0]);
+    const firstDeal = deals[0];
+    const sampleFields = Object.keys(firstDeal).slice(0, 3).reduce((acc, key) => {
+      acc[key] = firstDeal[key];
+      return acc;
+    }, {} as Record<string, any>);
+    console.log('📊 Primeira linha de exemplo (3 primeiros campos):', sampleFields);
   }
   
   console.log(`✅ Total de deals parseados: ${deals.length}`);
@@ -174,11 +180,11 @@ function convertToDBFormat(
   stagesCache: Map<string, string>
 ): Partial<CRMDeal> | null {
   // Validação melhorada com mensagens específicas
-  if (!csvDeal.id) {
+  if (!csvDeal.id || csvDeal.id.trim() === '') {
     console.warn('⚠️ Deal sem ID. Campos disponíveis:', Object.keys(csvDeal));
     return null;
   }
-  if (!csvDeal.name) {
+  if (!csvDeal.name || csvDeal.name.trim() === '') {
     console.warn(`⚠️ Deal ${csvDeal.id} sem nome. Campos disponíveis:`, Object.keys(csvDeal));
     return null;
   }
@@ -379,6 +385,7 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log('[IMPORT-DEALS-CSV] Version: 2025-11-24T17:50:00Z');
     console.log('📥 Iniciando importação de deals via CSV');
     
     const formData = await req.formData();
