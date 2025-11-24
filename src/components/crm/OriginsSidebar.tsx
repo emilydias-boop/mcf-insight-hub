@@ -22,6 +22,7 @@ interface Origin {
   id: string;
   name: string;
   group_id?: string | null;
+  groupId?: string | null; // Alias para compatibilidade
   contact_count?: number;
 }
 
@@ -80,6 +81,11 @@ const OriginTreeItem = ({
             <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
           )}
           <span className="truncate text-xs">{item.name}</span>
+          {!isGroup && 'group_id' in item && !item.group_id && !item.groupId && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 bg-yellow-500/10 text-yellow-600 border-yellow-500/20 flex-shrink-0">
+              Sem grupo
+            </Badge>
+          )}
         </span>
         {!isGroup && 'contact_count' in item && item.contact_count !== undefined && (
           <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
