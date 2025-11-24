@@ -34,7 +34,7 @@ interface CRMDeal {
   updated_at: string
 }
 
-const CHUNK_SIZE = 1000
+const CHUNK_SIZE = 1000 // Processar 1000 deals por vez
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -46,23 +46,23 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    console.log('🔄 Buscando jobs pendentes...')
+    console.log('🔄 Buscando jobs para processar...')
 
-    // Buscar jobs pendentes
-    const { data: pendingJobs, error: jobsError } = await supabase
+    // Buscar jobs 'pending' ou 'processing' (para retomar)
+    const { data: jobs, error: jobsError } = await supabase
       .from('sync_jobs')
       .select('*')
       .eq('job_type', 'import_deals_csv')
-      .eq('status', 'pending')
+      .in('status', ['pending', 'processing'])
       .order('created_at', { ascending: true })
-      .limit(5)
+      .limit(1) // Processar 1 job por vez
 
     if (jobsError) {
       console.error('❌ Erro ao buscar jobs:', jobsError)
       throw jobsError
     }
 
-    if (!pendingJobs || pendingJobs.length === 0) {
+    if (!jobs || jobs.length === 0) {
       console.log('✅ Nenhum job pendente para processar')
       return new Response(
         JSON.stringify({ message: 'Nenhum job pendente' }),
@@ -70,129 +70,149 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log(`📋 ${pendingJobs.length} job(s) pendente(s) encontrado(s)`)
+    const job = jobs[0]
+    console.log(`\n🔧 Processando job ${job.id}...`)
 
-    // Processar cada job
-    for (const job of pendingJobs) {
+    // Marcar como processing se for a primeira vez
+    if (job.status === 'pending') {
+      await supabase
+        .from('sync_jobs')
+        .update({ 
+          status: 'processing',
+          started_at: new Date().toISOString()
+        })
+        .eq('id', job.id)
+    }
+
+    const filePath = job.metadata.file_path
+    console.log(`📥 Baixando arquivo: ${filePath}`)
+
+    // Baixar CSV do storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('csv-imports')
+      .download(filePath)
+
+    if (downloadError) {
+      throw new Error(`Erro ao baixar arquivo: ${downloadError.message}`)
+    }
+
+    const csvText = await fileData.text()
+    const csvDeals = parseCSV(csvText)
+    const totalDeals = csvDeals.length
+    console.log(`📊 ${totalDeals} negócios no CSV`)
+
+    // Calcular total de chunks
+    const totalChunks = Math.ceil(totalDeals / CHUNK_SIZE)
+    
+    // Obter chunk atual do metadata (ou começar do 0)
+    const currentChunk = job.metadata.current_chunk || 0
+    
+    console.log(`📦 Processando chunk ${currentChunk + 1}/${totalChunks}`)
+
+    // Se já processou todos os chunks, marcar como completed
+    if (currentChunk >= totalChunks) {
+      console.log('✅ Todos os chunks já foram processados')
+      await supabase
+        .from('sync_jobs')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', job.id)
+      
+      return new Response(
+        JSON.stringify({ success: true, message: 'Job já concluído' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Carregar caches (apenas uma vez por execução)
+    console.log('🗂️ Carregando caches...')
+    const contactsCache = await loadContactsCache(supabase)
+    const stagesCache = await loadStagesCache(supabase)
+
+    // Processar apenas 1 chunk
+    const startIdx = currentChunk * CHUNK_SIZE
+    const endIdx = Math.min(startIdx + CHUNK_SIZE, totalDeals)
+    const chunkDeals = csvDeals.slice(startIdx, endIdx)
+    
+    console.log(`🔨 Processando deals ${startIdx + 1} a ${endIdx}...`)
+
+    const dbDeals: CRMDeal[] = []
+    const errors: any[] = job.metadata.errors || []
+    let chunkSkipped = 0
+
+    for (const csvDeal of chunkDeals) {
       try {
-        console.log(`\n🔧 Processando job ${job.id}...`)
-        
-        // Atualizar status para processing
-        await supabase
-          .from('sync_jobs')
-          .update({ 
-            status: 'processing',
-            started_at: new Date().toISOString()
-          })
-          .eq('id', job.id)
-
-        const filePath = job.metadata.file_path
-        console.log(`📥 Baixando arquivo: ${filePath}`)
-
-        // Baixar CSV do storage
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from('csv-imports')
-          .download(filePath)
-
-        if (downloadError) {
-          throw new Error(`Erro ao baixar arquivo: ${downloadError.message}`)
+        const dbDeal = convertToDBFormat(csvDeal, contactsCache, stagesCache)
+        if (dbDeal) {
+          dbDeals.push(dbDeal)
+        } else {
+          chunkSkipped++
         }
-
-        const csvText = await fileData.text()
-        const csvDeals = parseCSV(csvText)
-        console.log(`📊 ${csvDeals.length} negócios encontrados no CSV`)
-
-        // Carregar caches
-        console.log('🗂️ Carregando caches...')
-        const contactsCache = await loadContactsCache(supabase)
-        const stagesCache = await loadStagesCache(supabase)
-
-        // Processar em chunks
-        let processed = 0
-        let skipped = 0
-        const errors: any[] = []
-
-        for (let i = 0; i < csvDeals.length; i += CHUNK_SIZE) {
-          const chunk = csvDeals.slice(i, i + CHUNK_SIZE)
-          console.log(`\n📦 Processando chunk ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(csvDeals.length / CHUNK_SIZE)}`)
-
-          const dbDeals: CRMDeal[] = []
-
-          for (const csvDeal of chunk) {
-            try {
-              const dbDeal = convertToDBFormat(csvDeal, contactsCache, stagesCache)
-              if (dbDeal) {
-                dbDeals.push(dbDeal)
-              } else {
-                skipped++
-              }
-            } catch (error: any) {
-              console.error(`❌ Erro ao converter deal:`, error)
-              errors.push({ deal: csvDeal, error: error.message })
-              skipped++
-            }
-          }
-
-          if (dbDeals.length > 0) {
-            console.log(`💾 Salvando ${dbDeals.length} negócios...`)
-            const { error: upsertError } = await supabase.rpc('upsert_deals_smart', {
-              deals_data: dbDeals
-            })
-
-            if (upsertError) {
-              console.error('❌ Erro ao fazer upsert:', upsertError)
-              errors.push({ chunk: i, error: upsertError.message })
-            } else {
-              processed += dbDeals.length
-              console.log(`✅ ${processed}/${csvDeals.length} processados`)
-            }
-          }
-
-          // Atualizar progresso
-          await supabase
-            .from('sync_jobs')
-            .update({
-              total_processed: processed,
-              total_skipped: skipped,
-              metadata: {
-                ...job.metadata,
-                errors: errors.slice(0, 100) // Limitar a 100 erros
-              }
-            })
-            .eq('id', job.id)
-        }
-
-        // Finalizar job
-        await supabase
-          .from('sync_jobs')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString(),
-            total_processed: processed,
-            total_skipped: skipped
-          })
-          .eq('id', job.id)
-
-        console.log(`✅ Job ${job.id} concluído: ${processed} processados, ${skipped} ignorados`)
-
       } catch (error: any) {
-        console.error(`❌ Erro ao processar job ${job.id}:`, error)
-        
-        await supabase
-          .from('sync_jobs')
-          .update({
-            status: 'failed',
-            error_message: error.message,
-            completed_at: new Date().toISOString()
-          })
-          .eq('id', job.id)
+        console.error(`❌ Erro ao converter deal:`, error)
+        errors.push({ deal: csvDeal, error: error.message })
+        chunkSkipped++
       }
     }
+
+    // Salvar deals no banco
+    if (dbDeals.length > 0) {
+      console.log(`💾 Salvando ${dbDeals.length} negócios...`)
+      const { error: upsertError } = await supabase.rpc('upsert_deals_smart', {
+        deals_data: dbDeals
+      })
+
+      if (upsertError) {
+        console.error('❌ Erro ao fazer upsert:', upsertError)
+        throw upsertError
+      }
+    }
+
+    // Atualizar totais acumulados
+    const currentProcessed = (job.total_processed || 0) + dbDeals.length
+    const currentSkipped = (job.total_skipped || 0) + chunkSkipped
+    const nextChunk = currentChunk + 1
+    const isComplete = nextChunk >= totalChunks
+
+    console.log(`✅ Chunk ${currentChunk + 1} processado: ${dbDeals.length} salvos, ${chunkSkipped} pulados`)
+
+    // Atualizar job com progresso
+    await supabase
+      .from('sync_jobs')
+      .update({
+        status: isComplete ? 'completed' : 'processing',
+        total_processed: currentProcessed,
+        total_skipped: currentSkipped,
+        completed_at: isComplete ? new Date().toISOString() : null,
+        metadata: {
+          ...job.metadata,
+          current_chunk: nextChunk,
+          total_chunks: totalChunks,
+          current_line: endIdx,
+          total_lines: totalDeals,
+          errors: errors.slice(0, 100) // Limitar a 100 erros
+        }
+      })
+      .eq('id', job.id)
+
+    const message = isComplete 
+      ? `✅ Importação completa: ${currentProcessed} deals processados`
+      : `📦 Chunk ${nextChunk}/${totalChunks} processado. Próximo chunk será processado pelo cron.`
+
+    console.log(message)
 
     return new Response(
       JSON.stringify({ 
         success: true,
-        processedJobs: pendingJobs.length 
+        message,
+        job_id: job.id,
+        current_chunk: nextChunk,
+        total_chunks: totalChunks,
+        is_complete: isComplete,
+        total_processed: currentProcessed,
+        total_skipped: currentSkipped
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
@@ -348,7 +368,7 @@ async function loadContactsCache(supabase: any): Promise<Map<string, string>> {
     }
   }
   
-  console.log(`✅ Cache de contatos carregado: ${cache.size} entradas`)
+  console.log(`✅ Cache de contatos: ${cache.size} entradas`)
   return cache
 }
 
@@ -365,6 +385,6 @@ async function loadStagesCache(supabase: any): Promise<Map<string, string>> {
     }
   }
   
-  console.log(`✅ Cache de estágios carregado: ${cache.size} entradas`)
+  console.log(`✅ Cache de estágios: ${cache.size} entradas`)
   return cache
 }

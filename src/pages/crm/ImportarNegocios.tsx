@@ -7,42 +7,31 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-interface ImportStats {
-  total: number;
-  imported: number;
-  updated: number;
-  skipped: number;
-  errors: number;
-  duration_seconds: number;
-  errorDetails?: Array<{ line: number; clint_id: string; error: string }>;
+interface JobMetadata {
+  file_name: string;
+  file_path: string;
+  total_deals: number;
+  current_chunk?: number;
+  total_chunks?: number;
+  current_line?: number;
+  total_lines?: number;
+  errors?: any[];
 }
 
-interface ChunkJob {
+interface JobStatus {
   id: string;
   status: string;
   total_processed: number | null;
   total_skipped: number | null;
-  metadata: any;
-}
-
-interface AggregatedStats {
-  totalDeals: number;
-  totalImported: number;
-  totalSkipped: number;
-  totalErrors: number;
-  completedChunks: number;
-  totalChunks: number;
-  currentChunk: number;
-  allErrorDetails: Array<{ line: number; clint_id: string; error: string }>;
+  metadata: JobMetadata;
 }
 
 const ImportarNegocios = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [parentJobId, setParentJobId] = useState<string | null>(null);
-  const [jobIds, setJobIds] = useState<string[]>([]);
-  const [aggregatedStats, setAggregatedStats] = useState<AggregatedStats | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -56,9 +45,8 @@ const ImportarNegocios = () => {
         return;
       }
       setFile(selectedFile);
-      setAggregatedStats(null);
-      setParentJobId(null);
-      setJobIds([]);
+      setJobStatus(null);
+      setJobId(null);
     }
   };
 
@@ -82,9 +70,8 @@ const ImportarNegocios = () => {
       if (error) throw error;
 
       if (data.success) {
-        setParentJobId(data.parent_job_id);
-        setJobIds(data.job_ids);
-        toast.success(`Importação iniciada! ${data.total_chunks} chunk(s) de ${data.total_deals} deals sendo processados em background.`);
+        setJobId(data.jobId);
+        toast.success(`Importação iniciada! ${data.totalDeals} deals serão processados em chunks.`);
       } else {
         throw new Error(data.error || 'Erro na importação');
       }
@@ -95,81 +82,57 @@ const ImportarNegocios = () => {
     }
   };
 
-  // Monitorar progresso dos jobs
+  // Monitorar progresso do job
   useEffect(() => {
-    if (!jobIds.length) return;
+    if (!jobId) return;
 
     const interval = setInterval(async () => {
       try {
-        const { data: jobs, error } = await supabase
+        const { data: job, error } = await supabase
           .from('sync_jobs')
           .select('id, status, total_processed, total_skipped, metadata')
-          .in('id', jobIds);
+          .eq('id', jobId)
+          .single();
 
         if (error) throw error;
+        if (!job) return;
 
-        const chunkJobs = jobs as ChunkJob[];
-        
-        const completed = chunkJobs.filter(j => j.status === 'completed' || j.status === 'failed').length;
-        const totalChunks = chunkJobs.length;
-        const progressPercent = Math.round((completed / totalChunks) * 100);
+        const metadata = job.metadata as unknown as JobMetadata;
+        const jobWithMetadata = { ...job, metadata } as JobStatus;
+        setJobStatus(jobWithMetadata);
+
+        // Calcular progresso baseado nos chunks
+        const currentChunk = metadata?.current_chunk || 0;
+        const totalChunks = metadata?.total_chunks || 1;
+        const progressPercent = Math.round((currentChunk / totalChunks) * 100);
         
         setProgress(progressPercent);
 
-        // Calcular estatísticas agregadas
-        let totalImported = 0;
-        let totalSkipped = 0;
-        let totalErrors = 0;
-        let totalDeals = 0;
-        let currentChunk = 0;
-        const allErrorDetails: Array<{ line: number; clint_id: string; error: string }> = [];
-
-        chunkJobs.forEach((job, idx) => {
-          totalImported += job.metadata?.imported || job.total_processed || 0;
-          totalSkipped += job.metadata?.skipped || 0;
-          totalErrors += job.metadata?.errors || 0;
-          totalDeals += job.metadata?.stats?.total || 0;
-          
-          if (job.status === 'processing') {
-            currentChunk = idx + 1;
-          }
-          
-          if (job.metadata?.errorDetails) {
-            allErrorDetails.push(...job.metadata.errorDetails);
-          }
-        });
-
-        setAggregatedStats({
-          totalDeals,
-          totalImported,
-          totalSkipped,
-          totalErrors,
-          completedChunks: completed,
-          totalChunks,
-          currentChunk: currentChunk || completed,
-          allErrorDetails,
-        });
-
-        // Parar polling quando todos completarem
-        if (completed === totalChunks) {
+        // Parar polling quando completar ou falhar
+        if (job.status === 'completed' || job.status === 'failed') {
           setIsImporting(false);
           clearInterval(interval);
-          toast.success(`Importação concluída! ${totalImported} deals importados.`);
+          
+          if (job.status === 'completed') {
+            toast.success(`Importação concluída! ${job.total_processed || 0} deals importados.`);
+          } else {
+            toast.error('Erro na importação. Verifique os logs.');
+          }
         }
       } catch (error) {
-        console.error('Error polling jobs:', error);
+        console.error('Error polling job:', error);
       }
-    }, 2000); // Poll a cada 2 segundos
+    }, 3000); // Poll a cada 3 segundos
 
     return () => clearInterval(interval);
-  }, [jobIds]);
+  }, [jobId]);
 
   const downloadErrorLog = () => {
-    if (!aggregatedStats?.allErrorDetails || aggregatedStats.allErrorDetails.length === 0) return;
+    if (!jobStatus?.metadata?.errors || jobStatus.metadata.errors.length === 0) return;
 
     const csvContent = [
-      'Linha,Clint ID,Erro',
-      ...aggregatedStats.allErrorDetails.map(e => `${e.line},"${e.clint_id}","${e.error}"`),
+      'Deal,Erro',
+      ...jobStatus.metadata.errors.map((e: any) => `"${JSON.stringify(e.deal)}","${e.error}"`),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -179,12 +142,6 @@ const ImportarNegocios = () => {
     a.download = 'erros-importacao-deals.csv';
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return mins > 0 ? `${mins}min ${secs}s` : `${secs}s`;
   };
 
   return (
@@ -200,18 +157,18 @@ const ImportarNegocios = () => {
         <CardHeader>
           <CardTitle>Upload do Arquivo CSV</CardTitle>
           <CardDescription>
-            O arquivo será processado em chunks de 5.000 deals para garantir estabilidade
+            O arquivo será processado em chunks de 1.000 deals a cada 2 minutos
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Formato esperado:</strong> CSV exportado do Clint CRM com colunas: id, name, email, phone, stage, origin, value, user_email, tags, etc.
+              <strong>Formato esperado:</strong> CSV com colunas: id, name, value, stage, contact, owner, tags, etc.
               <br />
-              <strong>Destino:</strong> Todos os deals serão importados para <span className="font-semibold">PIPELINE INSIDE SALES</span>
+              <strong>Processamento incremental:</strong> 1.000 deals por chunk a cada 2 minutos (cron job)
               <br />
-              <strong>Processamento:</strong> Arquivos grandes são divididos em chunks de 5.000 deals processados em sequência. Não interfere com o webhook.
+              <strong>Segurança:</strong> Deals protegidos por webhook não são sobrescritos
             </AlertDescription>
           </Alert>
 
@@ -254,33 +211,30 @@ const ImportarNegocios = () => {
             </label>
           </div>
 
-          {isImporting && aggregatedStats && (
+          {isImporting && jobStatus && (
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Chunk {aggregatedStats.currentChunk}/{aggregatedStats.totalChunks} em progresso...
+                  Chunk {jobStatus.metadata?.current_chunk || 0}/{jobStatus.metadata?.total_chunks || 0} processado
                 </span>
                 <span className="font-medium text-foreground">{progress}%</span>
               </div>
               <Progress value={progress} />
-              <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex items-center gap-2 text-green-600">
                   <CheckCircle className="h-4 w-4" />
-                  <span>{aggregatedStats.totalImported} importados</span>
+                  <span>{jobStatus.total_processed || 0} processados</span>
                 </div>
-                {aggregatedStats.totalSkipped > 0 && (
+                {jobStatus.total_skipped && jobStatus.total_skipped > 0 && (
                   <div className="flex items-center gap-2 text-yellow-600">
                     <AlertCircle className="h-4 w-4" />
-                    <span>{aggregatedStats.totalSkipped} protegidos</span>
-                  </div>
-                )}
-                {aggregatedStats.totalErrors > 0 && (
-                  <div className="flex items-center gap-2 text-red-600">
-                    <XCircle className="h-4 w-4" />
-                    <span>{aggregatedStats.totalErrors} erros</span>
+                    <span>{jobStatus.total_skipped} ignorados</span>
                   </div>
                 )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Próximo chunk será processado automaticamente pelo cron job
+              </p>
             </div>
           )}
 
@@ -297,9 +251,8 @@ const ImportarNegocios = () => {
                 variant="outline"
                 onClick={() => {
                   setFile(null);
-                  setAggregatedStats(null);
-                  setParentJobId(null);
-                  setJobIds([]);
+                  setJobStatus(null);
+                  setJobId(null);
                 }}
               >
                 Limpar
@@ -309,7 +262,7 @@ const ImportarNegocios = () => {
         </CardContent>
       </Card>
 
-      {aggregatedStats && !isImporting && aggregatedStats.completedChunks === aggregatedStats.totalChunks && (
+      {jobStatus && jobStatus.status === 'completed' && !isImporting && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -317,61 +270,44 @@ const ImportarNegocios = () => {
               Importação Concluída
             </CardTitle>
             <CardDescription>
-              Processados {aggregatedStats.totalChunks} chunk(s) de 5.000 deals cada
+              Processados {jobStatus.metadata?.total_chunks || 0} chunk(s) de 1.000 deals cada
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {aggregatedStats.totalSkipped > 0 && (
+            {jobStatus.total_skipped && jobStatus.total_skipped > 0 && (
               <Alert className="border-yellow-500/50 bg-yellow-500/10">
                 <AlertCircle className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-                  <strong>{aggregatedStats.totalSkipped} deals foram protegidos</strong> porque já existem com dados mais recentes vindos do webhook (ao vivo). Isso evita sobrescrever dados atualizados.
+                  <strong>{jobStatus.total_skipped} deals foram ignorados</strong> por falta de dados obrigatórios ou erros na conversão.
                 </AlertDescription>
               </Alert>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="text-center p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold text-foreground">{aggregatedStats.totalDeals}</div>
-                <div className="text-sm text-muted-foreground">Total Processado</div>
+                <div className="text-2xl font-bold text-foreground">{jobStatus.metadata?.total_lines || 0}</div>
+                <div className="text-sm text-muted-foreground">Total no CSV</div>
               </div>
               <div className="text-center p-4 bg-green-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{aggregatedStats.totalImported}</div>
-                <div className="text-sm text-muted-foreground">Importados</div>
+                <div className="text-2xl font-bold text-green-600">{jobStatus.total_processed || 0}</div>
+                <div className="text-sm text-muted-foreground">Processados</div>
               </div>
               <div className="text-center p-4 bg-yellow-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600">{aggregatedStats.totalSkipped}</div>
-                <div className="text-sm text-muted-foreground">Protegidos</div>
-              </div>
-              <div className="text-center p-4 bg-blue-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{aggregatedStats.totalChunks}</div>
-                <div className="text-sm text-muted-foreground">Chunks</div>
-              </div>
-              <div className="text-center p-4 bg-red-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-red-600">{aggregatedStats.totalErrors}</div>
-                <div className="text-sm text-muted-foreground">Erros</div>
+                <div className="text-2xl font-bold text-yellow-600">{jobStatus.total_skipped || 0}</div>
+                <div className="text-sm text-muted-foreground">Ignorados</div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-              <div className="text-sm text-muted-foreground">
-                Processamento concluído com sucesso
-              </div>
-              {aggregatedStats.allErrorDetails && aggregatedStats.allErrorDetails.length > 0 && (
+            {jobStatus.metadata?.errors && jobStatus.metadata.errors.length > 0 && (
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <div className="text-sm text-muted-foreground">
+                  {jobStatus.metadata.errors.length} erro(s) encontrado(s)
+                </div>
                 <Button variant="outline" size="sm" onClick={downloadErrorLog}>
                   <Download className="h-4 w-4 mr-2" />
-                  Baixar Log de Erros ({aggregatedStats.allErrorDetails.length})
+                  Baixar Log de Erros
                 </Button>
-              )}
-            </div>
-
-            {aggregatedStats.totalErrors > 0 && aggregatedStats.allErrorDetails && (
-              <Alert variant="destructive">
-                <XCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {aggregatedStats.totalErrors} deal(s) não puderam ser importados. Baixe o log de erros para mais detalhes.
-                </AlertDescription>
-              </Alert>
+              </div>
             )}
           </CardContent>
         </Card>
