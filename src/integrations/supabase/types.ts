@@ -419,6 +419,7 @@ export type Database = {
           contact_id: string | null
           created_at: string | null
           custom_fields: Json | null
+          data_source: string | null
           expected_close_date: string | null
           id: string
           name: string
@@ -435,6 +436,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string | null
           custom_fields?: Json | null
+          data_source?: string | null
           expected_close_date?: string | null
           id?: string
           name: string
@@ -451,6 +453,7 @@ export type Database = {
           contact_id?: string | null
           created_at?: string | null
           custom_fields?: Json | null
+          data_source?: string | null
           expected_close_date?: string | null
           id?: string
           name?: string
