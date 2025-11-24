@@ -1,4 +1,4 @@
-// Clint CRM Webhook Handler - Version 2025-11-24T15:00:00Z
+// Clint CRM Webhook Handler - Version 2025-11-24T16:30:00Z
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -13,8 +13,25 @@ interface WebhookEvent {
   data: any;
 }
 
+// Interface para o formato direto do Clint (campo por campo)
+interface ClintRawPayload {
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  contact_doc?: string;
+  contact_role?: string;
+  contact_notes?: string;
+  deal_stage?: string;
+  deal_user?: string;
+  deal_status?: string;
+  deal_name?: string;
+  deal_value?: number;
+  origin_name?: string;
+  [key: string]: any;
+}
+
 serve(async (req) => {
-  console.log('[WEBHOOK] New request received - Version 2025-11-24T15:00:00Z');
+  console.log('[WEBHOOK] New request received - Version 2025-11-24T16:30:00Z');
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -29,25 +46,23 @@ serve(async (req) => {
   let webhookLogId: string | null = null;
 
   try {
-    const payload: WebhookEvent = await req.json();
-    console.log('[WEBHOOK] Event received:', payload.event);
-    console.log('[WEBHOOK] Data:', JSON.stringify(payload.data).substring(0, 200));
+    // FASE 1: LOG DETALHADO - Capturar payload EXATO que Clint envia
+    const rawPayload = await req.json();
+    console.log('[WEBHOOK] ========== RAW PAYLOAD COMPLETO ==========');
+    console.log(JSON.stringify(rawPayload, null, 2));
+    console.log('[WEBHOOK] =======================================');
 
-    // Validar estrutura básica
-    if (!payload.event || !payload.data) {
-      console.error('[WEBHOOK] Invalid payload structure');
-      return new Response(
-        JSON.stringify({ error: 'Invalid payload structure' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // FASE 2: NORMALIZAÇÃO - Converter formato direto para formato esperado
+    const normalizedPayload = normalizeClintPayload(rawPayload);
+    console.log('[WEBHOOK] Event type detectado:', normalizedPayload.event);
+    console.log('[WEBHOOK] Payload normalizado:', JSON.stringify(normalizedPayload.data, null, 2));
 
-    // Criar log do webhook
+    // Criar log do webhook (mesmo se houver erro depois)
     const { data: logData, error: logError } = await supabase
       .from('webhook_events')
       .insert({
-        event_type: payload.event,
-        event_data: payload,
+        event_type: normalizedPayload.event,
+        event_data: rawPayload, // Salvar payload original do Clint
         status: 'processing'
       })
       .select()
@@ -60,50 +75,57 @@ serve(async (req) => {
       console.log('[WEBHOOK] Log created:', webhookLogId);
     }
 
-    // Processar o evento baseado no tipo
+    // FASE 3: PROCESSAMENTO - Executar lógica baseada no evento
     let result: any = null;
 
-    switch (payload.event) {
-      case 'contact.created':
-        result = await handleContactCreated(supabase, payload.data);
+    switch (normalizedPayload.event) {
+      case 'deal.stage_changed':
+        result = await handleDealStageChanged(supabase, normalizedPayload.data);
         break;
+      
       case 'contact.updated':
-        result = await handleContactUpdated(supabase, payload.data);
+        result = await handleContactUpdated(supabase, normalizedPayload.data);
         break;
+
+      case 'deal.updated':
+        result = await handleDealUpdated(supabase, normalizedPayload.data);
+        break;
+
+      case 'contact.created':
+        result = await handleContactCreated(supabase, normalizedPayload.data);
+        break;
+
       case 'contact.deleted':
-        result = await handleContactDeleted(supabase, payload.data);
+        result = await handleContactDeleted(supabase, normalizedPayload.data);
         break;
       
       case 'deal.created':
-        result = await handleDealCreated(supabase, payload.data);
+        result = await handleDealCreated(supabase, normalizedPayload.data);
         break;
-      case 'deal.updated':
-        result = await handleDealUpdated(supabase, payload.data);
-        break;
-      case 'deal.stage_changed':
-        result = await handleDealStageChanged(supabase, payload.data);
-        break;
+
       case 'deal.deleted':
-        result = await handleDealDeleted(supabase, payload.data);
+        result = await handleDealDeleted(supabase, normalizedPayload.data);
         break;
 
       case 'origin.created':
-        result = await handleOriginCreated(supabase, payload.data);
+        result = await handleOriginCreated(supabase, normalizedPayload.data);
         break;
+      
       case 'origin.updated':
-        result = await handleOriginUpdated(supabase, payload.data);
+        result = await handleOriginUpdated(supabase, normalizedPayload.data);
         break;
 
       case 'stage.created':
-        result = await handleStageCreated(supabase, payload.data);
+        result = await handleStageCreated(supabase, normalizedPayload.data);
         break;
+      
       case 'stage.updated':
-        result = await handleStageUpdated(supabase, payload.data);
+        result = await handleStageUpdated(supabase, normalizedPayload.data);
         break;
 
       default:
-        console.log('[WEBHOOK] Unhandled event type:', payload.event);
-        result = { message: 'Event type not handled', event: payload.event };
+        console.log('[WEBHOOK] Unhandled event type:', normalizedPayload.event);
+        result = { message: 'Event type not handled', event: normalizedPayload.event };
     }
 
     const processingTime = Date.now() - startTime;
@@ -153,68 +175,162 @@ serve(async (req) => {
   }
 });
 
+// ============= NORMALIZAÇÃO DE PAYLOAD =============
+
+/**
+ * Converte o formato direto do Clint (campo por campo) para o formato esperado
+ */
+function normalizeClintPayload(rawPayload: any): WebhookEvent {
+  // Se já está no formato correto (com event e data), retornar
+  if (rawPayload.event && rawPayload.data) {
+    return rawPayload as WebhookEvent;
+  }
+
+  const raw = rawPayload as ClintRawPayload;
+
+  // Detectar tipo de evento baseado em campos presentes
+  let event = 'unknown';
+  
+  // Se tem deal_stage, é mudança de estágio
+  if (raw.deal_stage) {
+    event = 'deal.stage_changed';
+  } 
+  // Se tem informações de deal mas sem estágio, é atualização de deal
+  else if (raw.deal_name || raw.deal_value !== undefined || raw.deal_status) {
+    event = 'deal.updated';
+  }
+  // Se só tem informações de contato, é atualização de contato
+  else if (raw.contact_name || raw.contact_email || raw.contact_phone) {
+    event = 'contact.updated';
+  }
+
+  console.log('[NORMALIZE] Event detectado:', event);
+
+  // Normalizar dados
+  return {
+    event,
+    data: {
+      // Dados do contato
+      contact: {
+        name: raw.contact_name,
+        email: raw.contact_email,
+        phone: raw.contact_phone,
+        doc: raw.contact_doc,
+        role: raw.contact_role,
+        notes: raw.contact_notes
+      },
+      // Dados do deal
+      deal: {
+        name: raw.deal_name,
+        value: raw.deal_value,
+        stage: raw.deal_stage, // Nome do estágio
+        user: raw.deal_user,
+        status: raw.deal_status
+      },
+      // Dados da origem
+      origin: {
+        name: raw.origin_name
+      },
+      // Manter outros campos
+      ...raw
+    }
+  };
+}
+
 // ============= HANDLERS DE CONTATOS =============
 
 async function handleContactCreated(supabase: any, data: any) {
-  console.log('[CONTACT.CREATED] Processing:', data.id);
+  console.log('[CONTACT.CREATED] Processing contact:', data.contact?.name || data.name);
 
-  const { data: existing } = await supabase
-    .from('crm_contacts')
-    .select('id')
-    .eq('clint_id', data.id)
-    .single();
+  const contactData = data.contact || data;
+  const email = contactData.email || data.email;
 
-  if (existing) {
-    console.log('[CONTACT.CREATED] Contact already exists, updating instead');
-    return handleContactUpdated(supabase, data);
+  // Verificar se já existe pelo email
+  if (email) {
+    const { data: existing } = await supabase
+      .from('crm_contacts')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existing) {
+      console.log('[CONTACT.CREATED] Contact already exists, updating instead');
+      return handleContactUpdated(supabase, data);
+    }
   }
 
   const { error } = await supabase
     .from('crm_contacts')
     .insert({
-      clint_id: data.id,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
+      clint_id: data.id || `clint-${Date.now()}`,
+      name: contactData.name || data.name,
+      email: email,
+      phone: contactData.phone || data.phone,
       organization_name: data.organization?.name,
-      origin_id: data.origin_id,
       tags: data.tags || [],
       custom_fields: data.custom_fields || {}
     });
 
   if (error) throw error;
   console.log('[CONTACT.CREATED] Success');
-  return { action: 'created', contact_id: data.id };
+  return { action: 'created', contact: contactData.name };
 }
 
 async function handleContactUpdated(supabase: any, data: any) {
-  console.log('[CONTACT.UPDATED] Processing:', data.id);
+  const contactData = data.contact || data;
+  const email = contactData.email || data.email;
+  
+  console.log('[CONTACT.UPDATED] Processing contact:', contactData.name, email);
 
-  const { error } = await supabase
+  if (!email) {
+    console.warn('[CONTACT.UPDATED] No email provided, skipping');
+    return { action: 'skipped', reason: 'no_email' };
+  }
+
+  // Buscar contato pelo email
+  const { data: existing } = await supabase
     .from('crm_contacts')
-    .upsert({
-      clint_id: data.id,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      organization_name: data.organization?.name,
-      origin_id: data.origin_id,
-      tags: data.tags || [],
-      custom_fields: data.custom_fields || {},
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: 'clint_id'
-    });
+    .select('id, clint_id')
+    .eq('email', email)
+    .maybeSingle();
 
-  if (error) throw error;
-  console.log('[CONTACT.UPDATED] Success');
-  return { action: 'updated', contact_id: data.id };
+  if (existing) {
+    // Atualizar contato existente
+    const { error } = await supabase
+      .from('crm_contacts')
+      .update({
+        name: contactData.name || data.name,
+        phone: contactData.phone || data.phone,
+        organization_name: data.organization?.name,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id);
+
+    if (error) throw error;
+    console.log('[CONTACT.UPDATED] Success - updated existing');
+    return { action: 'updated', contact_id: existing.id };
+  } else {
+    // Criar novo contato
+    const { error } = await supabase
+      .from('crm_contacts')
+      .insert({
+        clint_id: data.id || `clint-${Date.now()}`,
+        name: contactData.name || data.name,
+        email: email,
+        phone: contactData.phone || data.phone,
+        tags: [],
+        custom_fields: {}
+      });
+
+    if (error) throw error;
+    console.log('[CONTACT.UPDATED] Success - created new');
+    return { action: 'created', email };
+  }
 }
 
 async function handleContactDeleted(supabase: any, data: any) {
   console.log('[CONTACT.DELETED] Processing:', data.id);
 
-  // Soft delete - você pode mudar para hard delete se preferir
   const { error } = await supabase
     .from('crm_contacts')
     .delete()
@@ -228,137 +344,208 @@ async function handleContactDeleted(supabase: any, data: any) {
 // ============= HANDLERS DE DEALS =============
 
 async function handleDealCreated(supabase: any, data: any) {
-  console.log('[DEAL.CREATED] Processing:', data.id);
+  console.log('[DEAL.CREATED] Processing deal:', data.deal?.name || data.name);
 
-  const { data: existing } = await supabase
-    .from('crm_deals')
-    .select('id')
-    .eq('clint_id', data.id)
-    .single();
+  const dealData = data.deal || data;
+  const contactData = data.contact || {};
 
-  if (existing) {
-    console.log('[DEAL.CREATED] Deal already exists, updating instead');
-    return handleDealUpdated(supabase, data);
+  // Buscar contato pelo email se tiver
+  let contactId = null;
+  if (contactData.email) {
+    const { data: contact } = await supabase
+      .from('crm_contacts')
+      .select('id')
+      .eq('email', contactData.email)
+      .maybeSingle();
+    contactId = contact?.id;
   }
 
-  // Buscar IDs internos
-  const contactId = await getInternalContactId(supabase, data.contact_id);
-  const stageId = await getInternalStageId(supabase, data.stage_id);
-  const originId = await getInternalOriginId(supabase, data.origin_id);
+  // Buscar stage pelo nome se tiver
+  let stageId = null;
+  if (dealData.stage) {
+    const { data: stage } = await supabase
+      .from('crm_stages')
+      .select('id')
+      .ilike('stage_name', dealData.stage)
+      .maybeSingle();
+    stageId = stage?.id;
+  }
 
   const { data: deal, error } = await supabase
     .from('crm_deals')
     .insert({
-      clint_id: data.id,
-      name: data.name,
-      value: data.value || 0,
+      clint_id: data.id || `clint-${Date.now()}`,
+      name: dealData.name || data.name || 'Deal sem nome',
+      value: dealData.value || 0,
       stage_id: stageId,
       contact_id: contactId,
-      origin_id: originId,
-      owner_id: data.owner_id,
-      probability: data.probability,
-      expected_close_date: data.expected_close_date,
-      tags: data.tags || [],
-      custom_fields: data.custom_fields || {}
+      tags: [],
+      custom_fields: {}
     })
     .select()
     .single();
 
   if (error) throw error;
 
-  // Criar atividade
   await createDealActivity(supabase, deal.id, 'created', 'Deal criado via webhook', null, null, data);
 
   console.log('[DEAL.CREATED] Success');
-  return { action: 'created', deal_id: data.id };
+  return { action: 'created', deal_id: deal.id };
 }
 
 async function handleDealUpdated(supabase: any, data: any) {
-  console.log('[DEAL.UPDATED] Processing:', data.id);
+  console.log('[DEAL.UPDATED] Processing deal update');
 
-  const contactId = await getInternalContactId(supabase, data.contact_id);
-  const stageId = await getInternalStageId(supabase, data.stage_id);
-  const originId = await getInternalOriginId(supabase, data.origin_id);
+  const dealData = data.deal || data;
+  const contactData = data.contact || {};
 
-  const { data: deal, error } = await supabase
+  // Buscar deal pelo email do contato
+  let dealId = null;
+  if (contactData.email) {
+    const { data: contact } = await supabase
+      .from('crm_contacts')
+      .select('id')
+      .eq('email', contactData.email)
+      .maybeSingle();
+
+    if (contact) {
+      const { data: deal } = await supabase
+        .from('crm_deals')
+        .select('id')
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      dealId = deal?.id;
+    }
+  }
+
+  if (!dealId) {
+    console.warn('[DEAL.UPDATED] Deal not found, cannot update');
+    return { action: 'skipped', reason: 'deal_not_found' };
+  }
+
+  const { error } = await supabase
     .from('crm_deals')
     .update({
-      name: data.name,
-      value: data.value || 0,
-      stage_id: stageId,
-      contact_id: contactId,
-      origin_id: originId,
-      owner_id: data.owner_id,
-      probability: data.probability,
-      expected_close_date: data.expected_close_date,
-      tags: data.tags || [],
-      custom_fields: data.custom_fields || {},
+      name: dealData.name,
+      value: dealData.value,
       updated_at: new Date().toISOString()
     })
-    .eq('clint_id', data.id)
-    .select()
-    .single();
+    .eq('id', dealId);
 
   if (error) throw error;
 
-  // Criar atividade
-  await createDealActivity(supabase, deal.id, 'updated', 'Deal atualizado via webhook', null, null, data);
+  await createDealActivity(supabase, dealId, 'updated', 'Deal atualizado via webhook', null, null, data);
 
   console.log('[DEAL.UPDATED] Success');
-  return { action: 'updated', deal_id: data.id };
+  return { action: 'updated', deal_id: dealId };
 }
 
 async function handleDealStageChanged(supabase: any, data: any) {
-  console.log('[DEAL.STAGE_CHANGED] Processing:', data.id);
-  console.log('[DEAL.STAGE_CHANGED] From:', data.from_stage_id, 'To:', data.to_stage_id);
+  console.log('[DEAL.STAGE_CHANGED] Processing stage change');
+  
+  const dealData = data.deal || {};
+  const contactData = data.contact || {};
+  const newStageName = dealData.stage || data.stage;
 
-  const fromStageId = await getInternalStageId(supabase, data.from_stage_id);
-  const toStageId = await getInternalStageId(supabase, data.to_stage_id);
+  console.log('[DEAL.STAGE_CHANGED] Contact:', contactData.email);
+  console.log('[DEAL.STAGE_CHANGED] New stage:', newStageName);
 
-  // Buscar nomes dos estágios
-  const { data: fromStage } = await supabase
+  if (!newStageName) {
+    throw new Error('Stage name not provided in webhook');
+  }
+
+  // 1. Buscar o estágio novo pelo NOME
+  const { data: newStage } = await supabase
     .from('crm_stages')
-    .select('stage_name')
-    .eq('id', fromStageId)
-    .single();
+    .select('id, stage_name')
+    .ilike('stage_name', newStageName)
+    .maybeSingle();
 
-  const { data: toStage } = await supabase
-    .from('crm_stages')
-    .select('stage_name')
-    .eq('id', toStageId)
-    .single();
+  if (!newStage) {
+    throw new Error(`Stage not found: ${newStageName}`);
+  }
 
-  // Atualizar estágio do deal
-  const { data: deal, error } = await supabase
+  console.log('[DEAL.STAGE_CHANGED] Found stage:', newStage.stage_name, newStage.id);
+
+  // 2. Buscar o deal pelo email do contato
+  let dealId = null;
+  let currentStageId = null;
+  let currentStageName = null;
+
+  if (contactData.email) {
+    // Buscar contato
+    const { data: contact } = await supabase
+      .from('crm_contacts')
+      .select('id')
+      .eq('email', contactData.email)
+      .maybeSingle();
+
+    if (contact) {
+      console.log('[DEAL.STAGE_CHANGED] Found contact:', contact.id);
+      
+      // Buscar deal mais recente deste contato
+      const { data: deal } = await supabase
+        .from('crm_deals')
+        .select('id, stage_id')
+        .eq('contact_id', contact.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (deal) {
+        dealId = deal.id;
+        currentStageId = deal.stage_id;
+        console.log('[DEAL.STAGE_CHANGED] Found deal:', dealId);
+
+        // Buscar nome do estágio atual
+        if (currentStageId) {
+          const { data: currentStage } = await supabase
+            .from('crm_stages')
+            .select('stage_name')
+            .eq('id', currentStageId)
+            .maybeSingle();
+          currentStageName = currentStage?.stage_name;
+        }
+      }
+    }
+  }
+
+  if (!dealId) {
+    throw new Error('Deal not found for contact');
+  }
+
+  // 3. Atualizar o estágio do deal
+  const { error: updateError } = await supabase
     .from('crm_deals')
     .update({
-      stage_id: toStageId,
+      stage_id: newStage.id,
       updated_at: new Date().toISOString()
     })
-    .eq('clint_id', data.id)
-    .select()
-    .single();
+    .eq('id', dealId);
 
-  if (error) throw error;
+  if (updateError) throw updateError;
 
-  // Criar atividade de mudança de estágio
-  const description = `Deal movido de ${fromStage?.stage_name || 'desconhecido'} para ${toStage?.stage_name || 'desconhecido'}`;
+  // 4. Criar atividade de mudança de estágio
+  const description = `Deal movido de ${currentStageName || 'desconhecido'} para ${newStage.stage_name}`;
   await createDealActivity(
     supabase,
-    deal.id,
+    dealId,
     'stage_change',
     description,
-    fromStage?.stage_name,
-    toStage?.stage_name,
+    currentStageName,
+    newStage.stage_name,
     data
   );
 
   console.log('[DEAL.STAGE_CHANGED] Success');
   return { 
     action: 'stage_changed', 
-    deal_id: data.id,
-    from_stage: fromStage?.stage_name,
-    to_stage: toStage?.stage_name
+    deal_id: dealId,
+    from_stage: currentStageName,
+    to_stage: newStage.stage_name
   };
 }
 
@@ -504,7 +691,7 @@ async function getInternalContactId(supabase: any, clintId: string | null): Prom
     .from('crm_contacts')
     .select('id')
     .eq('clint_id', clintId)
-    .single();
+    .maybeSingle();
   return data?.id || null;
 }
 
@@ -514,7 +701,7 @@ async function getInternalStageId(supabase: any, clintId: string | null): Promis
     .from('crm_stages')
     .select('id')
     .eq('clint_id', clintId)
-    .single();
+    .maybeSingle();
   return data?.id || null;
 }
 
@@ -524,7 +711,7 @@ async function getInternalOriginId(supabase: any, clintId: string | null): Promi
     .from('crm_origins')
     .select('id')
     .eq('clint_id', clintId)
-    .single();
+    .maybeSingle();
   return data?.id || null;
 }
 
@@ -534,6 +721,6 @@ async function getInternalGroupId(supabase: any, clintId: string | null): Promis
     .from('crm_groups')
     .select('id')
     .eq('clint_id', clintId)
-    .single();
+    .maybeSingle();
   return data?.id || null;
 }
