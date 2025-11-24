@@ -29,19 +29,66 @@ async function callClintAPI<T = any>(
 
   console.log(`🔵 Calling Clint API: ${resource} (page ${params?.page || 1})`);
 
-  const response = await fetch(url, {
-    headers: {
-      'api-token': CLINT_API_KEY!,
-      'Content-Type': 'application/json',
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Clint API error: ${response.status} - ${error}`);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'api-token': CLINT_API_KEY!,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Clint API error: ${response.status} - ${error}`);
+    }
+
+    // Verificar se há conteúdo na resposta
+    const contentLength = response.headers.get('content-length');
+    const contentType = response.headers.get('content-type');
+
+    if (contentLength === '0' || contentLength === null) {
+      console.log(`⚠️ Resposta vazia da API Clint (página ${params?.page || 1}) - Fim dos dados`);
+      return { data: [] as any };
+    }
+
+    if (!contentType?.includes('application/json')) {
+      console.error(`⚠️ Resposta não é JSON: ${contentType}`);
+      const text = await response.text();
+      console.error(`Resposta: ${text.substring(0, 200)}`);
+      throw new Error(`API retornou tipo inválido: ${contentType}`);
+    }
+
+    // Tentar fazer parse do JSON
+    const text = await response.text();
+    
+    if (!text || text.trim().length === 0) {
+      console.log(`⚠️ Corpo da resposta vazio (página ${params?.page || 1}) - Fim dos dados`);
+      return { data: [] as any };
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (parseError: any) {
+      console.error(`❌ Erro ao fazer parse do JSON (página ${params?.page || 1}):`, parseError);
+      console.error(`Resposta recebida (primeiros 500 chars): ${text.substring(0, 500)}`);
+      throw new Error(`Falha ao processar resposta JSON: ${parseError?.message || 'Erro desconhecido'}`);
+    }
+
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    
+    if (error?.name === 'AbortError') {
+      throw new Error(`Timeout na chamada à API Clint após 60s (${resource}, página ${params?.page || 1})`);
+    }
+    
+    throw error;
   }
-
-  return await response.json();
 }
 
 function getColorFromType(type: string): string {
