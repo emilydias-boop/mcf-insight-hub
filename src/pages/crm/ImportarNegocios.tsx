@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -16,11 +16,30 @@ interface ImportStats {
   errorDetails?: Array<{ line: number; clint_id: string; error: string }>;
 }
 
+interface ChunkJob {
+  id: string;
+  status: string;
+  total_processed: number | null;
+  total_skipped: number | null;
+  metadata: any;
+}
+
+interface AggregatedStats {
+  totalDeals: number;
+  totalImported: number;
+  totalErrors: number;
+  completedChunks: number;
+  totalChunks: number;
+  allErrorDetails: Array<{ line: number; clint_id: string; error: string }>;
+}
+
 const ImportarNegocios = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [stats, setStats] = useState<ImportStats | null>(null);
+  const [parentJobId, setParentJobId] = useState<string | null>(null);
+  const [jobIds, setJobIds] = useState<string[]>([]);
+  const [aggregatedStats, setAggregatedStats] = useState<AggregatedStats | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -34,7 +53,9 @@ const ImportarNegocios = () => {
         return;
       }
       setFile(selectedFile);
-      setStats(null);
+      setAggregatedStats(null);
+      setParentJobId(null);
+      setJobIds([]);
     }
   };
 
@@ -45,13 +66,11 @@ const ImportarNegocios = () => {
     }
 
     setIsImporting(true);
-    setProgress(10);
+    setProgress(0);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
-
-      setProgress(30);
 
       const { data, error } = await supabase.functions.invoke('import-deals-csv', {
         body: formData,
@@ -59,28 +78,86 @@ const ImportarNegocios = () => {
 
       if (error) throw error;
 
-      setProgress(100);
-
       if (data.success) {
-        setStats(data.stats);
-        toast.success(`Importação concluída! ${data.stats.imported} deals importados para PIPELINE INSIDE SALES`);
+        setParentJobId(data.parent_job_id);
+        setJobIds(data.job_ids);
+        toast.success(`Importação iniciada! ${data.total_chunks} chunk(s) de ${data.total_deals} deals sendo processados em background.`);
       } else {
         throw new Error(data.error || 'Erro na importação');
       }
     } catch (error: any) {
       console.error('Import error:', error);
       toast.error(error.message || 'Erro ao importar negócios');
-    } finally {
       setIsImporting(false);
     }
   };
 
+  // Monitorar progresso dos jobs
+  useEffect(() => {
+    if (!jobIds.length) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const { data: jobs, error } = await supabase
+          .from('sync_jobs')
+          .select('id, status, total_processed, total_skipped, metadata')
+          .in('id', jobIds);
+
+        if (error) throw error;
+
+        const chunkJobs = jobs as ChunkJob[];
+        
+        const completed = chunkJobs.filter(j => j.status === 'completed' || j.status === 'failed').length;
+        const totalChunks = chunkJobs.length;
+        const progressPercent = Math.round((completed / totalChunks) * 100);
+        
+        setProgress(progressPercent);
+
+        // Calcular estatísticas agregadas
+        let totalImported = 0;
+        let totalErrors = 0;
+        let totalDeals = 0;
+        const allErrorDetails: Array<{ line: number; clint_id: string; error: string }> = [];
+
+        chunkJobs.forEach(job => {
+          totalImported += job.total_processed || 0;
+          totalErrors += job.total_skipped || 0;
+          totalDeals += job.metadata?.total_deals || 0;
+          
+          if (job.metadata?.errorDetails) {
+            allErrorDetails.push(...job.metadata.errorDetails);
+          }
+        });
+
+        setAggregatedStats({
+          totalDeals,
+          totalImported,
+          totalErrors,
+          completedChunks: completed,
+          totalChunks,
+          allErrorDetails,
+        });
+
+        // Parar polling quando todos completarem
+        if (completed === totalChunks) {
+          setIsImporting(false);
+          clearInterval(interval);
+          toast.success(`Importação concluída! ${totalImported} deals importados.`);
+        }
+      } catch (error) {
+        console.error('Error polling jobs:', error);
+      }
+    }, 2000); // Poll a cada 2 segundos
+
+    return () => clearInterval(interval);
+  }, [jobIds]);
+
   const downloadErrorLog = () => {
-    if (!stats?.errorDetails || stats.errorDetails.length === 0) return;
+    if (!aggregatedStats?.allErrorDetails || aggregatedStats.allErrorDetails.length === 0) return;
 
     const csvContent = [
       'Linha,Clint ID,Erro',
-      ...stats.errorDetails.map(e => `${e.line},"${e.clint_id}","${e.error}"`),
+      ...aggregatedStats.allErrorDetails.map(e => `${e.line},"${e.clint_id}","${e.error}"`),
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -111,7 +188,7 @@ const ImportarNegocios = () => {
         <CardHeader>
           <CardTitle>Upload do Arquivo CSV</CardTitle>
           <CardDescription>
-            O arquivo deve estar no formato CSV com separador vírgula (,)
+            O arquivo será processado em chunks de 5.000 deals para garantir estabilidade
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -122,7 +199,7 @@ const ImportarNegocios = () => {
               <br />
               <strong>Destino:</strong> Todos os deals serão importados para <span className="font-semibold">PIPELINE INSIDE SALES</span>
               <br />
-              O sistema irá vincular automaticamente aos contacts, stages e origin corretos.
+              <strong>Processamento:</strong> Arquivos grandes são divididos em chunks de 5.000 deals processados em sequência. Não interfere com o webhook.
             </AlertDescription>
           </Alert>
 
@@ -165,13 +242,19 @@ const ImportarNegocios = () => {
             </label>
           </div>
 
-          {isImporting && (
+          {isImporting && aggregatedStats && (
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Processando deals...</span>
+                <span className="text-muted-foreground">
+                  Processando chunk {aggregatedStats.completedChunks} de {aggregatedStats.totalChunks}...
+                </span>
                 <span className="font-medium text-foreground">{progress}%</span>
               </div>
               <Progress value={progress} />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{aggregatedStats.totalImported} deals importados até agora</span>
+              </div>
             </div>
           )}
 
@@ -181,14 +264,16 @@ const ImportarNegocios = () => {
               disabled={!file || isImporting}
               className="flex-1"
             >
-              {isImporting ? 'Importando...' : 'Iniciar Importação'}
+              {isImporting ? 'Processando...' : 'Iniciar Importação'}
             </Button>
             {file && !isImporting && (
               <Button
                 variant="outline"
                 onClick={() => {
                   setFile(null);
-                  setStats(null);
+                  setAggregatedStats(null);
+                  setParentJobId(null);
+                  setJobIds([]);
                 }}
               >
                 Limpar
@@ -198,51 +283,54 @@ const ImportarNegocios = () => {
         </CardContent>
       </Card>
 
-      {stats && (
+      {aggregatedStats && !isImporting && aggregatedStats.completedChunks === aggregatedStats.totalChunks && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
               Importação Concluída
             </CardTitle>
+            <CardDescription>
+              Processados {aggregatedStats.totalChunks} chunk(s) de 5.000 deals cada
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold text-foreground">{stats.total}</div>
+                <div className="text-2xl font-bold text-foreground">{aggregatedStats.totalDeals}</div>
                 <div className="text-sm text-muted-foreground">Total Processado</div>
               </div>
               <div className="text-center p-4 bg-green-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{stats.imported}</div>
+                <div className="text-2xl font-bold text-green-600">{aggregatedStats.totalImported}</div>
                 <div className="text-sm text-muted-foreground">Importados</div>
               </div>
               <div className="text-center p-4 bg-blue-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{stats.updated || 0}</div>
-                <div className="text-sm text-muted-foreground">Atualizados</div>
+                <div className="text-2xl font-bold text-blue-600">{aggregatedStats.totalChunks}</div>
+                <div className="text-sm text-muted-foreground">Chunks</div>
               </div>
               <div className="text-center p-4 bg-red-500/10 rounded-lg">
-                <div className="text-2xl font-bold text-red-600">{stats.errors}</div>
+                <div className="text-2xl font-bold text-red-600">{aggregatedStats.totalErrors}</div>
                 <div className="text-sm text-muted-foreground">Erros</div>
               </div>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
               <div className="text-sm text-muted-foreground">
-                Tempo de processamento: <span className="font-medium text-foreground">{formatDuration(stats.duration_seconds)}</span>
+                Processamento concluído com sucesso
               </div>
-              {stats.errorDetails && stats.errorDetails.length > 0 && (
+              {aggregatedStats.allErrorDetails && aggregatedStats.allErrorDetails.length > 0 && (
                 <Button variant="outline" size="sm" onClick={downloadErrorLog}>
                   <Download className="h-4 w-4 mr-2" />
-                  Baixar Log de Erros
+                  Baixar Log de Erros ({aggregatedStats.allErrorDetails.length})
                 </Button>
               )}
             </div>
 
-            {stats.errors > 0 && stats.errorDetails && (
+            {aggregatedStats.totalErrors > 0 && aggregatedStats.allErrorDetails && (
               <Alert variant="destructive">
                 <XCircle className="h-4 w-4" />
                 <AlertDescription>
-                  {stats.errors} deal(s) não puderam ser importados. Baixe o log de erros para mais detalhes.
+                  {aggregatedStats.totalErrors} deal(s) não puderam ser importados. Baixe o log de erros para mais detalhes.
                 </AlertDescription>
               </Alert>
             )}
