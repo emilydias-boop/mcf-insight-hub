@@ -1448,6 +1448,7 @@ export type Database = {
         Returns: boolean
       }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
+      upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
         Args: {
           _required_level: Database["public"]["Enums"]["permission_level"]
