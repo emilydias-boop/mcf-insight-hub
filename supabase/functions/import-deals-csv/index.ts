@@ -310,7 +310,7 @@ async function processDeals(
     errorDetails: [],
   };
 
-  const BATCH_SIZE = 100;
+  const BATCH_SIZE = 50; // Reduzido de 100 para 50
   const startTime = Date.now();
 
   for (let i = 0; i < csvDeals.length; i += BATCH_SIZE) {
@@ -385,10 +385,7 @@ async function processDeals(
         .eq('id', jobId);
     }
 
-    // Pequeno delay para não sobrecarregar
-    if (i + BATCH_SIZE < csvDeals.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
+    // Removido delay entre batches para otimização
   }
 
   stats.duration_seconds = Math.floor((Date.now() - startTime) / 1000);
@@ -396,7 +393,92 @@ async function processDeals(
   return stats;
 }
 
-// Função de processamento em background
+// Função de processamento de chunks em background
+async function processChunksInBackground(
+  allDeals: CSVDeal[],
+  jobIds: string[],
+  chunkSize: number,
+  supabaseUrl: string,
+  supabaseKey: string
+) {
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  
+  // Carregar caches uma vez para todos os chunks
+  console.log('🔄 Carregando caches...');
+  const [contactsCache, stagesCache] = await Promise.all([
+    loadContactsCache(supabase),
+    loadStagesCache(supabase),
+  ]);
+  
+  // Processar cada chunk sequencialmente
+  for (let i = 0; i < jobIds.length; i++) {
+    const jobId = jobIds[i];
+    const chunkStart = i * chunkSize;
+    const chunkEnd = Math.min((i + 1) * chunkSize, allDeals.length);
+    const chunkDeals = allDeals.slice(chunkStart, chunkEnd);
+    
+    console.log(`📦 Processando chunk ${i + 1}/${jobIds.length}: deals ${chunkStart}-${chunkEnd}`);
+    
+    try {
+      // Atualizar job para processing
+      await supabase
+        .from('sync_jobs')
+        .update({
+          status: 'processing',
+          started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId);
+
+      // Processar deals do chunk
+      const stats = await processDeals(supabase, chunkDeals, contactsCache, stagesCache, jobId);
+
+      // Atualizar job para completed
+      await supabase
+        .from('sync_jobs')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          total_processed: stats.imported,
+          total_skipped: stats.errors,
+          metadata: {
+            stats,
+            errorDetails: stats.errorDetails.slice(0, 100),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId);
+
+      console.log(`✅ Chunk ${i + 1}/${jobIds.length} concluído: ${stats.imported} importados, ${stats.errors} erros`);
+    } catch (error) {
+      console.error(`❌ Erro no chunk ${i + 1}:`, error);
+      
+      // Atualizar job para failed
+      await supabase
+        .from('sync_jobs')
+        .update({
+          status: 'failed',
+          error_message: error instanceof Error ? error.message : 'Erro desconhecido',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId);
+    }
+  }
+  
+  // Executar link de contacts a origins via deals uma vez no final
+  console.log('🔗 Vinculando contacts a origins...');
+  try {
+    const { data: linkCount } = await supabase.rpc('link_contacts_to_origins_via_deals');
+    console.log(`✅ ${linkCount || 0} contacts vinculados a origins`);
+  } catch (linkError) {
+    console.error('⚠️ Erro ao vincular contacts:', linkError);
+  }
+  
+  console.log('✅ Todos os chunks processados!');
+}
+
+// Função de processamento em background (mantida para compatibilidade)
 async function processInBackground(
   csvDeals: CSVDeal[],
   jobId: string,
@@ -476,7 +558,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('[IMPORT-DEALS-CSV] Version: 2025-11-24T18:00:00Z');
+    console.log('[IMPORT-DEALS-CSV] Version: 2025-11-24T20:00:00Z - Chunked processing');
     console.log('📥 Iniciando importação de deals via CSV');
     
     const formData = await req.formData();
@@ -497,6 +579,12 @@ Deno.serve(async (req) => {
       throw new Error('CSV vazio ou inválido. Verifique se o arquivo tem pelo menos 2 linhas (header + dados).');
     }
     
+    // Configuração de chunks
+    const CHUNK_SIZE = 5000;
+    const totalChunks = Math.ceil(csvDeals.length / CHUNK_SIZE);
+    
+    console.log(`📦 Dividindo em ${totalChunks} chunk(s) de até ${CHUNK_SIZE} deals cada`);
+    
     // Validar que os deals têm os campos necessários
     const dealsWithoutId = csvDeals.filter(d => !d.id || d.id.trim() === '').length;
     const dealsWithoutName = csvDeals.filter(d => !d.name || d.name.trim() === '').length;
@@ -510,39 +598,62 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Criar job de sync
-    const { data: job, error: jobError } = await supabase
-      .from('sync_jobs')
-      .insert({
-        job_type: 'deals',
-        status: 'pending',
-        metadata: {
-          filename: file.name,
-          total_deals: csvDeals.length,
-          import_type: 'csv',
-        },
-      })
-      .select()
-      .single();
+    // Criar job parent para agrupar todos os chunks
+    const parentJobId = crypto.randomUUID();
+    const jobIds: string[] = [];
+    
+    // Criar jobs para cada chunk
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkStart = i * CHUNK_SIZE;
+      const chunkEnd = Math.min((i + 1) * CHUNK_SIZE, csvDeals.length);
+      const chunkSize = chunkEnd - chunkStart;
+      
+      const { data: job, error: jobError } = await supabase
+        .from('sync_jobs')
+        .insert({
+          job_type: 'deals',
+          status: 'pending',
+          metadata: {
+            filename: file.name,
+            total_deals: chunkSize,
+            import_type: 'csv',
+            parent_job_id: parentJobId,
+            chunk_number: i + 1,
+            total_chunks: totalChunks,
+            chunk_start: chunkStart,
+            chunk_end: chunkEnd,
+          },
+        })
+        .select()
+        .single();
 
-    if (jobError || !job) {
-      throw new Error(`Erro ao criar job: ${jobError?.message}`);
+      if (jobError || !job) {
+        console.error(`❌ Erro ao criar job chunk ${i + 1}:`, jobError);
+        continue;
+      }
+      
+      jobIds.push(job.id);
+      console.log(`✅ Job chunk ${i + 1}/${totalChunks} criado: ${job.id} (${chunkSize} deals)`);
+    }
+    
+    if (jobIds.length === 0) {
+      throw new Error('Falha ao criar jobs de importação');
     }
 
-    console.log(`✅ Job criado: ${job.id}`);
-
-    // Processar em background
+    // Processar chunks em background sequencialmente
     EdgeRuntime.waitUntil(
-      processInBackground(csvDeals, job.id, supabaseUrl, supabaseKey)
+      processChunksInBackground(csvDeals, jobIds, CHUNK_SIZE, supabaseUrl, supabaseKey)
     );
 
     // Retornar resposta imediata
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Importação iniciada. Processamento em andamento.',
-        job_id: job.id,
+        message: `Importação iniciada. ${totalChunks} chunk(s) serão processados em background.`,
+        parent_job_id: parentJobId,
+        job_ids: jobIds,
         total_deals: csvDeals.length,
+        total_chunks: totalChunks,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
