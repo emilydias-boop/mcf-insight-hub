@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.import-deals-csv]
 verify_jwt = false
 
+[functions.process-csv-imports]
+verify_jwt = false
+
 [functions.sync-clint-data]
 verify_jwt = false
 
@@ -25,9 +28,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.sync-by-origin]
-verify_jwt = false
-
-[functions.import-contacts-csv]
 verify_jwt = false
 
 [functions.clint-webhook-handler]
