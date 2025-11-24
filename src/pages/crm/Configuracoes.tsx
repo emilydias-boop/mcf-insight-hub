@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Settings, Users, Zap, Database, Shield } from 'lucide-react';
 import { SyncMonitor } from '@/components/crm/SyncMonitor';
 import { CronJobSetup } from '@/components/crm/CronJobSetup';
+import { SyncControls } from '@/components/crm/SyncControls';
 
 const Configuracoes = () => {
   const settingsSections = [
@@ -40,6 +41,8 @@ const Configuracoes = () => {
       </div>
 
       <CronJobSetup />
+      
+      <SyncControls />
       
       <SyncMonitor />
 
