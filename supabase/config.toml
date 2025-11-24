@@ -3,6 +3,12 @@ project_id = "rehcfgqvigfcekiipqkc"
 [functions.clint-api]
 verify_jwt = false
 
+[functions.import-contacts-csv]
+verify_jwt = false
+
+[functions.import-deals-csv]
+verify_jwt = false
+
 [functions.sync-clint-data]
 verify_jwt = false
 
