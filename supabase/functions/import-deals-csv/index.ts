@@ -201,8 +201,15 @@ function convertToDBFormat(
     console.warn('⚠️ Deal sem ID. Campos disponíveis:', Object.keys(csvDeal));
     return null;
   }
-  if (!csvDeal.name || csvDeal.name.trim() === '') {
-    console.warn(`⚠️ Deal ${csvDeal.id} sem nome. Campos disponíveis:`, Object.keys(csvDeal));
+  
+  // 🔧 FIX: Usar email como fallback se nome estiver vazio
+  let dealName = csvDeal.name?.trim() || '';
+  if (!dealName && csvDeal.email) {
+    dealName = csvDeal.email;
+    console.info(`ℹ️ Deal ${csvDeal.id} usando email como nome: ${dealName}`);
+  }
+  if (!dealName) {
+    console.warn(`⚠️ Deal ${csvDeal.id} sem nome nem email. Pulando...`);
     return null;
   }
 
@@ -245,7 +252,7 @@ function convertToDBFormat(
 
   return {
     clint_id: csvDeal.id,
-    name: csvDeal.name,
+    name: dealName, // 🔧 FIX: Usar variável com fallback
     value: value,
     stage_id: stageId,
     contact_id: contactId,
@@ -399,18 +406,19 @@ async function processDeals(
     }
 
     if (dealsToInsert.length > 0) {
-      try {
-        // 🚀 OTIMIZAÇÃO: Preparar deals com updated_at do CSV para comparação no UPSERT
-        const dealsWithTimestamp = dealsToInsert.map(deal => {
-          const csvDeal = batch.find(d => d.id === deal.clint_id);
-          const csvUpdatedAt = csvDeal?.updated_at || csvDeal?.updated_stage_at;
-          
-          return {
-            ...deal,
-            updated_at: csvUpdatedAt || new Date().toISOString(),
-          };
-        });
+      // 🚀 OTIMIZAÇÃO: Preparar deals com updated_at do CSV para comparação no UPSERT
+      const dealsWithTimestamp = dealsToInsert.map(deal => {
+        const csvDeal = batch.find(d => d.id === deal.clint_id);
+        const csvUpdatedAt = csvDeal?.updated_at || csvDeal?.updated_stage_at;
         
+        return {
+          ...deal,
+          updated_at: csvUpdatedAt || new Date().toISOString(),
+        };
+      });
+      
+      // 🔧 FIX: Try-catch individual para cada batch com logs detalhados
+      try {
         // Usar RPC function para UPSERT inteligente (só atualiza se CSV for mais recente)
         const { data, error } = await supabase.rpc('upsert_deals_smart', {
           deals_data: dealsWithTimestamp
@@ -419,6 +427,15 @@ async function processDeals(
         if (error) {
           console.error(`❌ Erro no batch ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
           stats.errors += dealsToInsert.length;
+          
+          // 🔍 Logar TODOS os deals do batch com erro para debug
+          console.error('Deals do batch com erro:', dealsWithTimestamp.map((d: any) => ({
+            id: d.clint_id,
+            name: d.name,
+            tags: d.tags,
+            tags_type: Array.isArray(d.tags) ? 'array' : typeof d.tags
+          })));
+          
           dealsToInsert.forEach((deal, idx) => {
             stats.errorDetails.push({
               line: i + idx + 2,
@@ -435,6 +452,7 @@ async function processDeals(
       } catch (err: any) {
         console.error(`❌ Exceção no batch ${Math.floor(i / BATCH_SIZE) + 1}:`, err);
         stats.errors += dealsToInsert.length;
+        // Continuar para próximo batch ao invés de parar
       }
     }
 
@@ -655,8 +673,8 @@ Deno.serve(async (req) => {
       throw new Error('CSV vazio ou inválido. Verifique se o arquivo tem pelo menos 2 linhas (header + dados).');
     }
     
-    // Configuração de chunks - otimizado para evitar timeout
-    const CHUNK_SIZE = 2000; // Reduzido de 5000 para 2000 (menos CPU por execução)
+    // 🔧 FIX: CHUNK_SIZE reduzido para evitar CPU timeout
+    const CHUNK_SIZE = 1000; // Reduzido de 2000 para 1000 (mais seguro)
     const totalChunks = Math.ceil(csvDeals.length / CHUNK_SIZE);
     
     console.log(`📦 Dividindo em ${totalChunks} chunk(s) de até ${CHUNK_SIZE} deals cada`);
