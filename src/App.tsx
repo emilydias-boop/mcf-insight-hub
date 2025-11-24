@@ -33,6 +33,7 @@ import Grupos from "./pages/crm/Grupos";
 import Tags from "./pages/crm/Tags";
 import ConfiguracoesCRM from "./pages/crm/Configuracoes";
 import ImportarContatos from "./pages/crm/ImportarContatos";
+import ImportarNegocios from "./pages/crm/ImportarNegocios";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -84,6 +85,7 @@ const App = () => (
                 <Route path="grupos" element={<Grupos />} />
                 <Route path="tags" element={<Tags />} />
                 <Route path="importar-contatos" element={<ImportarContatos />} />
+                <Route path="importar-negocios" element={<ImportarNegocios />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
             </Route>

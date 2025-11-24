@@ -45,13 +45,13 @@ interface ImportStats {
 
 const PIPELINE_INSIDE_SALES_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
 
-// Parse CSV com separador de ponto e vírgula
+// Parse CSV com separador de vírgula
 function parseCSV(csvText: string): CSVDeal[] {
   const lines = csvText.trim().split('\n');
   if (lines.length < 2) return [];
 
   // Primeira linha é o cabeçalho
-  const headers = lines[0].split(';').map(h => h.trim().toLowerCase());
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
   
   const deals: CSVDeal[] = [];
   
@@ -59,7 +59,7 @@ function parseCSV(csvText: string): CSVDeal[] {
     const line = lines[i].trim();
     if (!line) continue;
     
-    const values = line.split(';');
+    const values = line.split(',');
     const deal: CSVDeal = { id: '', name: '' };
     
     headers.forEach((header, index) => {
