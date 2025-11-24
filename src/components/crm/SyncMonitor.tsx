@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Clock, CheckCircle2, AlertCircle, Loader2, Pause } from "lucide-react";
+import { Clock, CheckCircle2, AlertCircle, Loader2, Pause, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -30,10 +30,12 @@ const jobTypeLabels: Record<string, string> = {
 
 const statusConfig = {
   running: { label: 'Em execução', icon: Loader2, color: 'bg-blue-500', variant: 'default' as const },
+  processing: { label: 'Processando', icon: Loader2, color: 'bg-blue-500', variant: 'default' as const },
   completed: { label: 'Concluído', icon: CheckCircle2, color: 'bg-green-500', variant: 'default' as const },
   failed: { label: 'Falhou', icon: AlertCircle, color: 'bg-destructive', variant: 'destructive' as const },
   pending: { label: 'Pendente', icon: Clock, color: 'bg-muted', variant: 'secondary' as const },
-  paused: { label: 'Pausado', icon: Pause, color: 'bg-yellow-500', variant: 'secondary' as const }
+  paused: { label: 'Pausado', icon: Pause, color: 'bg-yellow-500', variant: 'secondary' as const },
+  cancelled: { label: 'Cancelado', icon: XCircle, color: 'bg-gray-500', variant: 'secondary' as const }
 };
 
 export function SyncMonitor() {
@@ -110,7 +112,12 @@ export function SyncMonitor() {
           <div className="space-y-4">
             <h3 className="text-sm font-semibold">Sincronizações Ativas</h3>
             {activeJobs.map((job) => {
-              const config = statusConfig[job.status as keyof typeof statusConfig];
+              const config = statusConfig[job.status as keyof typeof statusConfig] || {
+                label: job.status,
+                icon: AlertCircle,
+                color: 'bg-gray-500',
+                variant: 'secondary' as const
+              };
               const Icon = config.icon;
               const progress = estimateProgress(job);
               const stats = calculateStats(job);
@@ -178,7 +185,12 @@ export function SyncMonitor() {
           <h3 className="text-sm font-semibold">Histórico Recente</h3>
           <div className="space-y-2">
             {recentJobs.map((job) => {
-              const config = statusConfig[job.status as keyof typeof statusConfig];
+              const config = statusConfig[job.status as keyof typeof statusConfig] || {
+                label: job.status,
+                icon: AlertCircle,
+                color: 'bg-gray-500',
+                variant: 'secondary' as const
+              };
               const Icon = config.icon;
 
               return (
