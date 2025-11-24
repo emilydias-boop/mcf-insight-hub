@@ -191,15 +191,29 @@ function normalizeClintPayload(rawPayload: any): WebhookEvent {
   // Detectar tipo de evento baseado em campos presentes
   let event = 'unknown';
   
-  // Se tem deal_stage, é mudança de estágio
-  if (raw.deal_stage) {
+  // 1. PRIORIDADE: Campo explícito de ação/evento do Clint
+  if (raw.action === 'created' || raw.event_type === 'deal_created') {
+    event = 'deal.created';
+    console.log('[NORMALIZE] Detectado deal.created por campo explícito:', raw.action || raw.event_type);
+  }
+  // 2. Detectar criação por timestamps (criado há menos de 5 segundos)
+  else if (raw.deal_created_at && raw.deal_updated_at) {
+    const createdAt = new Date(raw.deal_created_at).getTime();
+    const updatedAt = new Date(raw.deal_updated_at).getTime();
+    if (Math.abs(updatedAt - createdAt) < 5000) {
+      event = 'deal.created';
+      console.log('[NORMALIZE] Detectado deal.created por timestamps próximos');
+    }
+  }
+  // 3. Se tem deal_stage, é mudança de estágio
+  else if (raw.deal_stage) {
     event = 'deal.stage_changed';
   } 
-  // Se tem informações de deal mas sem estágio, é atualização de deal
+  // 4. Se tem informações de deal mas sem estágio, é atualização de deal
   else if (raw.deal_name || raw.deal_value !== undefined || raw.deal_status) {
     event = 'deal.updated';
   }
-  // Se só tem informações de contato, é atualização de contato
+  // 5. Se só tem informações de contato, é atualização de contato
   else if (raw.contact_name || raw.contact_email || raw.contact_phone) {
     event = 'contact.updated';
   }
@@ -348,11 +362,14 @@ async function handleContactDeleted(supabase: any, data: any) {
 
 async function handleDealCreated(supabase: any, data: any) {
   console.log('[DEAL.CREATED] Processing deal:', data.deal?.name || data.name);
+  console.log('[DEAL.CREATED] Full payload:', JSON.stringify(data, null, 2));
 
   const dealData = data.deal || data;
   const contactData = data.contact || {};
+  const originName = data.deal_origin || data.origin?.name;
+  const ownerName = dealData.user || data.deal_user;
 
-  // Buscar contato pelo email se tiver
+  // 1. Buscar ou criar contato pelo email
   let contactId = null;
   if (contactData.email) {
     const { data: contact } = await supabase
@@ -360,10 +377,33 @@ async function handleDealCreated(supabase: any, data: any) {
       .select('id')
       .eq('email', contactData.email)
       .maybeSingle();
-    contactId = contact?.id;
+    
+    if (contact) {
+      contactId = contact.id;
+      console.log('[DEAL.CREATED] Contact found:', contactId);
+    } else {
+      // Criar contato se não existir
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: contactData.id || `contact-${Date.now()}`,
+          name: contactData.name || 'Contato via webhook',
+          email: contactData.email,
+          phone: contactData.phone,
+          tags: [],
+          custom_fields: {}
+        })
+        .select('id')
+        .single();
+      
+      if (!contactError && newContact) {
+        contactId = newContact.id;
+        console.log('[DEAL.CREATED] Contact created:', contactId);
+      }
+    }
   }
 
-  // Buscar stage pelo nome se tiver
+  // 2. Buscar stage pelo nome
   let stageId = null;
   if (dealData.stage) {
     const { data: stage } = await supabase
@@ -372,28 +412,72 @@ async function handleDealCreated(supabase: any, data: any) {
       .ilike('stage_name', dealData.stage)
       .maybeSingle();
     stageId = stage?.id;
+    console.log('[DEAL.CREATED] Stage found:', stageId);
   }
 
+  // 3. Buscar origin pelo nome
+  let originId = null;
+  if (originName) {
+    const { data: origin } = await supabase
+      .from('crm_origins')
+      .select('id')
+      .ilike('name', originName)
+      .maybeSingle();
+    originId = origin?.id;
+    console.log('[DEAL.CREATED] Origin found:', originId);
+  }
+
+  // 4. Buscar owner (usuário responsável) - assumindo que temos profiles
+  let ownerId = null;
+  if (ownerName) {
+    const { data: owner } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('full_name', ownerName)
+      .maybeSingle();
+    ownerId = owner?.id;
+    console.log('[DEAL.CREATED] Owner found:', ownerId);
+  }
+
+  // 5. Processar custom_fields - tudo que não é campo padrão
+  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'user', 'deal', 'event', 'timestamp', 'action', 'event_type'];
+  const customFields: any = {};
+  Object.keys(data).forEach(key => {
+    if (!excludedFields.includes(key) && data[key] !== undefined && data[key] !== null) {
+      customFields[key] = data[key];
+    }
+  });
+  console.log('[DEAL.CREATED] Custom fields:', customFields);
+
+  // 6. Criar deal com UPSERT para evitar duplicação
   const { data: deal, error } = await supabase
     .from('crm_deals')
-    .insert({
-      clint_id: data.id || `clint-${Date.now()}`,
-      name: dealData.name || data.name || 'Deal sem nome',
-      value: dealData.value || 0,
+    .upsert({
+      clint_id: data.id || data.deal_id || `clint-${Date.now()}`,
+      name: dealData.name || data.deal_name || data.name || 'Deal sem nome',
+      value: dealData.value || data.deal_value || 0,
       stage_id: stageId,
       contact_id: contactId,
-      tags: [],
-      custom_fields: {}
-    })
+      origin_id: originId,
+      owner_id: ownerId,
+      tags: data.tags || dealData.tags || [],
+      probability: data.probability || dealData.probability,
+      expected_close_date: data.expected_close_date || dealData.expected_close_date,
+      custom_fields: customFields
+    }, { onConflict: 'clint_id' })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('[DEAL.CREATED] Error creating deal:', error);
+    throw error;
+  }
 
+  // 7. Registrar atividade
   await createDealActivity(supabase, deal.id, 'created', 'Deal criado via webhook', null, null, data);
 
-  console.log('[DEAL.CREATED] Success');
-  return { action: 'created', deal_id: deal.id };
+  console.log('[DEAL.CREATED] Success - Deal ID:', deal.id);
+  return { action: 'created', deal_id: deal.id, deal_name: deal.name };
 }
 
 async function handleDealUpdated(supabase: any, data: any) {
