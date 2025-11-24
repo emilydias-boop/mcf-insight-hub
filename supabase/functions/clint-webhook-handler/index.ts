@@ -497,89 +497,160 @@ async function handleDealStageChanged(supabase: any, data: any) {
 
   console.log('[DEAL.STAGE_CHANGED] Found stage:', newStage.stage_name, newStage.id, 'origin_id:', newStage.origin_id);
 
-  // 2. Buscar o deal pelo email do contato
+  // 2. Buscar o deal de múltiplas formas (robusto)
   let dealId = null;
   let currentStageId = null;
   let currentStageName = null;
+  let contactId = null;
 
+  // 2.1. Primeiro, buscar o contato pelo email
   if (contactData.email) {
-    // Buscar contato
     const { data: contact } = await supabase
       .from('crm_contacts')
       .select('id')
-      .eq('email', contactData.email)
+      .ilike('email', contactData.email)
       .maybeSingle();
 
     if (contact) {
-      console.log('[DEAL.STAGE_CHANGED] Found contact:', contact.id);
-      
-      // Buscar deal mais recente deste contato
-      const { data: deal } = await supabase
+      contactId = contact.id;
+      console.log('[DEAL.STAGE_CHANGED] Found contact:', contactId);
+
+      // 2.2. Tentar buscar deal por contact_id
+      const { data: dealByContact } = await supabase
         .from('crm_deals')
-        .select('id, stage_id')
-        .eq('contact_id', contact.id)
+        .select('id, stage_id, clint_id')
+        .eq('contact_id', contactId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (deal) {
-        dealId = deal.id;
-        currentStageId = deal.stage_id;
-        console.log('[DEAL.STAGE_CHANGED] Found deal:', dealId);
-
-        // Buscar nome do estágio atual
-        if (currentStageId) {
-          const { data: currentStage } = await supabase
-            .from('crm_stages')
-            .select('stage_name')
-            .eq('id', currentStageId)
-            .maybeSingle();
-          currentStageName = currentStage?.stage_name;
-        }
+      if (dealByContact) {
+        dealId = dealByContact.id;
+        currentStageId = dealByContact.stage_id;
+        console.log('[DEAL.STAGE_CHANGED] Found deal by contact_id:', dealId);
       }
     }
   }
 
+  // 2.3. Se não achou por contact_id, tentar por clint_id do deal
+  if (!dealId && data.deal_id) {
+    console.log('[DEAL.STAGE_CHANGED] Trying to find deal by clint_id:', data.deal_id);
+    
+    const { data: dealByClintId } = await supabase
+      .from('crm_deals')
+      .select('id, stage_id, contact_id')
+      .eq('clint_id', data.deal_id)
+      .maybeSingle();
+
+    if (dealByClintId) {
+      dealId = dealByClintId.id;
+      currentStageId = dealByClintId.stage_id;
+      console.log('[DEAL.STAGE_CHANGED] Found deal by clint_id:', dealId);
+
+      // Se o deal existe mas não tem contact_id vinculado, vincular agora
+      if (!dealByClintId.contact_id && contactId) {
+        console.log('[DEAL.STAGE_CHANGED] Linking contact to deal');
+        await supabase
+          .from('crm_deals')
+          .update({ contact_id: contactId })
+          .eq('id', dealId);
+      }
+    }
+  }
+
+  // 2.4. Se ainda não achou e temos contactId, criar o deal
+  if (!dealId && contactId) {
+    console.log('[DEAL.STAGE_CHANGED] Deal not found, creating new deal');
+    
+    const dealName = data.deal?.name || data.contact?.name || contactData.name || 'Deal via webhook';
+    const dealValue = data.deal?.value || data.deal_value || 0;
+    
+    const { data: newDeal, error: createError } = await supabase
+      .from('crm_deals')
+      .insert({
+        clint_id: data.deal_id || `webhook-${Date.now()}`,
+        name: dealName,
+        contact_id: contactId,
+        stage_id: newStage.id,
+        origin_id: originId,
+        value: dealValue,
+      })
+      .select('id, stage_id')
+      .single();
+
+    if (createError) {
+      console.error('[DEAL.STAGE_CHANGED] Error creating deal:', createError);
+      throw createError;
+    }
+
+    dealId = newDeal.id;
+    currentStageId = newStage.id; // Deal novo já começa no novo estágio
+    console.log('[DEAL.STAGE_CHANGED] Created new deal:', dealId);
+  }
+
   if (!dealId) {
-    throw new Error('Deal not found for contact');
+    throw new Error('Deal not found and could not be created');
   }
 
-  // 3. Atualizar o estágio do deal (e origem se encontrada)
-  const updateData: any = {
-    stage_id: newStage.id,
-    updated_at: new Date().toISOString()
-  };
-  
-  // Se temos origin_id do webhook, atualizar também
-  if (originId) {
-    updateData.origin_id = originId;
+  // Buscar nome do estágio atual (se temos stage_id e o deal não foi criado agora)
+  if (currentStageId && currentStageId !== newStage.id) {
+    const { data: currentStage } = await supabase
+      .from('crm_stages')
+      .select('stage_name')
+      .eq('id', currentStageId)
+      .maybeSingle();
+    currentStageName = currentStage?.stage_name;
   }
 
-  const { error: updateError } = await supabase
-    .from('crm_deals')
-    .update(updateData)
-    .eq('id', dealId);
+  // 3. Atualizar o estágio do deal (e origem se encontrada) - só se necessário
+  // Se o deal foi criado agora, já tem o stage correto, não precisa atualizar
+  if (currentStageId !== newStage.id) {
+    const updateData: any = {
+      stage_id: newStage.id,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Se temos origin_id do webhook, atualizar também
+    if (originId) {
+      updateData.origin_id = originId;
+    }
 
-  if (updateError) throw updateError;
+    const { error: updateError } = await supabase
+      .from('crm_deals')
+      .update(updateData)
+      .eq('id', dealId);
 
-  // 4. Criar atividade de mudança de estágio
-  const description = `Deal movido de ${currentStageName || 'desconhecido'} para ${newStage.stage_name}`;
-  await createDealActivity(
-    supabase,
-    dealId,
-    'stage_change',
-    description,
-    currentStageName,
-    newStage.stage_name,
-    data
-  );
+    if (updateError) throw updateError;
+
+    console.log('[DEAL.STAGE_CHANGED] Deal updated:', dealId);
+  } else {
+    console.log('[DEAL.STAGE_CHANGED] Deal already in correct stage, skipping update');
+  }
+
+  // 4. Criar atividade de mudança de estágio - só se houve mudança real
+  if (currentStageId && currentStageId !== newStage.id) {
+    const description = `Deal movido de ${currentStageName || 'desconhecido'} para ${newStage.stage_name}`;
+    await createDealActivity(
+      supabase,
+      dealId,
+      'stage_change',
+      description,
+      currentStageName,
+      newStage.stage_name,
+      data
+    );
+    console.log('[DEAL.STAGE_CHANGED] Activity created');
+  } else {
+    console.log('[DEAL.STAGE_CHANGED] No stage change activity needed (new deal or same stage)');
+  }
 
   console.log('[DEAL.STAGE_CHANGED] Success');
   return { 
     action: 'stage_changed', 
     deal_id: dealId,
     from_stage: currentStageName,
-    to_stage: newStage.stage_name
+    to_stage: newStage.stage_name,
+    was_created: !currentStageId // true se foi criado agora
   };
 }
 
