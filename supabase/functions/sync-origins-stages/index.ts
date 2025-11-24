@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
     const groupIdMap = new Map<string, string>();
     const originIdMap = new Map<string, string>();
     const originsWithParent: any[] = [];
+    const orphanedOrigins: any[] = []; // Origins sem grupo mas que deveriam ter
 
     // PRIMEIRA PASSADA: Salvar groups e origins (sem parent_id ainda)
     while (page <= MAX_PAGES) {
@@ -162,6 +163,13 @@ Deno.serve(async (req) => {
           } else {
             groupDbId = groupIdMap.get(groupClintId);
           }
+        } else {
+          // ⚠️ Origem sem grupo - registrar para análise
+          console.warn(`⚠️ Origem "${origin.name}" (${origin.id}) veio sem grupo da API Clint`);
+          orphanedOrigins.push({
+            name: origin.name,
+            clint_id: origin.id,
+          });
         }
         
         // 2. Salvar ORIGIN (sem parent_id por enquanto)
@@ -260,6 +268,13 @@ Deno.serve(async (req) => {
     
     console.log(`✅ ${linkedOrigins} origins vinculadas às suas origins pai`);
     
+    // Reportar origens órfãs
+    if (orphanedOrigins.length > 0) {
+      console.warn(`\n⚠️ ATENÇÃO: ${orphanedOrigins.length} origins sem grupo detectadas:`);
+      orphanedOrigins.forEach(o => console.warn(`  - ${o.name} (${o.clint_id})`));
+      console.warn('Verifique no Clint CRM se essas origins estão corretamente associadas a grupos.\n');
+    }
+    
     const duration = Date.now() - startTime;
 
     const summary = {
@@ -271,7 +286,9 @@ Deno.serve(async (req) => {
         origins_synced: totalOrigins,
         origins_with_parent: linkedOrigins,
         stages_synced: totalStages,
+        orphaned_origins: orphanedOrigins.length,
       },
+      warnings: orphanedOrigins.length > 0 ? orphanedOrigins : undefined,
     };
 
     console.log('✅ Sincronização completa:');
