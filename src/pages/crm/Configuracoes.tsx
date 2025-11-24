@@ -4,6 +4,7 @@ import { Settings, Users, Zap, Database, Shield } from 'lucide-react';
 import { SyncMonitor } from '@/components/crm/SyncMonitor';
 import { CronJobSetup } from '@/components/crm/CronJobSetup';
 import { SyncControls } from '@/components/crm/SyncControls';
+import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 
 const Configuracoes = () => {
   const settingsSections = [
@@ -40,6 +41,8 @@ const Configuracoes = () => {
         <p className="text-muted-foreground">Personalize e configure seu sistema de CRM</p>
       </div>
 
+      <WebhookMonitor />
+      
       <CronJobSetup />
       
       <SyncControls />
