@@ -45,7 +45,7 @@ export const useFunnelData = () => {
 };
 
 export const useA010Funnel = () => {
-  const { data: stages, isLoading } = useFunnelData();
+  const { data: stages, isLoading, error } = useFunnelData();
   
   // Filtrar apenas as etapas do funil A010 (etapas 1, 3, 4, 5)
   const a010Stages = stages?.filter((stage, index) => 
@@ -55,11 +55,12 @@ export const useA010Funnel = () => {
   return {
     data: a010Stages,
     isLoading,
+    error,
   };
 };
 
 export const useInstagramFunnel = () => {
-  const { data: stages, isLoading } = useFunnelData();
+  const { data: stages, isLoading, error } = useFunnelData();
   
   // Usar as primeiras 4 etapas para o funil Instagram
   const instagramStages = stages?.slice(0, 4) || [];
@@ -67,5 +68,6 @@ export const useInstagramFunnel = () => {
   return {
     data: instagramStages,
     isLoading,
+    error,
   };
 };

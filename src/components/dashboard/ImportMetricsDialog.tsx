@@ -5,6 +5,7 @@ import { Upload, FileSpreadsheet, AlertCircle, CheckCircle } from "lucide-react"
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ImportStats {
   success: boolean;
@@ -24,6 +25,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
   const [stats, setStats] = useState<ImportStats | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -83,6 +85,14 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
         title: "Importação concluída",
         description: `${data.processed || 0} registros processados com sucesso`,
       });
+
+      // Invalidate all queries to refresh dashboard data
+      await queryClient.invalidateQueries({ queryKey: ['weekly-metrics'] });
+      await queryClient.invalidateQueries({ queryKey: ['metrics-summary'] });
+      await queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+      await queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
+      await queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+      await queryClient.invalidateQueries({ queryKey: ['weekly-resumo'] });
 
       if (onImportSuccess) {
         onImportSuccess();
