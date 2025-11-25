@@ -49,7 +49,7 @@ export default function Dashboard() {
   
   const { data: metricsSummary, isLoading: loadingMetrics, error: errorMetrics } = useMetricsSummary(periodo.inicio, periodo.fim, canal);
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
-  const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(52, periodo.inicio, periodo.fim, canal);
+  const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(canal, 52);
   const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useA010Funnel(periodo.inicio, periodo.fim);
   const { data: instagramFunnel, isLoading: loadingInstagram, error: errorInstagram } = useInstagramFunnel(periodo.inicio, periodo.fim);
   const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
@@ -219,22 +219,6 @@ export default function Dashboard() {
         onExport={handleExport}
       />
 
-      {/* Indicador de Período Ativo */}
-      <div className="flex items-center gap-4 text-sm text-muted-foreground bg-card/50 border border-border rounded-lg p-3">
-        <div className="flex items-center gap-2">
-          <span className="font-medium text-foreground">Período:</span>
-          <span>{format(periodo.inicio, "dd/MM/yyyy")} até {format(periodo.fim, "dd/MM/yyyy")}</span>
-        </div>
-        {canal !== 'todos' && (
-          <>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-foreground">Canal:</span>
-              <span className="capitalize">{canal}</span>
-            </div>
-          </>
-        )}
-      </div>
 
       {/* Error Display */}
       {(errorMetrics || errorEvolution || errorA010 || errorInstagram || errorUltrameta || errorResumo) && (
