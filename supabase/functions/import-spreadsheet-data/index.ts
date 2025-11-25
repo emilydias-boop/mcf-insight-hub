@@ -1,6 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
 import * as xlsx from 'https://deno.land/x/sheetjs@v0.18.3/xlsx.mjs';
 
+// Declare EdgeRuntime for background tasks
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<any>): void;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -54,63 +59,31 @@ function parsePercent(value: string | number): number {
   return parseFloat(cleaned) || 0;
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// Função para processar o arquivo em background
+async function processSpreadsheet(fileName: string) {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('Starting background processing for:', fileName);
 
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
-
-    if (!file) {
-      throw new Error('No file provided');
-    }
-
-    console.log('Uploading file to storage:', file.name, 'Size:', file.size, 'bytes');
-
-    // Sanitizar nome do arquivo (remover caracteres especiais)
-    const sanitizedName = file.name
-      .replace(/[^\w.-]/g, '_') // Substituir caracteres especiais por _
-      .replace(/_{2,}/g, '_')    // Substituir múltiplos _ por um único
-      .toLowerCase();
-    
-    const fileName = `import-${Date.now()}-${sanitizedName}`;
-    const fileBuffer = await file.arrayBuffer();
-    
-    const { error: uploadError } = await supabase.storage
-      .from('csv-imports')
-      .upload(fileName, fileBuffer, {
-        contentType: file.type,
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw new Error(`Upload failed: ${uploadError.message}`);
-    }
-
-    console.log('File uploaded successfully, starting processing...');
-
-    // Segundo: baixar do storage e processar (storage tem melhor gestão de memória)
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('csv-imports')
       .download(fileName);
 
     if (downloadError) {
-      throw new Error(`Download failed: ${downloadError.message}`);
+      console.error('Download failed:', downloadError.message);
+      return;
     }
 
-    // Processar o arquivo baixado do storage
     const buffer = await fileData.arrayBuffer();
     const workbook = xlsx.read(new Uint8Array(buffer), {
       type: 'array',
       cellDates: true,
       cellNF: false,
       cellStyles: false,
+      sheetStubs: false,
     });
 
     const results = {
@@ -122,10 +95,9 @@ Deno.serve(async (req) => {
       const sheet = workbook.Sheets['Resultados Semanais'];
       const data = xlsx.utils.sheet_to_json(sheet, { raw: false, defval: null });
 
-      console.log(`Processing ${data.length} rows in batches of 10`);
+      console.log(`Processing ${data.length} rows in batches of 5`);
 
-      // Processar em batches de 10
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 5;
       
       for (let i = 0; i < data.length; i += BATCH_SIZE) {
         const batchData = data.slice(i, i + BATCH_SIZE);
@@ -224,18 +196,64 @@ Deno.serve(async (req) => {
     // Limpar arquivo do storage após processamento
     await supabase.storage.from('csv-imports').remove([fileName]);
 
-    console.log('Import complete:', results);
+    console.log('Background processing complete:', results);
+  } catch (error) {
+    console.error('Background processing error:', error);
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    console.log('Uploading file to storage:', file.name, 'Size:', file.size, 'bytes');
+
+    const sanitizedName = file.name
+      .replace(/[^\w.-]/g, '_')
+      .replace(/_{2,}/g, '_')
+      .toLowerCase();
+    
+    const fileName = `import-${Date.now()}-${sanitizedName}`;
+    const fileBuffer = await file.arrayBuffer();
+    
+    const { error: uploadError } = await supabase.storage
+      .from('csv-imports')
+      .upload(fileName, fileBuffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+
+    console.log('File uploaded successfully, starting background processing...');
+
+    // Processar em background
+    EdgeRuntime.waitUntil(processSpreadsheet(fileName));
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Importação concluída: ${results.metrics} registros`,
-        processed: results.metrics,
-        errors: results.errors.length > 0 ? results.errors : undefined,
+        message: 'Importação iniciada em background. Os dados serão processados em alguns minutos.',
+        status: 'processing',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
+        status: 202,
       }
     );
 
