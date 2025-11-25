@@ -62,10 +62,10 @@ export const useLatestMetrics = () => {
         .select('*')
         .order('start_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
-      return data as WeeklyMetric;
+      return data as WeeklyMetric | null;
     },
   });
 };
@@ -80,17 +80,20 @@ export const useMetricsSummary = () => {
         .select('*')
         .order('start_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       
       if (latestError) throw latestError;
+      
+      // Se não houver dados, retornar null
+      if (!latest) return null;
 
       // Buscar semana anterior para calcular variação
-      const { data: previous, error: previousError } = await supabase
+      const { data: previous } = await supabase
         .from('weekly_metrics')
         .select('*')
         .order('start_date', { ascending: false })
         .range(1, 1)
-        .single();
+        .maybeSingle();
 
       const calculateChange = (current: number, prev: number) => {
         if (!prev) return 0;

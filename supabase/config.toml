@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.import-weekly-metrics]
 verify_jwt = false
 
+[functions.import-excel-processor]
+verify_jwt = false
+
 [functions.clint-api]
 verify_jwt = false
 

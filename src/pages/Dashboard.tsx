@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MOCK_KPIS, MOCK_FUNIL_A010, MOCK_FUNIL_INSTAGRAM, MOCK_SEMANAS_DETALHADO, MOCK_ULTRAMETA } from "@/data/mockData";
 import { MOCK_EVOLUTION_DATA } from "@/data/evolutionMockData";
-import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle } from "lucide-react";
+import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle, AlertCircle } from "lucide-react";
 import { FunilLista } from "@/components/dashboard/FunilLista";
 import { ResumoFinanceiro } from "@/components/dashboard/ResumoFinanceiro";
 import { UltrametaCard } from "@/components/dashboard/UltrametaCard";
@@ -144,6 +145,20 @@ export default function Dashboard() {
         onClear={handleClearFilters}
         onExport={handleExport}
       />
+
+      {/* Alerta de dados vazios */}
+      {!loadingMetrics && !metricsSummary && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Nenhum dado encontrado. Por favor,{" "}
+            <a href="/dashboard/importar" className="font-semibold underline">
+              importe a planilha Excel
+            </a>{" "}
+            com os dados históricos para visualizar as métricas reais.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Seção de KPIs */}
       <div className="space-y-4">
