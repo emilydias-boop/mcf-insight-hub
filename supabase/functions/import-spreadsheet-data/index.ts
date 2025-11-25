@@ -71,50 +71,53 @@ Deno.serve(async (req) => {
       throw new Error('No file provided');
     }
 
-    console.log('Processing file:', file.name);
+    console.log('Processing file:', file.name, 'Size:', file.size);
 
-    // Ler arquivo Excel
+    // Ler arquivo com configuração otimizada para memória
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = xlsx.read(new Uint8Array(arrayBuffer));
+    const workbook = xlsx.read(new Uint8Array(arrayBuffer), {
+      type: 'array',
+      cellDates: true,
+      cellNF: false,
+      cellStyles: false,
+      sheetStubs: false,
+    });
+
+    // Liberar memória do arrayBuffer
+    arrayBuffer.constructor.prototype.slice = null;
 
     const results = {
       metrics: 0,
-      leads: 0,
-      goals: 0,
-      payments: 0,
       errors: [] as string[],
     };
 
     // Processar planilha de métricas
     if (workbook.SheetNames.includes('Resultados Semanais')) {
       const sheet = workbook.Sheets['Resultados Semanais'];
-      const data = xlsx.utils.sheet_to_json(sheet);
+      
+      // Converter para JSON com otimização
+      const data = xlsx.utils.sheet_to_json(sheet, {
+        raw: false,
+        defval: null,
+      });
 
-      console.log(`Found ${data.length} metric rows`);
+      console.log(`Found ${data.length} rows to process`);
 
-      // Processar em batches de 20 linhas para evitar memory limit
-      const BATCH_SIZE = 20;
-      const batches = [];
+      // Processar em batches MUITO pequenos de 5 linhas
+      const BATCH_SIZE = 5;
       
       for (let i = 0; i < data.length; i += BATCH_SIZE) {
-        batches.push(data.slice(i, i + BATCH_SIZE));
-      }
-
-      console.log(`Processing ${batches.length} batches of up to ${BATCH_SIZE} rows each`);
-
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
+        const batchData = data.slice(i, i + BATCH_SIZE);
         const metricsToInsert = [];
 
-        for (const row of batch) {
+        for (const row of batchData) {
           try {
             const rowData = row as any;
             
-            // Converter datas do Excel
+            // Converter datas
             const startDate = excelDateToJSDate(rowData['Data Inicio']);
             const endDate = excelDateToJSDate(rowData['Data Fim']);
 
-            // Gerar week_label
             const formatDate = (date: Date) => {
               const day = String(date.getDate()).padStart(2, '0');
               const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -124,47 +127,37 @@ Deno.serve(async (req) => {
 
             const week_label = `${formatDate(startDate)} - ${formatDate(endDate)}`;
 
-            // Preparar dados com mapeamento CORRETO das colunas da planilha
-            const metricsData = {
+            metricsToInsert.push({
               start_date: startDate.toISOString().split('T')[0],
               end_date: endDate.toISOString().split('T')[0],
               week_label,
-              // Custos
               ads_cost: parseBRCurrency(rowData['Custo Ads (MAKE)']),
               team_cost: parseBRCurrency(rowData['Custo Equipe (PLANILHA MANUAL)']),
               office_cost: parseBRCurrency(rowData['Custo Escritório (PLANILHA MANUAL)']),
-              // A010
               a010_revenue: parseBRCurrency(rowData['Faturado Curso A010']),
               a010_sales: parseInt(rowData['Vendas A010']) || 0,
               sdr_ia_ig: parseInt(rowData['SDR IA+IG']) || 0,
-              // Order Bumps
               ob_construir_revenue: parseBRCurrency(rowData['Faturado Order Bump Construir Para Alugar']),
               ob_construir_sales: parseInt(rowData['Vendas OB Construir Para alugar']) || 0,
               ob_vitalicio_revenue: parseBRCurrency(rowData['Faturado Order Bump Acesso Vitalício']),
               ob_vitalicio_sales: parseInt(rowData['Vendas Acesso Vitalício']) || 0,
               ob_evento_revenue: parseBRCurrency(rowData['Valor Vendido OB Evento']),
               ob_evento_sales: parseInt(rowData['Vendas OB Evento']) || 0,
-              // Contrato
               contract_revenue: parseBRCurrency(rowData['Faturado Contrato']),
               contract_sales: parseInt(rowData['Vendas Contrato']) || 0,
-              // Clint e Incorporador
               clint_revenue: parseBRCurrency(rowData['Faturamento Clint']),
               incorporador_50k: parseBRCurrency(rowData['Faturamento Incorporador 50k']),
-              // Ultrametas
               ultrameta_clint: parseBRCurrency(rowData['Ultrameta Clint']),
               ultrameta_liquido: parseBRCurrency(rowData['Ultra Meta Líquido']),
-              // Campos calculados da planilha
               total_revenue: parseBRCurrency(rowData['Faturamento Total']),
               operating_cost: parseBRCurrency(rowData['Custo Total']),
               operating_profit: parseBRCurrency(rowData['Lucro Operacional']),
               real_cost: parseBRCurrency(rowData['Custo Real Por Semana (ADS - (A010+BIM))']),
-              // Métricas calculadas
               roi: parsePercent(rowData['ROI']),
               roas: parseFloat(rowData['ROAS']) || 0,
               cpl: parseBRCurrency(rowData['CPL']),
               cplr: parseBRCurrency(rowData['CPLR']),
               cir: parsePercent(rowData['CIR']),
-              // Funil - Etapas com nomes CORRETOS da planilha
               stage_01_target: parseInt(rowData['Meta Etapa 01']) || 0,
               stage_01_actual: parseInt(rowData['Etapa 01 - Novo Lead']) || 0,
               stage_01_rate: 0,
@@ -189,16 +182,14 @@ Deno.serve(async (req) => {
               stage_08_target: 0,
               stage_08_actual: parseInt(rowData['Etapa 08 - Venda Realizada']) || 0,
               stage_08_rate: parsePercent(rowData['%Etapa 08']),
-            };
-
-            metricsToInsert.push(metricsData);
+            });
           } catch (error) {
-            console.error('Error processing metric row:', error);
-            results.errors.push(`Metric row error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error('Error processing row:', error);
+            results.errors.push(`Row error: ${error instanceof Error ? error.message : 'Unknown'}`);
           }
         }
 
-        // Inserir batch de uma vez
+        // Inserir batch
         if (metricsToInsert.length > 0) {
           const { error } = await supabase
             .from('weekly_metrics')
@@ -207,18 +198,18 @@ Deno.serve(async (req) => {
             });
 
           if (error) {
-            console.error(`Error inserting batch ${batchIndex + 1}:`, error);
-            results.errors.push(`Batch ${batchIndex + 1} error: ${error.message}`);
+            console.error(`Batch error:`, error);
+            results.errors.push(`Batch error: ${error.message}`);
           } else {
             results.metrics += metricsToInsert.length;
-            console.log(`✅ Batch ${batchIndex + 1}/${batches.length} inserted: ${metricsToInsert.length} rows`);
+            console.log(`✅ Processed ${results.metrics}/${data.length} rows`);
           }
         }
+
+        // Limpar memória após cada batch
+        metricsToInsert.length = 0;
       }
     }
-
-    // Processar outras abas conforme necessário
-    // (leads, metas incorporador, consórcios, etc.)
 
     console.log('Import complete:', results);
 
