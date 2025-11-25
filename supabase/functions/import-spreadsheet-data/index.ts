@@ -86,8 +86,8 @@ Deno.serve(async (req) => {
     };
 
     // Processar planilha de métricas
-    if (workbook.SheetNames.includes('Métricas')) {
-      const sheet = workbook.Sheets['Métricas'];
+    if (workbook.SheetNames.includes('Resultados Semanais')) {
+      const sheet = workbook.Sheets['Resultados Semanais'];
       const data = xlsx.utils.sheet_to_json(sheet);
 
       console.log(`Found ${data.length} metric rows`);
