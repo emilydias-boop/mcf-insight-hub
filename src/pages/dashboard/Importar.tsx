@@ -20,6 +20,7 @@ export default function Importar() {
     message: string;
     details?: any;
   } | null>(null);
+  const [sheetsFound, setSheetsFound] = useState<string[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -82,15 +83,56 @@ export default function Importar() {
         ) || 0;
       };
 
-      // Parse data DD/MM/YYYY para YYYY-MM-DD
+      // Parse data DD/MM/YYYY para YYYY-MM-DD ou Excel serial
       const parseDate = (dateStr: any) => {
         if (!dateStr) return null;
+        
+        // Se for número, é data serial do Excel
+        if (typeof dateStr === 'number') {
+          const excelEpoch = new Date(1899, 11, 30);
+          const excelDate = new Date(excelEpoch.getTime() + dateStr * 86400000);
+          const year = excelDate.getFullYear();
+          const month = String(excelDate.getMonth() + 1).padStart(2, '0');
+          const day = String(excelDate.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+        
+        // Se for string DD/MM/YYYY
         const [day, month, year] = String(dateStr).split('/');
         if (!day || !month || !year) return null;
         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
       };
 
       console.log('Abas encontradas:', workbook.SheetNames);
+      setSheetsFound(workbook.SheetNames);
+
+      // Função para verificar se uma aba é de resultados semanais pelo nome
+      const isResultadosSemanaisByName = (name: string) => {
+        const normalized = name.toLowerCase().replace(/\s+/g, '');
+        return (
+          normalized.includes('resultado') && normalized.includes('semana') ||
+          normalized.includes('resultadossemanais') ||
+          name.toLowerCase().includes('resultados semanais') ||
+          name.toLowerCase().includes('resultados_semanais')
+        );
+      };
+
+      // Função para verificar se uma aba tem as colunas de métricas
+      const hasMetricsColumns = (data: any[]) => {
+        if (!data || data.length === 0) return false;
+        const firstRow = data[0];
+        const keys = Object.keys(firstRow).map(k => k.toLowerCase());
+        
+        // Verificar colunas obrigatórias
+        const hasDataInicio = keys.some(k => k.includes('data') && k.includes('inicio'));
+        const hasDataFim = keys.some(k => k.includes('data') && k.includes('fim'));
+        const hasCustoAds = keys.some(k => k.includes('custo') && k.includes('ads'));
+        const hasFaturadoA010 = keys.some(k => k.includes('faturado') && k.includes('a010'));
+        
+        return hasDataInicio && hasDataFim && (hasCustoAds || hasFaturadoA010);
+      };
+
+      let metricsSheetFound = false;
 
       // Processar cada aba
       for (const sheetName of workbook.SheetNames) {
@@ -98,9 +140,11 @@ export default function Importar() {
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet);
         
-        // Procurar especificamente pela aba "Resultados Semanais"
-        if (sheetName.toLowerCase().includes('resultados semanais') || 
-            sheetName.toLowerCase().includes('resultados_semanais')) {
+        // Verificar se é aba de métricas (por nome OU por colunas)
+        const isMetricsSheet = isResultadosSemanaisByName(sheetName) || hasMetricsColumns(data);
+        
+        if (isMetricsSheet) {
+          metricsSheetFound = true;
           
           console.log(`✓ Aba de métricas encontrada: ${sheetName}`);
           console.log(`  Total de linhas: ${data.length}`);
@@ -211,7 +255,12 @@ export default function Importar() {
       setProgress(60);
 
       if (metrics.length === 0) {
-        throw new Error('Nenhuma métrica encontrada no arquivo');
+        if (!metricsSheetFound) {
+          throw new Error(
+            `Aba "Resultados Semanais" não encontrada. Abas disponíveis: ${workbook.SheetNames.join(', ')}`
+          );
+        }
+        throw new Error('Nenhuma métrica válida encontrada na aba (verifique se as colunas Data Inicio e Data Fim estão presentes)');
       }
 
       // Enviar para edge function
@@ -302,6 +351,20 @@ export default function Importar() {
             >
               {uploading ? "Processando..." : "Importar Dados"}
             </Button>
+
+            {sheetsFound.length > 0 && (
+              <Alert>
+                <FileSpreadsheet className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="font-semibold mb-1">Abas encontradas no arquivo:</p>
+                  <ul className="text-xs space-y-0.5">
+                    {sheetsFound.map((sheet, idx) => (
+                      <li key={idx}>• {sheet}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {result && (
               <Alert variant={result.success ? "default" : "destructive"}>
