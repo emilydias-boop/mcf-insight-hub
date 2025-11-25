@@ -2,25 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { EvolutionData } from '@/types/dashboard';
 
-export const useEvolutionData = (limit: number = 12, startDate?: Date, endDate?: Date, canal?: string) => {
+export const useEvolutionData = (canal?: string, limit: number = 52) => {
   return useQuery({
-    queryKey: ['evolution-data', limit, startDate?.toISOString(), endDate?.toISOString(), canal],
+    queryKey: ['evolution-data', canal, limit],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from('weekly_metrics')
         .select('*')
-        .order('start_date', { ascending: true });
-      
-      if (startDate) {
-        query = query.gte('start_date', startDate.toISOString().split('T')[0]);
-      }
-      if (endDate) {
-        query = query.lte('end_date', endDate.toISOString().split('T')[0]);
-      }
-      
-      query = query.limit(limit);
-      
-      const { data, error } = await query;
+        .order('start_date', { ascending: false })
+        .limit(limit);
       
       if (error) throw error;
 
