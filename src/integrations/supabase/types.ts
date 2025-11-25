@@ -319,6 +319,42 @@ export type Database = {
         }
         Relationships: []
       }
+      consortium_payments: {
+        Row: {
+          consorciado: string
+          contrato: string | null
+          created_at: string | null
+          data_interface: string | null
+          id: string
+          parcela: number | null
+          status: string | null
+          updated_at: string | null
+          valor_comissao: number | null
+        }
+        Insert: {
+          consorciado: string
+          contrato?: string | null
+          created_at?: string | null
+          data_interface?: string | null
+          id?: string
+          parcela?: number | null
+          status?: string | null
+          updated_at?: string | null
+          valor_comissao?: number | null
+        }
+        Update: {
+          consorciado?: string
+          contrato?: string | null
+          created_at?: string | null
+          data_interface?: string | null
+          id?: string
+          parcela?: number | null
+          status?: string | null
+          updated_at?: string | null
+          valor_comissao?: number | null
+        }
+        Relationships: []
+      }
       credit_clients: {
         Row: {
           cpf: string
@@ -956,6 +992,39 @@ export type Database = {
         }
         Relationships: []
       }
+      incorporator_goals: {
+        Row: {
+          created_at: string | null
+          efeito_alavanca: number | null
+          id: string
+          meta: number | null
+          month: string
+          resultado: number | null
+          supermeta: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          efeito_alavanca?: number | null
+          id?: string
+          meta?: number | null
+          month: string
+          resultado?: number | null
+          supermeta?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          efeito_alavanca?: number | null
+          id?: string
+          meta?: number | null
+          month?: string
+          resultado?: number | null
+          supermeta?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       integrations: {
         Row: {
           config: Json | null
@@ -988,6 +1057,118 @@ export type Database = {
           last_sync?: string | null
           name?: string
           type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      lead_assignments: {
+        Row: {
+          assigned_date: string
+          created_at: string | null
+          id: string
+          lead_id: string | null
+          sdr_name: string
+        }
+        Insert: {
+          assigned_date: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string | null
+          sdr_name: string
+        }
+        Update: {
+          assigned_date?: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string | null
+          sdr_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_assignments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_tracking: {
+        Row: {
+          closer: string | null
+          created_at: string | null
+          dias_compra: number | null
+          id: string
+          lead_id: string | null
+          perfil: string | null
+          produto_final: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          closer?: string | null
+          created_at?: string | null
+          dias_compra?: number | null
+          id?: string
+          lead_id?: string | null
+          perfil?: string | null
+          produto_final?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          closer?: string | null
+          created_at?: string | null
+          dias_compra?: number | null
+          id?: string
+          lead_id?: string | null
+          perfil?: string | null
+          produto_final?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_tracking_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          lead_date: string
+          name: string
+          origin: string | null
+          phone: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          lead_date: string
+          name: string
+          origin?: string | null
+          phone?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          lead_date?: string
+          name?: string
+          origin?: string | null
+          phone?: string | null
+          status?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1576,6 +1757,7 @@ export type Database = {
           ob_vitalicio_revenue: number | null
           ob_vitalicio_sales: number | null
           office_cost: number | null
+          operating_cost: number | null
           operating_profit: number | null
           real_cost: number | null
           roas: number | null
@@ -1635,6 +1817,7 @@ export type Database = {
           ob_vitalicio_revenue?: number | null
           ob_vitalicio_sales?: number | null
           office_cost?: number | null
+          operating_cost?: number | null
           operating_profit?: number | null
           real_cost?: number | null
           roas?: number | null
@@ -1694,6 +1877,7 @@ export type Database = {
           ob_vitalicio_revenue?: number | null
           ob_vitalicio_sales?: number | null
           office_cost?: number | null
+          operating_cost?: number | null
           operating_profit?: number | null
           real_cost?: number | null
           roas?: number | null

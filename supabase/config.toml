@@ -38,3 +38,12 @@ verify_jwt = false
 
 [functions.clint-webhook-handler]
 verify_jwt = false
+
+[functions.webhook-metrics-receiver]
+verify_jwt = false
+
+[functions.recalculate-metrics]
+verify_jwt = false
+
+[functions.import-spreadsheet-data]
+verify_jwt = false
