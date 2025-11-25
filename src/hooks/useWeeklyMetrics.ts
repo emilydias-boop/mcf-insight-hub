@@ -192,3 +192,35 @@ export const useMetricsSummary = () => {
     },
   });
 };
+
+// Hook para buscar resumo semanal para o componente ResumoFinanceiro
+export const useWeeklyResumo = (limit: number = 5) => {
+  return useQuery({
+    queryKey: ['weekly-resumo', limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('weekly_metrics')
+        .select('*')
+        .order('start_date', { ascending: false })
+        .limit(limit);
+      
+      if (error) throw error;
+
+      // Mapear para o formato SemanaMes
+      return data.map((week) => ({
+        dataInicio: new Date(week.start_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        dataFim: new Date(week.end_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        faturamentoA010: week.a010_revenue || 0,
+        vendasA010: week.a010_sales || 0,
+        valorVendidoOBEvento: week.ob_evento_revenue || 0,
+        vendasOBEvento: week.ob_evento_sales || 0,
+        faturamentoContrato: week.contract_revenue || 0,
+        vendasContratos: week.contract_sales || 0,
+        faturamentoOBConstruir: week.ob_construir_revenue || 0,
+        vendasOBConstruir: week.ob_construir_sales || 0,
+        faturamentoOBVitalicio: week.ob_vitalicio_revenue || 0,
+        vendasOBVitalicio: week.ob_vitalicio_sales || 0,
+      }));
+    },
+  });
+};

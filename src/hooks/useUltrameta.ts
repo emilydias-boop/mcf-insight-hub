@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface Ultrameta {
   ultrametaClint: number;
   faturamentoIncorporador50k: number;
-  faturamentoClint: number;
+  faturamentoClintBruto: number;
   ultrametaLiquido: number;
 }
 
@@ -25,7 +25,7 @@ export const useUltrameta = () => {
       return {
         ultrametaClint: data.ultrameta_clint || 0,
         faturamentoIncorporador50k: data.incorporador_50k || 0,
-        faturamentoClint: data.clint_revenue || 0,
+        faturamentoClintBruto: data.clint_revenue || 0,
         ultrametaLiquido: data.ultrameta_liquido || 0,
       } as Ultrameta;
     },

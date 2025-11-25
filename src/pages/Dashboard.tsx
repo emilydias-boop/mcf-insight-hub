@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MOCK_KPIS, MOCK_FUNIL_A010, MOCK_FUNIL_INSTAGRAM, MOCK_SEMANAS_DETALHADO, MOCK_ULTRAMETA } from "@/data/mockData";
-import { MOCK_EVOLUTION_DATA } from "@/data/evolutionMockData";
+import { MOCK_KPIS } from "@/data/mockData";
 import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle } from "lucide-react";
 import { FunilLista } from "@/components/dashboard/FunilLista";
 import { ResumoFinanceiro } from "@/components/dashboard/ResumoFinanceiro";
@@ -16,9 +15,10 @@ import { useToast } from "@/hooks/use-toast";
 import { startOfMonth, endOfMonth } from "date-fns";
 import { useMetricsSummary } from "@/hooks/useWeeklyMetrics";
 import { useHublaSummary } from "@/hooks/useHublaTransactions";
-import { useA010Funnel } from "@/hooks/useFunnelData";
+import { useA010Funnel, useInstagramFunnel } from "@/hooks/useFunnelData";
 import { useUltrameta } from "@/hooks/useUltrameta";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
+import { useWeeklyResumo } from "@/hooks/useWeeklyMetrics";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
 import { ImportMetricsDialog } from "@/components/dashboard/ImportMetricsDialog";
 
@@ -44,6 +44,11 @@ export default function Dashboard() {
   
   const { data: metricsSummary, isLoading: loadingMetrics } = useMetricsSummary();
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
+  const { data: evolutionData, isLoading: loadingEvolution } = useEvolutionData(52);
+  const { data: a010Funnel, isLoading: loadingA010 } = useA010Funnel();
+  const { data: instagramFunnel, isLoading: loadingInstagram } = useInstagramFunnel();
+  const { data: ultrameta, isLoading: loadingUltrameta } = useUltrameta();
+  const { data: weeklyResumo, isLoading: loadingResumo } = useWeeklyResumo(5);
 
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
     setPeriodo(filters.periodo);
@@ -68,13 +73,30 @@ export default function Dashboard() {
   };
 
   const handleExport = () => {
+    const kpiData = metricsSummary ? [
+      {
+        id: '1',
+        title: 'Faturamento',
+        value: formatCurrency(metricsSummary.revenue.value),
+        change: metricsSummary.revenue.change,
+        variant: metricsSummary.revenue.change >= 0 ? 'success' : 'danger',
+      },
+      {
+        id: '2',
+        title: 'Vendas',
+        value: formatNumber(metricsSummary.sales.value),
+        change: metricsSummary.sales.change,
+        variant: metricsSummary.sales.change >= 0 ? 'success' : 'danger',
+      },
+    ] : MOCK_KPIS;
+
     exportDashboardData({
-      kpis: MOCK_KPIS,
+      kpis: kpiData,
       funis: [
-        { titulo: 'Funil A010', etapas: MOCK_FUNIL_A010 },
-        { titulo: 'Funil Instagram', etapas: MOCK_FUNIL_INSTAGRAM }
+        { titulo: 'Funil A010', etapas: a010Funnel || [] },
+        { titulo: 'Funil Instagram', etapas: instagramFunnel || [] }
       ],
-      semanas: MOCK_SEMANAS_DETALHADO,
+      semanas: weeklyResumo || [],
       periodo,
       canal,
     });
@@ -180,7 +202,11 @@ export default function Dashboard() {
               );
             })
           )}
-          <UltrametaCard data={MOCK_ULTRAMETA} />
+          {loadingUltrameta ? (
+            <div className="h-full bg-card animate-pulse rounded-lg border border-border" />
+          ) : ultrameta ? (
+            <UltrametaCard data={ultrameta} />
+          ) : null}
         </div>
 
         {/* KPIs Secundários */}
@@ -210,7 +236,17 @@ export default function Dashboard() {
       </div>
 
       {/* Gráfico de Evolução Temporal */}
-      <TrendChart data={MOCK_EVOLUTION_DATA} />
+      {loadingEvolution ? (
+        <div className="h-96 bg-card animate-pulse rounded-lg border border-border" />
+      ) : evolutionData && evolutionData.length > 0 ? (
+        <TrendChart data={evolutionData} />
+      ) : (
+        <Card className="bg-card border-border">
+          <CardContent className="p-6 text-center text-muted-foreground">
+            Nenhum dado de evolução disponível
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-card border-border">
@@ -218,7 +254,13 @@ export default function Dashboard() {
             <CardTitle className="text-foreground">Funil A010</CardTitle>
           </CardHeader>
           <CardContent>
-            <FunilLista titulo="Funil A010" etapas={MOCK_FUNIL_A010} />
+            {loadingA010 ? (
+              <div className="h-64 bg-muted animate-pulse rounded" />
+            ) : a010Funnel && a010Funnel.length > 0 ? (
+              <FunilLista titulo="Funil A010" etapas={a010Funnel} />
+            ) : (
+              <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
+            )}
           </CardContent>
         </Card>
 
@@ -227,12 +269,28 @@ export default function Dashboard() {
             <CardTitle className="text-foreground">Funil Instagram</CardTitle>
           </CardHeader>
           <CardContent>
-            <FunilLista titulo="Funil Instagram" etapas={MOCK_FUNIL_INSTAGRAM} />
+            {loadingInstagram ? (
+              <div className="h-64 bg-muted animate-pulse rounded" />
+            ) : instagramFunnel && instagramFunnel.length > 0 ? (
+              <FunilLista titulo="Funil Instagram" etapas={instagramFunnel} />
+            ) : (
+              <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      <ResumoFinanceiro dados={MOCK_SEMANAS_DETALHADO} />
+      {loadingResumo ? (
+        <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
+      ) : weeklyResumo && weeklyResumo.length > 0 ? (
+        <ResumoFinanceiro dados={weeklyResumo} />
+      ) : (
+        <Card className="bg-card border-border">
+          <CardContent className="p-6 text-center text-muted-foreground">
+            Nenhum dado de resumo disponível
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
