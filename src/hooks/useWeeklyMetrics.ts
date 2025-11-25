@@ -11,9 +11,9 @@ export interface WeeklyMetric {
   ads_cost: number;
   team_cost: number;
   office_cost: number;
-  total_cost: number;
-  operating_cost: number;
-  real_cost: number;
+  total_cost?: number; // deprecated
+  operating_cost: number | null;
+  real_cost: number | null;
   
   // Vendas
   a010_revenue: number;
@@ -30,48 +30,48 @@ export interface WeeklyMetric {
   incorporador_50k: number;
   
   // Totais calculados
-  total_revenue: number;
-  operating_profit: number;
+  total_revenue: number | null;
+  operating_profit: number | null;
   
   // Métricas
-  roi: number;
-  roas: number;
-  cpl: number;
-  cplr: number;
-  cir: number;
+  roi: number | null;
+  roas: number | null;
+  cpl: number | null;
+  cplr: number | null;
+  cir: number | null;
   
   // Ultrametas
-  ultrameta_clint: number;
-  ultrameta_liquido: number;
+  ultrameta_clint: number | null;
+  ultrameta_liquido: number | null;
   
   // SDR
   sdr_ia_ig: number;
   
   // Funil
-  stage_01_target: number;
-  stage_01_actual: number;
-  stage_01_rate: number;
-  stage_02_target: number;
-  stage_02_actual: number;
-  stage_02_rate: number;
-  stage_03_target: number;
-  stage_03_actual: number;
-  stage_03_rate: number;
-  stage_04_target: number;
-  stage_04_actual: number;
-  stage_04_rate: number;
-  stage_05_target: number;
-  stage_05_actual: number;
-  stage_05_rate: number;
-  stage_06_target: number;
-  stage_06_actual: number;
-  stage_06_rate: number;
-  stage_07_target: number;
-  stage_07_actual: number;
-  stage_07_rate: number;
-  stage_08_target: number;
-  stage_08_actual: number;
-  stage_08_rate: number;
+  stage_01_target: number | null;
+  stage_01_actual: number | null;
+  stage_01_rate: number | null;
+  stage_02_target: number | null;
+  stage_02_actual: number | null;
+  stage_02_rate: number | null;
+  stage_03_target: number | null;
+  stage_03_actual: number | null;
+  stage_03_rate: number | null;
+  stage_04_target: number | null;
+  stage_04_actual: number | null;
+  stage_04_rate: number | null;
+  stage_05_target: number | null;
+  stage_05_actual: number | null;
+  stage_05_rate: number | null;
+  stage_06_target: number | null;
+  stage_06_actual: number | null;
+  stage_06_rate: number | null;
+  stage_07_target: number | null;
+  stage_07_actual: number | null;
+  stage_07_rate: number | null;
+  stage_08_target: number | null;
+  stage_08_actual: number | null;
+  stage_08_rate: number | null;
 }
 
 export const useWeeklyMetrics = (limit: number = 12) => {

@@ -46,46 +46,72 @@ Deno.serve(async (req) => {
 
         const week_label = `${formatDate(startDate)} - ${formatDate(endDate)}`;
 
+        // Calcular valores totais
+        const total_revenue = 
+          (metric.a010_revenue || 0) + 
+          (metric.ob_construir_revenue || 0) + 
+          (metric.ob_vitalicio_revenue || 0) + 
+          (metric.ob_evento_revenue || 0) + 
+          (metric.contract_revenue || 0);
+
+        const operating_cost = 
+          (metric.ads_cost || 0) + 
+          (metric.team_cost || 0) + 
+          (metric.office_cost || 0);
+
+        const real_cost = 
+          (metric.ads_cost || 0) - 
+          ((metric.a010_revenue || 0) + 
+           (metric.ob_construir_revenue || 0) + 
+           (metric.ob_vitalicio_revenue || 0) + 
+           (metric.ob_evento_revenue || 0));
+
+        const operating_profit = total_revenue - operating_cost;
+
         // Calcular CPL
         const cpl = metric.a010_sales > 0 
-          ? metric.ads_cost / metric.a010_sales 
+          ? (metric.ads_cost || 0) / metric.a010_sales 
           : null;
 
-        // Calcular CPLR (usando real_cost que já é calculado automaticamente)
-        const cplr = metric.a010_sales > 0 && metric.real_cost
-          ? metric.real_cost / metric.a010_sales
+        // Calcular CPLR
+        const cplr = metric.a010_sales > 0
+          ? real_cost / metric.a010_sales
           : null;
 
-        // Calcular ROAS (usando total_revenue que já é calculado automaticamente)
-        const roas = metric.ads_cost > 0 && metric.total_revenue
-          ? metric.total_revenue / metric.ads_cost
+        // Calcular ROAS
+        const roas = (metric.ads_cost || 0) > 0
+          ? total_revenue / (metric.ads_cost || 0)
           : null;
 
         // Calcular ROI
-        const roi = metric.clint_revenue && metric.operating_profit
-          ? (metric.clint_revenue / (metric.clint_revenue - metric.operating_profit)) * 100
+        const roi = metric.clint_revenue && operating_profit
+          ? (metric.clint_revenue / (metric.clint_revenue - operating_profit)) * 100
           : null;
 
         // Calcular CIR
-        const cir = metric.contract_revenue > 0 && metric.real_cost
-          ? (metric.real_cost / metric.contract_revenue) * 100
+        const cir = (metric.contract_revenue || 0) > 0
+          ? (real_cost / (metric.contract_revenue || 0)) * 100
           : null;
 
         // Calcular Ultrameta Clint
-        const ultrameta_clint = metric.a010_sales && metric.operating_cost
-          ? (metric.a010_sales * metric.operating_cost) + ((metric.sdr_ia_ig || 0) * metric.operating_cost / 2)
-          : null;
+        const ultrameta_clint = 
+          ((metric.a010_sales || 0) * operating_cost) + 
+          ((metric.sdr_ia_ig || 0) * operating_cost / 2);
 
         // Calcular Ultrameta Líquido
-        const ultrameta_liquido = metric.a010_sales && metric.total_revenue
-          ? (metric.total_revenue * metric.a010_sales) + ((metric.sdr_ia_ig || 0) * metric.total_revenue / 2)
-          : null;
+        const ultrameta_liquido = 
+          (total_revenue * (metric.a010_sales || 0)) + 
+          ((metric.sdr_ia_ig || 0) * total_revenue / 2);
 
         // Atualizar o registro com novos cálculos
         const { error: updateError } = await supabase
           .from('weekly_metrics')
           .update({
             week_label,
+            total_revenue,
+            operating_cost,
+            real_cost,
+            operating_profit,
             cpl,
             cplr,
             roas,
