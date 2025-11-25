@@ -13,7 +13,7 @@ export function ResumoFinanceiro({ dados }: ResumoFinanceiroProps) {
   const [modo, setModo] = useState<'semanas' | 'mes'>('semanas');
 
   const calcularTotal = (campo: keyof Omit<SemanaMes, 'dataInicio' | 'dataFim'>) => {
-    return dados.reduce((acc, item) => acc + (item[campo] || 0), 0);
+    return dados.reduce((acc, item) => acc + item[campo], 0);
   };
 
   const dadosMes = modo === 'mes' ? [{
@@ -29,11 +29,6 @@ export function ResumoFinanceiro({ dados }: ResumoFinanceiroProps) {
     vendasOBConstruir: calcularTotal('vendasOBConstruir'),
     faturamentoOBVitalicio: calcularTotal('faturamentoOBVitalicio'),
     vendasOBVitalicio: calcularTotal('vendasOBVitalicio'),
-    totalRevenue: calcularTotal('totalRevenue'),
-    totalCost: calcularTotal('totalCost'),
-    operatingProfit: calcularTotal('operatingProfit'),
-    realCost: calcularTotal('realCost'),
-    cir: calcularTotal('cir') / dados.length, // Média do CIR
   }] : dados;
 
   return (
@@ -41,7 +36,7 @@ export function ResumoFinanceiro({ dados }: ResumoFinanceiroProps) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-foreground">
-            Resumo Financeiro - {modo === 'semanas' ? 'Semanas' : 'Mês'}
+            {modo === 'semanas' ? 'Semanas' : 'Mês'} (A010 + Contratos + Custos)
           </CardTitle>
           <div className="flex gap-2">
             <Button
@@ -66,23 +61,35 @@ export function ResumoFinanceiro({ dados }: ResumoFinanceiroProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Período</TableHead>
-                <TableHead className="text-right">Receita Total</TableHead>
-                <TableHead className="text-right">Custo Total</TableHead>
-                <TableHead className="text-right">Lucro Operacional</TableHead>
-                <TableHead className="text-right">Custo Real</TableHead>
-                <TableHead className="text-right">CIR %</TableHead>
+                <TableHead>Data Início</TableHead>
+                <TableHead>Data Fim</TableHead>
+                <TableHead className="text-right">Faturamento A010</TableHead>
+                <TableHead className="text-right">Vendas A010</TableHead>
+                <TableHead className="text-right">Valor OB Evento</TableHead>
+                <TableHead className="text-right">Vendas OB Evento</TableHead>
+                <TableHead className="text-right">Faturamento Contrato</TableHead>
+                <TableHead className="text-right">Vendas Contratos</TableHead>
+                <TableHead className="text-right">Faturamento OB Construir</TableHead>
+                <TableHead className="text-right">Vendas OB Construir</TableHead>
+                <TableHead className="text-right">Faturamento OB Vitalício</TableHead>
+                <TableHead className="text-right">Vendas OB Vitalício</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {dadosMes.map((item, idx) => (
                 <TableRow key={idx}>
-                  <TableCell className="font-medium">{item.dataInicio} - {item.dataFim}</TableCell>
-                  <TableCell className="text-right font-semibold text-success">{formatCurrency(item.totalRevenue || 0)}</TableCell>
-                  <TableCell className="text-right font-semibold text-destructive">{formatCurrency(item.totalCost || 0)}</TableCell>
-                  <TableCell className="text-right font-bold text-foreground">{formatCurrency(item.operatingProfit || 0)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.realCost || 0)}</TableCell>
-                  <TableCell className="text-right">{(item.cir || 0).toFixed(2)}%</TableCell>
+                  <TableCell className="font-medium">{item.dataInicio}</TableCell>
+                  <TableCell className="font-medium">{item.dataFim}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.faturamentoA010)}</TableCell>
+                  <TableCell className="text-right">{item.vendasA010}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.valorVendidoOBEvento)}</TableCell>
+                  <TableCell className="text-right">{item.vendasOBEvento}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.faturamentoContrato)}</TableCell>
+                  <TableCell className="text-right">{item.vendasContratos}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.faturamentoOBConstruir)}</TableCell>
+                  <TableCell className="text-right">{item.vendasOBConstruir}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.faturamentoOBVitalicio)}</TableCell>
+                  <TableCell className="text-right">{item.vendasOBVitalicio}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

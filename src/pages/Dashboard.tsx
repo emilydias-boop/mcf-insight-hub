@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle, AlertCircle } from "lucide-react";
+import { MOCK_KPIS, MOCK_FUNIL_A010, MOCK_FUNIL_INSTAGRAM, MOCK_SEMANAS_DETALHADO, MOCK_ULTRAMETA } from "@/data/mockData";
+import { MOCK_EVOLUTION_DATA } from "@/data/evolutionMockData";
+import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle } from "lucide-react";
 import { FunilLista } from "@/components/dashboard/FunilLista";
 import { ResumoFinanceiro } from "@/components/dashboard/ResumoFinanceiro";
 import { UltrametaCard } from "@/components/dashboard/UltrametaCard";
@@ -13,7 +14,7 @@ import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer"
 import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { startOfMonth, endOfMonth } from "date-fns";
-import { useMetricsSummary, useEvolutionData, useFunnelData, useFinancialSummary } from "@/hooks/useWeeklyMetrics";
+import { useMetricsSummary } from "@/hooks/useWeeklyMetrics";
 import { useHublaSummary } from "@/hooks/useHublaTransactions";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
 
@@ -37,10 +38,7 @@ export default function Dashboard() {
   });
   const [canal, setCanal] = useState('todos');
   
-  const { data: metricsSummary, isLoading: loadingMetrics } = useMetricsSummary(periodo.inicio, periodo.fim);
-  const { data: evolutionData, isLoading: loadingEvolution } = useEvolutionData(52);
-  const { data: funnelData, isLoading: loadingFunnel } = useFunnelData(periodo.inicio, periodo.fim);
-  const { data: financialData, isLoading: loadingFinancial } = useFinancialSummary(periodo.inicio, periodo.fim);
+  const { data: metricsSummary, isLoading: loadingMetrics } = useMetricsSummary();
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
 
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
@@ -66,6 +64,16 @@ export default function Dashboard() {
   };
 
   const handleExport = () => {
+    exportDashboardData({
+      kpis: MOCK_KPIS,
+      funis: [
+        { titulo: 'Funil A010', etapas: MOCK_FUNIL_A010 },
+        { titulo: 'Funil Instagram', etapas: MOCK_FUNIL_INSTAGRAM }
+      ],
+      semanas: MOCK_SEMANAS_DETALHADO,
+      periodo,
+      canal,
+    });
     toast({
       title: "Dados exportados",
       description: "O arquivo CSV foi baixado com sucesso.",
@@ -116,7 +124,7 @@ export default function Dashboard() {
       change: metricsSummary.leads.change,
       variant: metricsSummary.leads.change >= 0 ? 'success' : 'danger',
     },
-  ] : [];
+  ] : MOCK_KPIS;
 
   return (
     <div className="space-y-6">
@@ -136,20 +144,6 @@ export default function Dashboard() {
         onClear={handleClearFilters}
         onExport={handleExport}
       />
-
-      {/* Alerta de dados vazios */}
-      {!loadingMetrics && !metricsSummary && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Nenhum dado encontrado. Por favor,{" "}
-            <a href="/dashboard/importar" className="font-semibold underline">
-              importe a planilha Excel
-            </a>{" "}
-            com os dados históricos para visualizar as métricas reais.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Seção de KPIs */}
       <div className="space-y-4">
@@ -176,14 +170,7 @@ export default function Dashboard() {
               );
             })
           )}
-          {metricsSummary?.ultrameta && (
-            <UltrametaCard data={{
-              ultrametaClint: metricsSummary.ultrameta.ultrameta_clint || 0,
-              faturamentoIncorporador50k: metricsSummary.ultrameta.incorporador_50k || 0,
-              faturamentoClintBruto: metricsSummary.ultrameta.clint_revenue || 0,
-              ultrametaLiquido: metricsSummary.ultrameta.ultrameta_liquido || 0,
-            }} />
-          )}
+          <UltrametaCard data={MOCK_ULTRAMETA} />
         </div>
 
         {/* KPIs Secundários */}
@@ -213,55 +200,29 @@ export default function Dashboard() {
       </div>
 
       {/* Gráfico de Evolução Temporal */}
-      {evolutionData && evolutionData.length > 0 && (
-        <TrendChart data={evolutionData} />
-      )}
+      <TrendChart data={MOCK_EVOLUTION_DATA} />
 
-      {funnelData && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-foreground">Funil Completo - Etapas 01, 03-08</CardTitle>
+            <CardTitle className="text-foreground">Funil A010</CardTitle>
           </CardHeader>
           <CardContent>
-            <FunilLista 
-              titulo="" 
-              etapas={[
-                { etapa: 'Etapa 01 - Novo Lead', leads: funnelData.stage_01_actual, conversao: funnelData.stage_01_rate || 100, meta: funnelData.stage_01_target },
-                { etapa: 'Etapa 03 - Reunião 01 Agendada', leads: funnelData.stage_03_actual, conversao: funnelData.stage_03_rate, meta: funnelData.stage_03_target },
-                { etapa: 'Etapa 04 - Reunião 01 Realizada', leads: funnelData.stage_04_actual, conversao: funnelData.stage_04_rate, meta: funnelData.stage_04_target },
-                { etapa: 'Etapa 05 - Contrato Pago', leads: funnelData.stage_05_actual, conversao: funnelData.stage_05_rate, meta: funnelData.stage_05_target },
-                { etapa: 'Etapa 06 - Reunião 02 Realizada', leads: funnelData.stage_06_actual, conversao: funnelData.stage_06_rate, meta: funnelData.stage_06_target || 0 },
-                { etapa: 'Etapa 07 - Reunião 03 Realizada', leads: funnelData.stage_07_actual, conversao: funnelData.stage_07_rate, meta: funnelData.stage_07_target || 0 },
-                { etapa: 'Etapa 08 - Venda Realizada', leads: funnelData.stage_08_actual, conversao: funnelData.stage_08_rate, meta: funnelData.stage_08_target || 0 },
-              ]}
-            />
+            <FunilLista titulo="Funil A010" etapas={MOCK_FUNIL_A010} />
           </CardContent>
         </Card>
-      )}
 
-      {financialData && financialData.length > 0 && (
-        <ResumoFinanceiro 
-          dados={financialData.map(m => ({
-            dataInicio: m.week_label.split(' - ')[0],
-            dataFim: m.week_label.split(' - ')[1],
-            faturamentoA010: m.a010_revenue || 0,
-            vendasA010: m.a010_sales || 0,
-            valorVendidoOBEvento: m.ob_evento_revenue || 0,
-            vendasOBEvento: m.ob_evento_sales || 0,
-            faturamentoContrato: m.contract_revenue || 0,
-            vendasContratos: m.contract_sales || 0,
-            faturamentoOBConstruir: m.ob_construir_revenue || 0,
-            vendasOBConstruir: m.ob_construir_sales || 0,
-            faturamentoOBVitalicio: m.ob_vitalicio_revenue || 0,
-            vendasOBVitalicio: m.ob_vitalicio_sales || 0,
-            totalRevenue: m.total_revenue || 0,
-            totalCost: m.total_cost || 0,
-            operatingProfit: m.operating_profit || 0,
-            realCost: m.real_cost || 0,
-            cir: m.cir || 0,
-          }))}
-        />
-      )}
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-foreground">Funil Instagram</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FunilLista titulo="Funil Instagram" etapas={MOCK_FUNIL_INSTAGRAM} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <ResumoFinanceiro dados={MOCK_SEMANAS_DETALHADO} />
     </div>
   );
 }

@@ -1,7 +1,0 @@
--- Adicionar colunas faltantes na tabela weekly_metrics
-ALTER TABLE weekly_metrics 
-ADD COLUMN IF NOT EXISTS real_cost NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS total_revenue NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS operating_profit NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS cir NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS ultrameta_liquido NUMERIC DEFAULT 0;

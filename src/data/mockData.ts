@@ -81,11 +81,6 @@ export type SemanaMes = {
   vendasOBConstruir: number;
   faturamentoOBVitalicio: number;
   vendasOBVitalicio: number;
-  totalRevenue?: number;
-  totalCost?: number;
-  operatingProfit?: number;
-  realCost?: number;
-  cir?: number;
 };
 
 export type Ultrameta = {

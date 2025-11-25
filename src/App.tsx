@@ -7,7 +7,6 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { MainLayout } from "./components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
-import DashboardImportar from "./pages/dashboard/Importar";
 import Auth from "./pages/Auth";
 import Receita from "./pages/receita/Index";
 import ReceitaOverview from "./pages/receita/Overview";
@@ -60,7 +59,6 @@ const App = () => (
               }
             >
               <Route index element={<Dashboard />} />
-              <Route path="dashboard/importar" element={<DashboardImportar />} />
               <Route path="receita" element={<Receita />}>
                 <Route index element={<ReceitaOverview />} />
                 <Route path="transacoes" element={<ReceitaTransacoes />} />
