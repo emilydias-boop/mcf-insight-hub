@@ -73,8 +73,13 @@ Deno.serve(async (req) => {
 
     console.log('Uploading file to storage:', file.name, 'Size:', file.size, 'bytes');
 
-    // Primeiro: fazer upload do arquivo para o storage
-    const fileName = `import-${Date.now()}-${file.name}`;
+    // Sanitizar nome do arquivo (remover caracteres especiais)
+    const sanitizedName = file.name
+      .replace(/[^\w.-]/g, '_') // Substituir caracteres especiais por _
+      .replace(/_{2,}/g, '_')    // Substituir múltiplos _ por um único
+      .toLowerCase();
+    
+    const fileName = `import-${Date.now()}-${sanitizedName}`;
     const fileBuffer = await file.arrayBuffer();
     
     const { error: uploadError } = await supabase.storage
