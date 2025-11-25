@@ -119,6 +119,11 @@ Deno.serve(async (req) => {
       clint_revenue,
       incorporador_50k,
       sdr_ia_ig,
+      // Campos calculados (usar valores fornecidos ou calcular)
+      total_revenue: parseBRCurrency(body.total_revenue) || total_revenue_calc,
+      operating_cost: parseBRCurrency(body.operating_cost) || operating_cost_calc,
+      real_cost: parseBRCurrency(body.real_cost) || real_cost_calc,
+      operating_profit: parseBRCurrency(body.operating_profit) || operating_profit_calc,
       cpl,
       cplr,
       roas,

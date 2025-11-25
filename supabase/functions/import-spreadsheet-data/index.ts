@@ -7,11 +7,28 @@ const corsHeaders = {
 };
 
 // Função para converter data do Excel para Date
-function excelDateToJSDate(serial: number): Date {
-  const utc_days = Math.floor(serial - 25569);
-  const utc_value = utc_days * 86400;
-  const date_info = new Date(utc_value * 1000);
-  return new Date(date_info.getFullYear(), date_info.getMonth(), date_info.getDate());
+function excelDateToJSDate(serial: number | string): Date {
+  // Se for string no formato DD/MM/YYYY
+  if (typeof serial === 'string') {
+    const parts = serial.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+      const year = parseInt(parts[2]);
+      return new Date(year, month, day);
+    }
+  }
+  
+  // Se for número (serial do Excel)
+  if (typeof serial === 'number') {
+    const utc_days = Math.floor(serial - 25569);
+    const utc_value = utc_days * 86400;
+    const date_info = new Date(utc_value * 1000);
+    return new Date(date_info.getFullYear(), date_info.getMonth(), date_info.getDate());
+  }
+  
+  // Fallback: tentar criar Date diretamente
+  return new Date(serial);
 }
 
 // Função para parsear valores brasileiros
@@ -80,13 +97,8 @@ Deno.serve(async (req) => {
           const rowData = row as any;
           
           // Converter datas do Excel
-          const startDate = typeof rowData['Data Início'] === 'number' 
-            ? excelDateToJSDate(rowData['Data Início'])
-            : new Date(rowData['Data Início']);
-          
-          const endDate = typeof rowData['Data Fim'] === 'number'
-            ? excelDateToJSDate(rowData['Data Fim'])
-            : new Date(rowData['Data Fim']);
+          const startDate = excelDateToJSDate(rowData['Data Inicio']);
+          const endDate = excelDateToJSDate(rowData['Data Fim']);
 
           // Gerar week_label
           const formatDate = (date: Date) => {
@@ -98,58 +110,71 @@ Deno.serve(async (req) => {
 
           const week_label = `${formatDate(startDate)} - ${formatDate(endDate)}`;
 
-          // Preparar dados
+          // Preparar dados com mapeamento CORRETO das colunas da planilha
           const metricsData = {
             start_date: startDate.toISOString().split('T')[0],
             end_date: endDate.toISOString().split('T')[0],
             week_label,
-            ads_cost: parseBRCurrency(rowData['Custo Ads']),
-            team_cost: parseBRCurrency(rowData['Custo Equipe']),
-            office_cost: parseBRCurrency(rowData['Custo Escritório']),
-            a010_revenue: parseBRCurrency(rowData['Faturado A010']),
+            // Custos
+            ads_cost: parseBRCurrency(rowData['Custo Ads (MAKE)']),
+            team_cost: parseBRCurrency(rowData['Custo Equipe (PLANILHA MANUAL)']),
+            office_cost: parseBRCurrency(rowData['Custo Escritório (PLANILHA MANUAL)']),
+            // A010
+            a010_revenue: parseBRCurrency(rowData['Faturado Curso A010']),
             a010_sales: parseInt(rowData['Vendas A010']) || 0,
-            ob_construir_revenue: parseBRCurrency(rowData['OB Construir']),
-            ob_construir_sales: parseInt(rowData['Vendas OB Construir']) || 0,
-            ob_vitalicio_revenue: parseBRCurrency(rowData['OB Vitalício']),
-            ob_vitalicio_sales: parseInt(rowData['Vendas OB Vitalício']) || 0,
-            ob_evento_revenue: parseBRCurrency(rowData['OB Evento']),
+            sdr_ia_ig: parseInt(rowData['SDR IA+IG']) || 0,
+            // Order Bumps
+            ob_construir_revenue: parseBRCurrency(rowData['Faturado Order Bump Construir Para Alugar']),
+            ob_construir_sales: parseInt(rowData['Vendas OB Construir Para alugar']) || 0,
+            ob_vitalicio_revenue: parseBRCurrency(rowData['Faturado Order Bump Acesso Vitalício']),
+            ob_vitalicio_sales: parseInt(rowData['Vendas Acesso Vitalício']) || 0,
+            ob_evento_revenue: parseBRCurrency(rowData['Valor Vendido OB Evento']),
             ob_evento_sales: parseInt(rowData['Vendas OB Evento']) || 0,
+            // Contrato
             contract_revenue: parseBRCurrency(rowData['Faturado Contrato']),
             contract_sales: parseInt(rowData['Vendas Contrato']) || 0,
+            // Clint e Incorporador
             clint_revenue: parseBRCurrency(rowData['Faturamento Clint']),
-            incorporador_50k: parseBRCurrency(rowData['Incorporador 50k']),
-            sdr_ia_ig: parseInt(rowData['SDR IA+IG']) || 0,
+            incorporador_50k: parseBRCurrency(rowData['Faturamento Incorporador 50k']),
+            // Ultrametas
+            ultrameta_clint: parseBRCurrency(rowData['Ultrameta Clint']),
+            ultrameta_liquido: parseBRCurrency(rowData['Ultra Meta Líquido']),
+            // Campos calculados da planilha
+            total_revenue: parseBRCurrency(rowData['Faturamento Total']),
+            operating_cost: parseBRCurrency(rowData['Custo Total']),
+            operating_profit: parseBRCurrency(rowData['Lucro Operacional']),
+            real_cost: parseBRCurrency(rowData['Custo Real Por Semana (ADS - (A010+BIM))']),
             // Métricas calculadas
-            roi: parsePercent(rowData['ROI %']),
+            roi: parsePercent(rowData['ROI']),
             roas: parseFloat(rowData['ROAS']) || 0,
             cpl: parseBRCurrency(rowData['CPL']),
             cplr: parseBRCurrency(rowData['CPLR']),
-            cir: parsePercent(rowData['CIR %']),
-            // Funil
-            stage_01_target: parseInt(rowData['Etapa 01 Meta']) || 0,
-            stage_01_actual: parseInt(rowData['Etapa 01 Real']) || 0,
-            stage_01_rate: parsePercent(rowData['Etapa 01 %']),
-            stage_02_target: parseInt(rowData['Etapa 02 Meta']) || 0,
-            stage_02_actual: parseInt(rowData['Etapa 02 Real']) || 0,
-            stage_02_rate: parsePercent(rowData['Etapa 02 %']),
-            stage_03_target: parseInt(rowData['Etapa 03 Meta']) || 0,
-            stage_03_actual: parseInt(rowData['Etapa 03 Real']) || 0,
-            stage_03_rate: parsePercent(rowData['Etapa 03 %']),
-            stage_04_target: parseInt(rowData['Etapa 04 Meta']) || 0,
-            stage_04_actual: parseInt(rowData['Etapa 04 Real']) || 0,
-            stage_04_rate: parsePercent(rowData['Etapa 04 %']),
-            stage_05_target: parseInt(rowData['Etapa 05 Meta']) || 0,
-            stage_05_actual: parseInt(rowData['Etapa 05 Real']) || 0,
-            stage_05_rate: parsePercent(rowData['Etapa 05 %']),
-            stage_06_target: parseInt(rowData['Etapa 06 Meta']) || 0,
-            stage_06_actual: parseInt(rowData['Etapa 06 Real']) || 0,
-            stage_06_rate: parsePercent(rowData['Etapa 06 %']),
-            stage_07_target: parseInt(rowData['Etapa 07 Meta']) || 0,
-            stage_07_actual: parseInt(rowData['Etapa 07 Real']) || 0,
-            stage_07_rate: parsePercent(rowData['Etapa 07 %']),
-            stage_08_target: parseInt(rowData['Etapa 08 Meta']) || 0,
-            stage_08_actual: parseInt(rowData['Etapa 08 Real']) || 0,
-            stage_08_rate: parsePercent(rowData['Etapa 08 %']),
+            cir: parsePercent(rowData['CIR']),
+            // Funil - Etapas com nomes CORRETOS da planilha
+            stage_01_target: parseInt(rowData['Meta Etapa 01']) || 0,
+            stage_01_actual: parseInt(rowData['Etapa 01 - Novo Lead']) || 0,
+            stage_01_rate: 0, // Não tem % para etapa 01
+            stage_02_target: 0,
+            stage_02_actual: 0,
+            stage_02_rate: 0,
+            stage_03_target: parseInt(rowData['Meta Etapa 03']) || 0,
+            stage_03_actual: parseInt(rowData['Etapa 03 - Reunião 01 Agendada']) || 0,
+            stage_03_rate: parsePercent(rowData['%Etapa 03']),
+            stage_04_target: parseInt(rowData['Meta Etapa 04']) || 0,
+            stage_04_actual: parseInt(rowData['Etapa 04 - Reunião 01 Realizada']) || 0,
+            stage_04_rate: parsePercent(rowData['%Etapa 04']),
+            stage_05_target: parseInt(rowData['Meta Etapa 05']) || 0,
+            stage_05_actual: parseInt(rowData['Etapa 05 - Contrato Pago']) || 0,
+            stage_05_rate: parsePercent(rowData['%Etapa 05']),
+            stage_06_target: 0,
+            stage_06_actual: parseInt(rowData['Etapa 06 - Reunião 02 Realizada']) || 0,
+            stage_06_rate: parsePercent(rowData['%Etapa 06']),
+            stage_07_target: 0,
+            stage_07_actual: parseInt(rowData['Etapa 07 - Reunião 03 Realizada']) || 0,
+            stage_07_rate: parsePercent(rowData['%Etapa 07']),
+            stage_08_target: 0,
+            stage_08_actual: parseInt(rowData['Etapa 08 - Venda Realizada']) || 0,
+            stage_08_rate: parsePercent(rowData['%Etapa 08']),
           };
 
           // Upsert (inserir ou atualizar)
