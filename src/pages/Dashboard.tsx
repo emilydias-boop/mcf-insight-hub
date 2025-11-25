@@ -75,7 +75,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
@@ -93,39 +93,42 @@ export default function Dashboard() {
         onExport={handleExport}
       />
 
-      {/* KPIs Principais (primeiros 3) + Ultrameta */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-        {MOCK_KPIS.slice(0, 3).map((kpi) => {
-          const Icon = iconMap[kpi.id as keyof typeof iconMap];
-          return (
-            <KPICard
-              key={kpi.id}
-              title={kpi.title}
-              value={kpi.value}
-              change={kpi.change}
-              icon={Icon}
-              variant={kpi.variant}
-            />
-          );
-        })}
-        <UltrametaCard data={MOCK_ULTRAMETA} />
-      </div>
+      {/* Seção de KPIs */}
+      <div className="space-y-4">
+        {/* KPIs Principais (primeiros 3) + Ultrameta */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+          {MOCK_KPIS.slice(0, 3).map((kpi) => {
+            const Icon = iconMap[kpi.id as keyof typeof iconMap];
+            return (
+              <KPICard
+                key={kpi.id}
+                title={kpi.title}
+                value={kpi.value}
+                change={kpi.change}
+                icon={Icon}
+                variant={kpi.variant}
+              />
+            );
+          })}
+          <UltrametaCard data={MOCK_ULTRAMETA} />
+        </div>
 
-      {/* KPIs Secundários */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {MOCK_KPIS.slice(3).map((kpi) => {
-          const Icon = iconMap[kpi.id as keyof typeof iconMap];
-          return (
-            <KPICard
-              key={kpi.id}
-              title={kpi.title}
-              value={kpi.value}
-              change={kpi.change}
-              icon={Icon}
-              variant={kpi.variant}
-            />
-          );
-        })}
+        {/* KPIs Secundários */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {MOCK_KPIS.slice(3).map((kpi) => {
+            const Icon = iconMap[kpi.id as keyof typeof iconMap];
+            return (
+              <KPICard
+                key={kpi.id}
+                title={kpi.title}
+                value={kpi.value}
+                change={kpi.change}
+                icon={Icon}
+                variant={kpi.variant}
+              />
+            );
+          })}
+        </div>
       </div>
 
       {/* Gráfico de Evolução Temporal */}
