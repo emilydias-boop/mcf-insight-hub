@@ -28,10 +28,10 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.name.endsWith('.xlsx')) {
+      if (!file.name.endsWith('.csv')) {
         toast({
           title: "Formato inválido",
-          description: "Por favor, selecione um arquivo .xlsx",
+          description: "Por favor, selecione um arquivo CSV",
           variant: "destructive",
         });
         return;
@@ -64,7 +64,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
         setProgress((prev) => Math.min(prev + 10, 90));
       }, 200);
 
-      const { data, error } = await supabase.functions.invoke('import-spreadsheet-data', {
+      const { data, error } = await supabase.functions.invoke('import-weekly-metrics', {
         body: formData,
       });
 
@@ -121,8 +121,18 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Importar Métricas Semanais</DialogTitle>
-          <DialogDescription>
-            Importe sua planilha Excel (.xlsx) com a aba "Resultados Semanais"
+          <DialogDescription className="space-y-2">
+            <p>Importe um arquivo CSV com suas métricas semanais</p>
+            <div className="text-xs bg-muted p-3 rounded-md space-y-1 mt-2">
+              <p className="font-semibold">Como preparar o arquivo:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Abra sua planilha Excel</li>
+                <li>Vá para a aba "Resultados Semanais"</li>
+                <li>Clique em Arquivo → Salvar Como</li>
+                <li>Escolha o formato "CSV UTF-8 (*.csv)"</li>
+                <li>Faça o upload do arquivo CSV aqui</li>
+              </ol>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -131,7 +141,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
           <div className="border-2 border-dashed border-border rounded-lg p-6 text-center space-y-2">
             <input
               type="file"
-              accept=".xlsx"
+              accept=".csv"
               onChange={handleFileChange}
               className="hidden"
               id="file-upload"
@@ -153,7 +163,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
                 <div className="text-sm text-muted-foreground">
                   <p className="font-medium">Clique para selecionar</p>
                   <p>ou arraste seu arquivo aqui</p>
-                  <p className="text-xs mt-1">Apenas arquivos .xlsx</p>
+                  <p className="text-xs mt-1">Apenas arquivos CSV</p>
                 </div>
               )}
             </label>

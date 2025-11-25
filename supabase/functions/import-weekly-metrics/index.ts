@@ -1,170 +1,235 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Converte valores BR (R$ 1.234,56) para número
-function parseBRNumber(value: string | number): number {
-  if (typeof value === 'number') return value;
+// Função para converter data do formato DD/MM/YYYY
+function parseDate(dateStr: string): string {
+  const parts = dateStr.split('/');
+  if (parts.length === 3) {
+    const day = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const year = parseInt(parts[2]);
+    const date = new Date(year, month, day);
+    return date.toISOString().split('T')[0];
+  }
+  throw new Error(`Invalid date format: ${dateStr}`);
+}
+
+// Função para parsear valores brasileiros
+function parseBRCurrency(value: string): number {
   if (!value) return 0;
-  
-  const cleaned = String(value)
+  const cleaned = value
     .replace(/R\$\s?/g, '')
     .replace(/\./g, '')
-    .replace(',', '.')
-    .trim();
-  
+    .replace(',', '.');
   return parseFloat(cleaned) || 0;
 }
 
-// Converte percentual BR (12,5%) para número
-function parseBRPercent(value: string | number): number {
-  if (typeof value === 'number') return value;
+// Função para parsear percentuais
+function parsePercent(value: string): number {
   if (!value) return 0;
-  
-  const cleaned = String(value)
-    .replace(/%/g, '')
-    .replace(',', '.')
-    .trim();
-  
+  const cleaned = value.replace('%', '').replace(',', '.');
   return parseFloat(cleaned) || 0;
 }
 
-serve(async (req) => {
+// Função para processar CSV linha por linha
+async function processCSVStream(fileText: string, supabase: any) {
+  const lines = fileText.split('\n').filter(line => line.trim());
+  
+  if (lines.length < 2) {
+    throw new Error('CSV vazio ou sem dados');
+  }
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  console.log('Headers:', headers);
+
+  let processed = 0;
+  let errors = 0;
+  const BATCH_SIZE = 10;
+  let batch: any[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    try {
+      const values = parseCSVLine(lines[i]);
+      const row: any = {};
+      
+      headers.forEach((header, idx) => {
+        row[header] = values[idx] || '';
+      });
+
+      const metric = {
+        start_date: parseDate(row['Data Inicio']),
+        end_date: parseDate(row['Data Fim']),
+        week_label: `${row['Data Inicio']} - ${row['Data Fim']}`,
+        ads_cost: parseBRCurrency(row['Custo Ads (MAKE)']),
+        team_cost: parseBRCurrency(row['Custo Equipe (PLANILHA MANUAL)']),
+        office_cost: parseBRCurrency(row['Custo Escritório (PLANILHA MANUAL)']),
+        a010_revenue: parseBRCurrency(row['Faturado Curso A010']),
+        a010_sales: parseInt(row['Vendas A010']) || 0,
+        sdr_ia_ig: parseInt(row['SDR IA+IG']) || 0,
+        ob_construir_revenue: parseBRCurrency(row['Faturado Order Bump Construir Para Alugar']),
+        ob_construir_sales: parseInt(row['Vendas OB Construir Para alugar']) || 0,
+        ob_vitalicio_revenue: parseBRCurrency(row['Faturado Order Bump Acesso Vitalício']),
+        ob_vitalicio_sales: parseInt(row['Vendas Acesso Vitalício']) || 0,
+        ob_evento_revenue: parseBRCurrency(row['Valor Vendido OB Evento']),
+        ob_evento_sales: parseInt(row['Vendas OB Evento']) || 0,
+        contract_revenue: parseBRCurrency(row['Faturado Contrato']),
+        contract_sales: parseInt(row['Vendas Contrato']) || 0,
+        clint_revenue: parseBRCurrency(row['Faturamento Clint']),
+        incorporador_50k: parseBRCurrency(row['Faturamento Incorporador 50k']),
+        ultrameta_clint: parseBRCurrency(row['Ultrameta Clint']),
+        ultrameta_liquido: parseBRCurrency(row['Ultra Meta Líquido']),
+        total_revenue: parseBRCurrency(row['Faturamento Total']),
+        operating_cost: parseBRCurrency(row['Custo Total']),
+        operating_profit: parseBRCurrency(row['Lucro Operacional']),
+        real_cost: parseBRCurrency(row['Custo Real Por Semana (ADS - (A010+BIM))']),
+        roi: parsePercent(row['ROI']),
+        roas: parseFloat(row['ROAS']) || 0,
+        cpl: parseBRCurrency(row['CPL']),
+        cplr: parseBRCurrency(row['CPLR']),
+        cir: parsePercent(row['CIR']),
+        stage_01_target: parseInt(row['Meta Etapa 01']) || 0,
+        stage_01_actual: parseInt(row['Etapa 01 - Novo Lead']) || 0,
+        stage_01_rate: 0,
+        stage_02_target: 0,
+        stage_02_actual: 0,
+        stage_02_rate: 0,
+        stage_03_target: parseInt(row['Meta Etapa 03']) || 0,
+        stage_03_actual: parseInt(row['Etapa 03 - Reunião 01 Agendada']) || 0,
+        stage_03_rate: parsePercent(row['%Etapa 03']),
+        stage_04_target: parseInt(row['Meta Etapa 04']) || 0,
+        stage_04_actual: parseInt(row['Etapa 04 - Reunião 01 Realizada']) || 0,
+        stage_04_rate: parsePercent(row['%Etapa 04']),
+        stage_05_target: parseInt(row['Meta Etapa 05']) || 0,
+        stage_05_actual: parseInt(row['Etapa 05 - Contrato Pago']) || 0,
+        stage_05_rate: parsePercent(row['%Etapa 05']),
+        stage_06_target: 0,
+        stage_06_actual: parseInt(row['Etapa 06 - Reunião 02 Realizada']) || 0,
+        stage_06_rate: parsePercent(row['%Etapa 06']),
+        stage_07_target: 0,
+        stage_07_actual: parseInt(row['Etapa 07 - Reunião 03 Realizada']) || 0,
+        stage_07_rate: parsePercent(row['%Etapa 07']),
+        stage_08_target: 0,
+        stage_08_actual: parseInt(row['Etapa 08 - Venda Realizada']) || 0,
+        stage_08_rate: parsePercent(row['%Etapa 08']),
+      };
+
+      batch.push(metric);
+
+      if (batch.length >= BATCH_SIZE) {
+        const { error } = await supabase
+          .from('weekly_metrics')
+          .upsert(batch, { onConflict: 'start_date,end_date' });
+
+        if (error) {
+          console.error('Batch insert error:', error);
+          errors += batch.length;
+        } else {
+          processed += batch.length;
+          console.log(`Processed ${processed} rows`);
+        }
+        
+        batch = [];
+      }
+    } catch (error) {
+      console.error(`Error processing line ${i}:`, error);
+      errors++;
+    }
+  }
+
+  // Insert remaining batch
+  if (batch.length > 0) {
+    const { error } = await supabase
+      .from('weekly_metrics')
+      .upsert(batch, { onConflict: 'start_date,end_date' });
+
+    if (error) {
+      console.error('Final batch error:', error);
+      errors += batch.length;
+    } else {
+      processed += batch.length;
+    }
+  }
+
+  return { processed, errors };
+}
+
+// Função para parsear linha CSV respeitando aspas
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result;
+}
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
-
   try {
-    const { metrics } = await req.json();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!Array.isArray(metrics) || metrics.length === 0) {
-      throw new Error('Dados inválidos: esperado array de métricas');
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      throw new Error('Nenhum arquivo fornecido');
     }
 
-    console.log(`📊 Importando ${metrics.length} semanas de métricas...`);
-
-    let imported = 0;
-    let updated = 0;
-    let errors = 0;
-
-    for (const metric of metrics) {
-      try {
-        const record = {
-          start_date: metric.start_date,
-          end_date: metric.end_date,
-          week_label: metric.week_label,
-          
-          // Custos
-          ads_cost: parseBRNumber(metric.ads_cost),
-          team_cost: parseBRNumber(metric.team_cost),
-          office_cost: parseBRNumber(metric.office_cost),
-          total_cost: parseBRNumber(metric.total_cost),
-          
-          // Vendas A010
-          a010_revenue: parseBRNumber(metric.a010_revenue),
-          a010_sales: parseInt(metric.a010_sales) || 0,
-          sdr_ia_ig: parseInt(metric.sdr_ia_ig) || 0,
-          
-          // Order Bumps
-          ob_construir_revenue: parseBRNumber(metric.ob_construir_revenue),
-          ob_construir_sales: parseInt(metric.ob_construir_sales) || 0,
-          ob_vitalicio_revenue: parseBRNumber(metric.ob_vitalicio_revenue),
-          ob_vitalicio_sales: parseInt(metric.ob_vitalicio_sales) || 0,
-          ob_evento_revenue: parseBRNumber(metric.ob_evento_revenue),
-          ob_evento_sales: parseInt(metric.ob_evento_sales) || 0,
-          
-          // Contratos
-          contract_revenue: parseBRNumber(metric.contract_revenue),
-          contract_sales: parseInt(metric.contract_sales) || 0,
-          
-          // Clint
-          ultrameta_clint: parseBRNumber(metric.ultrameta_clint),
-          clint_revenue: parseBRNumber(metric.clint_revenue),
-          incorporador_50k: parseBRNumber(metric.incorporador_50k),
-          
-          // Métricas
-          roi: parseBRPercent(metric.roi),
-          roas: parseBRPercent(metric.roas),
-          cpl: parseBRNumber(metric.cpl),
-          cplr: parseBRNumber(metric.cplr),
-          
-          // Funil
-          stage_01_target: parseInt(metric.stage_01_target) || 0,
-          stage_01_actual: parseInt(metric.stage_01_actual) || 0,
-          stage_01_rate: parseBRPercent(metric.stage_01_rate),
-          
-          stage_02_target: parseInt(metric.stage_02_target) || 0,
-          stage_02_actual: parseInt(metric.stage_02_actual) || 0,
-          stage_02_rate: parseBRPercent(metric.stage_02_rate),
-          
-          stage_03_target: parseInt(metric.stage_03_target) || 0,
-          stage_03_actual: parseInt(metric.stage_03_actual) || 0,
-          stage_03_rate: parseBRPercent(metric.stage_03_rate),
-          
-          stage_04_target: parseInt(metric.stage_04_target) || 0,
-          stage_04_actual: parseInt(metric.stage_04_actual) || 0,
-          stage_04_rate: parseBRPercent(metric.stage_04_rate),
-          
-          stage_05_target: parseInt(metric.stage_05_target) || 0,
-          stage_05_actual: parseInt(metric.stage_05_actual) || 0,
-          stage_05_rate: parseBRPercent(metric.stage_05_rate),
-          
-          stage_06_target: parseInt(metric.stage_06_target) || 0,
-          stage_06_actual: parseInt(metric.stage_06_actual) || 0,
-          stage_06_rate: parseBRPercent(metric.stage_06_rate),
-          
-          stage_07_target: parseInt(metric.stage_07_target) || 0,
-          stage_07_actual: parseInt(metric.stage_07_actual) || 0,
-          stage_07_rate: parseBRPercent(metric.stage_07_rate),
-          
-          stage_08_target: parseInt(metric.stage_08_target) || 0,
-          stage_08_actual: parseInt(metric.stage_08_actual) || 0,
-          stage_08_rate: parseBRPercent(metric.stage_08_rate),
-        };
-
-        // Upsert (inserir ou atualizar)
-        const { error } = await supabase
-          .from('weekly_metrics')
-          .upsert(record, {
-            onConflict: 'start_date,end_date',
-          });
-
-        if (error) throw error;
-
-        imported++;
-      } catch (error: any) {
-        console.error(`❌ Erro ao importar métrica:`, error.message);
-        errors++;
-      }
+    if (!file.name.endsWith('.csv')) {
+      throw new Error('Apenas arquivos CSV são aceitos');
     }
 
-    console.log(`✅ Importação concluída: ${imported} importadas, ${errors} erros`);
+    console.log('Processing CSV file:', file.name, 'Size:', file.size, 'bytes');
+
+    const text = await file.text();
+    const result = await processCSVStream(text, supabase);
 
     return new Response(
       JSON.stringify({
         success: true,
-        imported,
-        updated,
-        errors,
-        total: metrics.length,
+        message: `Importação concluída: ${result.processed} registros processados`,
+        processed: result.processed,
+        errors: result.errors,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
     );
 
-  } catch (error: any) {
-    console.error('❌ Erro na importação:', error);
+  } catch (error) {
+    console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        success: false,
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      }
     );
   }
 });
