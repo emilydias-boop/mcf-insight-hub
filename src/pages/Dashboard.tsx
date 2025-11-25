@@ -20,6 +20,7 @@ import { useA010Funnel } from "@/hooks/useFunnelData";
 import { useUltrameta } from "@/hooks/useUltrameta";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
+import { ImportMetricsDialog } from "@/components/dashboard/ImportMetricsDialog";
 
 const iconMap = {
   '1': DollarSign,
@@ -137,6 +138,12 @@ export default function Dashboard() {
           <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
         </div>
         <div className="flex gap-2">
+          <ImportMetricsDialog 
+            onImportSuccess={() => {
+              // Refetch metrics data after successful import
+              window.location.reload();
+            }} 
+          />
           <PeriodComparison />
           <DashboardCustomizer />
         </div>
