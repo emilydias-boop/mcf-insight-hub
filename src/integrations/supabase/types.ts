@@ -1559,6 +1559,7 @@ export type Database = {
           a010_revenue: number | null
           a010_sales: number | null
           ads_cost: number | null
+          cir: number | null
           clint_revenue: number | null
           contract_revenue: number | null
           contract_sales: number | null
@@ -1575,6 +1576,8 @@ export type Database = {
           ob_vitalicio_revenue: number | null
           ob_vitalicio_sales: number | null
           office_cost: number | null
+          operating_profit: number | null
+          real_cost: number | null
           roas: number | null
           roi: number | null
           sdr_ia_ig: number | null
@@ -1605,7 +1608,9 @@ export type Database = {
           start_date: string
           team_cost: number | null
           total_cost: number | null
+          total_revenue: number | null
           ultrameta_clint: number | null
+          ultrameta_liquido: number | null
           updated_at: string | null
           week_label: string
         }
@@ -1613,6 +1618,7 @@ export type Database = {
           a010_revenue?: number | null
           a010_sales?: number | null
           ads_cost?: number | null
+          cir?: number | null
           clint_revenue?: number | null
           contract_revenue?: number | null
           contract_sales?: number | null
@@ -1629,6 +1635,8 @@ export type Database = {
           ob_vitalicio_revenue?: number | null
           ob_vitalicio_sales?: number | null
           office_cost?: number | null
+          operating_profit?: number | null
+          real_cost?: number | null
           roas?: number | null
           roi?: number | null
           sdr_ia_ig?: number | null
@@ -1659,7 +1667,9 @@ export type Database = {
           start_date: string
           team_cost?: number | null
           total_cost?: number | null
+          total_revenue?: number | null
           ultrameta_clint?: number | null
+          ultrameta_liquido?: number | null
           updated_at?: string | null
           week_label: string
         }
@@ -1667,6 +1677,7 @@ export type Database = {
           a010_revenue?: number | null
           a010_sales?: number | null
           ads_cost?: number | null
+          cir?: number | null
           clint_revenue?: number | null
           contract_revenue?: number | null
           contract_sales?: number | null
@@ -1683,6 +1694,8 @@ export type Database = {
           ob_vitalicio_revenue?: number | null
           ob_vitalicio_sales?: number | null
           office_cost?: number | null
+          operating_profit?: number | null
+          real_cost?: number | null
           roas?: number | null
           roi?: number | null
           sdr_ia_ig?: number | null
@@ -1713,7 +1726,9 @@ export type Database = {
           start_date?: string
           team_cost?: number | null
           total_cost?: number | null
+          total_revenue?: number | null
           ultrameta_clint?: number | null
+          ultrameta_liquido?: number | null
           updated_at?: string | null
           week_label?: string
         }
