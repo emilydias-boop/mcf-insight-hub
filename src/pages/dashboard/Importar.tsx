@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import * as XLSX from 'xlsx';
 
 export default function Importar() {
   const { toast } = useToast();
@@ -58,72 +59,120 @@ export default function Importar() {
     setResult(null);
 
     try {
-      // Simular progresso durante leitura
+      // Ler arquivo
       setProgress(20);
-
-      // Ler arquivo como base64
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target?.result as string;
-        setProgress(40);
-
-        try {
-          // Chamar edge function para processar
-          const { data, error } = await supabase.functions.invoke('import-weekly-metrics', {
-            body: {
-              file: base64.split(',')[1], // remover prefixo data:...;base64,
-              filename: file.name,
-            },
-          });
-
-          setProgress(100);
-
-          if (error) throw error;
-
-          setResult({
-            success: true,
-            message: `Importação concluída com sucesso!`,
-            details: data,
-          });
-
-          toast({
-            title: "Importação concluída",
-            description: `${data.imported} registros importados com sucesso.`,
-          });
-        } catch (err: any) {
-          console.error('Erro ao processar:', err);
-          setResult({
-            success: false,
-            message: err.message || 'Erro ao processar arquivo',
-          });
-          toast({
-            title: "Erro na importação",
-            description: err.message || "Não foi possível processar o arquivo.",
-            variant: "destructive",
-          });
-        } finally {
-          setUploading(false);
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Parse Excel
+      setProgress(40);
+      const workbook = XLSX.read(arrayBuffer);
+      
+      const metrics: any[] = [];
+      
+      // Processar cada aba
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet);
+        
+        // Detectar se é aba de métricas
+        if (sheetName.toLowerCase().includes('métrica') || 
+            sheetName.toLowerCase().includes('metrica') || 
+            sheetName.toLowerCase().includes('semana')) {
+          
+          for (const row of data) {
+            // Parse período
+            const periodoStr = row['Período'] || row['periodo'] || row['PERÍODO'];
+            if (!periodoStr) continue;
+            
+            // Converter período para datas
+            const parts = String(periodoStr).split(' a ');
+            if (parts.length !== 2) continue;
+            
+            const [startStr, endStr] = parts.map(s => s.trim());
+            const [startDay, startMonth, startYear] = startStr.split('/');
+            const [endDay, endMonth, endYear] = endStr.split('/');
+            
+            const startDate = `${startYear}-${startMonth.padStart(2, '0')}-${startDay.padStart(2, '0')}`;
+            const endDate = `${endYear}-${endMonth.padStart(2, '0')}-${endDay.padStart(2, '0')}`;
+            
+            // Parse números (formato BR)
+            const parseNum = (val: any) => {
+              if (typeof val === 'number') return val;
+              if (!val) return 0;
+              return parseFloat(String(val).replace(/\./g, '').replace(',', '.'));
+            };
+            
+            metrics.push({
+              start_date: startDate,
+              end_date: endDate,
+              week_label: `Semana ${startDay}/${startMonth}`,
+              ads_cost: parseNum(row['Custo Ads'] || row['custo_ads']),
+              team_cost: parseNum(row['Custo Equipe'] || row['custo_equipe']),
+              office_cost: parseNum(row['Custo Escritório'] || row['custo_escritorio']),
+              a010_revenue: parseNum(row['Faturamento A010'] || row['faturamento_a010']),
+              a010_sales: parseNum(row['Vendas A010'] || row['vendas_a010']),
+              ob_evento_revenue: parseNum(row['Faturamento OB Evento'] || row['faturamento_ob_evento']),
+              ob_evento_sales: parseNum(row['Vendas OB Evento'] || row['vendas_ob_evento']),
+              contract_revenue: parseNum(row['Faturamento Contratos'] || row['faturamento_contratos']),
+              contract_sales: parseNum(row['Vendas Contratos'] || row['vendas_contratos']),
+              ob_construir_revenue: parseNum(row['Faturamento OB Construir'] || row['faturamento_ob_construir']),
+              ob_construir_sales: parseNum(row['Vendas OB Construir'] || row['vendas_ob_construir']),
+              ob_vitalicio_revenue: parseNum(row['Faturamento OB Vitalício'] || row['faturamento_ob_vitalicio']),
+              ob_vitalicio_sales: parseNum(row['Vendas OB Vitalício'] || row['vendas_ob_vitalicio']),
+              roi: parseNum(row['ROI'] || row['roi']),
+              roas: parseNum(row['ROAS'] || row['roas']),
+              cpl: parseNum(row['CPL'] || row['cpl']),
+              stage_01_actual: parseNum(row['Etapa 01'] || row['etapa_01']),
+              stage_02_actual: parseNum(row['Etapa 02'] || row['etapa_02']),
+              stage_03_actual: parseNum(row['Etapa 03'] || row['etapa_03']),
+              stage_04_actual: parseNum(row['Etapa 04'] || row['etapa_04']),
+              stage_05_actual: parseNum(row['Etapa 05'] || row['etapa_05']),
+              stage_06_actual: parseNum(row['Etapa 06'] || row['etapa_06']),
+              stage_07_actual: parseNum(row['Etapa 07'] || row['etapa_07']),
+              stage_08_actual: parseNum(row['Etapa 08'] || row['etapa_08']),
+            });
+          }
         }
-      };
+      }
 
-      reader.onerror = () => {
-        setUploading(false);
-        toast({
-          title: "Erro ao ler arquivo",
-          description: "Não foi possível ler o arquivo selecionado.",
-          variant: "destructive",
-        });
-      };
+      setProgress(60);
 
-      reader.readAsDataURL(file);
+      if (metrics.length === 0) {
+        throw new Error('Nenhuma métrica encontrada no arquivo');
+      }
+
+      // Enviar para edge function
+      const { data, error } = await supabase.functions.invoke('import-weekly-metrics', {
+        body: { metrics },
+      });
+
+      setProgress(100);
+
+      if (error) throw error;
+
+      setResult({
+        success: true,
+        message: `Importação concluída com sucesso!`,
+        details: { imported: metrics.length },
+      });
+
+      toast({
+        title: "Importação concluída",
+        description: `${metrics.length} registros importados com sucesso.`,
+      });
     } catch (err: any) {
       console.error('Erro:', err);
-      setUploading(false);
+      setResult({
+        success: false,
+        message: err.message || 'Erro ao processar arquivo',
+      });
       toast({
-        title: "Erro",
-        description: err.message || "Erro ao iniciar importação.",
+        title: "Erro na importação",
+        description: err.message || "Não foi possível processar o arquivo.",
         variant: "destructive",
       });
+    } finally {
+      setUploading(false);
     }
   };
 
