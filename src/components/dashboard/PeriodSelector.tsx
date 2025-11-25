@@ -16,9 +16,9 @@ interface PeriodSelectorProps {
 }
 
 export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorProps) {
-  const [tipo, setTipo] = useState<'semana' | 'mes'>('mes');
-  const [dataInicio, setDataInicio] = useState<Date>(startOfMonth(new Date()));
-  const [dataFim, setDataFim] = useState<Date>(endOfMonth(new Date()));
+  const [tipo, setTipo] = useState<'semana' | 'mes'>('semana');
+  const [dataInicio, setDataInicio] = useState<Date>(getCustomWeekStart(new Date()));
+  const [dataFim, setDataFim] = useState<Date>(getCustomWeekEnd(new Date()));
   const [canal, setCanal] = useState('todos');
 
   const handleSemanaAtual = () => {
@@ -64,9 +64,9 @@ export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorPro
 
   const handleLimpar = () => {
     const hoje = new Date();
-    setDataInicio(startOfMonth(hoje));
-    setDataFim(endOfMonth(hoje));
-    setTipo('mes');
+    setDataInicio(getCustomWeekStart(hoje));
+    setDataFim(getCustomWeekEnd(hoje));
+    setTipo('semana');
     setCanal('todos');
     onClear();
   };
