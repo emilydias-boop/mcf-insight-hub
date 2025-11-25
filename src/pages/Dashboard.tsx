@@ -181,7 +181,7 @@ export default function Dashboard() {
               ultrametaClint: metricsSummary.ultrameta.ultrameta_clint || 0,
               faturamentoIncorporador50k: metricsSummary.ultrameta.incorporador_50k || 0,
               faturamentoClintBruto: metricsSummary.ultrameta.clint_revenue || 0,
-              ultrametaLiquido: (metricsSummary.ultrameta.ultrameta_clint || 0) - (metricsSummary.ultrameta.total_cost || 0),
+              ultrametaLiquido: metricsSummary.ultrameta.ultrameta_liquido || 0,
             }} />
           )}
         </div>
@@ -218,41 +218,25 @@ export default function Dashboard() {
       )}
 
       {funnelData && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Funil A010</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FunilLista 
-                titulo="Funil A010" 
-                etapas={[
-                  { etapa: 'Etapa 01', leads: funnelData.stage_01_actual, conversao: funnelData.stage_01_rate, meta: funnelData.stage_01_target },
-                  { etapa: 'Etapa 02', leads: funnelData.stage_02_actual, conversao: funnelData.stage_02_rate, meta: funnelData.stage_02_target },
-                  { etapa: 'Etapa 03', leads: funnelData.stage_03_actual, conversao: funnelData.stage_03_rate, meta: funnelData.stage_03_target },
-                  { etapa: 'Etapa 04', leads: funnelData.stage_04_actual, conversao: funnelData.stage_04_rate, meta: funnelData.stage_04_target },
-                ]}
-              />
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Funil Instagram</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FunilLista 
-                titulo="Funil Instagram" 
-                etapas={[
-                  { etapa: 'Etapa 05', leads: funnelData.stage_05_actual, conversao: funnelData.stage_05_rate, meta: funnelData.stage_05_target },
-                  { etapa: 'Etapa 06', leads: funnelData.stage_06_actual, conversao: funnelData.stage_06_rate, meta: funnelData.stage_06_target },
-                  { etapa: 'Etapa 07', leads: funnelData.stage_07_actual, conversao: funnelData.stage_07_rate, meta: funnelData.stage_07_target },
-                  { etapa: 'Etapa 08', leads: funnelData.stage_08_actual, conversao: funnelData.stage_08_rate, meta: funnelData.stage_08_target },
-                ]}
-              />
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-foreground">Funil Completo - Etapas 01, 03-08</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FunilLista 
+              titulo="" 
+              etapas={[
+                { etapa: 'Etapa 01 - Novo Lead', leads: funnelData.stage_01_actual, conversao: funnelData.stage_01_rate || 100, meta: funnelData.stage_01_target },
+                { etapa: 'Etapa 03 - Reunião 01 Agendada', leads: funnelData.stage_03_actual, conversao: funnelData.stage_03_rate, meta: funnelData.stage_03_target },
+                { etapa: 'Etapa 04 - Reunião 01 Realizada', leads: funnelData.stage_04_actual, conversao: funnelData.stage_04_rate, meta: funnelData.stage_04_target },
+                { etapa: 'Etapa 05 - Contrato Pago', leads: funnelData.stage_05_actual, conversao: funnelData.stage_05_rate, meta: funnelData.stage_05_target },
+                { etapa: 'Etapa 06 - Reunião 02 Realizada', leads: funnelData.stage_06_actual, conversao: funnelData.stage_06_rate, meta: funnelData.stage_06_target || 0 },
+                { etapa: 'Etapa 07 - Reunião 03 Realizada', leads: funnelData.stage_07_actual, conversao: funnelData.stage_07_rate, meta: funnelData.stage_07_target || 0 },
+                { etapa: 'Etapa 08 - Venda Realizada', leads: funnelData.stage_08_actual, conversao: funnelData.stage_08_rate, meta: funnelData.stage_08_target || 0 },
+              ]}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {financialData && financialData.length > 0 && (
@@ -270,6 +254,11 @@ export default function Dashboard() {
             vendasOBConstruir: m.ob_construir_sales || 0,
             faturamentoOBVitalicio: m.ob_vitalicio_revenue || 0,
             vendasOBVitalicio: m.ob_vitalicio_sales || 0,
+            totalRevenue: m.total_revenue || 0,
+            totalCost: m.total_cost || 0,
+            operatingProfit: m.operating_profit || 0,
+            realCost: m.real_cost || 0,
+            cir: m.cir || 0,
           }))}
         />
       )}

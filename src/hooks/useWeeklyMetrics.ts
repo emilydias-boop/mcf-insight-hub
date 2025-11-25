@@ -17,24 +17,58 @@ export interface WeeklyMetric {
   a010_revenue: number;
   a010_sales: number;
   ob_construir_revenue: number;
+  ob_construir_sales: number;
   ob_vitalicio_revenue: number;
+  ob_vitalicio_sales: number;
   ob_evento_revenue: number;
+  ob_evento_sales: number;
   contract_revenue: number;
+  contract_sales: number;
+  
+  // Clint
+  clint_revenue: number;
+  incorporador_50k: number;
+  ultrameta_clint: number;
+  sdr_ia_ig: number;
   
   // Métricas
   roi: number;
   roas: number;
   cpl: number;
+  cplr: number;
+  
+  // Campos calculados
+  total_revenue: number;
+  real_cost: number;
+  operating_profit: number;
+  cir: number;
+  ultrameta_liquido: number;
   
   // Funil
   stage_01_actual: number;
+  stage_01_target: number;
+  stage_01_rate: number;
   stage_02_actual: number;
+  stage_02_target: number;
+  stage_02_rate: number;
   stage_03_actual: number;
+  stage_03_target: number;
+  stage_03_rate: number;
   stage_04_actual: number;
+  stage_04_target: number;
+  stage_04_rate: number;
   stage_05_actual: number;
+  stage_05_target: number;
+  stage_05_rate: number;
   stage_06_actual: number;
+  stage_06_target: number;
+  stage_06_rate: number;
   stage_07_actual: number;
+  stage_07_target: number;
+  stage_07_rate: number;
   stage_08_actual: number;
+  stage_08_target: number;
+  stage_08_rate: number;
 }
 
 export const useWeeklyMetrics = (limit: number = 12) => {
@@ -195,13 +229,9 @@ export const useEvolutionData = (limit: number = 12) => {
       return data.reverse().map(metric => ({
         periodo: metric.start_date,
         semanaLabel: metric.week_label,
-        faturamento: (metric.a010_revenue || 0) + (metric.contract_revenue || 0) + 
-                     (metric.ob_construir_revenue || 0) + (metric.ob_vitalicio_revenue || 0) + 
-                     (metric.ob_evento_revenue || 0),
+        faturamento: metric.total_revenue || 0,
         custos: metric.total_cost || 0,
-        lucro: ((metric.a010_revenue || 0) + (metric.contract_revenue || 0) + 
-                (metric.ob_construir_revenue || 0) + (metric.ob_vitalicio_revenue || 0) + 
-                (metric.ob_evento_revenue || 0)) - (metric.total_cost || 0),
+        lucro: metric.operating_profit || 0,
         roi: metric.roi || 0,
         roas: metric.roas || 0,
         vendasA010: metric.a010_sales || 0,

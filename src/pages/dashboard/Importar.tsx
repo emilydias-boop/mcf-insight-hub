@@ -106,9 +106,11 @@ export default function Importar() {
       console.log('Abas encontradas:', workbook.SheetNames);
       setSheetsFound(workbook.SheetNames);
 
-      // Buscar apenas pela aba "Resultados Semanais"
-      const isResultadosSemanais = (name: string) => {
-        return name.toLowerCase().includes('resultados') && name.toLowerCase().includes('semanais');
+      // Buscar pela aba "Resultado Semanal" (SINGULAR)
+      const isResultadoSemanal = (name: string) => {
+        const normalized = name.toLowerCase().trim();
+        return normalized === 'resultado semanal' || 
+               (normalized.includes('resultado') && normalized.includes('semanal') && !normalized.includes('semanais'));
       };
 
       let metricsSheetFound = false;
@@ -119,11 +121,12 @@ export default function Importar() {
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet);
         
-        if (isResultadosSemanais(sheetName)) {
+        if (isResultadoSemanal(sheetName)) {
           metricsSheetFound = true;
           
           console.log(`✓ Aba de métricas encontrada: ${sheetName}`);
           console.log(`  Total de linhas: ${data.length}`);
+          console.log('📋 Colunas encontradas:', Object.keys(data[0] || {}));
           
           for (const row of data) {
             // Parse datas separadas (Data Inicio e Data Fim)
@@ -143,10 +146,49 @@ export default function Importar() {
               continue;
             }
 
-            // Gerar week_label
-            const [startDay, startMonth] = String(dataInicio).split('/');
-            const [endDay, endMonth] = String(dataFim).split('/');
-            const weekLabel = `${startDay}/${startMonth} - ${endDay}/${endMonth}`;
+            // Gerar week_label no formato DD/MM - DD/MM
+            const formatWeekLabel = (start: string, end: string) => {
+              const startParts = String(start).split('/');
+              const endParts = String(end).split('/');
+              if (startParts.length >= 2 && endParts.length >= 2) {
+                return `${startParts[0].padStart(2,'0')}/${startParts[1].padStart(2,'0')} - ${endParts[0].padStart(2,'0')}/${endParts[1].padStart(2,'0')}`;
+              }
+              return `${start} - ${end}`;
+            };
+            const weekLabel = formatWeekLabel(dataInicio, dataFim);
+
+            // Parse valores com nomes EXATOS das colunas
+            const ads_cost = parseNum(row['Custo Ads (MAKE)']);
+            const team_cost = parseNum(row['Custo Equipe (PLANILHA MANUAL)']);
+            const office_cost = parseNum(row['Custo Escritório (PLANILHA MANUAL)']);
+            
+            const a010_revenue = parseNum(row['Faturado Curso A010']);
+            const a010_sales = parseInt(row['Vendas A010']) || 0;
+            
+            const ob_construir_revenue = parseNum(row['Faturado Order Bump Construir Para Alugar']);
+            const ob_construir_sales = parseInt(row['Vendas OB Construir Para alugar']) || 0;
+            const ob_vitalicio_revenue = parseNum(row['Faturado Order Bump Acesso Vitalício']);
+            const ob_vitalicio_sales = parseInt(row['Vendas Acesso Vitalício']) || 0;
+            const ob_evento_revenue = parseNum(row['Valor Vendido OB Evento']);
+            const ob_evento_sales = parseInt(row['Vendas OB Evento']) || 0;
+            
+            const contract_revenue = parseNum(row['Faturado Contrato']);
+            const contract_sales = parseInt(row['Vendas Contrato']) || 0;
+            
+            const clint_revenue = parseNum(row['Faturamento Clint']);
+            const incorporador_50k = parseNum(row['Faturamento Incorporador 50k']);
+            const ultrameta_clint = parseNum(row['Ultrameta Clint']);
+            const sdr_ia_ig = parseInt(row['SDR IA+IG']) || 0;
+            
+            // CALCULAR campos derivados
+            const total_revenue = a010_revenue + ob_construir_revenue + ob_vitalicio_revenue + ob_evento_revenue + contract_revenue;
+            const total_cost = ads_cost + team_cost + office_cost;
+            const real_cost = ads_cost - (a010_revenue + ob_construir_revenue + ob_vitalicio_revenue + ob_evento_revenue);
+            const operating_profit = total_revenue - total_cost;
+            const cir = contract_revenue > 0 ? (real_cost / contract_revenue) * 100 : 0;
+            
+            // Calcular Ultrameta Líquido: (Faturamento Total * Vendas A010) + (SDR IA+IG * Faturamento Total / 2)
+            const ultrameta_liquido = (total_revenue * a010_sales) + (sdr_ia_ig * total_revenue / 2);
 
             const metric = {
               start_date: startDate,
@@ -154,70 +196,87 @@ export default function Importar() {
               week_label: weekLabel,
               
               // Custos
-              ads_cost: parseNum(row['Custo Ads (MAKE)']),
-              team_cost: parseNum(row['Custo Equipe']),
-              office_cost: parseNum(row['Custo Escritório']),
-              total_cost: parseNum(row['Custo Real Por Semana (ADS - (A010+BIM))']),
+              ads_cost,
+              team_cost,
+              office_cost,
+              total_cost,
               
               // Receitas e vendas A010
-              a010_revenue: parseNum(row['Faturado Curso A010']),
-              a010_sales: parseInt(row['Vendas A010']) || 0,
+              a010_revenue,
+              a010_sales,
               
               // Receitas Order Bumps
-              ob_construir_revenue: parseNum(row['Faturado Order Bump Construir Para Alugar']),
-              ob_construir_sales: parseInt(row['Vendas OB Construir Para alugar']) || 0,
-              ob_vitalicio_revenue: parseNum(row['Faturado Order Bump Acesso Vitalício']),
-              ob_vitalicio_sales: parseInt(row['Vendas Acesso Vitalício']) || 0,
-              ob_evento_revenue: parseNum(row['Valor Vendido OB Evento']),
-              ob_evento_sales: parseInt(row['Vendas OB Evento']) || 0,
+              ob_construir_revenue,
+              ob_construir_sales,
+              ob_vitalicio_revenue,
+              ob_vitalicio_sales,
+              ob_evento_revenue,
+              ob_evento_sales,
               
               // Receitas Contrato
-              contract_revenue: parseNum(row['Faturado Contrato']),
-              contract_sales: parseInt(row['Vendas Contrato']) || 0,
+              contract_revenue,
+              contract_sales,
               
               // Receitas Clint
-              clint_revenue: parseNum(row['Faturado Clint']),
+              clint_revenue,
+              incorporador_50k,
+              ultrameta_clint,
               
-              // Métricas
+              // Métricas importadas da planilha
               roi: parseNum(row['ROI']),
               roas: parseNum(row['ROAS']),
               cpl: parseNum(row['CPL']),
               cplr: parseNum(row['CPLR']),
               
               // Outros
-              sdr_ia_ig: parseInt(row['SDR IA+IG']) || 0,
-              incorporador_50k: parseInt(row['Incorporador 50K']) || 0,
-              ultrameta_clint: parseNum(row['Ultrameta Clint']),
+              sdr_ia_ig,
               
-              // Funil - Etapas com valores reais
-              stage_01_actual: parseInt(row['01']) || 0,
-              stage_02_actual: parseInt(row['02']) || 0,
-              stage_03_actual: parseInt(row['03']) || 0,
-              stage_04_actual: parseInt(row['04']) || 0,
-              stage_05_actual: parseInt(row['05']) || 0,
-              stage_06_actual: parseInt(row['06']) || 0,
-              stage_07_actual: parseInt(row['07']) || 0,
-              stage_08_actual: parseInt(row['08']) || 0,
+              // Campos CALCULADOS
+              total_revenue,
+              real_cost,
+              operating_profit,
+              cir,
+              ultrameta_liquido,
               
-              // Funil - Metas
-              stage_01_target: parseInt(row['Meta 01']) || 0,
-              stage_02_target: parseInt(row['Meta 02']) || 0,
-              stage_03_target: parseInt(row['Meta 03']) || 0,
-              stage_04_target: parseInt(row['Meta 04']) || 0,
-              stage_05_target: parseInt(row['Meta 05']) || 0,
-              stage_06_target: parseInt(row['Meta 06']) || 0,
-              stage_07_target: parseInt(row['Meta 07']) || 0,
-              stage_08_target: parseInt(row['Meta 08']) || 0,
+              // Funil - Etapa 01
+              stage_01_target: parseInt(row['Meta Etapa 01']) || 0,
+              stage_01_actual: parseInt(row['Etapa 01 - Novo Lead']) || 0,
+              stage_01_rate: 100, // Sempre 100% na primeira etapa
               
-              // Funil - Taxas de conversão
-              stage_01_rate: parseNum(row['Taxa 01']),
-              stage_02_rate: parseNum(row['Taxa 02']),
-              stage_03_rate: parseNum(row['Taxa 03']),
-              stage_04_rate: parseNum(row['Taxa 04']),
-              stage_05_rate: parseNum(row['Taxa 05']),
-              stage_06_rate: parseNum(row['Taxa 06']),
-              stage_07_rate: parseNum(row['Taxa 07']),
-              stage_08_rate: parseNum(row['Taxa 08']),
+              // Funil - Etapa 03
+              stage_03_target: parseInt(row['Meta Etapa 03']) || 0,
+              stage_03_actual: parseInt(row['Etapa 03 - Reunião 01 Agendada']) || 0,
+              stage_03_rate: parseNum(row['%Etapa 03']),
+              
+              // Funil - Etapa 04
+              stage_04_target: parseInt(row['Meta Etapa 04']) || 0,
+              stage_04_actual: parseInt(row['Etapa 04 - Reunião 01 Realizada']) || 0,
+              stage_04_rate: parseNum(row['%Etapa 04']),
+              
+              // Funil - Etapa 05
+              stage_05_target: parseInt(row['Meta Etapa 05']) || 0,
+              stage_05_actual: parseInt(row['Etapa 05 - Contrato Pago']) || 0,
+              stage_05_rate: parseNum(row['%Etapa 05']),
+              
+              // Funil - Etapa 06 (sem meta)
+              stage_06_target: 0,
+              stage_06_actual: parseInt(row['Etapa 06 - Reunião 02 Realizada']) || 0,
+              stage_06_rate: parseNum(row['%Etapa 06']),
+              
+              // Funil - Etapa 07 (sem meta)
+              stage_07_target: 0,
+              stage_07_actual: parseInt(row['Etapa 07 - Reunião 03 Realizada']) || 0,
+              stage_07_rate: parseNum(row['%Etapa 07']),
+              
+              // Funil - Etapa 08 (sem meta)
+              stage_08_target: 0,
+              stage_08_actual: parseInt(row['Etapa 08 - Venda Realizada']) || 0,
+              stage_08_rate: parseNum(row['%Etapa 08']),
+              
+              // Etapa 02 não existe na planilha, definir como 0
+              stage_02_actual: 0,
+              stage_02_target: 0,
+              stage_02_rate: 0,
             };
 
             console.log('  ✓ Métrica processada:', { weekLabel, startDate, endDate });
@@ -233,7 +292,7 @@ export default function Importar() {
       if (metrics.length === 0) {
         if (!metricsSheetFound) {
           throw new Error(
-            `Aba "Resultados Semanais" não encontrada. Abas disponíveis: ${workbook.SheetNames.join(', ')}`
+            `Aba "Resultado Semanal" não encontrada. Abas disponíveis: ${workbook.SheetNames.join(', ')}`
           );
         }
         throw new Error('Nenhuma métrica válida encontrada na aba (verifique se as colunas Data Inicio e Data Fim estão presentes)');
@@ -382,18 +441,20 @@ export default function Importar() {
               </div>
 
               <div>
-                <h4 className="font-semibold text-foreground mb-1">Aba "Resultados Semanais"</h4>
+                <h4 className="font-semibold text-foreground mb-1">Aba "Resultado Semanal"</h4>
                 <p className="text-muted-foreground mb-2">
-                  A planilha deve conter uma aba chamada "Resultados Semanais" com as seguintes colunas:
+                  A planilha deve conter uma aba chamada "Resultado Semanal" (SINGULAR) com as seguintes colunas:
                 </p>
-                <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                <ul className="list-disc list-inside text-muted-foreground space-y-1 text-xs">
                   <li>Data Inicio e Data Fim (formato DD/MM/YYYY)</li>
-                  <li>Custo Ads (MAKE), Custo Equipe, Custo Escritório</li>
+                  <li>Custo Ads (MAKE), Custo Equipe (PLANILHA MANUAL), Custo Escritório (PLANILHA MANUAL)</li>
                   <li>Faturado Curso A010, Vendas A010</li>
-                  <li>Faturado Order Bumps (Construir, Vitalício, Evento)</li>
-                  <li>Faturado Contrato, Faturado Clint</li>
+                  <li>Faturado Order Bumps: Construir Para Alugar, Acesso Vitalício, OB Evento</li>
+                  <li>Faturado Contrato, Faturamento Clint, Faturamento Incorporador 50k</li>
                   <li>ROI, ROAS, CPL, CPLR</li>
-                  <li>Funil: colunas 01 a 08 (valores), Meta 01 a 08, Taxa 01 a 08</li>
+                  <li>Ultrameta Clint, SDR IA+IG</li>
+                  <li>Funil: Etapa 01 - Novo Lead, Etapa 03-08 com nomes completos</li>
+                  <li>Meta Etapa 01, 03, 04, 05 e %Etapa 03-08</li>
                 </ul>
               </div>
 
