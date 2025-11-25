@@ -106,30 +106,9 @@ export default function Importar() {
       console.log('Abas encontradas:', workbook.SheetNames);
       setSheetsFound(workbook.SheetNames);
 
-      // Função para verificar se uma aba é de resultados semanais pelo nome
-      const isResultadosSemanaisByName = (name: string) => {
-        const normalized = name.toLowerCase().replace(/\s+/g, '');
-        return (
-          normalized.includes('resultado') && normalized.includes('semana') ||
-          normalized.includes('resultadossemanais') ||
-          name.toLowerCase().includes('resultados semanais') ||
-          name.toLowerCase().includes('resultados_semanais')
-        );
-      };
-
-      // Função para verificar se uma aba tem as colunas de métricas
-      const hasMetricsColumns = (data: any[]) => {
-        if (!data || data.length === 0) return false;
-        const firstRow = data[0];
-        const keys = Object.keys(firstRow).map(k => k.toLowerCase());
-        
-        // Verificar colunas obrigatórias
-        const hasDataInicio = keys.some(k => k.includes('data') && k.includes('inicio'));
-        const hasDataFim = keys.some(k => k.includes('data') && k.includes('fim'));
-        const hasCustoAds = keys.some(k => k.includes('custo') && k.includes('ads'));
-        const hasFaturadoA010 = keys.some(k => k.includes('faturado') && k.includes('a010'));
-        
-        return hasDataInicio && hasDataFim && (hasCustoAds || hasFaturadoA010);
+      // Buscar apenas pela aba "Resultados Semanais"
+      const isResultadosSemanais = (name: string) => {
+        return name.toLowerCase().includes('resultados') && name.toLowerCase().includes('semanais');
       };
 
       let metricsSheetFound = false;
@@ -140,10 +119,7 @@ export default function Importar() {
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet);
         
-        // Verificar se é aba de métricas (por nome OU por colunas)
-        const isMetricsSheet = isResultadosSemanaisByName(sheetName) || hasMetricsColumns(data);
-        
-        if (isMetricsSheet) {
+        if (isResultadosSemanais(sheetName)) {
           metricsSheetFound = true;
           
           console.log(`✓ Aba de métricas encontrada: ${sheetName}`);
