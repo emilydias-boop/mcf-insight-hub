@@ -107,86 +107,116 @@ export const useLatestMetrics = () => {
   });
 };
 
-export const useMetricsSummary = () => {
+export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: string) => {
   return useQuery({
-    queryKey: ['metrics-summary'],
+    queryKey: ['metrics-summary', startDate?.toISOString(), endDate?.toISOString(), canal],
     queryFn: async () => {
-      // Buscar última semana
-      const { data: latest, error: latestError } = await supabase
+      // Buscar semanas dentro do período
+      let query = supabase
         .from('weekly_metrics')
         .select('*')
-        .order('start_date', { ascending: false })
-        .limit(1)
-        .single();
+        .order('start_date', { ascending: false });
       
-      if (latestError) throw latestError;
+      if (startDate) {
+        query = query.gte('start_date', startDate.toISOString().split('T')[0]);
+      }
+      if (endDate) {
+        query = query.lte('end_date', endDate.toISOString().split('T')[0]);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return {
+          revenue: { value: 0, change: 0 },
+          sales: { value: 0, change: 0 },
+          roi: { value: 0, change: 0 },
+          roas: { value: 0, change: 0 },
+          cost: { value: 0, change: 0 },
+          leads: { value: 0, change: 0 },
+        };
+      }
 
-      // Buscar semana anterior para calcular variação
-      const { data: previous, error: previousError } = await supabase
-        .from('weekly_metrics')
-        .select('*')
-        .order('start_date', { ascending: false })
-        .range(1, 1)
-        .single();
+      // Agregar dados do período
+      let totalRevenue = 0;
+      let totalSales = 0;
+      let totalCost = 0;
+      let totalLeads = 0;
+      let avgRoi = 0;
+      let avgRoas = 0;
 
-      const calculateChange = (current: number, prev: number) => {
-        if (!prev) return 0;
-        return ((current - prev) / prev) * 100;
+      data.forEach(week => {
+        if (canal === 'todos' || !canal) {
+          totalRevenue += week.total_revenue || 0;
+          totalSales += (week.a010_sales || 0) + (week.contract_sales || 0);
+        } else if (canal === 'a010') {
+          totalRevenue += week.a010_revenue || 0;
+          totalSales += week.a010_sales || 0;
+        } else if (canal === 'instagram') {
+          // Instagram não tem revenue direto, usar leads
+          totalLeads += week.stage_01_actual || 0;
+        } else if (canal === 'contratos') {
+          totalRevenue += week.contract_revenue || 0;
+          totalSales += week.contract_sales || 0;
+        }
+        totalCost += week.total_cost || 0;
+        totalLeads += week.stage_01_actual || 0;
+        avgRoi += week.roi || 0;
+        avgRoas += week.roas || 0;
+      });
+
+      avgRoi = avgRoi / data.length;
+      avgRoas = avgRoas / data.length;
+
+      // Calcular mudança comparando primeira metade vs segunda metade do período
+      const halfPoint = Math.floor(data.length / 2);
+      const recentHalf = data.slice(0, halfPoint);
+      const olderHalf = data.slice(halfPoint);
+
+      const calcChange = (recent: number, older: number) => {
+        if (older === 0) return recent > 0 ? 100 : 0;
+        return ((recent - older) / older) * 100;
       };
 
-      // Calcular totais
-      const totalRevenue = 
-        (latest.a010_revenue || 0) +
-        (latest.ob_construir_revenue || 0) +
-        (latest.ob_vitalicio_revenue || 0) +
-        (latest.ob_evento_revenue || 0) +
-        (latest.contract_revenue || 0);
-
-      const previousRevenue = previous ? 
-        (previous.a010_revenue || 0) +
-        (previous.ob_construir_revenue || 0) +
-        (previous.ob_vitalicio_revenue || 0) +
-        (previous.ob_evento_revenue || 0) +
-        (previous.contract_revenue || 0) : 0;
-
-      const totalSales = 
-        (latest.a010_sales || 0) +
-        (latest.ob_construir_sales || 0) +
-        (latest.ob_vitalicio_sales || 0) +
-        (latest.ob_evento_sales || 0) +
-        (latest.contract_sales || 0);
-
-      const previousSales = previous ?
-        (previous.a010_sales || 0) +
-        (previous.ob_construir_sales || 0) +
-        (previous.ob_vitalicio_sales || 0) +
-        (previous.ob_evento_sales || 0) +
-        (previous.contract_sales || 0) : 0;
+      const recentRevenue = recentHalf.length > 0 
+        ? recentHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0) / recentHalf.length 
+        : 0;
+      const olderRevenue = olderHalf.length > 0 
+        ? olderHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0) / olderHalf.length 
+        : 0;
+      
+      const recentSales = recentHalf.length > 0 
+        ? recentHalf.reduce((sum, w) => sum + ((w.a010_sales || 0) + (w.contract_sales || 0)), 0) / recentHalf.length 
+        : 0;
+      const olderSales = olderHalf.length > 0 
+        ? olderHalf.reduce((sum, w) => sum + ((w.a010_sales || 0) + (w.contract_sales || 0)), 0) / olderHalf.length 
+        : 0;
 
       return {
-        revenue: {
-          value: latest.total_revenue || totalRevenue,
-          change: calculateChange(latest.total_revenue || totalRevenue, previous?.total_revenue || previousRevenue),
+        revenue: { 
+          value: totalRevenue, 
+          change: calcChange(recentRevenue, olderRevenue) 
         },
-        sales: {
-          value: totalSales,
-          change: calculateChange(totalSales, previousSales),
+        sales: { 
+          value: totalSales, 
+          change: calcChange(recentSales, olderSales) 
         },
-        roi: {
-          value: latest.roi || 0,
-          change: calculateChange(latest.roi || 0, previous?.roi || 0),
+        roi: { 
+          value: avgRoi, 
+          change: 0 
         },
-        roas: {
-          value: latest.roas || 0,
-          change: calculateChange(latest.roas || 0, previous?.roas || 0),
+        roas: { 
+          value: avgRoas, 
+          change: 0 
         },
-        cost: {
-          value: latest.operating_cost || latest.total_cost || 0,
-          change: calculateChange(latest.operating_cost || latest.total_cost || 0, previous?.operating_cost || previous?.total_cost || 0),
+        cost: { 
+          value: totalCost, 
+          change: 0 
         },
-        leads: {
-          value: latest.stage_01_actual || 0,
-          change: calculateChange(latest.stage_01_actual || 0, previous?.stage_01_actual || 0),
+        leads: { 
+          value: totalLeads, 
+          change: 0 
         },
       };
     },
@@ -194,33 +224,64 @@ export const useMetricsSummary = () => {
 };
 
 // Hook para buscar resumo semanal para o componente ResumoFinanceiro
-export const useWeeklyResumo = (limit: number = 5) => {
+export const useWeeklyResumo = (limit: number = 5, startDate?: Date, endDate?: Date, canal?: string) => {
   return useQuery({
-    queryKey: ['weekly-resumo', limit],
+    queryKey: ['weekly-resumo', limit, startDate?.toISOString(), endDate?.toISOString(), canal],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('weekly_metrics')
         .select('*')
-        .order('start_date', { ascending: false })
-        .limit(limit);
+        .order('start_date', { ascending: false });
+      
+      if (startDate) {
+        query = query.gte('start_date', startDate.toISOString().split('T')[0]);
+      }
+      if (endDate) {
+        query = query.lte('end_date', endDate.toISOString().split('T')[0]);
+      }
+      
+      query = query.limit(limit);
+      
+      const { data, error } = await query;
       
       if (error) throw error;
 
-      // Mapear para o formato SemanaMes
-      return data.map((week) => ({
-        dataInicio: new Date(week.start_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        dataFim: new Date(week.end_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        faturamentoA010: week.a010_revenue || 0,
-        vendasA010: week.a010_sales || 0,
-        valorVendidoOBEvento: week.ob_evento_revenue || 0,
-        vendasOBEvento: week.ob_evento_sales || 0,
-        faturamentoContrato: week.contract_revenue || 0,
-        vendasContratos: week.contract_sales || 0,
-        faturamentoOBConstruir: week.ob_construir_revenue || 0,
-        vendasOBConstruir: week.ob_construir_sales || 0,
-        faturamentoOBVitalicio: week.ob_vitalicio_revenue || 0,
-        vendasOBVitalicio: week.ob_vitalicio_sales || 0,
-      }));
+      // Mapear para o formato SemanaMes, filtrando por canal se necessário
+      return data.map((week) => {
+        let faturamentoA010 = week.a010_revenue || 0;
+        let vendasA010 = week.a010_sales || 0;
+        let faturamentoContrato = week.contract_revenue || 0;
+        let vendasContratos = week.contract_sales || 0;
+
+        if (canal === 'a010') {
+          faturamentoContrato = 0;
+          vendasContratos = 0;
+        } else if (canal === 'contratos') {
+          faturamentoA010 = 0;
+          vendasA010 = 0;
+        } else if (canal === 'instagram') {
+          // Instagram não tem faturamento direto nessa tabela
+          faturamentoA010 = 0;
+          vendasA010 = 0;
+          faturamentoContrato = 0;
+          vendasContratos = 0;
+        }
+
+        return {
+          dataInicio: new Date(week.start_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+          dataFim: new Date(week.end_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+          faturamentoA010,
+          vendasA010,
+          valorVendidoOBEvento: canal === 'todos' || !canal ? (week.ob_evento_revenue || 0) : 0,
+          vendasOBEvento: canal === 'todos' || !canal ? (week.ob_evento_sales || 0) : 0,
+          faturamentoContrato,
+          vendasContratos,
+          faturamentoOBConstruir: canal === 'todos' || !canal ? (week.ob_construir_revenue || 0) : 0,
+          vendasOBConstruir: canal === 'todos' || !canal ? (week.ob_construir_sales || 0) : 0,
+          faturamentoOBVitalicio: canal === 'todos' || !canal ? (week.ob_vitalicio_revenue || 0) : 0,
+          vendasOBVitalicio: canal === 'todos' || !canal ? (week.ob_vitalicio_sales || 0) : 0,
+        };
+      });
     },
   });
 };

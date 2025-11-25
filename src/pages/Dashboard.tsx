@@ -12,7 +12,8 @@ import { PeriodComparison } from "@/components/dashboard/PeriodComparison";
 import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer";
 import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
-import { startOfMonth, endOfMonth } from "date-fns";
+import { startOfMonth, endOfMonth, format } from "date-fns";
+import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 import { useMetricsSummary } from "@/hooks/useWeeklyMetrics";
 import { useHublaSummary } from "@/hooks/useHublaTransactions";
 import { useA010Funnel, useInstagramFunnel } from "@/hooks/useFunnelData";
@@ -40,19 +41,19 @@ export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [periodo, setPeriodo] = useState({
-    tipo: 'mes' as 'semana' | 'mes',
-    inicio: startOfMonth(new Date()),
-    fim: endOfMonth(new Date()),
+    tipo: 'semana' as 'semana' | 'mes',
+    inicio: getCustomWeekStart(new Date()),
+    fim: getCustomWeekEnd(new Date()),
   });
   const [canal, setCanal] = useState('todos');
   
-  const { data: metricsSummary, isLoading: loadingMetrics, error: errorMetrics } = useMetricsSummary();
+  const { data: metricsSummary, isLoading: loadingMetrics, error: errorMetrics } = useMetricsSummary(periodo.inicio, periodo.fim, canal);
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
-  const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(52);
-  const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useA010Funnel();
-  const { data: instagramFunnel, isLoading: loadingInstagram, error: errorInstagram } = useInstagramFunnel();
-  const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta();
-  const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(5);
+  const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(52, periodo.inicio, periodo.fim, canal);
+  const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useA010Funnel(periodo.inicio, periodo.fim);
+  const { data: instagramFunnel, isLoading: loadingInstagram, error: errorInstagram } = useInstagramFunnel(periodo.inicio, periodo.fim);
+  const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
+  const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(5, periodo.inicio, periodo.fim, canal);
 
   // Debug logs
   console.log('🔍 Dashboard Data Debug:');
@@ -79,6 +80,14 @@ export default function Dashboard() {
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
     setPeriodo(filters.periodo);
     setCanal(filters.canal);
+    
+    // Invalidar queries para forçar atualização
+    queryClient.invalidateQueries({ queryKey: ['metrics-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+    queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
+    queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    queryClient.invalidateQueries({ queryKey: ['weekly-resumo'] });
+    
     toast({
       title: "Filtros aplicados",
       description: "Os dados do dashboard foram atualizados com os filtros selecionados.",
@@ -87,14 +96,22 @@ export default function Dashboard() {
 
   const handleClearFilters = () => {
     setPeriodo({
-      tipo: 'mes',
-      inicio: startOfMonth(new Date()),
-      fim: endOfMonth(new Date()),
+      tipo: 'semana',
+      inicio: getCustomWeekStart(new Date()),
+      fim: getCustomWeekEnd(new Date()),
     });
     setCanal('todos');
+    
+    // Invalidar queries
+    queryClient.invalidateQueries({ queryKey: ['metrics-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+    queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
+    queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    queryClient.invalidateQueries({ queryKey: ['weekly-resumo'] });
+    
     toast({
       title: "Filtros limpos",
-      description: "Os filtros foram resetados para os valores padrão.",
+      description: "Os filtros foram resetados para a semana atual.",
     });
   };
 
@@ -201,6 +218,23 @@ export default function Dashboard() {
         onClear={handleClearFilters}
         onExport={handleExport}
       />
+
+      {/* Indicador de Período Ativo */}
+      <div className="flex items-center gap-4 text-sm text-muted-foreground bg-card/50 border border-border rounded-lg p-3">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-foreground">Período:</span>
+          <span>{format(periodo.inicio, "dd/MM/yyyy")} até {format(periodo.fim, "dd/MM/yyyy")}</span>
+        </div>
+        {canal !== 'todos' && (
+          <>
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-foreground">Canal:</span>
+              <span className="capitalize">{canal}</span>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Error Display */}
       {(errorMetrics || errorEvolution || errorA010 || errorInstagram || errorUltrameta || errorResumo) && (
