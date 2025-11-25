@@ -71,40 +71,56 @@ Deno.serve(async (req) => {
       throw new Error('No file provided');
     }
 
-    console.log('Processing file:', file.name, 'Size:', file.size);
+    console.log('Uploading file to storage:', file.name, 'Size:', file.size, 'bytes');
 
-    // Ler arquivo com configuração otimizada para memória
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = xlsx.read(new Uint8Array(arrayBuffer), {
+    // Primeiro: fazer upload do arquivo para o storage
+    const fileName = `import-${Date.now()}-${file.name}`;
+    const fileBuffer = await file.arrayBuffer();
+    
+    const { error: uploadError } = await supabase.storage
+      .from('csv-imports')
+      .upload(fileName, fileBuffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+
+    console.log('File uploaded successfully, starting processing...');
+
+    // Segundo: baixar do storage e processar (storage tem melhor gestão de memória)
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('csv-imports')
+      .download(fileName);
+
+    if (downloadError) {
+      throw new Error(`Download failed: ${downloadError.message}`);
+    }
+
+    // Processar o arquivo baixado do storage
+    const buffer = await fileData.arrayBuffer();
+    const workbook = xlsx.read(new Uint8Array(buffer), {
       type: 'array',
       cellDates: true,
       cellNF: false,
       cellStyles: false,
-      sheetStubs: false,
     });
-
-    // Liberar memória do arrayBuffer
-    arrayBuffer.constructor.prototype.slice = null;
 
     const results = {
       metrics: 0,
       errors: [] as string[],
     };
 
-    // Processar planilha de métricas
     if (workbook.SheetNames.includes('Resultados Semanais')) {
       const sheet = workbook.Sheets['Resultados Semanais'];
-      
-      // Converter para JSON com otimização
-      const data = xlsx.utils.sheet_to_json(sheet, {
-        raw: false,
-        defval: null,
-      });
+      const data = xlsx.utils.sheet_to_json(sheet, { raw: false, defval: null });
 
-      console.log(`Found ${data.length} rows to process`);
+      console.log(`Processing ${data.length} rows in batches of 10`);
 
-      // Processar em batches MUITO pequenos de 5 linhas
-      const BATCH_SIZE = 5;
+      // Processar em batches de 10
+      const BATCH_SIZE = 10;
       
       for (let i = 0; i < data.length; i += BATCH_SIZE) {
         const batchData = data.slice(i, i + BATCH_SIZE);
@@ -114,7 +130,6 @@ Deno.serve(async (req) => {
           try {
             const rowData = row as any;
             
-            // Converter datas
             const startDate = excelDateToJSDate(rowData['Data Inicio']);
             const endDate = excelDateToJSDate(rowData['Data Fim']);
 
@@ -125,12 +140,10 @@ Deno.serve(async (req) => {
               return `${day}/${month}/${year}`;
             };
 
-            const week_label = `${formatDate(startDate)} - ${formatDate(endDate)}`;
-
             metricsToInsert.push({
               start_date: startDate.toISOString().split('T')[0],
               end_date: endDate.toISOString().split('T')[0],
-              week_label,
+              week_label: `${formatDate(startDate)} - ${formatDate(endDate)}`,
               ads_cost: parseBRCurrency(rowData['Custo Ads (MAKE)']),
               team_cost: parseBRCurrency(rowData['Custo Equipe (PLANILHA MANUAL)']),
               office_cost: parseBRCurrency(rowData['Custo Escritório (PLANILHA MANUAL)']),
@@ -184,39 +197,34 @@ Deno.serve(async (req) => {
               stage_08_rate: parsePercent(rowData['%Etapa 08']),
             });
           } catch (error) {
-            console.error('Error processing row:', error);
             results.errors.push(`Row error: ${error instanceof Error ? error.message : 'Unknown'}`);
           }
         }
 
-        // Inserir batch
         if (metricsToInsert.length > 0) {
           const { error } = await supabase
             .from('weekly_metrics')
-            .upsert(metricsToInsert, {
-              onConflict: 'start_date,end_date',
-            });
+            .upsert(metricsToInsert, { onConflict: 'start_date,end_date' });
 
           if (error) {
-            console.error(`Batch error:`, error);
             results.errors.push(`Batch error: ${error.message}`);
           } else {
             results.metrics += metricsToInsert.length;
-            console.log(`✅ Processed ${results.metrics}/${data.length} rows`);
+            console.log(`Progress: ${results.metrics}/${data.length}`);
           }
         }
-
-        // Limpar memória após cada batch
-        metricsToInsert.length = 0;
       }
     }
+
+    // Limpar arquivo do storage após processamento
+    await supabase.storage.from('csv-imports').remove([fileName]);
 
     console.log('Import complete:', results);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Importação concluída: ${results.metrics} métricas processadas`,
+        message: `Importação concluída: ${results.metrics} registros`,
         processed: results.metrics,
         errors: results.errors.length > 0 ? results.errors : undefined,
       }),
@@ -227,7 +235,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in import-spreadsheet-data:', error);
+    console.error('Error:', error);
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error',
