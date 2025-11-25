@@ -12,29 +12,66 @@ export interface WeeklyMetric {
   team_cost: number;
   office_cost: number;
   total_cost: number;
+  operating_cost: number;
+  real_cost: number;
   
   // Vendas
   a010_revenue: number;
   a010_sales: number;
   ob_construir_revenue: number;
+  ob_construir_sales: number;
   ob_vitalicio_revenue: number;
+  ob_vitalicio_sales: number;
   ob_evento_revenue: number;
+  ob_evento_sales: number;
   contract_revenue: number;
+  contract_sales: number;
+  clint_revenue: number;
+  incorporador_50k: number;
+  
+  // Totais calculados
+  total_revenue: number;
+  operating_profit: number;
   
   // Métricas
   roi: number;
   roas: number;
   cpl: number;
+  cplr: number;
+  cir: number;
+  
+  // Ultrametas
+  ultrameta_clint: number;
+  ultrameta_liquido: number;
+  
+  // SDR
+  sdr_ia_ig: number;
   
   // Funil
+  stage_01_target: number;
   stage_01_actual: number;
+  stage_01_rate: number;
+  stage_02_target: number;
   stage_02_actual: number;
+  stage_02_rate: number;
+  stage_03_target: number;
   stage_03_actual: number;
+  stage_03_rate: number;
+  stage_04_target: number;
   stage_04_actual: number;
+  stage_04_rate: number;
+  stage_05_target: number;
   stage_05_actual: number;
+  stage_05_rate: number;
+  stage_06_target: number;
   stage_06_actual: number;
+  stage_06_rate: number;
+  stage_07_target: number;
   stage_07_actual: number;
+  stage_07_rate: number;
+  stage_08_target: number;
   stage_08_actual: number;
+  stage_08_rate: number;
 }
 
 export const useWeeklyMetrics = (limit: number = 12) => {
@@ -128,8 +165,8 @@ export const useMetricsSummary = () => {
 
       return {
         revenue: {
-          value: totalRevenue,
-          change: calculateChange(totalRevenue, previousRevenue),
+          value: latest.total_revenue || totalRevenue,
+          change: calculateChange(latest.total_revenue || totalRevenue, previous?.total_revenue || previousRevenue),
         },
         sales: {
           value: totalSales,
@@ -144,8 +181,8 @@ export const useMetricsSummary = () => {
           change: calculateChange(latest.roas || 0, previous?.roas || 0),
         },
         cost: {
-          value: latest.total_cost || 0,
-          change: calculateChange(latest.total_cost || 0, previous?.total_cost || 0),
+          value: latest.operating_cost || latest.total_cost || 0,
+          change: calculateChange(latest.operating_cost || latest.total_cost || 0, previous?.operating_cost || previous?.total_cost || 0),
         },
         leads: {
           value: latest.stage_01_actual || 0,

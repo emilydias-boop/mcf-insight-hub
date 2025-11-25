@@ -16,6 +16,9 @@ import { useToast } from "@/hooks/use-toast";
 import { startOfMonth, endOfMonth } from "date-fns";
 import { useMetricsSummary } from "@/hooks/useWeeklyMetrics";
 import { useHublaSummary } from "@/hooks/useHublaTransactions";
+import { useA010Funnel } from "@/hooks/useFunnelData";
+import { useUltrameta } from "@/hooks/useUltrameta";
+import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
 
 const iconMap = {
