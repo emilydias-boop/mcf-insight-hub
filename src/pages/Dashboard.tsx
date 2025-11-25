@@ -21,6 +21,9 @@ import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { useWeeklyResumo } from "@/hooks/useWeeklyMetrics";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
 import { ImportMetricsDialog } from "@/components/dashboard/ImportMetricsDialog";
+import { useQueryClient } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const iconMap = {
   '1': DollarSign,
@@ -35,6 +38,7 @@ const iconMap = {
 
 export default function Dashboard() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [periodo, setPeriodo] = useState({
     tipo: 'mes' as 'semana' | 'mes',
     inicio: startOfMonth(new Date()),
@@ -42,13 +46,35 @@ export default function Dashboard() {
   });
   const [canal, setCanal] = useState('todos');
   
-  const { data: metricsSummary, isLoading: loadingMetrics } = useMetricsSummary();
+  const { data: metricsSummary, isLoading: loadingMetrics, error: errorMetrics } = useMetricsSummary();
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
-  const { data: evolutionData, isLoading: loadingEvolution } = useEvolutionData(52);
-  const { data: a010Funnel, isLoading: loadingA010 } = useA010Funnel();
-  const { data: instagramFunnel, isLoading: loadingInstagram } = useInstagramFunnel();
-  const { data: ultrameta, isLoading: loadingUltrameta } = useUltrameta();
-  const { data: weeklyResumo, isLoading: loadingResumo } = useWeeklyResumo(5);
+  const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(52);
+  const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useA010Funnel();
+  const { data: instagramFunnel, isLoading: loadingInstagram, error: errorInstagram } = useInstagramFunnel();
+  const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta();
+  const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(5);
+
+  // Debug logs
+  console.log('🔍 Dashboard Data Debug:');
+  console.log('Metrics Summary:', { data: metricsSummary, loading: loadingMetrics, error: errorMetrics });
+  console.log('Evolution Data:', { count: evolutionData?.length, loading: loadingEvolution, error: errorEvolution });
+  console.log('A010 Funnel:', { count: a010Funnel?.length, loading: loadingA010, error: errorA010 });
+  console.log('Instagram Funnel:', { count: instagramFunnel?.length, loading: loadingInstagram, error: errorInstagram });
+  console.log('Ultrameta:', { data: ultrameta, loading: loadingUltrameta, error: errorUltrameta });
+  console.log('Weekly Resumo:', { count: weeklyResumo?.length, loading: loadingResumo, error: errorResumo });
+
+  const handleRefreshData = () => {
+    queryClient.invalidateQueries({ queryKey: ['weekly-metrics'] });
+    queryClient.invalidateQueries({ queryKey: ['metrics-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+    queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
+    queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    queryClient.invalidateQueries({ queryKey: ['weekly-resumo'] });
+    toast({
+      title: "Dados atualizados",
+      description: "Os dados do dashboard foram recarregados.",
+    });
+  };
 
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
     setPeriodo(filters.periodo);
@@ -160,12 +186,11 @@ export default function Dashboard() {
           <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
         </div>
         <div className="flex gap-2">
-          <ImportMetricsDialog 
-            onImportSuccess={() => {
-              // Refetch metrics data after successful import
-              window.location.reload();
-            }} 
-          />
+          <Button variant="outline" onClick={handleRefreshData} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </Button>
+          <ImportMetricsDialog />
           <PeriodComparison />
           <DashboardCustomizer />
         </div>
@@ -176,6 +201,28 @@ export default function Dashboard() {
         onClear={handleClearFilters}
         onExport={handleExport}
       />
+
+      {/* Error Display */}
+      {(errorMetrics || errorEvolution || errorA010 || errorInstagram || errorUltrameta || errorResumo) && (
+        <Card className="bg-destructive/10 border-destructive">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              <div>
+                <p className="font-semibold">Erro ao carregar dados</p>
+                <p className="text-sm">
+                  {errorMetrics && 'Métricas: ' + (errorMetrics as Error).message}
+                  {errorEvolution && ' | Evolução: ' + (errorEvolution as Error).message}
+                  {errorA010 && ' | Funil A010: ' + (errorA010 as Error).message}
+                  {errorInstagram && ' | Funil Instagram: ' + (errorInstagram as Error).message}
+                  {errorUltrameta && ' | Ultrameta: ' + (errorUltrameta as Error).message}
+                  {errorResumo && ' | Resumo: ' + (errorResumo as Error).message}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Seção de KPIs */}
       <div className="space-y-4">
