@@ -14,6 +14,9 @@ import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer"
 import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { startOfMonth, endOfMonth } from "date-fns";
+import { useMetricsSummary } from "@/hooks/useWeeklyMetrics";
+import { useHublaSummary } from "@/hooks/useHublaTransactions";
+import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
 
 const iconMap = {
   '1': DollarSign,
@@ -34,6 +37,9 @@ export default function Dashboard() {
     fim: endOfMonth(new Date()),
   });
   const [canal, setCanal] = useState('todos');
+  
+  const { data: metricsSummary, isLoading: loadingMetrics } = useMetricsSummary();
+  const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
 
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
     setPeriodo(filters.periodo);
@@ -74,6 +80,52 @@ export default function Dashboard() {
     });
   };
 
+  // KPIs com dados reais
+  const kpis = metricsSummary ? [
+    {
+      id: '1',
+      title: 'Faturamento',
+      value: formatCurrency(metricsSummary.revenue.value),
+      change: metricsSummary.revenue.change,
+      variant: metricsSummary.revenue.change >= 0 ? 'success' : 'danger',
+    },
+    {
+      id: '2',
+      title: 'Vendas',
+      value: formatNumber(metricsSummary.sales.value),
+      change: metricsSummary.sales.change,
+      variant: metricsSummary.sales.change >= 0 ? 'success' : 'danger',
+    },
+    {
+      id: '3',
+      title: 'ROI',
+      value: formatPercent(metricsSummary.roi.value, 0),
+      change: metricsSummary.roi.change,
+      variant: metricsSummary.roi.change >= 0 ? 'success' : 'danger',
+    },
+    {
+      id: '4',
+      title: 'ROAS',
+      value: `${metricsSummary.roas.value.toFixed(2)}x`,
+      change: metricsSummary.roas.change,
+      variant: metricsSummary.roas.change >= 0 ? 'success' : 'danger',
+    },
+    {
+      id: '5',
+      title: 'Custos',
+      value: formatCurrency(metricsSummary.cost.value),
+      change: metricsSummary.cost.change,
+      variant: metricsSummary.cost.change <= 0 ? 'success' : 'danger',
+    },
+    {
+      id: '6',
+      title: 'Leads',
+      value: formatNumber(metricsSummary.leads.value),
+      change: metricsSummary.leads.change,
+      variant: metricsSummary.leads.change >= 0 ? 'success' : 'danger',
+    },
+  ] : MOCK_KPIS;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -97,37 +149,53 @@ export default function Dashboard() {
       <div className="space-y-4">
         {/* KPIs Principais (primeiros 3) + Ultrameta */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-          {MOCK_KPIS.slice(0, 3).map((kpi) => {
-            const Icon = iconMap[kpi.id as keyof typeof iconMap];
-            return (
-              <KPICard
-                key={kpi.id}
-                title={kpi.title}
-                value={kpi.value}
-                change={kpi.change}
-                icon={Icon}
-                variant={kpi.variant}
-              />
-            );
-          })}
+          {loadingMetrics ? (
+            <>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-32 bg-card animate-pulse rounded-lg border border-border" />
+              ))}
+            </>
+          ) : (
+            kpis.slice(0, 3).map((kpi) => {
+              const Icon = iconMap[kpi.id as keyof typeof iconMap];
+              return (
+                <KPICard
+                  key={kpi.id}
+                  title={kpi.title}
+                  value={kpi.value}
+                  change={kpi.change}
+                  icon={Icon}
+                  variant={kpi.variant as any}
+                />
+              );
+            })
+          )}
           <UltrametaCard data={MOCK_ULTRAMETA} />
         </div>
 
         {/* KPIs Secundários */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {MOCK_KPIS.slice(3).map((kpi) => {
-            const Icon = iconMap[kpi.id as keyof typeof iconMap];
-            return (
-              <KPICard
-                key={kpi.id}
-                title={kpi.title}
-                value={kpi.value}
-                change={kpi.change}
-                icon={Icon}
-                variant={kpi.variant}
-              />
-            );
-          })}
+          {loadingMetrics ? (
+            <>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-32 bg-card animate-pulse rounded-lg border border-border" />
+              ))}
+            </>
+          ) : (
+            kpis.slice(3).map((kpi) => {
+              const Icon = iconMap[kpi.id as keyof typeof iconMap];
+              return (
+                <KPICard
+                  key={kpi.id}
+                  title={kpi.title}
+                  value={kpi.value}
+                  change={kpi.change}
+                  icon={Icon}
+                  variant={kpi.variant as any}
+                />
+              );
+            })
+          )}
         </div>
       </div>
 

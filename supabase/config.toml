@@ -1,5 +1,11 @@
 project_id = "rehcfgqvigfcekiipqkc"
 
+[functions.hubla-webhook-handler]
+verify_jwt = false
+
+[functions.import-weekly-metrics]
+verify_jwt = false
+
 [functions.clint-api]
 verify_jwt = false
 
