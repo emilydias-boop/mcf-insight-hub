@@ -94,7 +94,7 @@ export default function Dashboard() {
       />
 
       {/* KPIs Principais (primeiros 3) + Ultrameta */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
         {MOCK_KPIS.slice(0, 3).map((kpi) => {
           const Icon = iconMap[kpi.id as keyof typeof iconMap];
           return (
@@ -112,7 +112,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPIs Secundários */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {MOCK_KPIS.slice(3).map((kpi) => {
           const Icon = iconMap[kpi.id as keyof typeof iconMap];
           return (

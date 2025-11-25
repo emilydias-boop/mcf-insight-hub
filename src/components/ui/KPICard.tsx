@@ -20,7 +20,7 @@ export function KPICard({
     danger: 'text-destructive',
     neutral: 'text-muted-foreground'
   };
-  return <Card className="bg-card border-border hover:shadow-md transition-shadow py-0 my-[90px]">
+  return <Card className="bg-card border-border hover:shadow-md transition-shadow h-full">
       <CardContent className="p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-3">
