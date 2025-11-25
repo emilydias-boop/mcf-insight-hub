@@ -283,6 +283,42 @@ export type Database = {
         }
         Relationships: []
       }
+      closer_commissions: {
+        Row: {
+          closer_name: string
+          commission_rate: number
+          created_at: string | null
+          fixed_salary: number | null
+          id: string
+          lead_type: string
+          level: number
+          quantity_leads: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          closer_name: string
+          commission_rate: number
+          created_at?: string | null
+          fixed_salary?: number | null
+          id?: string
+          lead_type: string
+          level: number
+          quantity_leads?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          closer_name?: string
+          commission_rate?: number
+          created_at?: string | null
+          fixed_salary?: number | null
+          id?: string
+          lead_type?: string
+          level?: number
+          quantity_leads?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       credit_clients: {
         Row: {
           cpf: string
@@ -817,6 +853,108 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      hubla_transactions: {
+        Row: {
+          created_at: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          event_type: string
+          hubla_id: string
+          id: string
+          payment_method: string | null
+          product_category: string | null
+          product_code: string | null
+          product_name: string
+          product_price: number | null
+          product_type: string | null
+          raw_data: Json | null
+          sale_date: string
+          sale_status: string | null
+          updated_at: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          event_type: string
+          hubla_id: string
+          id?: string
+          payment_method?: string | null
+          product_category?: string | null
+          product_code?: string | null
+          product_name: string
+          product_price?: number | null
+          product_type?: string | null
+          raw_data?: Json | null
+          sale_date: string
+          sale_status?: string | null
+          updated_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          event_type?: string
+          hubla_id?: string
+          id?: string
+          payment_method?: string | null
+          product_category?: string | null
+          product_code?: string | null
+          product_name?: string
+          product_price?: number | null
+          product_type?: string | null
+          raw_data?: Json | null
+          sale_date?: string
+          sale_status?: string | null
+          updated_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: []
+      }
+      hubla_webhook_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          event_data: Json
+          event_type: string
+          id: string
+          processed_at: string | null
+          processing_time_ms: number | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          event_data: Json
+          event_type: string
+          id?: string
+          processed_at?: string | null
+          processing_time_ms?: number | null
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          event_data?: Json
+          event_type?: string
+          id?: string
+          processed_at?: string | null
+          processing_time_ms?: number | null
+          status?: string
+        }
+        Relationships: []
       }
       integrations: {
         Row: {
@@ -1413,6 +1551,171 @@ export type Database = {
           processed_at?: string | null
           processing_time_ms?: number | null
           status?: string
+        }
+        Relationships: []
+      }
+      weekly_metrics: {
+        Row: {
+          a010_revenue: number | null
+          a010_sales: number | null
+          ads_cost: number | null
+          clint_revenue: number | null
+          contract_revenue: number | null
+          contract_sales: number | null
+          cpl: number | null
+          cplr: number | null
+          created_at: string | null
+          end_date: string
+          id: string
+          incorporador_50k: number | null
+          ob_construir_revenue: number | null
+          ob_construir_sales: number | null
+          ob_evento_revenue: number | null
+          ob_evento_sales: number | null
+          ob_vitalicio_revenue: number | null
+          ob_vitalicio_sales: number | null
+          office_cost: number | null
+          roas: number | null
+          roi: number | null
+          sdr_ia_ig: number | null
+          stage_01_actual: number | null
+          stage_01_rate: number | null
+          stage_01_target: number | null
+          stage_02_actual: number | null
+          stage_02_rate: number | null
+          stage_02_target: number | null
+          stage_03_actual: number | null
+          stage_03_rate: number | null
+          stage_03_target: number | null
+          stage_04_actual: number | null
+          stage_04_rate: number | null
+          stage_04_target: number | null
+          stage_05_actual: number | null
+          stage_05_rate: number | null
+          stage_05_target: number | null
+          stage_06_actual: number | null
+          stage_06_rate: number | null
+          stage_06_target: number | null
+          stage_07_actual: number | null
+          stage_07_rate: number | null
+          stage_07_target: number | null
+          stage_08_actual: number | null
+          stage_08_rate: number | null
+          stage_08_target: number | null
+          start_date: string
+          team_cost: number | null
+          total_cost: number | null
+          ultrameta_clint: number | null
+          updated_at: string | null
+          week_label: string
+        }
+        Insert: {
+          a010_revenue?: number | null
+          a010_sales?: number | null
+          ads_cost?: number | null
+          clint_revenue?: number | null
+          contract_revenue?: number | null
+          contract_sales?: number | null
+          cpl?: number | null
+          cplr?: number | null
+          created_at?: string | null
+          end_date: string
+          id?: string
+          incorporador_50k?: number | null
+          ob_construir_revenue?: number | null
+          ob_construir_sales?: number | null
+          ob_evento_revenue?: number | null
+          ob_evento_sales?: number | null
+          ob_vitalicio_revenue?: number | null
+          ob_vitalicio_sales?: number | null
+          office_cost?: number | null
+          roas?: number | null
+          roi?: number | null
+          sdr_ia_ig?: number | null
+          stage_01_actual?: number | null
+          stage_01_rate?: number | null
+          stage_01_target?: number | null
+          stage_02_actual?: number | null
+          stage_02_rate?: number | null
+          stage_02_target?: number | null
+          stage_03_actual?: number | null
+          stage_03_rate?: number | null
+          stage_03_target?: number | null
+          stage_04_actual?: number | null
+          stage_04_rate?: number | null
+          stage_04_target?: number | null
+          stage_05_actual?: number | null
+          stage_05_rate?: number | null
+          stage_05_target?: number | null
+          stage_06_actual?: number | null
+          stage_06_rate?: number | null
+          stage_06_target?: number | null
+          stage_07_actual?: number | null
+          stage_07_rate?: number | null
+          stage_07_target?: number | null
+          stage_08_actual?: number | null
+          stage_08_rate?: number | null
+          stage_08_target?: number | null
+          start_date: string
+          team_cost?: number | null
+          total_cost?: number | null
+          ultrameta_clint?: number | null
+          updated_at?: string | null
+          week_label: string
+        }
+        Update: {
+          a010_revenue?: number | null
+          a010_sales?: number | null
+          ads_cost?: number | null
+          clint_revenue?: number | null
+          contract_revenue?: number | null
+          contract_sales?: number | null
+          cpl?: number | null
+          cplr?: number | null
+          created_at?: string | null
+          end_date?: string
+          id?: string
+          incorporador_50k?: number | null
+          ob_construir_revenue?: number | null
+          ob_construir_sales?: number | null
+          ob_evento_revenue?: number | null
+          ob_evento_sales?: number | null
+          ob_vitalicio_revenue?: number | null
+          ob_vitalicio_sales?: number | null
+          office_cost?: number | null
+          roas?: number | null
+          roi?: number | null
+          sdr_ia_ig?: number | null
+          stage_01_actual?: number | null
+          stage_01_rate?: number | null
+          stage_01_target?: number | null
+          stage_02_actual?: number | null
+          stage_02_rate?: number | null
+          stage_02_target?: number | null
+          stage_03_actual?: number | null
+          stage_03_rate?: number | null
+          stage_03_target?: number | null
+          stage_04_actual?: number | null
+          stage_04_rate?: number | null
+          stage_04_target?: number | null
+          stage_05_actual?: number | null
+          stage_05_rate?: number | null
+          stage_05_target?: number | null
+          stage_06_actual?: number | null
+          stage_06_rate?: number | null
+          stage_06_target?: number | null
+          stage_07_actual?: number | null
+          stage_07_rate?: number | null
+          stage_07_target?: number | null
+          stage_08_actual?: number | null
+          stage_08_rate?: number | null
+          stage_08_target?: number | null
+          start_date?: string
+          team_cost?: number | null
+          total_cost?: number | null
+          ultrameta_clint?: number | null
+          updated_at?: string | null
+          week_label?: string
         }
         Relationships: []
       }
