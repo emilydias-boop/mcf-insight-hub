@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -6,6 +6,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Filter } from "lucide-react";
 import { FunilLista } from "./FunilLista";
 import { useClintFunnelByLeadType } from "@/hooks/useClintFunnelByLeadType";
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 // Etapas fixas que devem sempre aparecer por padrão
 const DEFAULT_STAGES = [
@@ -23,23 +25,54 @@ interface FunilDuploProps {
   showCurrentState: boolean;
 }
 
+type PeriodType = 'hoje' | 'semana' | 'mes';
+
 export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: FunilDuploProps) {
   const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hoje');
+
+  // Calcular datas baseado no período selecionado
+  const { periodStart, periodEnd } = useMemo(() => {
+    const now = new Date();
+    
+    switch (selectedPeriod) {
+      case 'hoje':
+        return {
+          periodStart: startOfDay(now),
+          periodEnd: endOfDay(now),
+        };
+      case 'semana':
+        return {
+          periodStart: startOfWeek(now, { locale: ptBR }),
+          periodEnd: endOfWeek(now, { locale: ptBR }),
+        };
+      case 'mes':
+        return {
+          periodStart: startOfMonth(now),
+          periodEnd: endOfMonth(now),
+        };
+      default:
+        return {
+          periodStart: startOfDay(now),
+          periodEnd: endOfDay(now),
+        };
+    }
+  }, [selectedPeriod]);
 
   const { data: etapasLeadA = [], isLoading: isLoadingA } = useClintFunnelByLeadType(
     originId,
     'A',
-    weekStart,
-    weekEnd,
-    showCurrentState
+    periodStart,
+    periodEnd,
+    false // Sempre usar período histórico com os botões
   );
 
   const { data: etapasLeadB = [], isLoading: isLoadingB } = useClintFunnelByLeadType(
     originId,
     'B',
-    weekStart,
-    weekEnd,
-    showCurrentState
+    periodStart,
+    periodEnd,
+    false // Sempre usar período histórico com os botões
   );
 
   const isLoading = isLoadingA || isLoadingB;
@@ -75,13 +108,40 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                Filtrar Etapas ({visibleCount}/{allStages.length})
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
+              <Button
+                variant={selectedPeriod === 'hoje' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSelectedPeriod('hoje')}
+                className="h-8"
+              >
+                Hoje
               </Button>
-            </PopoverTrigger>
+              <Button
+                variant={selectedPeriod === 'semana' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSelectedPeriod('semana')}
+                className="h-8"
+              >
+                Semana
+              </Button>
+              <Button
+                variant={selectedPeriod === 'mes' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSelectedPeriod('mes')}
+                className="h-8"
+              >
+                Mês
+              </Button>
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filtrar Etapas ({visibleCount}/{allStages.length})
+                </Button>
+              </PopoverTrigger>
             <PopoverContent className="w-80">
               <div className="space-y-4">
                 <h4 className="font-semibold text-sm">Selecionar Etapas</h4>
@@ -104,7 +164,8 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
                 </div>
               </div>
             </PopoverContent>
-          </Popover>
+            </Popover>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
