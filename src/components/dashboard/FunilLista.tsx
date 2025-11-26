@@ -26,22 +26,45 @@ interface FunilEtapa {
 interface FunilListaProps {
   titulo: string;
   etapas: FunilEtapa[];
+  selectedStages?: string[];
+  isLoading?: boolean;
+  hideFilter?: boolean;
 }
 
-export function FunilLista({ titulo, etapas }: FunilListaProps) {
-  const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
+export function FunilLista({ 
+  titulo, 
+  etapas, 
+  selectedStages: externalSelectedStages,
+  isLoading = false,
+  hideFilter = false 
+}: FunilListaProps) {
+  const [internalSelectedStages, setInternalSelectedStages] = useState<string[]>(DEFAULT_STAGES);
+  
+  const selectedStages = externalSelectedStages ?? internalSelectedStages;
+  const setSelectedStages = externalSelectedStages ? undefined : setInternalSelectedStages;
 
   const visibleEtapas = etapas.filter(e => 
     selectedStages.includes(e.stage_id || e.etapa)
   );
 
   const handleToggleStage = (stageId: string) => {
-    setSelectedStages(prev =>
-      prev.includes(stageId)
-        ? prev.filter(id => id !== stageId)
-        : [...prev, stageId]
-    );
+    if (setSelectedStages) {
+      setSelectedStages(prev =>
+        prev.includes(stageId)
+          ? prev.filter(id => id !== stageId)
+          : [...prev, stageId]
+      );
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-foreground">{titulo}</h3>
+        <div className="text-sm text-muted-foreground">Carregando...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -53,7 +76,7 @@ export function FunilLista({ titulo, etapas }: FunilListaProps) {
           </span>
         </div>
         
-        <Popover>
+        {!hideFilter && <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm">
               <Filter className="h-4 w-4 mr-2" />
@@ -82,7 +105,7 @@ export function FunilLista({ titulo, etapas }: FunilListaProps) {
               </div>
             </div>
           </PopoverContent>
-        </Popover>
+        </Popover>}
       </div>
       
       <div className="space-y-3">

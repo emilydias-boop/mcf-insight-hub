@@ -3,6 +3,7 @@ import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_KPIS } from "@/data/mockData";
 import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle, Eye, Calendar } from "lucide-react";
+import { FunilDuplo } from "@/components/dashboard/FunilDuplo";
 import { FunilLista } from "@/components/dashboard/FunilLista";
 import { TargetsConfigDialog } from "@/components/dashboard/TargetsConfigDialog";
 import { ResumoFinanceiro } from "@/components/dashboard/ResumoFinanceiro";
@@ -22,7 +23,7 @@ import { useUltrameta } from "@/hooks/useUltrameta";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { useWeeklyResumo } from "@/hooks/useWeeklyMetrics";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
-import { ImportMetricsDialog } from "@/components/dashboard/ImportMetricsDialog";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -212,9 +213,8 @@ export default function Dashboard() {
             <RefreshCw className="h-4 w-4" />
             Atualizar
           </Button>
-          <TargetsConfigDialog />
-          <ImportMetricsDialog />
-          <PeriodComparison />
+            <TargetsConfigDialog />
+            <PeriodComparison />
           <DashboardCustomizer />
         </div>
       </div>
@@ -247,48 +247,27 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Seção de KPIs */}
-      <div className="space-y-4">
-        {/* KPIs Principais (primeiros 3) + Ultrameta */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
-          {loadingMetrics ? (
-            <>
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-32 bg-card animate-pulse rounded-lg border border-border" />
-              ))}
-            </>
-          ) : (
-            kpis.slice(0, 3).map((kpi) => {
-              const Icon = iconMap[kpi.id as keyof typeof iconMap];
-              return (
-                <KPICard
-                  key={kpi.id}
-                  title={kpi.title}
-                  value={kpi.value}
-                  change={kpi.change}
-                  icon={Icon}
-                  variant={kpi.variant as any}
-                />
-              );
-            })
-          )}
-          {loadingUltrameta ? (
-            <div className="h-full bg-card animate-pulse rounded-lg border border-border" />
-          ) : ultrameta ? (
+      {/* KPIs + Ultrameta Layout Compacto */}
+      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
+        {/* Ultrameta Card - Esquerda */}
+        {loadingUltrameta ? (
+          <div className="h-full min-h-[240px] bg-card animate-pulse rounded-lg border border-border" />
+        ) : ultrameta ? (
+          <div className="h-full">
             <UltrametaCard data={ultrameta} />
-          ) : null}
-        </div>
+          </div>
+        ) : null}
 
-        {/* KPIs Secundários */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPIs Grid 3x2 - Direita */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
           {loadingMetrics ? (
             <>
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-32 bg-card animate-pulse rounded-lg border border-border" />
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="h-24 bg-card animate-pulse rounded-lg border border-border" />
               ))}
             </>
           ) : (
-            kpis.slice(3).map((kpi) => {
+            kpis.map((kpi) => {
               const Icon = iconMap[kpi.id as keyof typeof iconMap];
               return (
                 <KPICard
@@ -298,6 +277,7 @@ export default function Dashboard() {
                   change={kpi.change}
                   icon={Icon}
                   variant={kpi.variant as any}
+                  compact
                 />
               );
             })
@@ -318,11 +298,10 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Funil Pipeline Inside Sales */}
-      <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
-          <div className="flex gap-2 border border-border rounded-lg p-1">
+      {/* Funil Pipeline Inside Sales - Dividido em Leads A e B */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-end">
+          <div className="flex gap-2 border border-border rounded-lg p-1 bg-card">
             <Button
               variant={viewMode === 'periodo' ? 'default' : 'ghost'}
               size="sm"
@@ -342,17 +321,14 @@ export default function Dashboard() {
               Visão Atual
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {loadingA010 ? (
-            <div className="h-64 bg-muted animate-pulse rounded" />
-          ) : a010Funnel && a010Funnel.length > 0 ? (
-            <FunilLista titulo="Pipeline Inside Sales" etapas={a010Funnel} />
-          ) : (
-            <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+        <FunilDuplo
+          originId="9f9f6bc5-e2d4-4f7b-afb6-ec5868b3ad02"
+          weekStart={periodo.inicio}
+          weekEnd={periodo.fim}
+          showCurrentState={viewMode === 'atual'}
+        />
+      </div>
 
       {loadingResumo ? (
         <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
