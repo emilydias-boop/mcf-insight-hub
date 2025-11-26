@@ -52,7 +52,7 @@ serve(async (req) => {
 
   try {
     const eventData = await req.json();
-    const eventType = eventData.event || eventData.type || 'unknown';
+    const eventType = eventData.type || 'unknown';
 
     console.log('📥 Webhook recebido:', eventType);
     console.log('Dados:', JSON.stringify(eventData, null, 2));
@@ -74,7 +74,7 @@ serve(async (req) => {
 
     // Processar eventos de venda (formato real da Hubla)
     if (eventType === 'invoice.payment_succeeded' || eventType === 'NewSale') {
-      const sale = eventData.data || eventData;
+      const sale = eventData.event || eventData.data || eventData;
       
       // Extrair dados do produto
       const productName = sale.product?.name || sale.products?.[0]?.name || 'Produto Desconhecido';
@@ -83,21 +83,21 @@ serve(async (req) => {
       const productCategory = mapProductCategory(productName, productCode);
       
       // Extrair dados do cliente
-      const firstName = sale.subscription?.payer?.firstName || sale.user?.firstName || '';
-      const lastName = sale.subscription?.payer?.lastName || sale.user?.lastName || '';
+      const firstName = sale.invoice?.buyer?.firstName || sale.subscription?.payer?.firstName || sale.user?.firstName || '';
+      const lastName = sale.invoice?.buyer?.lastName || sale.subscription?.payer?.lastName || sale.user?.lastName || '';
       const customerName = `${firstName} ${lastName}`.trim() || 'Cliente Hubla';
-      const customerEmail = sale.subscription?.payer?.email || sale.user?.email;
-      const customerPhone = sale.subscription?.payer?.phone || sale.user?.phone;
+      const customerEmail = sale.invoice?.buyer?.email || sale.subscription?.payer?.email || sale.user?.email;
+      const customerPhone = sale.invoice?.buyer?.phone || sale.subscription?.payer?.phone || sale.user?.phone;
       
       // Extrair valor (converter de centavos para reais)
-      const amountCents = sale.subscription?.lastInvoice?.amount?.totalCents || sale.amount || 0;
+      const amountCents = sale.invoice?.amount?.totalCents || sale.subscription?.lastInvoice?.amount?.totalCents || sale.amount || 0;
       const amount = typeof amountCents === 'number' ? amountCents / 100 : 0;
       
       // Extrair data da venda
-      const saleDate = sale.subscription?.lastInvoice?.saleDate || sale.created_at || new Date().toISOString();
+      const saleDate = sale.invoice?.saleDate || sale.subscription?.lastInvoice?.saleDate || sale.created_at || new Date().toISOString();
       
       // ID da transação
-      const hublaId = sale.subscription?.lastInvoice?.id || sale.id || sale.transaction_id || `${Date.now()}`;
+      const hublaId = sale.invoice?.id || sale.subscription?.lastInvoice?.id || sale.id || sale.transaction_id || `${Date.now()}`;
       
       console.log(`📦 Produto: ${productName} → Categoria: ${productCategory} | Valor: R$ ${amount.toFixed(2)}`);
 
@@ -157,8 +157,8 @@ serve(async (req) => {
 
     // Processar eventos de reembolso
     if (eventType === 'invoice.refunded') {
-      const sale = eventData.data || eventData;
-      const hublaId = sale.subscription?.lastInvoice?.id || sale.id || sale.transaction_id;
+      const sale = eventData.event || eventData.data || eventData;
+      const hublaId = sale.invoice?.id || sale.subscription?.lastInvoice?.id || sale.id || sale.transaction_id;
 
       // Atualizar status da transação na hubla_transactions
       const { error: updateError } = await supabase
@@ -177,7 +177,7 @@ serve(async (req) => {
       const { error: a010UpdateError } = await supabase
         .from('a010_sales')
         .update({ status: 'refunded' })
-        .eq('customer_email', sale.subscription?.payer?.email || sale.user?.email);
+        .eq('customer_email', sale.invoice?.buyer?.email || sale.subscription?.payer?.email || sale.user?.email);
 
       if (a010UpdateError) {
         console.error('⚠️ Erro ao atualizar A010:', a010UpdateError);
