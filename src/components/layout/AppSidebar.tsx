@@ -88,6 +88,7 @@ const menuItems: MenuItem[] = [
       { title: "Origens", url: "/crm/origens" },
       { title: "Grupos", url: "/crm/grupos" },
       { title: "Tags", url: "/crm/tags" },
+      { title: "Importar Histórico", url: "/crm/importar-historico" },
       { title: "Configurações", url: "/crm/configuracoes" },
     ]
   },
