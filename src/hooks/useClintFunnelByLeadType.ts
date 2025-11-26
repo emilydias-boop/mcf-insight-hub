@@ -212,13 +212,13 @@ export const useClintFunnelByLeadType = (
         // Buscar metas para os stages no período
         const targetsMap: Record<string, number> = {};
         if (weekStart && weekEnd) {
-          const { data: targets } = await supabase
+        const { data: targets } = await supabase
             .from('team_targets')
             .select('reference_id, target_value')
             .eq('origin_id', originId)
             .eq('target_type', 'funnel_stage')
-            .gte('week_start', weekStart.toISOString().split('T')[0])
-            .lte('week_end', weekEnd.toISOString().split('T')[0]);
+            .lte('week_start', weekEnd.toISOString().split('T')[0])   // week_start <= fim do período
+            .gte('week_end', weekStart.toISOString().split('T')[0]);  // week_end >= início do período
 
           console.log(`🎯 [FunilByLeadType] Metas encontradas: ${targets?.length || 0}`);
 
