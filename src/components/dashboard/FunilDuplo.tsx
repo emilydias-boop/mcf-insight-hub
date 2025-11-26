@@ -64,7 +64,8 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     'A',
     periodStart,
     periodEnd,
-    false // Sempre usar período histórico com os botões
+    false, // Sempre usar período histórico com os botões
+    selectedPeriod // Passar o tipo de período para calcular meta correta
   );
 
   const { data: etapasLeadB = [], isLoading: isLoadingB } = useClintFunnelByLeadType(
@@ -72,7 +73,8 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     'B',
     periodStart,
     periodEnd,
-    false // Sempre usar período histórico com os botões
+    false, // Sempre usar período histórico com os botões
+    selectedPeriod // Passar o tipo de período para calcular meta correta
   );
 
   const isLoading = isLoadingA || isLoadingB;

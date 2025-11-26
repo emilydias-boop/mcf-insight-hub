@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { endOfMonth } from 'date-fns';
 
 interface FunnelStageData {
   etapa: string;
@@ -14,7 +15,8 @@ export const useClintFunnelByLeadType = (
   leadType: 'A' | 'B',
   weekStart?: Date,
   weekEnd?: Date,
-  showCurrentState = false
+  showCurrentState = false,
+  periodType: 'hoje' | 'semana' | 'mes' = 'semana'
 ) => {
   return useQuery({
     queryKey: ['clint-funnel-by-lead-type', originId, leadType, weekStart?.toISOString(), weekEnd?.toISOString(), showCurrentState],
@@ -229,12 +231,28 @@ export const useClintFunnelByLeadType = (
           });
         }
 
+        // Calcular multiplicador da meta baseado no período
+        let metaMultiplier = 1; // semana = meta semanal (padrão)
+
+        if (periodType === 'hoje') {
+          metaMultiplier = 1 / 7; // meta diária = meta semanal ÷ 7
+        } else if (periodType === 'mes') {
+          // Calcular número de semanas no mês
+          const monthDate = weekStart || new Date();
+          const daysInMonth = endOfMonth(monthDate).getDate();
+          const weeksInMonth = Math.ceil(daysInMonth / 7);
+          metaMultiplier = weeksInMonth; // meta mensal = meta semanal × semanas
+        }
+
+        console.log(`🎯 [FunilByLeadType] Período: ${periodType}, Multiplicador: ${metaMultiplier}`);
+
         // Montar dados do funil
         const funnelData: FunnelStageData[] = stages.map((stage, index) => {
           // Garantir que usamos string para buscar
           const stageIdStr = String(stage.id);
           const leads = dealsByStage[stageIdStr] || 0;
-          const meta = targetsMap[stageIdStr] || 0;
+          const metaSemanal = targetsMap[stageIdStr] || 0;
+          const meta = Math.round(metaSemanal * metaMultiplier);
           const conversao = index > 0 && stages[index - 1] 
             ? (dealsByStage[String(stages[index - 1].id)] || 0) > 0
               ? (leads / (dealsByStage[String(stages[index - 1].id)] || 1)) * 100
