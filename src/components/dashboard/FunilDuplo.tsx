@@ -43,8 +43,8 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
         };
       case 'semana':
         return {
-          periodStart: startOfWeek(now, { locale: ptBR }),
-          periodEnd: endOfWeek(now, { locale: ptBR }),
+          periodStart: startOfWeek(now, { weekStartsOn: 6 }), // Sábado
+          periodEnd: endOfWeek(now, { weekStartsOn: 6 }),     // Sexta
         };
       case 'mes':
         return {
