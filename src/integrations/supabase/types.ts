@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      a010_sales: {
+        Row: {
+          created_at: string
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          net_value: number
+          sale_date: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          net_value?: number
+          sale_date: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          net_value?: number
+          sale_date?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       alert_rules: {
         Row: {
           alert_level: Database["public"]["Enums"]["alert_level"]
