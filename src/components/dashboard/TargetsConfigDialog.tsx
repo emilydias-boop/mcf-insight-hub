@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { Target, Copy, Save } from "lucide-react";
 import { useTeamTargets, useCreateTeamTarget, useUpdateTeamTarget, useCopyTargetsFromPreviousWeek } from "@/hooks/useTeamTargets";
 import { useCRMStages } from "@/hooks/useCRMData";
@@ -21,6 +22,7 @@ export function TargetsConfigDialog() {
   const [selectedWeekStart, setSelectedWeekStart] = useState(
     startOfWeek(new Date(), { weekStartsOn: 6 }) // Sábado
   );
+  const [copyFromWeek, setCopyFromWeek] = useState<string>("");
   
   const weekEnd = endOfWeek(selectedWeekStart, { weekStartsOn: 6 }); // Sexta
   
@@ -33,10 +35,31 @@ export function TargetsConfigDialog() {
   // State para metas diárias (usuário edita)
   const [dailyTargets, setDailyTargets] = useState<Record<TargetKey, number>>({});
 
-  const handleCopyFromPreviousWeek = () => {
-    const previousWeekStart = subWeeks(selectedWeekStart, 1);
+  // Gerar últimas 8 semanas disponíveis para copiar
+  const availableWeeks = useMemo(() => {
+    return Array.from({ length: 8 }, (_, i) => {
+      const weekStart = subWeeks(selectedWeekStart, i + 1);
+      const weekEndDate = endOfWeek(weekStart, { weekStartsOn: 6 });
+      return {
+        value: format(weekStart, 'yyyy-MM-dd'),
+        label: `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEndDate, 'dd/MM/yyyy', { locale: ptBR })}`,
+        start: weekStart,
+        end: weekEndDate,
+      };
+    });
+  }, [selectedWeekStart]);
+
+  const handleCopyFromSelectedWeek = () => {
+    if (!copyFromWeek) {
+      toast.error('Selecione uma semana para copiar');
+      return;
+    }
+
+    const selectedWeek = availableWeeks.find(w => w.value === copyFromWeek);
+    if (!selectedWeek) return;
+    
     copyTargets.mutate({
-      fromWeekStart: previousWeekStart,
+      fromWeekStart: selectedWeek.start,
       toWeekStart: selectedWeekStart,
       toWeekEnd: weekEnd,
     });
@@ -163,32 +186,46 @@ export function TargetsConfigDialog() {
       <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Configurar Metas da Semana</DialogTitle>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>
-              {format(selectedWeekStart, "dd/MM/yyyy", { locale: ptBR })} até {format(weekEnd, "dd/MM/yyyy", { locale: ptBR })}
+          <div className="flex items-center gap-4 mt-2">
+            <span className="text-sm text-muted-foreground">
+              {format(selectedWeekStart, "dd/MM", { locale: ptBR })} até {format(weekEnd, "dd/MM/yyyy", { locale: ptBR })}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCopyFromPreviousWeek}
-              disabled={copyTargets.isPending}
-            >
-              <Copy className="h-4 w-4 mr-1" />
-              Copiar Semana Anterior
-            </Button>
+            <div className="flex items-center gap-2 flex-1">
+              <Label htmlFor="copy-week" className="text-sm whitespace-nowrap">Copiar de:</Label>
+              <Select value={copyFromWeek} onValueChange={setCopyFromWeek}>
+                <SelectTrigger id="copy-week" className="w-[200px]">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableWeeks.map((week) => (
+                    <SelectItem key={week.value} value={week.value}>
+                      {week.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyFromSelectedWeek}
+                disabled={copyTargets.isPending || !copyFromWeek}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                {copyTargets.isPending ? "Copiando..." : "Copiar"}
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="funnel" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <Tabs defaultValue="funnel" className="flex-1 flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="funnel">Funil</TabsTrigger>
             <TabsTrigger value="vendas">Vendas</TabsTrigger>
             <TabsTrigger value="time">Time</TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 mt-4 h-[400px]">
-            <div className="pr-4">
-              <TabsContent value="funnel" className="space-y-4 mt-0">
+          <div className="flex-1 mt-4 overflow-y-auto max-h-[400px] pr-2">
+            <TabsContent value="funnel" className="space-y-4 mt-0">
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-foreground">Metas por Etapa do Funil</h3>
                 <p className="text-xs text-muted-foreground">
@@ -199,6 +236,13 @@ export function TargetsConfigDialog() {
               <div className="grid grid-cols-2 gap-4">
                 {stages?.map(stage => {
                   const daily = getDailyTarget('funnel_stage', stage.stage_name, stage.id);
+                  const existingTarget = targets?.find(
+                    t => t.target_type === 'funnel_stage' && t.reference_id === stage.id
+                  );
+                  const currentValue = existingTarget?.current_value || 0;
+                  const targetValue = existingTarget?.target_value || calculateWeekly(daily);
+                  const progress = targetValue > 0 ? Math.min((currentValue / targetValue) * 100, 100) : 0;
+                  
                   return (
                     <div key={stage.id} className="p-4 border rounded-lg space-y-3 bg-card">
                       <Label className="text-sm font-medium">{stage.stage_name}</Label>
@@ -226,6 +270,18 @@ export function TargetsConfigDialog() {
                           </div>
                         </div>
                       </div>
+                      
+                      {existingTarget && (
+                        <div className="space-y-1.5 pt-2 border-t">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">
+                              Atual: {currentValue} / {targetValue}
+                            </span>
+                            <span className="font-medium">{Math.round(progress)}%</span>
+                          </div>
+                          <Progress value={progress} className="h-2" />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -268,6 +324,24 @@ export function TargetsConfigDialog() {
                       </div>
                     </div>
                   </div>
+                  
+                  {(() => {
+                    const target = targets?.find(t => t.target_type === 'team_revenue');
+                    const currentValue = target?.current_value || 0;
+                    const targetValue = target?.target_value || calculateWeekly(getDailyTarget('team_revenue', 'Faturamento Semanal', null));
+                    const progress = targetValue > 0 ? Math.min((currentValue / targetValue) * 100, 100) : 0;
+                    return target ? (
+                      <div className="space-y-1.5 pt-2 border-t">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">
+                            Atual: R$ {currentValue.toLocaleString('pt-BR')} / R$ {targetValue.toLocaleString('pt-BR')}
+                          </span>
+                          <span className="font-medium">{Math.round(progress)}%</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* Vendas */}
@@ -297,6 +371,24 @@ export function TargetsConfigDialog() {
                       </div>
                     </div>
                   </div>
+                  
+                  {(() => {
+                    const target = targets?.find(t => t.target_type === 'team_sales');
+                    const currentValue = target?.current_value || 0;
+                    const targetValue = target?.target_value || calculateWeekly(getDailyTarget('team_sales', 'Vendas Semanais', null));
+                    const progress = targetValue > 0 ? Math.min((currentValue / targetValue) * 100, 100) : 0;
+                    return target ? (
+                      <div className="space-y-1.5 pt-2 border-t">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">
+                            Atual: {currentValue} / {targetValue}
+                          </span>
+                          <span className="font-medium">{Math.round(progress)}%</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* Ultrameta */}
@@ -324,7 +416,25 @@ export function TargetsConfigDialog() {
                       </div>
                     </div>
                   </div>
-                  </div>
+                  
+                  {(() => {
+                    const target = targets?.find(t => t.target_type === 'ultrameta');
+                    const currentValue = target?.current_value || 0;
+                    const targetValue = target?.target_value || calculateWeekly(getDailyTarget('ultrameta', 'Ultrameta Semanal', null));
+                    const progress = targetValue > 0 ? Math.min((currentValue / targetValue) * 100, 100) : 0;
+                    return target ? (
+                      <div className="space-y-1.5 pt-2 border-t">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">
+                            Atual: R$ {currentValue.toLocaleString('pt-BR')} / R$ {targetValue.toLocaleString('pt-BR')}
+                          </span>
+                          <span className="font-medium">{Math.round(progress)}%</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
                 </div>
               </TabsContent>
 
@@ -347,8 +457,7 @@ export function TargetsConfigDialog() {
                   </div>
                 </div>
               </TabsContent>
-            </div>
-          </ScrollArea>
+          </div>
         </Tabs>
 
         <div className="flex justify-between items-center pt-4 border-t">
