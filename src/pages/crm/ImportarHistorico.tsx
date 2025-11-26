@@ -8,7 +8,7 @@ import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, History } from "l
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface BubbleRecord {
   clint_id: string;
@@ -75,11 +75,33 @@ export default function ImportarHistorico() {
     const lines = text.split('\n').filter(line => line.trim());
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    // Parser robusto que respeita campos entre aspas
+    const parseCSVLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+
+    const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g, ''));
     const records: BubbleRecord[] = [];
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      const values = parseCSVLine(lines[i]).map(v => v.replace(/"/g, ''));
       const record: any = {};
       headers.forEach((header, index) => {
         record[header] = values[index] || '';
@@ -279,6 +301,38 @@ export default function ImportarHistorico() {
           {/* Preview */}
           {records.length > 0 && !stats && (
             <div className="space-y-3">
+              {/* Validação de Dados */}
+              {(() => {
+                const hasValidEmails = records.slice(0, 5).some(r => r.email_clint?.includes('@'));
+                const hasValidDates = records.slice(0, 5).some(r => 
+                  r['Creation Date']?.match(/\d{4}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/i)
+                );
+                
+                return (
+                  <>
+                    {!hasValidEmails && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Atenção: Emails Inválidos</AlertTitle>
+                        <AlertDescription>
+                          Os emails parecem incorretos no preview. Verifique se o CSV está formatado corretamente 
+                          (campos com vírgulas devem estar entre aspas).
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {!hasValidDates && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Atenção: Datas Inválidas</AlertTitle>
+                        <AlertDescription>
+                          As datas parecem incorretas. Verifique o formato do CSV.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </>
+                );
+              })()}
+              
               <h3 className="font-medium">Preview dos primeiros 5 registros:</h3>
               <div className="border rounded-lg overflow-auto max-h-64">
                 <table className="w-full text-sm">
