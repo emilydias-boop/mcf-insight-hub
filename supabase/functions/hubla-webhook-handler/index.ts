@@ -9,6 +9,7 @@ const corsHeaders = {
 // Mapeamento de produtos Hubla para categorias do dashboard
 const PRODUCT_MAPPING: Record<string, string> = {
   'A001': 'a010',
+  'A000': 'a010',
   'MCF Incorporador Completo': 'a010',
   'A005': 'ob_construir',
   'Anticrise Completo': 'ob_construir',
@@ -71,33 +72,52 @@ serve(async (req) => {
       console.error('❌ Erro ao logar webhook:', logError);
     }
 
-    // Processar eventos de venda
-    if (eventType === 'sale.completed' || eventType === 'sale.approved') {
+    // Processar eventos de venda (formato real da Hubla)
+    if (eventType === 'invoice.payment_succeeded' || eventType === 'NewSale') {
       const sale = eventData.data || eventData;
       
-      const productName = sale.product?.name || sale.product_name || 'Produto Desconhecido';
-      const productCode = sale.product?.code || sale.product_code;
+      // Extrair dados do produto
+      const productName = sale.product?.name || sale.products?.[0]?.name || 'Produto Desconhecido';
+      const productCode = sale.product?.code || sale.products?.[0]?.code;
+      const productType = sale.product?.type || sale.products?.[0]?.type;
       const productCategory = mapProductCategory(productName, productCode);
       
-      console.log(`📦 Produto: ${productName} → Categoria: ${productCategory}`);
+      // Extrair dados do cliente
+      const firstName = sale.subscription?.payer?.firstName || sale.user?.firstName || '';
+      const lastName = sale.subscription?.payer?.lastName || sale.user?.lastName || '';
+      const customerName = `${firstName} ${lastName}`.trim() || 'Cliente Hubla';
+      const customerEmail = sale.subscription?.payer?.email || sale.user?.email;
+      const customerPhone = sale.subscription?.payer?.phone || sale.user?.phone;
+      
+      // Extrair valor (converter de centavos para reais)
+      const amountCents = sale.subscription?.lastInvoice?.amount?.totalCents || sale.amount || 0;
+      const amount = typeof amountCents === 'number' ? amountCents / 100 : 0;
+      
+      // Extrair data da venda
+      const saleDate = sale.subscription?.lastInvoice?.saleDate || sale.created_at || new Date().toISOString();
+      
+      // ID da transação
+      const hublaId = sale.subscription?.lastInvoice?.id || sale.id || sale.transaction_id || `${Date.now()}`;
+      
+      console.log(`📦 Produto: ${productName} → Categoria: ${productCategory} | Valor: R$ ${amount.toFixed(2)}`);
 
-      // Inserir transação
+      // Inserir transação na tabela hubla_transactions
       const { error: insertError } = await supabase
         .from('hubla_transactions')
         .insert({
-          hubla_id: sale.id || sale.transaction_id || `${Date.now()}`,
+          hubla_id: hublaId,
           event_type: eventType,
           product_name: productName,
-          product_type: sale.product?.type || sale.product_type,
+          product_type: productType,
           product_code: productCode,
           product_category: productCategory,
-          product_price: sale.amount || sale.value || 0,
-          customer_name: sale.customer?.name || sale.customer_name,
-          customer_email: sale.customer?.email || sale.customer_email,
-          customer_phone: sale.customer?.phone || sale.customer_phone,
+          product_price: amount,
+          customer_name: customerName,
+          customer_email: customerEmail,
+          customer_phone: customerPhone,
           sale_status: 'completed',
           payment_method: sale.payment_method,
-          sale_date: sale.created_at || sale.sale_date || new Date().toISOString(),
+          sale_date: saleDate,
           utm_source: sale.utm_source,
           utm_medium: sale.utm_medium,
           utm_campaign: sale.utm_campaign,
@@ -109,15 +129,38 @@ serve(async (req) => {
         throw insertError;
       }
 
-      console.log('✅ Transação registrada com sucesso!');
+      console.log('✅ Transação Hubla registrada com sucesso!');
+
+      // Se for produto A010, também inserir na tabela a010_sales
+      if (productCategory === 'a010') {
+        console.log('💰 Inserindo venda A010...');
+        
+        const { error: a010Error } = await supabase
+          .from('a010_sales')
+          .insert({
+            sale_date: new Date(saleDate).toISOString().split('T')[0],
+            customer_name: customerName,
+            customer_email: customerEmail,
+            customer_phone: customerPhone,
+            net_value: amount,
+            status: 'completed',
+          });
+
+        if (a010Error) {
+          console.error('❌ Erro ao inserir venda A010:', a010Error);
+          // Não faz throw aqui para não bloquear o webhook
+        } else {
+          console.log('✅ Venda A010 registrada com sucesso!');
+        }
+      }
     }
 
     // Processar eventos de reembolso
-    if (eventType === 'sale.refunded') {
+    if (eventType === 'invoice.refunded') {
       const sale = eventData.data || eventData;
-      const hublaId = sale.id || sale.transaction_id;
+      const hublaId = sale.subscription?.lastInvoice?.id || sale.id || sale.transaction_id;
 
-      // Atualizar status da transação
+      // Atualizar status da transação na hubla_transactions
       const { error: updateError } = await supabase
         .from('hubla_transactions')
         .update({ sale_status: 'refunded' })
@@ -129,6 +172,16 @@ serve(async (req) => {
       }
 
       console.log('✅ Transação marcada como reembolsada');
+      
+      // Também atualizar na a010_sales se existir
+      const { error: a010UpdateError } = await supabase
+        .from('a010_sales')
+        .update({ status: 'refunded' })
+        .eq('customer_email', sale.subscription?.payer?.email || sale.user?.email);
+
+      if (a010UpdateError) {
+        console.error('⚠️ Erro ao atualizar A010:', a010UpdateError);
+      }
     }
 
     // Processar checkout abandonado
