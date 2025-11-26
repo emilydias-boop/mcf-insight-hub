@@ -2054,7 +2054,13 @@ export type Database = {
     }
     Enums: {
       alert_level: "info" | "warning" | "critical"
-      app_role: "admin" | "manager" | "viewer" | "sdr" | "closer"
+      app_role:
+        | "admin"
+        | "manager"
+        | "viewer"
+        | "sdr"
+        | "closer"
+        | "coordenador"
       auction_status: "ativo" | "encerrado" | "cancelado"
       flag_category:
         | "desempenho"
@@ -2209,7 +2215,7 @@ export const Constants = {
   public: {
     Enums: {
       alert_level: ["info", "warning", "critical"],
-      app_role: ["admin", "manager", "viewer", "sdr", "closer"],
+      app_role: ["admin", "manager", "viewer", "sdr", "closer", "coordenador"],
       auction_status: ["ativo", "encerrado", "cancelado"],
       flag_category: [
         "desempenho",

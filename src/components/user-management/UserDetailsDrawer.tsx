@@ -16,7 +16,7 @@ import { useUpdateUserRole, useUpdateUserEmployment, useCreateUserTarget, useUpd
 import { UserTargetsForm } from "./UserTargetsForm";
 import { UserFlagForm } from "./UserFlagForm";
 import { UserObservationForm } from "./UserObservationForm";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/formatters";
@@ -66,7 +66,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
   });
 
   // Update employment data when user details load
-  useState(() => {
+  useEffect(() => {
     if (userDetails?.employment) {
       setEmploymentData({
         position: userDetails.employment.position || "",
@@ -77,7 +77,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         commission_rate: userDetails.employment.commission_rate || 0,
       });
     }
-  });
+  }, [userDetails]);
 
   const handleRoleChange = (role: AppRole) => {
     if (!userId) return;
@@ -110,14 +110,19 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     'efeito_alavanca', 'projetos', 'credito', 'leilao', 'configuracoes'
   ];
 
-  const [permissionLevels, setPermissionLevels] = useState<Record<ResourceType, PermissionLevel>>(() => {
-    const initial: Record<string, PermissionLevel> = {};
-    allResources.forEach(resource => {
-      const perm = permissions.find(p => p.resource === resource);
-      initial[resource] = perm?.permission_level || 'none';
-    });
-    return initial as Record<ResourceType, PermissionLevel>;
-  });
+  const [permissionLevels, setPermissionLevels] = useState<Record<ResourceType, PermissionLevel>>({} as Record<ResourceType, PermissionLevel>);
+
+  // Update permission levels when permissions data loads
+  useEffect(() => {
+    if (permissions.length > 0 || userId) {
+      const initial: Record<string, PermissionLevel> = {};
+      allResources.forEach(resource => {
+        const perm = permissions.find(p => p.resource === resource);
+        initial[resource] = perm?.permission_level || 'none';
+      });
+      setPermissionLevels(initial as Record<ResourceType, PermissionLevel>);
+    }
+  }, [permissions, userId]);
 
   const handlePermissionsUpdate = () => {
     if (!userId) return;
