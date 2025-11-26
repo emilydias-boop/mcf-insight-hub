@@ -1,83 +1,103 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { KPICard } from "@/components/ui/KPICard";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useA010Sales, useA010Summary } from "@/hooks/useA010Sales";
-import { formatCurrency, formatDate } from "@/lib/formatters";
-import { DollarSign, TrendingUp, Users, Search, Download, Upload } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { KPICard } from "@/components/ui/KPICard";
+import { DollarSign, TrendingUp, Users, BookOpen } from "lucide-react";
+import { formatCurrency, formatDate } from "@/lib/formatters";
+import { useCoursesSales, useCoursesSummary } from "@/hooks/useCoursesSales";
+import { CourseFilters } from "@/components/courses/CourseFilters";
+import { CourseComparison } from "@/components/courses/CourseComparison";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function A010() {
-  const [period, setPeriod] = useState<'semana' | 'mes' | 'all'>('mes');
-  const [search, setSearch] = useState('');
-  
-  const { data: sales, isLoading: salesLoading } = useA010Sales({ period, search, limit: 200 });
-  const { data: summary, isLoading: summaryLoading } = useA010Summary({ period });
+  const [period, setPeriod] = useState<'semana' | 'mes'>('mes');
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
+  const [courseType, setCourseType] = useState<'all' | 'a010' | 'construir_para_alugar'>('all');
+  const [search, setSearch] = useState("");
+
+  const { data: sales, isLoading: salesLoading } = useCoursesSales({ 
+    period, 
+    startDate, 
+    endDate,
+    courseType,
+    search 
+  });
+
+  const { data: summary, isLoading: summaryLoading } = useCoursesSummary({ 
+    period, 
+    startDate, 
+    endDate,
+    courseType
+  });
+
+  const handleApply = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; curso: string }) => {
+    setPeriod(filters.periodo.tipo);
+    setStartDate(filters.periodo.inicio);
+    setEndDate(filters.periodo.fim);
+    setCourseType(filters.curso as 'all' | 'a010' | 'construir_para_alugar');
+  };
+
+  const handleClear = () => {
+    setPeriod('mes');
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setCourseType('all');
+    setSearch("");
+  };
 
   const handleExport = () => {
-    if (!sales || sales.length === 0) return;
+    if (!sales) return;
 
-    const headers = ['Data', 'Nome', 'Email', 'Telefone', 'Valor'];
-    const rows = sales.map(sale => [
-      formatDate(sale.sale_date),
-      sale.customer_name,
-      sale.customer_email || '',
-      sale.customer_phone || '',
-      sale.net_value.toString()
-    ]);
+    const csvContent = [
+      ['Data', 'Curso', 'Cliente', 'Email', 'Telefone', 'Valor'].join(','),
+      ...sales.map(sale => 
+        [
+          formatDate(sale.sale_date),
+          sale.product_name,
+          sale.customer_name,
+          sale.customer_email || '',
+          sale.customer_phone || '',
+          sale.product_price
+        ].join(',')
+      )
+    ].join('\n');
 
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `a010-vendas-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `cursos-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
   return (
     <div className="space-y-6">
-      {/* Controles */}
-      <div className="flex items-center justify-between gap-4">
-        <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="semana">Esta Semana</SelectItem>
-            <SelectItem value="mes">Este Mês</SelectItem>
-            <SelectItem value="all">Todos</SelectItem>
-          </SelectContent>
-        </Select>
+      <div>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Cursos</h1>
+        <p className="text-muted-foreground">
+          Acompanhe as vendas de todos os cursos em tempo real
+        </p>
+      </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome, email ou telefone..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Button asChild variant="outline">
-            <Link to="/importar-a010">
-              <Upload className="h-4 w-4 mr-2" />
-              Importar Dados
-            </Link>
-          </Button>
-          <Button variant="outline" size="icon" onClick={handleExport} disabled={!sales || sales.length === 0}>
-            <Download className="h-4 w-4" />
-          </Button>
-        </div>
+      <CourseFilters 
+        onApply={handleApply}
+        onClear={handleClear}
+        onExport={handleExport}
+      />
+
+      <div className="mb-6">
+        <Input
+          placeholder="Buscar por nome, email ou telefone..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-md"
+        />
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {summaryLoading ? (
           <>
             <Skeleton className="h-32" />
@@ -88,9 +108,9 @@ export default function A010() {
           <>
             <KPICard
               title="Total de Vendas"
-              value={summary?.totalSales.toString() || '0'}
+              value={summary?.totalSales.toString() || "0"}
               icon={Users}
-              variant="success"
+              variant="neutral"
             />
             <KPICard
               title="Receita Total"
@@ -108,88 +128,135 @@ export default function A010() {
         )}
       </div>
 
+      {/* Comparação de Cursos */}
+      {courseType === 'all' && summary && (
+        <CourseComparison 
+          a010Summary={summary.a010Summary}
+          construirSummary={summary.construirSummary}
+        />
+      )}
+
       {/* Gráfico de Evolução */}
-      {!summaryLoading && summary && summary.chartData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Evolução de Vendas</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold text-foreground">
+            Evolução de Vendas por Curso
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {summaryLoading ? (
+            <Skeleton className="h-[300px]" />
+          ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={summary.chartData}>
+              <LineChart data={summary?.chartData || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
                   dataKey="date" 
                   stroke="hsl(var(--muted-foreground))"
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
                 />
-                <YAxis stroke="hsl(var(--muted-foreground))" />
-                <Tooltip
-                  contentStyle={{
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))',
                     border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
+                    borderRadius: '6px'
                   }}
-                  formatter={(value: any) => [formatCurrency(value), 'Receita']}
-                  labelFormatter={(label) => formatDate(label)}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="hsl(var(--primary))" 
-                  strokeWidth={2}
-                  dot={{ fill: 'hsl(var(--primary))' }}
-                />
+                <Legend />
+                {courseType === 'all' ? (
+                  <>
+                    <Line 
+                      type="monotone" 
+                      dataKey="a010" 
+                      stroke="hsl(var(--primary))" 
+                      strokeWidth={2}
+                      name="A010 - Consultoria"
+                      dot={{ fill: 'hsl(var(--primary))' }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="construir" 
+                      stroke="hsl(var(--success))" 
+                      strokeWidth={2}
+                      name="Construir Para Alugar"
+                      dot={{ fill: 'hsl(var(--success))' }}
+                    />
+                  </>
+                ) : (
+                  <Line 
+                    type="monotone" 
+                    dataKey="total" 
+                    stroke="hsl(var(--primary))" 
+                    strokeWidth={2}
+                    name="Receita"
+                    dot={{ fill: 'hsl(var(--primary))' }}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Tabela de Transações */}
-      <Card>
+      <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle>Transações de Cursos</CardTitle>
+          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            Transações de Cursos
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {salesLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : sales && sales.length > 0 ? (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data</TableHead>
+                <TableHead>Curso</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Telefone</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {salesLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sales.map((sale) => (
-                    <TableRow key={sale.id}>
-                      <TableCell>{formatDate(sale.sale_date)}</TableCell>
-                      <TableCell className="font-medium">{sale.customer_name}</TableCell>
-                      <TableCell className="text-muted-foreground">{sale.customer_email || '-'}</TableCell>
-                      <TableCell className="text-muted-foreground">{sale.customer_phone || '-'}</TableCell>
-                      <TableCell className="text-right font-semibold text-success">
-                        {formatCurrency(sale.net_value)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              Nenhuma transação encontrada para o período selecionado.
-            </div>
-          )}
+                ))
+              ) : sales && sales.length > 0 ? (
+                sales.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell>{formatDate(sale.sale_date)}</TableCell>
+                    <TableCell className="font-medium">{sale.product_name}</TableCell>
+                    <TableCell>{sale.customer_name}</TableCell>
+                    <TableCell>{sale.customer_email || "-"}</TableCell>
+                    <TableCell>{sale.customer_phone || "-"}</TableCell>
+                    <TableCell className="text-right font-semibold text-success">
+                      {formatCurrency(sale.product_price)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    Nenhuma transação encontrada para o período selecionado
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
