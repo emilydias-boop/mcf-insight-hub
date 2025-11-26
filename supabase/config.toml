@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.import-bubble-history]
 verify_jwt = false
+
+[functions.reprocess-hubla-events]
+verify_jwt = false
