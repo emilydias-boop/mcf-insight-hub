@@ -49,11 +49,10 @@ serve(async (req) => {
   try {
     console.log('🔄 Iniciando reprocessamento de eventos Hubla...');
 
-    // Buscar todos os logs de eventos de venda que não foram processados
+    // Buscar todos os logs com status success (vamos filtrar por tipo em JS)
     const { data: logs, error: logsError } = await supabase
       .from('hubla_webhook_logs')
       .select('*')
-      .in('event_type', ['invoice.payment_succeeded', 'NewSale'])
       .eq('status', 'success')
       .order('created_at', { ascending: true });
 
@@ -72,6 +71,12 @@ serve(async (req) => {
       try {
         const eventData = log.event_data as any;
         const eventType = eventData.type || log.event_type;
+        
+        // Filtrar apenas eventos de venda
+        if (eventType !== 'invoice.payment_succeeded' && eventType !== 'NewSale') {
+          continue;
+        }
+        
         const sale = eventData.event || eventData.data || eventData;
 
         // Extrair dados do produto
