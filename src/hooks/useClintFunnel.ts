@@ -54,6 +54,9 @@ export const useClintFunnel = (originId: string, weekStart?: Date, weekEnd?: Dat
 
       const { data: targets } = await targetsQuery;
 
+      console.log('[useClintFunnel] Loaded targets:', targets);
+      console.log('[useClintFunnel] Week start filter:', weekStart?.toISOString().split('T')[0]);
+
       // Contar deals por stage
       const dealsByStage: Record<string, number> = {};
       deals?.forEach(deal => {
@@ -62,6 +65,8 @@ export const useClintFunnel = (originId: string, weekStart?: Date, weekEnd?: Dat
         }
       });
 
+      console.log('[useClintFunnel] Deals by stage:', dealsByStage);
+
       // Montar dados do funil
       const funnelData: FunnelStageData[] = [];
       let previousCount = 0;
@@ -69,6 +74,14 @@ export const useClintFunnel = (originId: string, weekStart?: Date, weekEnd?: Dat
       stages.forEach((stage, index) => {
         const currentCount = dealsByStage[stage.id] || 0;
         const target = targets?.find(t => t.reference_id === stage.id);
+        
+        console.log(`[useClintFunnel] Stage "${stage.stage_name}":`, {
+          id: stage.id,
+          currentLeads: currentCount,
+          targetValue: target?.target_value || 0,
+          targetFound: !!target,
+          targetReferenceId: target?.reference_id
+        });
         
         // Taxa de conversão: (atual / anterior) * 100, ou 100 para primeira etapa
         const conversionRate = index === 0 
@@ -87,6 +100,8 @@ export const useClintFunnel = (originId: string, weekStart?: Date, weekEnd?: Dat
 
         previousCount = currentCount;
       });
+
+      console.log('[useClintFunnel] Final funnel data:', funnelData);
 
       return funnelData;
     },

@@ -6,6 +6,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Etapas fixas que devem sempre aparecer por padrão
+const DEFAULT_STAGES = [
+  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', // Novo Lead
+  'a8365215-fd31-4bdc-bbe7-77100fa39e53', // Reunião 01 Agendada
+  '34995d75-933e-4d67-b7fc-19fcb8b81680', // Reunião 01 Realizada
+  '062927f5-b7a3-496a-9d47-eb03b3d69b10', // Contrato Pago
+  '3a2776e2-a536-4a2a-bb7b-a2f53c8941df', // Venda realizada
+];
+
 interface FunilEtapa {
   etapa: string;
   leads: number;
@@ -20,9 +29,7 @@ interface FunilListaProps {
 }
 
 export function FunilLista({ titulo, etapas }: FunilListaProps) {
-  const [selectedStages, setSelectedStages] = useState<string[]>(
-    etapas.map(e => e.stage_id || e.etapa)
-  );
+  const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
 
   const visibleEtapas = etapas.filter(e => 
     selectedStages.includes(e.stage_id || e.etapa)
@@ -80,30 +87,35 @@ export function FunilLista({ titulo, etapas }: FunilListaProps) {
       
       <div className="space-y-3">
         {visibleEtapas.map((etapa) => {
-          const isAboveMeta = etapa.conversao >= etapa.meta;
-          const progressValue = (etapa.conversao / etapa.meta) * 100;
+          // Calcular porcentagem baseada em leads/meta (quantidade de leads)
+          const progressPercent = etapa.meta > 0 ? (etapa.leads / etapa.meta) * 100 : 0;
+          
+          // Definir cor baseada na porcentagem
+          let progressColorClass = "[&>div]:bg-destructive"; // vermelho < 35%
+          let textColorClass = "text-destructive";
+          
+          if (progressPercent >= 80) {
+            progressColorClass = "[&>div]:bg-success"; // verde >= 80%
+            textColorClass = "text-success";
+          } else if (progressPercent >= 35) {
+            progressColorClass = "[&>div]:bg-warning"; // amarelo 35-79%
+            textColorClass = "text-warning";
+          }
           
           return (
             <div key={etapa.etapa} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium text-foreground">{etapa.etapa}</span>
                 <div className="flex items-center gap-4 text-muted-foreground">
-                  <span>{etapa.leads}</span>
-                  <span>Meta {etapa.meta}</span>
-                  <span className={cn(
-                    "font-semibold",
-                    isAboveMeta ? "text-success" : "text-destructive"
-                  )}>
-                    {etapa.conversao.toFixed(1)}%
+                  <span>{etapa.leads}/{etapa.meta} leads</span>
+                  <span className={cn("font-semibold", textColorClass)}>
+                    {progressPercent.toFixed(1)}%
                   </span>
                 </div>
               </div>
               <Progress 
-                value={Math.min(progressValue, 100)} 
-                className={cn(
-                  "h-2",
-                  isAboveMeta ? "[&>div]:bg-success" : "[&>div]:bg-destructive"
-                )}
+                value={Math.min(progressPercent, 100)} 
+                className={cn("h-2", progressColorClass)}
               />
             </div>
           );
