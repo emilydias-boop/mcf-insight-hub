@@ -19,134 +19,206 @@ export const useClintFunnelByLeadType = (
   return useQuery({
     queryKey: ['clint-funnel-by-lead-type', originId, leadType, weekStart?.toISOString(), weekEnd?.toISOString(), showCurrentState],
     queryFn: async () => {
-      if (!originId) return [];
+      try {
+        console.log(`🔍 [FunilByLeadType] Iniciando consulta para Lead ${leadType}`);
+        console.log(`🔍 [FunilByLeadType] originId: ${originId}`);
+        console.log(`🔍 [FunilByLeadType] showCurrentState: ${showCurrentState}`);
+        console.log(`🔍 [FunilByLeadType] weekStart: ${weekStart?.toISOString()}`);
+        console.log(`🔍 [FunilByLeadType] weekEnd: ${weekEnd?.toISOString()}`);
 
-      // Buscar stages ativas para a origem
-      const { data: stages, error: stagesError } = await supabase
-        .from('crm_stages')
-        .select('*')
-        .eq('origin_id', originId)
-        .eq('is_active', true)
-        .order('stage_order', { ascending: true });
-
-      if (stagesError) throw stagesError;
-      if (!stages || stages.length === 0) return [];
-
-      // Definir lógica de filtro por tipo de lead
-      const filterByLeadType = (tags: string[] | null) => {
-        if (!tags || tags.length === 0) return false;
-        
-        if (leadType === 'A') {
-          // Lead A: tag contém "A010" OU é exatamente "lead a"
-          return tags.some(tag => 
-            tag.toUpperCase().includes('A010') || 
-            tag.toLowerCase() === 'lead a'
-          );
-        } else {
-          // Lead B: tag contém "INSTAGRAM" OU é exatamente "lead b"
-          return tags.some(tag => 
-            tag.toUpperCase().includes('INSTAGRAM') || 
-            tag.toLowerCase() === 'lead b'
-          );
+        if (!originId) {
+          console.warn('⚠️ [FunilByLeadType] originId não fornecido');
+          return [];
         }
-      };
 
-      let dealsByStage: Record<string, number> = {};
-
-      if (showCurrentState) {
-        // Estado atual: buscar deals no stage_id atual
-        const { data: deals, error: dealsError } = await supabase
-          .from('crm_deals')
-          .select('id, stage_id, tags')
-          .eq('origin_id', originId);
-
-        if (dealsError) throw dealsError;
-
-        // Filtrar por tipo de lead e contar por stage
-        deals?.forEach(deal => {
-          if (filterByLeadType(deal.tags) && deal.stage_id) {
-            dealsByStage[deal.stage_id] = (dealsByStage[deal.stage_id] || 0) + 1;
-          }
-        });
-
-      } else if (weekStart && weekEnd) {
-        // Período histórico: usar deal_activities
-        const startStr = weekStart.toISOString();
-        const endStr = weekEnd.toISOString();
-
-        // Buscar atividades de stage_change no período
-        const { data: activities, error: activitiesError } = await supabase
-          .from('deal_activities')
-          .select('deal_id, to_stage, created_at, metadata')
-          .eq('activity_type', 'stage_change')
-          .gte('created_at', startStr)
-          .lte('created_at', endStr);
-
-        if (activitiesError) throw activitiesError;
-
-        // Buscar tags dos deals
-        const dealIds = [...new Set(activities?.map(a => a.deal_id) || [])];
-        const { data: deals, error: dealsError } = await supabase
-          .from('crm_deals')
-          .select('id, tags, origin_id')
-          .in('id', dealIds)
-          .eq('origin_id', originId);
-
-        if (dealsError) throw dealsError;
-
-        // Criar mapa de deal_id -> tags
-        const dealTagsMap: Record<string, string[] | null> = {};
-        deals?.forEach(deal => {
-          dealTagsMap[deal.id] = deal.tags;
-        });
-
-        // Contar atividades por stage, filtrando por tipo de lead
-        activities?.forEach(activity => {
-          const tags = dealTagsMap[activity.deal_id];
-          if (filterByLeadType(tags) && activity.to_stage) {
-            dealsByStage[activity.to_stage] = (dealsByStage[activity.to_stage] || 0) + 1;
-          }
-        });
-      }
-
-      // Buscar metas para os stages no período
-      const targetsMap: Record<string, number> = {};
-      if (weekStart && weekEnd) {
-        const { data: targets } = await supabase
-          .from('team_targets')
-          .select('reference_id, target_value')
+        // Buscar stages ativas para a origem
+        const { data: stages, error: stagesError } = await supabase
+          .from('crm_stages')
+          .select('*')
           .eq('origin_id', originId)
-          .eq('target_type', 'funnel_stage')
-          .gte('week_start', weekStart.toISOString().split('T')[0])
-          .lte('week_end', weekEnd.toISOString().split('T')[0]);
+          .eq('is_active', true)
+          .order('stage_order', { ascending: true });
 
-        targets?.forEach(target => {
-          if (target.reference_id) {
-            targetsMap[target.reference_id] = target.target_value;
+        if (stagesError) {
+          console.error('❌ [FunilByLeadType] Erro ao buscar stages:', stagesError);
+          throw stagesError;
+        }
+
+        console.log(`✅ [FunilByLeadType] Stages encontrados: ${stages?.length || 0}`);
+        console.log(`📋 [FunilByLeadType] Stages:`, stages?.map(s => ({ id: s.id, name: s.stage_name })));
+
+        if (!stages || stages.length === 0) {
+          console.warn('⚠️ [FunilByLeadType] Nenhum stage encontrado');
+          return [];
+        }
+
+        // Definir lógica de filtro por tipo de lead
+        const filterByLeadType = (tags: string[] | null) => {
+          if (!tags || tags.length === 0) return false;
+          
+          if (leadType === 'A') {
+            // Lead A: tag contém "A010" OU é exatamente "lead a"
+            const matches = tags.some(tag => 
+              tag.toUpperCase().includes('A010') || 
+              tag.toLowerCase() === 'lead a'
+            );
+            return matches;
+          } else {
+            // Lead B: tag contém "INSTAGRAM" OU é exatamente "lead b"
+            const matches = tags.some(tag => 
+              tag.toUpperCase().includes('INSTAGRAM') || 
+              tag.toLowerCase() === 'lead b'
+            );
+            return matches;
           }
-        });
-      }
-
-      // Montar dados do funil
-      const funnelData: FunnelStageData[] = stages.map((stage, index) => {
-        const leads = dealsByStage[stage.id] || 0;
-        const meta = targetsMap[stage.id] || 0;
-        const conversao = index > 0 && stages[index - 1] 
-          ? (dealsByStage[stages[index - 1].id] || 0) > 0
-            ? (leads / (dealsByStage[stages[index - 1].id] || 1)) * 100
-            : 0
-          : 100;
-
-        return {
-          etapa: stage.stage_name,
-          leads,
-          conversao,
-          meta,
-          stage_id: stage.id,
         };
-      });
 
-      return funnelData;
+        let dealsByStage: Record<string, number> = {};
+
+        if (showCurrentState) {
+          console.log(`🔄 [FunilByLeadType] Buscando estado atual dos deals...`);
+          
+          // Estado atual: buscar deals no stage_id atual
+          const { data: deals, error: dealsError } = await supabase
+            .from('crm_deals')
+            .select('id, stage_id, tags')
+            .eq('origin_id', originId);
+
+          if (dealsError) {
+            console.error('❌ [FunilByLeadType] Erro ao buscar deals:', dealsError);
+            throw dealsError;
+          }
+
+          console.log(`✅ [FunilByLeadType] Total de deals encontrados: ${deals?.length || 0}`);
+
+          // Filtrar por tipo de lead e contar por stage
+          let filteredCount = 0;
+          deals?.forEach(deal => {
+            const matches = filterByLeadType(deal.tags);
+            if (matches && deal.stage_id) {
+              // Converter explicitamente para string
+              const stageIdStr = String(deal.stage_id);
+              dealsByStage[stageIdStr] = (dealsByStage[stageIdStr] || 0) + 1;
+              filteredCount++;
+            }
+          });
+
+          console.log(`✅ [FunilByLeadType] Deals filtrados para Lead ${leadType}: ${filteredCount}`);
+          console.log(`📊 [FunilByLeadType] Deals por stage:`, dealsByStage);
+
+        } else if (weekStart && weekEnd) {
+          console.log(`🔄 [FunilByLeadType] Buscando dados históricos do período...`);
+          
+          // Período histórico: usar deal_activities
+          const startStr = weekStart.toISOString();
+          const endStr = weekEnd.toISOString();
+
+          // Buscar atividades de stage_change no período
+          const { data: activities, error: activitiesError } = await supabase
+            .from('deal_activities')
+            .select('deal_id, to_stage, created_at, metadata')
+            .eq('activity_type', 'stage_change')
+            .gte('created_at', startStr)
+            .lte('created_at', endStr);
+
+          if (activitiesError) {
+            console.error('❌ [FunilByLeadType] Erro ao buscar activities:', activitiesError);
+            throw activitiesError;
+          }
+
+          console.log(`✅ [FunilByLeadType] Activities encontradas: ${activities?.length || 0}`);
+
+          // Buscar tags dos deals
+          const dealIds = [...new Set(activities?.map(a => a.deal_id) || [])];
+          console.log(`🔄 [FunilByLeadType] Buscando tags para ${dealIds.length} deals únicos...`);
+
+          const { data: deals, error: dealsError } = await supabase
+            .from('crm_deals')
+            .select('id, tags, origin_id')
+            .in('id', dealIds)
+            .eq('origin_id', originId);
+
+          if (dealsError) {
+            console.error('❌ [FunilByLeadType] Erro ao buscar deals para tags:', dealsError);
+            throw dealsError;
+          }
+
+          console.log(`✅ [FunilByLeadType] Deals com tags encontrados: ${deals?.length || 0}`);
+
+          // Criar mapa de deal_id -> tags
+          const dealTagsMap: Record<string, string[] | null> = {};
+          deals?.forEach(deal => {
+            dealTagsMap[deal.id] = deal.tags;
+          });
+
+          // Contar atividades por stage, filtrando por tipo de lead
+          let filteredCount = 0;
+          activities?.forEach(activity => {
+            const tags = dealTagsMap[activity.deal_id];
+            const matches = filterByLeadType(tags);
+            if (matches && activity.to_stage) {
+              // Converter explicitamente para string
+              const stageIdStr = String(activity.to_stage);
+              dealsByStage[stageIdStr] = (dealsByStage[stageIdStr] || 0) + 1;
+              filteredCount++;
+            }
+          });
+
+          console.log(`✅ [FunilByLeadType] Activities filtradas para Lead ${leadType}: ${filteredCount}`);
+          console.log(`📊 [FunilByLeadType] Deals por stage (histórico):`, dealsByStage);
+        } else {
+          console.warn('⚠️ [FunilByLeadType] Nenhum modo selecionado (nem estado atual, nem período histórico)');
+        }
+
+        // Buscar metas para os stages no período
+        const targetsMap: Record<string, number> = {};
+        if (weekStart && weekEnd) {
+          const { data: targets } = await supabase
+            .from('team_targets')
+            .select('reference_id, target_value')
+            .eq('origin_id', originId)
+            .eq('target_type', 'funnel_stage')
+            .gte('week_start', weekStart.toISOString().split('T')[0])
+            .lte('week_end', weekEnd.toISOString().split('T')[0]);
+
+          console.log(`🎯 [FunilByLeadType] Metas encontradas: ${targets?.length || 0}`);
+
+          targets?.forEach(target => {
+            if (target.reference_id) {
+              targetsMap[target.reference_id] = target.target_value;
+            }
+          });
+        }
+
+        // Montar dados do funil
+        const funnelData: FunnelStageData[] = stages.map((stage, index) => {
+          // Garantir que usamos string para buscar
+          const stageIdStr = String(stage.id);
+          const leads = dealsByStage[stageIdStr] || 0;
+          const meta = targetsMap[stageIdStr] || 0;
+          const conversao = index > 0 && stages[index - 1] 
+            ? (dealsByStage[String(stages[index - 1].id)] || 0) > 0
+              ? (leads / (dealsByStage[String(stages[index - 1].id)] || 1)) * 100
+              : 0
+            : 100;
+
+          return {
+            etapa: stage.stage_name,
+            leads,
+            conversao,
+            meta,
+            stage_id: stage.id,
+          };
+        });
+
+        console.log(`✅ [FunilByLeadType] Funil montado com ${funnelData.length} etapas`);
+        console.log(`📊 [FunilByLeadType] Dados finais:`, funnelData);
+
+        return funnelData;
+      } catch (error) {
+        console.error(`❌ [FunilByLeadType] Erro geral no hook:`, error);
+        throw error;
+      }
     },
     enabled: !!originId,
   });
