@@ -248,17 +248,8 @@ export default function Dashboard() {
       )}
 
       {/* KPIs + Ultrameta Layout Compacto */}
-      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
-        {/* Ultrameta Card - Esquerda */}
-        {loadingUltrameta ? (
-          <div className="h-full min-h-[240px] bg-card animate-pulse rounded-lg border border-border" />
-        ) : ultrameta ? (
-          <div className="h-full">
-            <UltrametaCard data={ultrameta} />
-          </div>
-        ) : null}
-
-        {/* KPIs Grid 3x2 - Direita */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4">
+        {/* KPIs Grid 3x2 - Esquerda */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
           {loadingMetrics ? (
             <>
@@ -283,6 +274,15 @@ export default function Dashboard() {
             })
           )}
         </div>
+
+        {/* Ultrameta Card - Direita */}
+        {loadingUltrameta ? (
+          <div className="h-full min-h-[240px] bg-card animate-pulse rounded-lg border border-border" />
+        ) : ultrameta ? (
+          <div className="h-full">
+            <UltrametaCard data={ultrameta} />
+          </div>
+        ) : null}
       </div>
 
       {/* Gráfico de Evolução Temporal */}
@@ -323,7 +323,7 @@ export default function Dashboard() {
           </div>
         </div>
         <FunilDuplo
-          originId="9f9f6bc5-e2d4-4f7b-afb6-ec5868b3ad02"
+          originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
           weekStart={periodo.inicio}
           weekEnd={periodo.fim}
           showCurrentState={viewMode === 'atual'}
