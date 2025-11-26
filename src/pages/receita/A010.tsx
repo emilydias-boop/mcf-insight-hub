@@ -149,7 +149,7 @@ export default function A010() {
       {/* Tabela de Transações */}
       <Card>
         <CardHeader>
-          <CardTitle>Transações A010</CardTitle>
+          <CardTitle>Transações de Cursos</CardTitle>
         </CardHeader>
         <CardContent>
           {salesLoading ? (
