@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,7 @@ export default function Alertas() {
 
   const alertasAtivos = alertas.filter(a => !a.resolvido);
   const alertasCriticos = alertasAtivos.filter(a => a.tipo === 'critico');
-  const alertasAvisos = alertasAtivos.filter(a => a.tipo === 'aviso');
+  const alertasWarning = alertasAtivos.filter(a => a.tipo === 'aviso');
   const alertasInfo = alertasAtivos.filter(a => a.tipo === 'info');
 
   const AlertaCard = ({ alerta }: any) => {
@@ -88,74 +89,84 @@ export default function Alertas() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Alertas e Notificações</h1>
-        <p className="text-muted-foreground mt-1">Acompanhe eventos importantes e metas não atingidas</p>
-      </div>
+    <ResourceGuard resource="alertas">
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Alertas e Notificações</h1>
+          <p className="text-muted-foreground mt-1">Monitoramento de eventos importantes</p>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-card border-border border-l-4 border-l-destructive">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Críticos</p>
-                <p className="text-3xl font-bold text-destructive">{alertasCriticos.length}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-destructive/10 border-destructive/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Alertas Críticos</p>
+                  <p className="text-3xl font-bold text-destructive">{alertasCriticos.length}</p>
+                </div>
+                <AlertTriangle className="h-10 w-10 text-destructive" />
               </div>
-              <AlertTriangle className="h-8 w-8 text-destructive" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-card border-border border-l-4 border-l-warning">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Avisos</p>
-                <p className="text-3xl font-bold text-warning">{alertasAvisos.length}</p>
-              </div>
-              <AlertCircle className="h-8 w-8 text-warning" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-card border-border border-l-4 border-l-primary">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Informativos</p>
-                <p className="text-3xl font-bold text-primary">{alertasInfo.length}</p>
-              </div>
-              <Info className="h-8 w-8 text-primary" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      <Tabs defaultValue="todos" className="w-full">
-        <TabsList>
-          <TabsTrigger value="todos">Todos ({alertasAtivos.length})</TabsTrigger>
-          <TabsTrigger value="criticos">Críticos ({alertasCriticos.length})</TabsTrigger>
-          <TabsTrigger value="avisos">Avisos ({alertasAvisos.length})</TabsTrigger>
-          <TabsTrigger value="info">Info ({alertasInfo.length})</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="todos" className="space-y-4">
-          {alertasAtivos.map(alerta => <AlertaCard key={alerta.id} alerta={alerta} />)}
-        </TabsContent>
-        
-        <TabsContent value="criticos" className="space-y-4">
-          {alertasCriticos.map(alerta => <AlertaCard key={alerta.id} alerta={alerta} />)}
-        </TabsContent>
-        
-        <TabsContent value="avisos" className="space-y-4">
-          {alertasAvisos.map(alerta => <AlertaCard key={alerta.id} alerta={alerta} />)}
-        </TabsContent>
-        
-        <TabsContent value="info" className="space-y-4">
-          {alertasInfo.map(alerta => <AlertaCard key={alerta.id} alerta={alerta} />)}
-        </TabsContent>
-      </Tabs>
-    </div>
+          <Card className="bg-warning/10 border-warning/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Avisos</p>
+                  <p className="text-3xl font-bold text-warning">{alertasWarning.length}</p>
+                </div>
+                <AlertCircle className="h-10 w-10 text-warning" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-info/10 border-info/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Informativos</p>
+                  <p className="text-3xl font-bold text-info">{alertasInfo.length}</p>
+                </div>
+                <Info className="h-10 w-10 text-info" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="todos" className="w-full">
+          <TabsList className="grid w-full md:w-[400px] grid-cols-4">
+            <TabsTrigger value="todos">Todos</TabsTrigger>
+            <TabsTrigger value="critico">Crítico</TabsTrigger>
+            <TabsTrigger value="warning">Aviso</TabsTrigger>
+            <TabsTrigger value="info">Info</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="todos" className="space-y-4 mt-6">
+            {alertasAtivos.map(alerta => (
+              <AlertaCard key={alerta.id} alerta={alerta} onResolver={resolverAlerta} />
+            ))}
+          </TabsContent>
+
+          <TabsContent value="critico" className="space-y-4 mt-6">
+            {alertasCriticos.map(alerta => (
+              <AlertaCard key={alerta.id} alerta={alerta} onResolver={resolverAlerta} />
+            ))}
+          </TabsContent>
+
+          <TabsContent value="warning" className="space-y-4 mt-6">
+            {alertasWarning.map(alerta => (
+              <AlertaCard key={alerta.id} alerta={alerta} onResolver={resolverAlerta} />
+            ))}
+          </TabsContent>
+
+          <TabsContent value="info" className="space-y-4 mt-6">
+            {alertasInfo.map(alerta => (
+              <AlertaCard key={alerta.id} alerta={alerta} onResolver={resolverAlerta} />
+            ))}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </ResourceGuard>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { MOCK_CANAIS_RECEITA } from "@/data/mockData";
 import { formatCurrency } from "@/lib/formatters";
-import { Calculator, TrendingUp, Lightbulb } from "lucide-react";
+import { Calculator, TrendingUp, Lightbulb, Target, AlertCircle, PieChart } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const roiData = MOCK_CANAIS_RECEITA.map(canal => ({
@@ -15,87 +16,81 @@ const roiData = MOCK_CANAIS_RECEITA.map(canal => ({
 })).sort((a, b) => b.roi - a.roi);
 
 export default function EfeitoAlavanca() {
-  const [investimento, setInvestimento] = useState("10000");
+  const [investimento, setInvestimento] = useState(10000);
   const [canalSelecionado, setCanalSelecionado] = useState("A010");
 
   const calcularRetorno = () => {
-    const valor = parseFloat(investimento);
+    const valor = investimento;
     const roasCanal = canalSelecionado === 'A010' ? 4.2 : canalSelecionado === 'Instagram' ? 3.5 : 3.8;
     const receitaEstimada = valor * roasCanal;
-    const roiProjetado = ((receitaEstimada - valor) / valor) * 100;
-    const tempoRetorno = Math.ceil((valor / receitaEstimada) * 30);
+    const roi = ((receitaEstimada - valor) / valor) * 100;
+    const roas = roasCanal;
+    const paybackMeses = Math.ceil((valor / receitaEstimada) * 30);
 
     return {
       receitaEstimada,
-      roiProjetado,
-      roasEsperado: roasCanal,
-      tempoRetorno
+      roi,
+      roas,
+      paybackMeses
     };
   };
 
   const resultado = calcularRetorno();
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Efeito Alavanca</h1>
-        <p className="text-muted-foreground mt-1">Análise de ROI e simulação de investimentos</p>
-      </div>
+    <ResourceGuard resource="efeito_alavanca">
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Efeito Alavanca</h1>
+          <p className="text-muted-foreground mt-1">Simulação de investimentos e ROI por canal</p>
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-foreground flex items-center gap-2">
-              <Calculator className="h-5 w-5" />
-              Simulador de Investimentos
-            </CardTitle>
+            <CardTitle className="text-foreground">Simulador de Investimento</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="investimento">Valor a Investir</Label>
-              <Input
-                id="investimento"
-                type="number"
-                value={investimento}
-                onChange={(e) => setInvestimento(e.target.value)}
-                placeholder="10000"
-              />
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Valor do Investimento (R$)</label>
+                <Input 
+                  type="number" 
+                  value={investimento} 
+                  onChange={(e) => setInvestimento(Number(e.target.value))}
+                  placeholder="Ex: 50000"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Canal</label>
+                <Select value={canalSelecionado} onValueChange={setCanalSelecionado}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MOCK_CANAIS_RECEITA.map(canal => (
+                      <SelectItem key={canal.canal} value={canal.canal}>{canal.canal}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="canal">Canal</Label>
-              <Select value={canalSelecionado} onValueChange={setCanalSelecionado}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="A010">A010</SelectItem>
-                  <SelectItem value="Instagram">Instagram</SelectItem>
-                  <SelectItem value="Contratos">Contratos</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="pt-4 space-y-4 border-t border-border">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Investimento</span>
-                <span className="text-sm font-bold text-foreground">{formatCurrency(parseFloat(investimento))}</span>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-4 border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">Receita Estimada</p>
+                <p className="text-2xl font-bold text-success">{formatCurrency(resultado.receitaEstimada)}</p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">ROAS Esperado</span>
-                <span className="text-sm font-bold text-primary">{resultado.roasEsperado}x</span>
+              <div className="p-4 border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">ROI Projetado</p>
+                <p className="text-2xl font-bold text-primary">{resultado.roi.toFixed(2)}%</p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Receita Estimada</span>
-                <span className="text-sm font-bold text-success">{formatCurrency(resultado.receitaEstimada)}</span>
+              <div className="p-4 border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">ROAS</p>
+                <p className="text-2xl font-bold text-info">{resultado.roas.toFixed(2)}x</p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">ROI Projetado</span>
-                <span className="text-sm font-bold text-success">+{resultado.roiProjetado.toFixed(1)}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Tempo de Retorno</span>
-                <span className="text-sm font-bold text-foreground">{resultado.tempoRetorno} dias</span>
+              <div className="p-4 border border-border rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">Payback (meses)</p>
+                <p className="text-2xl font-bold text-foreground">{resultado.paybackMeses}</p>
               </div>
             </div>
           </CardContent>
@@ -103,71 +98,81 @@ export default function EfeitoAlavanca() {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-foreground flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              ROI Histórico por Canal
-            </CardTitle>
+            <CardTitle className="text-foreground">ROI Histórico por Canal</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={400}>
               <BarChart data={roiData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                <YAxis dataKey="canal" type="category" stroke="hsl(var(--muted-foreground))" />
+                <YAxis dataKey="canal" type="category" stroke="hsl(var(--muted-foreground))" width={150} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                  formatter={(value: any) => `${value.toFixed(1)}%`}
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))',
+                    color: 'hsl(var(--foreground))'
+                  }}
+                  formatter={(value: any) => `${value.toFixed(2)}%`}
                 />
-                <Bar dataKey="roi" fill="hsl(var(--success))" />
+                <Bar dataKey="roi" fill="hsl(var(--primary))" name="ROI (%)" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="text-foreground">Recomendações Estratégicas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-4 border border-border rounded-lg">
+                <TrendingUp className="h-5 w-5 text-success mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-foreground mb-1">Oportunidades de Crescimento</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Com base no ROI atual de {resultado.roi.toFixed(2)}%, considere aumentar investimento em {canalSelecionado} 
+                    para maximizar retornos. O payback estimado é de {resultado.paybackMeses} meses.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 border border-border rounded-lg">
+                <Target className="h-5 w-5 text-primary mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-foreground mb-1">Canais de Alto Desempenho</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {roiData.slice(0, 2).map(c => c.canal).join(' e ')} apresentam os melhores ROIs históricos. 
+                    Mantenha ou aumente investimentos nesses canais.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 border border-border rounded-lg">
+                <AlertCircle className="h-5 w-5 text-warning mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-foreground mb-1">Pontos de Atenção</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {roiData.slice(-2).map(c => c.canal).join(' e ')} apresentam ROI abaixo da média. 
+                    Revise estratégias ou considere realocar orçamento.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 border border-border rounded-lg">
+                <PieChart className="h-5 w-5 text-info mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-foreground mb-1">Diversificação</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Mantenha um portfólio diversificado de canais para mitigar riscos. O investimento total recomendado 
+                    considera a proporção histórica de performance.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-foreground flex items-center gap-2">
-            <Lightbulb className="h-5 w-5" />
-            Recomendações Estratégicas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="p-4 bg-success/10 border border-success/20 rounded-lg">
-              <h4 className="font-semibold text-success mb-2">💡 Oportunidade: Investir no Instagram</h4>
-              <p className="text-sm text-muted-foreground">
-                Investir R$ 10.000 no Instagram pode gerar aproximadamente R$ 35.000 em receita (ROAS 3.5x), 
-                com retorno do investimento em 9 dias. Canal com alta taxa de conversão e público engajado.
-              </p>
-            </div>
-
-            <div className="p-4 bg-success/10 border border-success/20 rounded-lg">
-              <h4 className="font-semibold text-success mb-2">⚡ Alta Performance: Canal A010</h4>
-              <p className="text-sm text-muted-foreground">
-                A010 apresenta o melhor ROAS (4.2x) e maior ticket médio (R$ 4.200). 
-                Recomenda-se aumentar investimentos neste canal para maximizar lucros no curto prazo.
-              </p>
-            </div>
-
-            <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg">
-              <h4 className="font-semibold text-warning mb-2">⚠️ Atenção: OB Vitalício</h4>
-              <p className="text-sm text-muted-foreground">
-                Canal com menor receita (R$ 5.760) e ticket médio baixo (R$ 480). 
-                Considere otimizar estratégia de marketing ou realocar recursos para canais de maior retorno.
-              </p>
-            </div>
-
-            <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
-              <h4 className="font-semibold text-primary mb-2">📊 Diversificação: Contratos</h4>
-              <p className="text-sm text-muted-foreground">
-                Canal Contratos representa 21.1% da receita total com alto ticket médio (R$ 6.300). 
-                Expandir parcerias estratégicas pode aumentar receita sem aumentar custos de marketing.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    </ResourceGuard>
   );
 }

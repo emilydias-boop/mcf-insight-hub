@@ -1,13 +1,14 @@
+import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { User, Bell, Shield, Settings, DollarSign, Mail } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { User, Bell, Shield, Plug } from "lucide-react";
 
 export default function Configuracoes() {
   const handleSave = () => {
@@ -15,208 +16,194 @@ export default function Configuracoes() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Configurações</h1>
-        <p className="text-muted-foreground mt-1">Gerencie suas preferências e configurações do sistema</p>
-      </div>
+    <ResourceGuard resource="configuracoes">
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Configurações</h1>
+          <p className="text-muted-foreground mt-1">Gerenciamento de preferências e integrações</p>
+        </div>
 
-      <Tabs defaultValue="perfil" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 max-w-[600px]">
-          <TabsTrigger value="perfil">
-            <User className="h-4 w-4 mr-2" />
-            Perfil
-          </TabsTrigger>
-          <TabsTrigger value="notificacoes">
-            <Bell className="h-4 w-4 mr-2" />
-            Notificações
-          </TabsTrigger>
-          <TabsTrigger value="seguranca">
-            <Shield className="h-4 w-4 mr-2" />
-            Segurança
-          </TabsTrigger>
-          <TabsTrigger value="integracoes">
-            <Plug className="h-4 w-4 mr-2" />
-            Integrações
-          </TabsTrigger>
-        </TabsList>
+        <Tabs defaultValue="perfil" className="w-full">
+          <TabsList className="grid w-full md:w-[600px] grid-cols-4">
+            <TabsTrigger value="perfil" className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Perfil
+            </TabsTrigger>
+            <TabsTrigger value="notificacoes" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Notificações
+            </TabsTrigger>
+            <TabsTrigger value="seguranca" className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Segurança
+            </TabsTrigger>
+            <TabsTrigger value="integracoes" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Integrações
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="perfil" className="space-y-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Informações Pessoais</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center gap-6">
-                <Avatar className="h-24 w-24">
-                  <AvatarImage src="" />
-                  <AvatarFallback className="text-2xl">AD</AvatarFallback>
-                </Avatar>
+          <TabsContent value="perfil" className="space-y-4 mt-6">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Informações Pessoais</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Button variant="outline">Alterar Foto</Button>
-                  <p className="text-xs text-muted-foreground">JPG, PNG ou GIF. Máx 2MB.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="nome">Nome Completo</Label>
-                  <Input id="nome" defaultValue="Administrador MCF" />
+                  <Label htmlFor="nome" className="text-foreground">Nome Completo</Label>
+                  <Input id="nome" defaultValue="João Silva" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="admin@mcf.com.br" />
+                  <Label htmlFor="email" className="text-foreground">Email</Label>
+                  <Input id="email" type="email" defaultValue="joao.silva@mcf.com.br" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="telefone">Telefone</Label>
-                  <Input id="telefone" defaultValue="(11) 99999-9999" />
+                  <Label htmlFor="telefone" className="text-foreground">Telefone</Label>
+                  <Input id="telefone" defaultValue="(11) 98765-4321" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cargo">Cargo</Label>
-                  <Input id="cargo" defaultValue="Diretor Executivo" disabled />
+                  <Label htmlFor="foto" className="text-foreground">Foto de Perfil</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
+                      <User className="h-8 w-8 text-primary" />
+                    </div>
+                    <Button variant="outline" size="sm">Alterar Foto</Button>
+                  </div>
                 </div>
-              </div>
+                <Button onClick={handleSave}>Salvar Alterações</Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              <Button onClick={handleSave}>Salvar Alterações</Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="notificacoes" className="space-y-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Preferências de Notificação</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Email</p>
-                  <p className="text-xs text-muted-foreground">Receber notificações por email</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Push</p>
-                  <p className="text-xs text-muted-foreground">Notificações push no navegador</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">SMS</p>
-                  <p className="text-xs text-muted-foreground">Alertas via SMS</p>
-                </div>
-                <Switch />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Alertas Críticos</p>
-                  <p className="text-xs text-muted-foreground">Notificar sempre que houver alertas críticos</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">Resumo Diário</p>
-                  <p className="text-xs text-muted-foreground">Receber resumo diário por email</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <Button onClick={handleSave}>Salvar Preferências</Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="seguranca" className="space-y-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Segurança da Conta</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="senha-atual">Senha Atual</Label>
-                  <Input id="senha-atual" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="nova-senha">Nova Senha</Label>
-                  <Input id="nova-senha" type="password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmar-senha">Confirmar Nova Senha</Label>
-                  <Input id="confirmar-senha" type="password" />
-                </div>
-              </div>
-
-              <Button onClick={handleSave}>Alterar Senha</Button>
-
-              <div className="border-t border-border pt-6">
+          <TabsContent value="notificacoes" className="space-y-4 mt-6">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Preferências de Notificação</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">Autenticação de Dois Fatores (2FA)</p>
-                    <p className="text-xs text-muted-foreground">Adicione uma camada extra de segurança</p>
+                  <div>
+                    <p className="font-medium text-foreground">Email</p>
+                    <p className="text-sm text-muted-foreground">Receber notificações por email</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Push</p>
+                    <p className="text-sm text-muted-foreground">Notificações no navegador</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">SMS</p>
+                    <p className="text-sm text-muted-foreground">Alertas por mensagem de texto</p>
                   </div>
                   <Switch />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="integracoes" className="space-y-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Integrações Ativas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center">
-                    <span className="text-2xl">🔗</span>
-                  </div>
+                <Separator />
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Manus</p>
-                    <p className="text-xs text-muted-foreground">Sistema de gestão integrado</p>
+                    <p className="font-medium text-foreground">Alertas Críticos</p>
+                    <p className="text-sm text-muted-foreground">Notificações de alta prioridade</p>
                   </div>
+                  <Switch defaultChecked />
                 </div>
-                <Badge>Conectado</Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
-                    <span className="text-2xl">💳</span>
-                  </div>
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-foreground">Stripe</p>
-                    <p className="text-xs text-muted-foreground">Pagamentos online</p>
+                    <p className="font-medium text-foreground">Resumo Diário</p>
+                    <p className="text-sm text-muted-foreground">Receber resumo das métricas</p>
                   </div>
+                  <Switch defaultChecked />
                 </div>
-                <Badge variant="secondary">Não conectado</Badge>
-              </div>
+                <Button onClick={handleSave}>Salvar Preferências</Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
-                    <span className="text-2xl">📧</span>
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">SendGrid</p>
-                    <p className="text-xs text-muted-foreground">Envio de emails</p>
-                  </div>
+          <TabsContent value="seguranca" className="space-y-4 mt-6">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Segurança da Conta</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="senha-atual" className="text-foreground">Senha Atual</Label>
+                  <Input id="senha-atual" type="password" />
                 </div>
-                <Badge variant="secondary">Não conectado</Badge>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nova-senha" className="text-foreground">Nova Senha</Label>
+                  <Input id="nova-senha" type="password" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmar-senha" className="text-foreground">Confirmar Nova Senha</Label>
+                  <Input id="confirmar-senha" type="password" />
+                </div>
+                <Button onClick={handleSave}>Alterar Senha</Button>
+                
+                <Separator className="my-6" />
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Autenticação de Dois Fatores</p>
+                    <p className="text-sm text-muted-foreground">Adicionar camada extra de segurança</p>
+                  </div>
+                  <Switch />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="integracoes" className="space-y-4 mt-6">
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Integrações Ativas</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
+                      <Settings className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Manus</p>
+                      <p className="text-sm text-muted-foreground">CRM e gestão de leads</p>
+                    </div>
+                  </div>
+                  <Badge variant="default">Conectado</Badge>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
+                      <DollarSign className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Stripe</p>
+                      <p className="text-sm text-muted-foreground">Processamento de pagamentos</p>
+                    </div>
+                  </div>
+                  <Badge variant="outline">Desconectado</Badge>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded bg-primary/20 flex items-center justify-center">
+                      <Mail className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">SendGrid</p>
+                      <p className="text-sm text-muted-foreground">Envio de emails</p>
+                    </div>
+                  </div>
+                  <Badge variant="default">Conectado</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </ResourceGuard>
   );
 }

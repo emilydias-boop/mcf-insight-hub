@@ -1,7 +1,9 @@
+import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MOCK_CLIENTES_CREDITO } from "@/data/mockData";
 import { formatCurrency } from "@/lib/formatters";
 import { DollarSign, Users, TrendingDown, Award, Phone } from "lucide-react";
@@ -29,100 +31,95 @@ export default function Credito() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Gestão de Crédito</h1>
-        <p className="text-muted-foreground mt-1">Análise de crédito e controle de inadimplência</p>
-      </div>
+    <ResourceGuard resource="credito">
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Gestão de Crédito</h1>
+          <p className="text-muted-foreground mt-1">Monitoramento de crédito e inadimplência</p>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {kpis.map((kpi, idx) => (
-          <KPICard key={idx} {...kpi} />
-        ))}
-      </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {kpis.map((kpi, i) => (
+            <Card key={i} className="bg-card border-border">
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground mb-1">{kpi.title}</p>
+                <p className="text-3xl font-bold text-foreground">{kpi.value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="bg-success/5 border-success/20">
-          <CardContent className="p-6 text-center">
-            <div className="text-4xl mb-2">✅</div>
-            <p className="text-2xl font-bold text-success">60%</p>
-            <p className="text-sm text-muted-foreground">Baixo Risco</p>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-success/10 border-success/20">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground mb-2">Risco Baixo</p>
+              <p className="text-3xl font-bold text-success">128</p>
+              <p className="text-xs text-muted-foreground mt-1">Score &gt; 700</p>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-warning/5 border-warning/20">
-          <CardContent className="p-6 text-center">
-            <div className="text-4xl mb-2">⚠️</div>
-            <p className="text-2xl font-bold text-warning">30%</p>
-            <p className="text-sm text-muted-foreground">Médio Risco</p>
-          </CardContent>
-        </Card>
+          <Card className="bg-warning/10 border-warning/20">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground mb-2">Risco Médio</p>
+              <p className="text-3xl font-bold text-warning">45</p>
+              <p className="text-xs text-muted-foreground mt-1">Score 500-700</p>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-destructive/5 border-destructive/20">
-          <CardContent className="p-6 text-center">
-            <div className="text-4xl mb-2">🚨</div>
-            <p className="text-2xl font-bold text-destructive">10%</p>
-            <p className="text-sm text-muted-foreground">Alto Risco</p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="bg-destructive/10 border-destructive/20">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground mb-2">Risco Alto</p>
+              <p className="text-3xl font-bold text-destructive">12</p>
+              <p className="text-xs text-muted-foreground mt-1">Score &lt; 500</p>
+            </CardContent>
+          </Card>
+        </div>
 
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-foreground">Clientes Inadimplentes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Nome</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">CPF</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Valor Devido</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Dias Atraso</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Score</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Risco</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Ação</th>
-                </tr>
-              </thead>
-              <tbody>
+        <Card className="bg-card border-border">
+          <CardContent className="pt-6">
+            <h2 className="text-xl font-semibold text-foreground mb-4">Clientes Inadimplentes</h2>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-muted-foreground">Cliente</TableHead>
+                  <TableHead className="text-muted-foreground">CPF</TableHead>
+                  <TableHead className="text-muted-foreground">Valor Devido</TableHead>
+                  <TableHead className="text-muted-foreground">Dias em Atraso</TableHead>
+                  <TableHead className="text-muted-foreground">Score</TableHead>
+                  <TableHead className="text-muted-foreground">Risco</TableHead>
+                  <TableHead className="text-muted-foreground">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {MOCK_CLIENTES_CREDITO.map((cliente) => (
-                  <tr key={cliente.id} className="border-b border-border hover:bg-muted/50">
-                    <td className="py-3 px-4 text-sm text-foreground">{cliente.nome}</td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">{cliente.cpf}</td>
-                    <td className="py-3 px-4 text-sm text-right font-medium text-destructive">
-                      {formatCurrency(cliente.valorDevido)}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <Badge variant={cliente.diasAtraso > 45 ? 'destructive' : 'default'}>
-                        {cliente.diasAtraso} dias
-                      </Badge>
-                    </td>
-                    <td className={cn("py-3 px-4 text-sm text-center font-medium", getRiscoColor(cliente.score))}>
-                      {cliente.score}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={cn("text-xs font-medium", getRiscoColor(cliente.score))}>
+                  <TableRow key={cliente.id}>
+                    <TableCell className="font-medium text-foreground">{cliente.nome}</TableCell>
+                    <TableCell className="text-muted-foreground">{cliente.cpf}</TableCell>
+                    <TableCell className="text-destructive font-semibold">{formatCurrency(cliente.valorDevido)}</TableCell>
+                    <TableCell className="text-muted-foreground">{cliente.diasAtraso} dias</TableCell>
+                    <TableCell className="text-foreground">{cliente.score}</TableCell>
+                    <TableCell>
+                      <Badge variant={getRiscoColor(cliente.score) as any}>
                         {getRiscoLabel(cliente.score)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <Button 
                         size="sm" 
                         variant="outline"
-                        onClick={() => toast({ title: "Contato", description: `Entrando em contato com ${cliente.nome}` })}
+                        onClick={() => toast({ title: "Contato iniciado", description: `Tentando contato com ${cliente.nome}` })}
                       >
                         <Phone className="h-3 w-3 mr-1" />
                         Contatar
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </ResourceGuard>
   );
 }

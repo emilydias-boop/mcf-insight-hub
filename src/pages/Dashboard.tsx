@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_KPIS } from "@/data/mockData";
@@ -202,145 +203,147 @@ export default function Dashboard() {
   ] : MOCK_KPIS;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRefreshData} className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Atualizar
-          </Button>
-            <TargetsConfigDialog />
-            <PeriodComparison />
-          <DashboardCustomizer />
-        </div>
-      </div>
-
-      <PeriodSelector 
-        onApply={handleApplyFilters}
-        onClear={handleClearFilters}
-        onExport={handleExport}
-      />
-
-
-      {/* Error Display */}
-      {(errorMetrics || errorEvolution || errorA010 || errorUltrameta || errorResumo) && (
-        <Card className="bg-destructive/10 border-destructive">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              <div>
-                <p className="font-semibold">Erro ao carregar dados</p>
-                <p className="text-sm">
-                  {errorMetrics && 'Métricas: ' + (errorMetrics as Error).message}
-                  {errorEvolution && ' | Evolução: ' + (errorEvolution as Error).message}
-                  {errorA010 && ' | Funil A010: ' + (errorA010 as Error).message}
-                  {errorUltrameta && ' | Ultrameta: ' + (errorUltrameta as Error).message}
-                  {errorResumo && ' | Resumo: ' + (errorResumo as Error).message}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* KPIs + Ultrameta Layout Compacto */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4">
-        {/* KPIs Grid 3x2 - Esquerda */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
-          {loadingMetrics ? (
-            <>
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="h-24 bg-card animate-pulse rounded-lg border border-border" />
-              ))}
-            </>
-          ) : (
-            kpis.map((kpi) => {
-              const Icon = iconMap[kpi.id as keyof typeof iconMap];
-              return (
-                <KPICard
-                  key={kpi.id}
-                  title={kpi.title}
-                  value={kpi.value}
-                  change={kpi.change}
-                  icon={Icon}
-                  variant={kpi.variant as any}
-                  compact
-                />
-              );
-            })
-          )}
-        </div>
-
-        {/* Ultrameta Card - Direita */}
-        {loadingUltrameta ? (
-          <div className="h-full min-h-[240px] bg-card animate-pulse rounded-lg border border-border" />
-        ) : ultrameta ? (
-          <div className="h-full">
-            <UltrametaCard data={ultrameta} />
+    <ResourceGuard resource="dashboard">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
           </div>
-        ) : null}
-      </div>
-
-      {/* Gráfico de Evolução Temporal */}
-      {loadingEvolution ? (
-        <div className="h-96 bg-card animate-pulse rounded-lg border border-border" />
-      ) : evolutionData && evolutionData.length > 0 ? (
-        <TrendChart data={evolutionData} />
-      ) : (
-        <Card className="bg-card border-border">
-          <CardContent className="p-6 text-center text-muted-foreground">
-            Nenhum dado de evolução disponível
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Funil Pipeline Inside Sales - Dividido em Leads A e B */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-end">
-          <div className="flex gap-2 border border-border rounded-lg p-1 bg-card">
-            <Button
-              variant={viewMode === 'periodo' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('periodo')}
-              className="gap-2"
-            >
-              <Calendar className="h-4 w-4" />
-              Período
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleRefreshData} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Atualizar
             </Button>
-            <Button
-              variant={viewMode === 'atual' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('atual')}
-              className="gap-2"
-            >
-              <Eye className="h-4 w-4" />
-              Visão Atual
-            </Button>
+              <TargetsConfigDialog />
+              <PeriodComparison />
+            <DashboardCustomizer />
           </div>
         </div>
-        <FunilDuplo
-          originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
-          weekStart={periodo.inicio}
-          weekEnd={periodo.fim}
-          showCurrentState={viewMode === 'atual'}
+
+        <PeriodSelector 
+          onApply={handleApplyFilters}
+          onClear={handleClearFilters}
+          onExport={handleExport}
         />
-      </div>
 
-      {loadingResumo ? (
-        <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
-      ) : weeklyResumo && weeklyResumo.length > 0 ? (
-        <ResumoFinanceiro dados={weeklyResumo} />
-      ) : (
-        <Card className="bg-card border-border">
-          <CardContent className="p-6 text-center text-muted-foreground">
-            Nenhum dado de resumo disponível
-          </CardContent>
-        </Card>
-      )}
-    </div>
+
+        {/* Error Display */}
+        {(errorMetrics || errorEvolution || errorA010 || errorUltrameta || errorResumo) && (
+          <Card className="bg-destructive/10 border-destructive">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                <div>
+                  <p className="font-semibold">Erro ao carregar dados</p>
+                  <p className="text-sm">
+                    {errorMetrics && 'Métricas: ' + (errorMetrics as Error).message}
+                    {errorEvolution && ' | Evolução: ' + (errorEvolution as Error).message}
+                    {errorA010 && ' | Funil A010: ' + (errorA010 as Error).message}
+                    {errorUltrameta && ' | Ultrameta: ' + (errorUltrameta as Error).message}
+                    {errorResumo && ' | Resumo: ' + (errorResumo as Error).message}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* KPIs + Ultrameta Layout Compacto */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4">
+          {/* KPIs Grid 3x2 - Esquerda */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
+            {loadingMetrics ? (
+              <>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="h-24 bg-card animate-pulse rounded-lg border border-border" />
+                ))}
+              </>
+            ) : (
+              kpis.map((kpi) => {
+                const Icon = iconMap[kpi.id as keyof typeof iconMap];
+                return (
+                  <KPICard
+                    key={kpi.id}
+                    title={kpi.title}
+                    value={kpi.value}
+                    change={kpi.change}
+                    icon={Icon}
+                    variant={kpi.variant as any}
+                    compact
+                  />
+                );
+              })
+            )}
+          </div>
+
+          {/* Ultrameta Card - Direita */}
+          {loadingUltrameta ? (
+            <div className="h-full min-h-[240px] bg-card animate-pulse rounded-lg border border-border" />
+          ) : ultrameta ? (
+            <div className="h-full">
+              <UltrametaCard data={ultrameta} />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Gráfico de Evolução Temporal */}
+        {loadingEvolution ? (
+          <div className="h-96 bg-card animate-pulse rounded-lg border border-border" />
+        ) : evolutionData && evolutionData.length > 0 ? (
+          <TrendChart data={evolutionData} />
+        ) : (
+          <Card className="bg-card border-border">
+            <CardContent className="p-6 text-center text-muted-foreground">
+              Nenhum dado de evolução disponível
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Funil Pipeline Inside Sales - Dividido em Leads A e B */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-end">
+            <div className="flex gap-2 border border-border rounded-lg p-1 bg-card">
+              <Button
+                variant={viewMode === 'periodo' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('periodo')}
+                className="gap-2"
+              >
+                <Calendar className="h-4 w-4" />
+                Período
+              </Button>
+              <Button
+                variant={viewMode === 'atual' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('atual')}
+                className="gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                Visão Atual
+              </Button>
+            </div>
+          </div>
+          <FunilDuplo
+            originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
+            weekStart={periodo.inicio}
+            weekEnd={periodo.fim}
+            showCurrentState={viewMode === 'atual'}
+          />
+        </div>
+
+        {loadingResumo ? (
+          <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
+        ) : weeklyResumo && weeklyResumo.length > 0 ? (
+          <ResumoFinanceiro dados={weeklyResumo} />
+        ) : (
+          <Card className="bg-card border-border">
+            <CardContent className="p-6 text-center text-muted-foreground">
+              Nenhum dado de resumo disponível
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </ResourceGuard>
   );
 }
