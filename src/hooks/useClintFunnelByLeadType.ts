@@ -20,6 +20,12 @@ export const useClintFunnelByLeadType = (
     queryKey: ['clint-funnel-by-lead-type', originId, leadType, weekStart?.toISOString(), weekEnd?.toISOString(), showCurrentState],
     queryFn: async () => {
       try {
+        // Função para validar se uma string é um UUID válido
+        const isValidUUID = (str: string) => {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          return uuidRegex.test(str);
+        };
+
         console.log(`🔍 [FunilByLeadType] Iniciando consulta para Lead ${leadType}`);
         console.log(`🔍 [FunilByLeadType] originId: ${originId}`);
         console.log(`🔍 [FunilByLeadType] showCurrentState: ${showCurrentState}`);
@@ -138,8 +144,17 @@ export const useClintFunnelByLeadType = (
 
           console.log(`✅ [FunilByLeadType] Activities encontradas: ${activities?.length || 0}`);
 
-          // Buscar tags dos deals
-          const dealIds = [...new Set(activities?.map(a => a.deal_id) || [])];
+          // Buscar tags dos deals - filtrar apenas deal_ids válidos
+          const allDealIds = [...new Set(activities?.map(a => a.deal_id) || [])];
+          const dealIds = allDealIds.filter(id => id && isValidUUID(id));
+          
+          console.log(`🔍 [FunilByLeadType] Deal IDs: ${allDealIds.length} total, ${dealIds.length} válidos`);
+          
+          if (dealIds.length === 0) {
+            console.warn('⚠️ [FunilByLeadType] Nenhum deal_id válido encontrado');
+            return [];
+          }
+
           console.log(`🔄 [FunilByLeadType] Buscando tags para ${dealIds.length} deals únicos...`);
 
           const { data: deals, error: dealsError } = await supabase
