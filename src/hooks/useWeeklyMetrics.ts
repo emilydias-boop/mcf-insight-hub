@@ -144,7 +144,7 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
       let totalCost = 0;
       let totalLeads = 0;
       let avgRoi = 0;
-      let avgRoas = 0;
+      let totalAdsForRoas = 0;
 
       data.forEach(week => {
         if (canal === 'todos' || !canal) {
@@ -164,11 +164,11 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
         totalCost += week.operating_cost || week.total_cost || 0;
         totalLeads += week.stage_01_actual || 0;
         avgRoi += week.roi || 0;
-        avgRoas += week.roas || 0;
+        totalAdsForRoas += week.ads_cost || 0;
       });
 
       avgRoi = data.length > 0 ? avgRoi / data.length : 0;
-      avgRoas = data.length > 0 ? avgRoas / data.length : 0;
+      const calculatedRoas = totalAdsForRoas > 0 ? totalRevenue / totalAdsForRoas : 0;
 
       const calcChange = (current: number, previous: number) => {
         if (previous === 0) return current > 0 ? 100 : 0;
@@ -210,7 +210,7 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
           let previousCost = 0;
           let previousLeads = 0;
           let previousRoi = 0;
-          let previousRoas = 0;
+          let previousAdsForRoas = 0;
 
           previousData.forEach(week => {
             if (canal === 'todos' || !canal) {
@@ -228,11 +228,11 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
             previousCost += week.operating_cost || week.total_cost || 0;
             previousLeads += week.stage_01_actual || 0;
             previousRoi += week.roi || 0;
-            previousRoas += week.roas || 0;
+            previousAdsForRoas += week.ads_cost || 0;
           });
 
           const previousAvgRoi = previousData.length > 0 ? previousRoi / previousData.length : 0;
-          const previousAvgRoas = previousData.length > 0 ? previousRoas / previousData.length : 0;
+          const previousCalculatedRoas = previousAdsForRoas > 0 ? previousRevenue / previousAdsForRoas : 0;
 
           // Calcular variações
           revenueChange = calcChange(totalRevenue, previousRevenue);
@@ -240,7 +240,7 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
           costChange = calcChange(totalCost, previousCost);
           leadsChange = calcChange(totalLeads, previousLeads);
           roiChange = calcChange(avgRoi, previousAvgRoi);
-          roasChange = calcChange(avgRoas, previousAvgRoas);
+          roasChange = calcChange(calculatedRoas, previousCalculatedRoas);
         }
       } else {
         // Comparar primeira metade vs segunda metade (comportamento original para múltiplas semanas)
@@ -283,12 +283,13 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
           ? olderHalf.reduce((sum, w) => sum + (w.roi || 0), 0) / olderHalf.length 
           : 0;
 
-        const recentRoas = recentHalf.length > 0 
-          ? recentHalf.reduce((sum, w) => sum + (w.roas || 0), 0) / recentHalf.length 
-          : 0;
-        const olderRoas = olderHalf.length > 0 
-          ? olderHalf.reduce((sum, w) => sum + (w.roas || 0), 0) / olderHalf.length 
-          : 0;
+        const recentAds = recentHalf.reduce((sum, w) => sum + (w.ads_cost || 0), 0);
+        const recentRevHalf = recentHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0);
+        const recentRoas = recentAds > 0 ? recentRevHalf / recentAds : 0;
+
+        const olderAds = olderHalf.reduce((sum, w) => sum + (w.ads_cost || 0), 0);
+        const olderRevHalf = olderHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0);
+        const olderRoas = olderAds > 0 ? olderRevHalf / olderAds : 0;
 
         revenueChange = calcChange(recentRevenue, olderRevenue);
         salesChange = calcChange(recentSales, olderSales);
@@ -312,7 +313,7 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
           change: roiChange 
         },
         roas: { 
-          value: avgRoas, 
+          value: calculatedRoas, 
           change: roasChange 
         },
         cost: { 
