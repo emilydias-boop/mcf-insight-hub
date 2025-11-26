@@ -10,8 +10,10 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Receita from "./pages/receita/Index";
 import ReceitaOverview from "./pages/receita/Overview";
+import A010 from "./pages/receita/A010";
 import ReceitaTransacoes from "./pages/receita/Transacoes";
 import ReceitaPorCanal from "./pages/receita/PorCanal";
+import ImportarA010 from "./pages/receita/ImportarA010";
 import Custos from "./pages/custos/Index";
 import CustosOverview from "./pages/custos/Overview";
 import CustosDespesas from "./pages/custos/Despesas";
@@ -62,9 +64,11 @@ const App = () => (
               <Route index element={<Dashboard />} />
               <Route path="receita" element={<Receita />}>
                 <Route index element={<ReceitaOverview />} />
+                <Route path="a010" element={<A010 />} />
                 <Route path="transacoes" element={<ReceitaTransacoes />} />
                 <Route path="por-canal" element={<ReceitaPorCanal />} />
               </Route>
+              <Route path="importar-a010" element={<ImportarA010 />} />
               <Route path="custos" element={<Custos />}>
                 <Route index element={<CustosOverview />} />
                 <Route path="despesas" element={<CustosDespesas />} />
