@@ -63,6 +63,46 @@ function parseBubbleDate(dateStr: string): string {
   }
 }
 
+function normalizePhone(phone: string): string {
+  // Remove +55, espaços, traços, parênteses
+  return phone.replace(/\D/g, '').replace(/^55/, '');
+}
+
+async function findClintIdFromContacts(
+  supabase: any,
+  email: string | undefined,
+  phone: string | undefined
+): Promise<string | null> {
+  // Tentar por email primeiro
+  if (email) {
+    const { data } = await supabase
+      .from('crm_contacts')
+      .select('clint_id')
+      .eq('email', email)
+      .maybeSingle();
+    if (data?.clint_id) {
+      console.log(`[findClintId] ✅ Found via email: ${data.clint_id}`);
+      return data.clint_id;
+    }
+  }
+  
+  // Tentar por telefone normalizado
+  if (phone) {
+    const normalizedPhone = normalizePhone(phone);
+    const { data } = await supabase
+      .from('crm_contacts')
+      .select('clint_id')
+      .eq('phone', normalizedPhone)
+      .maybeSingle();
+    if (data?.clint_id) {
+      console.log(`[findClintId] ✅ Found via phone: ${data.clint_id}`);
+      return data.clint_id;
+    }
+  }
+  
+  return null;
+}
+
 function mapStage(bubbleStage: string): string {
   return BUBBLE_TO_CRM_STAGES[bubbleStage] || BUBBLE_TO_CRM_STAGES['Novo Lead'];
 }
@@ -91,6 +131,8 @@ Deno.serve(async (req) => {
     let created = 0;
     let updated = 0;
     let preserved = 0;
+    let matchedViaContact = 0;
+    let generatedId = 0;
     let activitiesCreated = 0;
     const errors: string[] = [];
 
@@ -105,41 +147,45 @@ Deno.serve(async (req) => {
           const createdAt = parseBubbleDate(record['Creation Date'] || '');
           const stageId = mapStage(record.etapa_funil_clint || 'Novo Lead');
 
-          // 1. Find existing deal by clint_id or email+phone
-          let existingDeal = null;
+          // 1. Determinar clint_id do registro
+          let finalClintId = record.clint_id?.trim();
 
-          if (record.clint_id) {
-            const { data } = await supabase
-              .from('crm_deals')
-              .select('*')
-              .eq('clint_id', record.clint_id)
-              .single();
-            existingDeal = data;
-          }
-
-          if (!existingDeal && record.email_clint && record.tefone_clint) {
-            const { data: contact } = await supabase
-              .from('crm_contacts')
-              .select('id')
-              .eq('email', record.email_clint)
-              .eq('phone', record.tefone_clint)
-              .single();
-
-            if (contact) {
-              const { data } = await supabase
-                .from('crm_deals')
-                .select('*')
-                .eq('contact_id', contact.id)
-                .single();
-              existingDeal = data;
+          if (!finalClintId) {
+            // Tentar encontrar clint_id nos contatos existentes
+            const foundClintId = await findClintIdFromContacts(
+              supabase,
+              record.email_clint,
+              record.tefone_clint
+            );
+            
+            if (foundClintId) {
+              finalClintId = foundClintId;
+              matchedViaContact++;
+              console.log(`[import] ✅ Matched: ${record.nome_clint} -> ${finalClintId}`);
+            } else {
+              // Fallback: gerar ID sintético único
+              const timestamp = Date.now();
+              const random = Math.random().toString(36).substring(2, 9);
+              finalClintId = `bubble_${timestamp}_${random}`;
+              generatedId++;
+              console.log(`[import] ⚠️ Generated ID: ${finalClintId} for ${record.nome_clint}`);
             }
           }
 
+          // 2. Find existing deal by clint_id
+          let existingDeal = null;
+          const { data } = await supabase
+            .from('crm_deals')
+            .select('*')
+            .eq('clint_id', finalClintId)
+            .maybeSingle();
+          existingDeal = data;
+
           let dealId: string;
 
-          // 2. Handle deal creation/update based on data_source
+          // 3. Handle deal creation/update based on data_source
           if (existingDeal) {
-            dealId = existingDeal.clint_id;
+            dealId = finalClintId;
 
             if (existingDeal.data_source === 'webhook') {
               // Preserve webhook data - don't update
@@ -167,35 +213,53 @@ Deno.serve(async (req) => {
             }
           } else {
             // Create new deal
-            const newClintId = record.clint_id || `bubble_${record.email_clint}_${record.tefone_clint}`;
-            
             // Try to find or create contact
             let contactId = null;
             if (record.email_clint || record.tefone_clint) {
-              const { data: existingContact } = await supabase
-                .from('crm_contacts')
-                .select('id')
-                .or(`email.eq.${record.email_clint},phone.eq.${record.tefone_clint}`)
-                .single();
+              // Buscar por email primeiro
+              if (record.email_clint) {
+                const { data: existingContact } = await supabase
+                  .from('crm_contacts')
+                  .select('id')
+                  .eq('email', record.email_clint)
+                  .maybeSingle();
+                
+                if (existingContact) {
+                  contactId = existingContact.id;
+                }
+              }
 
-              if (existingContact) {
-                contactId = existingContact.id;
-              } else {
+              // Se não encontrou por email, tentar por telefone normalizado
+              if (!contactId && record.tefone_clint) {
+                const normalizedPhone = normalizePhone(record.tefone_clint);
+                const { data: existingContact } = await supabase
+                  .from('crm_contacts')
+                  .select('id')
+                  .eq('phone', normalizedPhone)
+                  .maybeSingle();
+                
+                if (existingContact) {
+                  contactId = existingContact.id;
+                }
+              }
+
+              // Se não encontrou, criar novo contato
+              if (!contactId) {
                 const { data: newContact, error: contactError } = await supabase
                   .from('crm_contacts')
                   .insert({
-                    clint_id: newClintId,
+                    clint_id: finalClintId,
                     name: record.nome_clint || 'Contato sem nome',
                     email: record.email_clint,
-                    phone: record.tefone_clint,
+                    phone: record.tefone_clint ? normalizePhone(record.tefone_clint) : null,
                     origin_id,
                   })
                   .select()
-                  .single();
+                  .maybeSingle();
 
                 if (contactError) {
                   console.error('[import-bubble-history] Error creating contact:', contactError);
-                } else {
+                } else if (newContact) {
                   contactId = newContact.id;
                 }
               }
@@ -204,7 +268,7 @@ Deno.serve(async (req) => {
             const { data: newDeal, error } = await supabase
               .from('crm_deals')
               .insert({
-                clint_id: newClintId,
+                clint_id: finalClintId,
                 name: record.nome_clint || 'Lead sem nome',
                 stage_id: stageId,
                 value: parseFloat(record.valor_clint || '0') || null,
@@ -217,19 +281,23 @@ Deno.serve(async (req) => {
                 data_source: 'bubble',
               })
               .select()
-              .single();
+              .maybeSingle();
 
             if (error) throw error;
-            dealId = newDeal.clint_id;
-            created++;
-            console.log(`[import-bubble-history] ➕ Created deal: ${dealId}`);
+            if (newDeal) {
+              dealId = finalClintId;
+              created++;
+              console.log(`[import-bubble-history] ➕ Created deal: ${dealId}`);
+            } else {
+              throw new Error('Failed to create deal');
+            }
           }
 
-          // 3. ALWAYS add historical activity
+          // 4. ALWAYS add historical activity
           const { error: activityError } = await supabase
             .from('deal_activities')
             .insert({
-              deal_id: dealId,
+              deal_id: finalClintId,
               activity_type: 'stage_change',
               to_stage: stageId,
               description: `Movido para ${record.etapa_funil_clint || 'Novo Lead'}`,
@@ -250,10 +318,15 @@ Deno.serve(async (req) => {
             activitiesCreated++;
           }
 
-        } catch (error) {
-          const errorMsg = `Error processing record: ${error instanceof Error ? error.message : 'Unknown error'}`;
-          console.error('[import-bubble-history]', errorMsg, record);
-          errors.push(errorMsg);
+        } catch (error: any) {
+          const errorMsg = error?.message || error?.details || error?.code || 'Unknown error';
+          console.error('[import-bubble-history] Error:', errorMsg, {
+            nome: record.nome_clint,
+            email: record.email_clint,
+            phone: record.tefone_clint,
+            clint_id: record.clint_id,
+          });
+          errors.push(`${record.nome_clint || 'Sem nome'}: ${errorMsg}`);
         }
       }
 
@@ -263,6 +336,7 @@ Deno.serve(async (req) => {
 
     console.log('[import-bubble-history] ✅ Import completed');
     console.log(`[import-bubble-history] Created: ${created}, Updated: ${updated}, Preserved: ${preserved}`);
+    console.log(`[import-bubble-history] Matched via contact: ${matchedViaContact}, Generated ID: ${generatedId}`);
     console.log(`[import-bubble-history] Activities created: ${activitiesCreated}`);
 
     return new Response(
@@ -274,6 +348,8 @@ Deno.serve(async (req) => {
           created,
           updated,
           preserved,
+          matchedViaContact,
+          generatedId,
           activitiesCreated,
           errors: errors.length,
         },

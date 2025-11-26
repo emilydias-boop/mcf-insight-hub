@@ -29,7 +29,9 @@ interface ImportStats {
   created: number;
   updated: number;
   preserved: number;
-  activities_created: number;
+  matchedViaContact: number;
+  generatedId: number;
+  activitiesCreated: number;
   errors: string[];
 }
 
@@ -161,7 +163,9 @@ export default function ImportarHistorico() {
         created: 0,
         updated: 0,
         preserved: 0,
-        activities_created: 0,
+        matchedViaContact: 0,
+        generatedId: 0,
+        activitiesCreated: 0,
         errors: []
       };
 
@@ -178,12 +182,14 @@ export default function ImportarHistorico() {
         if (error) {
           console.error('Erro no lote:', error);
           allStats.errors.push(`Erro no lote ${i / batchSize + 1}: ${error.message}`);
-        } else if (data) {
-          allStats.total += data.total || 0;
-          allStats.created += data.created || 0;
-          allStats.updated += data.updated || 0;
-          allStats.preserved += data.preserved || 0;
-          allStats.activities_created += data.activities_created || 0;
+        } else if (data?.stats) {
+          allStats.total += data.stats.total || 0;
+          allStats.created += data.stats.created || 0;
+          allStats.updated += data.stats.updated || 0;
+          allStats.preserved += data.stats.preserved || 0;
+          allStats.matchedViaContact += data.stats.matchedViaContact || 0;
+          allStats.generatedId += data.stats.generatedId || 0;
+          allStats.activitiesCreated += data.stats.activitiesCreated || 0;
           if (data.errors?.length) {
             allStats.errors.push(...data.errors);
           }
@@ -389,7 +395,7 @@ export default function ImportarHistorico() {
                 <h3 className="font-semibold">Importação Concluída</h3>
               </div>
               
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
                 <Card>
                   <CardContent className="pt-6">
                     <div className="text-2xl font-bold">{stats.total}</div>
@@ -416,7 +422,19 @@ export default function ImportarHistorico() {
                 </Card>
                 <Card>
                   <CardContent className="pt-6">
-                    <div className="text-2xl font-bold text-purple-600">{stats.activities_created}</div>
+                    <div className="text-2xl font-bold text-purple-600">{stats.matchedViaContact}</div>
+                    <p className="text-xs text-muted-foreground">Vinculados</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-orange-600">{stats.generatedId}</div>
+                    <p className="text-xs text-muted-foreground">IDs Gerados</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold text-indigo-600">{stats.activitiesCreated}</div>
                     <p className="text-xs text-muted-foreground">Atividades</p>
                   </CardContent>
                 </Card>
