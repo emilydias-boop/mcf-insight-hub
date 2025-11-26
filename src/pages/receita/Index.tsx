@@ -7,7 +7,7 @@ export default function Receita() {
 
   const tabs = [
     { name: "Visão Geral", path: "/receita" },
-    { name: "A010", path: "/receita/a010" },
+    { name: "Cursos", path: "/receita/a010" },
     { name: "Transações", path: "/receita/transacoes" },
     { name: "Por Canal", path: "/receita/por-canal" },
   ];

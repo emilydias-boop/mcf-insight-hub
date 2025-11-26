@@ -23,12 +23,24 @@ const PRODUCT_MAPPING: Record<string, string> = {
 };
 
 function mapProductCategory(productName: string, productCode?: string): string {
-  // Tentar mapear por código primeiro
+  const name = productName.toUpperCase();
+  
+  // Cursos: A010 ou qualquer produto "Construir para..."
+  if (name.includes('A010') || name.includes('CONSTRUIR PARA')) {
+    return 'curso';
+  }
+  
+  // Contratos
+  if (name.includes('CONTRATO') || productCode === 'A000' || productCode === '000') {
+    return 'contrato';
+  }
+  
+  // Tentar mapear por código primeiro (outros produtos)
   if (productCode && PRODUCT_MAPPING[productCode]) {
     return PRODUCT_MAPPING[productCode];
   }
   
-  // Tentar mapear por nome parcial
+  // Tentar mapear por nome parcial (outros produtos)
   for (const [key, category] of Object.entries(PRODUCT_MAPPING)) {
     if (productName.toLowerCase().includes(key.toLowerCase())) {
       return category;
@@ -131,8 +143,8 @@ serve(async (req) => {
 
       console.log('✅ Transação Hubla registrada com sucesso!');
 
-      // Se for produto A010, também inserir na tabela a010_sales
-      if (productCategory === 'a010') {
+      // Se for curso, também inserir na tabela a010_sales
+      if (productCategory === 'curso') {
         console.log('💰 Inserindo venda A010...');
         
         const { error: a010Error } = await supabase
