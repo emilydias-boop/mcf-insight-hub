@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KPICard } from "@/components/ui/KPICard";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useA010Sales, useA010Summary } from "@/hooks/useA010Sales";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { DollarSign, TrendingUp, Users, Search, Download } from "lucide-react";
+import { DollarSign, TrendingUp, Users, Search, Download, Upload } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -63,6 +64,12 @@ export default function A010() {
               className="pl-9"
             />
           </div>
+          <Button asChild variant="outline">
+            <Link to="/importar-a010">
+              <Upload className="h-4 w-4 mr-2" />
+              Importar Dados
+            </Link>
+          </Button>
           <Button variant="outline" size="icon" onClick={handleExport} disabled={!sales || sales.length === 0}>
             <Download className="h-4 w-4" />
           </Button>
