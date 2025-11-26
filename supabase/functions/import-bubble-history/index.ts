@@ -40,12 +40,25 @@ const BUBBLE_TO_CRM_STAGES: Record<string, string> = {
 };
 
 function parseBubbleDate(dateStr: string): string {
-  // Parse "Aug 13, 2025 3:52 pm" format
+  // Se vazio ou inválido, usar data atual
+  if (!dateStr || dateStr.trim() === '') {
+    console.log('[parseBubbleDate] Empty date, using current');
+    return new Date().toISOString();
+  }
+
   try {
+    // Tentar parse direto
     const date = new Date(dateStr);
+    
+    // Verificar se é válido
+    if (isNaN(date.getTime())) {
+      console.log('[parseBubbleDate] Invalid date:', dateStr, '- using current');
+      return new Date().toISOString();
+    }
+    
     return date.toISOString();
   } catch (error) {
-    console.error('Error parsing date:', dateStr, error);
+    console.error('[parseBubbleDate] Error:', dateStr, error);
     return new Date().toISOString();
   }
 }
