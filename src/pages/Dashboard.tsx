@@ -2,7 +2,7 @@ import { useState } from "react";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_KPIS } from "@/data/mockData";
-import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle } from "lucide-react";
+import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle, Eye, Calendar } from "lucide-react";
 import { FunilLista } from "@/components/dashboard/FunilLista";
 import { TargetsConfigDialog } from "@/components/dashboard/TargetsConfigDialog";
 import { ResumoFinanceiro } from "@/components/dashboard/ResumoFinanceiro";
@@ -47,6 +47,7 @@ export default function Dashboard() {
     fim: getCustomWeekEnd(new Date()),
   });
   const [canal, setCanal] = useState('todos');
+  const [viewMode, setViewMode] = useState<'periodo' | 'atual'>('periodo');
   
   const { data: metricsSummary, isLoading: loadingMetrics, error: errorMetrics } = useMetricsSummary(periodo.inicio, periodo.fim, canal);
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
@@ -55,7 +56,8 @@ export default function Dashboard() {
   const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useClintFunnel(
     PIPELINE_INSIDE_SALES_ID,
     periodo.inicio,
-    periodo.fim
+    periodo.fim,
+    viewMode === 'atual'
   );
   const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
   const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(5, periodo.inicio, periodo.fim, canal);
@@ -318,8 +320,28 @@ export default function Dashboard() {
 
       {/* Funil Pipeline Inside Sales */}
       <Card className="bg-card border-border">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
+          <div className="flex gap-2 border border-border rounded-lg p-1">
+            <Button
+              variant={viewMode === 'periodo' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('periodo')}
+              className="gap-2"
+            >
+              <Calendar className="h-4 w-4" />
+              Período
+            </Button>
+            <Button
+              variant={viewMode === 'atual' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('atual')}
+              className="gap-2"
+            >
+              <Eye className="h-4 w-4" />
+              Visão Atual
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {loadingA010 ? (
