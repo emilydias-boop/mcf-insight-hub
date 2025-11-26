@@ -52,6 +52,16 @@ export const useClintFunnelByLeadType = (
           return [];
         }
 
+        // Criar mapa para resolver tanto UUIDs quanto nomes de stages
+        const stageIdByNameOrId: Record<string, string> = {};
+        stages.forEach(stage => {
+          stageIdByNameOrId[stage.id] = stage.id; // UUID -> UUID
+          stageIdByNameOrId[stage.stage_name] = stage.id; // Nome -> UUID
+          stageIdByNameOrId[stage.stage_name.toLowerCase()] = stage.id; // nome lowercase -> UUID
+        });
+        
+        console.log(`🗺️ [FunilByLeadType] Mapa de stages criado com ${Object.keys(stageIdByNameOrId).length} entradas`);
+
         // Definir lógica de filtro por tipo de lead
         const filterByLeadType = (tags: string[] | null) => {
           if (!tags || tags.length === 0) return false;
@@ -153,19 +163,33 @@ export const useClintFunnelByLeadType = (
 
           // Contar atividades por stage, filtrando por tipo de lead
           let filteredCount = 0;
+          let unmatchedStages: string[] = [];
+          
           activities?.forEach(activity => {
             const tags = dealTagsMap[activity.deal_id];
             const matches = filterByLeadType(tags);
             if (matches && activity.to_stage) {
-              // Converter explicitamente para string
-              const stageIdStr = String(activity.to_stage);
-              dealsByStage[stageIdStr] = (dealsByStage[stageIdStr] || 0) + 1;
-              filteredCount++;
+              // Resolver o stage_id a partir do to_stage (pode ser nome ou UUID)
+              const resolvedStageId = stageIdByNameOrId[activity.to_stage] || 
+                                     stageIdByNameOrId[activity.to_stage?.toLowerCase()];
+              
+              if (resolvedStageId) {
+                dealsByStage[resolvedStageId] = (dealsByStage[resolvedStageId] || 0) + 1;
+                filteredCount++;
+              } else {
+                // Log de stages não mapeados para debug
+                unmatchedStages.push(activity.to_stage);
+              }
             }
           });
 
           console.log(`✅ [FunilByLeadType] Activities filtradas para Lead ${leadType}: ${filteredCount}`);
           console.log(`📊 [FunilByLeadType] Deals por stage (histórico):`, dealsByStage);
+          
+          if (unmatchedStages.length > 0) {
+            const uniqueUnmatched = [...new Set(unmatchedStages)];
+            console.warn(`⚠️ [FunilByLeadType] Stages não mapeados encontrados (${uniqueUnmatched.length}):`, uniqueUnmatched);
+          }
         } else {
           console.warn('⚠️ [FunilByLeadType] Nenhum modo selecionado (nem estado atual, nem período histórico)');
         }
