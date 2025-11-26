@@ -48,8 +48,12 @@ export const useClintFunnel = (originId: string, weekStart?: Date, weekEnd?: Dat
         .eq('target_type', 'funnel_stage')
         .eq('origin_id', originId);
 
-      if (weekStart) {
-        targetsQuery = targetsQuery.eq('week_start', weekStart.toISOString().split('T')[0]);
+      if (weekStart && weekEnd) {
+        const startDate = weekStart.toISOString().split('T')[0];
+        const endDate = weekEnd.toISOString().split('T')[0];
+        targetsQuery = targetsQuery
+          .gte('week_start', startDate)
+          .lte('week_start', endDate);
       }
 
       const { data: targets } = await targetsQuery;
