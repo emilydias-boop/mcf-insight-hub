@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.import-spreadsheet-data]
 verify_jwt = false
+
+[functions.webhook-funnel-targets]
+verify_jwt = false
