@@ -1417,6 +1417,59 @@ export type Database = {
         }
         Relationships: []
       }
+      team_targets: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          current_value: number | null
+          id: string
+          origin_id: string | null
+          reference_id: string | null
+          target_name: string
+          target_type: string
+          target_value: number
+          updated_at: string | null
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          current_value?: number | null
+          id?: string
+          origin_id?: string | null
+          reference_id?: string | null
+          target_name: string
+          target_type: string
+          target_value?: number
+          updated_at?: string | null
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          current_value?: number | null
+          id?: string
+          origin_id?: string | null
+          reference_id?: string | null
+          target_name?: string
+          target_type?: string
+          target_value?: number
+          updated_at?: string | null
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_targets_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           amount: number
