@@ -138,7 +138,7 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
         };
       }
 
-      // Agregar dados do período
+      // Agregar dados do período atual
       let totalRevenue = 0;
       let totalSales = 0;
       let totalCost = 0;
@@ -160,63 +160,168 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
           totalRevenue += week.contract_revenue || 0;
           totalSales += week.contract_sales || 0;
         }
-        totalCost += week.total_cost || 0;
+        // Usar operating_cost em vez de total_cost
+        totalCost += week.operating_cost || week.total_cost || 0;
         totalLeads += week.stage_01_actual || 0;
         avgRoi += week.roi || 0;
         avgRoas += week.roas || 0;
       });
 
-      avgRoi = avgRoi / data.length;
-      avgRoas = avgRoas / data.length;
+      avgRoi = data.length > 0 ? avgRoi / data.length : 0;
+      avgRoas = data.length > 0 ? avgRoas / data.length : 0;
 
-      // Calcular mudança comparando primeira metade vs segunda metade do período
-      const halfPoint = Math.floor(data.length / 2);
-      const recentHalf = data.slice(0, halfPoint);
-      const olderHalf = data.slice(halfPoint);
-
-      const calcChange = (recent: number, older: number) => {
-        if (older === 0) return recent > 0 ? 100 : 0;
-        return ((recent - older) / older) * 100;
+      const calcChange = (current: number, previous: number) => {
+        if (previous === 0) return current > 0 ? 100 : 0;
+        return ((current - previous) / previous) * 100;
       };
 
-      const recentRevenue = recentHalf.length > 0 
-        ? recentHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0) / recentHalf.length 
-        : 0;
-      const olderRevenue = olderHalf.length > 0 
-        ? olderHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0) / olderHalf.length 
-        : 0;
-      
-      const recentSales = recentHalf.length > 0 
-        ? recentHalf.reduce((sum, w) => sum + ((w.a010_sales || 0) + (w.contract_sales || 0)), 0) / recentHalf.length 
-        : 0;
-      const olderSales = olderHalf.length > 0 
-        ? olderHalf.reduce((sum, w) => sum + ((w.a010_sales || 0) + (w.contract_sales || 0)), 0) / olderHalf.length 
-        : 0;
+      // Variáveis para armazenar valores anteriores
+      let revenueChange = 0;
+      let salesChange = 0;
+      let roiChange = 0;
+      let roasChange = 0;
+      let costChange = 0;
+      let leadsChange = 0;
+
+      // Se tem poucos dados (1-2 semanas), buscar período anterior para comparação
+      if (data.length <= 2) {
+        // Calcular duração do período em dias
+        const periodDays = startDate && endDate 
+          ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+          : 7;
+        
+        // Calcular período anterior (mesma duração, antes do início)
+        const previousEndDate = startDate 
+          ? new Date(startDate.getTime() - (1000 * 60 * 60 * 24)) // dia antes do início
+          : new Date();
+        const previousStartDate = new Date(previousEndDate.getTime() - (periodDays * 1000 * 60 * 60 * 24));
+        
+        // Buscar dados do período anterior
+        const { data: previousData } = await supabase
+          .from('weekly_metrics')
+          .select('*')
+          .gte('start_date', previousStartDate.toISOString().split('T')[0])
+          .lte('end_date', previousEndDate.toISOString().split('T')[0])
+          .order('start_date', { ascending: false });
+        
+        if (previousData && previousData.length > 0) {
+          let previousRevenue = 0;
+          let previousSales = 0;
+          let previousCost = 0;
+          let previousLeads = 0;
+          let previousRoi = 0;
+          let previousRoas = 0;
+
+          previousData.forEach(week => {
+            if (canal === 'todos' || !canal) {
+              previousRevenue += week.total_revenue || 0;
+              previousSales += (week.a010_sales || 0) + (week.contract_sales || 0);
+            } else if (canal === 'a010') {
+              previousRevenue += week.a010_revenue || 0;
+              previousSales += week.a010_sales || 0;
+            } else if (canal === 'instagram') {
+              previousLeads += week.stage_01_actual || 0;
+            } else if (canal === 'contratos') {
+              previousRevenue += week.contract_revenue || 0;
+              previousSales += week.contract_sales || 0;
+            }
+            previousCost += week.operating_cost || week.total_cost || 0;
+            previousLeads += week.stage_01_actual || 0;
+            previousRoi += week.roi || 0;
+            previousRoas += week.roas || 0;
+          });
+
+          const previousAvgRoi = previousData.length > 0 ? previousRoi / previousData.length : 0;
+          const previousAvgRoas = previousData.length > 0 ? previousRoas / previousData.length : 0;
+
+          // Calcular variações
+          revenueChange = calcChange(totalRevenue, previousRevenue);
+          salesChange = calcChange(totalSales, previousSales);
+          costChange = calcChange(totalCost, previousCost);
+          leadsChange = calcChange(totalLeads, previousLeads);
+          roiChange = calcChange(avgRoi, previousAvgRoi);
+          roasChange = calcChange(avgRoas, previousAvgRoas);
+        }
+      } else {
+        // Comparar primeira metade vs segunda metade (comportamento original para múltiplas semanas)
+        const halfPoint = Math.floor(data.length / 2);
+        const recentHalf = data.slice(0, halfPoint);
+        const olderHalf = data.slice(halfPoint);
+
+        const recentRevenue = recentHalf.length > 0 
+          ? recentHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0) / recentHalf.length 
+          : 0;
+        const olderRevenue = olderHalf.length > 0 
+          ? olderHalf.reduce((sum, w) => sum + (w.total_revenue || 0), 0) / olderHalf.length 
+          : 0;
+        
+        const recentSales = recentHalf.length > 0 
+          ? recentHalf.reduce((sum, w) => sum + ((w.a010_sales || 0) + (w.contract_sales || 0)), 0) / recentHalf.length 
+          : 0;
+        const olderSales = olderHalf.length > 0 
+          ? olderHalf.reduce((sum, w) => sum + ((w.a010_sales || 0) + (w.contract_sales || 0)), 0) / olderHalf.length 
+          : 0;
+
+        const recentCost = recentHalf.length > 0 
+          ? recentHalf.reduce((sum, w) => sum + (w.operating_cost || w.total_cost || 0), 0) / recentHalf.length 
+          : 0;
+        const olderCost = olderHalf.length > 0 
+          ? olderHalf.reduce((sum, w) => sum + (w.operating_cost || w.total_cost || 0), 0) / olderHalf.length 
+          : 0;
+
+        const recentLeads = recentHalf.length > 0 
+          ? recentHalf.reduce((sum, w) => sum + (w.stage_01_actual || 0), 0) / recentHalf.length 
+          : 0;
+        const olderLeads = olderHalf.length > 0 
+          ? olderHalf.reduce((sum, w) => sum + (w.stage_01_actual || 0), 0) / olderHalf.length 
+          : 0;
+
+        const recentRoi = recentHalf.length > 0 
+          ? recentHalf.reduce((sum, w) => sum + (w.roi || 0), 0) / recentHalf.length 
+          : 0;
+        const olderRoi = olderHalf.length > 0 
+          ? olderHalf.reduce((sum, w) => sum + (w.roi || 0), 0) / olderHalf.length 
+          : 0;
+
+        const recentRoas = recentHalf.length > 0 
+          ? recentHalf.reduce((sum, w) => sum + (w.roas || 0), 0) / recentHalf.length 
+          : 0;
+        const olderRoas = olderHalf.length > 0 
+          ? olderHalf.reduce((sum, w) => sum + (w.roas || 0), 0) / olderHalf.length 
+          : 0;
+
+        revenueChange = calcChange(recentRevenue, olderRevenue);
+        salesChange = calcChange(recentSales, olderSales);
+        costChange = calcChange(recentCost, olderCost);
+        leadsChange = calcChange(recentLeads, olderLeads);
+        roiChange = calcChange(recentRoi, olderRoi);
+        roasChange = calcChange(recentRoas, olderRoas);
+      }
 
       return {
         revenue: { 
           value: totalRevenue, 
-          change: calcChange(recentRevenue, olderRevenue) 
+          change: revenueChange 
         },
         sales: { 
           value: totalSales, 
-          change: calcChange(recentSales, olderSales) 
+          change: salesChange 
         },
         roi: { 
           value: avgRoi, 
-          change: 0 
+          change: roiChange 
         },
         roas: { 
           value: avgRoas, 
-          change: 0 
+          change: roasChange 
         },
         cost: { 
           value: totalCost, 
-          change: 0 
+          change: costChange 
         },
         leads: { 
           value: totalLeads, 
-          change: 0 
+          change: leadsChange 
         },
       };
     },
