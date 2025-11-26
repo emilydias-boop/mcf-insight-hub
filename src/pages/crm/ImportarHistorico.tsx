@@ -1,7 +1,9 @@
-import { useState, useRef, ChangeEvent } from "react";
+import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, History } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -37,7 +39,37 @@ export default function ImportarHistorico() {
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stats, setStats] = useState<ImportStats | null>(null);
+  const [selectedOrigin, setSelectedOrigin] = useState<string>('');
+  const [origins, setOrigins] = useState<{ id: string; name: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Carregar origens disponíveis
+  useEffect(() => {
+    const loadOrigins = async () => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name')
+        .order('name');
+      
+      if (error) {
+        console.error('Erro ao carregar origens:', error);
+        toast.error('Erro ao carregar origens');
+        return;
+      }
+      
+      if (data) {
+        setOrigins(data);
+        // Pré-selecionar "PIPELINE INSIDE SALES" se existir
+        const pipelineOrigin = data.find(o => o.name === 'PIPELINE INSIDE SALES');
+        if (pipelineOrigin) {
+          setSelectedOrigin(pipelineOrigin.id);
+        } else if (data.length > 0) {
+          setSelectedOrigin(data[0].id);
+        }
+      }
+    };
+    loadOrigins();
+  }, []);
 
   const parseCSV = (text: string): BubbleRecord[] => {
     const lines = text.split('\n').filter(line => line.trim());
@@ -86,25 +118,17 @@ export default function ImportarHistorico() {
       return;
     }
 
+    if (!selectedOrigin) {
+      toast.error('Selecione uma origem antes de importar');
+      return;
+    }
+
     setImporting(true);
     setProgress(0);
     setStats(null);
 
     try {
-      // Buscar origin_id do Clint CRM
-      const { data: origins } = await supabase
-        .from('crm_origins')
-        .select('id')
-        .eq('name', 'Clint CRM')
-        .single();
-
-      if (!origins) {
-        toast.error('Origem "Clint CRM" não encontrada');
-        setImporting(false);
-        return;
-      }
-
-      const originId = origins.id;
+      const originId = selectedOrigin;
       const batchSize = 100;
       const totalBatches = Math.ceil(records.length / batchSize);
 
@@ -187,6 +211,26 @@ export default function ImportarHistorico() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Origin Selector */}
+          <div className="space-y-2">
+            <Label htmlFor="origin-select">Origem de Destino *</Label>
+            <Select value={selectedOrigin} onValueChange={setSelectedOrigin} disabled={importing}>
+              <SelectTrigger id="origin-select">
+                <SelectValue placeholder="Selecione a origem..." />
+              </SelectTrigger>
+              <SelectContent>
+                {origins.map((origin) => (
+                  <SelectItem key={origin.id} value={origin.id}>
+                    {origin.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Os negócios do histórico serão importados para esta origem
+            </p>
+          </div>
+
           {/* Upload Area */}
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
