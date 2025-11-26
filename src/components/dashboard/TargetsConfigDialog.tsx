@@ -160,7 +160,7 @@ export function TargetsConfigDialog() {
           Configurar Metas
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Configurar Metas da Semana</DialogTitle>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -179,15 +179,16 @@ export function TargetsConfigDialog() {
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="funnel" className="flex-1 flex flex-col min-h-0">
+        <Tabs defaultValue="funnel" className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="funnel">Funil</TabsTrigger>
             <TabsTrigger value="vendas">Vendas</TabsTrigger>
             <TabsTrigger value="time">Time</TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 mt-4 pr-4">
-            <TabsContent value="funnel" className="space-y-4 mt-0">
+          <ScrollArea className="flex-1 mt-4 h-[400px]">
+            <div className="pr-4">
+              <TabsContent value="funnel" className="space-y-4 mt-0">
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-foreground">Metas por Etapa do Funil</h3>
                 <p className="text-xs text-muted-foreground">
@@ -228,10 +229,10 @@ export function TargetsConfigDialog() {
                     </div>
                   );
                 })}
-              </div>
-            </TabsContent>
+                </div>
+              </TabsContent>
 
-            <TabsContent value="vendas" className="space-y-4 mt-0">
+              <TabsContent value="vendas" className="space-y-4 mt-0">
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-foreground">Metas de Faturamento e Vendas</h3>
                 <p className="text-xs text-muted-foreground">
@@ -323,11 +324,11 @@ export function TargetsConfigDialog() {
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="time" className="space-y-4 mt-0">
+              <TabsContent value="time" className="space-y-4 mt-0">
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-foreground">Metas do Time</h3>
                 <p className="text-xs text-muted-foreground">
@@ -335,17 +336,18 @@ export function TargetsConfigDialog() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium">Closers</h4>
-                  <p className="text-xs text-muted-foreground">Configure metas individuais para cada closer</p>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium">Closers</h4>
+                    <p className="text-xs text-muted-foreground">Configure metas individuais para cada closer</p>
+                  </div>
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium">SDRs</h4>
+                    <p className="text-xs text-muted-foreground">Configure metas individuais para cada SDR</p>
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <h4 className="text-sm font-medium">SDRs</h4>
-                  <p className="text-xs text-muted-foreground">Configure metas individuais para cada SDR</p>
-                </div>
-              </div>
-            </TabsContent>
+              </TabsContent>
+            </div>
           </ScrollArea>
         </Tabs>
 
