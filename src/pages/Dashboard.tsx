@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_KPIS } from "@/data/mockData";
 import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle } from "lucide-react";
 import { FunilLista } from "@/components/dashboard/FunilLista";
+import { TargetsConfigDialog } from "@/components/dashboard/TargetsConfigDialog";
 import { ResumoFinanceiro } from "@/components/dashboard/ResumoFinanceiro";
 import { UltrametaCard } from "@/components/dashboard/UltrametaCard";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
@@ -16,7 +17,7 @@ import { startOfMonth, endOfMonth, format } from "date-fns";
 import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 import { useMetricsSummary } from "@/hooks/useWeeklyMetrics";
 import { useHublaSummary } from "@/hooks/useHublaTransactions";
-import { useA010Funnel, useInstagramFunnel } from "@/hooks/useFunnelData";
+import { useClintFunnel } from "@/hooks/useClintFunnel";
 import { useUltrameta } from "@/hooks/useUltrameta";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { useWeeklyResumo } from "@/hooks/useWeeklyMetrics";
@@ -50,8 +51,12 @@ export default function Dashboard() {
   const { data: metricsSummary, isLoading: loadingMetrics, error: errorMetrics } = useMetricsSummary(periodo.inicio, periodo.fim, canal);
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
   const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(canal, 52);
-  const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useA010Funnel(periodo.inicio, periodo.fim);
-  const { data: instagramFunnel, isLoading: loadingInstagram, error: errorInstagram } = useInstagramFunnel(periodo.inicio, periodo.fim);
+  const PIPELINE_INSIDE_SALES_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
+  const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useClintFunnel(
+    PIPELINE_INSIDE_SALES_ID,
+    periodo.inicio,
+    periodo.fim
+  );
   const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
   const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(5, periodo.inicio, periodo.fim, canal);
 
@@ -60,7 +65,6 @@ export default function Dashboard() {
   console.log('Metrics Summary:', { data: metricsSummary, loading: loadingMetrics, error: errorMetrics });
   console.log('Evolution Data:', { count: evolutionData?.length, loading: loadingEvolution, error: errorEvolution });
   console.log('A010 Funnel:', { count: a010Funnel?.length, loading: loadingA010, error: errorA010 });
-  console.log('Instagram Funnel:', { count: instagramFunnel?.length, loading: loadingInstagram, error: errorInstagram });
   console.log('Ultrameta:', { data: ultrameta, loading: loadingUltrameta, error: errorUltrameta });
   console.log('Weekly Resumo:', { count: weeklyResumo?.length, loading: loadingResumo, error: errorResumo });
 
@@ -136,8 +140,7 @@ export default function Dashboard() {
     exportDashboardData({
       kpis: kpiData,
       funis: [
-        { titulo: 'Funil A010', etapas: a010Funnel || [] },
-        { titulo: 'Funil Instagram', etapas: instagramFunnel || [] }
+        { titulo: 'Funil A010', etapas: a010Funnel || [] }
       ],
       semanas: weeklyResumo || [],
       periodo,
@@ -207,6 +210,7 @@ export default function Dashboard() {
             <RefreshCw className="h-4 w-4" />
             Atualizar
           </Button>
+          <TargetsConfigDialog />
           <ImportMetricsDialog />
           <PeriodComparison />
           <DashboardCustomizer />
@@ -221,7 +225,7 @@ export default function Dashboard() {
 
 
       {/* Error Display */}
-      {(errorMetrics || errorEvolution || errorA010 || errorInstagram || errorUltrameta || errorResumo) && (
+      {(errorMetrics || errorEvolution || errorA010 || errorUltrameta || errorResumo) && (
         <Card className="bg-destructive/10 border-destructive">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-destructive">
@@ -232,7 +236,6 @@ export default function Dashboard() {
                   {errorMetrics && 'Métricas: ' + (errorMetrics as Error).message}
                   {errorEvolution && ' | Evolução: ' + (errorEvolution as Error).message}
                   {errorA010 && ' | Funil A010: ' + (errorA010 as Error).message}
-                  {errorInstagram && ' | Funil Instagram: ' + (errorInstagram as Error).message}
                   {errorUltrameta && ' | Ultrameta: ' + (errorUltrameta as Error).message}
                   {errorResumo && ' | Resumo: ' + (errorResumo as Error).message}
                 </p>
@@ -313,37 +316,21 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Funil A010</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingA010 ? (
-              <div className="h-64 bg-muted animate-pulse rounded" />
-            ) : a010Funnel && a010Funnel.length > 0 ? (
-              <FunilLista titulo="Funil A010" etapas={a010Funnel} />
-            ) : (
-              <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Funil Instagram</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingInstagram ? (
-              <div className="h-64 bg-muted animate-pulse rounded" />
-            ) : instagramFunnel && instagramFunnel.length > 0 ? (
-              <FunilLista titulo="Funil Instagram" etapas={instagramFunnel} />
-            ) : (
-              <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Funil Pipeline Inside Sales */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingA010 ? (
+            <div className="h-64 bg-muted animate-pulse rounded" />
+          ) : a010Funnel && a010Funnel.length > 0 ? (
+            <FunilLista titulo="Pipeline Inside Sales" etapas={a010Funnel} />
+          ) : (
+            <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
+          )}
+        </CardContent>
+      </Card>
 
       {loadingResumo ? (
         <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />

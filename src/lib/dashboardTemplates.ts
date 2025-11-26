@@ -4,7 +4,7 @@ export const DASHBOARD_TEMPLATES: Record<string, DashboardTemplate> = {
   executivo: {
     name: 'Visão Executiva',
     description: 'KPIs principais, Ultrameta e evolução temporal para decisões estratégicas',
-    widgets: ['kpis', 'ultrameta', 'grafico-evolucao', 'resumo-financeiro']
+    widgets: ['kpis', 'ultrameta', 'funil-a010', 'grafico-evolucao', 'resumo-financeiro']
   },
   vendas: {
     name: 'Foco em Vendas',
@@ -33,8 +33,8 @@ export const DASHBOARD_TEMPLATES: Record<string, DashboardTemplate> = {
 };
 
 export const DEFAULT_PREFERENCES = {
-  visible_widgets: DASHBOARD_TEMPLATES.completo.widgets,
-  widgets_order: DASHBOARD_TEMPLATES.completo.widgets,
+  visible_widgets: ['kpis', 'ultrameta', 'funil-a010', 'resumo-financeiro', 'grafico-evolucao'],
+  widgets_order: ['kpis', 'ultrameta', 'funil-a010', 'resumo-financeiro', 'grafico-evolucao'],
   default_period: 'mes' as const,
   default_canal: 'todos',
   auto_refresh: false,
