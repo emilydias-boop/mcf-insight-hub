@@ -25,11 +25,11 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
   ];
 
   return (
-    <div className="flex flex-col items-center gap-1 p-2 bg-card rounded border border-border">
-      <div className="text-[10px] font-medium text-center text-muted-foreground line-clamp-1">
+    <div className="flex flex-col items-center gap-0.5 p-1.5 bg-card rounded border border-border">
+      <div className="text-[9px] font-medium text-center text-muted-foreground truncate w-full px-1">
         {titulo}
       </div>
-      <ResponsiveContainer width="100%" height={90}>
+      <ResponsiveContainer width="100%" height={70}>
         <PieChart>
           <Pie
             data={data}
@@ -37,8 +37,8 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
             cy="80%"
             startAngle={180}
             endAngle={0}
-            innerRadius={35}
-            outerRadius={48}
+            innerRadius={28}
+            outerRadius={40}
             dataKey="value"
             stroke="none"
           >
@@ -48,10 +48,10 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
         </PieChart>
       </ResponsiveContainer>
       <div className="text-center -mt-2">
-        <div className="text-sm font-bold" style={{ color }}>
+        <div className="text-xs font-bold" style={{ color }}>
           {percentual.toFixed(0)}%
         </div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-[9px] text-muted-foreground">
           {valor} / {meta}
         </div>
       </div>
