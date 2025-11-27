@@ -11,13 +11,12 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
   const percentual = meta > 0 ? Math.min((valor / meta) * 100, 100) : 0;
   
   const getColor = (percent: number) => {
-    if (percent <= 35) return "hsl(var(--destructive))";
-    if (percent <= 75) return "hsl(var(--warning))";
-    return "hsl(var(--success))";
+    if (percent <= 35) return "#ef4444"; // red-500
+    if (percent <= 75) return "#eab308"; // yellow-500
+    return "#22c55e"; // green-500
   };
 
   const color = getColor(percentual);
-  const leadColor = leadType === "A" ? "hsl(var(--chart-1))" : leadType === "B" ? "hsl(var(--chart-2))" : color;
 
   const data = [
     { name: "Atingido", value: percentual },
@@ -43,20 +42,20 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
               dataKey="value"
               stroke="none"
             >
-              <Cell fill={leadColor} />
+              <Cell fill={color} />
               <Cell fill="hsl(var(--muted))" />
             </Pie>
           </PieChart>
         </ResponsiveContainer>
         {/* Valor/Meta centralizado no arco */}
         <div className="absolute inset-0 flex items-center justify-center" style={{ top: '30%' }}>
-          <span className="text-sm font-bold" style={{ color: leadColor }}>
+          <span className="text-sm font-bold" style={{ color }}>
             {valor} / {meta}
           </span>
         </div>
       </div>
       {/* Porcentagem abaixo com fonte maior */}
-      <div className="text-lg font-bold -mt-1" style={{ color: leadColor }}>
+      <div className="text-lg font-bold -mt-1" style={{ color }}>
         {percentual.toFixed(0)}%
       </div>
     </div>

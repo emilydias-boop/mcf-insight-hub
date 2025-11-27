@@ -3,6 +3,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { INSIDE_SALES_ORIGIN_ID, SDR_LIST, PIPELINE_STAGES } from "@/constants/team";
 import { startOfDay, endOfDay } from "date-fns";
 
+const SUPERVISOR_EMAIL = "jessica.bellini@minhacasafinanciada.com";
+
+// Função para determinar tipo de lead baseado na tag
+const getLeadType = (contactTag: string | string[] | null): 'A' | 'B' | null => {
+  if (!contactTag) return null;
+  const tagStr = Array.isArray(contactTag) ? contactTag.join(' ') : String(contactTag);
+  const lower = tagStr.toLowerCase();
+  if (lower.includes('lead a')) return 'A';
+  if (lower.includes('lead b')) return 'B';
+  return null;
+};
+
 interface SdrData {
   nome: string;
   email: string;
@@ -43,14 +55,14 @@ export const useTVSdrData = () => {
 
       console.log('[TV-SDR] Inside Sales events:', insideSalesEvents.length);
 
-      // 3. Novo Lead REAL = deal_stage = "Novo Lead" E deal_old_stage vazio
-      // Usar Set para remover duplicados por contact_email
+      // 3. Novo Lead REAL = APENAS da Jessica Bellini (supervisora)
       const novoLeadEmails = new Set(
         insideSalesEvents
           .filter(e => {
             const eventData = e.event_data as any;
             return eventData?.deal_stage === "Novo Lead" && 
-              (!eventData?.deal_old_stage || eventData?.deal_old_stage === "");
+              (!eventData?.deal_old_stage || eventData?.deal_old_stage === "") &&
+              eventData?.deal_user === SUPERVISOR_EMAIL;
           })
           .map(e => {
             const eventData = e.event_data as any;
@@ -210,7 +222,7 @@ export const useTVSdrData = () => {
         );
       }).length || 0;
 
-      // 9. Preparar dados do funil SEM Novo Lead (usando metas reais)
+      // 9. Preparar dados do funil separados por Lead A/B
       const funnelStages = [
         PIPELINE_STAGES.R1_AGENDADA,
         PIPELINE_STAGES.R1_REALIZADA,
@@ -218,34 +230,47 @@ export const useTVSdrData = () => {
         PIPELINE_STAGES.CONTRATO_PAGO,
       ];
 
-      // Contar por stage usando eventos únicos por email
-      const stageCounts = new Map<string, number>();
+      // Contar por stage E por tipo de lead (A/B)
+      const stageCountsA = new Map<string, number>();
+      const stageCountsB = new Map<string, number>();
+      
       funnelStages.forEach(stageName => {
-        const emailsInStage = new Set(
-          insideSalesEvents
-            .filter(e => {
-              const eventData = e.event_data as any;
-              return eventData?.deal_stage === stageName;
-            })
-            .map(e => {
-              const eventData = e.event_data as any;
-              return eventData?.contact_email;
-            })
-            .filter(Boolean)
-        );
-        stageCounts.set(stageName, emailsInStage.size);
+        const emailsInStageA = new Set<string>();
+        const emailsInStageB = new Set<string>();
+        
+        insideSalesEvents
+          .filter(e => {
+            const eventData = e.event_data as any;
+            return eventData?.deal_stage === stageName;
+          })
+          .forEach(e => {
+            const eventData = e.event_data as any;
+            const email = eventData?.contact_email;
+            const tag = eventData?.contact_tag;
+            if (email) {
+              const leadType = getLeadType(tag);
+              if (leadType === 'A') {
+                emailsInStageA.add(email);
+              } else if (leadType === 'B') {
+                emailsInStageB.add(email);
+              }
+            }
+          });
+        
+        stageCountsA.set(stageName, emailsInStageA.size);
+        stageCountsB.set(stageName, emailsInStageB.size);
       });
 
       const funnelDataA = funnelStages.map((stageName) => ({
         etapa: stageName,
-        leads: stageCounts.get(stageName) || 0,
+        leads: stageCountsA.get(stageName) || 0,
         meta: dailyTargetMap.get(stageName) || 0,
       }));
 
       const funnelDataB = funnelStages.map((stageName) => ({
         etapa: stageName,
-        leads: 0, // TODO: separar por perfil Lead A/B quando campo estiver disponível
-        meta: Math.round((dailyTargetMap.get(stageName) || 0) * 0.6), // 60% da meta de Lead A
+        leads: stageCountsB.get(stageName) || 0,
+        meta: Math.round((dailyTargetMap.get(stageName) || 0) * 0.6),
       }));
 
       console.log('[TV-SDR] Final data:', {
