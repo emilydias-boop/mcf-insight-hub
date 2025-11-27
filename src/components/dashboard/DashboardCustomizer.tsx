@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,9 +30,16 @@ const AVAILABLE_WIDGETS: Array<{
 export function DashboardCustomizer() {
   const { preferences, updatePreferences, isUpdating } = useDashboardPreferences();
   const [open, setOpen] = useState(false);
-  const [selectedWidgets, setSelectedWidgets] = useState<DashboardWidget[]>(
-    preferences?.visible_widgets || []
-  );
+  const [selectedWidgets, setSelectedWidgets] = useState<DashboardWidget[]>([]);
+
+  // Sincronizar estado quando preferences carrega
+  useEffect(() => {
+    if (preferences?.visible_widgets) {
+      setSelectedWidgets(preferences.visible_widgets);
+    } else {
+      setSelectedWidgets(DASHBOARD_TEMPLATES.completo.widgets);
+    }
+  }, [preferences?.visible_widgets]);
 
   const handleToggleWidget = (widgetId: DashboardWidget) => {
     setSelectedWidgets(prev =>
@@ -68,13 +75,16 @@ export function DashboardCustomizer() {
           Personalizar Dashboard
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Personalizar Dashboard</DialogTitle>
+          <DialogDescription>
+            Escolha quais widgets deseja exibir no seu dashboard
+          </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-6 pb-6">
+        <ScrollArea className="flex-1 max-h-[calc(90vh-180px)]">
+          <div className="space-y-6 pb-6 pr-4">
             {/* Templates */}
             <div>
               <h3 className="text-sm font-semibold mb-3">Templates Pré-definidos</h3>
@@ -144,7 +154,7 @@ export function DashboardCustomizer() {
         </ScrollArea>
 
         {/* Ações */}
-        <div className="flex items-center justify-between pt-4 border-t">
+        <div className="flex items-center justify-between pt-4 border-t border-border">
           <Button variant="outline" onClick={handleReset}>
             Resetar para Padrão
           </Button>
