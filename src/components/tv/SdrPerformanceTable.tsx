@@ -21,14 +21,14 @@ export function SdrPerformanceTable({ sdrs, dealsWithoutCloser = 0 }: SdrPerform
   const sortedSdrs = [...sdrs].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {dealsWithoutCloser > 0 && (
         <div className="mb-2 px-3 py-1.5 bg-destructive/10 border border-destructive/20 rounded flex items-center gap-2 text-xs shrink-0">
           <span className="text-destructive">⚠️</span>
           <span className="text-destructive font-semibold">{dealsWithoutCloser} deals sem closer atribuído</span>
         </div>
       )}
-      <div className="flex-1 overflow-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent border-border">

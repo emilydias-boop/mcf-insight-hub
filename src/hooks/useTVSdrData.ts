@@ -8,10 +8,10 @@ interface SdrData {
   email: string;
   novoLead: number;
   r1Agendada: number;
-  convRate: number; // (R1 Agendada / Novo Lead) * 100
+  convRate: number;
   noShow: number;
   r1Realizada: number;
-  intermediacao: number; // Deals em "Contrato Pago"
+  intermediacao: number;
   score: number;
   trend?: "up" | "down" | "stable";
 }
@@ -25,35 +25,44 @@ export const useTVSdrData = () => {
       const todayEnd = endOfDay(now);
       const today = now.toISOString().split("T")[0];
 
-      // Buscar stages da origem Inside Sales
-      const { data: stages } = await supabase
-        .from("crm_stages")
-        .select("*")
-        .eq("origin_id", INSIDE_SALES_ORIGIN_ID)
-        .eq("is_active", true)
-        .order("stage_order");
-
-      // Mapear stages por nome
-      const stageMap = new Map(stages?.map((s) => [s.stage_name, s.id]) || []);
-
-      // Buscar APENAS deals criados via webhook para Novo Lead (DIA ATUAL)
-      const { data: webhookDeals } = await supabase
-        .from("crm_deals")
-        .select("*, stage:crm_stages(stage_name)")
-        .eq("origin_id", INSIDE_SALES_ORIGIN_ID)
-        .eq("data_source", "webhook")
+      // 1. Buscar eventos do webhook de hoje
+      const { data: webhookEvents } = await supabase
+        .from("webhook_events")
+        .select("event_data, created_at")
+        .eq("event_type", "deal.stage_changed")
         .gte("created_at", todayStart.toISOString())
         .lte("created_at", todayEnd.toISOString());
 
-      // Buscar todos os deals para as outras métricas (DIA ATUAL)
-      const { data: deals } = await supabase
-        .from("crm_deals")
-        .select("*, stage:crm_stages(stage_name), contact:crm_contacts(custom_fields)")
-        .eq("origin_id", INSIDE_SALES_ORIGIN_ID)
-        .gte("created_at", todayStart.toISOString())
-        .lte("created_at", todayEnd.toISOString());
+      console.log('[TV-SDR] Total webhook events:', webhookEvents?.length);
 
-      // Buscar metas da tabela team_targets (onde hoje está entre week_start e week_end)
+      // 2. Filtrar apenas origem "PIPELINE INSIDE SALES"
+      const insideSalesEvents = webhookEvents?.filter(e => {
+        const eventData = e.event_data as any;
+        return eventData?.deal_origin === "PIPELINE INSIDE SALES";
+      }) || [];
+
+      console.log('[TV-SDR] Inside Sales events:', insideSalesEvents.length);
+
+      // 3. Novo Lead REAL = deal_stage = "Novo Lead" E deal_old_stage vazio
+      // Usar Set para remover duplicados por contact_email
+      const novoLeadEmails = new Set(
+        insideSalesEvents
+          .filter(e => {
+            const eventData = e.event_data as any;
+            return eventData?.deal_stage === "Novo Lead" && 
+              (!eventData?.deal_old_stage || eventData?.deal_old_stage === "");
+          })
+          .map(e => {
+            const eventData = e.event_data as any;
+            return eventData?.contact_email;
+          })
+          .filter(Boolean)
+      );
+      const totalNovoLeadCount = novoLeadEmails.size;
+
+      console.log('[TV-SDR] Novo Lead count:', totalNovoLeadCount);
+
+      // 4. Buscar metas da tabela team_targets
       const { data: targets } = await supabase
         .from("team_targets")
         .select("*")
@@ -61,25 +70,104 @@ export const useTVSdrData = () => {
         .lte("week_start", today)
         .gte("week_end", today);
 
-      // Mapear metas DIÁRIAS (meta semanal / 7)
+      // Metas DIÁRIAS (meta semanal / 7)
       const dailyTargetMap = new Map(
         targets?.map((t) => [t.target_name, Math.round(t.target_value / 7)]) || []
       );
 
-      // Calcular performance individual de cada SDR
-      const sdrsData: SdrData[] = SDR_LIST.map((sdr) => {
-        // Filtrar deals deste SDR
-        const sdrDeals = deals?.filter((d) => {
-          const customFields = d.custom_fields as any;
-          return customFields?.user_email === sdr.email;
-        }) || [];
+      const totalNovoLeadMeta = dailyTargetMap.get(PIPELINE_STAGES.NOVO_LEAD) || 80;
 
-        // Calcular métricas por stage
-        const novoLead = sdrDeals.filter((d) => d.stage?.stage_name === PIPELINE_STAGES.NOVO_LEAD).length;
-        const r1Agendada = sdrDeals.filter((d) => d.stage?.stage_name === PIPELINE_STAGES.R1_AGENDADA).length;
-        const noShow = sdrDeals.filter((d) => d.stage?.stage_name === PIPELINE_STAGES.NO_SHOW).length;
-        const r1Realizada = sdrDeals.filter((d) => d.stage?.stage_name === PIPELINE_STAGES.R1_REALIZADA).length;
-        const intermediacao = sdrDeals.filter((d) => d.stage?.stage_name === PIPELINE_STAGES.CONTRATO_PAGO).length;
+      // 5. Agrupar eventos por SDR usando deal_user
+      const sdrEventMap = new Map<string, any[]>();
+      insideSalesEvents.forEach(e => {
+        const eventData = e.event_data as any;
+        const sdrEmail = eventData?.deal_user;
+        if (sdrEmail) {
+          if (!sdrEventMap.has(sdrEmail)) {
+            sdrEventMap.set(sdrEmail, []);
+          }
+          sdrEventMap.get(sdrEmail)!.push(e);
+        }
+      });
+
+      console.log('[TV-SDR] SDRs com eventos:', sdrEventMap.size);
+
+      // 6. Calcular métricas por SDR
+      const sdrsData: SdrData[] = SDR_LIST.map((sdr) => {
+        const events = sdrEventMap.get(sdr.email) || [];
+        
+        // Usar Set para contar emails únicos por stage
+        const novoLeadSet = new Set(
+          events
+            .filter(e => {
+              const eventData = e.event_data as any;
+              return eventData?.deal_stage === PIPELINE_STAGES.NOVO_LEAD &&
+                (!eventData?.deal_old_stage || eventData?.deal_old_stage === "");
+            })
+            .map(e => {
+              const eventData = e.event_data as any;
+              return eventData?.contact_email;
+            })
+            .filter(Boolean)
+        );
+        
+        const r1AgendadaSet = new Set(
+          events
+            .filter(e => {
+              const eventData = e.event_data as any;
+              return eventData?.deal_stage === PIPELINE_STAGES.R1_AGENDADA;
+            })
+            .map(e => {
+              const eventData = e.event_data as any;
+              return eventData?.contact_email;
+            })
+            .filter(Boolean)
+        );
+        
+        const noShowSet = new Set(
+          events
+            .filter(e => {
+              const eventData = e.event_data as any;
+              return eventData?.deal_stage === PIPELINE_STAGES.NO_SHOW;
+            })
+            .map(e => {
+              const eventData = e.event_data as any;
+              return eventData?.contact_email;
+            })
+            .filter(Boolean)
+        );
+        
+        const r1RealizadaSet = new Set(
+          events
+            .filter(e => {
+              const eventData = e.event_data as any;
+              return eventData?.deal_stage === PIPELINE_STAGES.R1_REALIZADA;
+            })
+            .map(e => {
+              const eventData = e.event_data as any;
+              return eventData?.contact_email;
+            })
+            .filter(Boolean)
+        );
+        
+        const intermediacaoSet = new Set(
+          events
+            .filter(e => {
+              const eventData = e.event_data as any;
+              return eventData?.deal_stage === PIPELINE_STAGES.CONTRATO_PAGO;
+            })
+            .map(e => {
+              const eventData = e.event_data as any;
+              return eventData?.contact_email;
+            })
+            .filter(Boolean)
+        );
+
+        const novoLead = novoLeadSet.size;
+        const r1Agendada = r1AgendadaSet.size;
+        const noShow = noShowSet.size;
+        const r1Realizada = r1RealizadaSet.size;
+        const intermediacao = intermediacaoSet.size;
 
         // Conversão: (R1 Agendada / Novo Lead) * 100
         const convRate = novoLead > 0 ? Math.round((r1Agendada / novoLead) * 100) : 0;
@@ -101,24 +189,28 @@ export const useTVSdrData = () => {
         };
       });
 
-      // Ordenar por score
+      // 7. Ordenar por score
       const topSdrs = [...sdrsData].sort((a, b) => b.score - a.score).slice(0, 4);
 
-      // Contar deals sem closer (em R1 Realizada ou Contrato Pago)
+      // 8. Buscar deals atuais para verificar deals sem closer
+      const { data: deals } = await supabase
+        .from("crm_deals")
+        .select("*, stage:crm_stages(stage_name)")
+        .eq("origin_id", INSIDE_SALES_ORIGIN_ID)
+        .gte("created_at", todayStart.toISOString())
+        .lte("created_at", todayEnd.toISOString());
+
       const dealsWithoutCloser = deals?.filter((d) => {
         const stageName = d.stage?.stage_name;
-        const closer = (d.custom_fields as any)?.closer;
+        const customFields = d.custom_fields as any;
+        const closer = customFields?.deal_closer || customFields?.closer;
         return (
           (stageName === PIPELINE_STAGES.R1_REALIZADA || stageName === PIPELINE_STAGES.CONTRATO_PAGO) &&
           (!closer || closer.trim() === "")
         );
       }).length || 0;
 
-      // Calcular total de Novo Lead (só de webhook) - META DIÁRIA
-      const totalNovoLeadCount = webhookDeals?.filter((d) => d.stage?.stage_name === PIPELINE_STAGES.NOVO_LEAD).length || 0;
-      const totalNovoLeadMeta = dailyTargetMap.get(PIPELINE_STAGES.NOVO_LEAD) || 80;
-
-      // Preparar dados do funil SEM Novo Lead (usando metas reais)
+      // 9. Preparar dados do funil SEM Novo Lead (usando metas reais)
       const funnelStages = [
         PIPELINE_STAGES.R1_AGENDADA,
         PIPELINE_STAGES.R1_REALIZADA,
@@ -126,9 +218,27 @@ export const useTVSdrData = () => {
         PIPELINE_STAGES.CONTRATO_PAGO,
       ];
 
+      // Contar por stage usando eventos únicos por email
+      const stageCounts = new Map<string, number>();
+      funnelStages.forEach(stageName => {
+        const emailsInStage = new Set(
+          insideSalesEvents
+            .filter(e => {
+              const eventData = e.event_data as any;
+              return eventData?.deal_stage === stageName;
+            })
+            .map(e => {
+              const eventData = e.event_data as any;
+              return eventData?.contact_email;
+            })
+            .filter(Boolean)
+        );
+        stageCounts.set(stageName, emailsInStage.size);
+      });
+
       const funnelDataA = funnelStages.map((stageName) => ({
         etapa: stageName,
-        leads: deals?.filter((d) => d.stage?.stage_name === stageName).length || 0,
+        leads: stageCounts.get(stageName) || 0,
         meta: dailyTargetMap.get(stageName) || 0,
       }));
 
@@ -137,6 +247,12 @@ export const useTVSdrData = () => {
         leads: 0, // TODO: separar por perfil Lead A/B quando campo estiver disponível
         meta: Math.round((dailyTargetMap.get(stageName) || 0) * 0.6), // 60% da meta de Lead A
       }));
+
+      console.log('[TV-SDR] Final data:', {
+        totalNovoLead: totalNovoLeadCount,
+        topSdrs: topSdrs.length,
+        allSdrs: sdrsData.length,
+      });
 
       return {
         totalNovoLead: {
