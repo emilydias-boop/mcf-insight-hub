@@ -24,7 +24,7 @@ export function PipelineColumn({ funnelData, leadType }: PipelineColumnProps) {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col justify-between h-full">
       {stageOrder.map((stage) => {
         const data = getStageData(stage);
         return (

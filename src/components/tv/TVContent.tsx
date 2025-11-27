@@ -31,27 +31,27 @@ export function TVContent({
   }
 
   return (
-    <div className="grid grid-cols-[180px_180px_240px_1fr] gap-3 h-screen p-3">
+    <div className="grid grid-cols-[200px_200px_280px_1fr] gap-4 h-screen p-4">
       {/* Coluna 1: Lead A */}
-      <div className="space-y-2">
-        <h3 className="font-bold text-center text-sm">Lead A</h3>
+      <div className="flex flex-col gap-3 h-full">
+        <h3 className="font-bold text-center text-base">Lead A</h3>
         <PipelineColumn funnelData={funnelDataA} leadType="A" />
       </div>
 
       {/* Coluna 2: Lead B */}
-      <div className="space-y-2">
-        <h3 className="font-bold text-center text-sm">Lead B</h3>
+      <div className="flex flex-col gap-3 h-full">
+        <h3 className="font-bold text-center text-base">Lead B</h3>
         <PipelineColumn funnelData={funnelDataB} leadType="B" />
       </div>
 
       {/* Coluna 3: Ranking */}
-      <div className="space-y-2">
-        <h3 className="font-bold text-center text-sm">🏆 Top 4</h3>
+      <div className="flex flex-col gap-3 h-full">
+        <h3 className="font-bold text-center text-base">🏆 Top 4</h3>
         <SdrRanking topSdrs={topSdrs} />
       </div>
 
       {/* Coluna 4: Tabela */}
-      <div className="overflow-auto">
+      <div className="overflow-auto h-full">
         <SdrPerformanceTable sdrs={allSdrs} />
       </div>
     </div>
