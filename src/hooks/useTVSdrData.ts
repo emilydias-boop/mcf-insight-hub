@@ -15,6 +15,15 @@ const getLeadType = (contactTag: string | string[] | null): 'A' | 'B' | null => 
   return null;
 };
 
+// Função para determinar tipo de lead baseado no produto Hubla
+const getLeadTypeFromHubla = (productName: string): 'A' | 'B' => {
+  const lower = productName.toLowerCase();
+  // Anticrise = Lead B
+  if (lower.includes('anticrise')) return 'B';
+  // A000 - Contrato = Lead A (qualquer valor, incluindo parcelado)
+  return 'A';
+};
+
 interface SdrData {
   nome: string;
   email: string;
@@ -37,7 +46,35 @@ export const useTVSdrData = () => {
       const todayEnd = endOfDay(now);
       const today = now.toISOString().split("T")[0];
 
-      // 1. Buscar eventos do webhook de hoje
+      // Calcular início do dia no timezone brasileiro (UTC-3)
+      const todayBrazil = new Date();
+      todayBrazil.setHours(todayBrazil.getHours() - 3);
+      const todayStartBrazil = new Date(todayBrazil);
+      todayStartBrazil.setHours(3, 0, 0, 0); // 00:00 Brasil = 03:00 UTC
+      const todayEndBrazil = new Date(todayStartBrazil);
+      todayEndBrazil.setDate(todayEndBrazil.getDate() + 1);
+
+      // 1. Buscar contratos pagos do Hubla (mais confiável que Clint)
+      const { data: hublaContracts } = await supabase
+        .from("hubla_transactions")
+        .select("customer_email, customer_name, product_name, product_price")
+        .gte("sale_date", todayStartBrazil.toISOString())
+        .lt("sale_date", todayEndBrazil.toISOString())
+        .eq("sale_status", "completed")
+        .ilike("product_name", "%contrato%");
+
+      // Contar contratos por tipo de lead
+      const contratosLeadA = hublaContracts?.filter(c => 
+        getLeadTypeFromHubla(c.product_name) === 'A'
+      ).length || 0;
+
+      const contratosLeadB = hublaContracts?.filter(c => 
+        getLeadTypeFromHubla(c.product_name) === 'B'
+      ).length || 0;
+
+      console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB);
+
+      // 2. Buscar eventos do webhook de hoje
       const { data: webhookEvents } = await supabase
         .from("webhook_events")
         .select("event_data, created_at")
@@ -263,13 +300,19 @@ export const useTVSdrData = () => {
 
       const funnelDataA = funnelStages.map((stageName) => ({
         etapa: stageName,
-        leads: stageCountsA.get(stageName) || 0,
+        // Usar Hubla para Contrato Pago, Clint para outras etapas
+        leads: stageName === PIPELINE_STAGES.CONTRATO_PAGO 
+          ? contratosLeadA 
+          : stageCountsA.get(stageName) || 0,
         meta: dailyTargetMap.get(stageName) || 0,
       }));
 
       const funnelDataB = funnelStages.map((stageName) => ({
         etapa: stageName,
-        leads: stageCountsB.get(stageName) || 0,
+        // Usar Hubla para Contrato Pago, Clint para outras etapas
+        leads: stageName === PIPELINE_STAGES.CONTRATO_PAGO 
+          ? contratosLeadB 
+          : stageCountsB.get(stageName) || 0,
         meta: Math.round((dailyTargetMap.get(stageName) || 0) * 0.6),
       }));
 
