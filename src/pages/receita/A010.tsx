@@ -12,12 +12,12 @@ import { CourseComparison } from "@/components/courses/CourseComparison";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 
 export default function A010() {
-  const [period, setPeriod] = useState<'semana' | 'mes'>('mes');
-  const [startDate, setStartDate] = useState<Date | undefined>();
-  const [endDate, setEndDate] = useState<Date | undefined>();
-  const [courseType, setCourseType] = useState<'all' | 'a010' | 'construir_para_alugar'>('all');
+  const [period, setPeriod] = useState<'semana' | 'mes' | 'all'>('semana');
+  const [startDate, setStartDate] = useState<Date>(getCustomWeekStart(new Date()));
+  const [endDate, setEndDate] = useState<Date>(getCustomWeekEnd(new Date()));
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -33,25 +33,34 @@ export default function A010() {
     limit: 1000
   });
 
-  const { data: summary, isLoading: summaryLoading } = useCoursesSummary({ 
-    period, 
-    startDate, 
+  // Buscar dados dos KPIs e comparação (com filtro de período)
+  const { data: summaryData, isLoading: isSummaryLoading } = useCoursesSummary({
+    period,
+    startDate,
     endDate,
-    courseType
+    courseType: 'all'
   });
 
-  const handleApply = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; curso: string }) => {
+  // Buscar dados do gráfico de evolução (SEM filtro de período - mostra todo histórico)
+  const { data: evolutionData, isLoading: isEvolutionLoading } = useCoursesSummary({
+    period: 'all',
+    startDate: new Date('2024-06-01'),
+    endDate: new Date(),
+    courseType: 'all'
+  });
+
+  const handleApply = (filters: { 
+    periodo: { tipo: 'semana' | 'mes' | 'all'; inicio: Date; fim: Date };
+  }) => {
     setPeriod(filters.periodo.tipo);
     setStartDate(filters.periodo.inicio);
     setEndDate(filters.periodo.fim);
-    setCourseType(filters.curso as 'all' | 'a010' | 'construir_para_alugar');
   };
 
   const handleClear = () => {
-    setPeriod('mes');
-    setStartDate(undefined);
-    setEndDate(undefined);
-    setCourseType('all');
+    setPeriod('semana');
+    setStartDate(getCustomWeekStart(new Date()));
+    setEndDate(getCustomWeekEnd(new Date()));
     setSearch("");
     setCurrentPage(1);
   };
@@ -97,7 +106,7 @@ export default function A010() {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {summaryLoading ? (
+        {isSummaryLoading ? (
           <>
             <Skeleton className="h-32" />
             <Skeleton className="h-32" />
@@ -107,19 +116,19 @@ export default function A010() {
           <>
             <KPICard
               title="Total de Vendas"
-              value={summary?.totalSales.toString() || "0"}
+              value={summaryData?.totalSales.toString() || "0"}
               icon={Users}
               variant="neutral"
             />
             <KPICard
               title="Receita Total"
-              value={formatCurrency(summary?.totalRevenue || 0)}
+              value={formatCurrency(summaryData?.totalRevenue || 0)}
               icon={DollarSign}
               variant="success"
             />
             <KPICard
               title="Ticket Médio"
-              value={formatCurrency(summary?.averageTicket || 0)}
+              value={formatCurrency(summaryData?.averageTicket || 0)}
               icon={TrendingUp}
               variant="neutral"
             />
@@ -128,10 +137,10 @@ export default function A010() {
       </div>
 
       {/* Comparação de Cursos */}
-      {courseType === 'all' && summary && (
+      {summaryData && (
         <CourseComparison 
-          a010Summary={summary.a010Summary}
-          construirSummary={summary.construirSummary}
+          a010Summary={summaryData.a010Summary}
+          construirSummary={summaryData.construirSummary}
         />
       )}
 
@@ -139,7 +148,7 @@ export default function A010() {
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg font-semibold text-foreground">
-            Evolução de Vendas por Curso
+            Evolução de Vendas por Curso (Histórico Completo)
           </CardTitle>
           <div className="flex gap-2">
             <Button
@@ -166,11 +175,11 @@ export default function A010() {
           </div>
         </CardHeader>
         <CardContent>
-          {summaryLoading ? (
+          {isEvolutionLoading ? (
             <Skeleton className="h-[300px]" />
           ) : (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={summary?.chartData?.slice(-weeksToShow) || []}>
+              <LineChart data={evolutionData?.chartData?.slice(-weeksToShow) || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
                   dataKey="weekLabel" 
@@ -190,35 +199,22 @@ export default function A010() {
                   labelStyle={{ color: 'hsl(var(--foreground))' }}
                 />
                 <Legend />
-                {courseType === 'all' ? (
-                  <>
-                     <Line 
-                      type="monotone" 
-                      dataKey="a010" 
-                      stroke="hsl(var(--chart-1))" 
-                      strokeWidth={2}
-                      name="A010"
-                      dot={{ fill: 'hsl(var(--chart-1))' }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="construir" 
-                      stroke="hsl(var(--chart-2))" 
-                      strokeWidth={2}
-                      name="Construir Para Alugar"
-                      dot={{ fill: 'hsl(var(--chart-2))' }}
-                    />
-                  </>
-                ) : (
-                  <Line 
-                    type="monotone" 
-                    dataKey="total" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={2}
-                    name="Receita"
-                    dot={{ fill: 'hsl(var(--primary))' }}
-                  />
-                )}
+                <Line 
+                  type="monotone" 
+                  dataKey="a010" 
+                  stroke="hsl(var(--chart-1))" 
+                  strokeWidth={2}
+                  name="A010"
+                  dot={{ fill: 'hsl(var(--chart-1))' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="construir" 
+                  stroke="hsl(var(--chart-2))" 
+                  strokeWidth={2}
+                  name="Construir Para Alugar"
+                  dot={{ fill: 'hsl(var(--chart-2))' }}
+                />
               </LineChart>
             </ResponsiveContainer>
           )}
