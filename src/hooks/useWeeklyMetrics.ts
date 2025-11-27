@@ -377,8 +377,8 @@ export const useWeeklyResumo = (limit?: number, startDate?: Date, endDate?: Date
         }
 
         return {
-          dataInicio: new Date(week.start_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-          dataFim: new Date(week.end_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+          dataInicio: week.start_date.split('-').reverse().join('/'),
+          dataFim: week.end_date.split('-').reverse().join('/'),
           faturamentoA010,
           vendasA010,
           valorVendidoOBEvento: canal === 'todos' || !canal ? (week.ob_evento_revenue || 0) : 0,
