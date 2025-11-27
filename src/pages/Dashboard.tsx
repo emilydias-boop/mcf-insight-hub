@@ -3,7 +3,7 @@ import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_KPIS } from "@/data/mockData";
-import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle, Eye, Calendar } from "lucide-react";
+import { DollarSign, TrendingDown, TrendingUp, Percent, Target, Megaphone, Users, AlertTriangle } from "lucide-react";
 import { FunilDuplo } from "@/components/dashboard/FunilDuplo";
 import { FunilLista } from "@/components/dashboard/FunilLista";
 import { TargetsConfigDialog } from "@/components/dashboard/TargetsConfigDialog";
@@ -51,7 +51,6 @@ export default function Dashboard() {
     fim: getCustomWeekEnd(new Date()),
   });
   const [canal, setCanal] = useState('todos');
-  const [viewMode, setViewMode] = useState<'periodo' | 'atual'>('periodo');
   
   const { data: metricsSummary, isLoading: loadingMetrics, error: errorMetrics } = useMetricsSummary(periodo.inicio, periodo.fim, canal);
   const { data: hublaSummary, isLoading: loadingHubla } = useHublaSummary();
@@ -61,7 +60,7 @@ export default function Dashboard() {
     PIPELINE_INSIDE_SALES_ID,
     periodo.inicio,
     periodo.fim,
-    viewMode === 'atual'
+    false
   );
   const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
   const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(5, periodo.inicio, periodo.fim, canal);
@@ -303,36 +302,12 @@ export default function Dashboard() {
 
         {/* Funil Pipeline Inside Sales */}
         {isWidgetVisible('funil-a010') && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-end">
-              <div className="flex gap-2 border border-border rounded-lg p-1 bg-card">
-                <Button
-                  variant={viewMode === 'periodo' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('periodo')}
-                  className="gap-2"
-                >
-                  <Calendar className="h-4 w-4" />
-                  Período
-                </Button>
-                <Button
-                  variant={viewMode === 'atual' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('atual')}
-                  className="gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  Visão Atual
-                </Button>
-              </div>
-            </div>
-            <FunilDuplo
-              originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
-              weekStart={periodo.inicio}
-              weekEnd={periodo.fim}
-              showCurrentState={viewMode === 'atual'}
-            />
-          </div>
+          <FunilDuplo
+            originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
+            weekStart={periodo.inicio}
+            weekEnd={periodo.fim}
+            showCurrentState={false}
+          />
         )}
 
         {/* Resumo Financeiro */}

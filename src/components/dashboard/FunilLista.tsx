@@ -3,7 +3,8 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Filter } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Filter, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Etapas fixas que devem sempre aparecer por padrão
@@ -110,34 +111,55 @@ export function FunilLista({
       
       <div className="space-y-3">
         {visibleEtapas.map((etapa) => {
+          const semMeta = etapa.meta === 0;
+          
           // Calcular porcentagem baseada em leads/meta (quantidade de leads)
           const progressPercent = etapa.meta > 0 ? (etapa.leads / etapa.meta) * 100 : 0;
           
           // Definir cor baseada na porcentagem
-          let progressColorClass = "[&>div]:bg-destructive"; // vermelho < 35%
-          let textColorClass = "text-destructive";
+          let progressColorClass = "[&>div]:bg-muted"; // cinza se sem meta
+          let textColorClass = "text-muted-foreground";
           
-          if (progressPercent >= 80) {
-            progressColorClass = "[&>div]:bg-success"; // verde >= 80%
-            textColorClass = "text-success";
-          } else if (progressPercent >= 35) {
-            progressColorClass = "[&>div]:bg-warning"; // amarelo 35-79%
-            textColorClass = "text-warning";
+          if (!semMeta) {
+            if (progressPercent >= 80) {
+              progressColorClass = "[&>div]:bg-success"; // verde >= 80%
+              textColorClass = "text-success";
+            } else if (progressPercent >= 35) {
+              progressColorClass = "[&>div]:bg-warning"; // amarelo 35-79%
+              textColorClass = "text-warning";
+            } else {
+              progressColorClass = "[&>div]:bg-destructive"; // vermelho < 35%
+              textColorClass = "text-destructive";
+            }
           }
           
           return (
             <div key={etapa.etapa} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-foreground">{etapa.etapa}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground">{etapa.etapa}</span>
+                  {semMeta && (
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <AlertCircle className="h-3 w-3" />
+                      Sem meta
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
-                  <span>{etapa.leads}/{etapa.meta} leads</span>
-                  <span className={cn("font-semibold", textColorClass)}>
-                    {progressPercent.toFixed(1)}%
-                  </span>
+                  {semMeta ? (
+                    <span>{etapa.leads} leads</span>
+                  ) : (
+                    <>
+                      <span>{etapa.leads}/{etapa.meta} leads</span>
+                      <span className={cn("font-semibold", textColorClass)}>
+                        {progressPercent.toFixed(1)}%
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <Progress 
-                value={Math.min(progressPercent, 100)} 
+                value={semMeta ? 0 : Math.min(progressPercent, 100)} 
                 className={cn("h-2", progressColorClass)}
               />
             </div>

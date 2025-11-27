@@ -75,86 +75,80 @@ export function DashboardCustomizer() {
           Personalizar Dashboard
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col !grid-cols-none">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Personalizar Dashboard</DialogTitle>
           <DialogDescription>
-            Escolha quais widgets deseja exibir no seu dashboard
+            Escolha quais widgets você deseja visualizar no seu dashboard ou aplique um template pré-configurado.
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[calc(90vh-180px)]">
-          <div className="space-y-6 pb-6 pr-4">
-            {/* Templates */}
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Templates Pré-definidos</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="flex-1 overflow-y-auto min-h-0 pr-2">
+          <div className="space-y-6 pb-6">
+            {/* Templates Section */}
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold mb-1">Templates Rápidos</h3>
+                <p className="text-sm text-muted-foreground">Aplique configurações pré-definidas</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Object.entries(DASHBOARD_TEMPLATES).map(([key, template]) => (
-                  <Card 
+                  <Card
                     key={key}
                     className="cursor-pointer hover:border-primary transition-colors"
                     onClick={() => handleApplyTemplate(key)}
                   >
-                    <CardHeader className="pb-2">
+                    <CardHeader className="p-4">
                       <CardTitle className="text-sm">{template.name}</CardTitle>
                       <CardDescription className="text-xs">{template.description}</CardDescription>
                     </CardHeader>
-                    <CardContent className="pb-3">
-                      <div className="flex flex-wrap gap-1">
-                        {template.widgets.slice(0, 4).map(widgetId => {
-                          const widget = AVAILABLE_WIDGETS.find(w => w.id === widgetId);
-                          if (!widget) return null;
-                          const Icon = widget.icon;
-                          return (
-                            <div key={widgetId} className="flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded">
-                              <Icon className="h-3 w-3" />
-                              <span className="text-xs">{widget.name.split(' ')[0]}</span>
-                            </div>
-                          );
-                        })}
-                        {template.widgets.length > 4 && (
-                          <span className="text-xs text-muted-foreground">+{template.widgets.length - 4}</span>
-                        )}
-                      </div>
-                    </CardContent>
                   </Card>
                 ))}
               </div>
             </div>
 
-            {/* Widgets Disponíveis */}
-            <div>
-              <h3 className="text-sm font-semibold mb-3">Widgets Disponíveis</h3>
-              <div className="space-y-2">
+            <Separator />
+
+            {/* Widgets Section */}
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold mb-1">Widgets Disponíveis</h3>
+                <p className="text-sm text-muted-foreground">Selecione os widgets que deseja exibir</p>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
                 {AVAILABLE_WIDGETS.map((widget) => {
                   const Icon = widget.icon;
                   return (
-                    <div
+                    <Card
                       key={widget.id}
-                      className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent cursor-pointer"
+                      className="cursor-pointer transition-all hover:border-primary/50"
                       onClick={() => handleToggleWidget(widget.id)}
                     >
-                      <Checkbox
-                        checked={selectedWidgets.includes(widget.id)}
-                        onCheckedChange={() => handleToggleWidget(widget.id)}
-                      />
-                      <Icon className="h-5 w-5 text-muted-foreground" />
-                      <div className="flex-1">
-                        <Label className="text-sm font-medium cursor-pointer">
-                          {widget.name}
-                        </Label>
-                        <p className="text-xs text-muted-foreground">{widget.description}</p>
-                      </div>
-                    </div>
+                      <CardHeader className="p-4">
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={selectedWidgets.includes(widget.id)}
+                            onCheckedChange={() => handleToggleWidget(widget.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Icon className="h-5 w-5 text-muted-foreground" />
+                          <div className="flex-1">
+                            <CardTitle className="text-sm">{widget.name}</CardTitle>
+                            <CardDescription className="text-xs mt-1">
+                              {widget.description}
+                            </CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                    </Card>
                   );
                 })}
               </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
-        {/* Ações */}
-        <div className="flex items-center justify-between pt-4 border-t border-border">
+        <div className="flex-shrink-0 flex items-center justify-between pt-4 border-t">
           <Button variant="outline" onClick={handleReset}>
             Resetar para Padrão
           </Button>
