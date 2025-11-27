@@ -23,9 +23,16 @@ export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorPro
 
   const handleSemanaAtual = () => {
     const hoje = new Date();
-    setDataInicio(getCustomWeekStart(hoje));
-    setDataFim(getCustomWeekEnd(hoje));
+    const novaInicio = getCustomWeekStart(hoje);
+    const novaFim = getCustomWeekEnd(hoje);
+    setDataInicio(novaInicio);
+    setDataFim(novaFim);
     setTipo('semana');
+    // Aplicar automaticamente
+    onApply({
+      periodo: { tipo: 'semana', inicio: novaInicio, fim: novaFim },
+      canal
+    });
   };
 
   const handleSemanaAnterior = () => {
@@ -34,6 +41,11 @@ export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorPro
     setDataInicio(novaInicio);
     setDataFim(novaFim);
     setTipo('semana');
+    // Aplicar automaticamente
+    onApply({
+      periodo: { tipo: 'semana', inicio: novaInicio, fim: novaFim },
+      canal
+    });
   };
 
   const handleProximaSemana = () => {
@@ -45,14 +57,35 @@ export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorPro
       setDataInicio(novoInicio);
       setDataFim(novoFim);
       setTipo('semana');
+      // Aplicar automaticamente
+      onApply({
+        periodo: { tipo: 'semana', inicio: novoInicio, fim: novoFim },
+        canal
+      });
     }
   };
 
   const handleMes = () => {
     const hoje = new Date();
-    setDataInicio(startOfMonth(hoje));
-    setDataFim(endOfMonth(hoje));
+    const novaInicio = startOfMonth(hoje);
+    const novaFim = endOfMonth(hoje);
+    setDataInicio(novaInicio);
+    setDataFim(novaFim);
     setTipo('mes');
+    // Aplicar automaticamente
+    onApply({
+      periodo: { tipo: 'mes', inicio: novaInicio, fim: novaFim },
+      canal
+    });
+  };
+
+  const handleCanalChange = (novoCanal: string) => {
+    setCanal(novoCanal);
+    // Aplicar automaticamente ao mudar canal
+    onApply({
+      periodo: { tipo, inicio: dataInicio, fim: dataFim },
+      canal: novoCanal
+    });
   };
 
   const handleAplicar = () => {
@@ -124,7 +157,7 @@ export function PeriodSelector({ onApply, onClear, onExport }: PeriodSelectorPro
         <div className="h-6 w-px bg-border" />
 
         {/* Select de Canal */}
-        <Select value={canal} onValueChange={setCanal}>
+        <Select value={canal} onValueChange={handleCanalChange}>
           <SelectTrigger className="w-[180px] h-9">
             <SelectValue placeholder="Selecione o canal" />
           </SelectTrigger>
