@@ -20,7 +20,7 @@ export function SdrRanking({ topSdrs }: SdrRankingProps) {
   const medals = ["🥇", "🥈", "🥉", "🏅"];
 
   return (
-    <div className="flex flex-col gap-2 h-full">
+    <div className="flex flex-col gap-2 h-full min-h-0">
       {topSdrs.slice(0, 4).map((sdr, index) => (
         <Card key={sdr.email} className="bg-gradient-to-br from-card to-muted/30 border border-primary/20 flex-1">
           <CardContent className="p-3 h-full flex flex-col justify-between">

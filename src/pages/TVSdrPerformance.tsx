@@ -8,7 +8,7 @@ export default function TVSdrPerformance() {
   const { currentCelebration, handleCelebrationComplete } = useSalesCelebration();
 
   return (
-    <div className="container mx-auto px-2 py-1">
+    <div className="h-screen overflow-hidden p-2">
       <TVContent
         funnelDataA={data?.funnelDataA || []}
         funnelDataB={data?.funnelDataB || []}
