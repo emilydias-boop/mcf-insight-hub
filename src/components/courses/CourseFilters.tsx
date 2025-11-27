@@ -10,16 +10,15 @@ import { getCustomWeekStart, getCustomWeekEnd, addCustomWeeks } from "@/lib/date
 import { cn } from "@/lib/utils";
 
 interface CourseFiltersProps {
-  onApply: (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; curso: string }) => void;
+  onApply: (filters: { periodo: { tipo: 'semana' | 'mes' | 'all'; inicio: Date; fim: Date } }) => void;
   onClear: () => void;
   onExport: () => void;
 }
 
 export function CourseFilters({ onApply, onClear, onExport }: CourseFiltersProps) {
-  const [tipo, setTipo] = useState<'semana' | 'mes'>('semana');
+  const [tipo, setTipo] = useState<'semana' | 'mes' | 'all'>('semana');
   const [dataInicio, setDataInicio] = useState<Date>(getCustomWeekStart(new Date()));
   const [dataFim, setDataFim] = useState<Date>(getCustomWeekEnd(new Date()));
-  const [curso, setCurso] = useState('all');
 
   const handleSemanaAtual = () => {
     const hoje = new Date();
@@ -54,10 +53,15 @@ export function CourseFilters({ onApply, onClear, onExport }: CourseFiltersProps
     setTipo('mes');
   };
 
+  const handleTotal = () => {
+    setDataInicio(new Date('2024-06-01'));
+    setDataFim(new Date());
+    setTipo('all');
+  };
+
   const handleAplicar = () => {
     onApply({
-      periodo: { tipo, inicio: dataInicio, fim: dataFim },
-      curso
+      periodo: { tipo, inicio: dataInicio, fim: dataFim }
     });
   };
 
@@ -66,7 +70,6 @@ export function CourseFilters({ onApply, onClear, onExport }: CourseFiltersProps
     setDataInicio(getCustomWeekStart(hoje));
     setDataFim(getCustomWeekEnd(hoje));
     setTipo('semana');
-    setCurso('all');
     onClear();
   };
 
@@ -122,17 +125,15 @@ export function CourseFilters({ onApply, onClear, onExport }: CourseFiltersProps
         {/* Separador */}
         <div className="h-6 w-px bg-border" />
 
-        {/* Select de Curso */}
-        <Select value={curso} onValueChange={setCurso}>
-          <SelectTrigger className="w-[200px] h-9">
-            <SelectValue placeholder="Selecione o curso" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os Cursos</SelectItem>
-            <SelectItem value="a010">A010 - Consultoria</SelectItem>
-            <SelectItem value="construir_para_alugar">Construir Para Alugar</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Toggle Total */}
+        <Button
+          variant={tipo === 'all' ? 'default' : 'outline'}
+          size="sm"
+          onClick={handleTotal}
+          className={cn("h-9", tipo === 'all' && "bg-success hover:bg-success/90")}
+        >
+          Total
+        </Button>
 
         {/* Separador */}
         <div className="h-6 w-px bg-border" />
