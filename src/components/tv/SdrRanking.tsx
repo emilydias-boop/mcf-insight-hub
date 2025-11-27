@@ -23,12 +23,12 @@ export function SdrRanking({ topSdrs }: SdrRankingProps) {
     <div className="flex flex-col gap-1.5 h-full min-h-0">
       {topSdrs.slice(0, 4).map((sdr, index) => (
         <Card key={sdr.email} className="bg-gradient-to-br from-card to-muted/30 border border-primary/20 flex-1">
-          <CardContent className="p-2 h-full flex items-center gap-2">
-            <span className="text-2xl">{medals[index]}</span>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-sm text-foreground truncate">{sdr.nome}</h3>
+          <CardContent className="p-1.5 h-full flex items-center gap-2">
+            <span className="text-xl">{medals[index]}</span>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <h3 className="font-bold text-xs text-foreground truncate leading-tight">{sdr.nome}</h3>
+              <div className="text-sm font-bold text-primary leading-tight">{sdr.score} pts</div>
             </div>
-            <div className="text-lg font-bold text-primary">{sdr.score} pts</div>
           </CardContent>
         </Card>
       ))}

@@ -39,19 +39,17 @@ export function TVContent({
 
   return (
     <div className="flex flex-col h-full gap-2">
-      {/* Novo Lead Total - Centralizado no topo */}
-      <div className="grid grid-cols-[200px_200px_280px_1fr] gap-3">
-        <div className="col-span-2">
-          <div className="bg-card border border-primary/20 rounded-lg p-3 text-center">
-            <h4 className="text-sm font-semibold mb-1.5">📥 Novo Lead Total</h4>
-            <div className="text-3xl font-bold text-foreground">{totalNovoLead.valor} / {totalNovoLead.meta}</div>
-            <div className="text-primary text-xl font-bold mt-1">{percentual}%</div>
+      {/* Grid principal com Novo Lead no topo */}
+      <div className="grid grid-cols-[180px_180px_220px_minmax(500px,1fr)] gap-3 flex-1 min-h-0">
+        {/* Novo Lead Total - Compacto no topo */}
+        <div className="col-span-2 flex justify-center items-center">
+          <div className="bg-card border border-primary/20 rounded-lg px-4 py-1.5 flex items-center gap-3">
+            <span className="text-sm font-semibold">📥 Novo Lead</span>
+            <span className="text-lg font-bold text-foreground">{totalNovoLead.valor}/{totalNovoLead.meta}</span>
+            <span className="text-primary font-bold">{percentual}%</span>
           </div>
         </div>
-      </div>
-
-      {/* Grid principal */}
-      <div className="grid grid-cols-[200px_200px_280px_1fr] gap-3 flex-1 min-h-0">
+        <div className="col-span-2"></div>
         {/* Coluna 1: Lead A */}
         <div className="flex flex-col gap-1.5 h-full">
           <h3 className="font-bold text-center text-sm">Lead A</h3>
