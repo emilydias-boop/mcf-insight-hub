@@ -1,22 +1,14 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Filter } from "lucide-react";
 import { FunilLista } from "./FunilLista";
 import { useClintFunnelByLeadType } from "@/hooks/useClintFunnelByLeadType";
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
+import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-// Etapas fixas que devem sempre aparecer por padrão
-const DEFAULT_STAGES = [
-  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', // Novo Lead
-  'a8365215-fd31-4bdc-bbe7-77100fa39e53', // Reunião 01 Agendada
-  '34995d75-933e-4d67-b7fc-19fcb8b81680', // Reunião 01 Realizada
-  '062927f5-b7a3-496a-9d47-eb03b3d69b10', // Contrato Pago
-  '3a2776e2-a536-4a2a-bb7b-a2f53c8941df', // Venda realizada
-];
+import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRange } from "@/lib/dateHelpers";
 
 interface FunilDuploProps {
   originId: string;
@@ -28,36 +20,36 @@ interface FunilDuploProps {
 type PeriodType = 'hoje' | 'semana' | 'mes';
 
 export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: FunilDuploProps) {
-  const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
+  const [selectedStages, setSelectedStages] = useState<string[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hoje');
 
   // Calcular datas baseado no período selecionado
   const { periodStart, periodEnd } = useMemo(() => {
-    const now = new Date();
+    const referenceDate = weekStart || new Date();
     
     switch (selectedPeriod) {
       case 'hoje':
         return {
-          periodStart: startOfDay(now),
-          periodEnd: endOfDay(now),
+          periodStart: startOfDay(new Date()),
+          periodEnd: endOfDay(new Date()),
         };
       case 'semana':
         return {
-          periodStart: startOfWeek(now, { weekStartsOn: 6 }), // Sábado
-          periodEnd: endOfWeek(now, { weekStartsOn: 6 }),     // Sexta
+          periodStart: getCustomWeekStart(referenceDate),
+          periodEnd: getCustomWeekEnd(referenceDate),
         };
       case 'mes':
         return {
-          periodStart: startOfMonth(now),
-          periodEnd: endOfMonth(now),
+          periodStart: startOfMonth(referenceDate),
+          periodEnd: endOfMonth(referenceDate),
         };
       default:
         return {
-          periodStart: startOfDay(now),
-          periodEnd: endOfDay(now),
+          periodStart: startOfDay(new Date()),
+          periodEnd: endOfDay(new Date()),
         };
     }
-  }, [selectedPeriod]);
+  }, [selectedPeriod, weekStart]);
 
   const { data: etapasLeadA = [], isLoading: isLoadingA } = useClintFunnelByLeadType(
     originId,
@@ -87,6 +79,11 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     ])
   );
 
+  // Inicializar selectedStages com todas as etapas se estiver vazio
+  if (selectedStages.length === 0 && allStages.length > 0) {
+    setSelectedStages(allStages);
+  }
+
   // Mapear nomes das etapas
   const stageNames: Record<string, string> = {};
   [...etapasLeadA, ...etapasLeadB].forEach(etapa => {
@@ -94,6 +91,20 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
       stageNames[etapa.stage_id] = etapa.etapa;
     }
   });
+
+  // Calcular labels para o dropdown
+  const getWeekLabel = () => {
+    const referenceDate = weekStart || new Date();
+    const weekNum = getCustomWeekNumber(referenceDate);
+    const weekNumber = weekNum.split('-W')[1];
+    const range = formatCustomWeekRange(referenceDate);
+    return `Semana ${weekNumber} (${range})`;
+  };
+
+  const getMonthLabel = () => {
+    const referenceDate = weekStart || new Date();
+    return format(referenceDate, "MMMM yyyy", { locale: ptBR });
+  };
 
   const handleToggleStage = (stageId: string) => {
     setSelectedStages(prev =>
@@ -111,40 +122,30 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
         <div className="flex items-center justify-between">
           <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-              <Button
-                variant={selectedPeriod === 'hoje' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedPeriod('hoje')}
-                className="h-8"
-              >
-                Hoje
-              </Button>
-              <Button
-                variant={selectedPeriod === 'semana' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedPeriod('semana')}
-                className="h-8"
-              >
-                Semana
-              </Button>
-              <Button
-                variant={selectedPeriod === 'mes' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedPeriod('mes')}
-                className="h-8"
-              >
-                Mês
-              </Button>
-            </div>
+            <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as PeriodType)}>
+              <SelectTrigger className="w-auto h-8 min-w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hoje">
+                  Hoje ({format(new Date(), "dd/MM/yyyy", { locale: ptBR })})
+                </SelectItem>
+                <SelectItem value="semana">
+                  {getWeekLabel()}
+                </SelectItem>
+                <SelectItem value="mes">
+                  {getMonthLabel()}
+                </SelectItem>
+              </SelectContent>
+            </Select>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Filter className="h-4 w-4 mr-2" />
+                <button className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                  <Filter className="h-4 w-4" />
                   Filtrar Etapas ({visibleCount}/{allStages.length})
-                </Button>
+                </button>
               </PopoverTrigger>
-            <PopoverContent className="w-80">
+              <PopoverContent className="w-80">
               <div className="space-y-4">
                 <h4 className="font-semibold text-sm">Selecionar Etapas</h4>
                 <div className="space-y-2">
