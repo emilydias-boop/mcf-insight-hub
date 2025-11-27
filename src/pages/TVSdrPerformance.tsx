@@ -8,7 +8,7 @@ export default function TVSdrPerformance() {
   const { currentCelebration, handleCelebrationComplete } = useSalesCelebration();
 
   return (
-    <div className="h-screen overflow-hidden p-2">
+    <div className="h-screen overflow-hidden p-4">
       <TVContent
         totalNovoLead={data?.totalNovoLead || { valor: 0, meta: 560 }}
         funnelDataA={data?.funnelDataA || []}
