@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfMonth, endOfMonth } from 'date-fns';
-import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
+import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRangeShort } from '@/lib/dateHelpers';
 
 export interface CourseSale {
   id: string;
@@ -173,33 +173,36 @@ export const useCoursesSummary = ({
           : 0
       };
 
-      // Group by date for chart
-      const salesByDate = sales.reduce((acc, sale) => {
-        const date = sale.sale_date.split('T')[0];
+      // Group by custom week for chart
+      const salesByWeek = sales.reduce((acc, sale) => {
+        const saleDate = new Date(sale.sale_date);
+        const weekNumber = getCustomWeekNumber(saleDate);
+        const weekLabel = formatCustomWeekRangeShort(saleDate);
         const courseType = sale.product_name?.toLowerCase().includes('a010') ? 'a010' : 'construir';
         
-        if (!acc[date]) {
-          acc[date] = { a010: 0, construir: 0, total: 0 };
+        if (!acc[weekNumber]) {
+          acc[weekNumber] = { weekLabel, a010: 0, construir: 0, total: 0 };
         }
         
         if (courseType === 'a010') {
-          acc[date].a010 += sale.product_price || 0;
+          acc[weekNumber].a010 += sale.product_price || 0;
         } else {
-          acc[date].construir += sale.product_price || 0;
+          acc[weekNumber].construir += sale.product_price || 0;
         }
-        acc[date].total += sale.product_price || 0;
+        acc[weekNumber].total += sale.product_price || 0;
         
         return acc;
-      }, {} as Record<string, { a010: number; construir: number; total: number }>);
+      }, {} as Record<string, { weekLabel: string; a010: number; construir: number; total: number }>);
 
-      const chartData = Object.entries(salesByDate)
-        .map(([date, data]) => ({
-          date,
+      const chartData = Object.entries(salesByWeek)
+        .map(([weekNumber, data]) => ({
+          weekNumber,
+          weekLabel: data.weekLabel,
           a010: data.a010,
           construir: data.construir,
           total: data.total,
         }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+        .sort((a, b) => a.weekNumber.localeCompare(b.weekNumber));
 
       return {
         totalSales,
