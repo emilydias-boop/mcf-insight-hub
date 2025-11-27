@@ -316,7 +316,7 @@ export default function Dashboard() {
             {loadingResumo ? (
               <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
             ) : weeklyResumo && weeklyResumo.length > 0 ? (
-              <ResumoFinanceiro dados={weeklyResumo} periodoTipo={periodo.tipo} />
+              <ResumoFinanceiro dados={weeklyResumo} periodoTipo={periodo.tipo} canal={canal} />
             ) : (
               <Card className="bg-card border-border">
                 <CardContent className="p-6 text-center text-muted-foreground">

@@ -4,19 +4,43 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/formatters";
 import { SemanaMes } from "@/data/mockData";
+import { useWeeklyResumo } from "@/hooks/useWeeklyMetrics";
+import { startOfMonth, endOfMonth } from "date-fns";
 
 interface ResumoFinanceiroProps {
   dados: SemanaMes[];
   periodoTipo?: 'semana' | 'mes';
+  canal?: string;
 }
 
-export function ResumoFinanceiro({ dados, periodoTipo = 'semana' }: ResumoFinanceiroProps) {
+export function ResumoFinanceiro({ dados, periodoTipo = 'semana', canal }: ResumoFinanceiroProps) {
   const [modo, setModo] = useState<'semanas' | 'mes'>(periodoTipo === 'mes' ? 'mes' : 'semanas');
 
   // Sincronizar quando periodoTipo mudar
   useEffect(() => {
     setModo(periodoTipo === 'mes' ? 'mes' : 'semanas');
   }, [periodoTipo]);
+
+  // Calcular período do mês a partir dos dados
+  const obterPeriodoMes = () => {
+    if (!dados[0]?.dataInicio) return { inicio: undefined, fim: undefined };
+    const [dia, mes, ano] = dados[0].dataInicio.split('/');
+    const dataRef = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+    return {
+      inicio: startOfMonth(dataRef),
+      fim: endOfMonth(dataRef),
+    };
+  };
+
+  const periodoMes = obterPeriodoMes();
+
+  // Buscar dados do mês completo quando modo === 'mes'
+  const { data: dadosMesCompleto, isLoading: loadingMes } = useWeeklyResumo(
+    undefined, // sem limit
+    periodoMes.inicio,
+    periodoMes.fim,
+    canal
+  );
 
   const calcularTotal = (campo: keyof Omit<SemanaMes, 'dataInicio' | 'dataFim'>) => {
     return dados.reduce((acc, item) => acc + item[campo], 0);
@@ -32,19 +56,20 @@ export function ResumoFinanceiro({ dados, periodoTipo = 'semana' }: ResumoFinanc
     };
   };
 
-  const dadosMes = modo === 'mes' ? [{
+  // Usar dados corretos baseado no modo
+  const dadosMes = modo === 'mes' && dadosMesCompleto ? [{
     dataInicio: dados[0]?.dataInicio ? obterPrimeiroUltimoDiaMes(dados[0].dataInicio).primeiro : '',
     dataFim: dados[0]?.dataInicio ? obterPrimeiroUltimoDiaMes(dados[0].dataInicio).ultimo : '',
-    faturamentoA010: calcularTotal('faturamentoA010'),
-    vendasA010: calcularTotal('vendasA010'),
-    valorVendidoOBEvento: calcularTotal('valorVendidoOBEvento'),
-    vendasOBEvento: calcularTotal('vendasOBEvento'),
-    faturamentoContrato: calcularTotal('faturamentoContrato'),
-    vendasContratos: calcularTotal('vendasContratos'),
-    faturamentoOBConstruir: calcularTotal('faturamentoOBConstruir'),
-    vendasOBConstruir: calcularTotal('vendasOBConstruir'),
-    faturamentoOBVitalicio: calcularTotal('faturamentoOBVitalicio'),
-    vendasOBVitalicio: calcularTotal('vendasOBVitalicio'),
+    faturamentoA010: dadosMesCompleto.reduce((acc, item) => acc + item.faturamentoA010, 0),
+    vendasA010: dadosMesCompleto.reduce((acc, item) => acc + item.vendasA010, 0),
+    valorVendidoOBEvento: dadosMesCompleto.reduce((acc, item) => acc + item.valorVendidoOBEvento, 0),
+    vendasOBEvento: dadosMesCompleto.reduce((acc, item) => acc + item.vendasOBEvento, 0),
+    faturamentoContrato: dadosMesCompleto.reduce((acc, item) => acc + item.faturamentoContrato, 0),
+    vendasContratos: dadosMesCompleto.reduce((acc, item) => acc + item.vendasContratos, 0),
+    faturamentoOBConstruir: dadosMesCompleto.reduce((acc, item) => acc + item.faturamentoOBConstruir, 0),
+    vendasOBConstruir: dadosMesCompleto.reduce((acc, item) => acc + item.vendasOBConstruir, 0),
+    faturamentoOBVitalicio: dadosMesCompleto.reduce((acc, item) => acc + item.faturamentoOBVitalicio, 0),
+    vendasOBVitalicio: dadosMesCompleto.reduce((acc, item) => acc + item.vendasOBVitalicio, 0),
   }] : dados;
 
   return (
@@ -73,6 +98,9 @@ export function ResumoFinanceiro({ dados, periodoTipo = 'semana' }: ResumoFinanc
         </div>
       </CardHeader>
       <CardContent>
+        {modo === 'mes' && loadingMes ? (
+          <div className="text-center text-muted-foreground py-8">Carregando dados do mês...</div>
+        ) : (
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -111,6 +139,7 @@ export function ResumoFinanceiro({ dados, periodoTipo = 'semana' }: ResumoFinanc
             </TableBody>
           </Table>
         </div>
+        )}
       </CardContent>
     </Card>
   );
