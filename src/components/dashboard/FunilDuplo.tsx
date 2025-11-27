@@ -10,6 +10,14 @@ import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from "date-fns
 import { ptBR } from "date-fns/locale";
 import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRange } from "@/lib/dateHelpers";
 
+const DEFAULT_STAGES = [
+  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', // Novo Lead
+  'a8365215-fd31-4bdc-bbe7-77100fa39e53', // Reunião 01 Agendada
+  '34995d75-933e-4d67-b7fc-19fcb8b81680', // Reunião 01 Realizada
+  '062927f5-b7a3-496a-9d47-eb03b3d69b10', // Contrato Pago
+  '3a2776e2-a536-4a2a-bb7b-a2f53c8941df', // Venda realizada
+];
+
 interface FunilDuploProps {
   originId: string;
   weekStart?: Date;
@@ -20,7 +28,7 @@ interface FunilDuploProps {
 type PeriodType = 'hoje' | 'semana' | 'mes';
 
 export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: FunilDuploProps) {
-  const [selectedStages, setSelectedStages] = useState<string[]>([]);
+  const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hoje');
 
   // Calcular datas baseado no período selecionado
@@ -78,11 +86,6 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
       ...etapasLeadB.map(e => e.stage_id || e.etapa)
     ])
   );
-
-  // Inicializar selectedStages com todas as etapas se estiver vazio
-  if (selectedStages.length === 0 && allStages.length > 0) {
-    setSelectedStages(allStages);
-  }
 
   // Mapear nomes das etapas
   const stageNames: Record<string, string> = {};
