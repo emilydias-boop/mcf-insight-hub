@@ -29,7 +29,7 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
         {titulo}
       </div>
       <div className="relative w-full">
-        <ResponsiveContainer width="100%" height={90}>
+        <ResponsiveContainer width="100%" height={75}>
           <PieChart>
             <Pie
               data={data}
@@ -37,8 +37,8 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
               cy="80%"
               startAngle={180}
               endAngle={0}
-              innerRadius={35}
-              outerRadius={50}
+              innerRadius={30}
+              outerRadius={42}
               dataKey="value"
               stroke="none"
             >
