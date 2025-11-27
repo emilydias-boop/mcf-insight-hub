@@ -37,6 +37,8 @@ import ConfiguracoesCRM from "./pages/crm/Configuracoes";
 import ImportarContatos from "./pages/crm/ImportarContatos";
 import ImportarNegocios from "./pages/crm/ImportarNegocios";
 import ImportarHistorico from "./pages/crm/ImportarHistorico";
+import TVSdrPerformance from "./pages/TVSdrPerformance";
+import TVSdrFullscreen from "./pages/TVSdrFullscreen";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -82,6 +84,7 @@ const App = () => (
               <Route path="leilao" element={<Leilao />} />
               <Route path="configuracoes" element={<Configuracoes />} />
               <Route path="usuarios" element={<GerenciamentoUsuarios />} />
+              <Route path="tv-sdr" element={<TVSdrPerformance />} />
               <Route path="crm" element={<CRM />}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
@@ -95,6 +98,16 @@ const App = () => (
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
             </Route>
+            
+            {/* Fullscreen TV route (outside MainLayout) */}
+            <Route
+              path="/tv-sdr/fullscreen"
+              element={
+                <ProtectedRoute>
+                  <TVSdrFullscreen />
+                </ProtectedRoute>
+              }
+            />
             
             <Route path="*" element={<NotFound />} />
           </Routes>
