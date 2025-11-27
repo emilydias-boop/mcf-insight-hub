@@ -157,3 +157,15 @@ export function isCustomWeekEnd(date: Date): boolean {
 export function isCustomWeekStart(date: Date): boolean {
   return date.getDay() === 6; // 6 = Sábado
 }
+
+/**
+ * Formata uma data para string YYYY-MM-DD sem conversão de timezone
+ * @param date - Data para formatar
+ * @returns String no formato "YYYY-MM-DD"
+ */
+export function formatDateForDB(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}

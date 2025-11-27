@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { formatDateForDB } from '@/lib/dateHelpers';
 
 interface FunnelStageData {
   etapa: string;
@@ -118,8 +119,8 @@ export const useClintFunnel = (originId: string, weekStart?: Date, weekEnd?: Dat
         .eq('origin_id', originId);
 
       if (weekStart && weekEnd) {
-        const startDate = weekStart.toISOString().split('T')[0];
-        const endDate = weekEnd.toISOString().split('T')[0];
+        const startDate = formatDateForDB(weekStart);
+        const endDate = formatDateForDB(weekEnd);
         targetsQuery = targetsQuery
           .lte('week_start', endDate)   // week_start <= fim do período
           .gte('week_end', startDate);  // week_end >= início do período
