@@ -99,15 +99,8 @@ const App = () => (
               </Route>
             </Route>
             
-            {/* Fullscreen TV route (outside MainLayout) */}
-            <Route
-              path="/tv-sdr/fullscreen"
-              element={
-                <ProtectedRoute>
-                  <TVSdrFullscreen />
-                </ProtectedRoute>
-              }
-            />
+            {/* Public fullscreen TV route - no auth required */}
+            <Route path="/tv-sdr/fullscreen" element={<TVSdrFullscreen />} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>
