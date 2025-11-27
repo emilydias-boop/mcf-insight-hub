@@ -25,7 +25,7 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
   ];
 
   return (
-    <div className="flex flex-col items-center gap-0.5 p-1.5 bg-card rounded border border-border">
+    <div className="flex flex-col items-center justify-center gap-0.5 p-1.5 bg-card rounded border border-border flex-1 min-h-0">
       <div className="text-[9px] font-medium text-center text-muted-foreground truncate w-full px-1">
         {titulo}
       </div>
