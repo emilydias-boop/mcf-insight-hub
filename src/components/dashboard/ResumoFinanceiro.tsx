@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,10 +7,16 @@ import { SemanaMes } from "@/data/mockData";
 
 interface ResumoFinanceiroProps {
   dados: SemanaMes[];
+  periodoTipo?: 'semana' | 'mes';
 }
 
-export function ResumoFinanceiro({ dados }: ResumoFinanceiroProps) {
-  const [modo, setModo] = useState<'semanas' | 'mes'>('semanas');
+export function ResumoFinanceiro({ dados, periodoTipo = 'semana' }: ResumoFinanceiroProps) {
+  const [modo, setModo] = useState<'semanas' | 'mes'>(periodoTipo === 'mes' ? 'mes' : 'semanas');
+
+  // Sincronizar quando periodoTipo mudar
+  useEffect(() => {
+    setModo(periodoTipo === 'mes' ? 'mes' : 'semanas');
+  }, [periodoTipo]);
 
   const calcularTotal = (campo: keyof Omit<SemanaMes, 'dataInicio' | 'dataFim'>) => {
     return dados.reduce((acc, item) => acc + item[campo], 0);

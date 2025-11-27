@@ -63,7 +63,7 @@ export default function Dashboard() {
     false
   );
   const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
-  const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(5, periodo.inicio, periodo.fim, canal);
+  const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(undefined, periodo.inicio, periodo.fim, canal);
 
   // Debug logs
   console.log('🔍 Dashboard Data Debug:');
@@ -316,7 +316,7 @@ export default function Dashboard() {
             {loadingResumo ? (
               <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
             ) : weeklyResumo && weeklyResumo.length > 0 ? (
-              <ResumoFinanceiro dados={weeklyResumo} />
+              <ResumoFinanceiro dados={weeklyResumo} periodoTipo={periodo.tipo} />
             ) : (
               <Card className="bg-card border-border">
                 <CardContent className="p-6 text-center text-muted-foreground">
