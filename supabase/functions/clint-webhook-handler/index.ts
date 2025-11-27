@@ -439,9 +439,14 @@ async function handleDealCreated(supabase: any, data: any) {
     console.log('[DEAL.CREATED] Owner found:', ownerId);
   }
 
-  // 5. Processar custom_fields - tudo que não é campo padrão
+  // 5. Processar custom_fields - tudo que não é campo padrão + deal_user
   const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'user', 'deal', 'event', 'timestamp', 'action', 'event_type'];
-  const customFields: any = {};
+  const customFields: any = {
+    deal_user: data.deal_user || dealData.user,
+    deal_user_name: data.deal_user_name,
+    deal_closer: data.deal_closer,
+    deal_origin: data.deal_origin || originName,
+  };
   Object.keys(data).forEach(key => {
     if (!excludedFields.includes(key) && data[key] !== undefined && data[key] !== null) {
       customFields[key] = data[key];
@@ -660,6 +665,12 @@ async function handleDealStageChanged(supabase: any, data: any) {
         stage_id: newStage.id,
         origin_id: originId,
         value: dealValue,
+        custom_fields: {
+          deal_user: data.deal_user,
+          deal_user_name: data.deal_user_name,
+          deal_closer: data.deal_closer,
+          deal_origin: data.deal_origin || originName,
+        },
         data_source: 'webhook'
       })
       .select('id, stage_id')
