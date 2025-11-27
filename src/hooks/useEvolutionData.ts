@@ -1,16 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { EvolutionData } from '@/types/dashboard';
+import { getCustomWeekStart, addCustomWeeks, formatDateForDB } from '@/lib/dateHelpers';
 
 export const useEvolutionData = (canal?: string, limit: number = 52) => {
   return useQuery({
     queryKey: ['evolution-data', canal, limit],
     queryFn: async () => {
+      // Calcular semana atual e início do range
+      const semanaAtual = getCustomWeekStart(new Date());
+      const semanaInicio = addCustomWeeks(semanaAtual, -(limit - 1)); // X semanas atrás
+      
+      const startDate = formatDateForDB(semanaInicio);
+      const endDate = formatDateForDB(semanaAtual);
+      
       const { data, error } = await supabase
         .from('weekly_metrics')
         .select('*')
-        .order('start_date', { ascending: true })
-        .limit(limit);
+        .gte('start_date', startDate)  // >= semana início
+        .lte('start_date', endDate)    // <= semana atual
+        .order('start_date', { ascending: true }); // Ordem cronológica
       
       if (error) throw error;
 
