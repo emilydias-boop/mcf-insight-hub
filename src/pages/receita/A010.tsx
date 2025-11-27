@@ -22,13 +22,15 @@ export default function A010() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [weeksToShow, setWeeksToShow] = useState(12);
+  const [transactionCourseFilter, setTransactionCourseFilter] = useState<'all' | 'a010' | 'construir_para_alugar'>('all');
 
   const { data: sales, isLoading: salesLoading } = useCoursesSales({ 
     period, 
     startDate, 
     endDate,
-    courseType,
-    search 
+    courseType: transactionCourseFilter,
+    search,
+    limit: 1000
   });
 
   const { data: summary, isLoading: summaryLoading } = useCoursesSummary({ 
@@ -190,21 +192,21 @@ export default function A010() {
                 <Legend />
                 {courseType === 'all' ? (
                   <>
-                    <Line 
+                     <Line 
                       type="monotone" 
                       dataKey="a010" 
-                      stroke="hsl(var(--primary))" 
+                      stroke="hsl(var(--chart-1))" 
                       strokeWidth={2}
-                      name="A010 - Consultoria"
-                      dot={{ fill: 'hsl(var(--primary))' }}
+                      name="A010"
+                      dot={{ fill: 'hsl(var(--chart-1))' }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="construir" 
-                      stroke="hsl(var(--success))" 
+                      stroke="hsl(var(--chart-2))" 
                       strokeWidth={2}
                       name="Construir Para Alugar"
-                      dot={{ fill: 'hsl(var(--success))' }}
+                      dot={{ fill: 'hsl(var(--chart-2))' }}
                     />
                   </>
                 ) : (
@@ -230,15 +232,33 @@ export default function A010() {
             <BookOpen className="h-5 w-5" />
             Transações de Cursos
           </CardTitle>
-          <Input
-            placeholder="Buscar por nome, email ou telefone..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="max-w-md"
-          />
+          <div className="flex items-center gap-2">
+            <Select
+              value={transactionCourseFilter}
+              onValueChange={(value: 'all' | 'a010' | 'construir_para_alugar') => {
+                setTransactionCourseFilter(value);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por curso" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Cursos</SelectItem>
+                <SelectItem value="a010">A010</SelectItem>
+                <SelectItem value="construir_para_alugar">Construir Para Alugar</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="Buscar por nome, email ou telefone..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="max-w-md"
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <Table>

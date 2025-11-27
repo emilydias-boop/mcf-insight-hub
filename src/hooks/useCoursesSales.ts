@@ -3,12 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRangeShort } from '@/lib/dateHelpers';
 
+// Unified interface for course sales from both tables
 export interface CourseSale {
   id: string;
-  hubla_id: string;
-  event_type: string;
   product_name: string;
-  product_category: string;
   product_price: number;
   customer_name: string | null;
   customer_email: string | null;
@@ -16,6 +14,7 @@ export interface CourseSale {
   sale_status: string;
   sale_date: string;
   created_at: string;
+  source: 'a010_sales' | 'hubla_transactions';
 }
 
 interface UseCoursesSalesParams {
@@ -38,18 +37,11 @@ export const useCoursesSales = ({
   return useQuery({
     queryKey: ['courses-sales', period, startDate, endDate, courseType, search, limit],
     queryFn: async () => {
-      let query = supabase
-        .from('hubla_transactions')
-        .select('*')
-        .eq('product_category', 'curso')
-        .eq('sale_status', 'completed')
-        .order('sale_date', { ascending: false });
+      // Calculate date range
+      let start: Date | null = null;
+      let end: Date | null = null;
 
-      // Apply date filters
       if (period !== 'all') {
-        let start: Date;
-        let end: Date;
-
         if (startDate && endDate) {
           start = startDate;
           end = endDate;
@@ -63,34 +55,101 @@ export const useCoursesSales = ({
             end = endOfMonth(now);
           }
         }
+      }
 
-        query = query
+      // Fetch from a010_sales (historical A010 data)
+      let a010Query = supabase
+        .from('a010_sales')
+        .select('*')
+        .eq('status', 'completed')
+        .order('sale_date', { ascending: false });
+
+      if (start && end) {
+        a010Query = a010Query
           .gte('sale_date', start.toISOString())
           .lte('sale_date', end.toISOString());
       }
 
-      // Apply course type filter
-      if (courseType !== 'all') {
-        if (courseType === 'a010') {
-          query = query.ilike('product_name', '%A010%');
-        } else if (courseType === 'construir_para_alugar') {
-          query = query.ilike('product_name', '%Construir para%');
-        }
+      // Only include A010 if courseType allows it
+      const includeA010 = courseType === 'all' || courseType === 'a010';
+      const includeConstruir = courseType === 'all' || courseType === 'construir_para_alugar';
+
+      let a010Data: any[] = [];
+      if (includeA010) {
+        const { data, error } = await a010Query;
+        if (error) throw error;
+        a010Data = data || [];
       }
+
+      // Fetch from hubla_transactions (Construir Para Alugar + recent A010 webhooks)
+      let hublaQuery = supabase
+        .from('hubla_transactions')
+        .select('*')
+        .eq('product_category', 'curso')
+        .eq('sale_status', 'completed')
+        .order('sale_date', { ascending: false });
+
+      if (start && end) {
+        hublaQuery = hublaQuery
+          .gte('sale_date', start.toISOString())
+          .lte('sale_date', end.toISOString());
+      }
+
+      if (courseType === 'construir_para_alugar') {
+        hublaQuery = hublaQuery.ilike('product_name', '%Construir para%');
+      } else if (courseType === 'a010') {
+        hublaQuery = hublaQuery.ilike('product_name', '%A010%');
+      }
+
+      const { data: hublaData, error: hublaError } = await hublaQuery;
+      if (hublaError) throw hublaError;
+
+      // Normalize and combine data
+      const normalizedA010: CourseSale[] = a010Data.map(sale => ({
+        id: sale.id,
+        product_name: 'A010',
+        product_price: sale.net_value || 0,
+        customer_name: sale.customer_name,
+        customer_email: sale.customer_email,
+        customer_phone: sale.customer_phone,
+        sale_status: sale.status || 'completed',
+        sale_date: sale.sale_date,
+        created_at: sale.created_at,
+        source: 'a010_sales' as const,
+      }));
+
+      const normalizedHubla: CourseSale[] = (hublaData || []).map(sale => ({
+        id: sale.id,
+        product_name: sale.product_name?.toLowerCase().includes('construir') ? 'Construir Para Alugar' : 'A010',
+        product_price: sale.product_price || 0,
+        customer_name: sale.customer_name,
+        customer_email: sale.customer_email,
+        customer_phone: sale.customer_phone,
+        sale_status: sale.sale_status || 'completed',
+        sale_date: sale.sale_date,
+        created_at: sale.created_at,
+        source: 'hubla_transactions' as const,
+      }));
+
+      // Combine and remove duplicates (prefer a010_sales for A010 data)
+      let allSales = [...normalizedA010, ...normalizedHubla];
 
       // Apply search filter
       if (search && search.trim()) {
-        query = query.or(
-          `customer_name.ilike.%${search}%,customer_email.ilike.%${search}%,customer_phone.ilike.%${search}%,product_name.ilike.%${search}%`
+        const searchLower = search.toLowerCase();
+        allSales = allSales.filter(sale => 
+          sale.customer_name?.toLowerCase().includes(searchLower) ||
+          sale.customer_email?.toLowerCase().includes(searchLower) ||
+          sale.customer_phone?.toLowerCase().includes(searchLower) ||
+          sale.product_name.toLowerCase().includes(searchLower)
         );
       }
 
-      query = query.limit(limit);
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return data as CourseSale[];
+      // Sort by date descending
+      allSales.sort((a, b) => new Date(b.sale_date).getTime() - new Date(a.sale_date).getTime());
+
+      // Apply limit
+      return allSales.slice(0, limit);
     },
     refetchInterval: 30000,
   });
@@ -105,17 +164,11 @@ export const useCoursesSummary = ({
   return useQuery({
     queryKey: ['courses-summary', period, startDate, endDate, courseType],
     queryFn: async () => {
-      let query = supabase
-        .from('hubla_transactions')
-        .select('product_price, sale_date, product_name')
-        .eq('product_category', 'curso')
-        .eq('sale_status', 'completed');
+      // Calculate date range
+      let start: Date | null = null;
+      let end: Date | null = null;
 
-      // Apply date filters
       if (period !== 'all') {
-        let start: Date;
-        let end: Date;
-
         if (startDate && endDate) {
           start = startDate;
           end = endDate;
@@ -129,26 +182,66 @@ export const useCoursesSummary = ({
             end = endOfMonth(now);
           }
         }
+      }
 
-        query = query
+      // Fetch from a010_sales
+      let a010Query = supabase
+        .from('a010_sales')
+        .select('net_value, sale_date')
+        .eq('status', 'completed');
+
+      if (start && end) {
+        a010Query = a010Query
           .gte('sale_date', start.toISOString())
           .lte('sale_date', end.toISOString());
       }
 
-      // Apply course type filter
-      if (courseType !== 'all') {
-        if (courseType === 'a010') {
-          query = query.ilike('product_name', '%A010%');
-        } else if (courseType === 'construir_para_alugar') {
-          query = query.ilike('product_name', '%Construir para%');
-        }
+      const includeA010 = courseType === 'all' || courseType === 'a010';
+      const includeConstruir = courseType === 'all' || courseType === 'construir_para_alugar';
+
+      let a010Data: any[] = [];
+      if (includeA010) {
+        const { data, error } = await a010Query;
+        if (error) throw error;
+        a010Data = data || [];
       }
 
-      const { data, error } = await query;
-      
-      if (error) throw error;
+      // Fetch from hubla_transactions
+      let hublaQuery = supabase
+        .from('hubla_transactions')
+        .select('product_price, sale_date, product_name')
+        .eq('product_category', 'curso')
+        .eq('sale_status', 'completed');
 
-      const sales = data || [];
+      if (start && end) {
+        hublaQuery = hublaQuery
+          .gte('sale_date', start.toISOString())
+          .lte('sale_date', end.toISOString());
+      }
+
+      if (courseType === 'construir_para_alugar') {
+        hublaQuery = hublaQuery.ilike('product_name', '%Construir para%');
+      } else if (courseType === 'a010') {
+        hublaQuery = hublaQuery.ilike('product_name', '%A010%');
+      }
+
+      const { data: hublaData, error: hublaError } = await hublaQuery;
+      if (hublaError) throw hublaError;
+
+      // Normalize data
+      const normalizedA010 = a010Data.map(sale => ({
+        product_name: 'A010',
+        product_price: sale.net_value || 0,
+        sale_date: sale.sale_date,
+      }));
+
+      const normalizedHubla = (hublaData || []).map(sale => ({
+        product_name: sale.product_name?.toLowerCase().includes('construir') ? 'Construir Para Alugar' : 'A010',
+        product_price: sale.product_price || 0,
+        sale_date: sale.sale_date,
+      }));
+
+      const sales = [...normalizedA010, ...normalizedHubla];
       const totalSales = sales.length;
       const totalRevenue = sales.reduce((sum, sale) => sum + (sale.product_price || 0), 0);
       const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
