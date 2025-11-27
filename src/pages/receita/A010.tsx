@@ -4,11 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KPICard } from "@/components/ui/KPICard";
-import { DollarSign, TrendingUp, Users, BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { DollarSign, TrendingUp, Users, BookOpen, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { useCoursesSales, useCoursesSummary } from "@/hooks/useCoursesSales";
+import { useCoursesSales, useCoursesSummary, CourseSale } from "@/hooks/useCoursesSales";
 import { CourseFilters } from "@/components/courses/CourseFilters";
 import { CourseComparison } from "@/components/courses/CourseComparison";
+import { LeadDetailsDrawer } from "@/components/courses/LeadDetailsDrawer";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -23,11 +25,12 @@ export default function A010() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [weeksToShow, setWeeksToShow] = useState(12);
   const [transactionCourseFilter, setTransactionCourseFilter] = useState<'all' | 'a010' | 'construir_para_alugar'>('all');
+  const [selectedLead, setSelectedLead] = useState<CourseSale | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  // Buscar TODAS as transações (sem filtro de período)
   const { data: sales, isLoading: salesLoading } = useCoursesSales({ 
-    period, 
-    startDate, 
-    endDate,
+    period: 'all',
     courseType: transactionCourseFilter,
     search,
     limit: 1000
@@ -266,6 +269,8 @@ export default function A010() {
                 <TableHead>Email</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -278,27 +283,49 @@ export default function A010() {
                     <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-10" /></TableCell>
                   </TableRow>
                 ))
               ) : sales && sales.length > 0 ? (
                 sales
                   .slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
                   .map((sale) => (
-                    <TableRow key={sale.id}>
+                    <TableRow 
+                      key={sale.id}
+                      className={sale.sale_status === 'refunded' ? 'bg-destructive/10' : ''}
+                    >
                       <TableCell>{formatDate(sale.sale_date)}</TableCell>
                       <TableCell className="font-medium">{sale.product_name}</TableCell>
                       <TableCell>{sale.customer_name}</TableCell>
                       <TableCell>{sale.customer_email || "-"}</TableCell>
                       <TableCell>{sale.customer_phone || "-"}</TableCell>
-                      <TableCell className="text-right font-semibold text-success">
+                      <TableCell className="text-right font-semibold">
                         {formatCurrency(sale.product_price)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={sale.sale_status === 'refunded' ? 'destructive' : 'default'}>
+                          {sale.sale_status === 'refunded' ? 'Reembolso' : 'Pago'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSelectedLead(sale);
+                            setIsDrawerOpen(true);
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    Nenhuma transação encontrada para o período selecionado
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    Nenhuma transação encontrada
                   </TableCell>
                 </TableRow>
               )}
@@ -357,6 +384,12 @@ export default function A010() {
           )}
         </CardContent>
       </Card>
+
+      <LeadDetailsDrawer
+        open={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        sale={selectedLead}
+      />
     </div>
   );
 }

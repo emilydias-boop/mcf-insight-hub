@@ -57,11 +57,10 @@ export const useCoursesSales = ({
         }
       }
 
-      // Fetch from a010_sales (historical A010 data)
+      // Fetch from a010_sales (historical A010 data) - include all statuses
       let a010Query = supabase
         .from('a010_sales')
         .select('*')
-        .eq('status', 'completed')
         .order('sale_date', { ascending: false });
 
       if (start && end) {
@@ -81,12 +80,11 @@ export const useCoursesSales = ({
         a010Data = data || [];
       }
 
-      // Fetch from hubla_transactions (Construir Para Alugar + recent A010 webhooks)
+      // Fetch from hubla_transactions (Construir Para Alugar + recent A010 webhooks) - include all statuses
       let hublaQuery = supabase
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'curso')
-        .eq('sale_status', 'completed')
         .order('sale_date', { ascending: false });
 
       if (start && end) {
@@ -184,7 +182,7 @@ export const useCoursesSummary = ({
         }
       }
 
-      // Fetch from a010_sales
+      // Fetch from a010_sales - only completed for summary
       let a010Query = supabase
         .from('a010_sales')
         .select('net_value, sale_date')
