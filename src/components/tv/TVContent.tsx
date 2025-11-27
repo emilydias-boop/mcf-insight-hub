@@ -31,7 +31,7 @@ export function TVContent({
   }
 
   return (
-    <div className="grid grid-cols-[200px_200px_280px_1fr] gap-4 h-screen p-4">
+    <div className="grid grid-cols-[200px_200px_280px_1fr] gap-4 h-screen p-2">
       {/* Coluna 1: Lead A */}
       <div className="flex flex-col gap-3 h-full">
         <h3 className="font-bold text-center text-base">Lead A</h3>
