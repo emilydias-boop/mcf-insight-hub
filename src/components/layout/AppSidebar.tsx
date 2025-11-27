@@ -12,7 +12,8 @@ import {
   Users,
   LogOut,
   ChevronDown,
-  UserCircle
+  UserCircle,
+  Tv
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,6 +78,7 @@ const menuItems: MenuItem[] = [
   { title: "Projetos", url: "/projetos", icon: FolderKanban },
   { title: "Crédito", url: "/credito", icon: CreditCard, requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, requiredRoles: ['admin', 'manager'] },
+  { title: "TV SDR", url: "/tv-sdr", icon: Tv, requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { 
     title: "CRM", 
     icon: UserCircle, 
