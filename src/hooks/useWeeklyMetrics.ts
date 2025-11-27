@@ -330,7 +330,7 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
 };
 
 // Hook para buscar resumo semanal para o componente ResumoFinanceiro
-export const useWeeklyResumo = (limit: number = 5, startDate?: Date, endDate?: Date, canal?: string) => {
+export const useWeeklyResumo = (limit?: number, startDate?: Date, endDate?: Date, canal?: string) => {
   return useQuery({
     queryKey: ['weekly-resumo', limit, startDate?.toISOString(), endDate?.toISOString(), canal],
     queryFn: async () => {
@@ -346,7 +346,10 @@ export const useWeeklyResumo = (limit: number = 5, startDate?: Date, endDate?: D
         query = query.lte('end_date', endDate.toISOString().split('T')[0]);
       }
       
-      query = query.limit(limit);
+      // Só aplica limit se for passado
+      if (limit) {
+        query = query.limit(limit);
+      }
       
       const { data, error } = await query;
       
