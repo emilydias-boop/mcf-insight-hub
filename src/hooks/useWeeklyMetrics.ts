@@ -337,7 +337,7 @@ export const useWeeklyResumo = (limit?: number, startDate?: Date, endDate?: Date
       let query = supabase
         .from('weekly_metrics')
         .select('*')
-        .order('start_date', { ascending: false });
+        .order('start_date', { ascending: true });
       
       if (startDate) {
         query = query.gte('start_date', startDate.toISOString().split('T')[0]);
