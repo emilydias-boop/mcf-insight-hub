@@ -9,9 +9,10 @@ import { Progress } from "@/components/ui/progress";
 import { Target, Copy, Save } from "lucide-react";
 import { useTeamTargets, useCreateTeamTarget, useUpdateTeamTarget, useCopyTargetsFromPreviousWeek } from "@/hooks/useTeamTargets";
 import { useCRMStages } from "@/hooks/useCRMData";
-import { startOfWeek, endOfWeek, format, subWeeks } from "date-fns";
+import { format, subWeeks } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { getCustomWeekStart, getCustomWeekEnd, formatDateForDB, addCustomWeeks } from "@/lib/dateHelpers";
 
 const PIPELINE_INSIDE_SALES_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
 
@@ -20,11 +21,11 @@ type TargetKey = string;
 export function TargetsConfigDialog() {
   const [open, setOpen] = useState(false);
   const [selectedWeekStart, setSelectedWeekStart] = useState(
-    startOfWeek(new Date(), { weekStartsOn: 6 }) // Sábado
+    getCustomWeekStart(new Date())
   );
   const [copyFromWeek, setCopyFromWeek] = useState<string>("");
   
-  const weekEnd = endOfWeek(selectedWeekStart, { weekStartsOn: 6 }); // Sexta
+  const weekEnd = getCustomWeekEnd(selectedWeekStart);
   
   const { data: stages } = useCRMStages(PIPELINE_INSIDE_SALES_ID);
   const { data: targets, isLoading } = useTeamTargets(selectedWeekStart, weekEnd);
@@ -38,8 +39,8 @@ export function TargetsConfigDialog() {
   // Gerar últimas 8 semanas disponíveis para copiar
   const availableWeeks = useMemo(() => {
     return Array.from({ length: 8 }, (_, i) => {
-      const weekStart = subWeeks(selectedWeekStart, i + 1);
-      const weekEndDate = endOfWeek(weekStart, { weekStartsOn: 6 });
+      const weekStart = addCustomWeeks(selectedWeekStart, -(i + 1));
+      const weekEndDate = getCustomWeekEnd(weekStart);
       return {
         value: format(weekStart, 'yyyy-MM-dd'),
         label: `${format(weekStart, 'dd/MM', { locale: ptBR })} - ${format(weekEndDate, 'dd/MM/yyyy', { locale: ptBR })}`,
@@ -116,8 +117,8 @@ export function TargetsConfigDialog() {
               target_type: 'funnel_stage',
               target_name: stage.stage_name,
               reference_id: stage.id,
-              week_start: selectedWeekStart.toISOString().split('T')[0],
-              week_end: weekEnd.toISOString().split('T')[0],
+              week_start: formatDateForDB(selectedWeekStart),
+              week_end: formatDateForDB(weekEnd),
               target_value: weeklyValue,
               current_value: 0,
               origin_id: PIPELINE_INSIDE_SALES_ID,
@@ -155,8 +156,8 @@ export function TargetsConfigDialog() {
               target_type: type as any,
               target_name: name,
               reference_id: null,
-              week_start: selectedWeekStart.toISOString().split('T')[0],
-              week_end: weekEnd.toISOString().split('T')[0],
+              week_start: formatDateForDB(selectedWeekStart),
+              week_end: formatDateForDB(weekEnd),
               target_value: weeklyValue,
               current_value: 0,
               origin_id: null,

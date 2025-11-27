@@ -9,7 +9,7 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
       const { data, error } = await supabase
         .from('weekly_metrics')
         .select('*')
-        .order('start_date', { ascending: false })
+        .order('start_date', { ascending: true })
         .limit(limit);
       
       if (error) throw error;
