@@ -74,7 +74,57 @@ export const useTVSdrData = () => {
 
       console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB);
 
-      // 2. Buscar eventos do webhook de hoje
+      // 2. Buscar contratos pagos de hoje para rastrear o SDR original
+      const { data: contratoPagoEvents } = await supabase
+        .from("webhook_events")
+        .select("event_data")
+        .eq("event_type", "deal.stage_changed")
+        .gte("created_at", todayStartBrazil.toISOString())
+        .lt("created_at", todayEndBrazil.toISOString())
+        .eq("event_data->>deal_stage", PIPELINE_STAGES.CONTRATO_PAGO)
+        .eq("event_data->>deal_origin", "PIPELINE INSIDE SALES");
+
+      // Extrair deal_ids únicos dos contratos pagos
+      const dealIds = [...new Set(
+        contratoPagoEvents?.map(e => (e.event_data as any)?.deal_id).filter(Boolean) || []
+      )];
+
+      console.log('[TV-SDR] Contratos Pagos hoje:', dealIds.length);
+
+      // Buscar histórico completo de cada deal
+      const sdrIntermediacao = new Map<string, number>();
+      
+      if (dealIds.length > 0) {
+        const { data: historicos } = await supabase
+          .from("webhook_events")
+          .select("event_data, created_at")
+          .eq("event_type", "deal.stage_changed")
+          .in("event_data->>deal_id", dealIds)
+          .order("created_at", { ascending: true });
+
+        // Para cada deal, encontrar quem moveu para "Reunião 01 Agendada"
+        for (const dealId of dealIds) {
+          const dealHistory = historicos?.filter(h => 
+            (h.event_data as any)?.deal_id === dealId
+          ) || [];
+          
+          // Encontrar o evento de "Reunião 01 Agendada"
+          const r1Event = dealHistory.find(h => 
+            (h.event_data as any)?.deal_stage === PIPELINE_STAGES.R1_AGENDADA
+          );
+          
+          if (r1Event) {
+            const sdrEmail = (r1Event.event_data as any)?.deal_user;
+            if (sdrEmail && SDR_LIST.some(sdr => sdr.email === sdrEmail)) {
+              sdrIntermediacao.set(sdrEmail, (sdrIntermediacao.get(sdrEmail) || 0) + 1);
+            }
+          }
+        }
+      }
+
+      console.log('[TV-SDR] Intermediações por SDR:', Array.from(sdrIntermediacao.entries()));
+
+      // 3. Buscar eventos do webhook de hoje
       const { data: webhookEvents } = await supabase
         .from("webhook_events")
         .select("event_data, created_at")
@@ -199,24 +249,13 @@ export const useTVSdrData = () => {
             .filter(Boolean)
         );
         
-        const intermediacaoSet = new Set(
-          events
-            .filter(e => {
-              const eventData = e.event_data as any;
-              return eventData?.deal_stage === PIPELINE_STAGES.CONTRATO_PAGO;
-            })
-            .map(e => {
-              const eventData = e.event_data as any;
-              return eventData?.contact_email;
-            })
-            .filter(Boolean)
-        );
+        // Intermediação: buscar do Map que rastreou o SDR original da R1
+        const intermediacao = sdrIntermediacao.get(sdr.email) || 0;
 
         const novoLead = novoLeadSet.size;
         const r1Agendada = r1AgendadaSet.size;
         const noShow = noShowSet.size;
         const r1Realizada = r1RealizadaSet.size;
-        const intermediacao = intermediacaoSet.size;
 
         // Conversão: (R1 Agendada / Novo Lead) * 100
         const convRate = novoLead > 0 ? Math.round((r1Agendada / novoLead) * 100) : 0;
