@@ -4,13 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, GitCompare } from "lucide-react";
+import { Calendar as CalendarIcon, GitCompare, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCustomWeekStart, getCustomWeekEnd, formatCustomWeekRange } from "@/lib/dateHelpers";
 import { ComparisonTable } from "./ComparisonTable";
 import { ComparisonChart } from "./ComparisonChart";
 import { cn } from "@/lib/utils";
+import { usePeriodsComparison } from "@/hooks/usePeriodsComparison";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 export function PeriodComparison() {
   const [open, setOpen] = useState(false);
@@ -30,10 +33,7 @@ export function PeriodComparison() {
     fim: new Date(hoje.getFullYear(), hoje.getMonth(), 0),
   });
 
-  const handleComparar = () => {
-    // Aqui você pode adicionar lógica para buscar dados reais dos períodos
-    console.log('Comparando períodos:', { periodoA, periodoB });
-  };
+  const { data: comparisonData, isLoading, error } = usePeriodsComparison(periodoA, periodoB);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -170,16 +170,43 @@ export function PeriodComparison() {
             </Card>
           </div>
 
-          <Button onClick={handleComparar} className="w-full" size="lg">
-            <GitCompare className="mr-2 h-5 w-5" />
-            Comparar Períodos
-          </Button>
+          {/* Estado de carregamento */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2 text-muted-foreground">Carregando comparação...</span>
+            </div>
+          )}
 
-          {/* Tabela de Comparação */}
-          <ComparisonTable periodoA={periodoA} periodoB={periodoB} />
+          {/* Erro */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Erro ao carregar dados: {(error as Error).message}
+              </AlertDescription>
+            </Alert>
+          )}
 
-          {/* Gráfico de Comparação */}
-          <ComparisonChart periodoA={periodoA} periodoB={periodoB} />
+          {/* Dados carregados */}
+          {!isLoading && !error && comparisonData && (
+            <>
+              {/* Tabela de Comparação */}
+              <ComparisonTable 
+                periodoA={periodoA} 
+                periodoB={periodoB}
+                metricas={comparisonData.comparisons}
+              />
+
+              {/* Gráfico de Comparação */}
+              <ComparisonChart 
+                periodoA={periodoA} 
+                periodoB={periodoB}
+                metricsA={comparisonData.metricsA}
+                metricsB={comparisonData.metricsB}
+              />
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

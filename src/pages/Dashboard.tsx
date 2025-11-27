@@ -26,8 +26,9 @@ import { useWeeklyResumo } from "@/hooks/useWeeklyMetrics";
 import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
+import type { DashboardWidget } from "@/types/dashboard";
 
 const iconMap = {
   '1': DollarSign,
@@ -43,6 +44,7 @@ const iconMap = {
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { preferences } = useDashboardPreferences();
   const [periodo, setPeriodo] = useState({
     tipo: 'semana' as 'semana' | 'mes',
     inicio: getCustomWeekStart(new Date()),
@@ -72,17 +74,10 @@ export default function Dashboard() {
   console.log('Ultrameta:', { data: ultrameta, loading: loadingUltrameta, error: errorUltrameta });
   console.log('Weekly Resumo:', { count: weeklyResumo?.length, loading: loadingResumo, error: errorResumo });
 
-  const handleRefreshData = () => {
-    queryClient.invalidateQueries({ queryKey: ['weekly-metrics'] });
-    queryClient.invalidateQueries({ queryKey: ['metrics-summary'] });
-    queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
-    queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
-    queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
-    queryClient.invalidateQueries({ queryKey: ['weekly-resumo'] });
-    toast({
-      title: "Dados atualizados",
-      description: "Os dados do dashboard foram recarregados.",
-    });
+  // Função para verificar se widget é visível
+  const isWidgetVisible = (widgetId: DashboardWidget) => {
+    if (!preferences?.visible_widgets) return true;
+    return preferences.visible_widgets.includes(widgetId);
   };
 
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
@@ -211,12 +206,8 @@ export default function Dashboard() {
             <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleRefreshData} className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Atualizar
-            </Button>
-              <TargetsConfigDialog />
-              <PeriodComparison />
+            <TargetsConfigDialog />
+            <PeriodComparison />
             <DashboardCustomizer />
           </div>
         </div>
@@ -250,98 +241,115 @@ export default function Dashboard() {
         )}
 
         {/* KPIs + Ultrameta Layout Compacto */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4">
-          {/* KPIs Grid 3x2 - Esquerda */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
-            {loadingMetrics ? (
+        {isWidgetVisible('kpis') && (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-4">
+            {/* KPIs Grid 3x2 - Esquerda */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
+              {loadingMetrics ? (
+                <>
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="h-24 bg-card animate-pulse rounded-lg border border-border" />
+                  ))}
+                </>
+              ) : (
+                kpis.map((kpi) => {
+                  const Icon = iconMap[kpi.id as keyof typeof iconMap];
+                  return (
+                    <KPICard
+                      key={kpi.id}
+                      title={kpi.title}
+                      value={kpi.value}
+                      change={kpi.change}
+                      icon={Icon}
+                      variant={kpi.variant as any}
+                      compact
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            {/* Ultrameta Card - Direita */}
+            {isWidgetVisible('ultrameta') && (
               <>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="h-24 bg-card animate-pulse rounded-lg border border-border" />
-                ))}
+                {loadingUltrameta ? (
+                  <div className="h-full min-h-[240px] bg-card animate-pulse rounded-lg border border-border" />
+                ) : ultrameta ? (
+                  <div className="h-full">
+                    <UltrametaCard data={ultrameta} />
+                  </div>
+                ) : null}
               </>
-            ) : (
-              kpis.map((kpi) => {
-                const Icon = iconMap[kpi.id as keyof typeof iconMap];
-                return (
-                  <KPICard
-                    key={kpi.id}
-                    title={kpi.title}
-                    value={kpi.value}
-                    change={kpi.change}
-                    icon={Icon}
-                    variant={kpi.variant as any}
-                    compact
-                  />
-                );
-              })
             )}
           </div>
-
-          {/* Ultrameta Card - Direita */}
-          {loadingUltrameta ? (
-            <div className="h-full min-h-[240px] bg-card animate-pulse rounded-lg border border-border" />
-          ) : ultrameta ? (
-            <div className="h-full">
-              <UltrametaCard data={ultrameta} />
-            </div>
-          ) : null}
-        </div>
-
-        {/* Gráfico de Evolução Temporal */}
-        {loadingEvolution ? (
-          <div className="h-96 bg-card animate-pulse rounded-lg border border-border" />
-        ) : evolutionData && evolutionData.length > 0 ? (
-          <TrendChart data={evolutionData} />
-        ) : (
-          <Card className="bg-card border-border">
-            <CardContent className="p-6 text-center text-muted-foreground">
-              Nenhum dado de evolução disponível
-            </CardContent>
-          </Card>
         )}
 
-        {/* Funil Pipeline Inside Sales - Dividido em Leads A e B */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-end">
-            <div className="flex gap-2 border border-border rounded-lg p-1 bg-card">
-              <Button
-                variant={viewMode === 'periodo' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('periodo')}
-                className="gap-2"
-              >
-                <Calendar className="h-4 w-4" />
-                Período
-              </Button>
-              <Button
-                variant={viewMode === 'atual' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('atual')}
-                className="gap-2"
-              >
-                <Eye className="h-4 w-4" />
-                Visão Atual
-              </Button>
-            </div>
-          </div>
-          <FunilDuplo
-            originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
-            weekStart={periodo.inicio}
-            weekEnd={periodo.fim}
-            showCurrentState={viewMode === 'atual'}
-          />
-        </div>
+        {/* Gráfico de Evolução Temporal */}
+        {isWidgetVisible('grafico-evolucao') && (
+          <>
+            {loadingEvolution ? (
+              <div className="h-96 bg-card animate-pulse rounded-lg border border-border" />
+            ) : evolutionData && evolutionData.length > 0 ? (
+              <TrendChart data={evolutionData} />
+            ) : (
+              <Card className="bg-card border-border">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  Nenhum dado de evolução disponível
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
 
-        {loadingResumo ? (
-          <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
-        ) : weeklyResumo && weeklyResumo.length > 0 ? (
-          <ResumoFinanceiro dados={weeklyResumo} />
-        ) : (
-          <Card className="bg-card border-border">
-            <CardContent className="p-6 text-center text-muted-foreground">
-              Nenhum dado de resumo disponível
-            </CardContent>
-          </Card>
+        {/* Funil Pipeline Inside Sales */}
+        {isWidgetVisible('funil-a010') && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-end">
+              <div className="flex gap-2 border border-border rounded-lg p-1 bg-card">
+                <Button
+                  variant={viewMode === 'periodo' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('periodo')}
+                  className="gap-2"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Período
+                </Button>
+                <Button
+                  variant={viewMode === 'atual' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('atual')}
+                  className="gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  Visão Atual
+                </Button>
+              </div>
+            </div>
+            <FunilDuplo
+              originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
+              weekStart={periodo.inicio}
+              weekEnd={periodo.fim}
+              showCurrentState={viewMode === 'atual'}
+            />
+          </div>
+        )}
+
+        {/* Resumo Financeiro */}
+        {isWidgetVisible('resumo-financeiro') && (
+          <>
+            {loadingResumo ? (
+              <div className="h-64 bg-card animate-pulse rounded-lg border border-border" />
+            ) : weeklyResumo && weeklyResumo.length > 0 ? (
+              <ResumoFinanceiro dados={weeklyResumo} />
+            ) : (
+              <Card className="bg-card border-border">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  Nenhum dado de resumo disponível
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
       </div>
     </ResourceGuard>

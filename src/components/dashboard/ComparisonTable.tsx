@@ -1,6 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatPercent, formatNumber } from "@/lib/formatters";
 import { ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ComparisonPeriod, ComparisonMetric } from "@/types/dashboard";
@@ -9,19 +9,10 @@ import { formatCustomWeekRange } from "@/lib/dateHelpers";
 interface ComparisonTableProps {
   periodoA: ComparisonPeriod;
   periodoB: ComparisonPeriod;
+  metricas: ComparisonMetric[];
 }
 
-export function ComparisonTable({ periodoA, periodoB }: ComparisonTableProps) {
-  // Mock data - em produção, buscar dados reais baseado nos períodos
-  const metricas: ComparisonMetric[] = [
-    { name: 'Faturamento', periodA: 180000, periodB: 200000, diff: 20000, diffPercent: 11.1, isPositive: true },
-    { name: 'Custos', periodA: 120000, periodB: 110000, diff: -10000, diffPercent: -8.3, isPositive: true },
-    { name: 'Lucro', periodA: 60000, periodB: 90000, diff: 30000, diffPercent: 50, isPositive: true },
-    { name: 'ROI', periodA: 50, periodB: 81.8, diff: 31.8, diffPercent: 63.6, isPositive: true },
-    { name: 'ROAS', periodA: 3.5, periodB: 4.2, diff: 0.7, diffPercent: 20, isPositive: true },
-    { name: 'Vendas A010', periodA: 45, periodB: 52, diff: 7, diffPercent: 15.6, isPositive: true },
-    { name: 'Vendas Contratos', periodA: 12, periodB: 15, diff: 3, diffPercent: 25, isPositive: true },
-  ];
+export function ComparisonTable({ periodoA, periodoB, metricas }: ComparisonTableProps) {
 
   const renderTrend = (diff: number, diffPercent: number, isPositive: boolean) => {
     if (diff === 0) {
@@ -75,18 +66,24 @@ export function ComparisonTable({ periodoA, periodoB }: ComparisonTableProps) {
                 <TableRow key={metrica.name}>
                   <TableCell className="font-medium">{metrica.name}</TableCell>
                   <TableCell className="text-right">
-                    {metrica.name.includes('ROI') || metrica.name.includes('ROAS')
-                      ? `${metrica.periodA.toFixed(1)}${metrica.name.includes('ROI') ? '%' : 'x'}`
-                      : metrica.name.includes('Vendas')
-                      ? metrica.periodA
-                      : formatCurrency(metrica.periodA)}
+                    {metrica.name.includes('Vendas') || metrica.name === 'Leads'
+                      ? formatNumber(metrica.periodA)
+                      : metrica.name === 'ROI' 
+                        ? formatPercent(metrica.periodA, 1)
+                        : metrica.name === 'ROAS'
+                          ? `${metrica.periodA.toFixed(2)}x`
+                          : formatCurrency(metrica.periodA)
+                    }
                   </TableCell>
                   <TableCell className="text-right">
-                    {metrica.name.includes('ROI') || metrica.name.includes('ROAS')
-                      ? `${metrica.periodB.toFixed(1)}${metrica.name.includes('ROI') ? '%' : 'x'}`
-                      : metrica.name.includes('Vendas')
-                      ? metrica.periodB
-                      : formatCurrency(metrica.periodB)}
+                    {metrica.name.includes('Vendas') || metrica.name === 'Leads'
+                      ? formatNumber(metrica.periodB)
+                      : metrica.name === 'ROI'
+                        ? formatPercent(metrica.periodB, 1)
+                        : metrica.name === 'ROAS'
+                          ? `${metrica.periodB.toFixed(2)}x`
+                          : formatCurrency(metrica.periodB)
+                    }
                   </TableCell>
                   <TableCell className="text-right">
                     <span className={cn(
@@ -96,11 +93,14 @@ export function ComparisonTable({ periodoA, periodoB }: ComparisonTableProps) {
                       metrica.diff !== 0 ? "text-destructive" : "text-muted-foreground"
                     )}>
                       {metrica.diff > 0 ? '+' : ''}
-                      {metrica.name.includes('ROI') || metrica.name.includes('ROAS')
-                        ? `${metrica.diff.toFixed(1)}${metrica.name.includes('ROI') ? 'pp' : 'x'}`
-                        : metrica.name.includes('Vendas')
-                        ? metrica.diff
-                        : formatCurrency(metrica.diff)}
+                      {metrica.name.includes('Vendas') || metrica.name === 'Leads'
+                        ? formatNumber(metrica.diff)
+                        : metrica.name === 'ROI'
+                          ? formatPercent(metrica.diff, 1) + 'pp'
+                          : metrica.name === 'ROAS'
+                            ? metrica.diff.toFixed(2) + 'x'
+                            : formatCurrency(Math.abs(metrica.diff))
+                      }
                     </span>
                   </TableCell>
                   <TableCell className="text-right">

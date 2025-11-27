@@ -1,41 +1,54 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { ComparisonPeriod } from "@/types/dashboard";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { formatCustomWeekRange } from "@/lib/dateHelpers";
 
 interface ComparisonChartProps {
   periodoA: ComparisonPeriod;
   periodoB: ComparisonPeriod;
+  metricsA: {
+    faturamento: number;
+    custos: number;
+    lucro: number;
+    vendasA010: number;
+    vendasContratos: number;
+  };
+  metricsB: {
+    faturamento: number;
+    custos: number;
+    lucro: number;
+    vendasA010: number;
+    vendasContratos: number;
+  };
 }
 
-export function ComparisonChart({ periodoA, periodoB }: ComparisonChartProps) {
-  // Mock data - em produção, buscar dados reais baseado nos períodos
+export function ComparisonChart({ periodoA, periodoB, metricsA, metricsB }: ComparisonChartProps) {
   const data = [
     {
       name: 'Faturamento',
-      periodoA: 180000,
-      periodoB: 200000,
+      periodoA: metricsA.faturamento,
+      periodoB: metricsB.faturamento,
     },
     {
       name: 'Custos',
-      periodoA: 120000,
-      periodoB: 110000,
+      periodoA: metricsA.custos,
+      periodoB: metricsB.custos,
     },
     {
       name: 'Lucro',
-      periodoA: 60000,
-      periodoB: 90000,
+      periodoA: metricsA.lucro,
+      periodoB: metricsB.lucro,
     },
     {
       name: 'Vendas A010',
-      periodoA: 45,
-      periodoB: 52,
+      periodoA: metricsA.vendasA010,
+      periodoB: metricsB.vendasA010,
     },
     {
       name: 'Vendas Contratos',
-      periodoA: 12,
-      periodoB: 15,
+      periodoA: metricsA.vendasContratos,
+      periodoB: metricsB.vendasContratos,
     },
   ];
 
@@ -48,7 +61,7 @@ export function ComparisonChart({ periodoA, periodoB }: ComparisonChartProps) {
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm" style={{ color: entry.color }}>
             {entry.name}: {label.includes('Vendas') 
-              ? entry.value 
+              ? formatNumber(entry.value)
               : formatCurrency(entry.value)}
           </p>
         ))}
