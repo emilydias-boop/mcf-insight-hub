@@ -8,7 +8,6 @@ interface PipelineColumnProps {
 
 export function PipelineColumn({ funnelData, leadType }: PipelineColumnProps) {
   const stageOrder = [
-    PIPELINE_STAGES.NOVO_LEAD,
     PIPELINE_STAGES.R1_AGENDADA,
     PIPELINE_STAGES.R1_REALIZADA,
     PIPELINE_STAGES.NO_SHOW,
