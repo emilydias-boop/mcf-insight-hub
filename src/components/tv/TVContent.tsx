@@ -9,7 +9,7 @@ interface TVContentProps {
   topSdrs: any[];
   allSdrs: any[];
   isLoading?: boolean;
-  lastUpdate?: Date;
+  lastUpdate?: Date | { dealsWithoutCloser?: number };
 }
 
 export function TVContent({
@@ -18,6 +18,7 @@ export function TVContent({
   topSdrs,
   allSdrs,
   isLoading,
+  lastUpdate,
 }: TVContentProps) {
   if (isLoading) {
     return (
@@ -51,8 +52,11 @@ export function TVContent({
       </div>
 
       {/* Coluna 4: Tabela */}
-      <div className="overflow-auto h-full">
-        <SdrPerformanceTable sdrs={allSdrs} />
+      <div className="h-full flex flex-col min-h-0">
+        <SdrPerformanceTable 
+          sdrs={allSdrs} 
+          dealsWithoutCloser={lastUpdate && typeof lastUpdate === 'object' && 'dealsWithoutCloser' in lastUpdate ? lastUpdate.dealsWithoutCloser : undefined} 
+        />
       </div>
     </div>
   );

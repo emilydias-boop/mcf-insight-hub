@@ -29,31 +29,35 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
       <div className="text-[9px] font-medium text-center text-muted-foreground truncate w-full px-1">
         {titulo}
       </div>
-      <ResponsiveContainer width="100%" height={70}>
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="80%"
-            startAngle={180}
-            endAngle={0}
-            innerRadius={28}
-            outerRadius={40}
-            dataKey="value"
-            stroke="none"
-          >
-            <Cell fill={color} />
-            <Cell fill="hsl(var(--muted))" />
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
-      <div className="text-center -mt-2">
-        <div className="text-xs font-bold" style={{ color }}>
-          {percentual.toFixed(0)}%
+      <div className="relative w-full">
+        <ResponsiveContainer width="100%" height={70}>
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="80%"
+              startAngle={180}
+              endAngle={0}
+              innerRadius={28}
+              outerRadius={40}
+              dataKey="value"
+              stroke="none"
+            >
+              <Cell fill={leadColor} />
+              <Cell fill="hsl(var(--muted))" />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Valor/Meta centralizado no arco */}
+        <div className="absolute inset-0 flex items-center justify-center" style={{ top: '30%' }}>
+          <span className="text-sm font-bold" style={{ color: leadColor }}>
+            {valor} / {meta}
+          </span>
         </div>
-        <div className="text-[9px] text-muted-foreground">
-          {valor} / {meta}
-        </div>
+      </div>
+      {/* Porcentagem abaixo com fonte maior */}
+      <div className="text-lg font-bold -mt-1" style={{ color: leadColor }}>
+        {percentual.toFixed(0)}%
       </div>
     </div>
   );

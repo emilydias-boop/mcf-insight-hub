@@ -15,7 +15,7 @@ export default function TVSdrPerformance() {
         topSdrs={data?.topSdrs || []}
         allSdrs={data?.allSdrs || []}
         isLoading={isLoading}
-        lastUpdate={new Date()}
+        lastUpdate={{ dealsWithoutCloser: data?.dealsWithoutCloser }}
       />
 
       {currentCelebration && (
