@@ -9,7 +9,7 @@ export const SDR_LIST = [
   { nome: "Cleiton Lima", email: "cleiton.lima@minhacasafinanciada.com" },
   { nome: "Jessica Martins", email: "jessica.martins@minhacasafinanciada.com" },
   { nome: "Leticia Nunes", email: "leticia.faustino@minhacasafinanciada.com" },
-  { nome: "Vitor Costa", email: "victor.hugo@minhacasafinanciada.com" },
+  { nome: "Vitor Costa", email: "vitor.ferreira@minhacasafinanciada.com" },
   { nome: "Caroline Correa", email: "carol.correa@minhacasafinanciada.com" },
   { nome: "Caroline Souza", email: "caroline.souza@minhacasafinanciada.com" },
   { nome: "Yanca Tavares", email: "yanca.tavares@minhacasafinanciada.com" },

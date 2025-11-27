@@ -47,8 +47,8 @@ export function TVContent({
 
   return (
     <div className="flex flex-col h-full gap-2">
-      {/* Grid principal */}
-      <div className="grid grid-cols-[150px_150px_160px_minmax(550px,1fr)] gap-3 flex-1 min-h-0">
+      {/* Grid principal - mais espaço para tabela */}
+      <div className="grid grid-cols-[130px_130px_140px_1fr] gap-3 flex-1 min-h-0">
         {/* Novo Lead Total - Compacto inline */}
         <div className="col-span-2 flex justify-center items-center">
           <div className="bg-card border border-primary/20 rounded px-3 py-0.5 flex items-center gap-2 text-sm">
