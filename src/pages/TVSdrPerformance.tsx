@@ -10,6 +10,7 @@ export default function TVSdrPerformance() {
   return (
     <div className="h-screen overflow-hidden p-2">
       <TVContent
+        totalNovoLead={data?.totalNovoLead || { valor: 0, meta: 560 }}
         funnelDataA={data?.funnelDataA || []}
         funnelDataB={data?.funnelDataB || []}
         topSdrs={data?.topSdrs || []}

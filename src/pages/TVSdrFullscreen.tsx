@@ -10,6 +10,7 @@ export default function TVSdrFullscreen() {
   return (
     <div className="min-h-screen bg-background p-6">
       <TVContent
+        totalNovoLead={data?.totalNovoLead || { valor: 0, meta: 560 }}
         funnelDataA={data?.funnelDataA || []}
         funnelDataB={data?.funnelDataB || []}
         topSdrs={data?.topSdrs || []}

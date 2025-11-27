@@ -35,7 +35,16 @@ export const useTVSdrData = () => {
       // Mapear stages por nome
       const stageMap = new Map(stages?.map((s) => [s.stage_name, s.id]) || []);
 
-      // Buscar deals da semana
+      // Buscar APENAS deals criados via webhook para Novo Lead
+      const { data: webhookDeals } = await supabase
+        .from("crm_deals")
+        .select("*, stage:crm_stages(stage_name)")
+        .eq("origin_id", INSIDE_SALES_ORIGIN_ID)
+        .eq("data_source", "webhook")
+        .gte("created_at", weekStart.toISOString())
+        .lte("created_at", weekEnd.toISOString());
+
+      // Buscar todos os deals para as outras métricas
       const { data: deals } = await supabase
         .from("crm_deals")
         .select("*, stage:crm_stages(stage_name), contact:crm_contacts(custom_fields)")
@@ -102,9 +111,12 @@ export const useTVSdrData = () => {
         );
       }).length || 0;
 
-      // Preparar dados do funil (usando metas reais)
+      // Calcular total de Novo Lead (só de webhook)
+      const totalNovoLeadCount = webhookDeals?.filter((d) => d.stage?.stage_name === PIPELINE_STAGES.NOVO_LEAD).length || 0;
+      const totalNovoLeadMeta = targetMap.get(PIPELINE_STAGES.NOVO_LEAD) || 560;
+
+      // Preparar dados do funil SEM Novo Lead (usando metas reais)
       const funnelStages = [
-        PIPELINE_STAGES.NOVO_LEAD,
         PIPELINE_STAGES.R1_AGENDADA,
         PIPELINE_STAGES.R1_REALIZADA,
         PIPELINE_STAGES.NO_SHOW,
@@ -124,6 +136,10 @@ export const useTVSdrData = () => {
       }));
 
       return {
+        totalNovoLead: {
+          valor: totalNovoLeadCount,
+          meta: totalNovoLeadMeta,
+        },
         funnelDataA,
         funnelDataB,
         topSdrs,
