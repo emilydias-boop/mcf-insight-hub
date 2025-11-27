@@ -22,9 +22,19 @@ export function ResumoFinanceiro({ dados, periodoTipo = 'semana' }: ResumoFinanc
     return dados.reduce((acc, item) => acc + item[campo], 0);
   };
 
+  // Função para obter primeiro e último dia do mês a partir de uma data DD/MM/YYYY
+  const obterPrimeiroUltimoDiaMes = (dataStr: string) => {
+    const [dia, mes, ano] = dataStr.split('/');
+    const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
+    return {
+      primeiro: `01/${mes}/${ano}`,
+      ultimo: `${ultimoDia}/${mes}/${ano}`
+    };
+  };
+
   const dadosMes = modo === 'mes' ? [{
-    dataInicio: dados[0]?.dataInicio || '',
-    dataFim: dados[dados.length - 1]?.dataFim || '',
+    dataInicio: dados[0]?.dataInicio ? obterPrimeiroUltimoDiaMes(dados[0].dataInicio).primeiro : '',
+    dataFim: dados[0]?.dataInicio ? obterPrimeiroUltimoDiaMes(dados[0].dataInicio).ultimo : '',
     faturamentoA010: calcularTotal('faturamentoA010'),
     vendasA010: calcularTotal('vendasA010'),
     valorVendidoOBEvento: calcularTotal('valorVendidoOBEvento'),
