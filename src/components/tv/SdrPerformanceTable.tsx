@@ -20,6 +20,22 @@ interface SdrPerformanceTableProps {
 export function SdrPerformanceTable({ sdrs, dealsWithoutCloser = 0 }: SdrPerformanceTableProps) {
   const sortedSdrs = [...sdrs].sort((a, b) => b.score - a.score);
 
+  // Calcular totais
+  const totals = sortedSdrs.reduce(
+    (acc, sdr) => ({
+      novoLead: acc.novoLead + sdr.novoLead,
+      r1Agendada: acc.r1Agendada + sdr.r1Agendada,
+      noShow: acc.noShow + sdr.noShow,
+      r1Realizada: acc.r1Realizada + sdr.r1Realizada,
+      intermediacao: acc.intermediacao + sdr.intermediacao,
+    }),
+    { novoLead: 0, r1Agendada: 0, noShow: 0, r1Realizada: 0, intermediacao: 0 }
+  );
+
+  const totalConvRate = totals.novoLead > 0 
+    ? Math.round((totals.r1Agendada / totals.novoLead) * 100) 
+    : 0;
+
   return (
     <div className="h-full flex flex-col min-h-0 overflow-hidden">
       {dealsWithoutCloser > 0 && (
@@ -55,6 +71,16 @@ export function SdrPerformanceTable({ sdrs, dealsWithoutCloser = 0 }: SdrPerform
                 <TableCell className="text-center font-bold text-success text-xs p-2">{sdr.intermediacao}</TableCell>
               </TableRow>
             ))}
+            <TableRow className="bg-primary/10 font-bold border-t-2 border-primary">
+              <TableCell className="p-2"></TableCell>
+              <TableCell className="text-primary font-bold text-xs p-2">TOTAL</TableCell>
+              <TableCell className="text-center font-bold text-xs p-2">{totals.novoLead}</TableCell>
+              <TableCell className="text-center font-bold text-xs p-2">{totals.r1Agendada}</TableCell>
+              <TableCell className="text-center font-bold text-primary text-xs p-2">{totalConvRate}%</TableCell>
+              <TableCell className="text-center font-bold text-destructive text-xs p-2">{totals.noShow}</TableCell>
+              <TableCell className="text-center font-bold text-xs p-2">{totals.r1Realizada}</TableCell>
+              <TableCell className="text-center font-bold text-success text-xs p-2">{totals.intermediacao}</TableCell>
+            </TableRow>
           </TableBody>
         </Table>
       </div>
