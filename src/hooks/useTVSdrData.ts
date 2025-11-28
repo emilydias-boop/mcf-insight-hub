@@ -89,20 +89,26 @@ export const useTVSdrData = () => {
 
       console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB);
 
-      // 2. Buscar contratos pagos de hoje para rastrear o SDR original
-      const { data: contratoPagoEvents } = await supabase
-        .from("webhook_events")
-        .select("event_data")
-        .eq("event_type", "deal.stage_changed")
-        .gte("created_at", todayStartBrazil.toISOString())
-        .lt("created_at", todayEndBrazil.toISOString())
-        .eq("event_data->>deal_stage", PIPELINE_STAGES.CONTRATO_PAGO)
-        .eq("event_data->>deal_origin", "PIPELINE INSIDE SALES");
+      // 2. Rastrear SDR original usando APENAS emails dos contratos Hubla filtrados
+      const hublaEmails = hublaContracts.map(c => c.customer_email).filter(Boolean) as string[];
+      
+      console.log('[TV-SDR] Emails de contratos Hubla (sem recorrências):', hublaEmails.length);
 
-      // Extrair deal_ids únicos dos contratos pagos
-      const dealIds = [...new Set(
-        contratoPagoEvents?.map(e => (e.event_data as any)?.deal_id).filter(Boolean) || []
-      )];
+      let dealIds: string[] = [];
+      
+      if (hublaEmails.length > 0) {
+        // Buscar eventos do Clint que correspondem aos emails do Hubla
+        const { data: dealEvents } = await supabase
+          .from("webhook_events")
+          .select("event_data")
+          .eq("event_type", "deal.stage_changed")
+          .in("event_data->>contact_email", hublaEmails);
+
+        // Extrair deal_ids únicos desses deals
+        dealIds = [...new Set(
+          dealEvents?.map(e => (e.event_data as any)?.deal_id).filter(Boolean) || []
+        )];
+      }
 
       console.log('[TV-SDR] Contratos Pagos hoje:', dealIds.length);
 
