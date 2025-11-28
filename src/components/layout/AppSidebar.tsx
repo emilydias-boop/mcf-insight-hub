@@ -72,7 +72,14 @@ const menuItems: MenuItem[] = [
       { title: "Por Categoria", url: "/custos/por-categoria" },
     ]
   },
-  { title: "Relatórios", url: "/relatorios", icon: FileText },
+  { 
+    title: "Relatórios", 
+    icon: FileText,
+    items: [
+      { title: "Visão Geral", url: "/relatorios" },
+      { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
+    ]
+  },
   { title: "Alertas", url: "/alertas", icon: Bell },
   { title: "Efeito Alavanca", url: "/efeito-alavanca", icon: Zap },
   { title: "Projetos", url: "/projetos", icon: FolderKanban },
