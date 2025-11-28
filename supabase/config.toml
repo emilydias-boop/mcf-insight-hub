@@ -3,6 +3,9 @@ project_id = "rehcfgqvigfcekiipqkc"
 [functions.webhook-a010-sales]
 verify_jwt = false
 
+[functions.import-ads-costs]
+verify_jwt = false
+
 [functions.hubla-webhook-handler]
 verify_jwt = false
 
