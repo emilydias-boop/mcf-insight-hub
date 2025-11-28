@@ -61,15 +61,19 @@ export function TVContent({
           </div>
         </div>
 
-        {/* Tabela de SDRs */}
-        <div className="shrink-0">
-          <SdrPerformanceTable 
-            sdrs={allSdrs} 
-            dealsWithoutCloser={lastUpdate && typeof lastUpdate === 'object' && 'dealsWithoutCloser' in lastUpdate ? lastUpdate.dealsWithoutCloser : undefined} 
-          />
+        {/* Gauges Lead A/B - PRIMEIRO */}
+        <div className="grid grid-cols-2 gap-2 shrink-0">
+          <div>
+            <h3 className="font-bold text-center text-xs mb-1">Lead A</h3>
+            <PipelineColumn funnelData={funnelDataA} leadType="A" />
+          </div>
+          <div>
+            <h3 className="font-bold text-center text-xs mb-1">Lead B</h3>
+            <PipelineColumn funnelData={funnelDataB} leadType="B" />
+          </div>
         </div>
 
-        {/* Ranking TOP 4 */}
+        {/* Ranking TOP 4 - SEGUNDO */}
         <div className="shrink-0">
           <h3 className="font-bold text-center text-sm mb-2">🏆 Top 4</h3>
           <div className="grid grid-cols-2 gap-2">
@@ -88,16 +92,12 @@ export function TVContent({
           </div>
         </div>
 
-        {/* Gauges Lead A/B */}
-        <div className="grid grid-cols-2 gap-2 shrink-0">
-          <div>
-            <h3 className="font-bold text-center text-xs mb-1">Lead A</h3>
-            <PipelineColumn funnelData={funnelDataA} leadType="A" />
-          </div>
-          <div>
-            <h3 className="font-bold text-center text-xs mb-1">Lead B</h3>
-            <PipelineColumn funnelData={funnelDataB} leadType="B" />
-          </div>
+        {/* Tabela de SDRs - TERCEIRO */}
+        <div className="shrink-0">
+          <SdrPerformanceTable 
+            sdrs={allSdrs} 
+            dealsWithoutCloser={lastUpdate && typeof lastUpdate === 'object' && 'dealsWithoutCloser' in lastUpdate ? lastUpdate.dealsWithoutCloser : undefined} 
+          />
         </div>
       </div>
     );
