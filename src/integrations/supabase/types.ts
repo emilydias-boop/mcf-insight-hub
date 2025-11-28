@@ -1901,16 +1901,34 @@ export type Database = {
           a010_revenue: number | null
           a010_sales: number | null
           ads_cost: number | null
+          captacao_revenue: number | null
+          captacao_sales: number | null
           cir: number | null
           clint_revenue: number | null
+          clube_arremate_revenue: number | null
+          clube_arremate_sales: number | null
           contract_revenue: number | null
           contract_sales: number | null
           cpl: number | null
           cplr: number | null
           created_at: string | null
+          efeito_alavanca_revenue: number | null
+          efeito_alavanca_sales: number | null
           end_date: string
+          formacao_revenue: number | null
+          formacao_sales: number | null
           id: string
+          imersao_revenue: number | null
+          imersao_sales: number | null
+          imersao_socios_revenue: number | null
+          imersao_socios_sales: number | null
           incorporador_50k: number | null
+          mentoria_caixa_revenue: number | null
+          mentoria_caixa_sales: number | null
+          mentoria_grupo_caixa_revenue: number | null
+          mentoria_grupo_caixa_sales: number | null
+          ob_construir_alugar_revenue: number | null
+          ob_construir_alugar_sales: number | null
           ob_construir_revenue: number | null
           ob_construir_sales: number | null
           ob_evento_revenue: number | null
@@ -1920,10 +1938,22 @@ export type Database = {
           office_cost: number | null
           operating_cost: number | null
           operating_profit: number | null
+          outros_revenue: number | null
+          outros_sales: number | null
+          p2_revenue: number | null
+          p2_sales: number | null
+          parceria_revenue: number | null
+          parceria_sales: number | null
+          projetos_revenue: number | null
+          projetos_sales: number | null
           real_cost: number | null
+          renovacao_revenue: number | null
+          renovacao_sales: number | null
           roas: number | null
           roi: number | null
           sdr_ia_ig: number | null
+          socios_revenue: number | null
+          socios_sales: number | null
           stage_01_actual: number | null
           stage_01_rate: number | null
           stage_01_target: number | null
@@ -1961,16 +1991,34 @@ export type Database = {
           a010_revenue?: number | null
           a010_sales?: number | null
           ads_cost?: number | null
+          captacao_revenue?: number | null
+          captacao_sales?: number | null
           cir?: number | null
           clint_revenue?: number | null
+          clube_arremate_revenue?: number | null
+          clube_arremate_sales?: number | null
           contract_revenue?: number | null
           contract_sales?: number | null
           cpl?: number | null
           cplr?: number | null
           created_at?: string | null
+          efeito_alavanca_revenue?: number | null
+          efeito_alavanca_sales?: number | null
           end_date: string
+          formacao_revenue?: number | null
+          formacao_sales?: number | null
           id?: string
+          imersao_revenue?: number | null
+          imersao_sales?: number | null
+          imersao_socios_revenue?: number | null
+          imersao_socios_sales?: number | null
           incorporador_50k?: number | null
+          mentoria_caixa_revenue?: number | null
+          mentoria_caixa_sales?: number | null
+          mentoria_grupo_caixa_revenue?: number | null
+          mentoria_grupo_caixa_sales?: number | null
+          ob_construir_alugar_revenue?: number | null
+          ob_construir_alugar_sales?: number | null
           ob_construir_revenue?: number | null
           ob_construir_sales?: number | null
           ob_evento_revenue?: number | null
@@ -1980,10 +2028,22 @@ export type Database = {
           office_cost?: number | null
           operating_cost?: number | null
           operating_profit?: number | null
+          outros_revenue?: number | null
+          outros_sales?: number | null
+          p2_revenue?: number | null
+          p2_sales?: number | null
+          parceria_revenue?: number | null
+          parceria_sales?: number | null
+          projetos_revenue?: number | null
+          projetos_sales?: number | null
           real_cost?: number | null
+          renovacao_revenue?: number | null
+          renovacao_sales?: number | null
           roas?: number | null
           roi?: number | null
           sdr_ia_ig?: number | null
+          socios_revenue?: number | null
+          socios_sales?: number | null
           stage_01_actual?: number | null
           stage_01_rate?: number | null
           stage_01_target?: number | null
@@ -2021,16 +2081,34 @@ export type Database = {
           a010_revenue?: number | null
           a010_sales?: number | null
           ads_cost?: number | null
+          captacao_revenue?: number | null
+          captacao_sales?: number | null
           cir?: number | null
           clint_revenue?: number | null
+          clube_arremate_revenue?: number | null
+          clube_arremate_sales?: number | null
           contract_revenue?: number | null
           contract_sales?: number | null
           cpl?: number | null
           cplr?: number | null
           created_at?: string | null
+          efeito_alavanca_revenue?: number | null
+          efeito_alavanca_sales?: number | null
           end_date?: string
+          formacao_revenue?: number | null
+          formacao_sales?: number | null
           id?: string
+          imersao_revenue?: number | null
+          imersao_sales?: number | null
+          imersao_socios_revenue?: number | null
+          imersao_socios_sales?: number | null
           incorporador_50k?: number | null
+          mentoria_caixa_revenue?: number | null
+          mentoria_caixa_sales?: number | null
+          mentoria_grupo_caixa_revenue?: number | null
+          mentoria_grupo_caixa_sales?: number | null
+          ob_construir_alugar_revenue?: number | null
+          ob_construir_alugar_sales?: number | null
           ob_construir_revenue?: number | null
           ob_construir_sales?: number | null
           ob_evento_revenue?: number | null
@@ -2040,10 +2118,22 @@ export type Database = {
           office_cost?: number | null
           operating_cost?: number | null
           operating_profit?: number | null
+          outros_revenue?: number | null
+          outros_sales?: number | null
+          p2_revenue?: number | null
+          p2_sales?: number | null
+          parceria_revenue?: number | null
+          parceria_sales?: number | null
+          projetos_revenue?: number | null
+          projetos_sales?: number | null
           real_cost?: number | null
+          renovacao_revenue?: number | null
+          renovacao_sales?: number | null
           roas?: number | null
           roi?: number | null
           sdr_ia_ig?: number | null
+          socios_revenue?: number | null
+          socios_sales?: number | null
           stage_01_actual?: number | null
           stage_01_rate?: number | null
           stage_01_target?: number | null
