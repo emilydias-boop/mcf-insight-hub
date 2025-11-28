@@ -196,6 +196,23 @@ serve(async (req) => {
 
       console.log('✅ Transação Hubla registrada com sucesso!');
 
+      // Recalcular métricas da semana em background (não bloqueia resposta)
+      const saleDateTime = new Date(saleDate);
+      const weekStart = new Date(saleDateTime);
+      weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 1) % 7)); // Saturday
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6); // Friday
+
+      supabase.functions.invoke('calculate-weekly-metrics', {
+        body: {
+          week_start: weekStart.toISOString().split('T')[0],
+          week_end: weekEnd.toISOString().split('T')[0],
+        },
+      }).then(({ error }: any) => {
+        if (error) console.error('⚠️ Erro ao recalcular métricas:', error);
+        else console.log('📊 Métricas recalculadas em background');
+      });
+
       // Se for a010, também inserir na tabela a010_sales
       if (productCategory === 'a010') {
         console.log('💰 Inserindo venda A010...');
