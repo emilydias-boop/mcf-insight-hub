@@ -11,6 +11,7 @@ export default function Receita() {
     { name: "Cursos", path: "/receita/a010" },
     { name: "Transações", path: "/receita/transacoes" },
     { name: "Por Canal", path: "/receita/por-canal" },
+    { name: "Importar Hubla", path: "/receita/importar-hubla" },
   ];
 
   return (
