@@ -35,12 +35,17 @@ const getLeadType = (contactTag: string | string[] | null): 'A' | 'B' | null => 
 };
 
 // Função para determinar tipo de lead baseado no produto Hubla
-const getLeadTypeFromHubla = (productName: string): 'A' | 'B' => {
+const getLeadTypeFromHubla = (productName: string): 'A' | 'B' | null => {
   const lower = productName.toLowerCase();
-  // Anticrise = Lead B
+  
+  // A000 - Contrato = Lead A
+  if (lower.includes('a000')) return 'A';
+  
+  // Contrato - Anticrise = Lead B
   if (lower.includes('anticrise')) return 'B';
-  // A000 - Contrato = Lead A (qualquer valor, incluindo parcelado)
-  return 'A';
+  
+  // Outros produtos (Clube do Arremate, etc) = não contar
+  return null;
 };
 
 interface SdrData {
