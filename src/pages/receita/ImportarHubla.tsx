@@ -26,6 +26,8 @@ export default function ImportarHubla() {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [totalRows, setTotalRows] = useState(0);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -58,6 +60,68 @@ export default function ImportarHubla() {
     }
   }, []);
 
+  const pollJobStatus = async (currentJobId: string) => {
+    try {
+      const { data: job } = await supabase
+        .from('sync_jobs')
+        .select('*')
+        .eq('id', currentJobId)
+        .single();
+
+      if (!job) return;
+
+      const metadata = job.metadata as any;
+      const currentRow = metadata?.current_row || 0;
+      const total = metadata?.total_rows || 0;
+
+      if (total > 0) {
+        setTotalRows(total);
+        setProgress(Math.round((currentRow / total) * 100));
+      }
+
+      if (job.status === 'completed') {
+        setResult({
+          success: true,
+          message: "Importação concluída com sucesso",
+          processedCount: job.total_processed,
+          skippedCount: job.total_skipped,
+          errorCount: metadata?.error_count || 0,
+        });
+        setIsUploading(false);
+        setJobId(null);
+        toast.success("Importação concluída!");
+        return;
+      }
+
+      if (job.status === 'error') {
+        setResult({
+          success: false,
+          message: job.error_message || "Erro ao importar arquivo",
+        });
+        setIsUploading(false);
+        setJobId(null);
+        toast.error("Erro ao importar arquivo");
+        return;
+      }
+
+      // Continue processing
+      if (job.status === 'running' && currentRow < total) {
+        const { error } = await supabase.functions.invoke('import-hubla-history', {
+          body: new URLSearchParams({ jobId: currentJobId }).toString(),
+        });
+
+        if (error) {
+          console.error('Erro ao continuar job:', error);
+        }
+
+        // Poll again after 2 seconds
+        setTimeout(() => pollJobStatus(currentJobId), 2000);
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status:', error);
+    }
+  };
+
   const handleImport = async () => {
     if (!selectedFile) {
       toast.error("Selecione um arquivo para importar");
@@ -67,35 +131,26 @@ export default function ImportarHubla() {
     setIsUploading(true);
     setProgress(0);
     setResult(null);
+    setTotalRows(0);
 
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('fileType', fileType);
 
-      // Simular progresso enquanto faz upload
-      const progressInterval = setInterval(() => {
-        setProgress(prev => Math.min(prev + 10, 90));
-      }, 500);
-
       const { data, error } = await supabase.functions.invoke('import-hubla-history', {
         body: formData,
       });
 
-      clearInterval(progressInterval);
-      setProgress(100);
-
       if (error) throw error;
 
-      setResult({
-        success: true,
-        message: data.message || "Importação concluída com sucesso",
-        processedCount: data.processedCount,
-        skippedCount: data.skippedCount,
-        errorCount: data.errorCount,
-      });
-
-      toast.success("Importação concluída!");
+      if (data.jobId) {
+        setJobId(data.jobId);
+        toast.success("Importação iniciada! Processando em background...");
+        
+        // Start polling
+        setTimeout(() => pollJobStatus(data.jobId), 2000);
+      }
       
     } catch (error: any) {
       console.error('Erro ao importar:', error);
@@ -103,9 +158,8 @@ export default function ImportarHubla() {
         success: false,
         message: error.message || "Erro ao importar arquivo",
       });
-      toast.error("Erro ao importar arquivo");
-    } finally {
       setIsUploading(false);
+      toast.error("Erro ao importar arquivo");
     }
   };
 
@@ -113,6 +167,8 @@ export default function ImportarHubla() {
     setSelectedFile(null);
     setProgress(0);
     setResult(null);
+    setJobId(null);
+    setTotalRows(0);
   };
 
   return (
@@ -211,10 +267,17 @@ export default function ImportarHubla() {
           {isUploading && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Processando arquivo...</span>
+                <span className="text-muted-foreground">
+                  {totalRows > 0 ? `Processando ${progress}% (${Math.round(totalRows * progress / 100)}/${totalRows} linhas)` : 'Processando arquivo...'}
+                </span>
                 <span className="font-medium text-foreground">{progress}%</span>
               </div>
               <Progress value={progress} />
+              {jobId && (
+                <p className="text-xs text-muted-foreground">
+                  Job ID: {jobId} • A importação continua em background mesmo se você sair desta página
+                </p>
+              )}
             </div>
           )}
 
