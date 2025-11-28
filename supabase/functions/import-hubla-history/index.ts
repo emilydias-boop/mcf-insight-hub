@@ -102,14 +102,11 @@ async function processHublaFile(
 
     if (downloadError) throw downloadError;
 
-    console.log(`📂 Lendo arquivo com ExcelJS (streaming)...`);
-
-    // Salvar temporariamente no /tmp para streaming
-    const tempPath = `/tmp/${crypto.randomUUID()}.xlsx`;
-    await Deno.writeFile(tempPath, new Uint8Array(await fileData.arrayBuffer()));
+    console.log(`📂 Lendo arquivo com ExcelJS...`);
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(tempPath);
+    const arrayBuffer = await fileData.arrayBuffer();
+    await workbook.xlsx.load(arrayBuffer);
     const worksheet = workbook.worksheets[0];
     
     // Extrair headers da primeira linha
@@ -227,13 +224,6 @@ async function processHublaFile(
     console.log(`✅ ${endRow}/${totalRows} (${Math.round(endRow / totalRows * 100)}%)`);
 
     const isComplete = endRow >= totalRows;
-    
-    // Limpar arquivo temporário
-    try {
-      await Deno.remove(tempPath);
-    } catch {
-      // Ignorar erro se arquivo não existe
-    }
 
     if (isComplete) {
       await supabase
