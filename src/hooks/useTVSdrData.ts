@@ -3,7 +3,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { INSIDE_SALES_ORIGIN_ID, SDR_LIST, PIPELINE_STAGES } from "@/constants/team";
 import { startOfDay, endOfDay } from "date-fns";
 
-const SUPERVISOR_EMAIL = "jessica.bellini@minhacasafinanciada.com";
+// Helper para verificar se deal_created_at é de hoje (formato: "DD/MM/YYYY HH:mm:ss")
+const isDealCreatedToday = (dealCreatedAt: string | null): boolean => {
+  if (!dealCreatedAt) return false;
+  
+  // Formato brasileiro: "28/11/2025 00:48:06"
+  const parts = dealCreatedAt.split(' ')[0]?.split('/');
+  if (!parts || parts.length !== 3) return false;
+  
+  const [day, month, year] = parts;
+  const dealDate = new Date(`${year}-${month}-${day}`);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  
+  return dealDate >= todayStart;
+};
 
 // Função para determinar tipo de lead baseado na tag
 const getLeadType = (contactTag: string | string[] | null): 'A' | 'B' | null => {
@@ -163,14 +177,14 @@ export const useTVSdrData = () => {
 
       console.log('[TV-SDR] Inside Sales events:', insideSalesEvents.length);
 
-      // 3. Novo Lead REAL = APENAS da Jessica Bellini (supervisora)
+      // 3. Novo Lead REAL = criado HOJE (deal_created_at)
       const novoLeadEmails = new Set(
         insideSalesEvents
           .filter(e => {
             const eventData = e.event_data as any;
             return eventData?.deal_stage === "Novo Lead" && 
               (!eventData?.deal_old_stage || eventData?.deal_old_stage === "") &&
-              eventData?.deal_user === SUPERVISOR_EMAIL;
+              isDealCreatedToday(eventData?.deal_created_at);
           })
           .map(e => {
             const eventData = e.event_data as any;
