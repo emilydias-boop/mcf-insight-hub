@@ -106,16 +106,14 @@ export default function ImportarHubla() {
 
       // Continue processing
       if (job.status === 'running' && currentRow < total) {
-        const { error } = await supabase.functions.invoke('import-hubla-history', {
-          body: new URLSearchParams({ jobId: currentJobId }).toString(),
-        });
+        const { error } = await supabase.functions.invoke(`import-hubla-history?jobId=${currentJobId}`);
 
         if (error) {
           console.error('Erro ao continuar job:', error);
         }
 
-        // Poll again after 2 seconds
-        setTimeout(() => pollJobStatus(currentJobId), 2000);
+        // Poll again after 1.5 seconds
+        setTimeout(() => pollJobStatus(currentJobId), 1500);
       }
     } catch (error) {
       console.error('Erro ao verificar status:', error);
@@ -149,7 +147,7 @@ export default function ImportarHubla() {
         toast.success("Importação iniciada! Processando em background...");
         
         // Start polling
-        setTimeout(() => pollJobStatus(data.jobId), 2000);
+        setTimeout(() => pollJobStatus(data.jobId), 1500);
       }
       
     } catch (error: any) {
