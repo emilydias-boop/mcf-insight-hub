@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
-import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
+import ExcelJS from 'https://esm.sh/exceljs@4.4.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -102,97 +102,138 @@ async function processHublaFile(
 
     if (downloadError) throw downloadError;
 
-    const fileBuffer = await fileData.arrayBuffer();
-    const workbook = XLSX.read(fileBuffer, { type: 'array' });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(worksheet);
+    console.log(`📂 Lendo arquivo com ExcelJS (streaming)...`);
 
-    console.log(`📊 ${rows.length} linhas, iniciando da linha ${startRow}`);
+    // Salvar temporariamente no /tmp para streaming
+    const tempPath = `/tmp/${crypto.randomUUID()}.xlsx`;
+    await Deno.writeFile(tempPath, new Uint8Array(await fileData.arrayBuffer()));
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(tempPath);
+    const worksheet = workbook.worksheets[0];
+    
+    // Extrair headers da primeira linha
+    const headerRow = worksheet.getRow(1);
+    const headers: string[] = [];
+    headerRow.eachCell((cell, colNumber) => {
+      headers[colNumber - 1] = cell.text;
+    });
+
+    const totalRows = worksheet.rowCount - 1; // -1 para header
+    console.log(`📊 ${totalRows} linhas de dados, iniciando da linha ${startRow}`);
 
     let processedCount = 0;
     let skippedCount = 0;
     let errorCount = 0;
     const BATCH_SIZE = 25;
-    const MAX_ROWS_PER_RUN = 50;
-    const endRow = Math.min(startRow + MAX_ROWS_PER_RUN, rows.length);
+    const MAX_ROWS_PER_RUN = 100;
+    const endRow = Math.min(startRow + MAX_ROWS_PER_RUN, totalRows);
+    
+    let currentRow = 0;
+    const transactions: any[] = [];
 
-    for (let i = startRow; i < endRow; i += BATCH_SIZE) {
-      const batch = rows.slice(i, Math.min(i + BATCH_SIZE, endRow));
-      const transactions = [];
-
-      for (const row of batch) {
-        try {
-          const r = row as any;
-          const hublaId = String(r['ID da fatura'] || r['id'] || '').trim();
-          if (!hublaId) {
-            skippedCount++;
-            continue;
+    // Processar linhas do range especificado
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Skip header
+      
+      const dataRowIndex = rowNumber - 2; // 0-indexed (linha 2 = índice 0)
+      
+      // Skip até startRow
+      if (dataRowIndex < startRow) return;
+      
+      // Parar quando atingir endRow
+      if (dataRowIndex >= endRow) return;
+      
+      try {
+        // Converter linha em objeto usando headers
+        const rowData: any = {};
+        row.eachCell((cell, colNumber) => {
+          const header = headers[colNumber - 1];
+          if (header) {
+            rowData[header] = cell.text;
           }
+        });
 
-          const productName = String(r['Nome do produto'] || r['product_name'] || 'Produto Desconhecido').trim();
-          const productCode = r['Código do produto'] || r['product_code'];
-          const productCategory = mapProductCategory(productName, productCode);
-          const saleDate = parseDate(String(r['Data de pagamento'] || r['Data de reembolso'] || r['sale_date'] || ''));
-
-          transactions.push({
-            hubla_id: hublaId,
-            product_name: productName,
-            product_code: productCode || null,
-            product_category: productCategory,
-            product_price: parseBRNumber(r['Valor do produto'] || r['product_price'] || 0),
-            product_type: r['Tipo do produto'] || r['product_type'] || null,
-            customer_name: String(r['Nome do cliente'] || r['customer_name'] || '').trim() || null,
-            customer_email: String(r['Email do cliente'] || r['customer_email'] || '').trim() || null,
-            customer_phone: String(r['Telefone do cliente'] || r['customer_phone'] || '').trim() || null,
-            utm_source: r['UTM Origem'] || r['utm_source'] || null,
-            utm_medium: r['UTM Mídia'] || r['utm_medium'] || null,
-            utm_campaign: r['UTM Campanha'] || r['utm_campaign'] || null,
-            payment_method: r['Método de pagamento'] || r['payment_method'] || null,
-            sale_date: saleDate,
-            sale_status: fileType === 'sales' ? 'completed' : 'refunded',
-            event_type: fileType === 'sales' ? 'invoice.payment_succeeded' : 'refund',
-            raw_data: r,
-          });
-        } catch (error) {
-          console.error(`❌ Erro ao processar linha:`, error);
-          errorCount++;
+        const hublaId = String(rowData['ID da fatura'] || rowData['id'] || '').trim();
+        if (!hublaId) {
+          skippedCount++;
+          return;
         }
+
+        const productName = String(rowData['Nome do produto'] || rowData['product_name'] || 'Produto Desconhecido').trim();
+        const productCode = rowData['Código do produto'] || rowData['product_code'];
+        const productCategory = mapProductCategory(productName, productCode);
+        const saleDate = parseDate(String(rowData['Data de pagamento'] || rowData['Data de reembolso'] || rowData['sale_date'] || ''));
+
+        transactions.push({
+          hubla_id: hublaId,
+          product_name: productName,
+          product_code: productCode || null,
+          product_category: productCategory,
+          product_price: parseBRNumber(rowData['Valor do produto'] || rowData['product_price'] || 0),
+          product_type: rowData['Tipo do produto'] || rowData['product_type'] || null,
+          customer_name: String(rowData['Nome do cliente'] || rowData['customer_name'] || '').trim() || null,
+          customer_email: String(rowData['Email do cliente'] || rowData['customer_email'] || '').trim() || null,
+          customer_phone: String(rowData['Telefone do cliente'] || rowData['customer_phone'] || '').trim() || null,
+          utm_source: rowData['UTM Origem'] || rowData['utm_source'] || null,
+          utm_medium: rowData['UTM Mídia'] || rowData['utm_medium'] || null,
+          utm_campaign: rowData['UTM Campanha'] || rowData['utm_campaign'] || null,
+          payment_method: rowData['Método de pagamento'] || rowData['payment_method'] || null,
+          sale_date: saleDate,
+          sale_status: fileType === 'sales' ? 'completed' : 'refunded',
+          event_type: fileType === 'sales' ? 'invoice.payment_succeeded' : 'refund',
+          raw_data: rowData,
+        });
+        
+        currentRow++;
+      } catch (error) {
+        console.error(`❌ Erro ao processar linha ${rowNumber}:`, error);
+        errorCount++;
       }
+    });
 
-      if (transactions.length > 0) {
-        const { error } = await supabase
-          .from('hubla_transactions')
-          .upsert(transactions, { onConflict: 'hubla_id', ignoreDuplicates: true });
+    processedCount = transactions.length;
 
-        if (error) {
-          console.error('❌ Erro ao inserir lote:', error);
-          errorCount += transactions.length;
-        } else {
-          processedCount += transactions.length;
-        }
+    // Inserir transações no banco
+    if (transactions.length > 0) {
+      const { error } = await supabase
+        .from('hubla_transactions')
+        .upsert(transactions, { onConflict: 'hubla_id', ignoreDuplicates: true });
+
+      if (error) {
+        console.error('❌ Erro ao inserir lote:', error);
+        errorCount += transactions.length;
       }
-
-      await supabase
-        .from('sync_jobs')
-        .update({
-          total_processed: processedCount,
-          total_skipped: skippedCount,
-          last_page: endRow,
-          updated_at: new Date().toISOString(),
-          metadata: {
-            file_path: filePath,
-            file_type: fileType,
-            total_rows: rows.length,
-            current_row: endRow,
-            error_count: errorCount,
-          }
-        })
-        .eq('id', jobId);
-
-      console.log(`✅ ${endRow}/${rows.length} (${Math.round(endRow / rows.length * 100)}%)`);
     }
 
-    const isComplete = endRow >= rows.length;
+    // Atualizar progresso
+    await supabase
+      .from('sync_jobs')
+      .update({
+        total_processed: processedCount,
+        total_skipped: skippedCount,
+        last_page: endRow,
+        updated_at: new Date().toISOString(),
+        metadata: {
+          file_path: filePath,
+          file_type: fileType,
+          total_rows: totalRows,
+          current_row: endRow,
+          error_count: errorCount,
+        }
+      })
+      .eq('id', jobId);
+
+    console.log(`✅ ${endRow}/${totalRows} (${Math.round(endRow / totalRows * 100)}%)`);
+
+    const isComplete = endRow >= totalRows;
+    
+    // Limpar arquivo temporário
+    try {
+      await Deno.remove(tempPath);
+    } catch {
+      // Ignorar erro se arquivo não existe
+    }
 
     if (isComplete) {
       await supabase
@@ -208,7 +249,7 @@ async function processHublaFile(
         .from('sync_jobs')
         .update({ status: 'running' })
         .eq('id', jobId);
-      console.log(`⏸️ Pausado em ${endRow}/${rows.length}`);
+      console.log(`⏸️ Pausado em ${endRow}/${totalRows}`);
     }
 
   } catch (error: any) {
