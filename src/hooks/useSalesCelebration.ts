@@ -118,21 +118,23 @@ export const useSalesCelebration = () => {
         .from("deal_activities")
         .select("to_stage, metadata")
         .eq("deal_id", deal.clint_id)
-        .in("to_stage", ["Reunião 01 Agendada", "Reunião 01 Realizada", "Contrato Pago"])
+        .in("to_stage", ["Reunião 01 Agendada", "Reunião 01 Realizada", "Reunião 02 Agendada", "Reunião 02 Realizada", "Contrato Pago"])
         .order("created_at", { ascending: true });
 
       // Candidato a SDR = quem moveu para R1 Agendada
       const r1AgendadaActivity = activities?.find(a => a.to_stage === "Reunião 01 Agendada");
       const sdrCandidate = (r1AgendadaActivity?.metadata as any)?.deal_user_name;
 
-      // Candidato a Closer = quem moveu para R1 Realizada ou deal_closer
-      const r1RealizadaActivity = activities?.find(a => a.to_stage === "Reunião 01 Realizada");
+      // Candidato a Closer = quem moveu para R2 Agendada/Realizada (prioridade) ou Contrato Pago
+      const r2AgendadaActivity = activities?.find(a => a.to_stage === "Reunião 02 Agendada");
+      const r2RealizadaActivity = activities?.find(a => a.to_stage === "Reunião 02 Realizada");
       const contratoPagoActivity = activities?.find(a => a.to_stage === "Contrato Pago");
       
       const closerCandidate = 
+        (r2RealizadaActivity?.metadata as any)?.deal_user_name ||
+        (r2AgendadaActivity?.metadata as any)?.deal_user_name ||
         (contratoPagoActivity?.metadata as any)?.deal_closer ||
-        (r1RealizadaActivity?.metadata as any)?.deal_closer ||
-        (r1RealizadaActivity?.metadata as any)?.deal_user_name;
+        (contratoPagoActivity?.metadata as any)?.deal_user_name;
 
       // Validar SDR contra lista
       if (sdrCandidate) {
