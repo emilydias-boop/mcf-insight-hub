@@ -80,12 +80,23 @@ function parseDate(dateStr: string): string {
 function parseBRNumber(value: string | number): number {
   if (typeof value === 'number') return value;
   if (!value) return 0;
-  return parseFloat(
-    value.toString()
-      .replace(/R\$\s?/g, '')
-      .replace(/\./g, '')
-      .replace(',', '.')
-  ) || 0;
+  
+  const str = value.toString().replace(/R\$\s?/g, '').trim();
+  
+  // Detectar formato: BR (vírgula decimal) vs US (ponto decimal)
+  const hasComma = str.includes(',');
+  const hasDot = str.includes('.');
+  
+  if (hasComma && hasDot) {
+    // Formato brasileiro: 1.234,56 → remove pontos, troca vírgula por ponto
+    return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
+  } else if (hasComma && !hasDot) {
+    // Formato brasileiro sem milhar: 1234,56 → troca vírgula por ponto
+    return parseFloat(str.replace(',', '.')) || 0;
+  } else {
+    // Formato americano ou inteiro: 1234.56 ou 1234 → usa direto
+    return parseFloat(str) || 0;
+  }
 }
 
 async function processHublaFile(
