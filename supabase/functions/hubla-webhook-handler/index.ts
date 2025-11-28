@@ -6,43 +6,97 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mapeamento de produtos Hubla para categorias do dashboard
+// Mapeamento completo de 19 categorias (sincronizado com import-hubla-history)
 const PRODUCT_MAPPING: Record<string, string> = {
-  'A001': 'a010',
-  'A000': 'a010',
-  'MCF Incorporador Completo': 'a010',
-  'A005': 'ob_construir',
-  'Anticrise Completo': 'ob_construir',
-  'A006': 'ob_vitalicio',
-  'Anticrise Básico': 'ob_vitalicio',
-  'OB Evento': 'ob_evento',
-  'R001': 'incorporador_50k',
-  'Incorporador 50K': 'incorporador_50k',
-  '000': 'contract',
-  'Contrato': 'contract',
+  // A010 - Construa para Vender
+  'A010': 'a010',
+  'CONSTRUA PARA VENDER': 'a010',
+  'CONSULTORIA': 'a010',
+  
+  // Captação
+  'A011': 'captacao',
+  'CAPTAÇÃO': 'captacao',
+  
+  // Contrato
+  'A000': 'contrato',
+  'CONTRATO - ANTICRISE': 'contrato',
+  
+  // Parceria (MCF Completo)
+  'A003': 'parceria',
+  'A004': 'parceria',
+  'A009': 'parceria',
+  'A001': 'parceria',
+  'MCF INCORPORADOR COMPLETO': 'parceria',
+  'MCF PLANO ANTICRISE': 'parceria',
+  
+  // P2 (pagamento parcelado)
+  'A005': 'p2',
+  'MCF P2': 'p2',
+  
+  // Renovação
+  'A006': 'renovacao',
+  'RENOVAÇÃO': 'renovacao',
+  
+  // Formação
+  'A015': 'formacao',
+  'FORMAÇÃO INCORPORADOR': 'formacao',
+  
+  // Projetos
+  'MCF PROJETOS': 'projetos',
+  
+  // Efeito Alavanca
+  'EFEITO ALAVANCA': 'efeito_alavanca',
+  
+  // Mentoria Caixa
+  'MENTORIA INDIVIDUAL': 'mentoria_caixa',
+  'CREDENCIAMENTO CAIXA': 'mentoria_caixa',
+  
+  // Mentoria em Grupo
+  'MENTORIA EM GRUPO': 'mentoria_grupo_caixa',
+  
+  // Sócios
+  'SÓCIO MCF': 'socios',
+  
+  // OB Construir para Alugar
+  'CONSTRUIR PARA ALUGAR': 'ob_construir_alugar',
+  'CONSTRUIR PRA ALUGAR': 'ob_construir_alugar',
+  'VIVER DE ALUGUEL': 'ob_construir_alugar',
+  
+  // OB Vitalício
+  'ACESSO VITALÍCIO': 'ob_vitalicio',
+  'ACESSO VITALICÍO': 'ob_vitalicio',
+  'OB - ACESSO VITALÍCIO': 'ob_vitalicio',
+  
+  // OB Evento
+  'OB - EVENTO': 'ob_evento',
+  
+  // Clube do Arremate
+  'CLUBE DO ARREMATE': 'clube_arremate',
+  'CONTRATO - CLUBE DO ARREMATE': 'clube_arremate',
+  
+  // Imersão
+  'IMERSÃO PRESENCIAL': 'imersao',
+  
+  // Imersão Sócios
+  'IMERSÃO SÓCIOS': 'imersao_socios',
 };
 
 function mapProductCategory(productName: string, productCode?: string): string {
   const name = productName.toUpperCase();
   
-  // Cursos: A010 ou qualquer produto "Construir para..."
-  if (name.includes('A010') || name.includes('CONSTRUIR PARA')) {
-    return 'curso';
+  // Tentar mapear por código exato primeiro
+  if (productCode && PRODUCT_MAPPING[productCode.toUpperCase()]) {
+    return PRODUCT_MAPPING[productCode.toUpperCase()];
   }
   
-  // Contratos
-  if (name.includes('CONTRATO') || productCode === 'A000' || productCode === '000') {
-    return 'contrato';
+  // Tentar mapear por nome completo
+  if (PRODUCT_MAPPING[name]) {
+    return PRODUCT_MAPPING[name];
   }
   
-  // Tentar mapear por código primeiro (outros produtos)
-  if (productCode && PRODUCT_MAPPING[productCode]) {
-    return PRODUCT_MAPPING[productCode];
-  }
-  
-  // Tentar mapear por nome parcial (outros produtos)
+  // Tentar mapear por nome parcial
   for (const [key, category] of Object.entries(PRODUCT_MAPPING)) {
-    if (productName.toLowerCase().includes(key.toLowerCase())) {
+    if (name.includes(key)) {
       return category;
     }
   }
@@ -67,7 +121,6 @@ serve(async (req) => {
     const eventType = eventData.type || 'unknown';
 
     console.log('📥 Webhook recebido:', eventType);
-    console.log('Dados:', JSON.stringify(eventData, null, 2));
 
     // Logar evento no banco
     const { data: logEntry, error: logError } = await supabase
@@ -143,8 +196,8 @@ serve(async (req) => {
 
       console.log('✅ Transação Hubla registrada com sucesso!');
 
-      // Se for curso, também inserir na tabela a010_sales
-      if (productCategory === 'curso') {
+      // Se for a010, também inserir na tabela a010_sales
+      if (productCategory === 'a010') {
         console.log('💰 Inserindo venda A010...');
         
         const { error: a010Error } = await supabase
@@ -160,7 +213,6 @@ serve(async (req) => {
 
         if (a010Error) {
           console.error('❌ Erro ao inserir venda A010:', a010Error);
-          // Não faz throw aqui para não bloquear o webhook
         } else {
           console.log('✅ Venda A010 registrada com sucesso!');
         }
