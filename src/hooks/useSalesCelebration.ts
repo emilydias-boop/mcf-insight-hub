@@ -71,10 +71,15 @@ export const useSalesCelebration = () => {
 
     console.log('🎯 Processando venda:', transaction.customer_name, '|', transaction.product_name);
 
-    // Buscar informações do lead no CRM
+    // Buscar informações do lead no CRM (com o deal relacionado)
     const { data: contact } = await supabase
       .from("crm_contacts")
-      .select("name, custom_fields, crm_deals(custom_fields)")
+      .select(`
+        name, 
+        custom_fields, 
+        tags,
+        crm_deals!crm_deals_contact_id_fkey(custom_fields)
+      `)
       .eq("email", transaction.customer_email)
       .single();
 
@@ -85,22 +90,29 @@ export const useSalesCelebration = () => {
 
     // Extrair informações
     const leadName = contact.name || "Lead";
-    const customFields = contact.custom_fields as any;
-    const leadType = customFields?.tipo_lead === "A" ? "A" : "B";
-    const sdrName = customFields?.user_email || "SDR Desconhecido";
     
-    // Buscar closer (última atividade R1 Realizada)
-    const { data: lastActivity } = await supabase
-      .from("deal_activities")
-      .select("metadata")
-      .eq("activity_type", "stage_change")
-      .eq("to_stage", "Reunião 01 Realizada")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+    // Determinar tipo de lead baseado em tags
+    let leadType: "A" | "B" = "B";
+    if (Array.isArray(contact?.tags)) {
+      const hasLeadA = contact.tags.some((tag: any) => 
+        tag?.name?.toLowerCase()?.includes('lead a') || 
+        String(tag).toLowerCase().includes('lead a')
+      );
+      if (hasLeadA) leadType = "A";
+    }
 
-    const activityMetadata = lastActivity?.metadata as any;
-    const closerName = activityMetadata?.closer_name || "Closer Desconhecido";
+    // Buscar SDR e Closer dos custom_fields do deal
+    const deal = (contact as any)?.crm_deals?.[0];
+    const dealCustomFields = deal?.custom_fields as any;
+    
+    const sdrName = dealCustomFields?.user_name 
+      || dealCustomFields?.deal_user_name 
+      || "SDR";
+    
+    const closerName = dealCustomFields?.deal_closer || "Closer";
+
+    console.log('👤 SDR encontrado:', sdrName);
+    console.log('🎯 Closer encontrado:', closerName);
 
     return {
       id: transaction.id,
