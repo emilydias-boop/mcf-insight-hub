@@ -113,7 +113,7 @@ async function processHublaFile(
     let skippedCount = 0;
     let errorCount = 0;
     const BATCH_SIZE = 50;
-    const MAX_ROWS_PER_RUN = 1000;
+    const MAX_ROWS_PER_RUN = 200;
     const endRow = Math.min(startRow + MAX_ROWS_PER_RUN, rows.length);
 
     for (let i = startRow; i < endRow; i += BATCH_SIZE) {
@@ -262,17 +262,25 @@ Deno.serve(async (req) => {
       }
 
       const metadata = job.metadata as any;
-      queueMicrotask(() => {
-        processHublaFile(supabase, jobId, metadata.file_path, metadata.file_type, job.last_page || 0);
-      });
+      const startRow = job.last_page || 0;
+      
+      await processHublaFile(supabase, jobId, metadata.file_path, metadata.file_type, startRow);
+
+      // Re-fetch job to get updated status
+      const { data: updatedJob } = await supabase
+        .from('sync_jobs')
+        .select('*')
+        .eq('id', jobId)
+        .single();
 
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Processamento continuado',
+          message: 'Chunk processado',
           jobId,
-          progress: job.last_page || 0,
+          progress: updatedJob?.last_page || 0,
           totalRows: metadata.total_rows,
+          isComplete: updatedJob?.status === 'completed',
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -308,12 +316,23 @@ Deno.serve(async (req) => {
 
     if (jobError) throw jobError;
 
-    queueMicrotask(() => {
-      processHublaFile(supabase, job.id, fileName, fileType, 0);
-    });
+    await processHublaFile(supabase, job.id, fileName, fileType, 0);
+
+    // Re-fetch job to get updated status
+    const { data: updatedJob } = await supabase
+      .from('sync_jobs')
+      .select('*')
+      .eq('id', job.id)
+      .single();
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Importação iniciada', jobId: job.id }),
+      JSON.stringify({ 
+        success: true, 
+        message: 'Primeiro chunk processado', 
+        jobId: job.id,
+        isComplete: updatedJob?.status === 'completed',
+        progress: updatedJob?.last_page || 0,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
