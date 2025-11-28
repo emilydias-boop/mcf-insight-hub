@@ -29,8 +29,8 @@ export function SaleCelebration({
   useEffect(() => {
     // 🔊 Tocar som diferente para cada tipo de venda
     const soundUrl = isContrato 
-      ? '/sounds/applause.mp3'      // 👏 Aplausos para CONTRATO
-      : '/sounds/celebration.mp3';   // 🎵 Som emotivo para PARCERIA
+      ? '/sounds/celebration.mp3'   // 🎵 Som emotivo para CONTRATO
+      : '/sounds/applause.mp3';      // 👏 Aplausos para PARCERIA
     
     const audio = new Audio(soundUrl);
     audio.volume = 0.7;
