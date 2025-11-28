@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
 
     // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (APENAS VENDAS CONFIRMADAS)
     // Filtrar apenas invoice.payment_succeeded para vendas reais
+    // Incluir raw_data para acessar o Valor Líquido real do Hubla
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
@@ -96,31 +97,36 @@ Deno.serve(async (req) => {
       revenueByCategory[cat] = { revenue: 0, sales: 0 };
     });
 
-    // Somar vendas completadas
+    // Somar vendas completadas usando Valor Líquido real do Hubla
     completedTransactions?.forEach(t => {
       const category = t.product_category?.toLowerCase() || 'outros';
-      const price = t.product_price || 0;
+      
+      // Usar Valor Líquido do Hubla se disponível, senão calcular
+      const valorLiquidoStr = t.raw_data?.['Valor Líquido'];
+      const netValue = valorLiquidoStr 
+        ? parseFloat(String(valorLiquidoStr).replace(/[^\d.,-]/g, '').replace(',', '.'))
+        : (t.product_price || 0) * HUBLA_NET_MULTIPLIER;
       
       if (revenueByCategory[category]) {
-        revenueByCategory[category].revenue += price;
+        revenueByCategory[category].revenue += netValue;
         revenueByCategory[category].sales += 1;
       }
     });
 
-    // Calcular gross revenue (faturamento bruto)
-    const gross_revenue = Object.values(revenueByCategory).reduce((sum, cat) => sum + cat.revenue, 0);
+    // Calcular gross revenue (faturamento bruto - soma dos product_price)
+    const gross_revenue = completedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
 
     // Calcular reembolsos (apenas para informação)
     const refunds_amount = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
     const refunds_count = refundedTransactions?.length || 0;
 
-    // Calcular receita líquida (bruto - taxa Hubla 5.83%)
-    const platform_fees = gross_revenue * HUBLA_PLATFORM_FEE;
-    const net_revenue = gross_revenue * HUBLA_NET_MULTIPLIER;
+    // Calcular receita líquida (soma dos valores líquidos reais do Hubla)
+    const net_revenue = Object.values(revenueByCategory).reduce((sum, cat) => sum + cat.revenue, 0);
+    const platform_fees = gross_revenue - net_revenue;
 
     console.log(`💵 Faturamento Bruto: R$ ${gross_revenue.toFixed(2)}`);
-    console.log(`💳 Taxa Plataforma (5.83%): R$ ${platform_fees.toFixed(2)}`);
-    console.log(`💰 Receita Líquida: R$ ${net_revenue.toFixed(2)}`);
+    console.log(`💳 Taxa Plataforma (real): R$ ${platform_fees.toFixed(2)}`);
+    console.log(`💰 Receita Líquida (Hubla): R$ ${net_revenue.toFixed(2)}`);
     console.log(`💸 Reembolsos: R$ ${refunds_amount.toFixed(2)} (${refunds_count} transações)`);
 
     // Log por categoria
