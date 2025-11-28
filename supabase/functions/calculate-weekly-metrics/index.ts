@@ -18,6 +18,11 @@ const REVENUE_CATEGORIES = [
   'imersao_socios', 'outros'
 ] as const;
 
+// Mapeamento de categoria → nome da coluna (quando diferente)
+const COLUMN_NAME_MAP: Record<string, string> = {
+  'contrato': 'contract',  // tabela usa contract_revenue, não contrato_revenue
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -165,8 +170,9 @@ Deno.serve(async (req) => {
     // Adicionar receitas por categoria
     REVENUE_CATEGORIES.forEach(cat => {
       const { revenue, sales } = revenueByCategory[cat];
-      metricsData[`${cat}_revenue`] = revenue;
-      metricsData[`${cat}_sales`] = sales;
+      const columnName = COLUMN_NAME_MAP[cat] || cat; // usa mapeamento ou nome original
+      metricsData[`${columnName}_revenue`] = revenue;
+      metricsData[`${columnName}_sales`] = sales;
     });
 
     // 8. UPSERT EM WEEKLY_METRICS
