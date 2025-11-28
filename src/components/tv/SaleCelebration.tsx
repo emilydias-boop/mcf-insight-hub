@@ -27,6 +27,17 @@ export function SaleCelebration({
   const accentColor = isContrato ? "text-yellow-500" : "text-blue-500";
 
   useEffect(() => {
+    // 🔊 Tocar som diferente para cada tipo de venda
+    const soundUrl = isContrato 
+      ? '/sounds/applause.mp3'      // 👏 Aplausos para CONTRATO
+      : '/sounds/celebration.mp3';   // 🎵 Som emotivo para PARCERIA
+    
+    const audio = new Audio(soundUrl);
+    audio.volume = 0.7;
+    audio.play().catch((err) => {
+      console.warn('Não foi possível tocar o áudio:', err);
+    });
+
     const colors = isContrato
       ? ["#FFD700", "#FFA500", "#FF8C00"]
       : ["#4169E1", "#1E90FF", "#00BFFF"];
