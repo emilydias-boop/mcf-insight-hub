@@ -227,6 +227,28 @@ async function processHublaFile(
         })
         .eq('id', jobId);
       console.log(`✅ Completo: ${processedCount} processados, ${skippedCount} ignorados, ${errorCount} erros`);
+      
+      // Recalcular métricas para todas as semanas do período importado
+      console.log('📊 Iniciando recálculo automático de métricas...');
+      const { data: importedDates } = await supabase
+        .from('hubla_transactions')
+        .select('sale_date')
+        .order('sale_date', { ascending: true });
+      
+      if (importedDates && importedDates.length > 0) {
+        const minDate = new Date(importedDates[0].sale_date);
+        const maxDate = new Date(importedDates[importedDates.length - 1].sale_date);
+        
+        supabase.functions.invoke('recalculate-metrics', {
+          body: {
+            start_date: minDate.toISOString().split('T')[0],
+            end_date: maxDate.toISOString().split('T')[0],
+          },
+        }).then(({ error }: any) => {
+          if (error) console.error('⚠️ Erro ao recalcular métricas:', error);
+          else console.log('✅ Recálculo de métricas concluído');
+        });
+      }
     } else {
       await supabase
         .from('sync_jobs')
