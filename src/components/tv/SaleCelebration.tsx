@@ -20,7 +20,7 @@ export function SaleCelebration({
   closerName,
   productName,
   onComplete,
-  duration = 50000,
+  duration = 5000,
 }: SaleCelebrationProps) {
   const isContrato = productName.toLowerCase().includes("contrato");
   const bgColor = isContrato ? "from-yellow-500/20 to-amber-600/20" : "from-blue-500/20 to-cyan-600/20";
