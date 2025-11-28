@@ -79,13 +79,13 @@ export const useSalesCelebration = () => {
 
     console.log('🎯 Processando venda:', transaction.customer_name, '|', transaction.product_name);
 
-    // Buscar informações do lead no CRM (com o deal relacionado)
+    // Buscar informações do lead no CRM (com o deal relacionado e custom_fields)
     const { data: contact } = await supabase
       .from("crm_contacts")
       .select(`
         name, 
         tags,
-        crm_deals!crm_deals_contact_id_fkey(clint_id)
+        crm_deals!crm_deals_contact_id_fkey(clint_id, custom_fields)
       `)
       .eq("email", transaction.customer_email)
       .single();
@@ -139,12 +139,11 @@ export const useSalesCelebration = () => {
       // Validar SDR contra lista
       if (sdrCandidate) {
         const isValidSdr = SDR_LIST.some(sdr => 
-          sdr.nome.toLowerCase() === sdrCandidate.toLowerCase() ||
-          sdr.nome.toLowerCase().includes(sdrCandidate.toLowerCase()) ||
+          sdr.nome.toLowerCase().includes(sdrCandidate.split(' ')[0].toLowerCase()) ||
           sdrCandidate.toLowerCase().includes(sdr.nome.split(' ')[0].toLowerCase())
         );
         
-        // Se não é SDR válido, pode ser que seja um Closer no lugar errado
+        // Verificar se não é na verdade um Closer
         const isActuallyCloser = CLOSER_LIST.some(closer => 
           closer.variations.some(v => sdrCandidate.toLowerCase().includes(v.toLowerCase()))
         );
@@ -168,6 +167,42 @@ export const useSalesCelebration = () => {
         
         if (isValidCloser && !isActuallySdr) {
           closerName = closerCandidate;
+        }
+      }
+
+      // Fallback: buscar em custom_fields se não encontrou nas atividades
+      if (sdrName === "SDR" || closerName === "Closer") {
+        const customFields = deal?.custom_fields as any;
+        
+        // Fallback para SDR
+        if (sdrName === "SDR") {
+          const sdrFallback = customFields?.deal_user_name || customFields?.user_name;
+          if (sdrFallback) {
+            const isValidSdr = SDR_LIST.some(sdr => 
+              sdr.nome.toLowerCase().includes(sdrFallback.split(' ')[0].toLowerCase()) ||
+              sdrFallback.toLowerCase().includes(sdr.nome.split(' ')[0].toLowerCase())
+            );
+            const isActuallyCloser = CLOSER_LIST.some(closer => 
+              closer.variations.some(v => sdrFallback.toLowerCase().includes(v.toLowerCase()))
+            );
+            
+            if (isValidSdr && !isActuallyCloser) {
+              sdrName = sdrFallback;
+            }
+          }
+        }
+        
+        // Fallback para Closer
+        if (closerName === "Closer") {
+          const closerFallback = customFields?.deal_closer;
+          if (closerFallback) {
+            const isValidCloser = CLOSER_LIST.some(closer => 
+              closer.variations.some(v => closerFallback.toLowerCase().includes(v.toLowerCase()))
+            );
+            if (isValidCloser) {
+              closerName = closerFallback;
+            }
+          }
         }
       }
     }
