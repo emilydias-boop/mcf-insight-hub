@@ -5,6 +5,55 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function parseDate(dateStr: string): string {
+  // Mapeamento de meses em português
+  const monthsPT: Record<string, string> = {
+    'janeiro': '01',
+    'fevereiro': '02',
+    'março': '03',
+    'abril': '04',
+    'maio': '05',
+    'junho': '06',
+    'julho': '07',
+    'agosto': '08',
+    'setembro': '09',
+    'outubro': '10',
+    'novembro': '11',
+    'dezembro': '12'
+  };
+
+  // Formato português: "9 de março de 2025 às 00:00"
+  const ptMatch = dateStr.match(/^(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i);
+  if (ptMatch) {
+    const day = ptMatch[1].padStart(2, '0');
+    const monthName = ptMatch[2].toLowerCase();
+    const year = ptMatch[3];
+    const month = monthsPT[monthName];
+    
+    if (month) {
+      return `${year}-${month}-${day}`;
+    }
+  }
+  
+  // Se já está no formato YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  // Se está no formato DD/MM/YYYY
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const [day, month, year] = dateStr.split('/');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Se está no formato ISO (com T e timezone)
+  if (dateStr.includes('T')) {
+    return dateStr.split('T')[0];
+  }
+  
+  throw new Error(`Formato de data não reconhecido: ${dateStr}`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -33,11 +82,24 @@ Deno.serve(async (req) => {
       ? parseFloat(amount.replace(/[^\d,]/g, '').replace(',', '.'))
       : amount;
 
+    // Parse da data para formato YYYY-MM-DD
+    let parsedDate: string;
+    try {
+      parsedDate = parseDate(date);
+      console.log(`📅 Data convertida: ${date} → ${parsedDate}`);
+    } catch (error) {
+      console.error('❌ Erro ao converter data:', error);
+      return new Response(
+        JSON.stringify({ error: `Invalid date format: ${date}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Upsert no banco
     const { data, error } = await supabase
       .from('daily_costs')
       .upsert({
-        date,
+        date: parsedDate,
         cost_type: 'ads',
         source,
         amount: parsedAmount,
