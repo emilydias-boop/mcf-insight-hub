@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRangeShort } from '@/lib/dateHelpers';
+import { HUBLA_NET_MULTIPLIER } from '@/lib/constants';
 
 // Unified interface for course sales from both tables
 export interface CourseSale {
@@ -231,56 +232,82 @@ export const useCoursesSummary = ({
         product_name: 'A010',
         product_price: sale.net_value || 0,
         sale_date: sale.sale_date,
+        source: 'a010_sales' as const,
       }));
 
       const normalizedHubla = (hublaData || []).map(sale => ({
         product_name: sale.product_name?.toLowerCase().includes('construir') ? 'Construir Para Alugar' : 'A010',
         product_price: sale.product_price || 0,
         sale_date: sale.sale_date,
+        source: 'hubla_transactions' as const,
       }));
 
       const sales = [...normalizedA010, ...normalizedHubla];
       const totalSales = sales.length;
-      const totalRevenue = sales.reduce((sum, sale) => sum + (sale.product_price || 0), 0);
-      const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
+      
+      // Calculate gross revenue
+      const grossRevenue = sales.reduce((sum, sale) => sum + (sale.product_price || 0), 0);
+      
+      // Calculate net revenue (apply Hubla fee only to Hubla transactions)
+      const netRevenue = sales.reduce((sum, sale) => {
+        const price = sale.product_price || 0;
+        // A010 from a010_sales table is already net, Hubla needs fee deduction
+        return sum + (sale.source === 'hubla_transactions' ? price * HUBLA_NET_MULTIPLIER : price);
+      }, 0);
+      
+      const averageTicket = totalSales > 0 ? netRevenue / totalSales : 0;
 
       // Separate by course type for comparison
       const a010Sales = sales.filter(s => s.product_name?.toLowerCase().includes('a010'));
       const construirSales = sales.filter(s => s.product_name?.toLowerCase().includes('construir para'));
 
+      const a010GrossRevenue = a010Sales.reduce((sum, sale) => sum + (sale.product_price || 0), 0);
+      const a010NetRevenue = a010Sales.reduce((sum, sale) => {
+        const price = sale.product_price || 0;
+        return sum + (sale.source === 'hubla_transactions' ? price * HUBLA_NET_MULTIPLIER : price);
+      }, 0);
+
       const a010Summary = {
         count: a010Sales.length,
-        revenue: a010Sales.reduce((sum, sale) => sum + (sale.product_price || 0), 0),
-        averageTicket: a010Sales.length > 0 
-          ? a010Sales.reduce((sum, sale) => sum + (sale.product_price || 0), 0) / a010Sales.length 
-          : 0
+        grossRevenue: a010GrossRevenue,
+        netRevenue: a010NetRevenue,
+        revenue: a010NetRevenue, // For backward compatibility
+        averageTicket: a010Sales.length > 0 ? a010NetRevenue / a010Sales.length : 0
       };
+
+      const construirGrossRevenue = construirSales.reduce((sum, sale) => sum + (sale.product_price || 0), 0);
+      const construirNetRevenue = construirSales.reduce((sum, sale) => {
+        const price = sale.product_price || 0;
+        return sum + (sale.source === 'hubla_transactions' ? price * HUBLA_NET_MULTIPLIER : price);
+      }, 0);
 
       const construirSummary = {
         count: construirSales.length,
-        revenue: construirSales.reduce((sum, sale) => sum + (sale.product_price || 0), 0),
-        averageTicket: construirSales.length > 0 
-          ? construirSales.reduce((sum, sale) => sum + (sale.product_price || 0), 0) / construirSales.length 
-          : 0
+        grossRevenue: construirGrossRevenue,
+        netRevenue: construirNetRevenue,
+        revenue: construirNetRevenue, // For backward compatibility
+        averageTicket: construirSales.length > 0 ? construirNetRevenue / construirSales.length : 0
       };
 
-      // Group by custom week for chart
+      // Group by custom week for chart (using net revenue)
       const salesByWeek = sales.reduce((acc, sale) => {
         const saleDate = new Date(sale.sale_date);
         const weekNumber = getCustomWeekNumber(saleDate);
         const weekLabel = formatCustomWeekRangeShort(saleDate);
         const courseType = sale.product_name?.toLowerCase().includes('a010') ? 'a010' : 'construir';
+        const price = sale.product_price || 0;
+        const netPrice = sale.source === 'hubla_transactions' ? price * HUBLA_NET_MULTIPLIER : price;
         
         if (!acc[weekNumber]) {
           acc[weekNumber] = { weekLabel, a010: 0, construir: 0, total: 0 };
         }
         
         if (courseType === 'a010') {
-          acc[weekNumber].a010 += sale.product_price || 0;
+          acc[weekNumber].a010 += netPrice;
         } else {
-          acc[weekNumber].construir += sale.product_price || 0;
+          acc[weekNumber].construir += netPrice;
         }
-        acc[weekNumber].total += sale.product_price || 0;
+        acc[weekNumber].total += netPrice;
         
         return acc;
       }, {} as Record<string, { weekLabel: string; a010: number; construir: number; total: number }>);
@@ -297,7 +324,9 @@ export const useCoursesSummary = ({
 
       return {
         totalSales,
-        totalRevenue,
+        grossRevenue,
+        netRevenue,
+        totalRevenue: netRevenue, // For backward compatibility
         averageTicket,
         a010Summary,
         construirSummary,

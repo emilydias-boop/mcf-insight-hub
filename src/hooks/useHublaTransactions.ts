@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { HUBLA_PLATFORM_FEE, HUBLA_NET_MULTIPLIER } from '@/lib/constants';
 
 export interface HublaTransaction {
   id: string;
@@ -36,7 +37,7 @@ export const useHublaSummary = () => {
   return useQuery({
     queryKey: ['hubla-summary'],
     queryFn: async () => {
-      // Buscar transações de hoje
+      // Buscar transações de hoje (vendas)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -44,13 +45,23 @@ export const useHublaSummary = () => {
         .from('hubla_transactions')
         .select('*')
         .gte('sale_date', today.toISOString())
-        .eq('sale_status', 'completed');
+        .eq('sale_status', 'completed')
+        .eq('event_type', 'invoice.payment_succeeded');
 
       if (todayError) throw todayError;
 
-      // Calcular totais por categoria
-      const byCategory: Record<string, { revenue: number; count: number }> = {};
-      let totalRevenue = 0;
+      // Buscar reembolsos de hoje
+      const { data: todayRefunds, error: refundsError } = await supabase
+        .from('hubla_transactions')
+        .select('*')
+        .gte('sale_date', today.toISOString())
+        .eq('event_type', 'refund');
+
+      if (refundsError) throw refundsError;
+
+      // Calcular totais de vendas por categoria
+      const byCategory: Record<string, { grossRevenue: number; netRevenue: number; count: number }> = {};
+      let grossRevenue = 0;
       let totalSales = 0;
 
       (todayTransactions || []).forEach((transaction) => {
@@ -58,20 +69,34 @@ export const useHublaSummary = () => {
         const price = transaction.product_price || 0;
 
         if (!byCategory[category]) {
-          byCategory[category] = { revenue: 0, count: 0 };
+          byCategory[category] = { grossRevenue: 0, netRevenue: 0, count: 0 };
         }
 
-        byCategory[category].revenue += price;
+        byCategory[category].grossRevenue += price;
+        byCategory[category].netRevenue += price * HUBLA_NET_MULTIPLIER;
         byCategory[category].count += 1;
 
-        totalRevenue += price;
+        grossRevenue += price;
         totalSales += 1;
       });
 
+      // Calcular receita líquida e taxas
+      const netRevenue = grossRevenue * HUBLA_NET_MULTIPLIER;
+      const platformFees = grossRevenue * HUBLA_PLATFORM_FEE;
+
+      // Calcular total de reembolsos
+      const refundsAmount = (todayRefunds || []).reduce((sum, refund) => 
+        sum + (refund.product_price || 0), 0
+      );
+
       return {
-        totalRevenue,
+        grossRevenue,
+        netRevenue,
+        platformFees,
         totalSales,
         todayCount: todayTransactions?.length || 0,
+        refundsCount: todayRefunds?.length || 0,
+        refundsAmount,
         byCategory,
         lastTransaction: todayTransactions?.[0] || null,
       };
