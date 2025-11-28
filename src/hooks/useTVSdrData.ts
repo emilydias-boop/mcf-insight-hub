@@ -12,11 +12,16 @@ const isDealCreatedToday = (dealCreatedAt: string | null): boolean => {
   if (!parts || parts.length !== 3) return false;
   
   const [day, month, year] = parts;
-  const dealDate = new Date(`${year}-${month}-${day}`);
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
   
-  return dealDate >= todayStart;
+  // Comparar apenas dia/mês/ano (sem problemas de timezone)
+  const today = new Date();
+  const todayDay = today.getDate();
+  const todayMonth = today.getMonth() + 1; // getMonth() retorna 0-11
+  const todayYear = today.getFullYear();
+  
+  return parseInt(day) === todayDay && 
+         parseInt(month) === todayMonth && 
+         parseInt(year) === todayYear;
 };
 
 // Função para determinar tipo de lead baseado na tag
@@ -236,7 +241,8 @@ export const useTVSdrData = () => {
             .filter(e => {
               const eventData = e.event_data as any;
               return eventData?.deal_stage === PIPELINE_STAGES.NOVO_LEAD &&
-                (!eventData?.deal_old_stage || eventData?.deal_old_stage === "");
+                (!eventData?.deal_old_stage || eventData?.deal_old_stage === "") &&
+                isDealCreatedToday(eventData?.deal_created_at);
             })
             .map(e => {
               const eventData = e.event_data as any;
