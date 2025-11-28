@@ -37,6 +37,11 @@ export function RecalculateMetricsButton() {
         throw error;
       }
 
+      // Verificar se houve erros no processamento interno
+      if (data?.errors > 0) {
+        throw new Error(`Falha no recálculo: ${data.errors} erros de ${data.total} semanas`);
+      }
+
       console.log('✅ Recálculo concluído:', data);
       
       localStorage.setItem(STORAGE_KEY, 'true');
@@ -44,7 +49,7 @@ export function RecalculateMetricsButton() {
       
       toast({
         title: "✅ Métricas recalculadas!",
-        description: "Todas as métricas históricas foram atualizadas. Este botão não aparecerá mais.",
+        description: `${data?.processed || 0} semanas processadas com sucesso. Este botão não aparecerá mais.`,
       });
     } catch (error: any) {
       console.error('❌ Erro ao recalcular métricas:', error);
