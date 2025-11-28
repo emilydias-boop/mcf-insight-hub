@@ -173,26 +173,35 @@ export const useSalesCelebration = () => {
       // Fallback: buscar em custom_fields se não encontrou nas atividades
       if (sdrName === "SDR" || closerName === "Closer") {
         const customFields = deal?.custom_fields as any;
+        const userName = customFields?.deal_user_name || customFields?.user_name;
         
-        // Fallback para SDR
-        if (sdrName === "SDR") {
-          const sdrFallback = customFields?.deal_user_name || customFields?.user_name;
-          if (sdrFallback) {
-            const isValidSdr = SDR_LIST.some(sdr => 
-              sdr.nome.toLowerCase().includes(sdrFallback.split(' ')[0].toLowerCase()) ||
-              sdrFallback.toLowerCase().includes(sdr.nome.split(' ')[0].toLowerCase())
-            );
-            const isActuallyCloser = CLOSER_LIST.some(closer => 
-              closer.variations.some(v => sdrFallback.toLowerCase().includes(v.toLowerCase()))
-            );
-            
-            if (isValidSdr && !isActuallyCloser) {
-              sdrName = sdrFallback;
-            }
+        // Verificar se user_name é um Closer
+        const isUserNameCloser = userName && CLOSER_LIST.some(closer => 
+          closer.variations.some(v => userName.toLowerCase().includes(v.toLowerCase()))
+        );
+        
+        // Se user_name é Closer, usar como Closer e deixar SDR vazio
+        if (isUserNameCloser && closerName === "Closer") {
+          closerName = userName;
+          if (sdrName === "SDR") {
+            sdrName = "-";
+          }
+        }
+        // Se não é Closer, tentar usar como SDR
+        else if (sdrName === "SDR" && userName) {
+          const isValidSdr = SDR_LIST.some(sdr => 
+            sdr.nome.toLowerCase().includes(userName.split(' ')[0].toLowerCase()) ||
+            userName.toLowerCase().includes(sdr.nome.split(' ')[0].toLowerCase())
+          );
+          
+          if (isValidSdr) {
+            sdrName = userName;
+          } else {
+            sdrName = "-";
           }
         }
         
-        // Fallback para Closer
+        // Fallback separado para deal_closer
         if (closerName === "Closer") {
           const closerFallback = customFields?.deal_closer;
           if (closerFallback) {
@@ -205,6 +214,10 @@ export const useSalesCelebration = () => {
           }
         }
       }
+      
+      // Se ainda ficou genérico, usar "-"
+      if (sdrName === "SDR") sdrName = "-";
+      if (closerName === "Closer") closerName = "-";
     }
 
     console.log('👤 SDR validado:', sdrName);

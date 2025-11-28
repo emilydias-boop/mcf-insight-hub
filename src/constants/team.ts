@@ -21,6 +21,7 @@ export const CLOSER_LIST = [
   { nome: "Deisi", variations: ["deisi", "Deisi", "DEISE", "deise", "Deisiele", "Deisiele Vieira"] },
   { nome: "Leticia", variations: ["leticia", "Leticia", "LETICIA", "Letícia", "Leticia Correia"] },
   { nome: "Julio", variations: ["julio", "Julio", "Júlio", "JULIO", "Julio Caetano"] },
+  { nome: "Jessica Bellini", variations: ["jessica bellini", "Jessica Bellini", "Jéssica Bellini", "jéssica bellini", "bellini"] },
 ];
 
 // Produtos que disparam confetti (case insensitive, busca parcial)
