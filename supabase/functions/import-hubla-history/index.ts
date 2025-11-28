@@ -112,8 +112,8 @@ async function processHublaFile(
     let processedCount = 0;
     let skippedCount = 0;
     let errorCount = 0;
-    const BATCH_SIZE = 50;
-    const MAX_ROWS_PER_RUN = 200;
+    const BATCH_SIZE = 25;
+    const MAX_ROWS_PER_RUN = 50;
     const endRow = Math.min(startRow + MAX_ROWS_PER_RUN, rows.length);
 
     for (let i = startRow; i < endRow; i += BATCH_SIZE) {
