@@ -42,7 +42,6 @@ export const useSalesCelebration = () => {
   const [celebrationQueue, setCelebrationQueue] = useState<SaleData[]>([]);
   const [currentCelebration, setCurrentCelebration] = useState<SaleData | null>(null);
   const celebratedSales = useRef<Set<string>>(getCelebratedSales());
-  const fetchedRetroactive = useRef(false);
 
   // Função para processar uma transação
   const processTransaction = async (transaction: any): Promise<SaleData | null> => {
@@ -232,50 +231,6 @@ export const useSalesCelebration = () => {
       productName: transaction.product_name,
     };
   };
-
-  // Buscar vendas retroativas ao carregar
-  useEffect(() => {
-    if (fetchedRetroactive.current) return;
-    fetchedRetroactive.current = true;
-
-    const fetchRetractiveSales = async () => {
-      console.log('📊 Buscando vendas retroativas de hoje...');
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const { data: transactions, error } = await supabase
-        .from("hubla_transactions")
-        .select("*")
-        .eq("sale_status", "completed")
-        .gte("sale_date", today.toISOString())
-        .order("sale_date", { ascending: true });
-
-      if (error) {
-        console.error('❌ Erro ao buscar vendas:', error);
-        return;
-      }
-
-      console.log(`📦 Encontradas ${transactions?.length || 0} transações de hoje`);
-
-      const salesToCelebrate: SaleData[] = [];
-      
-      for (const transaction of transactions || []) {
-        const saleData = await processTransaction(transaction);
-        if (saleData) {
-          salesToCelebrate.push(saleData);
-        }
-      }
-
-      console.log(`🎊 ${salesToCelebrate.length} vendas para celebrar`);
-      
-      if (salesToCelebrate.length > 0) {
-        setCelebrationQueue((prev) => [...prev, ...salesToCelebrate]);
-      }
-    };
-
-    fetchRetractiveSales();
-  }, []);
 
   // Escutar novas vendas via Realtime
   useEffect(() => {
