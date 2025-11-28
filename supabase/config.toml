@@ -59,3 +59,12 @@ verify_jwt = false
 
 [functions.reprocess-hubla-events]
 verify_jwt = false
+
+[functions.webhook-ads-cost]
+verify_jwt = false
+
+[functions.webhook-sdr-leads]
+verify_jwt = false
+
+[functions.calculate-weekly-metrics]
+verify_jwt = false

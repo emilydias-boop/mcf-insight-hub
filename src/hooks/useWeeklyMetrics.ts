@@ -110,6 +110,7 @@ export const useLatestMetrics = () => {
 export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: string) => {
   return useQuery({
     queryKey: ['metrics-summary', startDate?.toISOString(), endDate?.toISOString(), canal],
+    refetchInterval: 30000, // Atualizar a cada 30 segundos
     queryFn: async () => {
       // Buscar semanas dentro do período
       let query = supabase
@@ -333,6 +334,7 @@ export const useMetricsSummary = (startDate?: Date, endDate?: Date, canal?: stri
 export const useWeeklyResumo = (limit?: number, startDate?: Date, endDate?: Date, canal?: string) => {
   return useQuery({
     queryKey: ['weekly-resumo', limit, startDate?.toISOString(), endDate?.toISOString(), canal],
+    refetchInterval: 30000, // Atualizar a cada 30 segundos
     queryFn: async () => {
       let query = supabase
         .from('weekly_metrics')
