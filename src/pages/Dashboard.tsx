@@ -14,6 +14,7 @@ import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { PeriodComparison } from "@/components/dashboard/PeriodComparison";
 import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer";
+import { RecalculateMetricsButton } from "@/components/dashboard/RecalculateMetricsButton";
 import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { startOfMonth, endOfMonth, format } from "date-fns";
@@ -237,6 +238,7 @@ export default function Dashboard() {
             <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
           </div>
           <div className="flex gap-2">
+            <RecalculateMetricsButton />
             <TargetsConfigDialog />
             <PeriodComparison />
             <DashboardCustomizer />
