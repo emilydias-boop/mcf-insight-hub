@@ -17,10 +17,10 @@ export const SDR_LIST = [
 
 // Lista de Closers (para validação)
 export const CLOSER_LIST = [
-  { nome: "Thayna", variations: ["thayna", "Thayna", "thaynar", "Thaynar"] },
-  { nome: "Deisi", variations: ["deisi", "Deisi", "DEISE", "deise"] },
-  { nome: "Leticia", variations: ["leticia", "Leticia", "LETICIA", "Letícia"] },
-  { nome: "Julio", variations: ["julio", "Julio", "Júlio", "JULIO"] },
+  { nome: "Thayna", variations: ["thayna", "Thayna", "thaynar", "Thaynar", "Thayna Dos Santos", "Thayna Dos Santos Tavares"] },
+  { nome: "Deisi", variations: ["deisi", "Deisi", "DEISE", "deise", "Deisiele", "Deisiele Vieira"] },
+  { nome: "Leticia", variations: ["leticia", "Leticia", "LETICIA", "Letícia", "Leticia Correia"] },
+  { nome: "Julio", variations: ["julio", "Julio", "Júlio", "JULIO", "Julio Caetano"] },
 ];
 
 // Produtos que disparam confetti (case insensitive, busca parcial)
