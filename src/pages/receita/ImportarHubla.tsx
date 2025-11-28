@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import * as XLSX from 'xlsx';
 
 type FileType = "sales" | "refunds";
 
@@ -132,8 +133,27 @@ export default function ImportarHubla() {
     setTotalRows(0);
 
     try {
+      let csvFile: File;
+      
+      // Se for Excel, converter para CSV
+      if (selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
+        toast.info("Convertendo Excel para CSV...");
+        
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Converter para CSV
+        const csv = XLSX.utils.sheet_to_csv(worksheet);
+        const blob = new Blob([csv], { type: 'text/csv' });
+        csvFile = new File([blob], selectedFile.name.replace(/\.(xlsx|xls)$/, '.csv'), { type: 'text/csv' });
+      } else {
+        csvFile = selectedFile;
+      }
+
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      formData.append('file', csvFile);
       formData.append('fileType', fileType);
 
       const { data, error } = await supabase.functions.invoke('import-hubla-history', {

@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
-import ExcelJS from 'https://esm.sh/exceljs@4.4.0';
+import { parse } from "https://deno.land/std@0.224.0/csv/parse.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -102,21 +102,17 @@ async function processHublaFile(
 
     if (downloadError) throw downloadError;
 
-    console.log(`📂 Lendo arquivo com ExcelJS...`);
+    console.log(`📂 Lendo arquivo CSV...`);
 
-    const workbook = new ExcelJS.Workbook();
-    const arrayBuffer = await fileData.arrayBuffer();
-    await workbook.xlsx.load(arrayBuffer);
-    const worksheet = workbook.worksheets[0];
+    const text = await fileData.text();
+    const allData = parse(text, {
+      skipFirstRow: false,
+    }) as string[][];
     
-    // Extrair headers da primeira linha
-    const headerRow = worksheet.getRow(1);
-    const headers: string[] = [];
-    headerRow.eachCell((cell, colNumber) => {
-      headers[colNumber - 1] = cell.text;
-    });
-
-    const totalRows = worksheet.rowCount - 1; // -1 para header
+    const headers = allData[0];
+    const dataRows = allData.slice(1);
+    const totalRows = dataRows.length;
+    
     console.log(`📊 ${totalRows} linhas de dados, iniciando da linha ${startRow}`);
 
     let processedCount = 0;
@@ -126,35 +122,23 @@ async function processHublaFile(
     const MAX_ROWS_PER_RUN = 100;
     const endRow = Math.min(startRow + MAX_ROWS_PER_RUN, totalRows);
     
-    let currentRow = 0;
     const transactions: any[] = [];
 
     // Processar linhas do range especificado
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return; // Skip header
-      
-      const dataRowIndex = rowNumber - 2; // 0-indexed (linha 2 = índice 0)
-      
-      // Skip até startRow
-      if (dataRowIndex < startRow) return;
-      
-      // Parar quando atingir endRow
-      if (dataRowIndex >= endRow) return;
-      
+    for (let i = startRow; i < endRow && i < dataRows.length; i++) {
       try {
-        // Converter linha em objeto usando headers
+        const row = dataRows[i];
+        
+        // Converter array em objeto usando headers
         const rowData: any = {};
-        row.eachCell((cell, colNumber) => {
-          const header = headers[colNumber - 1];
-          if (header) {
-            rowData[header] = cell.text;
-          }
+        headers.forEach((header, idx) => {
+          rowData[header] = row[idx];
         });
 
         const hublaId = String(rowData['ID da fatura'] || rowData['id'] || '').trim();
         if (!hublaId) {
           skippedCount++;
-          return;
+          continue;
         }
 
         const productName = String(rowData['Nome do produto'] || rowData['product_name'] || 'Produto Desconhecido').trim();
@@ -181,13 +165,11 @@ async function processHublaFile(
           event_type: fileType === 'sales' ? 'invoice.payment_succeeded' : 'refund',
           raw_data: rowData,
         });
-        
-        currentRow++;
       } catch (error) {
-        console.error(`❌ Erro ao processar linha ${rowNumber}:`, error);
+        console.error(`❌ Erro ao processar linha ${i + 2}:`, error);
         errorCount++;
       }
-    });
+    }
 
     processedCount = transactions.length;
 
