@@ -44,7 +44,7 @@ export function SdrPerformanceTable({ sdrs, dealsWithoutCloser = 0 }: SdrPerform
           <span className="text-destructive font-semibold">{dealsWithoutCloser} deals sem closer atribuído</span>
         </div>
       )}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-x-auto overflow-y-auto min-h-0">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent border-border">
