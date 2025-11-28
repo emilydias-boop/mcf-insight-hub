@@ -19,6 +19,7 @@ import CustosOverview from "./pages/custos/Overview";
 import CustosDespesas from "./pages/custos/Despesas";
 import CustosPorCategoria from "./pages/custos/PorCategoria";
 import Relatorios from "./pages/Relatorios";
+import LeadsSemTag from "./pages/relatorios/LeadsSemTag";
 import Alertas from "./pages/Alertas";
 import EfeitoAlavanca from "./pages/EfeitoAlavanca";
 import Projetos from "./pages/Projetos";
@@ -77,6 +78,7 @@ const App = () => (
                 <Route path="por-categoria" element={<CustosPorCategoria />} />
               </Route>
               <Route path="relatorios" element={<Relatorios />} />
+              <Route path="relatorios/leads-sem-tag" element={<LeadsSemTag />} />
               <Route path="alertas" element={<Alertas />} />
               <Route path="efeito-alavanca" element={<EfeitoAlavanca />} />
               <Route path="projetos" element={<Projetos />} />
