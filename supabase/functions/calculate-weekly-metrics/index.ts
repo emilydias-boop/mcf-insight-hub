@@ -29,13 +29,18 @@ Deno.serve(async (req) => {
     }
 
     // 1. BUSCAR CUSTOS DA SEMANA
-    const { data: dailyCosts } = await supabase
+    const { data: dailyCosts, error: costsError } = await supabase
       .from('daily_costs')
       .select('*')
       .gte('date', week_start)
       .lte('date', week_end);
 
+    if (costsError) {
+      console.error('❌ Erro ao buscar custos:', costsError);
+    }
+
     const ads_cost = dailyCosts?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+    console.log(`💰 Custo de Ads: R$ ${ads_cost.toFixed(2)}`);
 
     // 2. BUSCAR CUSTOS OPERACIONAIS MENSAIS (dividir por 4 semanas)
     const weekMonth = new Date(week_start);
@@ -50,12 +55,18 @@ Deno.serve(async (req) => {
     const office_cost = (operationalCosts?.find(c => c.cost_type === 'office')?.amount || 0) / 4;
 
     // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA
-    const { data: hublaTransactions } = await supabase
+    const { data: hublaTransactions, error: hublaError } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', week_start)
       .lte('sale_date', week_end)
       .eq('sale_status', 'completed');
+
+    if (hublaError) {
+      console.error('❌ Erro ao buscar transações Hubla:', hublaError);
+    }
+
+    console.log(`📊 Transações Hubla encontradas: ${hublaTransactions?.length || 0}`);
 
     // Mapear produtos para categorias
     let a010_revenue = 0, a010_sales = 0;
@@ -70,36 +81,58 @@ Deno.serve(async (req) => {
       const category = t.product_category?.toLowerCase() || '';
       const price = t.product_price || 0;
 
-      // A010
-      if (name.includes('a010') || (category === 'curso' && name.includes('consultoria'))) {
-        a010_revenue += price;
-        a010_sales += 1;
-      }
-      // OB Construir
-      else if (name.includes('construir para alugar') || name.includes('a005') || name.includes('a003')) {
+      // PRIORIDADE 1: Category exata (MCF Incorporador, A005, A006)
+      if (category === 'a010') {
+        // MCF Incorporador (A001, A009) - vai para incorporador_50k E pode ir para outra categoria
+        incorporador_50k += price;
+        // Não adicionar em nenhuma outra categoria, pois é um produto específico
+      } 
+      else if (category === 'ob_construir') {
+        // A005 - MCF P2
         ob_construir_revenue += price;
         ob_construir_sales += 1;
-      }
-      // OB Vitalício
-      else if (name.includes('vitalício') || name.includes('a006') || name.includes('a004')) {
+      } 
+      else if (category === 'ob_vitalicio') {
+        // A006 - Renovação Parceiro MCF
         ob_vitalicio_revenue += price;
         ob_vitalicio_sales += 1;
       }
-      // OB Evento (ajustar conforme produto correto)
-      else if (name.includes('evento') || category === 'evento') {
-        ob_evento_revenue += price;
-        ob_evento_sales += 1;
-      }
-      // Contratos
-      else if (category === 'contrato' || name.includes('contrato')) {
+      else if (category === 'contrato') {
+        // A000 - Contrato
         contract_revenue += price;
         contract_sales += 1;
       }
-      // Incorporador 50k
-      if (name.includes('mcf incorporador') || name.includes('a001') || name.includes('a009')) {
-        incorporador_50k += price;
+      // PRIORIDADE 2: Category 'curso' - verificar pelo nome
+      else if (category === 'curso') {
+        if (name.includes('a010') || name.includes('consultoria')) {
+          a010_revenue += price;
+          a010_sales += 1;
+        } else if (name.includes('construir para alugar') || name.includes('construir pra alugar')) {
+          ob_construir_revenue += price;
+          ob_construir_sales += 1;
+        }
+      }
+      // PRIORIDADE 3: Category 'outros' - verificar pelo nome
+      else if (category === 'outros') {
+        if (name.includes('vitalício') || name.includes('vitalicio') || name.includes('acesso vitalic')) {
+          ob_vitalicio_revenue += price;
+          ob_vitalicio_sales += 1;
+        } else if (name.includes('imersão') || name.includes('imersao') || name.includes('evento')) {
+          ob_evento_revenue += price;
+          ob_evento_sales += 1;
+        } else if (name.includes('efeito alavanca')) {
+          // Efeito Alavanca não entra em nenhuma categoria específica
+          // Mas conta para o total
+        }
       }
     });
+
+    console.log(`💵 Faturamento A010: R$ ${a010_revenue.toFixed(2)} (${a010_sales} vendas)`);
+    console.log(`💵 Faturamento Contratos: R$ ${contract_revenue.toFixed(2)} (${contract_sales} vendas)`);
+    console.log(`💵 Faturamento OB Construir: R$ ${ob_construir_revenue.toFixed(2)} (${ob_construir_sales} vendas)`);
+    console.log(`💵 Faturamento OB Vitalício: R$ ${ob_vitalicio_revenue.toFixed(2)} (${ob_vitalicio_sales} vendas)`);
+    console.log(`💵 Faturamento OB Evento: R$ ${ob_evento_revenue.toFixed(2)} (${ob_evento_sales} vendas)`);
+    console.log(`💵 Incorporador 50k: R$ ${incorporador_50k.toFixed(2)}`);
 
     // 4. CALCULAR CLINT REVENUE (soma de todos)
     const clint_revenue = a010_revenue + ob_construir_revenue + ob_vitalicio_revenue + 
