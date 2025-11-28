@@ -55,13 +55,28 @@ export const useTVSdrData = () => {
       todayEndBrazil.setDate(todayEndBrazil.getDate() + 1);
 
       // 1. Buscar contratos pagos do Hubla (mais confiável que Clint)
-      const { data: hublaContracts } = await supabase
+      const { data: allHublaContracts } = await supabase
         .from("hubla_transactions")
-        .select("customer_email, customer_name, product_name, product_price")
+        .select("customer_email, customer_name, product_name, product_price, raw_data")
         .gte("sale_date", todayStartBrazil.toISOString())
         .lt("sale_date", todayEndBrazil.toISOString())
         .eq("sale_status", "completed")
         .ilike("product_name", "%contrato%");
+
+      // Filtrar apenas vendas NOVAS (não recorrências)
+      const hublaContracts = allHublaContracts?.filter(contract => {
+        const rawData = contract.raw_data as any;
+        const smartInstallment = rawData?.event?.invoice?.smartInstallment;
+        
+        // Se não tem smartInstallment = venda única (OK)
+        if (!smartInstallment) return true;
+        
+        // Se tem smartInstallment mas é parcela 1 = primeira venda (OK)
+        if (smartInstallment.installment === 1) return true;
+        
+        // Parcela 2, 3, 4... = recorrência (IGNORAR)
+        return false;
+      }) || [];
 
       // Contar contratos por tipo de lead
       const contratosLeadA = hublaContracts?.filter(c => 
