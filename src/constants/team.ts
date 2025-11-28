@@ -23,8 +23,19 @@ export const CLOSER_LIST = [
   { nome: "Julio", variations: ["julio", "Julio", "Júlio", "JULIO"] },
 ];
 
-// Produtos que disparam confetti
-export const CONFETTI_PRODUCTS = ["Contrato", "Parceria"];
+// Produtos que disparam confetti (case insensitive, busca parcial)
+export const CONFETTI_PRODUCTS = [
+  // Contratos (contêm "Contrato" no nome)
+  "Contrato",
+  
+  // Parcerias (A001, A002, A003, A004, A009)
+  "MCF INCORPORADOR",     // A001, A002, A009
+  "MCF Plano Anticrise",  // A003, A004
+  "Plano Construtor",     // Plano Construtor Básico
+  
+  // Outros produtos de venda
+  "Clube do Arremate",    // Clube sem "Contrato" no nome
+];
 
 // ID da origem PIPELINE INSIDE SALES
 export const INSIDE_SALES_ORIGIN_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
