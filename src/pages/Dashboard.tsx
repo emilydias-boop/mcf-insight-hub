@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
+import { supabase } from "@/integrations/supabase/client";
 import { KPICard } from "@/components/ui/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_KPIS } from "@/data/mockData";
@@ -64,6 +65,37 @@ export default function Dashboard() {
   );
   const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
   const { data: weeklyResumo, isLoading: loadingResumo, error: errorResumo } = useWeeklyResumo(undefined, periodo.inicio, periodo.fim, canal);
+
+  // Realtime listener para weekly_metrics
+  useEffect(() => {
+    const channel = supabase
+      .channel('weekly-metrics-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'weekly_metrics' },
+        (payload) => {
+          console.log('📊 Dados atualizados em tempo real:', payload);
+          
+          // Invalidar todas as queries relacionadas
+          queryClient.invalidateQueries({ queryKey: ['metrics-summary'] });
+          queryClient.invalidateQueries({ queryKey: ['weekly-resumo'] });
+          queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+          queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+          queryClient.invalidateQueries({ queryKey: ['weekly-metrics'] });
+          
+          // Notificar usuário
+          toast({
+            title: "📊 Dados atualizados",
+            description: "Novas métricas foram recebidas!",
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, toast]);
 
   // Debug logs
   console.log('🔍 Dashboard Data Debug:');

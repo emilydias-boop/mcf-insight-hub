@@ -719,6 +719,42 @@ export type Database = {
           },
         ]
       }
+      daily_costs: {
+        Row: {
+          amount: number
+          campaign_name: string | null
+          cost_type: string
+          created_at: string | null
+          date: string
+          id: string
+          metadata: Json | null
+          source: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number
+          campaign_name?: string | null
+          cost_type?: string
+          created_at?: string | null
+          date: string
+          id?: string
+          metadata?: Json | null
+          source?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          campaign_name?: string | null
+          cost_type?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          metadata?: Json | null
+          source?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       dashboard_preferences: {
         Row: {
           auto_refresh: boolean
@@ -1205,6 +1241,42 @@ export type Database = {
           origin?: string | null
           phone?: string | null
           status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      operational_costs: {
+        Row: {
+          amount: number
+          cost_type: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_recurring: boolean | null
+          month: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount?: number
+          cost_type: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          month: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          cost_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          month?: string
           updated_at?: string | null
         }
         Relationships: []
