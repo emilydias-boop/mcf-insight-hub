@@ -1,168 +1,128 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-Deno.serve(async (req) => {
+function getWeekBounds(date: Date): { start: string; end: string } {
+  // Semana customizada: Sábado até Sexta
+  const dayOfWeek = date.getDay(); // 0 = Dom, 6 = Sáb
+  
+  // Calcular quantos dias voltar até o sábado
+  const daysToSaturday = dayOfWeek === 6 ? 0 : (dayOfWeek + 1);
+  
+  const saturday = new Date(date);
+  saturday.setDate(date.getDate() - daysToSaturday);
+  saturday.setHours(0, 0, 0, 0);
+  
+  const friday = new Date(saturday);
+  friday.setDate(saturday.getDate() + 6);
+  friday.setHours(23, 59, 59, 999);
+  
+  return {
+    start: saturday.toISOString().split('T')[0],
+    end: friday.toISOString().split('T')[0],
+  };
+}
+
+function* generateWeeks(startDate: Date, endDate: Date) {
+  const current = new Date(startDate);
+  
+  while (current <= endDate) {
+    const { start, end } = getWeekBounds(current);
+    yield { start, end };
+    
+    // Avançar 7 dias
+    current.setDate(current.getDate() + 7);
+  }
+}
+
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const payload = await req.json();
+    const { start_date, end_date } = payload;
 
-    console.log('Starting metrics recalculation...');
+    // Defaults: Jun/2024 até agora
+    const startDate = start_date ? new Date(start_date) : new Date('2024-06-01');
+    const endDate = end_date ? new Date(end_date) : new Date();
 
-    // Buscar todos os registros de weekly_metrics
-    const { data: metrics, error: fetchError } = await supabase
-      .from('weekly_metrics')
-      .select('*')
-      .order('start_date', { ascending: true });
+    console.log(`🔄 Recalculando métricas de ${startDate.toISOString()} até ${endDate.toISOString()}`);
 
-    if (fetchError) throw fetchError;
+    const weeks = Array.from(generateWeeks(startDate, endDate));
+    console.log(`📅 Total de semanas: ${weeks.length}`);
 
-    console.log(`Found ${metrics?.length || 0} metrics to recalculate`);
-
-    let updated = 0;
+    let processed = 0;
     let errors = 0;
 
-    // Processar cada registro
-    for (const metric of metrics || []) {
-      try {
-        // Calcular week_label correto
-        const startDate = new Date(metric.start_date);
-        const endDate = new Date(metric.end_date);
-        
-        const formatDate = (date: Date) => {
-          const day = String(date.getDate()).padStart(2, '0');
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const year = date.getFullYear();
-          return `${day}/${month}/${year}`;
-        };
+    // Processar em lotes de 5 semanas para evitar timeout
+    for (let i = 0; i < weeks.length; i += 5) {
+      const batch = weeks.slice(i, i + 5);
+      
+      console.log(`\n📊 Processando lote ${i / 5 + 1}/${Math.ceil(weeks.length / 5)}`);
+      
+      for (const week of batch) {
+        try {
+          console.log(`   ⏳ ${week.start} - ${week.end}`);
+          
+          // Chamar calculate-weekly-metrics para cada semana
+          const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/calculate-weekly-metrics`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({
+              week_start: week.start,
+              week_end: week.end,
+            }),
+          });
 
-        const week_label = `${formatDate(startDate)} - ${formatDate(endDate)}`;
-
-        // Calcular valores totais
-        const total_revenue = 
-          (metric.a010_revenue || 0) + 
-          (metric.ob_construir_revenue || 0) + 
-          (metric.ob_vitalicio_revenue || 0) + 
-          (metric.ob_evento_revenue || 0) + 
-          (metric.contract_revenue || 0);
-
-        const operating_cost = 
-          (metric.ads_cost || 0) + 
-          (metric.team_cost || 0) + 
-          (metric.office_cost || 0);
-
-        const real_cost = 
-          (metric.ads_cost || 0) - 
-          ((metric.a010_revenue || 0) + 
-           (metric.ob_construir_revenue || 0) + 
-           (metric.ob_vitalicio_revenue || 0) + 
-           (metric.ob_evento_revenue || 0));
-
-        const operating_profit = total_revenue - operating_cost;
-
-        // Calcular CPL
-        const cpl = metric.a010_sales > 0 
-          ? (metric.ads_cost || 0) / metric.a010_sales 
-          : null;
-
-        // Calcular CPLR
-        const cplr = metric.a010_sales > 0
-          ? real_cost / metric.a010_sales
-          : null;
-
-        // Calcular ROAS
-        const roas = (metric.ads_cost || 0) > 0
-          ? total_revenue / (metric.ads_cost || 0)
-          : null;
-
-        // Calcular ROI
-        const roi = metric.clint_revenue && operating_profit
-          ? (metric.clint_revenue / (metric.clint_revenue - operating_profit)) * 100
-          : null;
-
-        // Calcular CIR
-        const cir = (metric.contract_revenue || 0) > 0
-          ? (real_cost / (metric.contract_revenue || 0)) * 100
-          : null;
-
-        // Calcular Ultrameta Clint
-        const ultrameta_clint = 
-          ((metric.a010_sales || 0) * operating_cost) + 
-          ((metric.sdr_ia_ig || 0) * operating_cost / 2);
-
-        // Calcular Ultrameta Líquido
-        const ultrameta_liquido = 
-          (total_revenue * (metric.a010_sales || 0)) + 
-          ((metric.sdr_ia_ig || 0) * total_revenue / 2);
-
-        // Atualizar o registro com novos cálculos
-        const { error: updateError } = await supabase
-          .from('weekly_metrics')
-          .update({
-            week_label,
-            total_revenue,
-            operating_cost,
-            real_cost,
-            operating_profit,
-            cpl,
-            cplr,
-            roas,
-            roi,
-            cir,
-            ultrameta_clint,
-            ultrameta_liquido,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', metric.id);
-
-        if (updateError) {
-          console.error(`Error updating metric ${metric.id}:`, updateError);
+          if (response.ok) {
+            processed++;
+            console.log(`   ✅ Sucesso`);
+          } else {
+            errors++;
+            const error = await response.text();
+            console.error(`   ❌ Erro: ${error}`);
+          }
+        } catch (error) {
           errors++;
-        } else {
-          updated++;
-          console.log(`Updated metric for week ${week_label}`);
+          console.error(`   ❌ Erro ao processar semana:`, error);
         }
-      } catch (error) {
-        console.error(`Error processing metric ${metric.id}:`, error);
-        errors++;
       }
     }
 
-    console.log(`Recalculation complete. Updated: ${updated}, Errors: ${errors}`);
+    console.log(`\n📈 Resumo do recálculo:`);
+    console.log(`   ✅ Processadas: ${processed}`);
+    console.log(`   ❌ Erros: ${errors}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Recalculated ${updated} metrics`,
-        updated,
+        message: `${processed} semanas recalculadas com sucesso`,
+        processed,
         errors,
-        total: metrics?.length || 0,
+        total: weeks.length,
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
-    console.error('Error in recalculate-metrics:', error);
+  } catch (error: any) {
+    console.error('❌ Erro no recálculo:', error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        success: false,
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

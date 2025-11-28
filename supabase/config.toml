@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.calculate-weekly-metrics]
 verify_jwt = false
+
+[functions.import-hubla-history]
+verify_jwt = false
