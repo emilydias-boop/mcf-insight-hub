@@ -30,6 +30,14 @@ export const useSalesCelebration = () => {
         async (payload) => {
           const transaction = payload.new as any;
 
+          // 🚫 Ignorar recorrências (parcela > 1)
+          const rawData = transaction.raw_data;
+          const smartInstallment = rawData?.event?.invoice?.smartInstallment;
+          if (smartInstallment && smartInstallment.installment > 1) {
+            console.log('🔇 Ignorando recorrência - parcela:', smartInstallment.installment);
+            return;
+          }
+
           // Verificar se é produto de confetti
           const isConfettiProduct = CONFETTI_PRODUCTS.some((p) =>
             transaction.product_name?.toLowerCase().includes(p.toLowerCase())
