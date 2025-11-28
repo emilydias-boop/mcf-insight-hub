@@ -10,6 +10,7 @@ interface SaleCelebrationProps {
   closerName: string;
   productName: string;
   onComplete: () => void;
+  duration?: number; // Duração em ms (padrão: 50000)
 }
 
 export function SaleCelebration({
@@ -19,6 +20,7 @@ export function SaleCelebration({
   closerName,
   productName,
   onComplete,
+  duration = 50000,
 }: SaleCelebrationProps) {
   const isContrato = productName.toLowerCase().includes("contrato");
   const bgColor = isContrato ? "from-yellow-500/20 to-amber-600/20" : "from-blue-500/20 to-cyan-600/20";
@@ -29,7 +31,6 @@ export function SaleCelebration({
       ? ["#FFD700", "#FFA500", "#FF8C00"]
       : ["#4169E1", "#1E90FF", "#00BFFF"];
 
-    const duration = 50000; // 50 segundos
     const end = Date.now() + duration;
 
     const frame = () => {
@@ -60,7 +61,7 @@ export function SaleCelebration({
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [isContrato, onComplete]);
+  }, [isContrato, onComplete, duration]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm animate-fade-in">

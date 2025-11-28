@@ -40,6 +40,7 @@ import ImportarNegocios from "./pages/crm/ImportarNegocios";
 import ImportarHistorico from "./pages/crm/ImportarHistorico";
 import TVSdrPerformance from "./pages/TVSdrPerformance";
 import TVSdrFullscreen from "./pages/TVSdrFullscreen";
+import TVSdrCelebrationDemo from "./pages/TVSdrCelebrationDemo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -103,6 +104,7 @@ const App = () => (
             
             {/* Public fullscreen TV route - no auth required */}
             <Route path="/tv-sdr/fullscreen" element={<TVSdrFullscreen />} />
+            <Route path="/tv-sdr/demo-celebration" element={<TVSdrCelebrationDemo />} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>
