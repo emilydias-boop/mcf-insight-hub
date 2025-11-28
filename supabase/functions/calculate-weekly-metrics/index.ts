@@ -5,6 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Hubla platform fee (5.83%)
+const HUBLA_PLATFORM_FEE = 0.0583;
+const HUBLA_NET_MULTIPLIER = 1 - HUBLA_PLATFORM_FEE; // 0.9417
+
 // Mapeamento completo de 19 categorias
 const REVENUE_CATEGORIES = [
   'a010', 'captacao', 'contrato', 'parceria', 'p2', 'renovacao', 
@@ -59,22 +63,23 @@ Deno.serve(async (req) => {
     const team_cost = (operationalCosts?.find(c => c.cost_type === 'team')?.amount || 0) / 4;
     const office_cost = (operationalCosts?.find(c => c.cost_type === 'office')?.amount || 0) / 4;
 
-    // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (VENDAS COMPLETADAS)
-    // Query corrigida com timezone UTC
+    // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (APENAS VENDAS CONFIRMADAS)
+    // Filtrar apenas invoice.payment_succeeded para vendas reais
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', `${week_start}T00:00:00Z`)
       .lt('sale_date', `${week_end}T23:59:59Z`)
+      .eq('event_type', 'invoice.payment_succeeded')
       .eq('sale_status', 'completed');
 
-    // 4. BUSCAR REEMBOLSOS DA SEMANA
+    // 4. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
     const { data: refundedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', `${week_start}T00:00:00Z`)
       .lt('sale_date', `${week_end}T23:59:59Z`)
-      .eq('sale_status', 'refunded');
+      .eq('event_type', 'invoice.refunded');
 
     console.log(`📊 Vendas: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
@@ -100,15 +105,18 @@ Deno.serve(async (req) => {
     // Calcular gross revenue (faturamento bruto)
     const gross_revenue = Object.values(revenueByCategory).reduce((sum, cat) => sum + cat.revenue, 0);
 
-    // Calcular reembolsos
-    const refunds = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
+    // Calcular reembolsos (apenas para informação)
+    const refunds_amount = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
+    const refunds_count = refundedTransactions?.length || 0;
 
-    // Calcular receita líquida (net revenue)
-    const net_revenue = gross_revenue - refunds;
+    // Calcular receita líquida (bruto - taxa Hubla 5.83%)
+    const platform_fees = gross_revenue * HUBLA_PLATFORM_FEE;
+    const net_revenue = gross_revenue * HUBLA_NET_MULTIPLIER;
 
     console.log(`💵 Faturamento Bruto: R$ ${gross_revenue.toFixed(2)}`);
-    console.log(`💸 Reembolsos: R$ ${refunds.toFixed(2)}`);
+    console.log(`💳 Taxa Plataforma (5.83%): R$ ${platform_fees.toFixed(2)}`);
     console.log(`💰 Receita Líquida: R$ ${net_revenue.toFixed(2)}`);
+    console.log(`💸 Reembolsos: R$ ${refunds_amount.toFixed(2)} (${refunds_count} transações)`);
 
     // Log por categoria
     REVENUE_CATEGORIES.forEach(cat => {
@@ -186,8 +194,10 @@ Deno.serve(async (req) => {
         data,
         summary: {
           gross_revenue,
-          refunds,
+          platform_fees,
           net_revenue,
+          refunds_amount,
+          refunds_count,
           operating_profit,
           roi: `${roi.toFixed(2)}%`,
           roas: roas.toFixed(2),
