@@ -32,9 +32,11 @@ export const CONFETTI_PRODUCTS = [
   "MCF INCORPORADOR",     // A001, A002, A009
   "MCF Plano Anticrise",  // A003, A004
   "Plano Construtor",     // Plano Construtor Básico
-  
-  // Outros produtos de venda
-  "Clube do Arremate",    // Clube sem "Contrato" no nome
+];
+
+// Produtos que NÃO disparam confetti (mesmo se contiverem palavras do CONFETTI_PRODUCTS)
+export const CONFETTI_EXCLUDE_PRODUCTS = [
+  "Clube do Arremate",  // Exclui "Contrato - Clube do Arremate" também
 ];
 
 // ID da origem PIPELINE INSIDE SALES

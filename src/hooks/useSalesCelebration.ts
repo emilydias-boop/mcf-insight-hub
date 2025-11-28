@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CONFETTI_PRODUCTS } from "@/constants/team";
+import { CONFETTI_PRODUCTS, CONFETTI_EXCLUDE_PRODUCTS, SDR_LIST, CLOSER_LIST } from "@/constants/team";
 
 interface SaleData {
   id: string;
@@ -59,7 +59,15 @@ export const useSalesCelebration = () => {
       transaction.product_name?.toLowerCase().includes(p.toLowerCase())
     );
 
-    if (!isConfettiProduct) {
+    // Verificar se está na lista de exclusão
+    const isExcludedProduct = CONFETTI_EXCLUDE_PRODUCTS.some((p) =>
+      transaction.product_name?.toLowerCase().includes(p.toLowerCase())
+    );
+
+    if (!isConfettiProduct || isExcludedProduct) {
+      if (isExcludedProduct) {
+        console.log('🚫 Produto excluído:', transaction.product_name);
+      }
       return null;
     }
 
@@ -76,9 +84,8 @@ export const useSalesCelebration = () => {
       .from("crm_contacts")
       .select(`
         name, 
-        custom_fields, 
         tags,
-        crm_deals!crm_deals_contact_id_fkey(custom_fields)
+        crm_deals!crm_deals_contact_id_fkey(clint_id)
       `)
       .eq("email", transaction.customer_email)
       .single();
@@ -101,18 +108,70 @@ export const useSalesCelebration = () => {
       if (hasLeadA) leadType = "A";
     }
 
-    // Buscar SDR e Closer dos custom_fields do deal
-    const deal = (contact as any)?.crm_deals?.[0];
-    const dealCustomFields = deal?.custom_fields as any;
-    
-    const sdrName = dealCustomFields?.user_name 
-      || dealCustomFields?.deal_user_name 
-      || "SDR";
-    
-    const closerName = dealCustomFields?.deal_closer || "Closer";
+    // Buscar SDR e Closer das atividades do deal
+    let sdrName = "SDR";
+    let closerName = "Closer";
 
-    console.log('👤 SDR encontrado:', sdrName);
-    console.log('🎯 Closer encontrado:', closerName);
+    const deal = (contact as any)?.crm_deals?.[0];
+    if (deal?.clint_id) {
+      const { data: activities } = await supabase
+        .from("deal_activities")
+        .select("to_stage, metadata")
+        .eq("deal_id", deal.clint_id)
+        .in("to_stage", ["Reunião 01 Agendada", "Reunião 01 Realizada", "Contrato Pago"])
+        .order("created_at", { ascending: true });
+
+      // Candidato a SDR = quem moveu para R1 Agendada
+      const r1AgendadaActivity = activities?.find(a => a.to_stage === "Reunião 01 Agendada");
+      const sdrCandidate = (r1AgendadaActivity?.metadata as any)?.deal_user_name;
+
+      // Candidato a Closer = quem moveu para R1 Realizada ou deal_closer
+      const r1RealizadaActivity = activities?.find(a => a.to_stage === "Reunião 01 Realizada");
+      const contratoPagoActivity = activities?.find(a => a.to_stage === "Contrato Pago");
+      
+      const closerCandidate = 
+        (contratoPagoActivity?.metadata as any)?.deal_closer ||
+        (r1RealizadaActivity?.metadata as any)?.deal_closer ||
+        (r1RealizadaActivity?.metadata as any)?.deal_user_name;
+
+      // Validar SDR contra lista
+      if (sdrCandidate) {
+        const isValidSdr = SDR_LIST.some(sdr => 
+          sdr.nome.toLowerCase() === sdrCandidate.toLowerCase() ||
+          sdr.nome.toLowerCase().includes(sdrCandidate.toLowerCase()) ||
+          sdrCandidate.toLowerCase().includes(sdr.nome.split(' ')[0].toLowerCase())
+        );
+        
+        // Se não é SDR válido, pode ser que seja um Closer no lugar errado
+        const isActuallyCloser = CLOSER_LIST.some(closer => 
+          closer.variations.some(v => sdrCandidate.toLowerCase().includes(v.toLowerCase()))
+        );
+        
+        if (isValidSdr && !isActuallyCloser) {
+          sdrName = sdrCandidate;
+        }
+      }
+
+      // Validar Closer contra lista
+      if (closerCandidate) {
+        const isValidCloser = CLOSER_LIST.some(closer => 
+          closer.variations.some(v => closerCandidate.toLowerCase().includes(v.toLowerCase()))
+        );
+        
+        // Se não é Closer válido, pode ser que seja um SDR no lugar errado
+        const isActuallySdr = SDR_LIST.some(sdr => 
+          sdr.nome.toLowerCase() === closerCandidate.toLowerCase() ||
+          closerCandidate.toLowerCase().includes(sdr.nome.split(' ')[0].toLowerCase())
+        );
+        
+        if (isValidCloser && !isActuallySdr) {
+          closerName = closerCandidate;
+        }
+      }
+    }
+
+    console.log('👤 SDR validado:', sdrName);
+    console.log('🎯 Closer validado:', closerName);
 
     return {
       id: transaction.id,
