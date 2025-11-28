@@ -249,7 +249,19 @@ export const useSalesCelebration = () => {
         async (payload) => {
           console.log('🔔 Nova transação recebida via Realtime:', payload.new);
           
-          const saleData = await processTransaction(payload.new as any);
+          const transaction = payload.new as any;
+          
+          // 🔒 Verificar se a venda é de hoje (não histórica)
+          const saleDate = new Date(transaction.sale_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          if (saleDate < today) {
+            console.log('⏭️ Ignorando venda histórica:', transaction.customer_name, '| Data:', transaction.sale_date);
+            return;
+          }
+          
+          const saleData = await processTransaction(transaction);
           if (saleData) {
             setCelebrationQueue((prev) => [...prev, saleData]);
           }
