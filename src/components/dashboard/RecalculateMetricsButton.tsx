@@ -29,7 +29,7 @@ export function RecalculateMetricsButton() {
       const { data, error } = await supabase.functions.invoke('recalculate-metrics', {
         body: {
           start_date: '2024-06-01',
-          end_date: '2025-11-28',
+          end_date: new Date().toISOString().split('T')[0], // Data atual dinâmica
         },
       });
 
