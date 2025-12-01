@@ -98,6 +98,13 @@ Deno.serve(async (req) => {
 
           totalObPrice += obData.gross;
           
+          // Criar raw_data seguro para JSON
+          const safeRawData = JSON.parse(JSON.stringify({
+            ...(rawData || {}),
+            order_bump_index: index + 1,
+            corrected_by_fix_script: true
+          }));
+          
           obTransactions.push({
             hubla_id: `${transaction.hubla_id}-offer-${index + 1}`,
             product_name: obName,
@@ -115,7 +122,7 @@ Deno.serve(async (req) => {
             sale_date: transaction.sale_date,
             sale_status: transaction.sale_status,
             event_type: transaction.event_type,
-            raw_data: { ...rawData, order_bump_index: index + 1, corrected_by_fix_script: true },
+            raw_data: safeRawData,
           });
 
           console.log(`   ✅ Criando OB ${index + 1}: ${obName} - ${obData.category} - R$ ${obData.gross}`);
@@ -140,11 +147,18 @@ Deno.serve(async (req) => {
           const newMainPrice = 47;
           console.log(`   🔄 Ajustando produto principal de R$ ${transaction.product_price} para R$ ${newMainPrice}`);
           
+          // Criar raw_data seguro para JSON
+          const safeMainRawData = JSON.parse(JSON.stringify({
+            ...(rawData || {}),
+            corrected_by_fix_script: true,
+            original_price: transaction.product_price
+          }));
+          
           await supabase
             .from('hubla_transactions')
             .update({
               product_price: newMainPrice,
-              raw_data: { ...rawData, corrected_by_fix_script: true, original_price: transaction.product_price },
+              raw_data: safeMainRawData,
             })
             .eq('hubla_id', transaction.hubla_id);
         }
