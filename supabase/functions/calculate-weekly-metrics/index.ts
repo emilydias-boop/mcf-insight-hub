@@ -10,7 +10,19 @@ const HUBLA_PLATFORM_FEE = 0.0583;
 const HUBLA_NET_MULTIPLIER = 1 - HUBLA_PLATFORM_FEE; // 0.9417
 
 // Produtos que ENTRAM no Incorporador 50k (apenas códigos A00x específicos)
-const INCORPORADOR_50K_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A008', 'A009'];
+const INCORPORADOR_50K_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009'];
+
+// Mapeamento de preços fixos (BRUTO) para Incorporador 50k
+// A005 (P2) não está no mapeamento pois tem preço variável
+const INCORPORADOR_PRODUCT_PRICES: Record<string, number> = {
+  'A001': 14500,  // MCF INCORPORADOR COMPLETO
+  'A003': 7503,   // MCF Plano Anticrise Completo
+  'A004': 5503,   // MCF Plano Anticrise Básico
+  'A006': 2997,   // Renovação Parceiro MCF
+  'A009': 19500,  // MCF INCORPORADOR COMPLETO + THE CLUB
+  'CONTRATO - ANTICRISE': 249,
+  'CONTRATO-ANTICRISE': 249,
+};
 
 // Não precisa mais de lista de exclusões, pois estamos usando apenas códigos específicos
 
@@ -71,17 +83,9 @@ Deno.serve(async (req) => {
     const ads_cost = dailyCosts?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
     console.log(`💰 Custo de Ads: R$ ${ads_cost.toFixed(2)}`);
 
-    // 2. BUSCAR CUSTOS OPERACIONAIS MENSAIS (dividir por 4 semanas)
-    const weekMonth = new Date(week_start);
-    const monthStart = new Date(weekMonth.getFullYear(), weekMonth.getMonth(), 1);
-    
-    const { data: operationalCosts } = await supabase
-      .from('operational_costs')
-      .select('*')
-      .eq('month', monthStart.toISOString().split('T')[0]);
-
-    const team_cost = (operationalCosts?.find(c => c.cost_type === 'team')?.amount || 0) / 4;
-    const office_cost = (operationalCosts?.find(c => c.cost_type === 'office')?.amount || 0) / 4;
+    // 2. CUSTOS OPERACIONAIS - apenas ads_cost (simplificado)
+    const team_cost = 0;
+    const office_cost = 0;
 
     // 3. BUSCAR TRANSAÇÕES HUBLA (para contar A010 depois)
     // Vendas A010 serão contadas a partir das transações Hubla
@@ -116,7 +120,7 @@ Deno.serve(async (req) => {
     
     console.log(`📈 Vendas A010: ${vendas_a010} vendas, R$ ${faturado_a010.toFixed(2)}`);
 
-    // 7. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A004, A008, A009)
+    // 7. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A009)
     const incorporadorTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       // Verificar se começa com algum dos códigos válidos
@@ -124,9 +128,25 @@ Deno.serve(async (req) => {
     });
 
     // 8. CALCULAR MÉTRICAS INCORPORADOR 50K
-    const faturamento_clint = incorporadorTransactions?.reduce(
-      (sum, t) => sum + (t.product_price || 0), 0) || 0;
+    // Faturamento Clint (BRUTO) - usar preço fixo do mapeamento quando disponível
+    const faturamento_clint = incorporadorTransactions?.reduce((sum, t) => {
+      const productName = (t.product_name || '').toUpperCase();
+      
+      // Tentar encontrar preço fixo no mapeamento
+      let fixedPrice = 0;
+      for (const [key, price] of Object.entries(INCORPORADOR_PRODUCT_PRICES)) {
+        if (productName.includes(key)) {
+          fixedPrice = price;
+          break;
+        }
+      }
+      
+      // Se encontrou preço fixo, usar; senão usar product_price (caso do A005/P2)
+      const grossValue = fixedPrice > 0 ? fixedPrice : (t.product_price || 0);
+      return sum + grossValue;
+    }, 0) || 0;
 
+    // Incorporador 50k (LÍQUIDO) - soma do valor líquido das parcelas
     const incorporador_50k = incorporadorTransactions?.reduce(
       (sum, t) => sum + parseValorLiquido(t), 0) || 0;
 
@@ -310,7 +330,7 @@ Deno.serve(async (req) => {
       contract_sales,
       
       // Métricas antigas (manter compatibilidade)
-      clint_revenue: incorporador_50k, // Receita líquida Incorporador 50k
+      clint_revenue: faturamento_clint, // Receita BRUTA Incorporador 50k (preço cheio)
       total_revenue: faturamento_total,
       operating_profit: lucro_operacional,
       roi,
