@@ -111,13 +111,13 @@ Deno.serve(async (req) => {
 
           totalObPrice += obData.gross;
           
-          // Criar raw_data limpo (sem spread para evitar corrupção)
-          const safeRawData: any = {
-            'Nome do produto de orderbump': rawData['Nome do produto de orderbump'] || '',
-            'Valor do produto de orderbump': rawData['Valor do produto de orderbump'] || '',
+          // Criar raw_data minimalista para evitar problemas de serialização
+          const safeRawData = {
+            source: 'csv_import',
+            order_bump_name: obName,
             order_bump_index: index + 1,
             corrected_by_fix_script: true,
-            original_transaction_id: transaction.hubla_id
+            original_transaction_id: String(transaction.hubla_id)
           };
           
           obTransactions.push({
@@ -127,16 +127,16 @@ Deno.serve(async (req) => {
             product_category: obData.category,
             product_price: obData.gross,
             product_type: 'offer',
-            customer_name: transaction.customer_name,
-            customer_email: transaction.customer_email,
-            customer_phone: transaction.customer_phone,
-            utm_source: transaction.utm_source,
-            utm_medium: transaction.utm_medium,
-            utm_campaign: transaction.utm_campaign,
-            payment_method: transaction.payment_method,
+            customer_name: transaction.customer_name || null,
+            customer_email: transaction.customer_email || null,
+            customer_phone: transaction.customer_phone || null,
+            utm_source: transaction.utm_source || null,
+            utm_medium: transaction.utm_medium || null,
+            utm_campaign: transaction.utm_campaign || null,
+            payment_method: transaction.payment_method || null,
             sale_date: transaction.sale_date,
-            sale_status: transaction.sale_status,
-            event_type: transaction.event_type,
+            sale_status: transaction.sale_status || 'completed',
+            event_type: transaction.event_type || 'csv_import',
             raw_data: safeRawData,
           });
 
@@ -145,16 +145,21 @@ Deno.serve(async (req) => {
 
         // Inserir as transações dos OBs
         if (obTransactions.length > 0) {
+          console.log(`   📤 Inserindo ${obTransactions.length} Order Bumps...`);
+          
           const { error: insertError } = await supabase
             .from('hubla_transactions')
             .insert(obTransactions);
 
           if (insertError) {
             console.error(`   ❌ Erro ao inserir OBs:`, insertError);
+            console.error(`   📋 Transação problemática:`, transaction.hubla_id);
+            console.error(`   📋 Dados tentados:`, JSON.stringify(obTransactions[0], null, 2));
             continue;
           }
 
           createdObCount += obTransactions.length;
+          console.log(`   ✅ ${obTransactions.length} OBs inseridos com sucesso`);
         }
 
         // Atualizar transação principal (se for A010, ajustar para R$47)
@@ -162,21 +167,27 @@ Deno.serve(async (req) => {
           const newMainPrice = 47;
           console.log(`   🔄 Ajustando produto principal de R$ ${transaction.product_price} para R$ ${newMainPrice}`);
           
-          // Criar raw_data limpo (sem spread para evitar corrupção)
-          const safeMainRawData: any = {
-            'Nome do produto de orderbump': rawData['Nome do produto de orderbump'] || '',
-            'Valor do produto de orderbump': rawData['Valor do produto de orderbump'] || '',
+          // Criar raw_data minimalista
+          const safeMainRawData = {
+            source: 'csv_import',
             corrected_by_fix_script: true,
-            original_price: transaction.product_price
+            original_price: Number(transaction.product_price)
           };
           
-          await supabase
+          const { error: updateError } = await supabase
             .from('hubla_transactions')
             .update({
               product_price: newMainPrice,
               raw_data: safeMainRawData,
             })
             .eq('hubla_id', transaction.hubla_id);
+          
+          if (updateError) {
+            console.error(`   ❌ Erro ao atualizar transação principal:`, updateError);
+            console.error(`   📋 Transação: ${transaction.hubla_id}`);
+          } else {
+            console.log(`   ✅ Transação principal atualizada`);
+          }
         }
 
         correctedCount++;
