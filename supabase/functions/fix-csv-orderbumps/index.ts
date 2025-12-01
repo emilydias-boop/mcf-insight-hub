@@ -76,20 +76,12 @@ const OB_VALUES: Record<string, { gross: number, net: number, category: string }
   'EVENTO': { gross: 97, net: 88.15, category: 'outros' },
 };
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
-
+// Função de processamento em background
+async function processOrderBumps(supabase: any) {
   try {
-    console.log('🔧 Iniciando correção de Order Bumps históricos...');
+    console.log('🔧 Iniciando correção de Order Bumps em background...');
 
-    // 1. Buscar TODAS as transações com paginação
+    // Buscar TODAS as transações com paginação
     let allTransactions: any[] = [];
     let from = 0;
     const pageSize = 1000;
@@ -106,8 +98,8 @@ Deno.serve(async (req) => {
         .range(from, from + pageSize - 1);
       
       if (batchError) {
-        console.error('❌ Erro ao buscar lote de transações:', batchError);
-        throw batchError;
+        console.error('❌ Erro ao buscar lote:', batchError);
+        break;
       }
       
       if (batch && batch.length > 0) {
@@ -321,7 +313,6 @@ Deno.serve(async (req) => {
     // Recalcular métricas após correção
     console.log('\n🔄 Recalculando métricas...');
     
-    // Buscar data mais antiga
     const { data: minDateData } = await supabase
       .from('hubla_transactions')
       .select('sale_date')
@@ -329,7 +320,6 @@ Deno.serve(async (req) => {
       .limit(1)
       .single();
 
-    // Buscar data mais recente  
     const { data: maxDateData } = await supabase
       .from('hubla_transactions')
       .select('sale_date')
@@ -353,21 +343,41 @@ Deno.serve(async (req) => {
       console.log('✅ Recálculo de métricas iniciado');
     }
 
+    console.log('✅ Processamento em background concluído!');
+  } catch (error: any) {
+    console.error('❌ Erro no processamento background:', error);
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  try {
+    console.log('🚀 Iniciando correção de Order Bumps (modo assíncrono)...');
+    
+    // Iniciar processamento em background
+    // @ts-ignore - EdgeRuntime disponível em Deno edge functions
+    EdgeRuntime.waitUntil(processOrderBumps(supabase));
+    
+    // Retornar resposta imediata
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Correção de Order Bumps concluída',
-        summary: {
-          correctedTransactions: correctedCount,
-          createdOrderBumps: createdObCount,
-          skippedTransactions: skippedCount,
-        },
+        message: 'Processamento de Order Bumps iniciado em background',
+        info: 'O processamento continuará executando. Verifique os logs para acompanhar o progresso.',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: any) {
-    console.error('❌ Erro na correção:', error);
+    console.error('❌ Erro ao iniciar processamento:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
