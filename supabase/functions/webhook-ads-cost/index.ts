@@ -82,6 +82,13 @@ Deno.serve(async (req) => {
       ? parseFloat(amount.replace(/[^\d,]/g, '').replace(',', '.'))
       : amount;
 
+    // Detectar se o valor está em centavos (Facebook API envia valores em centavos)
+    // Se o valor é muito alto (>100k) e é inteiro, provavelmente está em centavos
+    if (typeof parsedAmount === 'number' && parsedAmount > 100000 && Number.isInteger(parsedAmount)) {
+      console.log(`⚠️ Valor detectado em centavos: R$ ${parsedAmount} → R$ ${parsedAmount / 100}`);
+      parsedAmount = parsedAmount / 100;
+    }
+
     // Parse da data para formato YYYY-MM-DD
     let parsedDate: string;
     try {
