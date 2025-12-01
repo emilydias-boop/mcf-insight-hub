@@ -19,67 +19,94 @@ const EXCLUDED_CONTRACTS = [
 ];
 
 const PRODUCT_MAPPING: Record<string, string> = {
+  // Incorporador 50k
+  'A001': 'incorporador',
+  'A002': 'incorporador',
+  'A003': 'incorporador',
+  'A004': 'incorporador',
+  'A005': 'incorporador',
+  'A006': 'incorporador',
+  'A008': 'incorporador',
+  'A009': 'incorporador',
+  'A000': 'incorporador',
+  'CONTRATO': 'incorporador',
+  'CONTRATO - ANTICRISE': 'incorporador',
+  'ANTICRISE': 'incorporador',
+  'RENOVAÇÃO PARCEIRO': 'incorporador',
+  
+  // A010
   'A010': 'a010',
-  'A010 - Incorporador': 'a010',
-  'Contrato': 'contrato',
-  'Contrato Individual': 'contrato',
-  'Contrato Combo': 'contrato',
-  'MCF Plano Anticrise': 'parceria',
-  'MCF INCORPORADOR COMPLETO': 'parceria',
-  'MCF Incorporador': 'parceria',
-  'A001': 'parceria',
-  'A003': 'parceria',
-  'A004': 'parceria',
-  'A008': 'parceria',
-  'A009': 'parceria',
-  'The Club': 'parceria',
-  'Renovação': 'renovacao',
-  'Renovação Anual': 'renovacao',
-  'Captação': 'captacao',
-  'Captação de Recursos': 'captacao',
-  'P2': 'p2',
-  'P2 - Mercado Primário': 'p2',
-  'Formação': 'formacao',
-  'Formação de Corretores': 'formacao',
-  'Projetos': 'projetos',
-  'Desenvolvimento de Projetos': 'projetos',
-  'Efeito Alavanca': 'efeito_alavanca',
-  'EA': 'efeito_alavanca',
-  'Mentoria Caixa': 'mentoria_caixa',
-  'Mentoria Caixa Individual': 'mentoria_caixa',
-  'Mentoria Grupo Caixa': 'mentoria_grupo_caixa',
-  'MGC': 'mentoria_grupo_caixa',
-  'Sócios': 'socios',
-  'Programa Sócios': 'socios',
-  'A007': 'socios',
-  'Clube Arremate': 'clube_arremate',
-  'CA': 'clube_arremate',
-  'Imersão': 'imersao',
-  'Imersão Presencial': 'imersao',
-  'Imersão Sócios': 'imersao_socios',
-  'IS': 'imersao_socios',
-  'Viver de Aluguel': 'ob_construir_alugar',
-  'Como Viver de Aluguel': 'ob_construir_alugar',
-  'OB - CONSTRUIR (Viver de Aluguel)': 'ob_construir_alugar',
-  'Gestão de Obras': 'ob_construir_gestao_obras',
-  'OB - CONSTRUIR (Gestão de Obras)': 'ob_construir_gestao_obras',
-  'OB - EVENTO': 'ob_evento',
-  'Evento OB': 'ob_evento',
+  'A010 - INCORPORADOR': 'a010',
+  
+  // Order Bumps
+  'CONSTRUIR PARA ALUGAR': 'ob_construir_alugar',
+  'VIVER DE ALUGUEL': 'ob_construir_alugar',
+  'COMO VIVER DE ALUGUEL': 'ob_construir_alugar',
+  'CONSTRUIR PARA VENDER': 'ob_construir_vender',
+  'ACESSO VITALIC': 'ob_vitalicio',
+  'ACESSO VITALÍCIO': 'ob_vitalicio',
+  'VITALÍCIO': 'ob_vitalicio',
   'OB - VITALÍCIO': 'ob_vitalicio',
-  'Vitalício': 'ob_vitalicio',
-  'outros': 'outros',
+  'GESTÃO DE OBRAS': 'ob_construir_gestao_obras',
+  'OB - CONSTRUIR (GESTÃO DE OBRAS)': 'ob_construir_gestao_obras',
+  'OB - EVENTO': 'ob_evento',
+  'EVENTO OB': 'ob_evento',
+  
+  // Outros produtos
+  'CONTRATO INDIVIDUAL': 'contrato',
+  'CONTRATO COMBO': 'contrato',
+  'MCF PLANO ANTICRISE': 'parceria',
+  'MCF INCORPORADOR COMPLETO': 'parceria',
+  'MCF INCORPORADOR': 'parceria',
+  'RENOVAÇÃO': 'renovacao',
+  'RENOVAÇÃO ANUAL': 'renovacao',
+  'CAPTAÇÃO': 'captacao',
+  'CAPTAÇÃO DE RECURSOS': 'captacao',
+  'P2': 'p2',
+  'P2 - MERCADO PRIMÁRIO': 'p2',
+  'FORMAÇÃO': 'formacao',
+  'FORMAÇÃO DE CORRETORES': 'formacao',
+  'PROJETOS': 'projetos',
+  'DESENVOLVIMENTO DE PROJETOS': 'projetos',
+  'EFEITO ALAVANCA': 'efeito_alavanca',
+  'EA': 'efeito_alavanca',
+  'MENTORIA CAIXA': 'mentoria_caixa',
+  'MENTORIA CAIXA INDIVIDUAL': 'mentoria_caixa',
+  'MENTORIA GRUPO CAIXA': 'mentoria_grupo_caixa',
+  'MGC': 'mentoria_grupo_caixa',
+  'SÓCIOS': 'socios',
+  'PROGRAMA SÓCIOS': 'socios',
+  'A007': 'socios',
+  'CLUBE ARREMATE': 'clube_arremate',
+  'CA': 'clube_arremate',
+  'IMERSÃO': 'imersao',
+  'IMERSÃO PRESENCIAL': 'imersao',
+  'IMERSÃO SÓCIOS': 'imersao_socios',
+  'IS': 'imersao_socios',
+};
+
+// Valores conhecidos dos Order Bumps
+const OB_VALUES: Record<string, { gross: number, net: number }> = {
+  'CONSTRUIR PARA ALUGAR': { gross: 97, net: 88.15 },
+  'VIVER DE ALUGUEL': { gross: 97, net: 88.15 },
+  'ACESSO VITALIC': { gross: 57, net: 51.82 },
+  'ACESSO VITALÍCIO': { gross: 57, net: 51.82 },
+  'VITALÍCIO': { gross: 57, net: 51.82 },
+  'CONSTRUIR PARA VENDER': { gross: 47, net: 42.70 },
 };
 
 function mapProductCategory(productName: string, productCode?: string): string {
-  const name = productName.toUpperCase();
-  if (productCode && PRODUCT_MAPPING[productCode.toUpperCase()]) {
-    return PRODUCT_MAPPING[productCode.toUpperCase()];
+  const name = productName?.toUpperCase() || '';
+  const code = productCode?.toUpperCase() || '';
+  
+  if (code && PRODUCT_MAPPING[code]) {
+    return PRODUCT_MAPPING[code];
   }
   if (PRODUCT_MAPPING[name]) {
     return PRODUCT_MAPPING[name];
   }
   for (const [key, category] of Object.entries(PRODUCT_MAPPING)) {
-    if (name.includes(key)) {
+    if (name.includes(key) || (code && code.includes(key))) {
       return category;
     }
   }
@@ -100,19 +127,14 @@ function parseBRNumber(value: string | number): number {
   if (!value) return 0;
   
   const str = value.toString().replace(/R\$\s?/g, '').trim();
-  
-  // Detectar formato: BR (vírgula decimal) vs US (ponto decimal)
   const hasComma = str.includes(',');
   const hasDot = str.includes('.');
   
   if (hasComma && hasDot) {
-    // Formato brasileiro: 1.234,56 → remove pontos, troca vírgula por ponto
     return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
   } else if (hasComma && !hasDot) {
-    // Formato brasileiro sem milhar: 1234,56 → troca vírgula por ponto
     return parseFloat(str.replace(',', '.')) || 0;
   } else {
-    // Formato americano ou inteiro: 1234.56 ou 1234 → usa direto
     return parseFloat(str) || 0;
   }
 }
@@ -153,12 +175,10 @@ async function processHublaFile(
     
     const transactions: any[] = [];
 
-    // Processar linhas do range especificado
     for (let i = startRow; i < endRow && i < dataRows.length; i++) {
       try {
         const row = dataRows[i];
         
-        // Converter array em objeto usando headers
         const rowData: any = {};
         headers.forEach((header, idx) => {
           rowData[header] = row[idx];
@@ -173,14 +193,42 @@ async function processHublaFile(
         const productName = String(rowData['Nome do produto'] || rowData['product_name'] || 'Produto Desconhecido').trim();
         const productCode = rowData['Código do produto'] || rowData['product_code'];
         const productCategory = mapProductCategory(productName, productCode);
+        const totalPrice = parseBRNumber(rowData['Valor do produto'] || rowData['product_price'] || 0);
         const saleDate = parseDate(String(rowData['Data de pagamento'] || rowData['Data de reembolso'] || rowData['sale_date'] || ''));
 
+        // Extrair Order Bumps da coluna
+        const orderbumpNamesStr = rowData['Nome do produto de orderbump'] || '';
+        const orderbumps = orderbumpNamesStr ? orderbumpNamesStr.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+        
+        // Calcular valor do produto principal
+        let mainProductPrice = totalPrice;
+        let obTotalPrice = 0;
+        
+        if (orderbumps.length > 0) {
+          // Se há OBs, o produto principal é A010 (R$47)
+          if (productCategory === 'a010') {
+            mainProductPrice = 47;
+          }
+          
+          // Calcular valor total dos OBs
+          orderbumps.forEach((obName: string) => {
+            const obNameUpper = obName.toUpperCase();
+            for (const [key, values] of Object.entries(OB_VALUES)) {
+              if (obNameUpper.includes(key)) {
+                obTotalPrice += values.gross;
+                break;
+              }
+            }
+          });
+        }
+
+        // Inserir transação principal
         transactions.push({
           hubla_id: hublaId,
           product_name: productName,
           product_code: productCode || null,
           product_category: productCategory,
-          product_price: parseBRNumber(rowData['Valor do produto'] || rowData['product_price'] || 0),
+          product_price: mainProductPrice,
           product_type: rowData['Tipo do produto'] || rowData['product_type'] || null,
           customer_name: String(rowData['Nome do cliente'] || rowData['customer_name'] || '').trim() || null,
           customer_email: String(rowData['Email do cliente'] || rowData['customer_email'] || '').trim() || null,
@@ -194,6 +242,43 @@ async function processHublaFile(
           event_type: fileType === 'sales' ? 'invoice.payment_succeeded' : 'refund',
           raw_data: rowData,
         });
+
+        // Inserir transações dos Order Bumps
+        orderbumps.forEach((obName: string, index: number) => {
+          const obNameUpper = obName.toUpperCase();
+          let obCategory = 'outros';
+          let obPrice = 0;
+          
+          // Identificar categoria e preço do OB
+          for (const [key, values] of Object.entries(OB_VALUES)) {
+            if (obNameUpper.includes(key)) {
+              obCategory = mapProductCategory(key);
+              obPrice = values.gross;
+              break;
+            }
+          }
+          
+          transactions.push({
+            hubla_id: `${hublaId}-offer-${index + 1}`,
+            product_name: obName,
+            product_code: null,
+            product_category: obCategory,
+            product_price: obPrice,
+            product_type: 'offer',
+            customer_name: String(rowData['Nome do cliente'] || rowData['customer_name'] || '').trim() || null,
+            customer_email: String(rowData['Email do cliente'] || rowData['customer_email'] || '').trim() || null,
+            customer_phone: String(rowData['Telefone do cliente'] || rowData['customer_phone'] || '').trim() || null,
+            utm_source: rowData['UTM Origem'] || rowData['utm_source'] || null,
+            utm_medium: rowData['UTM Mídia'] || rowData['utm_medium'] || null,
+            utm_campaign: rowData['UTM Campanha'] || rowData['utm_campaign'] || null,
+            payment_method: rowData['Método de pagamento'] || rowData['payment_method'] || null,
+            sale_date: saleDate,
+            sale_status: fileType === 'sales' ? 'completed' : 'refunded',
+            event_type: fileType === 'sales' ? 'invoice.payment_succeeded' : 'refund',
+            raw_data: { ...rowData, order_bump_index: index + 1 },
+          });
+        });
+        
       } catch (error) {
         console.error(`❌ Erro ao processar linha ${i + 2}:`, error);
         errorCount++;
@@ -202,7 +287,6 @@ async function processHublaFile(
 
     processedCount = transactions.length;
 
-    // Inserir transações no banco
     if (transactions.length > 0) {
       const { error } = await supabase
         .from('hubla_transactions')
@@ -214,7 +298,6 @@ async function processHublaFile(
       }
     }
 
-    // Atualizar progresso
     await supabase
       .from('sync_jobs')
       .update({
@@ -246,7 +329,6 @@ async function processHublaFile(
         .eq('id', jobId);
       console.log(`✅ Completo: ${processedCount} processados, ${skippedCount} ignorados, ${errorCount} erros`);
       
-      // Recalcular métricas para todas as semanas do período importado
       console.log('📊 Iniciando recálculo automático de métricas...');
       const { data: importedDates } = await supabase
         .from('hubla_transactions')
@@ -301,7 +383,6 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const jobId = url.searchParams.get('jobId');
 
-    // Continue existing job
     if (jobId) {
       const { data: job } = await supabase
         .from('sync_jobs')
@@ -330,7 +411,6 @@ Deno.serve(async (req) => {
       
       await processHublaFile(supabase, jobId, metadata.file_path, metadata.file_type, startRow);
 
-      // Re-fetch job to get updated status
       const { data: updatedJob } = await supabase
         .from('sync_jobs')
         .select('*')
@@ -350,7 +430,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // New import
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const fileType = formData.get('fileType') as string;
@@ -382,7 +461,6 @@ Deno.serve(async (req) => {
 
     await processHublaFile(supabase, job.id, fileName, fileType, 0);
 
-    // Re-fetch job to get updated status
     const { data: updatedJob } = await supabase
       .from('sync_jobs')
       .select('*')

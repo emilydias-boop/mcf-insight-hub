@@ -122,17 +122,10 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K
-    const incorporadorTransactions = completedTransactions?.filter(t => {
-      const code = t.product_code?.toUpperCase();
-      const name = t.product_name?.toUpperCase();
-      
-      // Excluir consórcio/leilão
-      if (EXCLUDED_CONTRACTS.some(ex => name?.includes(ex))) return false;
-      
-      // Incluir apenas da lista
-      return INCORPORADOR_50K_PRODUCTS.some(p => code?.includes(p) || name?.includes(p));
-    });
+    // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (baseado em product_category)
+    const incorporadorTransactions = completedTransactions?.filter(t => 
+      t.product_category === 'incorporador'
+    );
 
     // 7. CALCULAR MÉTRICAS INCORPORADOR 50K
     const faturamento_clint = incorporadorTransactions?.reduce(
@@ -144,17 +137,38 @@ Deno.serve(async (req) => {
     console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)}`);
     console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)}`);
 
-    // 8. CALCULAR ORDER BUMPS
-    const ob_construir = completedTransactions?.filter(t => 
-      t.product_category?.toLowerCase() === 'ob_construir_alugar'
-    ).reduce((sum, t) => sum + parseValorLiquido(t), 0) || 0;
+    // 8. CALCULAR ORDER BUMPS (apenas -offer- que não sejam A010)
+    const ob_construir_alugar_transactions = completedTransactions?.filter(t => 
+      t.product_category === 'ob_construir_alugar'
+    ) || [];
+    
+    const ob_vitalicio_transactions = completedTransactions?.filter(t => 
+      t.product_category === 'ob_vitalicio'
+    ) || [];
+    
+    const ob_construir_vender_transactions = completedTransactions?.filter(t => 
+      t.product_category === 'ob_construir_vender'
+    ) || [];
 
-    const ob_vitalicio = completedTransactions?.filter(t => 
-      t.product_category?.toLowerCase() === 'ob_vitalicio'
-    ).reduce((sum, t) => sum + parseValorLiquido(t), 0) || 0;
+    const ob_construir_alugar = ob_construir_alugar_transactions.reduce(
+      (sum, t) => sum + parseValorLiquido(t), 0
+    );
+    
+    const ob_vitalicio = ob_vitalicio_transactions.reduce(
+      (sum, t) => sum + parseValorLiquido(t), 0
+    );
+    
+    const ob_construir_vender = ob_construir_vender_transactions.reduce(
+      (sum, t) => sum + parseValorLiquido(t), 0
+    );
 
-    console.log(`📦 OB Construir: R$ ${ob_construir.toFixed(2)}`);
-    console.log(`📦 OB Vitalício: R$ ${ob_vitalicio.toFixed(2)}`);
+    const ob_construir_alugar_sales = ob_construir_alugar_transactions.length;
+    const ob_vitalicio_sales = ob_vitalicio_transactions.length;
+    const ob_construir_vender_sales = ob_construir_vender_transactions.length;
+
+    console.log(`📦 OB Construir Alugar: ${ob_construir_alugar_sales} vendas, R$ ${ob_construir_alugar.toFixed(2)}`);
+    console.log(`📦 OB Vitalício: ${ob_vitalicio_sales} vendas, R$ ${ob_vitalicio.toFixed(2)}`);
+    console.log(`📦 OB Construir Vender: ${ob_construir_vender_sales} vendas, R$ ${ob_construir_vender.toFixed(2)}`);
 
     // 9. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
     const revenueByCategory: Record<string, { revenue: number; sales: number }> = {};
@@ -190,13 +204,13 @@ Deno.serve(async (req) => {
     console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)}`);
     console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)}`);
 
-    // 11. CALCULAR FATURAMENTO TOTAL (nova fórmula)
-    const faturamento_total = incorporador_50k + ob_construir + ob_vitalicio + faturado_a010;
+    // 11. CALCULAR FATURAMENTO TOTAL (nova fórmula - incluir OB Construir Vender)
+    const faturamento_total = incorporador_50k + ob_construir_alugar + ob_vitalicio + ob_construir_vender + faturado_a010;
 
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
 
-    // 12. CALCULAR CUSTO REAL (nova fórmula)
-    const custo_real = ads_cost - (faturado_a010 + ob_construir + ob_vitalicio);
+    // 12. CALCULAR CUSTO REAL (nova fórmula - incluir OB Construir Vender)
+    const custo_real = ads_cost - (faturado_a010 + ob_construir_alugar + ob_vitalicio + ob_construir_vender);
 
     console.log(`💸 Custo Real: R$ ${custo_real.toFixed(2)}`);
 
@@ -245,8 +259,14 @@ Deno.serve(async (req) => {
       custo_real,
       cpl,
       cplr,
-      ob_construir,
-      ob_vitalicio,
+      
+      // Order Bumps separados
+      ob_construir_alugar_revenue: ob_construir_alugar,
+      ob_construir_alugar_sales: ob_construir_alugar_sales,
+      ob_vitalicio_revenue: ob_vitalicio,
+      ob_vitalicio_sales: ob_vitalicio_sales,
+      ob_construir_revenue: ob_construir_vender,
+      ob_construir_sales: ob_construir_vender_sales,
       
       // Métricas antigas (manter compatibilidade)
       clint_revenue: incorporador_50k, // Receita líquida Incorporador 50k
@@ -297,8 +317,12 @@ Deno.serve(async (req) => {
           faturado_a010,
           faturamento_clint,
           incorporador_50k,
-          ob_construir,
+          ob_construir_alugar,
+          ob_construir_alugar_sales,
           ob_vitalicio,
+          ob_vitalicio_sales,
+          ob_construir_vender,
+          ob_construir_vender_sales,
           faturamento_total,
           custo_real,
           gross_revenue,

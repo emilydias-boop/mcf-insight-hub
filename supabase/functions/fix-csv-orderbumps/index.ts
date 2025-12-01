@@ -1,0 +1,206 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.83.0';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Valores conhecidos dos Order Bumps
+const OB_VALUES: Record<string, { gross: number, net: number, category: string }> = {
+  'CONSTRUIR PARA ALUGAR': { gross: 97, net: 88.15, category: 'ob_construir_alugar' },
+  'VIVER DE ALUGUEL': { gross: 97, net: 88.15, category: 'ob_construir_alugar' },
+  'ACESSO VITALIC': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
+  'ACESSO VITALÍCIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
+  'VITALÍCIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
+  'CONSTRUIR PARA VENDER': { gross: 47, net: 42.70, category: 'ob_construir_vender' },
+};
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  try {
+    console.log('🔧 Iniciando correção de Order Bumps históricos...');
+
+    // 1. Buscar todas as transações CSV que têm orderbumps no raw_data
+    const { data: transactions, error: fetchError } = await supabase
+      .from('hubla_transactions')
+      .select('*')
+      .not('raw_data->Nome do produto de orderbump', 'is', null)
+      .neq('raw_data->Nome do produto de orderbump', '');
+
+    if (fetchError) throw fetchError;
+
+    console.log(`📊 ${transactions?.length || 0} transações com Order Bumps encontradas`);
+
+    let correctedCount = 0;
+    let createdObCount = 0;
+    let skippedCount = 0;
+
+    for (const transaction of transactions || []) {
+      try {
+        const rawData = transaction.raw_data as any;
+        const orderbumpNamesStr = rawData['Nome do produto de orderbump'] || '';
+        
+        if (!orderbumpNamesStr) {
+          skippedCount++;
+          continue;
+        }
+
+        const orderbumps = orderbumpNamesStr.split(',').map((s: string) => s.trim()).filter(Boolean);
+        
+        if (orderbumps.length === 0) {
+          skippedCount++;
+          continue;
+        }
+
+        console.log(`\n📦 Processando: ${transaction.hubla_id}`);
+        console.log(`   OBs: ${orderbumps.join(', ')}`);
+
+        // Verificar se já existem transações de offer
+        const { data: existingOffers } = await supabase
+          .from('hubla_transactions')
+          .select('hubla_id')
+          .like('hubla_id', `${transaction.hubla_id}-offer-%`);
+
+        if (existingOffers && existingOffers.length > 0) {
+          console.log(`   ⏭️ Já possui ${existingOffers.length} offers criados`);
+          skippedCount++;
+          continue;
+        }
+
+        // Criar transações para cada Order Bump
+        const obTransactions: any[] = [];
+        let totalObPrice = 0;
+
+        orderbumps.forEach((obName: string, index: number) => {
+          const obNameUpper = obName.toUpperCase();
+          let obData = null;
+          
+          // Identificar OB pelo nome
+          for (const [key, values] of Object.entries(OB_VALUES)) {
+            if (obNameUpper.includes(key)) {
+              obData = values;
+              break;
+            }
+          }
+          
+          if (!obData) {
+            console.log(`   ⚠️ OB desconhecido: ${obName}`);
+            return;
+          }
+
+          totalObPrice += obData.gross;
+          
+          obTransactions.push({
+            hubla_id: `${transaction.hubla_id}-offer-${index + 1}`,
+            product_name: obName,
+            product_code: null,
+            product_category: obData.category,
+            product_price: obData.gross,
+            product_type: 'offer',
+            customer_name: transaction.customer_name,
+            customer_email: transaction.customer_email,
+            customer_phone: transaction.customer_phone,
+            utm_source: transaction.utm_source,
+            utm_medium: transaction.utm_medium,
+            utm_campaign: transaction.utm_campaign,
+            payment_method: transaction.payment_method,
+            sale_date: transaction.sale_date,
+            sale_status: transaction.sale_status,
+            event_type: transaction.event_type,
+            raw_data: { ...rawData, order_bump_index: index + 1, corrected_by_fix_script: true },
+          });
+
+          console.log(`   ✅ Criando OB ${index + 1}: ${obName} - ${obData.category} - R$ ${obData.gross}`);
+        });
+
+        // Inserir as transações dos OBs
+        if (obTransactions.length > 0) {
+          const { error: insertError } = await supabase
+            .from('hubla_transactions')
+            .insert(obTransactions);
+
+          if (insertError) {
+            console.error(`   ❌ Erro ao inserir OBs:`, insertError);
+            continue;
+          }
+
+          createdObCount += obTransactions.length;
+        }
+
+        // Atualizar transação principal (se for A010, ajustar para R$47)
+        if (transaction.product_category === 'a010') {
+          const newMainPrice = 47;
+          console.log(`   🔄 Ajustando produto principal de R$ ${transaction.product_price} para R$ ${newMainPrice}`);
+          
+          await supabase
+            .from('hubla_transactions')
+            .update({
+              product_price: newMainPrice,
+              raw_data: { ...rawData, corrected_by_fix_script: true, original_price: transaction.product_price },
+            })
+            .eq('hubla_id', transaction.hubla_id);
+        }
+
+        correctedCount++;
+        console.log(`   ✅ Correção concluída`);
+
+      } catch (error) {
+        console.error(`❌ Erro ao processar ${transaction.hubla_id}:`, error);
+      }
+    }
+
+    console.log('\n📊 Resumo da Correção:');
+    console.log(`   ✅ ${correctedCount} transações corrigidas`);
+    console.log(`   📦 ${createdObCount} Order Bumps criados`);
+    console.log(`   ⏭️ ${skippedCount} transações ignoradas`);
+
+    // Recalcular métricas após correção
+    console.log('\n🔄 Recalculando métricas...');
+    const { data: dates } = await supabase
+      .from('hubla_transactions')
+      .select('sale_date')
+      .order('sale_date', { ascending: true });
+    
+    if (dates && dates.length > 0) {
+      const minDate = new Date(dates[0].sale_date);
+      const maxDate = new Date(dates[dates.length - 1].sale_date);
+      
+      await supabase.functions.invoke('recalculate-metrics', {
+        body: {
+          start_date: minDate.toISOString().split('T')[0],
+          end_date: maxDate.toISOString().split('T')[0],
+        },
+      });
+      
+      console.log('✅ Recálculo de métricas iniciado');
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Correção de Order Bumps concluída',
+        summary: {
+          correctedTransactions: correctedCount,
+          createdOrderBumps: createdObCount,
+          skippedTransactions: skippedCount,
+        },
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error: any) {
+    console.error('❌ Erro na correção:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
