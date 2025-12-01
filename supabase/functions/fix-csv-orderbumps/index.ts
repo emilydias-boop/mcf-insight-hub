@@ -45,7 +45,20 @@ Deno.serve(async (req) => {
 
     for (const transaction of transactions || []) {
       try {
-        const rawData = transaction.raw_data as any;
+        // Garantir que raw_data seja um objeto válido
+        let rawData: any = {};
+        try {
+          if (typeof transaction.raw_data === 'string') {
+            rawData = JSON.parse(transaction.raw_data);
+          } else if (transaction.raw_data && typeof transaction.raw_data === 'object') {
+            rawData = transaction.raw_data;
+          }
+        } catch (parseError) {
+          console.error(`⚠️ raw_data inválido para ${transaction.hubla_id}:`, parseError);
+          skippedCount++;
+          continue;
+        }
+        
         const orderbumpNamesStr = rawData['Nome do produto de orderbump'] || '';
         
         if (!orderbumpNamesStr) {
@@ -98,12 +111,14 @@ Deno.serve(async (req) => {
 
           totalObPrice += obData.gross;
           
-          // Criar raw_data seguro para JSON
-          const safeRawData = JSON.parse(JSON.stringify({
-            ...(rawData || {}),
+          // Criar raw_data limpo (sem spread para evitar corrupção)
+          const safeRawData: any = {
+            'Nome do produto de orderbump': rawData['Nome do produto de orderbump'] || '',
+            'Valor do produto de orderbump': rawData['Valor do produto de orderbump'] || '',
             order_bump_index: index + 1,
-            corrected_by_fix_script: true
-          }));
+            corrected_by_fix_script: true,
+            original_transaction_id: transaction.hubla_id
+          };
           
           obTransactions.push({
             hubla_id: `${transaction.hubla_id}-offer-${index + 1}`,
@@ -147,12 +162,13 @@ Deno.serve(async (req) => {
           const newMainPrice = 47;
           console.log(`   🔄 Ajustando produto principal de R$ ${transaction.product_price} para R$ ${newMainPrice}`);
           
-          // Criar raw_data seguro para JSON
-          const safeMainRawData = JSON.parse(JSON.stringify({
-            ...(rawData || {}),
+          // Criar raw_data limpo (sem spread para evitar corrupção)
+          const safeMainRawData: any = {
+            'Nome do produto de orderbump': rawData['Nome do produto de orderbump'] || '',
+            'Valor do produto de orderbump': rawData['Valor do produto de orderbump'] || '',
             corrected_by_fix_script: true,
             original_price: transaction.product_price
-          }));
+          };
           
           await supabase
             .from('hubla_transactions')
