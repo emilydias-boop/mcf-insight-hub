@@ -123,9 +123,18 @@ Deno.serve(async (req) => {
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
     // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (baseado em product_category)
-    const incorporadorTransactions = completedTransactions?.filter(t => 
-      t.product_category === 'incorporador'
-    );
+    const incorporadorTransactions = completedTransactions?.filter(t => {
+      const category = t.product_category?.toLowerCase() || '';
+      const productName = (t.product_name || '').toUpperCase();
+      
+      // Excluir se for Efeito Alavanca ou Clube do Arremate
+      if (productName.includes('EFEITO ALAVANCA') || productName.includes('CLUBE DO ARREMATE')) {
+        return false;
+      }
+      
+      // Incluir parceria, contrato, e incorporador (se existir)
+      return ['parceria', 'contrato', 'incorporador'].includes(category);
+    });
 
     // 7. CALCULAR MÉTRICAS INCORPORADOR 50K
     const faturamento_clint = incorporadorTransactions?.reduce(
@@ -204,8 +213,10 @@ Deno.serve(async (req) => {
     console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)}`);
     console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)}`);
 
-    // 11. CALCULAR FATURAMENTO TOTAL (nova fórmula - incluir OB Construir Vender)
-    const faturamento_total = incorporador_50k + ob_construir_alugar + ob_vitalicio + ob_construir_vender + faturado_a010;
+    // 11. CALCULAR FATURAMENTO TOTAL (TODOS os valores líquidos da Hubla)
+    const faturamento_total = completedTransactions?.reduce(
+      (sum, t) => sum + parseValorLiquido(t), 0
+    ) || 0;
 
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
 
