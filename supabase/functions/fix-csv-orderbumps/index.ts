@@ -89,22 +89,42 @@ Deno.serve(async (req) => {
   try {
     console.log('🔧 Iniciando correção de Order Bumps históricos...');
 
-    // 1. Buscar todas as transações invoice.payment_succeeded (sem filtrar por raw_data na query)
-    const { data: transactions, error: fetchError } = await supabase
-      .from('hubla_transactions')
-      .select('*')
-      .eq('event_type', 'invoice.payment_succeeded')
-      .not('product_name', 'like', '%-offer-%');
+    // 1. Buscar TODAS as transações com paginação
+    let allTransactions: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (fetchError) {
-      console.error('❌ Erro ao buscar transações:', fetchError);
-      throw fetchError;
+    console.log('📥 Carregando transações em lotes...');
+    
+    while (hasMore) {
+      const { data: batch, error: batchError } = await supabase
+        .from('hubla_transactions')
+        .select('*')
+        .eq('event_type', 'invoice.payment_succeeded')
+        .not('hubla_id', 'ilike', '%-offer-%')
+        .range(from, from + pageSize - 1);
+      
+      if (batchError) {
+        console.error('❌ Erro ao buscar lote de transações:', batchError);
+        throw batchError;
+      }
+      
+      if (batch && batch.length > 0) {
+        allTransactions = [...allTransactions, ...batch];
+        from += pageSize;
+        hasMore = batch.length === pageSize;
+        console.log(`   ✓ ${allTransactions.length} transações carregadas...`);
+      } else {
+        hasMore = false;
+      }
     }
 
-    console.log(`📊 ${transactions?.length || 0} transações encontradas`);
+    const transactions = allTransactions;
+    console.log(`📊 ${transactions.length} transações totais carregadas`);
 
-    // Filtrar apenas as que têm Order Bumps
-    const transactionsWithOB = (transactions || []).filter(t => {
+    // 2. Filtrar apenas as que têm Order Bumps
+    const transactionsWithOB = transactions.filter(t => {
       try {
         const rawData = typeof t.raw_data === 'string' ? JSON.parse(t.raw_data) : t.raw_data;
         const obField = rawData?.['Nome do produto de orderbump'];
