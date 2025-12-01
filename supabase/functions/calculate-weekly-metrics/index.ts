@@ -86,13 +86,13 @@ Deno.serve(async (req) => {
     // 3. BUSCAR TRANSAÇÕES HUBLA (para contar A010 depois)
     // Vendas A010 serão contadas a partir das transações Hubla
 
-    // 4. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (APENAS VENDAS CONFIRMADAS)
+    // 4. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (VENDAS CONFIRMADAS - ambos event_type)
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', `${week_start}T00:00:00Z`)
       .lt('sale_date', `${week_end}T23:59:59Z`)
-      .eq('event_type', 'invoice.payment_succeeded')
+      .in('event_type', ['invoice.payment_succeeded', 'NewSale'])
       .eq('sale_status', 'completed');
 
     // 5. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
@@ -151,9 +151,10 @@ Deno.serve(async (req) => {
     
     const ob_evento_transactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
+      // Normalizar removendo acentos para evitar problemas com IMERSÃO vs IMERSAO
+      const normalizedName = productName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const price = t.product_price || 0;
-      return (productName.includes('IMERSÃO PRESENCIAL') || productName.includes('IMERSAO PRESENCIAL')) 
-             && price <= 300;
+      return normalizedName.includes('IMERSAO PRESENCIAL') && price <= 300;
     }) || [];
     
     const ob_construir_vender_transactions = completedTransactions?.filter(t => 
@@ -228,11 +229,12 @@ Deno.serve(async (req) => {
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
 
     // 13. CALCULAR FATURADO CONTRATO (apenas A000-Contrato e Anticrise)
+    // Incluir de TODAS as categorias (contrato, incorporador, etc)
     const contractTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
-      return (productName.includes('A000') && productName.includes('CONTRATO')) ||
-             productName.includes('CONTRATO - ANTICRISE') ||
-             productName.includes('CONTRATO-ANTICRISE');
+      const isA000Contrato = productName.includes('A000') && productName.includes('CONTRATO');
+      const isAnticrise = productName.includes('ANTICRISE');
+      return isA000Contrato || isAnticrise;
     }) || [];
     
     const contract_revenue = contractTransactions.reduce(
