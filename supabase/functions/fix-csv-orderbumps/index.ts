@@ -13,6 +13,11 @@ const OB_VALUES: Record<string, { gross: number, net: number, category: string }
   'ACESSO VITALÍCIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
   'VITALÍCIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
   'CONSTRUIR PARA VENDER': { gross: 47, net: 42.70, category: 'ob_construir_vender' },
+  // Novos produtos identificados nos dados reais
+  'A010': { gross: 47, net: 42.70, category: 'a010' },
+  'A010 - CONSULTORIA': { gross: 47, net: 42.70, category: 'a010' },
+  'A011': { gross: 97, net: 88.15, category: 'clube_arremate' },
+  'A011 - CAPTAÇÃO': { gross: 97, net: 88.15, category: 'clube_arremate' },
 };
 
 Deno.serve(async (req) => {
@@ -28,11 +33,11 @@ Deno.serve(async (req) => {
   try {
     console.log('🔧 Iniciando correção de Order Bumps históricos...');
 
-    // 1. Buscar todas as transações CSV (sem filtrar por raw_data na query)
+    // 1. Buscar todas as transações invoice.payment_succeeded (sem filtrar por raw_data na query)
     const { data: transactions, error: fetchError } = await supabase
       .from('hubla_transactions')
       .select('*')
-      .eq('event_type', 'csv_import')
+      .eq('event_type', 'invoice.payment_succeeded')
       .not('product_name', 'like', '%-offer-%');
 
     if (fetchError) {
@@ -40,7 +45,7 @@ Deno.serve(async (req) => {
       throw fetchError;
     }
 
-    console.log(`📊 ${transactions?.length || 0} transações CSV encontradas`);
+    console.log(`📊 ${transactions?.length || 0} transações encontradas`);
 
     // Filtrar apenas as que têm Order Bumps
     const transactionsWithOB = (transactions || []).filter(t => {
@@ -59,7 +64,18 @@ Deno.serve(async (req) => {
     let createdObCount = 0;
     let skippedCount = 0;
 
-    for (const transaction of transactionsWithOB || []) {
+    // Processar em batches de 100 para evitar timeout
+    const BATCH_SIZE = 100;
+    const totalBatches = Math.ceil(transactionsWithOB.length / BATCH_SIZE);
+    
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const start = batchIndex * BATCH_SIZE;
+      const end = Math.min(start + BATCH_SIZE, transactionsWithOB.length);
+      const batch = transactionsWithOB.slice(start, end);
+      
+      console.log(`\n📦 Processando batch ${batchIndex + 1}/${totalBatches} (${start + 1}-${end} de ${transactionsWithOB.length})`);
+
+      for (const transaction of batch) {
       try {
         // Garantir que raw_data seja um objeto válido
         let rawData: any = {};
@@ -209,9 +225,13 @@ Deno.serve(async (req) => {
         correctedCount++;
         console.log(`   ✅ Correção concluída`);
 
-      } catch (error) {
-        console.error(`❌ Erro ao processar ${transaction.hubla_id}:`, error);
+        } catch (error) {
+          console.error(`❌ Erro ao processar transação ${transaction.hubla_id}:`, error);
+          skippedCount++;
+        }
       }
+      
+      console.log(`✅ Batch ${batchIndex + 1}/${totalBatches} concluído`);
     }
 
     console.log('\n📊 Resumo da Correção:');
