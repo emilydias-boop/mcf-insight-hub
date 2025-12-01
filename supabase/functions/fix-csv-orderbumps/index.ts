@@ -5,19 +5,75 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Valores conhecidos dos Order Bumps
+// Função auxiliar para normalizar nomes (remover acentos, trim, uppercase)
+function normalizeName(name: string): string {
+  return name
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // Remove acentos
+}
+
+// Valores conhecidos dos Order Bumps - Mapeamento expandido
 const OB_VALUES: Record<string, { gross: number, net: number, category: string }> = {
+  // Order Bumps padrão - Construir
   'CONSTRUIR PARA ALUGAR': { gross: 97, net: 88.15, category: 'ob_construir_alugar' },
   'VIVER DE ALUGUEL': { gross: 97, net: 88.15, category: 'ob_construir_alugar' },
-  'ACESSO VITALIC': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
-  'ACESSO VITALÍCIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
-  'VITALÍCIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
+  'VIVENDO DE ALUGUEL': { gross: 97, net: 88.15, category: 'ob_construir_alugar' },
   'CONSTRUIR PARA VENDER': { gross: 47, net: 42.70, category: 'ob_construir_vender' },
-  // Novos produtos identificados nos dados reais
+  
+  // Order Bumps - Vitalício (todas as variações)
+  'ACESSO VITALIC': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
+  'ACESSO VITALICIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
+  'VITALICIO': { gross: 57, net: 51.82, category: 'ob_vitalicio' },
+  
+  // A010 produtos - todos mapeados como categoria a010
   'A010': { gross: 47, net: 42.70, category: 'a010' },
   'A010 - CONSULTORIA': { gross: 47, net: 42.70, category: 'a010' },
+  'A010 - CONSTRUA PARA VENDER': { gross: 47, net: 42.70, category: 'a010' },
+  'CONSTRUA PARA VENDER': { gross: 47, net: 42.70, category: 'a010' },
+  
+  // A011 produtos - Captação/Clube do Arremate
   'A011': { gross: 97, net: 88.15, category: 'clube_arremate' },
-  'A011 - CAPTAÇÃO': { gross: 97, net: 88.15, category: 'clube_arremate' },
+  'A011 - CAPTACAO': { gross: 97, net: 88.15, category: 'clube_arremate' },
+  'CAPTACAO': { gross: 97, net: 88.15, category: 'clube_arremate' },
+  
+  // A012 produtos
+  'A012': { gross: 297, net: 269.88, category: 'a012' },
+  
+  // Imersões
+  'IMERSAO PRESENCIAL': { gross: 97, net: 88.15, category: 'imersao' },
+  'IMERSAO': { gross: 97, net: 88.15, category: 'imersao' },
+  'IMERSAO SOCIOS': { gross: 197, net: 179.10, category: 'imersao_socios' },
+  
+  // Produtos Incorporador (A001-A009, Contrato)
+  'A001': { gross: 997, net: 906.17, category: 'incorporador' },
+  'A001 - MCF INCORPORADOR': { gross: 997, net: 906.17, category: 'incorporador' },
+  'A002': { gross: 997, net: 906.17, category: 'incorporador' },
+  'A003': { gross: 997, net: 906.17, category: 'incorporador' },
+  'A004': { gross: 1497, net: 1359.73, category: 'incorporador' },
+  'A005': { gross: 1997, net: 1813.29, category: 'incorporador' },
+  'A006': { gross: 1497, net: 1359.73, category: 'incorporador' },
+  'A007': { gross: 197, net: 179.10, category: 'imersao_socios' },
+  'A007 - IMERSAO SOCIOS': { gross: 197, net: 179.10, category: 'imersao_socios' },
+  'A008': { gross: 997, net: 906.17, category: 'incorporador' },
+  'A009': { gross: 1497, net: 1359.73, category: 'incorporador' },
+  'A009 - MCF INCORPORADOR': { gross: 1497, net: 1359.73, category: 'incorporador' },
+  'CONTRATO': { gross: 997, net: 906.17, category: 'incorporador' },
+  'CONTRATO - ANTICRISE': { gross: 997, net: 906.17, category: 'incorporador' },
+  
+  // Sócio MCF
+  'SOCIO MCF': { gross: 197, net: 179.10, category: 'socios' },
+  
+  // Efeito Alavanca / Clube Arremate
+  'EFEITO ALAVANCA': { gross: 297, net: 269.88, category: 'efeito_alavanca' },
+  'CONTRATO - EFEITO ALAVANCA': { gross: 297, net: 269.88, category: 'efeito_alavanca' },
+  'CONTRATO - CLUBE DO ARREMATE': { gross: 297, net: 269.88, category: 'clube_arremate' },
+  'CLUBE DO ARREMATE': { gross: 297, net: 269.88, category: 'clube_arremate' },
+  
+  // Ingressos de eventos
+  'INGRESSO': { gross: 97, net: 88.15, category: 'outros' },
+  'EVENTO': { gross: 97, net: 88.15, category: 'outros' },
 };
 
 Deno.serve(async (req) => {
@@ -125,20 +181,23 @@ Deno.serve(async (req) => {
         let totalObPrice = 0;
 
         orderbumps.forEach((obName: string, index: number) => {
-          const obNameUpper = obName.toUpperCase();
+          const normalizedName = normalizeName(obName);
           let obData = null;
           
-          // Identificar OB pelo nome
+          // Identificar OB pelo nome (matching por substring/keyword)
           for (const [key, values] of Object.entries(OB_VALUES)) {
-            if (obNameUpper.includes(key)) {
+            const normalizedKey = normalizeName(key);
+            if (normalizedName.includes(normalizedKey) || normalizedKey.includes(normalizedName)) {
               obData = values;
+              console.log(`   🔍 Match encontrado: "${obName}" -> "${key}" (${values.category})`);
               break;
             }
           }
           
+          // Fallback para OBs não reconhecidos
           if (!obData) {
-            console.log(`   ⚠️ OB desconhecido: ${obName}`);
-            return;
+            obData = { gross: 97, net: 88.15, category: 'outros' };
+            console.log(`   ⚠️ OB sem categoria específica: "${obName}" -> outros`);
           }
 
           totalObPrice += obData.gross;
