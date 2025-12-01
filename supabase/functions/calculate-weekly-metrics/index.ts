@@ -27,10 +27,21 @@ const INCORPORADOR_50K_INCLUDES = [
 // Produtos EXCLUÍDOS do Incorporador 50k
 const INCORPORADOR_50K_EXCLUDES = [
   'A010', 'A011', 'A012', 'A013', 'A014', 'A015',
-  'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'THE CLUB',
+  'EFEITO ALAVANCA', 'CLUBE DO ARREMATE',
   'CONSTRUIR PARA ALUGAR', 'VIVER DE ALUGUEL', 'ACESSO VITALIC',
   'IMERSÃO PRESENCIAL', // OB Evento
 ];
+
+// THE CLUB é excluído EXCETO quando faz parte de produtos A00x (ex: A009 + THE CLUB)
+const shouldExcludeTheClub = (productName: string): boolean => {
+  const upperName = productName.toUpperCase();
+  // Se o produto começa com A00, não excluir mesmo contendo THE CLUB
+  if (/^A00[0-9]/.test(upperName)) {
+    return false;
+  }
+  // Caso contrário, excluir se contém THE CLUB
+  return upperName.includes('THE CLUB');
+};
 
 // Mapeamento completo de 19 categorias
 const REVENUE_CATEGORIES = [
@@ -139,6 +150,11 @@ Deno.serve(async (req) => {
       
       // Excluir produtos específicos
       if (INCORPORADOR_50K_EXCLUDES.some(exc => productName.includes(exc))) {
+        return false;
+      }
+      
+      // Verificar exclusão especial de THE CLUB (exceto para A00x)
+      if (shouldExcludeTheClub(productName)) {
         return false;
       }
       
