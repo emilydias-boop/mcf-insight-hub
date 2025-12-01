@@ -9,39 +9,10 @@ const corsHeaders = {
 const HUBLA_PLATFORM_FEE = 0.0583;
 const HUBLA_NET_MULTIPLIER = 1 - HUBLA_PLATFORM_FEE; // 0.9417
 
-// Produtos que ENTRAM no Incorporador 50k (coluna H da planilha)
-const INCORPORADOR_50K_INCLUDES = [
-  // Prefixos A00x e R0xx
-  'A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008', 'A009',
-  'R001', 'R002', 'R003', 'R004', 'R005', 'R006', 'R007', 'R008', 'R009',
-  'R21', 'R22',
-  // Produtos específicos
-  'PRÉ RESERVA', 'PRÉ-RESERVA',
-  'CONTRATO - ANTICRISE', 'CONTRATO CREDENCIAMENTO',
-  'IMERSÃO SÓCIOS',
-  'JANTAR NETWORKING', 'SÓCIO JANTAR',
-  'MCF INCORPORADOR', 'MCF PLANO ANTICRISE',
-  'INCORPORADOR COMPLETO', 'INCORPORADOR BÁSICO',
-];
+// Produtos que ENTRAM no Incorporador 50k (apenas códigos A00x específicos)
+const INCORPORADOR_50K_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A008', 'A009'];
 
-// Produtos EXCLUÍDOS do Incorporador 50k
-const INCORPORADOR_50K_EXCLUDES = [
-  'A010', 'A011', 'A012', 'A013', 'A014', 'A015',
-  'EFEITO ALAVANCA', 'CLUBE DO ARREMATE',
-  'CONSTRUIR PARA ALUGAR', 'VIVER DE ALUGUEL', 'ACESSO VITALIC',
-  'IMERSÃO PRESENCIAL', // OB Evento
-];
-
-// THE CLUB é excluído EXCETO quando faz parte de produtos A00x (ex: A009 + THE CLUB)
-const shouldExcludeTheClub = (productName: string): boolean => {
-  const upperName = productName.toUpperCase();
-  // Se o produto começa com A00, não excluir mesmo contendo THE CLUB
-  if (/^A00[0-9]/.test(upperName)) {
-    return false;
-  }
-  // Caso contrário, excluir se contém THE CLUB
-  return upperName.includes('THE CLUB');
-};
+// Não precisa mais de lista de exclusões, pois estamos usando apenas códigos específicos
 
 // Mapeamento completo de 19 categorias
 const REVENUE_CATEGORIES = [
@@ -112,18 +83,8 @@ Deno.serve(async (req) => {
     const team_cost = (operationalCosts?.find(c => c.cost_type === 'team')?.amount || 0) / 4;
     const office_cost = (operationalCosts?.find(c => c.cost_type === 'office')?.amount || 0) / 4;
 
-    // 3. BUSCAR VENDAS A010 (da tabela a010_sales)
-    const { data: a010Sales } = await supabase
-      .from('a010_sales')
-      .select('*')
-      .gte('sale_date', week_start)
-      .lte('sale_date', week_end)
-      .eq('status', 'completed');
-
-    const vendas_a010 = a010Sales?.length || 0;
-    const faturado_a010 = a010Sales?.reduce((sum, s) => sum + (s.net_value || 0), 0) || 0;
-
-    console.log(`📈 Vendas A010: ${vendas_a010} vendas, R$ ${faturado_a010.toFixed(2)}`);
+    // 3. BUSCAR TRANSAÇÕES HUBLA (para contar A010 depois)
+    // Vendas A010 serão contadas a partir das transações Hubla
 
     // 4. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (APENAS VENDAS CONFIRMADAS)
     const { data: completedTransactions } = await supabase
@@ -144,25 +105,25 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (baseado no nome do produto)
+    // 6. CONTAR VENDAS A010 (faturas únicas da Hubla, não parcelas)
+    const a010Transactions = completedTransactions?.filter(t => {
+      const productName = (t.product_name || '').toUpperCase();
+      return t.product_category === 'a010' || productName.includes('A010');
+    }) || [];
+    
+    const vendas_a010 = a010Transactions.length;
+    const faturado_a010 = a010Transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    
+    console.log(`📈 Vendas A010: ${vendas_a010} vendas, R$ ${faturado_a010.toFixed(2)}`);
+
+    // 7. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A004, A008, A009)
     const incorporadorTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
-      
-      // Excluir produtos específicos
-      if (INCORPORADOR_50K_EXCLUDES.some(exc => productName.includes(exc))) {
-        return false;
-      }
-      
-      // Verificar exclusão especial de THE CLUB (exceto para A00x)
-      if (shouldExcludeTheClub(productName)) {
-        return false;
-      }
-      
-      // Incluir produtos específicos
-      return INCORPORADOR_50K_INCLUDES.some(inc => productName.includes(inc));
+      // Verificar se começa com algum dos códigos válidos
+      return INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
     });
 
-    // 7. CALCULAR MÉTRICAS INCORPORADOR 50K
+    // 8. CALCULAR MÉTRICAS INCORPORADOR 50K
     const faturamento_clint = incorporadorTransactions?.reduce(
       (sum, t) => sum + (t.product_price || 0), 0) || 0;
 
@@ -172,7 +133,7 @@ Deno.serve(async (req) => {
     console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)}`);
     console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)}`);
 
-    // 8. CALCULAR ORDER BUMPS (incluir os que estão em 'outros')
+    // 9. CALCULAR ORDER BUMPS (incluir os que estão em 'outros')
     const ob_construir_alugar_transactions = completedTransactions?.filter(t => {
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
@@ -191,7 +152,8 @@ Deno.serve(async (req) => {
     const ob_evento_transactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const price = t.product_price || 0;
-      return productName.includes('IMERSÃO PRESENCIAL') && price <= 300;
+      return (productName.includes('IMERSÃO PRESENCIAL') || productName.includes('IMERSAO PRESENCIAL')) 
+             && price <= 300;
     }) || [];
     
     const ob_construir_vender_transactions = completedTransactions?.filter(t => 
@@ -224,7 +186,7 @@ Deno.serve(async (req) => {
     console.log(`📦 OB Evento: ${ob_evento_sales} vendas, R$ ${ob_evento.toFixed(2)}`);
     console.log(`📦 OB Construir Vender: ${ob_construir_vender_sales} vendas, R$ ${ob_construir_vender.toFixed(2)}`);
 
-    // 9. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
+    // 10. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
     const revenueByCategory: Record<string, { revenue: number; sales: number }> = {};
     
     // Inicializar todas as categorias
@@ -251,30 +213,26 @@ Deno.serve(async (req) => {
       }
     });
 
-    // 10. CALCULAR ULTRAMETAS (baseado em vendas A010)
+    // 11. CALCULAR ULTRAMETAS (baseado em vendas A010)
     const ultrameta_clint = vendas_a010 * 1680;
     const ultrameta_liquido = vendas_a010 * 1400;
 
     console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)}`);
     console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)}`);
 
-    // 11. CALCULAR FATURAMENTO TOTAL (TODOS os valores líquidos da Hubla)
+    // 12. CALCULAR FATURAMENTO TOTAL (TODOS os valores líquidos da Hubla)
     const faturamento_total = completedTransactions?.reduce(
       (sum, t) => sum + parseValorLiquido(t), 0
     ) || 0;
 
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
 
-    // 12. CALCULAR FATURADO CONTRATO
+    // 13. CALCULAR FATURADO CONTRATO (apenas A000-Contrato e Anticrise)
     const contractTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
-      return (productName.includes('A000 - CONTRATO') ||
-              productName === 'CONTRATO CREDENCIAMENTO' ||
-              (productName.includes('CONTRATO') && 
-               !productName.includes('ANTICRISE') && 
-               !productName.includes('EFEITO ALAVANCA') &&
-               !productName.includes('CLUBE DO ARREMATE') &&
-               !productName.includes('THE CLUB')));
+      return (productName.includes('A000') && productName.includes('CONTRATO')) ||
+             productName.includes('CONTRATO - ANTICRISE') ||
+             productName.includes('CONTRATO-ANTICRISE');
     }) || [];
     
     const contract_revenue = contractTransactions.reduce(
@@ -284,12 +242,12 @@ Deno.serve(async (req) => {
     
     console.log(`📋 Faturado Contrato: ${contract_sales} vendas, R$ ${contract_revenue.toFixed(2)}`);
 
-    // 13. CALCULAR CUSTO REAL (incluir todos OBs)
+    // 14. CALCULAR CUSTO REAL (incluir todos OBs)
     const custo_real = ads_cost - (faturado_a010 + ob_construir_alugar + ob_vitalicio + ob_evento + ob_construir_vender);
 
     console.log(`💸 Custo Real: R$ ${custo_real.toFixed(2)}`);
 
-    // 14. CALCULAR MÉTRICAS DERIVADAS (fórmulas corrigidas)
+    // 15. CALCULAR MÉTRICAS DERIVADAS (fórmulas corrigidas)
     const operating_cost = ads_cost + team_cost + office_cost;
     const lucro_operacional = faturamento_total - operating_cost;
     
@@ -311,7 +269,7 @@ Deno.serve(async (req) => {
     const platform_fees = gross_revenue - net_revenue;
     const refunds_amount = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
 
-    // 15. PREPARAR DADOS PARA UPSERT
+    // 16. PREPARAR DADOS PARA UPSERT
     const metricsData: any = {
       start_date: week_start,
       end_date: week_end,
@@ -370,7 +328,12 @@ Deno.serve(async (req) => {
       metricsData[`${columnName}_sales`] = sales;
     });
 
-    // 16. UPSERT EM WEEKLY_METRICS
+    // IMPORTANTE: Sobrescrever contract_revenue com o valor calculado manualmente
+    // (não usar o da categoria 'contrato' que vem de product_category)
+    metricsData.contract_revenue = contract_revenue;
+    metricsData.contract_sales = contract_sales;
+
+    // 17. UPSERT EM WEEKLY_METRICS
     const { data, error } = await supabase
       .from('weekly_metrics')
       .upsert(metricsData, {
