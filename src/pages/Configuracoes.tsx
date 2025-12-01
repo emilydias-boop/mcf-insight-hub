@@ -162,6 +162,52 @@ export default function Configuracoes() {
 
           <TabsContent value="financeiro" className="space-y-4 mt-6">
             <OperationalCostsConfig />
+            
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-foreground">Recálculo de Métricas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Execute o recálculo de todas as métricas semanais após configurar os custos operacionais.
+                </p>
+                <Button 
+                  onClick={async () => {
+                    const { toast } = await import("sonner");
+                    toast.info("Recalculando métricas...");
+                    try {
+                      const { supabase } = await import("@/integrations/supabase/client");
+                      const { data: dates } = await supabase
+                        .from('hubla_transactions')
+                        .select('sale_date')
+                        .order('sale_date', { ascending: true })
+                        .limit(1);
+                      
+                      const { data: maxDates } = await supabase
+                        .from('hubla_transactions')
+                        .select('sale_date')
+                        .order('sale_date', { ascending: false })
+                        .limit(1);
+
+                      const startDate = dates?.[0]?.sale_date || '2024-06-01';
+                      const endDate = maxDates?.[0]?.sale_date || new Date().toISOString();
+
+                      const { error } = await supabase.functions.invoke('recalculate-metrics', {
+                        body: { start_date: startDate, end_date: endDate }
+                      });
+
+                      if (error) throw error;
+                      toast.success("Métricas recalculadas com sucesso!");
+                    } catch (error: any) {
+                      toast.error("Erro ao recalcular: " + error.message);
+                    }
+                  }}
+                  variant="outline"
+                >
+                  Recalcular Todas as Métricas
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="integracoes" className="space-y-4 mt-6">
