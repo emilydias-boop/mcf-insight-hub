@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.import-hubla-history]
 verify_jwt = false
+
+[functions.fix-csv-orderbumps]
+verify_jwt = false
