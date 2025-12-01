@@ -14,7 +14,9 @@ export function OperationalCostsConfig() {
   const [teamCost, setTeamCost] = useState("");
   const [officeCost, setOfficeCost] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(() => {
+    // Default to previous month (November when current is December)
     const now = new Date();
+    now.setMonth(now.getMonth() - 1);
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 

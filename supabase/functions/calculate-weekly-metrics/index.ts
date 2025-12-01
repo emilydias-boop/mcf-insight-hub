@@ -161,8 +161,8 @@ Deno.serve(async (req) => {
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
       return category === 'ob_construir_alugar' || 
-             productName === 'CONSTRUIR PARA ALUGAR' ||
-             productName === 'VIVER DE ALUGUEL';
+             productName.includes('CONSTRUIR PARA ALUGAR') ||
+             productName.includes('VIVER DE ALUGUEL');
     }) || [];
     
     const ob_vitalicio_transactions = completedTransactions?.filter(t => {
@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
     const ob_evento_transactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const price = t.product_price || 0;
-      return productName.includes('IMERSÃO PRESENCIAL') && price <= 150;
+      return productName.includes('IMERSÃO PRESENCIAL') && price <= 300;
     }) || [];
     
     const ob_construir_vender_transactions = completedTransactions?.filter(t => 
