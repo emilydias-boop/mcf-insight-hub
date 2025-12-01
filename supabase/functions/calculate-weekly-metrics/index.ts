@@ -9,6 +9,18 @@ const corsHeaders = {
 const HUBLA_PLATFORM_FEE = 0.0583;
 const HUBLA_NET_MULTIPLIER = 1 - HUBLA_PLATFORM_FEE; // 0.9417
 
+// Produtos que ENTRAM no Incorporador 50k
+const INCORPORADOR_50K_PRODUCTS = [
+  'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009',
+  'A000', 'CONTRATO - ANTICRISE'
+];
+
+// Produtos EXCLUÍDOS (consórcio/leilão)
+const EXCLUDED_CONTRACTS = [
+  'CONTRATO - EFEITO ALAVANCA',
+  'CONTRATO - CLUBE DO ARREMATE'
+];
+
 // Mapeamento completo de 19 categorias
 const REVENUE_CATEGORIES = [
   'a010', 'captacao', 'contrato', 'parceria', 'p2', 'renovacao', 
@@ -22,6 +34,16 @@ const REVENUE_CATEGORIES = [
 const COLUMN_NAME_MAP: Record<string, string> = {
   'contrato': 'contract',  // tabela usa contract_revenue, não contrato_revenue
 };
+
+function parseValorLiquido(transaction: any): number {
+  // Usar Valor Líquido do Hubla se disponível, senão calcular
+  const valorLiquidoStr = transaction.raw_data?.['Valor Líquido'];
+  if (valorLiquidoStr) {
+    const cleaned = String(valorLiquidoStr).replace(/[^\d.,-]/g, '').replace(',', '.');
+    return parseFloat(cleaned) || 0;
+  }
+  return (transaction.product_price || 0) * HUBLA_NET_MULTIPLIER;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -68,9 +90,20 @@ Deno.serve(async (req) => {
     const team_cost = (operationalCosts?.find(c => c.cost_type === 'team')?.amount || 0) / 4;
     const office_cost = (operationalCosts?.find(c => c.cost_type === 'office')?.amount || 0) / 4;
 
-    // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (APENAS VENDAS CONFIRMADAS)
-    // Filtrar apenas invoice.payment_succeeded para vendas reais
-    // Incluir raw_data para acessar o Valor Líquido real do Hubla
+    // 3. BUSCAR VENDAS A010 (da tabela a010_sales)
+    const { data: a010Sales } = await supabase
+      .from('a010_sales')
+      .select('*')
+      .gte('sale_date', week_start)
+      .lte('sale_date', week_end)
+      .eq('status', 'completed');
+
+    const vendas_a010 = a010Sales?.length || 0;
+    const faturado_a010 = a010Sales?.reduce((sum, s) => sum + (s.net_value || 0), 0) || 0;
+
+    console.log(`📈 Vendas A010: ${vendas_a010} vendas, R$ ${faturado_a010.toFixed(2)}`);
+
+    // 4. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (APENAS VENDAS CONFIRMADAS)
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
@@ -79,7 +112,7 @@ Deno.serve(async (req) => {
       .eq('event_type', 'invoice.payment_succeeded')
       .eq('sale_status', 'completed');
 
-    // 4. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
+    // 5. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
     const { data: refundedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
@@ -87,9 +120,43 @@ Deno.serve(async (req) => {
       .lt('sale_date', `${week_end}T23:59:59Z`)
       .eq('event_type', 'invoice.refunded');
 
-    console.log(`📊 Vendas: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
+    console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 5. CALCULAR RECEITAS POR CATEGORIA
+    // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K
+    const incorporadorTransactions = completedTransactions?.filter(t => {
+      const code = t.product_code?.toUpperCase();
+      const name = t.product_name?.toUpperCase();
+      
+      // Excluir consórcio/leilão
+      if (EXCLUDED_CONTRACTS.some(ex => name?.includes(ex))) return false;
+      
+      // Incluir apenas da lista
+      return INCORPORADOR_50K_PRODUCTS.some(p => code?.includes(p) || name?.includes(p));
+    });
+
+    // 7. CALCULAR MÉTRICAS INCORPORADOR 50K
+    const faturamento_clint = incorporadorTransactions?.reduce(
+      (sum, t) => sum + (t.product_price || 0), 0) || 0;
+
+    const incorporador_50k = incorporadorTransactions?.reduce(
+      (sum, t) => sum + parseValorLiquido(t), 0) || 0;
+
+    console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)}`);
+    console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)}`);
+
+    // 8. CALCULAR ORDER BUMPS
+    const ob_construir = completedTransactions?.filter(t => 
+      t.product_category?.toLowerCase() === 'ob_construir_alugar'
+    ).reduce((sum, t) => sum + parseValorLiquido(t), 0) || 0;
+
+    const ob_vitalicio = completedTransactions?.filter(t => 
+      t.product_category?.toLowerCase() === 'ob_vitalicio'
+    ).reduce((sum, t) => sum + parseValorLiquido(t), 0) || 0;
+
+    console.log(`📦 OB Construir: R$ ${ob_construir.toFixed(2)}`);
+    console.log(`📦 OB Vitalício: R$ ${ob_vitalicio.toFixed(2)}`);
+
+    // 9. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
     const revenueByCategory: Record<string, { revenue: number; sales: number }> = {};
     
     // Inicializar todas as categorias
@@ -100,34 +167,13 @@ Deno.serve(async (req) => {
     // Somar vendas completadas usando Valor Líquido real do Hubla
     completedTransactions?.forEach(t => {
       const category = t.product_category?.toLowerCase() || 'outros';
-      
-      // Usar Valor Líquido do Hubla se disponível, senão calcular
-      const valorLiquidoStr = t.raw_data?.['Valor Líquido'];
-      const netValue = valorLiquidoStr 
-        ? parseFloat(String(valorLiquidoStr).replace(/[^\d.,-]/g, '').replace(',', '.'))
-        : (t.product_price || 0) * HUBLA_NET_MULTIPLIER;
+      const netValue = parseValorLiquido(t);
       
       if (revenueByCategory[category]) {
         revenueByCategory[category].revenue += netValue;
         revenueByCategory[category].sales += 1;
       }
     });
-
-    // Calcular gross revenue (faturamento bruto - soma dos product_price)
-    const gross_revenue = completedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
-
-    // Calcular reembolsos (apenas para informação)
-    const refunds_amount = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
-    const refunds_count = refundedTransactions?.length || 0;
-
-    // Calcular receita líquida (soma dos valores líquidos reais do Hubla)
-    const net_revenue = Object.values(revenueByCategory).reduce((sum, cat) => sum + cat.revenue, 0);
-    const platform_fees = gross_revenue - net_revenue;
-
-    console.log(`💵 Faturamento Bruto: R$ ${gross_revenue.toFixed(2)}`);
-    console.log(`💳 Taxa Plataforma (real): R$ ${platform_fees.toFixed(2)}`);
-    console.log(`💰 Receita Líquida (Hubla): R$ ${net_revenue.toFixed(2)}`);
-    console.log(`💸 Reembolsos: R$ ${refunds_amount.toFixed(2)} (${refunds_count} transações)`);
 
     // Log por categoria
     REVENUE_CATEGORIES.forEach(cat => {
@@ -137,51 +183,93 @@ Deno.serve(async (req) => {
       }
     });
 
-    // 6. CALCULAR MÉTRICAS DERIVADAS (usar receita líquida)
-    const total_revenue = net_revenue;
+    // 10. CALCULAR ULTRAMETAS (baseado em vendas A010)
+    const ultrameta_clint = vendas_a010 * 1680;
+    const ultrameta_liquido = vendas_a010 * 1400;
+
+    console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)}`);
+    console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)}`);
+
+    // 11. CALCULAR FATURAMENTO TOTAL (nova fórmula)
+    const faturamento_total = incorporador_50k + ob_construir + ob_vitalicio + faturado_a010;
+
+    console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
+
+    // 12. CALCULAR CUSTO REAL (nova fórmula)
+    const custo_real = ads_cost - (faturado_a010 + ob_construir + ob_vitalicio);
+
+    console.log(`💸 Custo Real: R$ ${custo_real.toFixed(2)}`);
+
+    // 13. CALCULAR MÉTRICAS DERIVADAS (fórmulas corrigidas)
     const operating_cost = ads_cost + team_cost + office_cost;
-    const real_cost = operating_cost;
-    const operating_profit = total_revenue - operating_cost;
+    const lucro_operacional = faturamento_total - operating_cost;
     
-    const roi = real_cost > 0 ? ((operating_profit / real_cost) * 100) : 0;
-    const roas = ads_cost > 0 ? (total_revenue / ads_cost) : 0;
-    const cir = total_revenue > 0 ? ((ads_cost / total_revenue) * 100) : 0;
+    const roi = incorporador_50k > 0 ? (incorporador_50k / (incorporador_50k - lucro_operacional)) * 100 : 0;
+    const cir = incorporador_50k > 0 ? (custo_real / incorporador_50k) * 100 : 0;
+    const roas = ads_cost > 0 ? (faturamento_total / ads_cost) : 0;
+    const cpl = vendas_a010 > 0 ? (ads_cost / vendas_a010) : 0;
+    const cplr = vendas_a010 > 0 ? (custo_real / vendas_a010) : 0;
 
-    // Ultrametas
-    const ultrameta_clint = total_revenue * 0.3;
-    const ultrameta_liquido = ultrameta_clint - (operating_cost * 0.15);
+    console.log(`📊 ROI: ${roi.toFixed(2)}%`);
+    console.log(`📊 CIR: ${cir.toFixed(2)}%`);
+    console.log(`📊 ROAS: ${roas.toFixed(2)}`);
+    console.log(`📊 CPL: R$ ${cpl.toFixed(2)}`);
+    console.log(`📊 CPLR: R$ ${cplr.toFixed(2)}`);
 
-    // 7. PREPARAR DADOS PARA UPSERT
+    // Calcular gross revenue e platform fees para informação
+    const gross_revenue = completedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
+    const net_revenue = completedTransactions?.reduce((sum, t) => sum + parseValorLiquido(t), 0) || 0;
+    const platform_fees = gross_revenue - net_revenue;
+    const refunds_amount = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
+
+    // 14. PREPARAR DADOS PARA UPSERT
     const metricsData: any = {
       start_date: week_start,
       end_date: week_end,
       week_label: `${week_start} - ${week_end}`,
+      
+      // Custos
       ads_cost,
       team_cost,
       office_cost,
       total_cost: operating_cost,
       operating_cost,
-      real_cost,
-      clint_revenue: net_revenue, // Receita líquida
-      total_revenue: net_revenue,
-      operating_profit,
+      real_cost: custo_real,
+      
+      // Novas métricas
+      faturamento_clint,
+      incorporador_50k,
+      faturamento_total,
+      a010_sales: vendas_a010,
+      a010_revenue: faturado_a010,
+      custo_real,
+      cpl,
+      cplr,
+      ob_construir,
+      ob_vitalicio,
+      
+      // Métricas antigas (manter compatibilidade)
+      clint_revenue: incorporador_50k, // Receita líquida Incorporador 50k
+      total_revenue: faturamento_total,
+      operating_profit: lucro_operacional,
       roi,
       roas,
       cir,
       ultrameta_clint,
       ultrameta_liquido,
+      
       updated_at: new Date().toISOString(),
     };
 
-    // Adicionar receitas por categoria
+    // Adicionar receitas por categoria (19 categorias)
     REVENUE_CATEGORIES.forEach(cat => {
       const { revenue, sales } = revenueByCategory[cat];
-      const columnName = COLUMN_NAME_MAP[cat] || cat; // usa mapeamento ou nome original
+      const columnName = COLUMN_NAME_MAP[cat] || cat;
       metricsData[`${columnName}_revenue`] = revenue;
       metricsData[`${columnName}_sales`] = sales;
     });
 
-    // 8. UPSERT EM WEEKLY_METRICS
+    // 15. UPSERT EM WEEKLY_METRICS
     const { data, error } = await supabase
       .from('weekly_metrics')
       .upsert(metricsData, {
@@ -205,14 +293,24 @@ Deno.serve(async (req) => {
         message: 'Métricas calculadas com sucesso',
         data,
         summary: {
+          vendas_a010,
+          faturado_a010,
+          faturamento_clint,
+          incorporador_50k,
+          ob_construir,
+          ob_vitalicio,
+          faturamento_total,
+          custo_real,
           gross_revenue,
           platform_fees,
           net_revenue,
           refunds_amount,
-          refunds_count,
-          operating_profit,
+          lucro_operacional,
           roi: `${roi.toFixed(2)}%`,
           roas: roas.toFixed(2),
+          cir: `${cir.toFixed(2)}%`,
+          cpl: `R$ ${cpl.toFixed(2)}`,
+          cplr: `R$ ${cplr.toFixed(2)}`,
         }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

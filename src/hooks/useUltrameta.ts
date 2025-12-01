@@ -37,11 +37,11 @@ export const useUltrameta = (startDate?: Date, endDate?: Date) => {
         } as Ultrameta;
       }
 
-      // Agregar dados do período
+      // Agregar dados do período (usando novas colunas)
       const totals = data.reduce((acc, week) => ({
         ultrametaClint: acc.ultrametaClint + (week.ultrameta_clint || 0),
         faturamentoIncorporador50k: acc.faturamentoIncorporador50k + (week.incorporador_50k || 0),
-        faturamentoClintBruto: acc.faturamentoClintBruto + (week.clint_revenue || 0),
+        faturamentoClintBruto: acc.faturamentoClintBruto + (week.faturamento_clint || 0),
         ultrametaLiquido: acc.ultrametaLiquido + (week.ultrameta_liquido || 0),
       }), {
         ultrametaClint: 0,
