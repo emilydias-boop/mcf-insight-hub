@@ -241,19 +241,33 @@ Deno.serve(async (req) => {
 
     // Recalcular métricas após correção
     console.log('\n🔄 Recalculando métricas...');
-    const { data: dates } = await supabase
+    
+    // Buscar data mais antiga
+    const { data: minDateData } = await supabase
       .from('hubla_transactions')
       .select('sale_date')
-      .order('sale_date', { ascending: true });
+      .order('sale_date', { ascending: true })
+      .limit(1)
+      .single();
+
+    // Buscar data mais recente  
+    const { data: maxDateData } = await supabase
+      .from('hubla_transactions')
+      .select('sale_date')
+      .order('sale_date', { ascending: false })
+      .limit(1)
+      .single();
     
-    if (dates && dates.length > 0) {
-      const minDate = new Date(dates[0].sale_date);
-      const maxDate = new Date(dates[dates.length - 1].sale_date);
+    if (minDateData && maxDateData) {
+      const startDate = new Date(minDateData.sale_date).toISOString().split('T')[0];
+      const endDate = new Date(maxDateData.sale_date).toISOString().split('T')[0];
+      
+      console.log(`📅 Range de recálculo: ${startDate} até ${endDate}`);
       
       await supabase.functions.invoke('recalculate-metrics', {
         body: {
-          start_date: minDate.toISOString().split('T')[0],
-          end_date: maxDate.toISOString().split('T')[0],
+          start_date: startDate,
+          end_date: endDate,
         },
       });
       

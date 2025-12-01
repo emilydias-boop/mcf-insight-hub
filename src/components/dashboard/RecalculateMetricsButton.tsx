@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-const STORAGE_KEY = 'orderbumps_fixed_v3'; // Incrementado para permitir nova execução
+const STORAGE_KEY = 'orderbumps_fixed_v4'; // Incrementado para permitir nova execução
 
 export function RecalculateMetricsButton() {
   const [isRecalculated, setIsRecalculated] = useState(false);
