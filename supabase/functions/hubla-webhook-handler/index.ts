@@ -6,6 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Produtos que ENTRAM no Incorporador 50k
+const INCORPORADOR_50K_PRODUCTS = [
+  'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009',
+  'A000', 'CONTRATO - ANTICRISE'
+];
+
+// Produtos EXCLUÍDOS (consórcio/leilão)
+const EXCLUDED_CONTRACTS = [
+  'CONTRATO - EFEITO ALAVANCA',
+  'CONTRATO - CLUBE DO ARREMATE'
+];
+
 // Mapeamento completo de 19 categorias (sincronizado com import-hubla-history)
 const PRODUCT_MAPPING: Record<string, string> = {
   // A010 - Construa para Vender
@@ -56,6 +68,11 @@ const PRODUCT_MAPPING: Record<string, string> = {
   
   // Sócios
   'SÓCIO MCF': 'socios',
+  'A007': 'socios',
+  
+  // The Club
+  'A008': 'parceria',
+  'THE CLUB': 'parceria',
   
   // OB Construir para Alugar
   'CONSTRUIR PARA ALUGAR': 'ob_construir_alugar',

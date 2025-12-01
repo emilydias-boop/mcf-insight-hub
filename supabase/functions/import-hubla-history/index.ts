@@ -6,6 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Produtos que ENTRAM no Incorporador 50k
+const INCORPORADOR_50K_PRODUCTS = [
+  'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009',
+  'A000', 'CONTRATO - ANTICRISE'
+];
+
+// Produtos EXCLUÍDOS (consórcio/leilão)
+const EXCLUDED_CONTRACTS = [
+  'CONTRATO - EFEITO ALAVANCA',
+  'CONTRATO - CLUBE DO ARREMATE'
+];
+
 const PRODUCT_MAPPING: Record<string, string> = {
   'A010': 'a010',
   'A010 - Incorporador': 'a010',
@@ -16,6 +28,11 @@ const PRODUCT_MAPPING: Record<string, string> = {
   'MCF INCORPORADOR COMPLETO': 'parceria',
   'MCF Incorporador': 'parceria',
   'A001': 'parceria',
+  'A003': 'parceria',
+  'A004': 'parceria',
+  'A008': 'parceria',
+  'A009': 'parceria',
+  'The Club': 'parceria',
   'Renovação': 'renovacao',
   'Renovação Anual': 'renovacao',
   'Captação': 'captacao',
@@ -34,6 +51,7 @@ const PRODUCT_MAPPING: Record<string, string> = {
   'MGC': 'mentoria_grupo_caixa',
   'Sócios': 'socios',
   'Programa Sócios': 'socios',
+  'A007': 'socios',
   'Clube Arremate': 'clube_arremate',
   'CA': 'clube_arremate',
   'Imersão': 'imersao',

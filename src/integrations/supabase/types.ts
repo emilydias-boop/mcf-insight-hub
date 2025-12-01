@@ -1912,9 +1912,12 @@ export type Database = {
           cpl: number | null
           cplr: number | null
           created_at: string | null
+          custo_real: number | null
           efeito_alavanca_revenue: number | null
           efeito_alavanca_sales: number | null
           end_date: string
+          faturamento_clint: number | null
+          faturamento_total: number | null
           formacao_revenue: number | null
           formacao_sales: number | null
           id: string
@@ -1927,12 +1930,14 @@ export type Database = {
           mentoria_caixa_sales: number | null
           mentoria_grupo_caixa_revenue: number | null
           mentoria_grupo_caixa_sales: number | null
+          ob_construir: number | null
           ob_construir_alugar_revenue: number | null
           ob_construir_alugar_sales: number | null
           ob_construir_revenue: number | null
           ob_construir_sales: number | null
           ob_evento_revenue: number | null
           ob_evento_sales: number | null
+          ob_vitalicio: number | null
           ob_vitalicio_revenue: number | null
           ob_vitalicio_sales: number | null
           office_cost: number | null
@@ -2002,9 +2007,12 @@ export type Database = {
           cpl?: number | null
           cplr?: number | null
           created_at?: string | null
+          custo_real?: number | null
           efeito_alavanca_revenue?: number | null
           efeito_alavanca_sales?: number | null
           end_date: string
+          faturamento_clint?: number | null
+          faturamento_total?: number | null
           formacao_revenue?: number | null
           formacao_sales?: number | null
           id?: string
@@ -2017,12 +2025,14 @@ export type Database = {
           mentoria_caixa_sales?: number | null
           mentoria_grupo_caixa_revenue?: number | null
           mentoria_grupo_caixa_sales?: number | null
+          ob_construir?: number | null
           ob_construir_alugar_revenue?: number | null
           ob_construir_alugar_sales?: number | null
           ob_construir_revenue?: number | null
           ob_construir_sales?: number | null
           ob_evento_revenue?: number | null
           ob_evento_sales?: number | null
+          ob_vitalicio?: number | null
           ob_vitalicio_revenue?: number | null
           ob_vitalicio_sales?: number | null
           office_cost?: number | null
@@ -2092,9 +2102,12 @@ export type Database = {
           cpl?: number | null
           cplr?: number | null
           created_at?: string | null
+          custo_real?: number | null
           efeito_alavanca_revenue?: number | null
           efeito_alavanca_sales?: number | null
           end_date?: string
+          faturamento_clint?: number | null
+          faturamento_total?: number | null
           formacao_revenue?: number | null
           formacao_sales?: number | null
           id?: string
@@ -2107,12 +2120,14 @@ export type Database = {
           mentoria_caixa_sales?: number | null
           mentoria_grupo_caixa_revenue?: number | null
           mentoria_grupo_caixa_sales?: number | null
+          ob_construir?: number | null
           ob_construir_alugar_revenue?: number | null
           ob_construir_alugar_sales?: number | null
           ob_construir_revenue?: number | null
           ob_construir_sales?: number | null
           ob_evento_revenue?: number | null
           ob_evento_sales?: number | null
+          ob_vitalicio?: number | null
           ob_vitalicio_revenue?: number | null
           ob_vitalicio_sales?: number | null
           office_cost?: number | null
