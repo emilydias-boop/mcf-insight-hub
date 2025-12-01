@@ -28,22 +28,38 @@ Deno.serve(async (req) => {
   try {
     console.log('🔧 Iniciando correção de Order Bumps históricos...');
 
-    // 1. Buscar todas as transações CSV que têm orderbumps no raw_data
+    // 1. Buscar todas as transações CSV (sem filtrar por raw_data na query)
     const { data: transactions, error: fetchError } = await supabase
       .from('hubla_transactions')
       .select('*')
-      .not('raw_data->Nome do produto de orderbump', 'is', null)
-      .neq('raw_data->Nome do produto de orderbump', '');
+      .eq('event_type', 'csv_import')
+      .not('product_name', 'like', '%-offer-%');
 
-    if (fetchError) throw fetchError;
+    if (fetchError) {
+      console.error('❌ Erro ao buscar transações:', fetchError);
+      throw fetchError;
+    }
 
-    console.log(`📊 ${transactions?.length || 0} transações com Order Bumps encontradas`);
+    console.log(`📊 ${transactions?.length || 0} transações CSV encontradas`);
+
+    // Filtrar apenas as que têm Order Bumps
+    const transactionsWithOB = (transactions || []).filter(t => {
+      try {
+        const rawData = typeof t.raw_data === 'string' ? JSON.parse(t.raw_data) : t.raw_data;
+        const obField = rawData?.['Nome do produto de orderbump'];
+        return obField && obField !== '';
+      } catch {
+        return false;
+      }
+    });
+
+    console.log(`📦 ${transactionsWithOB.length} transações com Order Bumps identificadas`);
 
     let correctedCount = 0;
     let createdObCount = 0;
     let skippedCount = 0;
 
-    for (const transaction of transactions || []) {
+    for (const transaction of transactionsWithOB || []) {
       try {
         // Garantir que raw_data seja um objeto válido
         let rawData: any = {};
