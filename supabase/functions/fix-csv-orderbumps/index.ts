@@ -132,8 +132,9 @@ async function processOrderBumps(supabase: any) {
     let createdObCount = 0;
     let skippedCount = 0;
 
-    // Processar em batches de 100 para evitar timeout
-    const BATCH_SIZE = 100;
+    // Processar em batches menores (50) com delays para evitar CPU overload
+    const BATCH_SIZE = 50;
+    const BATCH_DELAY_MS = 500; // Delay entre batches
     const totalBatches = Math.ceil(transactionsWithOB.length / BATCH_SIZE);
     
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -176,14 +177,14 @@ async function processOrderBumps(supabase: any) {
         console.log(`\n📦 Processando: ${transaction.hubla_id}`);
         console.log(`   OBs: ${orderbumps.join(', ')}`);
 
-        // Verificar se já existem transações de offer
-        const { data: existingOffers } = await supabase
+        // Verificar se já existem transações de offer (otimizado com count)
+        const { count: existingOffersCount } = await supabase
           .from('hubla_transactions')
-          .select('hubla_id')
+          .select('*', { count: 'exact', head: true })
           .like('hubla_id', `${transaction.hubla_id}-offer-%`);
 
-        if (existingOffers && existingOffers.length > 0) {
-          console.log(`   ⏭️ Já possui ${existingOffers.length} offers criados`);
+        if (existingOffersCount && existingOffersCount > 0) {
+          console.log(`   ⏭️ Já possui ${existingOffersCount} offers criados`);
           skippedCount++;
           continue;
         }
@@ -303,6 +304,12 @@ async function processOrderBumps(supabase: any) {
       }
       
       console.log(`✅ Batch ${batchIndex + 1}/${totalBatches} concluído`);
+      
+      // Adicionar delay entre batches para evitar sobrecarga de CPU
+      if (batchIndex < totalBatches - 1) {
+        console.log(`⏳ Aguardando ${BATCH_DELAY_MS}ms antes do próximo batch...`);
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+      }
     }
 
     console.log('\n📊 Resumo da Correção:');

@@ -15,6 +15,7 @@ import { TrendChart } from "@/components/dashboard/TrendChart";
 import { PeriodComparison } from "@/components/dashboard/PeriodComparison";
 import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer";
 import { RecalculateMetricsButton } from "@/components/dashboard/RecalculateMetricsButton";
+import { RecalculateOnlyMetricsButton } from "@/components/dashboard/RecalculateOnlyMetricsButton";
 import { DebugResetButton } from "@/components/dashboard/DebugResetButton";
 import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
@@ -240,6 +241,7 @@ export default function Dashboard() {
           </div>
           <div className="flex gap-2">
             <RecalculateMetricsButton />
+            <RecalculateOnlyMetricsButton />
             <DebugResetButton />
             <TargetsConfigDialog />
             <PeriodComparison />
