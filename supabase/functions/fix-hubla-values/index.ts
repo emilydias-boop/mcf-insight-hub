@@ -125,12 +125,12 @@ serve(async (req) => {
         const receivers = invoice?.receivers || [];
         const smartInstallment = invoice?.smartInstallment || {};
 
-        // Extrair valores corretos
-        const subtotalCents = amount.subtotalCents || amount.totalCents || 0;
-        const installmentFeeCents = amount.installmentFeeCents || 0;
+        // Extrair valores corretos (garantir inteiros)
+        const subtotalCents = Math.round(amount.subtotalCents || amount.totalCents || 0);
+        const installmentFeeCents = Math.round(amount.installmentFeeCents || 0);
         
         const sellerReceiver = receivers.find((r: any) => r.role === 'seller');
-        const sellerTotalCents = sellerReceiver?.totalCents || 0;
+        const sellerTotalCents = Math.round(sellerReceiver?.totalCents || 0);
 
         // Calcular valores
         const grossValue = subtotalCents / 100;
