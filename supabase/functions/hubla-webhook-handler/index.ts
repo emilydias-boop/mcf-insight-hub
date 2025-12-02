@@ -109,6 +109,28 @@ function mapProductCategory(productName: string, productCode?: string): string {
   return 'outros';
 }
 
+// Extrair informações de smartInstallment do invoice
+function extractSmartInstallment(invoice: any): { installment: number | null; installments: number | null } {
+  const smartInstallment = invoice?.smartInstallment;
+  if (!smartInstallment) {
+    return { installment: null, installments: null };
+  }
+  return {
+    installment: smartInstallment.installment || null,
+    installments: smartInstallment.installments || null,
+  };
+}
+
+// Extrair valor líquido do seller dos receivers
+function extractSellerNetValue(invoice: any): number | null {
+  const receivers = invoice?.receivers || [];
+  const sellerReceiver = receivers.find((r: any) => r.role === 'seller');
+  if (sellerReceiver?.totalCents) {
+    return sellerReceiver.totalCents / 100; // Converter de centavos para reais
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -143,9 +165,14 @@ serve(async (req) => {
       // NewSale - extrair do body.event
       if (eventType === 'NewSale') {
         const eventData = body.event || {};
+        const invoice = eventData.invoice || {};
         const productName = eventData.groupName || eventData.products?.[0]?.name || 'Produto Desconhecido';
         const productPrice = parseFloat(eventData.totalAmount || eventData.amount || 0);
         const customerId = eventData.customer_id || eventData.customerId;
+        
+        // Extrair smartInstallment
+        const { installment, installments } = extractSmartInstallment(invoice);
+        const sellerNetValue = extractSellerNetValue(invoice);
         
         const productCategory = mapProductCategory(productName);
         const saleDate = new Date(eventData.created_at || eventData.createdAt || Date.now()).toISOString();
@@ -166,7 +193,7 @@ serve(async (req) => {
           payment_method: eventData.paymentMethod || null,
           sale_date: saleDate,
           sale_status: 'completed',
-          raw_data: body,
+          raw_data: body, // Preservar raw_data completo
         };
 
         const { error } = await supabase
@@ -175,21 +202,22 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        // Se for A010, inserir também na tabela a010_sales
-        if (productCategory === 'a010') {
+        // Se for A010 e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
+        const isFirstInstallment = installment === null || installment === 1;
+        if (productCategory === 'a010' && isFirstInstallment) {
           await supabase
             .from('a010_sales')
             .upsert({
               customer_name: transactionData.customer_name || 'Cliente Desconhecido',
               customer_email: transactionData.customer_email,
               customer_phone: transactionData.customer_phone,
-              net_value: productPrice,
+              net_value: sellerNetValue || productPrice,
               sale_date: saleDate,
               status: 'completed',
             }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
         }
 
-        console.log(`✅ NewSale processado: ${productName} - R$ ${productPrice}`);
+        console.log(`✅ NewSale processado: ${productName} - R$ ${productPrice} (parcela ${installment || 1}/${installments || 1})`);
       }
 
       // invoice.payment_succeeded - extrair items individuais
@@ -197,7 +225,65 @@ serve(async (req) => {
         const invoice = body.event?.invoice || body.invoice;
         const items = invoice?.items || [];
         
-        console.log(`📦 Processando ${items.length} items da invoice ${invoice?.id}`);
+        // Extrair smartInstallment do invoice
+        const { installment, installments } = extractSmartInstallment(invoice);
+        const sellerNetValue = extractSellerNetValue(invoice);
+        
+        console.log(`📦 Processando ${items.length} items da invoice ${invoice?.id} (parcela ${installment || 1}/${installments || 1})`);
+
+        // Se não tem items, criar transação do produto principal
+        if (items.length === 0) {
+          const product = body.event?.product || {};
+          const productName = product.name || 'Produto Desconhecido';
+          const productPrice = (invoice?.amount?.subtotalCents || 0) / 100;
+          const productCategory = mapProductCategory(productName);
+          const saleDate = new Date(invoice?.saleDate || invoice?.createdAt || Date.now()).toISOString();
+          
+          const user = body.event?.user || invoice?.payer || {};
+          
+          const transactionData = {
+            hubla_id: invoice?.id || `invoice-${Date.now()}`,
+            event_type: 'invoice.payment_succeeded',
+            product_name: productName,
+            product_code: null,
+            product_price: productPrice,
+            product_category: productCategory,
+            product_type: null,
+            customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
+            customer_email: user.email || null,
+            customer_phone: user.phone || null,
+            utm_source: null,
+            utm_medium: null,
+            utm_campaign: null,
+            payment_method: invoice?.paymentMethod || null,
+            sale_date: saleDate,
+            sale_status: 'completed',
+            raw_data: body, // Preservar raw_data completo com smartInstallment
+          };
+
+          const { error } = await supabase
+            .from('hubla_transactions')
+            .upsert(transactionData, { onConflict: 'hubla_id' });
+
+          if (error) throw error;
+
+          // Se for A010 e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
+          const isFirstInstallment = installment === null || installment === 1;
+          if (productCategory === 'a010' && isFirstInstallment) {
+            await supabase
+              .from('a010_sales')
+              .upsert({
+                customer_name: transactionData.customer_name || 'Cliente Desconhecido',
+                customer_email: transactionData.customer_email,
+                customer_phone: transactionData.customer_phone,
+                net_value: sellerNetValue || productPrice,
+                sale_date: saleDate,
+                status: 'completed',
+              }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+          }
+
+          console.log(`✅ Invoice sem items: ${productName} - ${productCategory} - R$ ${productPrice} (parcela ${installment || 1}/${installments || 1})`);
+        }
 
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
@@ -209,7 +295,9 @@ serve(async (req) => {
           const productPrice = parseFloat(item.price || item.amount || 0);
           
           const productCategory = mapProductCategory(productName, productCode);
-          const saleDate = new Date(invoice.created_at || invoice.createdAt || Date.now()).toISOString();
+          const saleDate = new Date(invoice.saleDate || invoice.created_at || invoice.createdAt || Date.now()).toISOString();
+          
+          const user = body.event?.user || invoice?.payer || {};
           
           const transactionData = {
             hubla_id: hublaId,
@@ -219,16 +307,16 @@ serve(async (req) => {
             product_price: productPrice,
             product_category: productCategory,
             product_type: item.type || null,
-            customer_name: invoice.customer?.name || invoice.customer_name || null,
-            customer_email: invoice.customer?.email || invoice.customer_email || null,
-            customer_phone: invoice.customer?.phone || invoice.customer_phone || null,
+            customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || invoice.customer?.name || invoice.customer_name || null,
+            customer_email: user.email || invoice.customer?.email || invoice.customer_email || null,
+            customer_phone: user.phone || invoice.customer?.phone || invoice.customer_phone || null,
             utm_source: invoice.utm_source || null,
             utm_medium: invoice.utm_medium || null,
             utm_campaign: invoice.utm_campaign || null,
-            payment_method: invoice.payment_method || null,
+            payment_method: invoice.paymentMethod || invoice.payment_method || null,
             sale_date: saleDate,
             sale_status: 'completed',
-            raw_data: { ...body, item_index: i },
+            raw_data: body, // Preservar raw_data completo com smartInstallment
           };
 
           const { error } = await supabase
@@ -237,21 +325,22 @@ serve(async (req) => {
 
           if (error) throw error;
 
-          // Se for A010 e não for offer, inserir na tabela a010_sales
-          if (productCategory === 'a010' && !isOffer) {
+          // Se for A010, não for offer, e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
+          const isFirstInstallment = installment === null || installment === 1;
+          if (productCategory === 'a010' && !isOffer && isFirstInstallment) {
             await supabase
               .from('a010_sales')
               .upsert({
                 customer_name: transactionData.customer_name || 'Cliente Desconhecido',
                 customer_email: transactionData.customer_email,
                 customer_phone: transactionData.customer_phone,
-                net_value: productPrice,
+                net_value: sellerNetValue || productPrice,
                 sale_date: saleDate,
                 status: 'completed',
               }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
           }
 
-          console.log(`✅ Item ${i + 1}/${items.length}: ${productName} - ${productCategory} - R$ ${productPrice}`);
+          console.log(`✅ Item ${i + 1}/${items.length}: ${productName} - ${productCategory} - R$ ${productPrice} (parcela ${installment || 1}/${installments || 1})`);
         }
       }
 
