@@ -241,31 +241,39 @@ serve(async (req) => {
           
           const user = body.event?.user || invoice?.payer || {};
           
-          const transactionData = {
-            hubla_id: invoice?.id || `invoice-${Date.now()}`,
-            event_type: 'invoice.payment_succeeded',
-            product_name: productName,
-            product_code: null,
-            product_price: productPrice,
-            product_category: productCategory,
-            product_type: null,
-            customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
-            customer_email: user.email || null,
-            customer_phone: user.phone || null,
-            utm_source: null,
-            utm_medium: null,
-            utm_campaign: null,
-            payment_method: invoice?.paymentMethod || null,
-            sale_date: saleDate,
-            sale_status: 'completed',
-            raw_data: body, // Preservar raw_data completo com smartInstallment
-          };
+        const transactionData = {
+          hubla_id: invoice?.id || `invoice-${Date.now()}`,
+          event_type: 'invoice.payment_succeeded',
+          product_name: productName,
+          product_code: null,
+          product_price: productPrice,
+          product_category: productCategory,
+          product_type: null,
+          customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
+          customer_email: user.email || null,
+          customer_phone: user.phone || null,
+          utm_source: null,
+          utm_medium: null,
+          utm_campaign: null,
+          payment_method: invoice?.paymentMethod || null,
+          sale_date: saleDate,
+          sale_status: 'completed',
+          raw_data: body, // Preservar raw_data completo com smartInstallment
+        };
 
-          const { error } = await supabase
-            .from('hubla_transactions')
-            .upsert(transactionData, { onConflict: 'hubla_id' });
+        console.log(`📝 [UPSERT] Tentando salvar transação: ${transactionData.hubla_id} - ${productName}`);
+        
+        const { data: upsertData, error } = await supabase
+          .from('hubla_transactions')
+          .upsert(transactionData, { onConflict: 'hubla_id' })
+          .select();
 
-          if (error) throw error;
+        if (error) {
+          console.error(`❌ [UPSERT ERROR] hubla_id=${transactionData.hubla_id}:`, error);
+          throw error;
+        }
+        
+        console.log(`✅ [UPSERT SUCCESS] hubla_id=${transactionData.hubla_id}, rows=${upsertData?.length || 0}`);
 
           // Se for A010 e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
           const isFirstInstallment = installment === null || installment === 1;
@@ -319,11 +327,19 @@ serve(async (req) => {
             raw_data: body, // Preservar raw_data completo com smartInstallment
           };
 
-          const { error } = await supabase
+          console.log(`📝 [UPSERT] Tentando salvar item ${i + 1}: ${transactionData.hubla_id} - ${productName}`);
+          
+          const { data: itemUpsertData, error } = await supabase
             .from('hubla_transactions')
-            .upsert(transactionData, { onConflict: 'hubla_id' });
+            .upsert(transactionData, { onConflict: 'hubla_id' })
+            .select();
 
-          if (error) throw error;
+          if (error) {
+            console.error(`❌ [UPSERT ERROR] hubla_id=${transactionData.hubla_id}:`, error);
+            throw error;
+          }
+          
+          console.log(`✅ [UPSERT SUCCESS] hubla_id=${transactionData.hubla_id}, rows=${itemUpsertData?.length || 0}`);
 
           // Se for A010, não for offer, e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
           const isFirstInstallment = installment === null || installment === 1;
