@@ -13,18 +13,19 @@ const HUBLA_NET_MULTIPLIER = 1 - HUBLA_PLATFORM_FEE; // 0.9417
 const INCORPORADOR_50K_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009'];
 
 // Mapeamento de preços fixos (BRUTO) para Incorporador 50k
-// A005 (P2) não está no mapeamento pois tem preço variável
 const INCORPORADOR_PRODUCT_PRICES: Record<string, number> = {
   'A001': 14500,  // MCF INCORPORADOR COMPLETO
+  'A002': 14000,  // MCF INCORPORADOR BÁSICO
   'A003': 7503,   // MCF Plano Anticrise Completo
   'A004': 5503,   // MCF Plano Anticrise Básico
   'A006': 2997,   // Renovação Parceiro MCF
   'A009': 19500,  // MCF INCORPORADOR COMPLETO + THE CLUB
+  'SÓCIO JANTAR': 297,
+  'SOCIO JANTAR': 297,
   'CONTRATO - ANTICRISE': 249,
   'CONTRATO-ANTICRISE': 249,
+  // A000 (Contrato), A005 (P2), A008 (The Club) = preço variável, usar product_price
 };
-
-// Não precisa mais de lista de exclusões, pois estamos usando apenas códigos específicos
 
 // Mapeamento completo de 19 categorias
 const REVENUE_CATEGORIES = [
@@ -40,13 +41,82 @@ const COLUMN_NAME_MAP: Record<string, string> = {
   'contrato': 'contract',  // tabela usa contract_revenue, não contrato_revenue
 };
 
+// Extrair smartInstallment do raw_data
+function getSmartInstallment(transaction: any): { installment: number | null; installments: number | null } {
+  const rawData = transaction.raw_data;
+  const invoice = rawData?.event?.invoice || rawData?.invoice;
+  const smartInstallment = invoice?.smartInstallment;
+  
+  if (!smartInstallment) {
+    return { installment: null, installments: null };
+  }
+  
+  return {
+    installment: smartInstallment.installment || null,
+    installments: smartInstallment.installments || null,
+  };
+}
+
+// Limite para identificar recorrência baseado no valor líquido do seller
+const RECO_VALUE_THRESHOLD = 20; // R$ 20 - valores abaixo são recorrências
+
+// Extrair valor líquido do seller dos receivers (movido para cima)
+function extractSellerNetValue(transaction: any): number | null {
+  const rawData = transaction.raw_data;
+  const invoice = rawData?.event?.invoice || rawData?.invoice;
+  const receivers = invoice?.receivers || [];
+  const sellerReceiver = receivers.find((r: any) => r.role === 'seller');
+  if (sellerReceiver?.totalCents) {
+    return sellerReceiver.totalCents / 100;
+  }
+  return null;
+}
+
+// Verificar se é primeira parcela (não é recorrência)
+function isFirstInstallment(transaction: any): boolean {
+  const { installment } = getSmartInstallment(transaction);
+  
+  // Se tem smartInstallment e não é parcela 1 = recorrência
+  if (installment !== null && installment > 1) {
+    return false;
+  }
+  
+  // Fallback: verificar pelo valor líquido do seller (RECO tem valor baixo < R$20)
+  const sellerNetValue = extractSellerNetValue(transaction);
+  if (sellerNetValue !== null && sellerNetValue < RECO_VALUE_THRESHOLD) {
+    return false; // Valor muito baixo = recorrência
+  }
+  
+  return true; // É venda nova
+}
+
+// Extrair valor líquido do seller dos receivers
+function extractSellerNetValue(transaction: any): number | null {
+  const rawData = transaction.raw_data;
+  const invoice = rawData?.event?.invoice || rawData?.invoice;
+  const receivers = invoice?.receivers || [];
+  const sellerReceiver = receivers.find((r: any) => r.role === 'seller');
+  if (sellerReceiver?.totalCents) {
+    return sellerReceiver.totalCents / 100; // Converter de centavos para reais
+  }
+  return null;
+}
+
 function parseValorLiquido(transaction: any): number {
-  // Usar Valor Líquido do Hubla se disponível, senão calcular
+  // Primeiro, tentar extrair valor líquido do seller dos receivers
+  const sellerNetValue = extractSellerNetValue(transaction);
+  if (sellerNetValue !== null && sellerNetValue > 0) {
+    return sellerNetValue;
+  }
+  
+  // Fallback: Usar Valor Líquido do Hubla se disponível no raw_data (formato antigo)
   const valorLiquidoStr = transaction.raw_data?.['Valor Líquido'];
   if (valorLiquidoStr) {
     const cleaned = String(valorLiquidoStr).replace(/[^\d.,-]/g, '').replace(',', '.');
     return parseFloat(cleaned) || 0;
   }
+  
+  // Último fallback: calcular baseado no product_price
   return (transaction.product_price || 0) * HUBLA_NET_MULTIPLIER;
 }
 
@@ -87,10 +157,7 @@ Deno.serve(async (req) => {
     const team_cost = 0;
     const office_cost = 0;
 
-    // 3. BUSCAR TRANSAÇÕES HUBLA (para contar A010 depois)
-    // Vendas A010 serão contadas a partir das transações Hubla
-
-    // 4. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (VENDAS CONFIRMADAS - ambos event_type)
+    // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (VENDAS CONFIRMADAS - ambos event_type)
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
@@ -99,7 +166,7 @@ Deno.serve(async (req) => {
       .in('event_type', ['invoice.payment_succeeded', 'NewSale'])
       .eq('sale_status', 'completed');
 
-    // 5. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
+    // 4. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
     const { data: refundedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
@@ -109,51 +176,73 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 6. CONTAR VENDAS A010 (faturas únicas da Hubla, não parcelas)
-    const a010Transactions = completedTransactions?.filter(t => {
+    // 5. CONTAR VENDAS A010 (APENAS PRIMEIRA PARCELA - excluir RECOs)
+    const a010AllTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       return t.product_category === 'a010' || productName.includes('A010');
     }) || [];
     
-    const vendas_a010 = a010Transactions.length;
-    const faturado_a010 = a010Transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    // Filtrar apenas primeira parcela (não recorrência)
+    const a010NewSales = a010AllTransactions.filter(t => isFirstInstallment(t));
+    const a010Recurrences = a010AllTransactions.filter(t => !isFirstInstallment(t));
     
-    console.log(`📈 Vendas A010: ${vendas_a010} vendas, R$ ${faturado_a010.toFixed(2)}`);
+    const vendas_a010 = a010NewSales.length;
+    const faturado_a010 = a010NewSales.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    const a010_reco_revenue = a010Recurrences.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    
+    console.log(`📈 Vendas A010: ${vendas_a010} novas vendas (${a010Recurrences.length} recorrências excluídas)`);
+    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (RECO: R$ ${a010_reco_revenue.toFixed(2)})`);
 
-    // 7. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A009)
+    // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A009, APENAS PRIMEIRA PARCELA)
     const incorporadorTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       // Verificar se começa com algum dos códigos válidos
-      return INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
-    });
+      const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
+      // Apenas primeira parcela
+      return isIncorporador && isFirstInstallment(t);
+    }) || [];
+    
+    // Também contar recorrências do Incorporador para log
+    const incorporadorRecurrences = completedTransactions?.filter(t => {
+      const productName = (t.product_name || '').toUpperCase();
+      const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
+      return isIncorporador && !isFirstInstallment(t);
+    }) || [];
 
-    // 8. CALCULAR MÉTRICAS INCORPORADOR 50K
+    console.log(`💼 Incorporador 50k: ${incorporadorTransactions.length} vendas novas (${incorporadorRecurrences.length} recorrências excluídas)`);
+
+    // 7. CALCULAR MÉTRICAS INCORPORADOR 50K
     // Faturamento Clint (BRUTO) - usar preço fixo do mapeamento quando disponível
-    const faturamento_clint = incorporadorTransactions?.reduce((sum, t) => {
+    const faturamento_clint = incorporadorTransactions.reduce((sum, t) => {
       const productName = (t.product_name || '').toUpperCase();
       
       // Tentar encontrar preço fixo no mapeamento
       let fixedPrice = 0;
       for (const [key, price] of Object.entries(INCORPORADOR_PRODUCT_PRICES)) {
-        if (productName.includes(key)) {
+        if (productName.includes(key.toUpperCase())) {
           fixedPrice = price;
           break;
         }
       }
       
-      // Se encontrou preço fixo, usar; senão usar product_price (caso do A005/P2)
+      // Se encontrou preço fixo, usar; senão usar product_price (caso do A000, A005/P2, A008)
       const grossValue = fixedPrice > 0 ? fixedPrice : (t.product_price || 0);
       return sum + grossValue;
-    }, 0) || 0;
+    }, 0);
 
-    // Incorporador 50k (LÍQUIDO) - soma do valor líquido das parcelas
-    const incorporador_50k = incorporadorTransactions?.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0) || 0;
+    // Incorporador 50k (LÍQUIDO) - soma do valor líquido das parcelas (apenas vendas novas)
+    const incorporador_50k = incorporadorTransactions.reduce(
+      (sum, t) => sum + parseValorLiquido(t), 0);
+    
+    // Também somar recorrências do Incorporador para revenue total (mas não contam como vendas novas)
+    const incorporador_reco_revenue = incorporadorRecurrences.reduce(
+      (sum, t) => sum + parseValorLiquido(t), 0);
 
     console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)}`);
-    console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)}`);
+    console.log(`💰 Incorporador 50k (líquido novas vendas): R$ ${incorporador_50k.toFixed(2)}`);
+    console.log(`💰 Incorporador 50k (líquido recorrências): R$ ${incorporador_reco_revenue.toFixed(2)}`);
 
-    // 9. CALCULAR ORDER BUMPS (incluir os que estão em 'outros')
+    // 8. CALCULAR ORDER BUMPS (incluir os que estão em 'outros')
     const ob_construir_alugar_transactions = completedTransactions?.filter(t => {
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
@@ -207,7 +296,7 @@ Deno.serve(async (req) => {
     console.log(`📦 OB Evento: ${ob_evento_sales} vendas, R$ ${ob_evento.toFixed(2)}`);
     console.log(`📦 OB Construir Vender: ${ob_construir_vender_sales} vendas, R$ ${ob_construir_vender.toFixed(2)}`);
 
-    // 10. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
+    // 9. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
     const revenueByCategory: Record<string, { revenue: number; sales: number }> = {};
     
     // Inicializar todas as categorias
@@ -234,21 +323,21 @@ Deno.serve(async (req) => {
       }
     });
 
-    // 11. CALCULAR ULTRAMETAS (baseado em vendas A010)
+    // 10. CALCULAR ULTRAMETAS (baseado em vendas A010 NOVAS, excluindo RECOs)
     const ultrameta_clint = vendas_a010 * 1680;
     const ultrameta_liquido = vendas_a010 * 1400;
 
-    console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)}`);
-    console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)}`);
+    console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)} (${vendas_a010} vendas × R$ 1.680)`);
+    console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)} (${vendas_a010} vendas × R$ 1.400)`);
 
-    // 12. CALCULAR FATURAMENTO TOTAL (TODOS os valores líquidos da Hubla)
+    // 11. CALCULAR FATURAMENTO TOTAL (TODOS os valores líquidos da Hubla)
     const faturamento_total = completedTransactions?.reduce(
       (sum, t) => sum + parseValorLiquido(t), 0
     ) || 0;
 
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
 
-    // 13. CALCULAR FATURADO CONTRATO (apenas A000-Contrato e Anticrise)
+    // 12. CALCULAR FATURADO CONTRATO (apenas A000-Contrato e Anticrise)
     // Incluir de TODAS as categorias (contrato, incorporador, etc)
     const contractTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
@@ -264,12 +353,12 @@ Deno.serve(async (req) => {
     
     console.log(`📋 Faturado Contrato: ${contract_sales} vendas, R$ ${contract_revenue.toFixed(2)}`);
 
-    // 14. CALCULAR CUSTO REAL (incluir todos OBs)
+    // 13. CALCULAR CUSTO REAL (incluir todos OBs)
     const custo_real = ads_cost - (faturado_a010 + ob_construir_alugar + ob_vitalicio + ob_evento + ob_construir_vender);
 
     console.log(`💸 Custo Real: R$ ${custo_real.toFixed(2)}`);
 
-    // 15. CALCULAR MÉTRICAS DERIVADAS (fórmulas corrigidas)
+    // 14. CALCULAR MÉTRICAS DERIVADAS (fórmulas corrigidas)
     const operating_cost = ads_cost + team_cost + office_cost;
     const lucro_operacional = faturamento_total - operating_cost;
     
@@ -291,7 +380,7 @@ Deno.serve(async (req) => {
     const platform_fees = gross_revenue - net_revenue;
     const refunds_amount = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
 
-    // 16. PREPARAR DADOS PARA UPSERT
+    // 15. PREPARAR DADOS PARA UPSERT
     const metricsData: any = {
       start_date: week_start,
       end_date: week_end,
@@ -355,7 +444,7 @@ Deno.serve(async (req) => {
     metricsData.contract_revenue = contract_revenue;
     metricsData.contract_sales = contract_sales;
 
-    // 17. UPSERT EM WEEKLY_METRICS
+    // 16. UPSERT EM WEEKLY_METRICS
     const { data, error } = await supabase
       .from('weekly_metrics')
       .upsert(metricsData, {
@@ -380,9 +469,13 @@ Deno.serve(async (req) => {
         data,
         summary: {
           vendas_a010,
+          a010_recorrencias_excluidas: a010Recurrences.length,
           faturado_a010,
+          a010_reco_revenue,
           faturamento_clint,
           incorporador_50k,
+          incorporador_recorrencias_excluidas: incorporadorRecurrences.length,
+          incorporador_reco_revenue,
           ob_construir_alugar,
           ob_construir_alugar_sales,
           ob_vitalicio,
@@ -400,6 +493,8 @@ Deno.serve(async (req) => {
           net_revenue,
           refunds_amount,
           lucro_operacional,
+          ultrameta_clint,
+          ultrameta_liquido,
           roi: `${roi.toFixed(2)}%`,
           roas: roas.toFixed(2),
           cir: `${cir.toFixed(2)}%`,
