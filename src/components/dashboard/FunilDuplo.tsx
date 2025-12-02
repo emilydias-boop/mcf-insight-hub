@@ -11,11 +11,11 @@ import { ptBR } from "date-fns/locale";
 import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRange } from "@/lib/dateHelpers";
 
 const DEFAULT_STAGES = [
-  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b', // Novo Lead
-  'a8365215-fd31-4bdc-bbe7-77100fa39e53', // Reunião 01 Agendada
-  '34995d75-933e-4d67-b7fc-19fcb8b81680', // Reunião 01 Realizada
-  '062927f5-b7a3-496a-9d47-eb03b3d69b10', // Contrato Pago
-  '3a2776e2-a536-4a2a-bb7b-a2f53c8941df', // Venda realizada
+  "cf4a369c-c4a6-4299-933d-5ae3dcc39d4b", // Novo Lead
+  "a8365215-fd31-4bdc-bbe7-77100fa39e53", // Reunião 01 Agendada
+  "34995d75-933e-4d67-b7fc-19fcb8b81680", // Reunião 01 Realizada
+  "062927f5-b7a3-496a-9d47-eb03b3d69b10", // Contrato Pago
+  "3a2776e2-a536-4a2a-bb7b-a2f53c8941df", // Venda realizada
 ];
 
 interface FunilDuploProps {
@@ -25,28 +25,28 @@ interface FunilDuploProps {
   showCurrentState: boolean;
 }
 
-type PeriodType = 'hoje' | 'semana' | 'mes';
+type PeriodType = "hoje" | "semana" | "mes";
 
 export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: FunilDuploProps) {
   const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hoje');
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("hoje");
 
   // Calcular datas baseado no período selecionado
   const { periodStart, periodEnd } = useMemo(() => {
     const referenceDate = weekStart || new Date();
-    
+
     switch (selectedPeriod) {
-      case 'hoje':
+      case "hoje":
         return {
           periodStart: startOfDay(new Date()),
           periodEnd: endOfDay(new Date()),
         };
-      case 'semana':
+      case "semana":
         return {
           periodStart: getCustomWeekStart(referenceDate),
           periodEnd: getCustomWeekEnd(referenceDate),
         };
-      case 'mes':
+      case "mes":
         return {
           periodStart: startOfMonth(referenceDate),
           periodEnd: endOfMonth(referenceDate),
@@ -61,35 +61,32 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
 
   const { data: etapasLeadA = [], isLoading: isLoadingA } = useClintFunnelByLeadType(
     originId,
-    'A',
+    "A",
     periodStart,
     periodEnd,
     false, // Sempre usar período histórico com os botões
-    selectedPeriod // Passar o tipo de período para calcular meta correta
+    selectedPeriod, // Passar o tipo de período para calcular meta correta
   );
 
   const { data: etapasLeadB = [], isLoading: isLoadingB } = useClintFunnelByLeadType(
     originId,
-    'B',
+    "B",
     periodStart,
     periodEnd,
     false, // Sempre usar período histórico com os botões
-    selectedPeriod // Passar o tipo de período para calcular meta correta
+    selectedPeriod, // Passar o tipo de período para calcular meta correta
   );
 
   const isLoading = isLoadingA || isLoadingB;
 
   // Combinar todas as etapas únicas para o filtro
   const allStages = Array.from(
-    new Set([
-      ...etapasLeadA.map(e => e.stage_id || e.etapa),
-      ...etapasLeadB.map(e => e.stage_id || e.etapa)
-    ])
+    new Set([...etapasLeadA.map((e) => e.stage_id || e.etapa), ...etapasLeadB.map((e) => e.stage_id || e.etapa)]),
   );
 
   // Mapear nomes das etapas
   const stageNames: Record<string, string> = {};
-  [...etapasLeadA, ...etapasLeadB].forEach(etapa => {
+  [...etapasLeadA, ...etapasLeadB].forEach((etapa) => {
     if (etapa.stage_id) {
       stageNames[etapa.stage_id] = etapa.etapa;
     }
@@ -99,7 +96,7 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
   const getWeekLabel = () => {
     const referenceDate = weekStart || new Date();
     const weekNum = getCustomWeekNumber(referenceDate);
-    const weekNumber = weekNum.split('-W')[1];
+    const weekNumber = weekNum.split("-W")[1];
     const range = formatCustomWeekRange(referenceDate);
     return `Semana ${weekNumber} (${range})`;
   };
@@ -110,11 +107,7 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
   };
 
   const handleToggleStage = (stageId: string) => {
-    setSelectedStages(prev =>
-      prev.includes(stageId)
-        ? prev.filter(id => id !== stageId)
-        : [...prev, stageId]
-    );
+    setSelectedStages((prev) => (prev.includes(stageId) ? prev.filter((id) => id !== stageId) : [...prev, stageId]));
   };
 
   const visibleCount = selectedStages.length;
@@ -130,15 +123,9 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="hoje">
-                  Hoje ({format(new Date(), "dd/MM/yyyy", { locale: ptBR })})
-                </SelectItem>
-                <SelectItem value="semana">
-                  {getWeekLabel()}
-                </SelectItem>
-                <SelectItem value="mes">
-                  {getMonthLabel()}
-                </SelectItem>
+                <SelectItem value="hoje">Hoje ({format(new Date(), "dd/MM/yyyy", { locale: ptBR })})</SelectItem>
+                <SelectItem value="semana">{getWeekLabel()}</SelectItem>
+                <SelectItem value="mes">{getMonthLabel()}</SelectItem>
               </SelectContent>
             </Select>
             <Popover>
@@ -149,27 +136,27 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-80">
-              <div className="space-y-4">
-                <h4 className="font-semibold text-sm">Selecionar Etapas</h4>
-                <div className="space-y-2">
-                  {allStages.map((stageId) => (
-                    <div key={stageId} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={stageId}
-                        checked={selectedStages.includes(stageId)}
-                        onCheckedChange={() => handleToggleStage(stageId)}
-                      />
-                      <label
-                        htmlFor={stageId}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        {stageNames[stageId] || stageId}
-                      </label>
-                    </div>
-                  ))}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-sm">Selecionar Etapas</h4>
+                  <div className="space-y-2">
+                    {allStages.map((stageId) => (
+                      <div key={stageId} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={stageId}
+                          checked={selectedStages.includes(stageId)}
+                          onCheckedChange={() => handleToggleStage(stageId)}
+                        />
+                        <label
+                          htmlFor={stageId}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          {stageNames[stageId] || stageId}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </PopoverContent>
+              </PopoverContent>
             </Popover>
           </div>
         </div>
@@ -178,7 +165,7 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
             <FunilLista
-              titulo="Leads A (A010)"
+              titulo="Leads A"
               etapas={etapasLeadA}
               selectedStages={selectedStages}
               isLoading={isLoading}
