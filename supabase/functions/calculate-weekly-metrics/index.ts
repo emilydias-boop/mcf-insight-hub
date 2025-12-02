@@ -183,11 +183,11 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 5. CONTAR VENDAS A010 (APENAS PRIMEIRA PARCELA - excluir RECOs, containers e newsale-*)
+    // 5. CONTAR VENDAS A010 (APENAS PRIMEIRA PARCELA - excluir offers e containers)
     // IMPORTANTE: Excluir transações que são:
     //   - "-offer-" (são OBs, não A010 principal)
     //   - "containers" (transações com childInvoiceIds que só agrupam offers)
-    //   - "newsale-*" (são duplicatas incompletas, apenas invoice.payment_succeeded é válido)
+    // NOTA: newsale-* são válidas e devem ser contadas
     const a010AllTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
@@ -197,10 +197,6 @@ Deno.serve(async (req) => {
       
       // Excluir containers (transações pai que agrupam offers)
       if (isContainerTransaction(t)) return false;
-      
-      // Excluir newsale-* (são duplicatas incompletas do evento NewSale)
-      const hublaId = t.hubla_id || '';
-      if (hublaId.startsWith('newsale-')) return false;
       
       return isA010;
     }) || [];
