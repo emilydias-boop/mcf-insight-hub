@@ -254,6 +254,10 @@ export const useTVSdrData = () => {
         const events = sdrEventMap.get(sdr.email) || [];
         
         // Usar Set para contar emails únicos por stage
+        // Usar email OU nome como identificador (fallback para leads sem email)
+        const getLeadIdentifier = (eventData: any) => 
+          eventData?.contact_email || eventData?.contact_name;
+
         const novoLeadSet = new Set(
           events
             .filter(e => {
@@ -262,10 +266,7 @@ export const useTVSdrData = () => {
                 (!eventData?.deal_old_stage || eventData?.deal_old_stage === "") &&
                 isDealCreatedToday(eventData?.deal_created_at);
             })
-            .map(e => {
-              const eventData = e.event_data as any;
-              return eventData?.contact_email;
-            })
+            .map(e => getLeadIdentifier(e.event_data as any))
             .filter(Boolean)
         );
         
@@ -275,10 +276,7 @@ export const useTVSdrData = () => {
               const eventData = e.event_data as any;
               return eventData?.deal_stage === PIPELINE_STAGES.R1_AGENDADA;
             })
-            .map(e => {
-              const eventData = e.event_data as any;
-              return eventData?.contact_email;
-            })
+            .map(e => getLeadIdentifier(e.event_data as any))
             .filter(Boolean)
         );
         
@@ -288,10 +286,7 @@ export const useTVSdrData = () => {
               const eventData = e.event_data as any;
               return eventData?.deal_stage === PIPELINE_STAGES.NO_SHOW;
             })
-            .map(e => {
-              const eventData = e.event_data as any;
-              return eventData?.contact_email;
-            })
+            .map(e => getLeadIdentifier(e.event_data as any))
             .filter(Boolean)
         );
         
@@ -301,10 +296,7 @@ export const useTVSdrData = () => {
               const eventData = e.event_data as any;
               return eventData?.deal_stage === PIPELINE_STAGES.R1_REALIZADA;
             })
-            .map(e => {
-              const eventData = e.event_data as any;
-              return eventData?.contact_email;
-            })
+            .map(e => getLeadIdentifier(e.event_data as any))
             .filter(Boolean)
         );
         
