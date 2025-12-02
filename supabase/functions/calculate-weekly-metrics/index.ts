@@ -183,48 +183,86 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 5. CONTAR VENDAS A010 (APENAS PRIMEIRA PARCELA - excluir offers e containers)
-    // IMPORTANTE: Excluir transações que são:
-    //   - "-offer-" (são OBs, não A010 principal)
-    //   - "containers" (transações com childInvoiceIds que só agrupam offers)
-    // NOTA: newsale-* são válidas e devem ser contadas
+    // 5. CONTAR VENDAS A010 (ÚNICA POR CLIENTE, PRIMEIRA PARCELA)
+    // REGRAS ATUALIZADAS:
+    //   - INCLUIR A010 vendido como Order Bump (offer) - são vendas válidas
+    //   - EXCLUIR transações sem customer_name (dados incompletos)
+    //   - DEDUZIR duplicatas usando base_id (hubla_id sem -offer-N)
+    //   - NÃO excluir containers - são vendas A010 válidas que têm OBs juntos
+    
+    // Função para extrair base_id (sem -offer-N e sem newsale-)
+    const getBaseId = (hublaId: string): string => {
+      let baseId = hublaId;
+      // Remover sufixo -offer-N
+      if (baseId.includes('-offer-')) {
+        baseId = baseId.split('-offer-')[0];
+      }
+      // Remover prefixo newsale-
+      if (baseId.startsWith('newsale-')) {
+        baseId = baseId.replace('newsale-', '');
+      }
+      return baseId;
+    };
+    
+    // Filtrar todas transações A010 (incluindo offers = A010 vendido como OB)
     const a010AllTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
       
-      // Excluir offers (são OBs vendidos junto com A010)
-      if (isOfferTransaction(t)) return false;
-      
-      // Excluir containers (transações pai que agrupam offers)
-      if (isContainerTransaction(t)) return false;
+      // MUDANÇA 1: NÃO excluir offers - A010 pode ser vendido como OB
+      // MUDANÇA 2: Excluir transações sem customer_name (dados incompletos)
+      const hasValidName = t.customer_name && t.customer_name.trim() !== '';
+      if (!hasValidName) return false;
       
       return isA010;
     }) || [];
     
     // Filtrar apenas primeira parcela (não recorrência)
-    const a010NewSales = a010AllTransactions.filter(t => isFirstInstallment(t));
+    const a010FirstInstallments = a010AllTransactions.filter(t => isFirstInstallment(t));
     const a010Recurrences = a010AllTransactions.filter(t => !isFirstInstallment(t));
     
-    // Contar também containers e offers excluídos para log
-    const a010Containers = completedTransactions?.filter(t => {
+    // MUDANÇA 3: Deduzir duplicatas usando base_id
+    // Agrupar por base_id e manter apenas uma transação por cliente
+    const uniqueBaseIds = new Map<string, any>();
+    a010FirstInstallments.forEach(t => {
+      const baseId = getBaseId(t.hubla_id);
+      // Se já existe, preferir a transação direta (sem offer) sobre a offer
+      if (!uniqueBaseIds.has(baseId)) {
+        uniqueBaseIds.set(baseId, t);
+      } else {
+        const existing = uniqueBaseIds.get(baseId);
+        const existingIsOffer = existing.hubla_id.includes('-offer-');
+        const currentIsOffer = t.hubla_id.includes('-offer-');
+        // Preferir direto sobre offer
+        if (existingIsOffer && !currentIsOffer) {
+          uniqueBaseIds.set(baseId, t);
+        }
+      }
+    });
+    
+    const a010NewSales = Array.from(uniqueBaseIds.values());
+    const duplicatesRemoved = a010FirstInstallments.length - a010NewSales.length;
+    
+    // Contar transações sem nome para log
+    const a010WithoutName = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
-      return isA010 && isContainerTransaction(t);
+      const hasValidName = t.customer_name && t.customer_name.trim() !== '';
+      return isA010 && !hasValidName && isFirstInstallment(t);
     }) || [];
-    const a010Offers = completedTransactions?.filter(t => {
-      const productName = (t.product_name || '').toUpperCase();
-      const isA010 = t.product_category === 'a010' || productName.includes('A010');
-      return isA010 && isOfferTransaction(t);
-    }) || [];
+    
+    // Contar A010 que são offers para log
+    const a010AsOffers = a010NewSales.filter(t => isOfferTransaction(t));
     
     const vendas_a010 = a010NewSales.length;
     const faturado_a010 = a010NewSales.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     const a010_reco_revenue = a010Recurrences.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} novas vendas`);
-    console.log(`   ├─ Recorrências excluídas: ${a010Recurrences.length}`);
-    console.log(`   ├─ Containers excluídos: ${a010Containers.length}`);
-    console.log(`   └─ Offers excluídos: ${a010Offers.length}`);
+    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas`);
+    console.log(`   ├─ A010 como Order Bump (incluídos): ${a010AsOffers.length}`);
+    console.log(`   ├─ Sem nome (excluídos): ${a010WithoutName.length}`);
+    console.log(`   ├─ Duplicatas removidas: ${duplicatesRemoved}`);
+    console.log(`   └─ Recorrências excluídas: ${a010Recurrences.length}`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (RECO: R$ ${a010_reco_revenue.toFixed(2)})`);
 
     // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A009, APENAS PRIMEIRA PARCELA)
