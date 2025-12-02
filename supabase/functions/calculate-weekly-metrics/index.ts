@@ -89,6 +89,26 @@ function isFirstInstallment(transaction: any): boolean {
   
   return true; // É venda nova
 }
+
+// Verificar se a transação é um "container" (tem childInvoiceIds = compra principal com OBs)
+function isContainerTransaction(transaction: any): boolean {
+  const rawData = transaction.raw_data;
+  const invoice = rawData?.event?.invoice || rawData?.invoice;
+  const childInvoiceIds = invoice?.childInvoiceIds || [];
+  
+  // É container se NÃO é offer E tem childInvoiceIds
+  const hublaId = transaction.hubla_id || '';
+  const isOffer = hublaId.includes('-offer-');
+  
+  return !isOffer && Array.isArray(childInvoiceIds) && childInvoiceIds.length > 0;
+}
+
+// Verificar se é uma transação de Order Bump (offer)
+function isOfferTransaction(transaction: any): boolean {
+  const hublaId = transaction.hubla_id || '';
+  return hublaId.includes('-offer-');
+}
+
 function parseValorLiquido(transaction: any): number {
   // Primeiro, tentar extrair valor líquido do seller dos receivers
   const sellerNetValue = extractSellerNetValue(transaction);
@@ -163,21 +183,47 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 5. CONTAR VENDAS A010 (APENAS PRIMEIRA PARCELA - excluir RECOs)
+    // 5. CONTAR VENDAS A010 (APENAS PRIMEIRA PARCELA - excluir RECOs e containers)
+    // IMPORTANTE: Excluir transações que são:
+    //   - "-offer-" (são OBs, não A010 principal)
+    //   - "containers" (transações com childInvoiceIds que só agrupam offers)
     const a010AllTransactions = completedTransactions?.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
-      return t.product_category === 'a010' || productName.includes('A010');
+      const isA010 = t.product_category === 'a010' || productName.includes('A010');
+      
+      // Excluir offers (são OBs vendidos junto com A010)
+      if (isOfferTransaction(t)) return false;
+      
+      // Excluir containers (transações pai que agrupam offers)
+      if (isContainerTransaction(t)) return false;
+      
+      return isA010;
     }) || [];
     
     // Filtrar apenas primeira parcela (não recorrência)
     const a010NewSales = a010AllTransactions.filter(t => isFirstInstallment(t));
     const a010Recurrences = a010AllTransactions.filter(t => !isFirstInstallment(t));
     
+    // Contar também containers e offers excluídos para log
+    const a010Containers = completedTransactions?.filter(t => {
+      const productName = (t.product_name || '').toUpperCase();
+      const isA010 = t.product_category === 'a010' || productName.includes('A010');
+      return isA010 && isContainerTransaction(t);
+    }) || [];
+    const a010Offers = completedTransactions?.filter(t => {
+      const productName = (t.product_name || '').toUpperCase();
+      const isA010 = t.product_category === 'a010' || productName.includes('A010');
+      return isA010 && isOfferTransaction(t);
+    }) || [];
+    
     const vendas_a010 = a010NewSales.length;
     const faturado_a010 = a010NewSales.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     const a010_reco_revenue = a010Recurrences.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} novas vendas (${a010Recurrences.length} recorrências excluídas)`);
+    console.log(`📈 Vendas A010: ${vendas_a010} novas vendas`);
+    console.log(`   ├─ Recorrências excluídas: ${a010Recurrences.length}`);
+    console.log(`   ├─ Containers excluídos: ${a010Containers.length}`);
+    console.log(`   └─ Offers excluídos: ${a010Offers.length}`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (RECO: R$ ${a010_reco_revenue.toFixed(2)})`);
 
     // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A009, APENAS PRIMEIRA PARCELA)
@@ -229,8 +275,14 @@ Deno.serve(async (req) => {
     console.log(`💰 Incorporador 50k (líquido novas vendas): R$ ${incorporador_50k.toFixed(2)}`);
     console.log(`💰 Incorporador 50k (líquido recorrências): R$ ${incorporador_reco_revenue.toFixed(2)}`);
 
-    // 8. CALCULAR ORDER BUMPS (incluir os que estão em 'outros')
+    // 8. CALCULAR ORDER BUMPS (APENAS transações -offer- = OBs reais)
+    // IMPORTANTE: OBs são SEMPRE transações com "-offer-" no hubla_id
+    // Transações sem "-offer-" são vendas diretas do produto, NÃO order bumps
+    
     const ob_construir_alugar_transactions = completedTransactions?.filter(t => {
+      // DEVE ser uma transação -offer- para ser OB
+      if (!isOfferTransaction(t)) return false;
+      
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
       return category === 'ob_construir_alugar' || 
@@ -239,6 +291,9 @@ Deno.serve(async (req) => {
     }) || [];
     
     const ob_vitalicio_transactions = completedTransactions?.filter(t => {
+      // DEVE ser uma transação -offer- para ser OB
+      if (!isOfferTransaction(t)) return false;
+      
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
       return category === 'ob_vitalicio' || 
@@ -246,6 +301,9 @@ Deno.serve(async (req) => {
     }) || [];
     
     const ob_evento_transactions = completedTransactions?.filter(t => {
+      // DEVE ser uma transação -offer- para ser OB
+      if (!isOfferTransaction(t)) return false;
+      
       const productName = (t.product_name || '').toUpperCase();
       // Normalizar removendo acentos para evitar problemas com IMERSÃO vs IMERSAO
       const normalizedName = productName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -253,9 +311,11 @@ Deno.serve(async (req) => {
       return normalizedName.includes('IMERSAO PRESENCIAL') && price <= 300;
     }) || [];
     
-    const ob_construir_vender_transactions = completedTransactions?.filter(t => 
-      t.product_category === 'ob_construir_vender'
-    ) || [];
+    const ob_construir_vender_transactions = completedTransactions?.filter(t => {
+      // DEVE ser uma transação -offer- para ser OB
+      if (!isOfferTransaction(t)) return false;
+      return t.product_category === 'ob_construir_vender';
+    }) || [];
 
     const ob_construir_alugar = ob_construir_alugar_transactions.reduce(
       (sum, t) => sum + parseValorLiquido(t), 0
@@ -278,10 +338,10 @@ Deno.serve(async (req) => {
     const ob_evento_sales = ob_evento_transactions.length;
     const ob_construir_vender_sales = ob_construir_vender_transactions.length;
 
-    console.log(`📦 OB Construir Alugar: ${ob_construir_alugar_sales} vendas, R$ ${ob_construir_alugar.toFixed(2)}`);
-    console.log(`📦 OB Vitalício: ${ob_vitalicio_sales} vendas, R$ ${ob_vitalicio.toFixed(2)}`);
-    console.log(`📦 OB Evento: ${ob_evento_sales} vendas, R$ ${ob_evento.toFixed(2)}`);
-    console.log(`📦 OB Construir Vender: ${ob_construir_vender_sales} vendas, R$ ${ob_construir_vender.toFixed(2)}`);
+    console.log(`📦 OB Construir Alugar: ${ob_construir_alugar_sales} vendas (offers), R$ ${ob_construir_alugar.toFixed(2)}`);
+    console.log(`📦 OB Vitalício: ${ob_vitalicio_sales} vendas (offers), R$ ${ob_vitalicio.toFixed(2)}`);
+    console.log(`📦 OB Evento: ${ob_evento_sales} vendas (offers), R$ ${ob_evento.toFixed(2)}`);
+    console.log(`📦 OB Construir Vender: ${ob_construir_vender_sales} vendas (offers), R$ ${ob_construir_vender.toFixed(2)}`);
 
     // 9. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
     const revenueByCategory: Record<string, { revenue: number; sales: number }> = {};
@@ -430,6 +490,18 @@ Deno.serve(async (req) => {
     // (não usar o da categoria 'contrato' que vem de product_category)
     metricsData.contract_revenue = contract_revenue;
     metricsData.contract_sales = contract_sales;
+    
+    // IMPORTANTE: Sobrescrever a010_sales e a010_revenue com valores corrigidos
+    // (excluindo containers e offers, apenas vendas diretas)
+    metricsData.a010_sales = vendas_a010;
+    metricsData.a010_revenue = faturado_a010;
+    
+    // IMPORTANTE: Sobrescrever OB values com os calculados corretamente
+    // (apenas transações -offer-)
+    metricsData.ob_construir_alugar_revenue = ob_construir_alugar;
+    metricsData.ob_construir_alugar_sales = ob_construir_alugar_sales;
+    metricsData.ob_vitalicio_revenue = ob_vitalicio;
+    metricsData.ob_vitalicio_sales = ob_vitalicio_sales;
 
     // 16. UPSERT EM WEEKLY_METRICS
     const { data, error } = await supabase
