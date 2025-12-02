@@ -971,6 +971,10 @@ export type Database = {
           event_type: string
           hubla_id: string
           id: string
+          installment_fee_cents: number | null
+          installment_number: number | null
+          is_offer: boolean | null
+          net_value: number | null
           payment_method: string | null
           product_category: string | null
           product_code: string | null
@@ -980,6 +984,8 @@ export type Database = {
           raw_data: Json | null
           sale_date: string
           sale_status: string | null
+          subtotal_cents: number | null
+          total_installments: number | null
           updated_at: string | null
           utm_campaign: string | null
           utm_medium: string | null
@@ -993,6 +999,10 @@ export type Database = {
           event_type: string
           hubla_id: string
           id?: string
+          installment_fee_cents?: number | null
+          installment_number?: number | null
+          is_offer?: boolean | null
+          net_value?: number | null
           payment_method?: string | null
           product_category?: string | null
           product_code?: string | null
@@ -1002,6 +1012,8 @@ export type Database = {
           raw_data?: Json | null
           sale_date: string
           sale_status?: string | null
+          subtotal_cents?: number | null
+          total_installments?: number | null
           updated_at?: string | null
           utm_campaign?: string | null
           utm_medium?: string | null
@@ -1015,6 +1027,10 @@ export type Database = {
           event_type?: string
           hubla_id?: string
           id?: string
+          installment_fee_cents?: number | null
+          installment_number?: number | null
+          is_offer?: boolean | null
+          net_value?: number | null
           payment_method?: string | null
           product_category?: string | null
           product_code?: string | null
@@ -1024,6 +1040,8 @@ export type Database = {
           raw_data?: Json | null
           sale_date?: string
           sale_status?: string | null
+          subtotal_cents?: number | null
+          total_installments?: number | null
           updated_at?: string | null
           utm_campaign?: string | null
           utm_medium?: string | null
