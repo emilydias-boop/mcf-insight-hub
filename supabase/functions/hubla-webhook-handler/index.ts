@@ -6,33 +6,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Produtos que ENTRAM no Incorporador 50k
-const INCORPORADOR_50K_PRODUCTS = [
-  'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009',
-  'A000', 'CONTRATO - ANTICRISE'
-];
+// Produtos que ENTRAM no Incorporador 50k (A006 EXCLUÍDO - é renovação)
+const INCORPORADOR_50K_CATEGORIES = ['a000', 'a001', 'a002', 'a003', 'a004', 'a005', 'a008', 'a009', 'contrato-anticrise'];
 
-// Produtos EXCLUÍDOS (consórcio/leilão)
-const EXCLUDED_CONTRACTS = [
-  'CONTRATO - EFEITO ALAVANCA',
-  'CONTRATO - CLUBE DO ARREMATE'
+// Produtos EXCLUÍDOS (consórcio/leilão e renovação)
+const EXCLUDED_FROM_INCORPORADOR = [
+  'A006', 'RENOVAÇÃO PARCEIRO', 'CONTRATO - EFEITO ALAVANCA', 'CONTRATO - CLUBE DO ARREMATE',
+  'IMERSÃO SÓCIOS', 'IMERSÃO SÓCIOS MCF'
 ];
 
 const PRODUCT_MAPPING: Record<string, string> = {
-  // Incorporador 50k
+  // Incorporador 50k (A006 agora é renovacao, não incorporador)
   'A001': 'incorporador',
   'A002': 'incorporador',
   'A003': 'incorporador',
   'A004': 'incorporador',
   'A005': 'incorporador',
-  'A006': 'incorporador',
   'A008': 'incorporador',
   'A009': 'incorporador',
   'A000': 'incorporador',
   'CONTRATO': 'incorporador',
-  'CONTRATO - ANTICRISE': 'incorporador',
-  'ANTICRISE': 'incorporador',
-  'RENOVAÇÃO PARCEIRO': 'incorporador',
+  'CONTRATO - ANTICRISE': 'contrato-anticrise',
+  'ANTICRISE': 'contrato-anticrise',
+  
+  // A006 é renovação, NÃO incorporador
+  'A006': 'renovacao',
+  'RENOVAÇÃO PARCEIRO': 'renovacao',
   
   // A010
   'A010': 'a010',
@@ -80,14 +79,26 @@ const PRODUCT_MAPPING: Record<string, string> = {
   'CLUBE ARREMATE': 'clube_arremate',
   'CA': 'clube_arremate',
   'IMERSÃO': 'imersao',
-  'IMERSÃO PRESENCIAL': 'imersao',
+  'IMERSÃO PRESENCIAL': 'ob_evento',
   'IMERSÃO SÓCIOS': 'imersao_socios',
+  'IMERSÃO SÓCIOS MCF': 'imersao_socios',
   'IS': 'imersao_socios',
 };
 
 function mapProductCategory(productName: string, productCode?: string): string {
   const name = productName?.toUpperCase() || '';
   const code = productCode?.toUpperCase() || '';
+  
+  // Verificar se é produto excluído do Incorporador 50k
+  for (const excluded of EXCLUDED_FROM_INCORPORADOR) {
+    if (name.includes(excluded) || code === excluded) {
+      // Mapear para categoria correta
+      if (excluded === 'A006' || excluded === 'RENOVAÇÃO PARCEIRO') return 'renovacao';
+      if (excluded.includes('IMERSÃO SÓCIOS')) return 'imersao_socios';
+      if (excluded.includes('EFEITO ALAVANCA')) return 'efeito_alavanca';
+      if (excluded.includes('CLUBE DO ARREMATE')) return 'clube_arremate';
+    }
+  }
   
   // Tentar match exato por código
   if (code && PRODUCT_MAPPING[code]) {
@@ -110,25 +121,49 @@ function mapProductCategory(productName: string, productCode?: string): string {
 }
 
 // Extrair informações de smartInstallment do invoice
-function extractSmartInstallment(invoice: any): { installment: number | null; installments: number | null } {
+function extractSmartInstallment(invoice: any): { installment: number; installments: number } {
   const smartInstallment = invoice?.smartInstallment;
   if (!smartInstallment) {
-    return { installment: null, installments: null };
+    return { installment: 1, installments: 1 };
   }
   return {
-    installment: smartInstallment.installment || null,
-    installments: smartInstallment.installments || null,
+    installment: smartInstallment.installment || 1,
+    installments: smartInstallment.installments || 1,
   };
 }
 
-// Extrair valor líquido do seller dos receivers
-function extractSellerNetValue(invoice: any): number | null {
+// CORREÇÃO: Extrair valores corretos do invoice
+// Bruto = subtotalCents (sem juros de parcelamento)
+// Líquido = sellerTotalCents - installmentFeeCents
+function extractCorrectValues(invoice: any): {
+  subtotalCents: number;
+  installmentFeeCents: number;
+  sellerTotalCents: number;
+  grossValue: number;
+  netValue: number;
+} {
+  const amount = invoice?.amount || {};
   const receivers = invoice?.receivers || [];
+  
+  const subtotalCents = amount.subtotalCents || amount.totalCents || 0;
+  const installmentFeeCents = amount.installmentFeeCents || 0;
+  
   const sellerReceiver = receivers.find((r: any) => r.role === 'seller');
-  if (sellerReceiver?.totalCents) {
-    return sellerReceiver.totalCents / 100; // Converter de centavos para reais
-  }
-  return null;
+  const sellerTotalCents = sellerReceiver?.totalCents || 0;
+  
+  // Bruto = subtotal em centavos convertido para reais
+  const grossValue = subtotalCents / 100;
+  
+  // Líquido = seller total - juros de parcelamento (convertido para reais)
+  const netValue = (sellerTotalCents - installmentFeeCents) / 100;
+  
+  return {
+    subtotalCents,
+    installmentFeeCents,
+    sellerTotalCents,
+    grossValue,
+    netValue: netValue > 0 ? netValue : grossValue * 0.9417, // Fallback se não tiver seller
+  };
 }
 
 serve(async (req) => {
@@ -167,13 +202,12 @@ serve(async (req) => {
         const eventData = body.event || {};
         const invoice = eventData.invoice || {};
         const productName = eventData.groupName || eventData.products?.[0]?.name || 'Produto Desconhecido';
-        const productPrice = parseFloat(eventData.totalAmount || eventData.amount || 0);
-        const customerId = eventData.customer_id || eventData.customerId;
         
-        // Extrair smartInstallment
+        // Extrair valores corrigidos
         const { installment, installments } = extractSmartInstallment(invoice);
-        const sellerNetValue = extractSellerNetValue(invoice);
+        const { grossValue, netValue, subtotalCents, installmentFeeCents } = extractCorrectValues(invoice);
         
+        const productPrice = grossValue || parseFloat(eventData.totalAmount || eventData.amount || 0);
         const productCategory = mapProductCategory(productName);
         const saleDate = new Date(eventData.created_at || eventData.createdAt || Date.now()).toISOString();
         
@@ -193,7 +227,14 @@ serve(async (req) => {
           payment_method: eventData.paymentMethod || null,
           sale_date: saleDate,
           sale_status: 'completed',
-          raw_data: body, // Preservar raw_data completo
+          raw_data: body,
+          // Novos campos
+          net_value: netValue,
+          subtotal_cents: subtotalCents,
+          installment_fee_cents: installmentFeeCents,
+          installment_number: installment,
+          total_installments: installments,
+          is_offer: false,
         };
 
         const { error } = await supabase
@@ -202,22 +243,21 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        // Se for A010 e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
-        const isFirstInstallment = installment === null || installment === 1;
-        if (productCategory === 'a010' && isFirstInstallment) {
+        // Se for A010 e for primeira parcela, inserir na tabela a010_sales
+        if (productCategory === 'a010' && installment === 1) {
           await supabase
             .from('a010_sales')
             .upsert({
               customer_name: transactionData.customer_name || 'Cliente Desconhecido',
               customer_email: transactionData.customer_email,
               customer_phone: transactionData.customer_phone,
-              net_value: sellerNetValue || productPrice,
+              net_value: netValue,
               sale_date: saleDate,
               status: 'completed',
             }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
         }
 
-        console.log(`✅ NewSale processado: ${productName} - R$ ${productPrice} (parcela ${installment || 1}/${installments || 1})`);
+        console.log(`✅ NewSale processado: ${productName} - Bruto: R$ ${productPrice} | Líquido: R$ ${netValue} (parcela ${installment}/${installments})`);
       }
 
       // invoice.payment_succeeded - extrair items individuais
@@ -227,92 +267,106 @@ serve(async (req) => {
         
         // Extrair smartInstallment do invoice
         const { installment, installments } = extractSmartInstallment(invoice);
-        const sellerNetValue = extractSellerNetValue(invoice);
+        const { grossValue, netValue, subtotalCents, installmentFeeCents } = extractCorrectValues(invoice);
         
-        console.log(`📦 Processando ${items.length} items da invoice ${invoice?.id} (parcela ${installment || 1}/${installments || 1})`);
+        console.log(`📦 Processando ${items.length} items da invoice ${invoice?.id} (parcela ${installment}/${installments}) - Bruto: R$ ${grossValue} | Líquido: R$ ${netValue}`);
 
         // Se não tem items, criar transação do produto principal
         if (items.length === 0) {
           const product = body.event?.product || {};
           const productName = product.name || 'Produto Desconhecido';
-          const productPrice = (invoice?.amount?.subtotalCents || 0) / 100;
           const productCategory = mapProductCategory(productName);
           const saleDate = new Date(invoice?.saleDate || invoice?.createdAt || Date.now()).toISOString();
           
           const user = body.event?.user || invoice?.payer || {};
           
-        const transactionData = {
-          hubla_id: invoice?.id || `invoice-${Date.now()}`,
-          event_type: 'invoice.payment_succeeded',
-          product_name: productName,
-          product_code: null,
-          product_price: productPrice,
-          product_category: productCategory,
-          product_type: null,
-          customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
-          customer_email: user.email || null,
-          customer_phone: user.phone || null,
-          utm_source: null,
-          utm_medium: null,
-          utm_campaign: null,
-          payment_method: invoice?.paymentMethod || null,
-          sale_date: saleDate,
-          sale_status: 'completed',
-          raw_data: body, // Preservar raw_data completo com smartInstallment
-        };
+          const transactionData = {
+            hubla_id: invoice?.id || `invoice-${Date.now()}`,
+            event_type: 'invoice.payment_succeeded',
+            product_name: productName,
+            product_code: null,
+            product_price: grossValue,
+            product_category: productCategory,
+            product_type: null,
+            customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
+            customer_email: user.email || null,
+            customer_phone: user.phone || null,
+            utm_source: null,
+            utm_medium: null,
+            utm_campaign: null,
+            payment_method: invoice?.paymentMethod || null,
+            sale_date: saleDate,
+            sale_status: 'completed',
+            raw_data: body,
+            // Novos campos
+            net_value: netValue,
+            subtotal_cents: subtotalCents,
+            installment_fee_cents: installmentFeeCents,
+            installment_number: installment,
+            total_installments: installments,
+            is_offer: false,
+          };
 
-        console.log(`📝 [UPSERT] Tentando salvar transação: ${transactionData.hubla_id} - ${productName}`);
-        
-        const { data: upsertData, error } = await supabase
-          .from('hubla_transactions')
-          .upsert(transactionData, { onConflict: 'hubla_id' })
-          .select();
+          console.log(`📝 [UPSERT] Salvando transação: ${transactionData.hubla_id} - ${productName}`);
+          
+          const { error } = await supabase
+            .from('hubla_transactions')
+            .upsert(transactionData, { onConflict: 'hubla_id' });
 
-        if (error) {
-          console.error(`❌ [UPSERT ERROR] hubla_id=${transactionData.hubla_id}:`, error);
-          throw error;
-        }
-        
-        console.log(`✅ [UPSERT SUCCESS] hubla_id=${transactionData.hubla_id}, rows=${upsertData?.length || 0}`);
+          if (error) {
+            console.error(`❌ [UPSERT ERROR]:`, error);
+            throw error;
+          }
 
-          // Se for A010 e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
-          const isFirstInstallment = installment === null || installment === 1;
-          if (productCategory === 'a010' && isFirstInstallment) {
+          // Se for A010 e for primeira parcela, inserir na tabela a010_sales
+          if (productCategory === 'a010' && installment === 1) {
             await supabase
               .from('a010_sales')
               .upsert({
                 customer_name: transactionData.customer_name || 'Cliente Desconhecido',
                 customer_email: transactionData.customer_email,
                 customer_phone: transactionData.customer_phone,
-                net_value: sellerNetValue || productPrice,
+                net_value: netValue,
                 sale_date: saleDate,
                 status: 'completed',
               }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
           }
 
-          console.log(`✅ Invoice sem items: ${productName} - ${productCategory} - R$ ${productPrice} (parcela ${installment || 1}/${installments || 1})`);
+          console.log(`✅ Invoice sem items: ${productName} - ${productCategory} - Bruto: R$ ${grossValue} | Líquido: R$ ${netValue}`);
         }
 
+        // Processar items individuais
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
           const isOffer = i > 0;
           const hublaId = isOffer ? `${invoice.id}-offer-${i}` : invoice.id;
           
-          const productName = item.product?.name || item.offer?.name || item.name || 'Produto Desconhecido';
+          // Para offers, usar o nome do offer para categorização correta
+          const productName = isOffer 
+            ? (item.offer?.name || item.product?.name || item.name || 'Offer Desconhecido')
+            : (item.product?.name || item.name || 'Produto Desconhecido');
           const productCode = item.product?.code || item.product_code || null;
-          const productPrice = parseFloat(item.price || item.amount || 0);
+          
+          // Para items individuais, usar o price do item
+          const itemPrice = parseFloat(item.price || item.amount || 0);
           
           const productCategory = mapProductCategory(productName, productCode);
           const saleDate = new Date(invoice.saleDate || invoice.created_at || invoice.createdAt || Date.now()).toISOString();
           
           const user = body.event?.user || invoice?.payer || {};
           
+          // Para offers, calcular net_value proporcional
+          // Para item principal, usar o net_value calculado
+          const itemNetValue = isOffer 
+            ? itemPrice * 0.9417 // Offers usam taxa aproximada
+            : netValue;
+          
           const transactionData = {
             hubla_id: hublaId,
             event_type: 'invoice.payment_succeeded',
             product_name: productName,
             product_code: productCode,
-            product_price: productPrice,
+            product_price: isOffer ? itemPrice : grossValue,
             product_category: productCategory,
             product_type: item.type || null,
             customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || invoice.customer?.name || invoice.customer_name || null,
@@ -324,39 +378,42 @@ serve(async (req) => {
             payment_method: invoice.paymentMethod || invoice.payment_method || null,
             sale_date: saleDate,
             sale_status: 'completed',
-            raw_data: body, // Preservar raw_data completo com smartInstallment
+            raw_data: body,
+            // Novos campos
+            net_value: itemNetValue,
+            subtotal_cents: isOffer ? Math.round(itemPrice * 100) : subtotalCents,
+            installment_fee_cents: isOffer ? 0 : installmentFeeCents,
+            installment_number: installment,
+            total_installments: installments,
+            is_offer: isOffer,
           };
 
-          console.log(`📝 [UPSERT] Tentando salvar item ${i + 1}: ${transactionData.hubla_id} - ${productName}`);
+          console.log(`📝 [UPSERT] Item ${i + 1}: ${hublaId} - ${productName} (offer: ${isOffer})`);
           
-          const { data: itemUpsertData, error } = await supabase
+          const { error } = await supabase
             .from('hubla_transactions')
-            .upsert(transactionData, { onConflict: 'hubla_id' })
-            .select();
+            .upsert(transactionData, { onConflict: 'hubla_id' });
 
           if (error) {
-            console.error(`❌ [UPSERT ERROR] hubla_id=${transactionData.hubla_id}:`, error);
+            console.error(`❌ [UPSERT ERROR]:`, error);
             throw error;
           }
-          
-          console.log(`✅ [UPSERT SUCCESS] hubla_id=${transactionData.hubla_id}, rows=${itemUpsertData?.length || 0}`);
 
-          // Se for A010, não for offer, e for primeira parcela (ou sem smartInstallment), inserir na tabela a010_sales
-          const isFirstInstallment = installment === null || installment === 1;
-          if (productCategory === 'a010' && !isOffer && isFirstInstallment) {
+          // Se for A010, não for offer, e for primeira parcela, inserir na tabela a010_sales
+          if (productCategory === 'a010' && !isOffer && installment === 1) {
             await supabase
               .from('a010_sales')
               .upsert({
                 customer_name: transactionData.customer_name || 'Cliente Desconhecido',
                 customer_email: transactionData.customer_email,
                 customer_phone: transactionData.customer_phone,
-                net_value: sellerNetValue || productPrice,
+                net_value: itemNetValue,
                 sale_date: saleDate,
                 status: 'completed',
               }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
           }
 
-          console.log(`✅ Item ${i + 1}/${items.length}: ${productName} - ${productCategory} - R$ ${productPrice} (parcela ${installment || 1}/${installments || 1})`);
+          console.log(`✅ Item ${i + 1}/${items.length}: ${productName} - ${productCategory} - Bruto: R$ ${transactionData.product_price} | Líquido: R$ ${itemNetValue}`);
         }
       }
 

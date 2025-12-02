@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.reprocess-hubla-webhooks]
 verify_jwt = false
+
+[functions.fix-hubla-values]
+verify_jwt = false
