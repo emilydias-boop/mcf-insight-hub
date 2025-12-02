@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.fix-csv-orderbumps]
 verify_jwt = false
+
+[functions.reprocess-hubla-webhooks]
+verify_jwt = false
