@@ -89,19 +89,6 @@ function isFirstInstallment(transaction: any): boolean {
   
   return true; // É venda nova
 }
-
-// Extrair valor líquido do seller dos receivers
-function extractSellerNetValue(transaction: any): number | null {
-  const rawData = transaction.raw_data;
-  const invoice = rawData?.event?.invoice || rawData?.invoice;
-  const receivers = invoice?.receivers || [];
-  const sellerReceiver = receivers.find((r: any) => r.role === 'seller');
-  if (sellerReceiver?.totalCents) {
-    return sellerReceiver.totalCents / 100; // Converter de centavos para reais
-  }
-  return null;
-}
-
 function parseValorLiquido(transaction: any): number {
   // Primeiro, tentar extrair valor líquido do seller dos receivers
   const sellerNetValue = extractSellerNetValue(transaction);
