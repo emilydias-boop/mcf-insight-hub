@@ -164,13 +164,13 @@ Deno.serve(async (req) => {
     const team_cost = 0;
     const office_cost = 0;
 
-    // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (VENDAS CONFIRMADAS - ambos event_type)
+    // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (TODAS AS VENDAS CONFIRMADAS)
+    // Removido filtro de event_type para incluir NewSale e invoice.payment_succeeded
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', `${week_start}T00:00:00Z`)
       .lt('sale_date', `${week_end}T23:59:59Z`)
-      .in('event_type', ['invoice.payment_succeeded', 'NewSale'])
       .eq('sale_status', 'completed');
 
     // 4. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
