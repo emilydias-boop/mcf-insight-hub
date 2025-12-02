@@ -34,17 +34,26 @@ const getLeadType = (contactTag: string | string[] | null): 'A' | 'B' | null => 
   return null;
 };
 
-// Função para determinar tipo de lead baseado no produto Hubla
-const getLeadTypeFromHubla = (productName: string): 'A' | 'B' | null => {
+// Função para determinar tipo de lead baseado no VALOR do produto Hubla
+// Lead A = R$ 497 (valor >= 450), Lead B = R$ 397 (valor >= 350)
+const getLeadTypeFromHubla = (productName: string, productPrice: number | null): 'A' | 'B' | null => {
   const lower = productName.toLowerCase();
   
-  // A000 - Contrato = Lead A
-  if (lower.includes('a000')) return 'A';
+  // Excluir produtos que NÃO são Inside Sales
+  if (lower.includes('clube do arremate')) return null;
+  if (lower.includes('efeito alavanca')) return null;
+  if (lower.includes('clube arremate')) return null;
   
-  // Contrato - Anticrise = Lead B
-  if (lower.includes('anticrise')) return 'B';
+  // Classificar por VALOR (não por nome)
+  const price = productPrice || 0;
   
-  // Outros produtos (Clube do Arremate, etc) = não contar
+  // Lead A = R$ 497 (geralmente entre 450-500)
+  if (price >= 450) return 'A';
+  
+  // Lead B = R$ 397 (geralmente entre 350-420)
+  if (price >= 350) return 'B';
+  
+  // Valores muito baixos (recorrências, etc) = não contar
   return null;
 };
 
@@ -87,9 +96,13 @@ export const useTVSdrData = () => {
         .eq("sale_status", "completed")
         .ilike("product_name", "%contrato%");
 
-      // Filtrar apenas vendas NOVAS (não recorrências)
+      // Filtrar apenas vendas NOVAS (não recorrências e não duplicados)
       const hublaContracts = allHublaContracts?.filter(contract => {
         const rawData = contract.raw_data as any;
+        
+        // Ignorar transações sem customer_email (newsale-xxx duplicados)
+        if (!contract.customer_email) return false;
+        
         const smartInstallment = rawData?.event?.invoice?.smartInstallment;
         
         // Se não tem smartInstallment = venda única (OK)
@@ -102,16 +115,16 @@ export const useTVSdrData = () => {
         return false;
       }) || [];
 
-      // Contar contratos por tipo de lead
+      // Contar contratos por tipo de lead (usando VALOR)
       const contratosLeadA = hublaContracts?.filter(c => 
-        getLeadTypeFromHubla(c.product_name) === 'A'
+        getLeadTypeFromHubla(c.product_name, c.product_price) === 'A'
       ).length || 0;
 
       const contratosLeadB = hublaContracts?.filter(c => 
-        getLeadTypeFromHubla(c.product_name) === 'B'
+        getLeadTypeFromHubla(c.product_name, c.product_price) === 'B'
       ).length || 0;
 
-      console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB);
+      console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB, 'Total filtrado:', hublaContracts.length);
 
       // 2. Rastrear SDR original usando APENAS emails dos contratos Hubla filtrados
       const hublaEmails = hublaContracts.map(c => c.customer_email).filter(Boolean) as string[];
