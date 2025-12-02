@@ -174,7 +174,7 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
           </div>
           <div className="space-y-4">
             <FunilLista
-              titulo="Leads B (Instagram)"
+              titulo="Leads B"
               etapas={etapasLeadB}
               selectedStages={selectedStages}
               isLoading={isLoading}
