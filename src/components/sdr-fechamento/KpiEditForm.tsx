@@ -5,11 +5,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Save, RefreshCw, Cloud, AlertCircle, Zap, Edit3 } from 'lucide-react';
+import { Save, RefreshCw, Cloud, AlertCircle, Zap, Edit3, FileWarning } from 'lucide-react';
 import { SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fechamento';
 import { useSyncSdrKpis } from '@/hooks/useSyncSdrKpis';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// Meses que requerem entrada manual devido a dados incompletos no Clint
+const MANUAL_OVERRIDE_MONTHS = ['2025-11'];
 
 interface KpiEditFormProps {
   kpi: SdrMonthKpi | null;
@@ -41,6 +44,9 @@ export const KpiEditForm = ({
   });
 
   const syncKpis = useSyncSdrKpis();
+  
+  // Verifica se é mês de entrada manual (dados incompletos)
+  const isManualOverrideMonth = MANUAL_OVERRIDE_MONTHS.includes(anoMes);
 
   useEffect(() => {
     if (kpi) {
@@ -64,6 +70,16 @@ export const KpiEditForm = ({
     
     // Validate manual fields
     const hasPendingManualFields = formData.tentativas_ligacoes === 0 || formData.score_organizacao === 0;
+    
+    // Para meses de override, validar também os campos de KPI
+    if (isManualOverrideMonth) {
+      const hasIncompleteKpis = formData.reunioes_agendadas === 0;
+      if (hasIncompleteKpis) {
+        toast.warning('Preencha os KPIs', {
+          description: 'Reuniões Agendadas deve ser preenchido para este mês.',
+        });
+      }
+    }
     
     if (hasPendingManualFields) {
       toast.warning('Atenção: Campos manuais estão zerados', {
@@ -103,29 +119,50 @@ export const KpiEditForm = ({
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-lg">Editar KPIs</CardTitle>
-          {hasPendingFields && (
+          {hasPendingFields && !isManualOverrideMonth && (
             <p className="text-sm text-yellow-500 mt-1 flex items-center gap-1">
               <AlertCircle className="h-4 w-4" />
               Campos manuais pendentes de preenchimento
             </p>
           )}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSyncFromClint}
-          disabled={disabled || syncKpis.isPending}
-        >
-          {syncKpis.isPending ? (
-            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Cloud className="h-4 w-4 mr-2" />
+          {isManualOverrideMonth && (
+            <p className="text-sm text-orange-500 mt-1 flex items-center gap-1">
+              <FileWarning className="h-4 w-4" />
+              Mês com entrada manual de KPIs
+            </p>
           )}
-          Sincronizar do Clint
-        </Button>
+        </div>
+        {/* Ocultar botão de sincronização para meses de override */}
+        {!isManualOverrideMonth && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncFromClint}
+            disabled={disabled || syncKpis.isPending}
+          >
+            {syncKpis.isPending ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Cloud className="h-4 w-4 mr-2" />
+            )}
+            Sincronizar do Clint
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
-        {hasPendingFields && (
+        {/* Alerta para mês de entrada manual */}
+        {isManualOverrideMonth && (
+          <Alert className="mb-4 border-orange-500/50 bg-orange-500/10">
+            <FileWarning className="h-4 w-4 text-orange-500" />
+            <AlertDescription className="text-orange-500">
+              <strong>Novembro 2025 - Entrada Manual:</strong> Devido a dados incompletos no Clint 
+              (período 15-23/nov sem registro), os valores de R1 Agendadas, R1 Realizadas e No-Shows 
+              devem ser inseridos manualmente. Os cálculos de percentual e variável continuam automáticos.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {hasPendingFields && !isManualOverrideMonth && (
           <Alert className="mb-4 border-yellow-500/50 bg-yellow-500/10">
             <Edit3 className="h-4 w-4 text-yellow-500" />
             <AlertDescription className="text-yellow-500">
@@ -137,14 +174,21 @@ export const KpiEditForm = ({
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {/* Campo Automático: Reuniões Agendadas */}
+            {/* Campo: Reuniões Agendadas - Manual para override months */}
             <div className="space-y-2">
               <Label htmlFor="reunioes_agendadas" className="flex items-center gap-2">
                 Reuniões Agendadas
-                <Badge variant="secondary" className="text-xs">
-                  <Zap className="h-3 w-3 mr-1" />
-                  Auto
-                </Badge>
+                {isManualOverrideMonth ? (
+                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
+                    <Edit3 className="h-3 w-3 mr-1" />
+                    Manual (Exceção)
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs">
+                    <Zap className="h-3 w-3 mr-1" />
+                    Auto
+                  </Badge>
+                )}
               </Label>
               {compPlan && (
                 <span className="text-xs text-muted-foreground block">
@@ -156,19 +200,28 @@ export const KpiEditForm = ({
                 type="number"
                 min="0"
                 value={formData.reunioes_agendadas}
-                readOnly
-                className="bg-muted/50"
+                readOnly={!isManualOverrideMonth}
+                onChange={isManualOverrideMonth ? (e) => handleChange('reunioes_agendadas', e.target.value) : undefined}
+                disabled={disabled}
+                className={isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50"}
               />
             </div>
 
-            {/* Campo Automático: Reuniões Realizadas */}
+            {/* Campo: Reuniões Realizadas - Manual para override months */}
             <div className="space-y-2">
               <Label htmlFor="reunioes_realizadas" className="flex items-center gap-2">
                 Reuniões Realizadas
-                <Badge variant="secondary" className="text-xs">
-                  <Zap className="h-3 w-3 mr-1" />
-                  Auto
-                </Badge>
+                {isManualOverrideMonth ? (
+                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
+                    <Edit3 className="h-3 w-3 mr-1" />
+                    Manual (Exceção)
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs">
+                    <Zap className="h-3 w-3 mr-1" />
+                    Auto
+                  </Badge>
+                )}
               </Label>
               {compPlan && (
                 <span className="text-xs text-muted-foreground block">
@@ -180,19 +233,28 @@ export const KpiEditForm = ({
                 type="number"
                 min="0"
                 value={formData.reunioes_realizadas}
-                readOnly
-                className="bg-muted/50"
+                readOnly={!isManualOverrideMonth}
+                onChange={isManualOverrideMonth ? (e) => handleChange('reunioes_realizadas', e.target.value) : undefined}
+                disabled={disabled}
+                className={isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50"}
               />
             </div>
 
-            {/* Campo Automático: No-Shows */}
+            {/* Campo: No-Shows - Manual para override months */}
             <div className="space-y-2">
               <Label htmlFor="no_shows" className="flex items-center gap-2">
                 No-Shows
-                <Badge variant="secondary" className="text-xs">
-                  <Zap className="h-3 w-3 mr-1" />
-                  Auto
-                </Badge>
+                {isManualOverrideMonth ? (
+                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
+                    <Edit3 className="h-3 w-3 mr-1" />
+                    Manual (Exceção)
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="text-xs">
+                    <Zap className="h-3 w-3 mr-1" />
+                    Auto
+                  </Badge>
+                )}
               </Label>
               <span className="text-xs text-muted-foreground block">
                 Taxa: {taxaNoShow}% / Max: 30%
@@ -202,8 +264,10 @@ export const KpiEditForm = ({
                 type="number"
                 min="0"
                 value={formData.no_shows}
-                readOnly
-                className="bg-muted/50"
+                readOnly={!isManualOverrideMonth}
+                onChange={isManualOverrideMonth ? (e) => handleChange('no_shows', e.target.value) : undefined}
+                disabled={disabled}
+                className={isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50"}
               />
             </div>
 
