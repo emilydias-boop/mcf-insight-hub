@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { getMultiplierRange } from '@/types/sdr-fechamento';
 import { formatCurrency } from '@/lib/formatters';
+import { cn } from '@/lib/utils';
 
 interface SdrIndicatorCardProps {
   title: string;
@@ -33,6 +35,16 @@ export const SdrIndicatorCard = ({
     return 'text-emerald-400';
   };
 
+  const getProgressColor = (pct: number) => {
+    if (pct < 71) return 'bg-red-500';
+    if (pct < 86) return 'bg-yellow-500';
+    if (pct < 100) return 'bg-orange-500';
+    if (pct < 120) return 'bg-green-500';
+    return 'bg-emerald-500';
+  };
+
+  const progressValue = Math.min(pct, 150);
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
@@ -53,6 +65,27 @@ export const SdrIndicatorCard = ({
             <span className="ml-2 font-medium">
               {isPercentage ? `${realizado.toFixed(1)}%` : realizado.toLocaleString('pt-BR')}
             </span>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="space-y-1">
+          <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
+            <div 
+              className={cn("h-full transition-all duration-500", getProgressColor(pct))}
+              style={{ width: `${Math.min((progressValue / 150) * 100, 100)}%` }}
+            />
+            {/* 100% marker */}
+            <div 
+              className="absolute top-0 bottom-0 w-0.5 bg-foreground/50"
+              style={{ left: `${(100 / 150) * 100}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>0%</span>
+            <span>70%</span>
+            <span>100%</span>
+            <span>150%</span>
           </div>
         </div>
         

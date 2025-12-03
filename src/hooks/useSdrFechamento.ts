@@ -514,8 +514,8 @@ export const useAddAdjustment = () => {
       await supabase.from('sdr_payout_audit_log').insert({
         payout_id: payoutId,
         user_id: userId,
-        campo: adjustment.campo,
-        valor_novo: String(adjustment.valor),
+        campo: 'ajustes_json',
+        valor_novo: JSON.stringify(newAdjustment),
         motivo: adjustment.motivo,
       });
 
@@ -523,6 +523,7 @@ export const useAddAdjustment = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
       toast.success('Ajuste adicionado com sucesso');
     },
     onError: (error: Error) => {
@@ -531,7 +532,72 @@ export const useAddAdjustment = () => {
   });
 };
 
-// Fetch all SDRs (including inactive and pending for admin view)
+// Update iFood ultrameta authorization
+export const useUpdateIfoodAuthorization = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      payoutId, 
+      authorized, 
+      userId 
+    }: { 
+      payoutId: string; 
+      authorized: boolean; 
+      userId: string;
+    }) => {
+      const updateData: Record<string, any> = {
+        ifood_ultrameta_autorizado: authorized,
+      };
+      
+      if (authorized) {
+        updateData.ifood_ultrameta_autorizado_por = userId;
+        updateData.ifood_ultrameta_autorizado_em = new Date().toISOString();
+      }
+
+      // Get current payout to recalculate total_ifood
+      const { data: currentPayout } = await supabase
+        .from('sdr_month_payout')
+        .select('ifood_mensal, ifood_ultrameta')
+        .eq('id', payoutId)
+        .single();
+
+      if (currentPayout) {
+        updateData.total_ifood = (currentPayout.ifood_mensal || 0) + (authorized ? (currentPayout.ifood_ultrameta || 0) : 0);
+      }
+
+      const { data, error } = await supabase
+        .from('sdr_month_payout')
+        .update(updateData)
+        .eq('id', payoutId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Log the change
+      await supabase.from('sdr_payout_audit_log').insert({
+        payout_id: payoutId,
+        user_id: userId,
+        campo: 'ifood_ultrameta_autorizado',
+        valor_novo: String(authorized),
+        motivo: authorized ? 'Ultrameta iFood autorizada' : 'Ultrameta iFood revogada',
+      });
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
+      toast.success('Autorização atualizada');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro: ${error.message}`);
+    },
+  });
+};
+
+// Fetch all SDRs (including inactive) for admin
 export const useSdrsAll = () => {
   return useQuery({
     queryKey: ['sdrs-all'],
@@ -550,7 +616,7 @@ export const useSdrsAll = () => {
 // Fetch all comp plans
 export const useAllCompPlans = () => {
   return useQuery({
-    queryKey: ['all-comp-plans'],
+    queryKey: ['comp-plans-all'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sdr_comp_plan')
@@ -558,15 +624,181 @@ export const useAllCompPlans = () => {
           *,
           sdr:sdr_id(name)
         `)
-        .order('created_at', { ascending: false });
+        .order('vigencia_inicio', { ascending: false });
       
       if (error) throw error;
-      return data as unknown as (SdrCompPlan & { sdr: { name: string } })[];
+      return data as (SdrCompPlan & { sdr: { name: string } })[];
     },
   });
 };
 
-// Fetch users for linking to SDR
+// Create SDR
+export const useCreateSdr = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sdr: Partial<Sdr>) => {
+      const { data, error } = await supabase
+        .from('sdr')
+        .insert(sdr)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sdrs-all'] });
+      toast.success('SDR criado com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao criar SDR: ${error.message}`);
+    },
+  });
+};
+
+// Update SDR
+export const useUpdateSdr = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (sdr: Partial<Sdr> & { id: string }) => {
+      const { id, ...updateData } = sdr;
+      const { data, error } = await supabase
+        .from('sdr')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sdrs-all'] });
+      queryClient.invalidateQueries({ queryKey: ['sdrs'] });
+      toast.success('SDR atualizado com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao atualizar SDR: ${error.message}`);
+    },
+  });
+};
+
+// Approve SDR
+export const useApproveSdr = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ sdrId, approve, userId }: { sdrId: string; approve: boolean; userId: string }) => {
+      const { data, error } = await supabase
+        .from('sdr')
+        .update({
+          status: approve ? 'APPROVED' : 'REJECTED',
+          aprovado_por: userId,
+          aprovado_em: new Date().toISOString(),
+        })
+        .eq('id', sdrId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sdrs-all'] });
+      toast.success(variables.approve ? 'SDR aprovado' : 'SDR rejeitado');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro: ${error.message}`);
+    },
+  });
+};
+
+// Create Comp Plan
+export const useCreateCompPlan = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (plan: Partial<SdrCompPlan>) => {
+      const { data, error } = await supabase
+        .from('sdr_comp_plan')
+        .insert(plan)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comp-plans-all'] });
+      toast.success('Plano OTE criado com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao criar plano: ${error.message}`);
+    },
+  });
+};
+
+// Update Comp Plan
+export const useUpdateCompPlan = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (plan: Partial<SdrCompPlan> & { id: string }) => {
+      const { id, ...updateData } = plan;
+      const { data, error } = await supabase
+        .from('sdr_comp_plan')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comp-plans-all'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-comp-plan'] });
+      toast.success('Plano OTE atualizado com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao atualizar plano: ${error.message}`);
+    },
+  });
+};
+
+// Approve Comp Plan
+export const useApproveCompPlan = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ planId, approve, userId }: { planId: string; approve: boolean; userId: string }) => {
+      const { data, error } = await supabase
+        .from('sdr_comp_plan')
+        .update({
+          status: approve ? 'active' : 'rejected',
+          aprovado_por: userId,
+          aprovado_em: new Date().toISOString(),
+        })
+        .eq('id', planId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['comp-plans-all'] });
+      toast.success(variables.approve ? 'Plano aprovado' : 'Plano rejeitado');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro: ${error.message}`);
+    },
+  });
+};
+
+// Fetch users for SDR assignment
 export const useUsers = () => {
   return useQuery({
     queryKey: ['users-for-sdr'],
@@ -582,204 +814,52 @@ export const useUsers = () => {
   });
 };
 
-// Create SDR
-export const useCreateSdr = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ 
-      name, 
-      user_id, 
-      active 
-    }: { 
-      name: string; 
-      user_id: string | null; 
-      active: boolean;
-    }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Check user role to determine status
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single();
-
-      const isAdmin = roleData?.role === 'admin';
-      const status = isAdmin ? 'APPROVED' : 'PENDING';
-
+// Fetch intermediacoes for an SDR/month
+export const useSdrIntermediacoes = (sdrId: string | undefined, anoMes: string) => {
+  return useQuery({
+    queryKey: ['sdr-intermediacoes', sdrId, anoMes],
+    queryFn: async () => {
+      if (!sdrId) return [];
+      
       const { data, error } = await supabase
-        .from('sdr')
-        .insert({
-          name,
-          user_id,
-          active,
-          status,
-          criado_por: user.id,
-          aprovado_por: isAdmin ? user.id : null,
-          aprovado_em: isAdmin ? new Date().toISOString() : null,
-        } as any)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sdrs'] });
-      queryClient.invalidateQueries({ queryKey: ['sdrs-all'] });
-      toast.success('SDR criado com sucesso');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao criar SDR: ${error.message}`);
-    },
-  });
-};
-
-// Approve/Reject SDR
-export const useApproveSdr = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ 
-      sdrId, 
-      approve, 
-      userId 
-    }: { 
-      sdrId: string; 
-      approve: boolean; 
-      userId: string;
-    }) => {
-      const { data, error } = await supabase
-        .from('sdr')
-        .update({
-          status: approve ? 'APPROVED' : 'REJECTED',
-          aprovado_por: userId,
-          aprovado_em: new Date().toISOString(),
-        } as any)
-        .eq('id', sdrId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (_, { approve }) => {
-      queryClient.invalidateQueries({ queryKey: ['sdrs'] });
-      queryClient.invalidateQueries({ queryKey: ['sdrs-all'] });
-      toast.success(approve ? 'SDR aprovado' : 'SDR rejeitado');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro: ${error.message}`);
-    },
-  });
-};
-
-// Create Comp Plan
-export const useCreateCompPlan = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (plan: Omit<SdrCompPlan, 'id' | 'status' | 'criado_por' | 'aprovado_por' | 'aprovado_em' | 'created_at' | 'updated_at'>) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Check user role
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single();
-
-      const isAdmin = roleData?.role === 'admin';
-      const status = isAdmin ? 'APPROVED' : 'PENDING';
-
-      const { data, error } = await supabase
-        .from('sdr_comp_plan')
-        .insert({
-          ...plan,
-          status,
-          criado_por: user.id,
-          aprovado_por: isAdmin ? user.id : null,
-          aprovado_em: isAdmin ? new Date().toISOString() : null,
-        } as any)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['all-comp-plans'] });
-      queryClient.invalidateQueries({ queryKey: ['sdr-comp-plan'] });
-      toast.success('Plano OTE criado com sucesso');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao criar plano: ${error.message}`);
-    },
-  });
-};
-
-// Approve/Reject Comp Plan
-export const useApproveCompPlan = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ 
-      planId, 
-      approve, 
-      userId 
-    }: { 
-      planId: string; 
-      approve: boolean; 
-      userId: string;
-    }) => {
-      const { data, error } = await supabase
-        .from('sdr_comp_plan')
-        .update({
-          status: approve ? 'APPROVED' : 'REJECTED',
-          aprovado_por: userId,
-          aprovado_em: new Date().toISOString(),
-        } as any)
-        .eq('id', planId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (_, { approve }) => {
-      queryClient.invalidateQueries({ queryKey: ['all-comp-plans'] });
-      queryClient.invalidateQueries({ queryKey: ['sdr-comp-plan'] });
-      toast.success(approve ? 'Plano aprovado' : 'Plano rejeitado');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro: ${error.message}`);
-    },
-  });
-};
-
-// Recalculate payout via Edge Function
-export const useRecalculatePayoutEdge = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ sdr_id, ano_mes }: { sdr_id?: string; ano_mes: string }) => {
-      const { data, error } = await supabase.functions.invoke('recalculate-sdr-payout', {
-        body: { sdr_id, ano_mes }
-      });
+        .from('sdr_intermediacoes')
+        .select(`
+          *,
+          hubla_transaction:hubla_transaction_id(customer_name, customer_email, product_name, product_price)
+        `)
+        .eq('sdr_id', sdrId)
+        .eq('ano_mes', anoMes)
+        .order('created_at', { ascending: false });
       
       if (error) throw error;
       return data;
     },
-    onSuccess: (_, { ano_mes }) => {
-      queryClient.invalidateQueries({ queryKey: ['sdr-payouts', ano_mes] });
-      queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
-      toast.success('Fechamento recalculado com sucesso');
+    enabled: !!sdrId,
+  });
+};
+
+// Update KPI manually
+export const useUpdateKpi = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ kpiId, updates }: { kpiId: string; updates: Partial<SdrMonthKpi> }) => {
+      const { data, error } = await supabase
+        .from('sdr_month_kpi')
+        .update(updates)
+        .eq('id', kpiId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-month-kpi'] });
+      toast.success('KPI atualizado');
     },
     onError: (error: Error) => {
-      toast.error(`Erro ao recalcular: ${error.message}`);
+      toast.error(`Erro: ${error.message}`);
     },
   });
 };

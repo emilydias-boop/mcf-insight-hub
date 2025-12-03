@@ -23,17 +23,38 @@ import { Badge } from '@/components/ui/badge';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { useSdrPayouts, useRecalculateAllPayouts } from '@/hooks/useSdrFechamento';
 import { formatCurrency } from '@/lib/formatters';
-import { Calculator, Download, Eye, RefreshCw } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const FechamentoSDRList = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currentMonth = format(new Date(), 'yyyy-MM');
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   
   const { data: payouts, isLoading } = useSdrPayouts(selectedMonth);
   const recalculateAll = useRecalculateAllPayouts();
+
+  // Mutation to call edge function for recalculation with correct iFood from calendar
+  const recalculateViaEdge = useMutation({
+    mutationFn: async (anoMes: string) => {
+      const { data, error } = await supabase.functions.invoke('recalculate-sdr-payout', {
+        body: { ano_mes: anoMes },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts', selectedMonth] });
+      toast.success(`Fechamentos recalculados: ${data.processed || 0} SDRs processados`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro: ${error.message}`);
+    },
+  });
 
   // Fetch comp_plans for all SDRs to get OTE
   const { data: compPlans } = useQuery({
@@ -88,6 +109,21 @@ const FechamentoSDRList = () => {
     if (pcts.length === 0) return 0;
     return pcts.reduce((a, b) => a + b, 0) / pcts.length;
   };
+
+  // Calculate financial summary
+  const financialSummary = payouts?.reduce((acc, p) => ({
+    totalFixo: acc.totalFixo + (p.valor_fixo || 0),
+    totalVariavel: acc.totalVariavel + (p.valor_variavel_total || 0),
+    totalConta: acc.totalConta + (p.total_conta || 0),
+    totalIfood: acc.totalIfood + (p.total_ifood || 0),
+  }), { totalFixo: 0, totalVariavel: 0, totalConta: 0, totalIfood: 0 });
+
+  // Count critical alerts
+  const criticalCount = payouts?.filter(p => calculateGlobalPct(p) < 70).length || 0;
+  const warningCount = payouts?.filter(p => {
+    const pct = calculateGlobalPct(p);
+    return pct >= 70 && pct < 100;
+  }).length || 0;
 
   const escapeCSV = (value: string | number | null | undefined): string => {
     if (value === null || value === undefined) return '';
@@ -190,11 +226,11 @@ const FechamentoSDRList = () => {
 
           <Button
             variant="outline"
-            onClick={() => recalculateAll.mutate(selectedMonth)}
-            disabled={recalculateAll.isPending}
+            onClick={() => recalculateViaEdge.mutate(selectedMonth)}
+            disabled={recalculateViaEdge.isPending}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${recalculateAll.isPending ? 'animate-spin' : ''}`} />
-            Recalcular Mês
+            <RefreshCw className={`h-4 w-4 mr-2 ${recalculateViaEdge.isPending ? 'animate-spin' : ''}`} />
+            Recalcular Todos
           </Button>
 
           <Button variant="outline" onClick={handleExportCSV}>
@@ -203,6 +239,82 @@ const FechamentoSDRList = () => {
           </Button>
         </div>
       </div>
+
+      {/* Financial Summary Cards */}
+      {payouts && payouts.length > 0 && financialSummary && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <DollarSign className="h-5 w-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Fixo</p>
+                  <p className="text-lg font-bold">{formatCurrency(financialSummary.totalFixo)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-green-500/10">
+                  <Wallet className="h-5 w-5 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Variável</p>
+                  <p className="text-lg font-bold">{formatCurrency(financialSummary.totalVariavel)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <CreditCard className="h-5 w-5 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Conta</p>
+                  <p className="text-lg font-bold">{formatCurrency(financialSummary.totalConta)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-orange-500/10">
+                  <UtensilsCrossed className="h-5 w-5 text-orange-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total iFood</p>
+                  <p className="text-lg font-bold">{formatCurrency(financialSummary.totalIfood)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Alerts Summary */}
+      {(criticalCount > 0 || warningCount > 0) && (
+        <div className="flex gap-4">
+          {criticalCount > 0 && (
+            <Badge variant="destructive" className="flex items-center gap-1 px-3 py-1">
+              <AlertTriangle className="h-3 w-3" />
+              {criticalCount} SDR(s) em situação crítica (&lt;70%)
+            </Badge>
+          )}
+          {warningCount > 0 && (
+            <Badge variant="outline" className="flex items-center gap-1 px-3 py-1 bg-yellow-500/10 text-yellow-400 border-yellow-500/30">
+              <AlertTriangle className="h-3 w-3" />
+              {warningCount} SDR(s) abaixo da meta (70-99%)
+            </Badge>
+          )}
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -221,8 +333,8 @@ const FechamentoSDRList = () => {
               <p>Nenhum fechamento encontrado para este mês.</p>
               <Button
                 className="mt-4"
-                onClick={() => recalculateAll.mutate(selectedMonth)}
-                disabled={recalculateAll.isPending}
+                onClick={() => recalculateViaEdge.mutate(selectedMonth)}
+                disabled={recalculateViaEdge.isPending}
               >
                 <Calculator className="h-4 w-4 mr-2" />
                 Gerar Fechamentos
@@ -249,11 +361,20 @@ const FechamentoSDRList = () => {
                   const compPlan = getCompPlanForSdr(payout.sdr_id);
                   const nivel = payout.sdr?.nivel || 1;
                   const ote = compPlan?.ote_total || 4000;
+                  const isCritical = globalPct < 70;
+                  const isWarning = globalPct >= 70 && globalPct < 100;
                   
                   return (
-                    <TableRow key={payout.id}>
+                    <TableRow key={payout.id} className={isCritical ? 'bg-red-500/5' : isWarning ? 'bg-yellow-500/5' : ''}>
                       <TableCell className="font-medium">
-                        {payout.sdr?.name || 'SDR'}
+                        <div className="flex items-center gap-2">
+                          {payout.sdr?.name || 'SDR'}
+                          {isCritical && (
+                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                              CRÍTICO
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="font-mono">
