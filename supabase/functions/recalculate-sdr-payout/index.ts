@@ -231,6 +231,15 @@ serve(async (req) => {
           continue;
         }
 
+        // Log KPI values for debugging
+        console.log(`   📊 KPI carregado para ${sdr.name}:`, {
+          reunioes_agendadas: kpi.reunioes_agendadas,
+          reunioes_realizadas: kpi.reunioes_realizadas,
+          tentativas_ligacoes: kpi.tentativas_ligacoes,
+          score_organizacao: kpi.score_organizacao,
+          no_shows: kpi.no_shows,
+        });
+
         // Count intermediações
         const { count: interCount } = await supabase
           .from('sdr_intermediacoes')
@@ -249,6 +258,15 @@ serve(async (req) => {
 
         // Calculate values
         const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi);
+        
+        console.log(`   💰 Valores calculados para ${sdr.name}:`, {
+          pct_tentativas: calculatedValues.pct_tentativas.toFixed(1),
+          pct_organizacao: calculatedValues.pct_organizacao.toFixed(1),
+          mult_tentativas: calculatedValues.mult_tentativas,
+          mult_organizacao: calculatedValues.mult_organizacao,
+          valor_tentativas: calculatedValues.valor_tentativas,
+          valor_organizacao: calculatedValues.valor_organizacao,
+        });
 
         // Get existing payout to preserve ifood_ultrameta_autorizado
         const { data: existingPayout } = await supabase
