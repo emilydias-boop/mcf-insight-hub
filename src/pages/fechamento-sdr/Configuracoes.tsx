@@ -115,12 +115,12 @@ const SdrFormDialog = ({ onSuccess }: { onSuccess: () => void }) => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="user">Usuário vinculado (opcional)</Label>
-            <Select value={userId} onValueChange={setUserId}>
+            <Select value={userId} onValueChange={(val) => setUserId(val === '__none__' ? '' : val)}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um usuário" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+                <SelectItem value="__none__">Nenhum</SelectItem>
                 {users?.map((user) => (
                   <SelectItem key={user.id} value={user.id}>
                     {user.email}
