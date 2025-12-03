@@ -20,7 +20,7 @@ export function SaleCelebration({
   closerName,
   productName,
   onComplete,
-  duration = 5000,
+  duration = 15000,
 }: SaleCelebrationProps) {
   const isContrato = productName.toLowerCase().includes("contrato");
   const bgColor = isContrato ? "from-yellow-500/20 to-amber-600/20" : "from-blue-500/20 to-cyan-600/20";
@@ -28,19 +28,17 @@ export function SaleCelebration({
 
   useEffect(() => {
     // 🔊 Tocar som diferente para cada tipo de venda
-    const soundUrl = isContrato 
-      ? '/sounds/celebration.mp3'   // 🎵 Som emotivo para CONTRATO
-      : '/sounds/applause.mp3';      // 👏 Aplausos para PARCERIA
-    
+    const soundUrl = isContrato
+      ? "/sounds/celebration.mp3" // 🎵 Som emotivo para CONTRATO
+      : "/sounds/applause.mp3"; // 👏 Aplausos para PARCERIA
+
     const audio = new Audio(soundUrl);
     audio.volume = 0.7;
     audio.play().catch((err) => {
-      console.warn('Não foi possível tocar o áudio:', err);
+      console.warn("Não foi possível tocar o áudio:", err);
     });
 
-    const colors = isContrato
-      ? ["#FFD700", "#FFA500", "#FF8C00"]
-      : ["#4169E1", "#1E90FF", "#00BFFF"];
+    const colors = isContrato ? ["#FFD700", "#FFA500", "#FF8C00"] : ["#4169E1", "#1E90FF", "#00BFFF"];
 
     const end = Date.now() + duration;
 
@@ -81,23 +79,21 @@ export function SaleCelebration({
           <div className="flex justify-center">
             <Sparkles className={`h-20 w-20 ${accentColor} animate-pulse`} />
           </div>
-          
+
           <div>
-            <h2 className="text-5xl font-bold text-foreground mb-2">
-              🎉 VENDA REALIZADA! 🎉
-            </h2>
-            <p className={`text-3xl font-bold ${accentColor} uppercase tracking-wide`}>
-              {productName}
-            </p>
+            <h2 className="text-5xl font-bold text-foreground mb-2">🎉 VENDA REALIZADA! 🎉</h2>
+            <p className={`text-3xl font-bold ${accentColor} uppercase tracking-wide`}>{productName}</p>
           </div>
 
           <div className="space-y-4 bg-card/50 rounded-lg p-6 border border-border">
             <div>
               <p className="text-sm text-muted-foreground uppercase tracking-wider">Lead</p>
               <p className="text-2xl font-bold text-foreground">{leadName}</p>
-              <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-bold ${
-                leadType === "A" ? "bg-chart-1 text-white" : "bg-chart-2 text-white"
-              }`}>
+              <span
+                className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-bold ${
+                  leadType === "A" ? "bg-chart-1 text-white" : "bg-chart-2 text-white"
+                }`}
+              >
                 Lead {leadType}
               </span>
             </div>
@@ -114,9 +110,7 @@ export function SaleCelebration({
             </div>
           </div>
 
-          <p className="text-sm text-muted-foreground animate-pulse">
-            Parabéns pelo fechamento! 🚀
-          </p>
+          <p className="text-sm text-muted-foreground animate-pulse">Parabéns pelo fechamento! 🚀</p>
         </CardContent>
       </Card>
     </div>
