@@ -373,6 +373,7 @@ const FechamentoSDRDetail = () => {
             multiplicador={payout.mult_reunioes_agendadas || 0}
             valorBase={compPlan?.valor_meta_rpg || 0}
             valorFinal={payout.valor_reunioes_agendadas || 0}
+            isManual={false}
           />
 
           <SdrIndicatorCard
@@ -383,6 +384,7 @@ const FechamentoSDRDetail = () => {
             multiplicador={payout.mult_reunioes_realizadas || 0}
             valorBase={compPlan?.valor_docs_reuniao || 0}
             valorFinal={payout.valor_reunioes_realizadas || 0}
+            isManual={false}
           />
 
           <NoShowIndicator
@@ -398,6 +400,7 @@ const FechamentoSDRDetail = () => {
             multiplicador={payout.mult_tentativas || 0}
             valorBase={compPlan?.valor_tentativas || 0}
             valorFinal={payout.valor_tentativas || 0}
+            isManual={true}
           />
 
           <SdrIndicatorCard
@@ -409,6 +412,7 @@ const FechamentoSDRDetail = () => {
             valorBase={compPlan?.valor_organizacao || 0}
             valorFinal={payout.valor_organizacao || 0}
             isPercentage
+            isManual={true}
           />
         </div>
       </div>

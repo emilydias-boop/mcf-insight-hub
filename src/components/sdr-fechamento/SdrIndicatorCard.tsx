@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { getMultiplierRange } from '@/types/sdr-fechamento';
 import { formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
+import { AlertCircle, Zap } from 'lucide-react';
 
 interface SdrIndicatorCardProps {
   title: string;
@@ -13,6 +14,7 @@ interface SdrIndicatorCardProps {
   valorBase: number;
   valorFinal: number;
   isPercentage?: boolean;
+  isManual?: boolean;
 }
 
 export const SdrIndicatorCard = ({
@@ -24,8 +26,10 @@ export const SdrIndicatorCard = ({
   valorBase,
   valorFinal,
   isPercentage = false,
+  isManual = false,
 }: SdrIndicatorCardProps) => {
   const faixa = getMultiplierRange(pct);
+  const needsInput = isManual && realizado === 0 && meta > 0;
   
   const getColorByPct = (pct: number) => {
     if (pct < 71) return 'text-red-400';
@@ -46,11 +50,34 @@ export const SdrIndicatorCard = ({
   const progressValue = Math.min(pct, 150);
 
   return (
-    <Card className="bg-card border-border">
+    <Card className={cn(
+      "bg-card border-border",
+      needsInput && "border-yellow-500/50 bg-yellow-500/5"
+    )}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            {title}
+          </CardTitle>
+          <div className="flex items-center gap-1">
+            {isManual ? (
+              <Badge variant="outline" className="text-xs border-yellow-500/50 text-yellow-500">
+                Manual
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="text-xs">
+                <Zap className="h-3 w-3 mr-1" />
+                Auto
+              </Badge>
+            )}
+          </div>
+        </div>
+        {needsInput && (
+          <div className="flex items-center gap-1.5 mt-1 text-yellow-500 text-xs">
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span>Pendente de preenchimento</span>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-2 text-sm">
@@ -62,7 +89,10 @@ export const SdrIndicatorCard = ({
           </div>
           <div>
             <span className="text-muted-foreground">Realizado:</span>
-            <span className="ml-2 font-medium">
+            <span className={cn(
+              "ml-2 font-medium",
+              needsInput && "text-yellow-500"
+            )}>
               {isPercentage ? `${realizado.toFixed(1)}%` : realizado.toLocaleString('pt-BR')}
             </span>
           </div>
@@ -72,7 +102,10 @@ export const SdrIndicatorCard = ({
         <div className="space-y-1">
           <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
             <div 
-              className={cn("h-full transition-all duration-500", getProgressColor(pct))}
+              className={cn(
+                "h-full transition-all duration-500",
+                needsInput ? "bg-yellow-500/30" : getProgressColor(pct)
+              )}
               style={{ width: `${Math.min((progressValue / 150) * 100, 100)}%` }}
             />
             {/* 100% marker */}
@@ -90,7 +123,10 @@ export const SdrIndicatorCard = ({
         </div>
         
         <div className="flex items-center justify-between">
-          <div className={`text-2xl font-bold ${getColorByPct(pct)}`}>
+          <div className={cn(
+            "text-2xl font-bold",
+            needsInput ? "text-yellow-500" : getColorByPct(pct)
+          )}>
             {pct.toFixed(1)}%
           </div>
           <div className="text-right">

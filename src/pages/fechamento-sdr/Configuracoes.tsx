@@ -702,7 +702,9 @@ const ConfiguracoesSdr = () => {
                         <TableCell className="text-right">{formatCurrency(plan.ote_total)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(plan.fixo_valor)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(plan.variavel_total)}</TableCell>
-                        <TableCell><StatusBadge status={plan.status} /></TableCell>
+                        <TableCell>
+                          <StatusBadge status={(plan.status as string) === 'active' ? 'APPROVED' : plan.status} />
+                        </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
                             {plan.status === 'PENDING' && isAdmin && (
@@ -727,7 +729,7 @@ const ConfiguracoesSdr = () => {
                                 </Button>
                               </>
                             )}
-                            {plan.status === 'APPROVED' && (
+                            {(plan.status === 'APPROVED' || (plan.status as string) === 'active') && (
                               <EditCompPlanDialog plan={plan as SdrCompPlan} onSuccess={() => refetchPlans()} />
                             )}
                           </div>
