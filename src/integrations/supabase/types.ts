@@ -1462,7 +1462,10 @@ export type Database = {
       }
       sdr_comp_plan: {
         Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
           created_at: string | null
+          criado_por: string | null
           fixo_valor: number
           id: string
           ifood_mensal: number | null
@@ -1473,6 +1476,7 @@ export type Database = {
           meta_tentativas: number | null
           ote_total: number
           sdr_id: string
+          status: string | null
           updated_at: string | null
           valor_docs_reuniao: number
           valor_meta_rpg: number
@@ -1483,7 +1487,10 @@ export type Database = {
           vigencia_inicio: string
         }
         Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           created_at?: string | null
+          criado_por?: string | null
           fixo_valor?: number
           id?: string
           ifood_mensal?: number | null
@@ -1494,6 +1501,7 @@ export type Database = {
           meta_tentativas?: number | null
           ote_total?: number
           sdr_id: string
+          status?: string | null
           updated_at?: string | null
           valor_docs_reuniao?: number
           valor_meta_rpg?: number
@@ -1504,7 +1512,10 @@ export type Database = {
           vigencia_inicio: string
         }
         Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           created_at?: string | null
+          criado_por?: string | null
           fixo_valor?: number
           id?: string
           ifood_mensal?: number | null
@@ -1515,6 +1526,7 @@ export type Database = {
           meta_tentativas?: number | null
           ote_total?: number
           sdr_id?: string
+          status?: string | null
           updated_at?: string | null
           valor_docs_reuniao?: number
           valor_meta_rpg?: number
