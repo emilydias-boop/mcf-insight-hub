@@ -4,9 +4,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Save, RefreshCw, Cloud } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Save, RefreshCw, Cloud, AlertCircle, Zap, Edit3 } from 'lucide-react';
 import { SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fechamento';
 import { useSyncSdrKpis } from '@/hooks/useSyncSdrKpis';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface KpiEditFormProps {
   kpi: SdrMonthKpi | null;
@@ -59,6 +62,15 @@ export const KpiEditForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate manual fields
+    const hasPendingManualFields = formData.tentativas_ligacoes === 0 || formData.score_organizacao === 0;
+    
+    if (hasPendingManualFields) {
+      toast.warning('Atenção: Campos manuais estão zerados', {
+        description: 'Tentativas de Ligações e/ou Organização ainda precisam ser preenchidos.',
+      });
+    }
+    
     // Calculate taxa_no_show
     const taxa_no_show = formData.reunioes_agendadas > 0
       ? (formData.no_shows / formData.reunioes_agendadas) * 100
@@ -81,10 +93,23 @@ export const KpiEditForm = ({
     ? ((formData.no_shows / formData.reunioes_agendadas) * 100).toFixed(1)
     : '0.0';
 
+  // Check for pending manual inputs
+  const tentativasPending = formData.tentativas_ligacoes === 0 && (compPlan?.meta_tentativas || 0) > 0;
+  const organizacaoPending = formData.score_organizacao === 0 && (compPlan?.meta_organizacao || 0) > 0;
+  const hasPendingFields = tentativasPending || organizacaoPending;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">Editar KPIs</CardTitle>
+        <div>
+          <CardTitle className="text-lg">Editar KPIs</CardTitle>
+          {hasPendingFields && (
+            <p className="text-sm text-yellow-500 mt-1 flex items-center gap-1">
+              <AlertCircle className="h-4 w-4" />
+              Campos manuais pendentes de preenchimento
+            </p>
+          )}
+        </div>
         <Button
           variant="outline"
           size="sm"
@@ -100,13 +125,26 @@ export const KpiEditForm = ({
         </Button>
       </CardHeader>
       <CardContent>
+        {hasPendingFields && (
+          <Alert className="mb-4 border-yellow-500/50 bg-yellow-500/10">
+            <Edit3 className="h-4 w-4 text-yellow-500" />
+            <AlertDescription className="text-yellow-500">
+              <strong>Preencha os campos manuais:</strong> Tentativas de Ligações e Score de Organização 
+              devem ser inseridos manualmente pelo coordenador para completar o cálculo.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             {/* Campo Automático: Reuniões Agendadas */}
             <div className="space-y-2">
               <Label htmlFor="reunioes_agendadas" className="flex items-center gap-2">
                 Reuniões Agendadas
-                <Badge variant="secondary" className="text-xs">Automático</Badge>
+                <Badge variant="secondary" className="text-xs">
+                  <Zap className="h-3 w-3 mr-1" />
+                  Auto
+                </Badge>
               </Label>
               {compPlan && (
                 <span className="text-xs text-muted-foreground block">
@@ -127,7 +165,10 @@ export const KpiEditForm = ({
             <div className="space-y-2">
               <Label htmlFor="reunioes_realizadas" className="flex items-center gap-2">
                 Reuniões Realizadas
-                <Badge variant="secondary" className="text-xs">Automático</Badge>
+                <Badge variant="secondary" className="text-xs">
+                  <Zap className="h-3 w-3 mr-1" />
+                  Auto
+                </Badge>
               </Label>
               {compPlan && (
                 <span className="text-xs text-muted-foreground block">
@@ -148,7 +189,10 @@ export const KpiEditForm = ({
             <div className="space-y-2">
               <Label htmlFor="no_shows" className="flex items-center gap-2">
                 No-Shows
-                <Badge variant="secondary" className="text-xs">Automático</Badge>
+                <Badge variant="secondary" className="text-xs">
+                  <Zap className="h-3 w-3 mr-1" />
+                  Auto
+                </Badge>
               </Label>
               <span className="text-xs text-muted-foreground block">
                 Taxa: {taxaNoShow}% / Max: 30%
@@ -167,7 +211,13 @@ export const KpiEditForm = ({
             <div className="space-y-2">
               <Label htmlFor="tentativas_ligacoes" className="flex items-center gap-2">
                 Tentativas de Ligações
-                <Badge variant="outline" className="text-xs">Manual</Badge>
+                <Badge variant="outline" className={cn(
+                  "text-xs",
+                  tentativasPending ? "border-yellow-500 text-yellow-500" : "border-blue-500 text-blue-500"
+                )}>
+                  <Edit3 className="h-3 w-3 mr-1" />
+                  Manual
+                </Badge>
               </Label>
               {compPlan && compPlan.meta_tentativas > 0 && (
                 <span className="text-xs text-muted-foreground block">
@@ -181,6 +231,10 @@ export const KpiEditForm = ({
                 value={formData.tentativas_ligacoes}
                 onChange={(e) => handleChange('tentativas_ligacoes', e.target.value)}
                 disabled={disabled}
+                className={cn(
+                  tentativasPending && "border-yellow-500 focus-visible:ring-yellow-500"
+                )}
+                placeholder={tentativasPending ? "Preencha este campo" : undefined}
               />
             </div>
 
@@ -188,7 +242,13 @@ export const KpiEditForm = ({
             <div className="space-y-2">
               <Label htmlFor="score_organizacao" className="flex items-center gap-2">
                 Score de Organização (%)
-                <Badge variant="outline" className="text-xs">Manual</Badge>
+                <Badge variant="outline" className={cn(
+                  "text-xs",
+                  organizacaoPending ? "border-yellow-500 text-yellow-500" : "border-blue-500 text-blue-500"
+                )}>
+                  <Edit3 className="h-3 w-3 mr-1" />
+                  Manual
+                </Badge>
               </Label>
               {compPlan && (
                 <span className="text-xs text-muted-foreground block">
@@ -199,10 +259,14 @@ export const KpiEditForm = ({
                 id="score_organizacao"
                 type="number"
                 min="0"
-                max="100"
+                max="150"
                 value={formData.score_organizacao}
                 onChange={(e) => handleChange('score_organizacao', e.target.value)}
                 disabled={disabled}
+                className={cn(
+                  organizacaoPending && "border-yellow-500 focus-visible:ring-yellow-500"
+                )}
+                placeholder={organizacaoPending ? "Preencha este campo" : undefined}
               />
             </div>
 
@@ -210,7 +274,10 @@ export const KpiEditForm = ({
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 Intermediações de Contrato
-                <Badge variant="secondary" className="text-xs">Automático</Badge>
+                <Badge variant="secondary" className="text-xs">
+                  <Zap className="h-3 w-3 mr-1" />
+                  Auto
+                </Badge>
               </Label>
               <div className="h-10 px-3 py-2 rounded-md border bg-muted/50 flex items-center">
                 <span className="font-medium">{intermediacoes}</span>
