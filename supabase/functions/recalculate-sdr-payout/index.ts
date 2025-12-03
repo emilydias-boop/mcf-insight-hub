@@ -297,13 +297,16 @@ serve(async (req) => {
           continue;
         }
 
+        // Remove campos que não existem na tabela sdr_month_payout
+        const { pct_no_show, mult_no_show, ...payoutFields } = calculatedValues;
+
         // Upsert payout
         const { data: payout, error: payoutError } = await supabase
           .from('sdr_month_payout')
           .upsert({
             sdr_id: sdr.id,
             ano_mes: ano_mes,
-            ...calculatedValues,
+            ...payoutFields,
             status: existingPayout?.status || 'DRAFT',
             ifood_ultrameta_autorizado: existingPayout?.ifood_ultrameta_autorizado || false,
             ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,
