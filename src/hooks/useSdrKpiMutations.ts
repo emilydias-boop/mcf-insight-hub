@@ -202,7 +202,9 @@ export const useRecalculateWithKpi = () => {
       anoMes: string; 
       kpiData: Partial<SdrMonthKpi>;
     }) => {
-      // First, update KPI
+      console.log('🔄 Salvando KPIs:', kpiData);
+      
+      // First, update KPI and wait for it
       const { data: existing } = await supabase
         .from('sdr_month_kpi')
         .select('id')
@@ -210,29 +212,67 @@ export const useRecalculateWithKpi = () => {
         .eq('ano_mes', anoMes)
         .single();
 
+      let savedKpi;
       if (existing) {
-        await supabase
+        const { data, error } = await supabase
           .from('sdr_month_kpi')
-          .update(kpiData)
-          .eq('id', existing.id);
+          .update({
+            ...kpiData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('❌ Erro ao atualizar KPI:', error);
+          throw error;
+        }
+        savedKpi = data;
       } else {
-        await supabase
+        const { data, error } = await supabase
           .from('sdr_month_kpi')
-          .insert({ sdr_id: sdrId, ano_mes: anoMes, ...kpiData });
+          .insert({ 
+            sdr_id: sdrId, 
+            ano_mes: anoMes, 
+            ...kpiData 
+          })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('❌ Erro ao inserir KPI:', error);
+          throw error;
+        }
+        savedKpi = data;
       }
 
+      console.log('✅ KPI salvo:', savedKpi);
+
+      // Small delay to ensure DB is committed
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Then recalculate payout via edge function
+      console.log('🔄 Chamando edge function recalculate-sdr-payout...');
       const { data, error } = await supabase.functions.invoke('recalculate-sdr-payout', {
         body: { sdr_id: sdrId, ano_mes: anoMes }
       });
 
-      if (error) throw error;
-      return data;
+      if (error) {
+        console.error('❌ Erro na edge function:', error);
+        throw error;
+      }
+
+      console.log('✅ Payout recalculado:', data);
+      return { savedKpi, payoutResult: data };
     },
     onSuccess: (_, { sdrId, anoMes }) => {
+      // Invalidate all related queries
       queryClient.invalidateQueries({ queryKey: ['sdr-month-kpi', sdrId, anoMes] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-month-kpi'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-payouts', anoMes] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
       toast.success('KPIs salvos e payout recalculado');
     },
     onError: (error: Error) => {

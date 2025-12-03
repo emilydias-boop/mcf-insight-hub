@@ -54,14 +54,24 @@ const FechamentoSDRList = () => {
     },
   });
 
-  // Generate last 12 months options
-  const monthOptions = Array.from({ length: 12 }, (_, i) => {
-    const date = subMonths(new Date(), i);
-    return {
-      value: format(date, 'yyyy-MM'),
-      label: format(date, 'MMMM yyyy', { locale: ptBR }),
-    };
-  });
+  // Generate months from January 2025 to current month
+  const generateMonthOptions = () => {
+    const options = [];
+    const startDate = new Date(2025, 0, 1); // January 2025
+    const endDate = new Date();
+    
+    let current = endDate;
+    while (current >= startDate) {
+      options.push({
+        value: format(current, 'yyyy-MM'),
+        label: format(current, 'MMMM yyyy', { locale: ptBR }),
+      });
+      current = subMonths(current, 1);
+    }
+    return options;
+  };
+
+  const monthOptions = generateMonthOptions();
 
   const getCompPlanForSdr = (sdrId: string) => {
     return compPlans?.find(cp => cp.sdr_id === sdrId);
@@ -79,6 +89,15 @@ const FechamentoSDRList = () => {
     return pcts.reduce((a, b) => a + b, 0) / pcts.length;
   };
 
+  const escapeCSV = (value: string | number | null | undefined): string => {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
   const handleExportCSV = () => {
     if (!payouts || payouts.length === 0) return;
 
@@ -87,32 +106,58 @@ const FechamentoSDRList = () => {
       'Nível',
       'OTE',
       '% Meta Global',
-      'Variável (R$)',
-      'Total Conta (R$)',
-      'iFood (R$)',
+      '% Reuniões Agendadas',
+      '% Reuniões Realizadas',
+      '% Tentativas',
+      '% Organização',
+      'Valor Fixo',
+      'Valor Variável',
+      'Valor Reuniões Agendadas',
+      'Valor Reuniões Realizadas',
+      'Valor Tentativas',
+      'Valor Organização',
+      'Total Conta',
+      'iFood Mensal',
+      'iFood Ultrameta',
+      'iFood Ultrameta Autorizado',
+      'Total iFood',
       'Status',
     ];
 
     const rows = payouts.map((p) => {
       const compPlan = getCompPlanForSdr(p.sdr_id);
+      const globalPct = calculateGlobalPct(p);
       return [
-        p.sdr?.name || '',
-        p.sdr?.nivel || 1,
-        formatCurrency(compPlan?.ote_total || 4000),
-        `${calculateGlobalPct(p).toFixed(1)}%`,
-        formatCurrency(p.valor_variavel_total || 0),
-        formatCurrency(p.total_conta || 0),
-        formatCurrency(p.total_ifood || 0),
-        p.status,
+        escapeCSV(p.sdr?.name || ''),
+        escapeCSV(p.sdr?.nivel || 1),
+        escapeCSV(compPlan?.ote_total || 4000),
+        escapeCSV(globalPct.toFixed(1)),
+        escapeCSV((p.pct_reunioes_agendadas || 0).toFixed(1)),
+        escapeCSV((p.pct_reunioes_realizadas || 0).toFixed(1)),
+        escapeCSV((p.pct_tentativas || 0).toFixed(1)),
+        escapeCSV((p.pct_organizacao || 0).toFixed(1)),
+        escapeCSV(p.valor_fixo || 0),
+        escapeCSV(p.valor_variavel_total || 0),
+        escapeCSV(p.valor_reunioes_agendadas || 0),
+        escapeCSV(p.valor_reunioes_realizadas || 0),
+        escapeCSV(p.valor_tentativas || 0),
+        escapeCSV(p.valor_organizacao || 0),
+        escapeCSV(p.total_conta || 0),
+        escapeCSV(p.ifood_mensal || 0),
+        escapeCSV(p.ifood_ultrameta || 0),
+        escapeCSV(p.ifood_ultrameta_autorizado ? 'Sim' : 'Não'),
+        escapeCSV(p.total_ifood || 0),
+        escapeCSV(p.status),
       ];
     });
 
     const csvContent = [
-      headers.join(','),
-      ...rows.map((row) => row.join(',')),
+      headers.join(';'),
+      ...rows.map((row) => row.join(';')),
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `fechamento-sdr-${selectedMonth}.csv`;

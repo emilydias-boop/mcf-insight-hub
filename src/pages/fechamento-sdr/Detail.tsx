@@ -20,7 +20,7 @@ import {
 } from '@/hooks/useSdrKpiMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency, formatDateTime } from '@/lib/formatters';
-import { PayoutAdjustment, SdrMonthKpi } from '@/types/sdr-fechamento';
+import { PayoutAdjustment, SdrMonthKpi, getMultiplierRange } from '@/types/sdr-fechamento';
 import {
   ArrowLeft,
   Check,
@@ -33,6 +33,7 @@ import {
   CreditCard,
   Gift,
   CheckCircle,
+  Download,
 } from 'lucide-react';
 
 const FechamentoSDRDetail = () => {
@@ -121,6 +122,64 @@ const FechamentoSDRDetail = () => {
     });
   };
 
+  const handleExportIndividual = () => {
+    const sdrName = payout.sdr?.name || 'SDR';
+    const nivel = payout.sdr?.nivel || 1;
+    const ote = compPlan?.ote_total || 4000;
+    
+    const adjustments = payout.ajustes_json || [];
+    const totalAjustes = adjustments.reduce((sum: number, adj: PayoutAdjustment) => sum + (adj.valor || 0), 0);
+
+    const lines = [
+      `FECHAMENTO SDR - ${sdrName}`,
+      `Período: ${payout.ano_mes}`,
+      `Status: ${payout.status}`,
+      `Nível: ${nivel}`,
+      '',
+      '=== RESUMO FINANCEIRO ===',
+      `OTE Total;${ote}`,
+      `Valor Fixo;${payout.valor_fixo || 0}`,
+      `Valor Variável;${payout.valor_variavel_total || 0}`,
+      `Total Conta;${payout.total_conta || 0}`,
+      `iFood Mensal;${payout.ifood_mensal || 0}`,
+      `iFood Ultrameta;${payout.ifood_ultrameta || 0}`,
+      `iFood Ultrameta Autorizado;${payout.ifood_ultrameta_autorizado ? 'Sim' : 'Não'}`,
+      `Total iFood;${payout.total_ifood || 0}`,
+      '',
+      '=== INDICADORES DE META ===',
+      'Indicador;Meta;Realizado;%;Faixa;Multiplicador;Valor Base;Valor Final',
+      `Reuniões Agendadas;${compPlan?.meta_reunioes_agendadas || 0};${kpi?.reunioes_agendadas || 0};${(payout.pct_reunioes_agendadas || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_reunioes_agendadas || 0)};${payout.mult_reunioes_agendadas || 0}x;${compPlan?.valor_meta_rpg || 0};${payout.valor_reunioes_agendadas || 0}`,
+      `Reuniões Realizadas;${compPlan?.meta_reunioes_realizadas || 0};${kpi?.reunioes_realizadas || 0};${(payout.pct_reunioes_realizadas || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_reunioes_realizadas || 0)};${payout.mult_reunioes_realizadas || 0}x;${compPlan?.valor_docs_reuniao || 0};${payout.valor_reunioes_realizadas || 0}`,
+      `Tentativas de Ligações;${compPlan?.meta_tentativas || 0};${kpi?.tentativas_ligacoes || 0};${(payout.pct_tentativas || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_tentativas || 0)};${payout.mult_tentativas || 0}x;${compPlan?.valor_tentativas || 0};${payout.valor_tentativas || 0}`,
+      `Organização Clint;${compPlan?.meta_organizacao || 100};${kpi?.score_organizacao || 0};${(payout.pct_organizacao || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_organizacao || 0)};${payout.mult_organizacao || 0}x;${compPlan?.valor_organizacao || 0};${payout.valor_organizacao || 0}`,
+      `No-Shows;-;${kpi?.no_shows || 0};Taxa: ${kpi?.taxa_no_show?.toFixed(1) || 0}%;-;-;-;-`,
+      '',
+    ];
+
+    if (adjustments.length > 0) {
+      lines.push('=== AJUSTES MANUAIS ===');
+      lines.push('Tipo;Motivo;Valor;Data');
+      adjustments.forEach((adj: PayoutAdjustment) => {
+        lines.push(`${adj.tipo};${adj.motivo};${adj.valor};${adj.created_at}`);
+      });
+      lines.push(`Total Ajustes;;${totalAjustes};`);
+      lines.push('');
+    }
+
+    if (payout.aprovado_em) {
+      lines.push('=== APROVAÇÃO ===');
+      lines.push(`Aprovado em: ${payout.aprovado_em}`);
+    }
+
+    const csvContent = lines.join('\n');
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `fechamento-${sdrName.replace(/\s+/g, '-').toLowerCase()}-${payout.ano_mes}.csv`;
+    link.click();
+  };
+
   const adjustments = payout.ajustes_json || [];
   const intermediacaoCount = intermediacoes?.length || 0;
 
@@ -152,34 +211,41 @@ const FechamentoSDRDetail = () => {
           </div>
         </div>
 
-        {!isReadOnly && (
-          <div className="flex items-center gap-2">
-            {canEdit && (
-              <>
-                {payout.status === 'DRAFT' && (
-                  <Button onClick={handleApprove} disabled={updateStatus.isPending}>
-                    <Check className="h-4 w-4 mr-2" />
-                    Aprovar
-                  </Button>
-                )}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportIndividual}>
+            <Download className="h-4 w-4 mr-2" />
+            Exportar
+          </Button>
 
-                {payout.status === 'APPROVED' && (
-                  <Button onClick={handleLock} disabled={updateStatus.isPending}>
-                    <Lock className="h-4 w-4 mr-2" />
-                    Travar Mês
-                  </Button>
-                )}
-              </>
-            )}
+          {!isReadOnly && (
+            <>
+              {canEdit && (
+                <>
+                  {payout.status === 'DRAFT' && (
+                    <Button onClick={handleApprove} disabled={updateStatus.isPending}>
+                      <Check className="h-4 w-4 mr-2" />
+                      Aprovar
+                    </Button>
+                  )}
 
-            {canReopen && (
-              <Button variant="outline" onClick={handleReopen} disabled={updateStatus.isPending}>
-                <Unlock className="h-4 w-4 mr-2" />
-                Reabrir
-              </Button>
-            )}
-          </div>
-        )}
+                  {payout.status === 'APPROVED' && (
+                    <Button onClick={handleLock} disabled={updateStatus.isPending}>
+                      <Lock className="h-4 w-4 mr-2" />
+                      Travar Mês
+                    </Button>
+                  )}
+                </>
+              )}
+
+              {canReopen && (
+                <Button variant="outline" onClick={handleReopen} disabled={updateStatus.isPending}>
+                  <Unlock className="h-4 w-4 mr-2" />
+                  Reabrir
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}
