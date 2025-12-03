@@ -44,6 +44,7 @@ import TVSdrFullscreen from "./pages/TVSdrFullscreen";
 import TVSdrCelebrationDemo from "./pages/TVSdrCelebrationDemo";
 import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
+import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
 import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
 import NotFound from "./pages/NotFound";
 
@@ -94,6 +95,7 @@ const App = () => (
               <Route path="usuarios" element={<GerenciamentoUsuarios />} />
               <Route path="tv-sdr" element={<TVSdrPerformance />} />
               <Route path="fechamento-sdr" element={<FechamentoSDRList />} />
+              <Route path="fechamento-sdr/configuracoes" element={<FechamentoSDRConfiguracoes />} />
               <Route path="fechamento-sdr/:payoutId" element={<FechamentoSDRDetail />} />
               <Route path="meu-fechamento" element={<MeuFechamento />} />
               <Route path="crm" element={<CRM />}>

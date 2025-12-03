@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.fix-hubla-values]
 verify_jwt = false
+
+[functions.recalculate-sdr-payout]
+verify_jwt = false

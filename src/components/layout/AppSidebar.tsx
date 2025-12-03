@@ -103,7 +103,15 @@ const menuItems: MenuItem[] = [
       { title: "Configurações", url: "/crm/configuracoes" },
     ]
   },
-  { title: "Fechamento SDR", url: "/fechamento-sdr", icon: Calculator, requiredRoles: ['admin', 'manager'] },
+  { 
+    title: "Fechamento SDR", 
+    icon: Calculator, 
+    requiredRoles: ['admin', 'coordenador'],
+    items: [
+      { title: "Lista de Fechamentos", url: "/fechamento-sdr" },
+      { title: "Configurações", url: "/fechamento-sdr/configuracoes" },
+    ]
+  },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ['sdr'] },
   { title: "Usuários", url: "/usuarios", icon: Users, requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, requiredRoles: ['admin'] },
@@ -124,6 +132,9 @@ export function AppSidebar() {
   const getRoleLabel = (userRole: AppRole | null) => {
     if (userRole === 'admin') return 'Admin';
     if (userRole === 'manager') return 'Manager';
+    if (userRole === 'coordenador') return 'Coordenador';
+    if (userRole === 'sdr') return 'SDR';
+    if (userRole === 'closer') return 'Closer';
     return 'Viewer';
   };
 

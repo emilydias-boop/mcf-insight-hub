@@ -1,10 +1,15 @@
 export type PayoutStatus = 'DRAFT' | 'APPROVED' | 'LOCKED';
+export type SdrStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface Sdr {
   id: string;
   user_id: string | null;
   name: string;
   active: boolean;
+  status: SdrStatus;
+  criado_por: string | null;
+  aprovado_por: string | null;
+  aprovado_em: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +32,10 @@ export interface SdrCompPlan {
   meta_reunioes_realizadas: number;
   meta_tentativas: number;
   meta_organizacao: number;
+  status: SdrStatus;
+  criado_por: string | null;
+  aprovado_por: string | null;
+  aprovado_em: string | null;
   created_at: string;
   updated_at: string;
 }
