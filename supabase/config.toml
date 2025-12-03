@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.recalculate-sdr-payout]
 verify_jwt = false
+
+[functions.sync-sdr-kpis]
+verify_jwt = false

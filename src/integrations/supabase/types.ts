@@ -1440,6 +1440,7 @@ export type Database = {
           aprovado_por: string | null
           created_at: string | null
           criado_por: string | null
+          email: string | null
           id: string
           meta_diaria: number | null
           name: string
@@ -1455,6 +1456,7 @@ export type Database = {
           aprovado_por?: string | null
           created_at?: string | null
           criado_por?: string | null
+          email?: string | null
           id?: string
           meta_diaria?: number | null
           name: string
@@ -1470,6 +1472,7 @@ export type Database = {
           aprovado_por?: string | null
           created_at?: string | null
           criado_por?: string | null
+          email?: string | null
           id?: string
           meta_diaria?: number | null
           name?: string

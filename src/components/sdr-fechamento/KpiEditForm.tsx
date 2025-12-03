@@ -3,8 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Save, RefreshCw } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Save, RefreshCw, Cloud } from 'lucide-react';
 import { SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fechamento';
+import { useSyncSdrKpis } from '@/hooks/useSyncSdrKpis';
 
 interface KpiEditFormProps {
   kpi: SdrMonthKpi | null;
@@ -34,6 +36,8 @@ export const KpiEditForm = ({
     tentativas_ligacoes: 0,
     score_organizacao: 0,
   });
+
+  const syncKpis = useSyncSdrKpis();
 
   useEffect(() => {
     if (kpi) {
@@ -69,82 +73,107 @@ export const KpiEditForm = ({
     });
   };
 
+  const handleSyncFromClint = () => {
+    syncKpis.mutate({ sdr_id: sdrId, ano_mes: anoMes });
+  };
+
   const taxaNoShow = formData.reunioes_agendadas > 0
     ? ((formData.no_shows / formData.reunioes_agendadas) * 100).toFixed(1)
     : '0.0';
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Editar KPIs</CardTitle>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncFromClint}
+          disabled={disabled || syncKpis.isPending}
+        >
+          {syncKpis.isPending ? (
+            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Cloud className="h-4 w-4 mr-2" />
+          )}
+          Sincronizar do Clint
+        </Button>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
+            {/* Campo Automático: Reuniões Agendadas */}
             <div className="space-y-2">
-              <Label htmlFor="reunioes_agendadas">
+              <Label htmlFor="reunioes_agendadas" className="flex items-center gap-2">
                 Reuniões Agendadas
-                {compPlan && (
-                  <span className="text-muted-foreground ml-2">
-                    (Meta: {compPlan.meta_reunioes_agendadas})
-                  </span>
-                )}
+                <Badge variant="secondary" className="text-xs">Automático</Badge>
               </Label>
+              {compPlan && (
+                <span className="text-xs text-muted-foreground block">
+                  Meta: {compPlan.meta_reunioes_agendadas}
+                </span>
+              )}
               <Input
                 id="reunioes_agendadas"
                 type="number"
                 min="0"
                 value={formData.reunioes_agendadas}
-                onChange={(e) => handleChange('reunioes_agendadas', e.target.value)}
-                disabled={disabled}
+                readOnly
+                className="bg-muted/50"
               />
             </div>
 
+            {/* Campo Automático: Reuniões Realizadas */}
             <div className="space-y-2">
-              <Label htmlFor="reunioes_realizadas">
+              <Label htmlFor="reunioes_realizadas" className="flex items-center gap-2">
                 Reuniões Realizadas
-                {compPlan && (
-                  <span className="text-muted-foreground ml-2">
-                    (Meta: {compPlan.meta_reunioes_realizadas})
-                  </span>
-                )}
+                <Badge variant="secondary" className="text-xs">Automático</Badge>
               </Label>
+              {compPlan && (
+                <span className="text-xs text-muted-foreground block">
+                  Meta: {compPlan.meta_reunioes_realizadas}
+                </span>
+              )}
               <Input
                 id="reunioes_realizadas"
                 type="number"
                 min="0"
                 value={formData.reunioes_realizadas}
-                onChange={(e) => handleChange('reunioes_realizadas', e.target.value)}
-                disabled={disabled}
+                readOnly
+                className="bg-muted/50"
               />
             </div>
 
+            {/* Campo Automático: No-Shows */}
             <div className="space-y-2">
-              <Label htmlFor="no_shows">
+              <Label htmlFor="no_shows" className="flex items-center gap-2">
                 No-Shows
-                <span className="text-muted-foreground ml-2">
-                  (Taxa: {taxaNoShow}% / Max: 30%)
-                </span>
+                <Badge variant="secondary" className="text-xs">Automático</Badge>
               </Label>
+              <span className="text-xs text-muted-foreground block">
+                Taxa: {taxaNoShow}% / Max: 30%
+              </span>
               <Input
                 id="no_shows"
                 type="number"
                 min="0"
                 value={formData.no_shows}
-                onChange={(e) => handleChange('no_shows', e.target.value)}
-                disabled={disabled}
+                readOnly
+                className="bg-muted/50"
               />
             </div>
 
+            {/* Campo Manual: Tentativas de Ligações */}
             <div className="space-y-2">
-              <Label htmlFor="tentativas_ligacoes">
+              <Label htmlFor="tentativas_ligacoes" className="flex items-center gap-2">
                 Tentativas de Ligações
-                {compPlan && compPlan.meta_tentativas > 0 && (
-                  <span className="text-muted-foreground ml-2">
-                    (Meta: {compPlan.meta_tentativas})
-                  </span>
-                )}
+                <Badge variant="outline" className="text-xs">Manual</Badge>
               </Label>
+              {compPlan && compPlan.meta_tentativas > 0 && (
+                <span className="text-xs text-muted-foreground block">
+                  Meta: {compPlan.meta_tentativas}
+                </span>
+              )}
               <Input
                 id="tentativas_ligacoes"
                 type="number"
@@ -155,15 +184,17 @@ export const KpiEditForm = ({
               />
             </div>
 
+            {/* Campo Manual: Score de Organização */}
             <div className="space-y-2">
-              <Label htmlFor="score_organizacao">
+              <Label htmlFor="score_organizacao" className="flex items-center gap-2">
                 Score de Organização (%)
-                {compPlan && (
-                  <span className="text-muted-foreground ml-2">
-                    (Meta: {compPlan.meta_organizacao}%)
-                  </span>
-                )}
+                <Badge variant="outline" className="text-xs">Manual</Badge>
               </Label>
+              {compPlan && (
+                <span className="text-xs text-muted-foreground block">
+                  Meta: {compPlan.meta_organizacao}%
+                </span>
+              )}
               <Input
                 id="score_organizacao"
                 type="number"
@@ -175,11 +206,15 @@ export const KpiEditForm = ({
               />
             </div>
 
+            {/* Campo Automático: Intermediações de Contrato */}
             <div className="space-y-2">
-              <Label>Intermediações de Contrato</Label>
+              <Label className="flex items-center gap-2">
+                Intermediações de Contrato
+                <Badge variant="secondary" className="text-xs">Automático</Badge>
+              </Label>
               <div className="h-10 px-3 py-2 rounded-md border bg-muted/50 flex items-center">
                 <span className="font-medium">{intermediacoes}</span>
-                <span className="text-muted-foreground ml-2">(calculado automaticamente)</span>
+                <span className="text-muted-foreground text-xs ml-2">(calculado da Hubla)</span>
               </div>
             </div>
           </div>
