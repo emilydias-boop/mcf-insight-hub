@@ -2615,6 +2615,48 @@ export type Database = {
         }
         Relationships: []
       }
+      working_days_calendar: {
+        Row: {
+          ano_mes: string
+          created_at: string | null
+          dias_uteis_base: number
+          dias_uteis_final: number
+          feriados_nacionais: Json | null
+          id: string
+          ifood_mensal_calculado: number | null
+          ifood_valor_dia: number
+          observacoes: string | null
+          paradas_empresa: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string | null
+          dias_uteis_base?: number
+          dias_uteis_final?: number
+          feriados_nacionais?: Json | null
+          id?: string
+          ifood_mensal_calculado?: number | null
+          ifood_valor_dia?: number
+          observacoes?: string | null
+          paradas_empresa?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string | null
+          dias_uteis_base?: number
+          dias_uteis_final?: number
+          feriados_nacionais?: Json | null
+          id?: string
+          ifood_mensal_calculado?: number | null
+          ifood_valor_dia?: number
+          observacoes?: string | null
+          paradas_empresa?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       user_performance_summary: {
