@@ -637,10 +637,10 @@ export const useCreateSdr = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (sdr: Partial<Sdr>) => {
+    mutationFn: async (sdr: Omit<Partial<Sdr>, 'name'> & { name: string }) => {
       const { data, error } = await supabase
         .from('sdr')
-        .insert(sdr)
+        .insert([sdr as any])
         .select()
         .single();
 
@@ -720,10 +720,10 @@ export const useCreateCompPlan = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (plan: Partial<SdrCompPlan>) => {
+    mutationFn: async (plan: Omit<Partial<SdrCompPlan>, 'sdr_id' | 'vigencia_inicio'> & { sdr_id: string; vigencia_inicio: string }) => {
       const { data, error } = await supabase
         .from('sdr_comp_plan')
-        .insert(plan)
+        .insert([plan as any])
         .select()
         .single();
 
