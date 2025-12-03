@@ -15,6 +15,23 @@ const getMultiplier = (pct: number): number => {
   return 1.5;
 };
 
+// Cálculo inverso do No-Show
+// Se taxa_no_show <= 30% → performance = 100% + bônus proporcional até 150%
+// Se taxa_no_show > 30% → performance decresce
+const calculateNoShowPerformance = (noShows: number, agendadas: number): number => {
+  if (agendadas <= 0) return 100;
+  
+  const taxaNoShow = (noShows / agendadas) * 100;
+  
+  if (taxaNoShow <= 30) {
+    // Quanto menor a taxa, melhor (bônus até 150%)
+    return Math.min(150, 100 + ((30 - taxaNoShow) / 30) * 50);
+  } else {
+    // Acima de 30%, penalidade
+    return Math.max(0, 100 - ((taxaNoShow - 30) / 30) * 100);
+  }
+};
+
 interface CompPlan {
   meta_reunioes_agendadas: number;
   meta_reunioes_realizadas: number;
@@ -34,10 +51,11 @@ interface Kpi {
   reunioes_realizadas: number;
   tentativas_ligacoes: number;
   score_organizacao: number;
+  no_shows: number;
 }
 
 const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi) => {
-  // Calculate percentages
+  // Calculate percentages for regular indicators
   const pct_reunioes_agendadas = compPlan.meta_reunioes_agendadas > 0 
     ? (kpi.reunioes_agendadas / compPlan.meta_reunioes_agendadas) * 100 
     : 0;
@@ -51,11 +69,22 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi) => {
     ? (kpi.score_organizacao / compPlan.meta_organizacao) * 100
     : 0;
 
-  // Get multipliers
-  const mult_reunioes_agendadas = getMultiplier(pct_reunioes_agendadas);
-  const mult_reunioes_realizadas = getMultiplier(pct_reunioes_realizadas);
-  const mult_tentativas = getMultiplier(pct_tentativas);
-  const mult_organizacao = getMultiplier(pct_organizacao);
+  // Calculate No-Show performance (inverse calculation)
+  const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0);
+
+  // Cap all percentages at 120% for payout calculation
+  const cappedPctAgendadas = Math.min(pct_reunioes_agendadas, 120);
+  const cappedPctRealizadas = Math.min(pct_reunioes_realizadas, 120);
+  const cappedPctTentativas = Math.min(pct_tentativas, 120);
+  const cappedPctOrganizacao = Math.min(pct_organizacao, 120);
+  const cappedPctNoShow = Math.min(pct_no_show, 120);
+
+  // Get multipliers (using capped percentages)
+  const mult_reunioes_agendadas = getMultiplier(cappedPctAgendadas);
+  const mult_reunioes_realizadas = getMultiplier(cappedPctRealizadas);
+  const mult_tentativas = getMultiplier(cappedPctTentativas);
+  const mult_organizacao = getMultiplier(cappedPctOrganizacao);
+  const mult_no_show = getMultiplier(cappedPctNoShow);
 
   // Calculate values
   const valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
@@ -63,14 +92,16 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi) => {
   const valor_tentativas = compPlan.valor_tentativas * mult_tentativas;
   const valor_organizacao = compPlan.valor_organizacao * mult_organizacao;
 
-  // Totals
+  // Totals (No-Show não tem valor base próprio, afeta indiretamente via realizadas)
   const valor_variavel_total = valor_reunioes_agendadas + valor_reunioes_realizadas + valor_tentativas + valor_organizacao;
   const valor_fixo = compPlan.fixo_valor;
   const total_conta = valor_fixo + valor_variavel_total;
 
-  // iFood logic
-  const pct_media_global = (pct_reunioes_agendadas + pct_reunioes_realizadas + pct_tentativas + pct_organizacao) / 4;
+  // iFood logic - only ultrameta if average >= 100%
+  // Use the 4 main indicators for average calculation
+  const pct_media_global = (cappedPctAgendadas + cappedPctRealizadas + cappedPctTentativas + cappedPctOrganizacao) / 4;
   const ifood_mensal = compPlan.ifood_mensal;
+  // Note: ifood_ultrameta is set here but won't be paid unless authorized
   const ifood_ultrameta = pct_media_global >= 100 ? compPlan.ifood_ultrameta : 0;
   const total_ifood = ifood_mensal + ifood_ultrameta;
 
@@ -79,10 +110,12 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi) => {
     pct_reunioes_realizadas,
     pct_tentativas,
     pct_organizacao,
+    pct_no_show,
     mult_reunioes_agendadas,
     mult_reunioes_realizadas,
     mult_tentativas,
     mult_organizacao,
+    mult_no_show,
     valor_reunioes_agendadas,
     valor_reunioes_realizadas,
     valor_tentativas,
@@ -180,6 +213,8 @@ serve(async (req) => {
               reunioes_realizadas: 0,
               tentativas_ligacoes: 0,
               score_organizacao: 0,
+              no_shows: 0,
+              intermediacoes_contrato: 0,
             })
             .select()
             .single();
@@ -196,8 +231,38 @@ serve(async (req) => {
           continue;
         }
 
+        // Count intermediações
+        const { count: interCount } = await supabase
+          .from('sdr_intermediacoes')
+          .select('*', { count: 'exact', head: true })
+          .eq('sdr_id', sdr.id)
+          .eq('ano_mes', ano_mes);
+
+        // Update KPI with intermediações count
+        if (interCount !== null && interCount !== kpi.intermediacoes_contrato) {
+          await supabase
+            .from('sdr_month_kpi')
+            .update({ intermediacoes_contrato: interCount })
+            .eq('id', kpi.id);
+          kpi.intermediacoes_contrato = interCount;
+        }
+
         // Calculate values
         const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi);
+
+        // Get existing payout to preserve ifood_ultrameta_autorizado
+        const { data: existingPayout } = await supabase
+          .from('sdr_month_payout')
+          .select('ifood_ultrameta_autorizado, ifood_ultrameta_autorizado_por, ifood_ultrameta_autorizado_em, status')
+          .eq('sdr_id', sdr.id)
+          .eq('ano_mes', ano_mes)
+          .single();
+
+        // Only update if not LOCKED
+        if (existingPayout?.status === 'LOCKED') {
+          console.log(`   ⏭️ Payout travado para ${sdr.name}, pulando`);
+          continue;
+        }
 
         // Upsert payout
         const { data: payout, error: payoutError } = await supabase
@@ -206,7 +271,10 @@ serve(async (req) => {
             sdr_id: sdr.id,
             ano_mes: ano_mes,
             ...calculatedValues,
-            status: 'DRAFT',
+            status: existingPayout?.status || 'DRAFT',
+            ifood_ultrameta_autorizado: existingPayout?.ifood_ultrameta_autorizado || false,
+            ifood_ultrameta_autorizado_por: existingPayout?.ifood_ultrameta_autorizado_por || null,
+            ifood_ultrameta_autorizado_em: existingPayout?.ifood_ultrameta_autorizado_em || null,
           }, {
             onConflict: 'sdr_id,ano_mes',
           })

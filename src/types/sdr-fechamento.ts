@@ -1,11 +1,20 @@
 export type PayoutStatus = 'DRAFT' | 'APPROVED' | 'LOCKED';
 export type SdrStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
+export interface SdrLevel {
+  level: number;
+  fixo_valor: number;
+  description: string | null;
+}
+
 export interface Sdr {
   id: string;
   user_id: string | null;
   name: string;
   active: boolean;
+  nivel: number;
+  meta_diaria: number;
+  observacao: string | null;
   status: SdrStatus;
   criado_por: string | null;
   aprovado_por: string | null;
@@ -32,6 +41,8 @@ export interface SdrCompPlan {
   meta_reunioes_realizadas: number;
   meta_tentativas: number;
   meta_organizacao: number;
+  dias_uteis: number;
+  meta_no_show_pct: number;
   status: SdrStatus;
   criado_por: string | null;
   aprovado_por: string | null;
@@ -48,6 +59,9 @@ export interface SdrMonthKpi {
   reunioes_realizadas: number;
   tentativas_ligacoes: number;
   score_organizacao: number;
+  no_shows: number;
+  intermediacoes_contrato: number;
+  taxa_no_show: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,19 +74,25 @@ export interface SdrMonthPayout {
   pct_reunioes_realizadas: number | null;
   pct_tentativas: number | null;
   pct_organizacao: number | null;
+  pct_no_show: number | null;
   mult_reunioes_agendadas: number | null;
   mult_reunioes_realizadas: number | null;
   mult_tentativas: number | null;
   mult_organizacao: number | null;
+  mult_no_show: number | null;
   valor_reunioes_agendadas: number | null;
   valor_reunioes_realizadas: number | null;
   valor_tentativas: number | null;
   valor_organizacao: number | null;
+  valor_no_show: number | null;
   valor_variavel_total: number | null;
   valor_fixo: number | null;
   total_conta: number | null;
   ifood_mensal: number | null;
   ifood_ultrameta: number | null;
+  ifood_ultrameta_autorizado: boolean;
+  ifood_ultrameta_autorizado_por: string | null;
+  ifood_ultrameta_autorizado_em: string | null;
   total_ifood: number | null;
   status: PayoutStatus;
   aprovado_por: string | null;
@@ -102,6 +122,18 @@ export interface SdrPayoutAuditLog {
   created_at: string;
 }
 
+export interface SdrIntermediacao {
+  id: string;
+  sdr_id: string;
+  ano_mes: string;
+  hubla_transaction_id: string | null;
+  produto_nome: string | null;
+  valor_venda: number | null;
+  observacao: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
 export interface SdrPayoutWithDetails extends SdrMonthPayout {
   sdr: Sdr;
   comp_plan?: SdrCompPlan;
@@ -128,4 +160,21 @@ export const getMultiplier = (pct: number): number => {
 export const getMultiplierRange = (pct: number): string => {
   const range = MULTIPLIER_RANGES.find(r => pct >= r.min && pct <= r.max);
   return range?.label || '';
+};
+
+// Cálculo inverso do No-Show
+// Se taxa_no_show <= 30% → performance = 100% + bônus proporcional até 150%
+// Se taxa_no_show > 30% → performance decresce
+export const calculateNoShowPerformance = (noShows: number, agendadas: number): number => {
+  if (agendadas <= 0) return 100;
+  
+  const taxaNoShow = (noShows / agendadas) * 100;
+  
+  if (taxaNoShow <= 30) {
+    // Quanto menor a taxa, melhor (bônus até 150%)
+    return Math.min(150, 100 + ((30 - taxaNoShow) / 30) * 50);
+  } else {
+    // Acima de 30%, penalidade
+    return Math.max(0, 100 - ((taxaNoShow - 30) / 30) * 100);
+  }
 };
