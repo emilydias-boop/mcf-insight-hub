@@ -4,16 +4,23 @@ import { Button } from '@/components/ui/button';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { SdrIndicatorCard } from '@/components/sdr-fechamento/SdrIndicatorCard';
 import { SdrAdjustmentForm } from '@/components/sdr-fechamento/SdrAdjustmentForm';
+import { KpiEditForm } from '@/components/sdr-fechamento/KpiEditForm';
+import { IntermediacoesList } from '@/components/sdr-fechamento/IntermediacoesList';
+import { NoShowIndicator } from '@/components/sdr-fechamento/NoShowIndicator';
 import {
   useSdrPayoutDetail,
   useSdrCompPlan,
   useSdrMonthKpi,
   useUpdatePayoutStatus,
-  useRecalculatePayout,
 } from '@/hooks/useSdrFechamento';
+import { 
+  useRecalculateWithKpi, 
+  useAuthorizeUltrameta,
+  useSdrIntermediacoes,
+} from '@/hooks/useSdrKpiMutations';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency, formatDateTime } from '@/lib/formatters';
-import { PayoutAdjustment } from '@/types/sdr-fechamento';
+import { PayoutAdjustment, SdrMonthKpi } from '@/types/sdr-fechamento';
 import {
   ArrowLeft,
   Check,
@@ -24,6 +31,8 @@ import {
   Target,
   Wallet,
   CreditCard,
+  Gift,
+  CheckCircle,
 } from 'lucide-react';
 
 const FechamentoSDRDetail = () => {
@@ -34,12 +43,14 @@ const FechamentoSDRDetail = () => {
   const { data: payout, isLoading } = useSdrPayoutDetail(payoutId);
   const { data: compPlan } = useSdrCompPlan(payout?.sdr_id, payout?.ano_mes || '');
   const { data: kpi } = useSdrMonthKpi(payout?.sdr_id, payout?.ano_mes || '');
+  const { data: intermediacoes } = useSdrIntermediacoes(payout?.sdr_id, payout?.ano_mes || '');
 
   const updateStatus = useUpdatePayoutStatus();
-  const recalculate = useRecalculatePayout();
+  const recalculateWithKpi = useRecalculateWithKpi();
+  const authorizeUltrameta = useAuthorizeUltrameta();
 
   const isAdmin = role === 'admin';
-  const isManager = role === 'manager';
+  const isManager = role === 'manager' || role === 'coordenador';
   const canEdit = (isAdmin || isManager) && payout?.status !== 'LOCKED';
   const canReopen = isAdmin && payout?.status === 'LOCKED';
   const isReadOnly = role === 'sdr';
@@ -95,14 +106,32 @@ const FechamentoSDRDetail = () => {
     });
   };
 
-  const handleRecalculate = () => {
-    recalculate.mutate({
+  const handleSaveKpi = (kpiData: Partial<SdrMonthKpi>) => {
+    recalculateWithKpi.mutate({
       sdrId: payout.sdr_id,
       anoMes: payout.ano_mes,
+      kpiData,
+    });
+  };
+
+  const handleAuthorizeUltrameta = () => {
+    authorizeUltrameta.mutate({
+      payoutId: payout.id,
+      authorize: !payout.ifood_ultrameta_autorizado,
     });
   };
 
   const adjustments = payout.ajustes_json || [];
+  const intermediacaoCount = intermediacoes?.length || 0;
+
+  // Check if SDR met ultrameta criteria (avg >= 100%)
+  const avgPerformance = (
+    (payout.pct_reunioes_agendadas || 0) +
+    (payout.pct_reunioes_realizadas || 0) +
+    (payout.pct_tentativas || 0) +
+    (payout.pct_organizacao || 0)
+  ) / 4;
+  const metUltrameta = avgPerformance >= 100;
 
   return (
     <div className="space-y-6">
@@ -127,15 +156,6 @@ const FechamentoSDRDetail = () => {
           <div className="flex items-center gap-2">
             {canEdit && (
               <>
-                <Button
-                  variant="outline"
-                  onClick={handleRecalculate}
-                  disabled={recalculate.isPending}
-                >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${recalculate.isPending ? 'animate-spin' : ''}`} />
-                  Recalcular
-                </Button>
-
                 {payout.status === 'DRAFT' && (
                   <Button onClick={handleApprove} disabled={updateStatus.isPending}>
                     <Check className="h-4 w-4 mr-2" />
@@ -221,43 +241,92 @@ const FechamentoSDRDetail = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={payout.ifood_ultrameta_autorizado ? 'bg-green-500/10 border-green-500/20' : ''}>
           <CardContent className="pt-6">
-            <div className="text-muted-foreground text-sm">iFood Ultrameta</div>
-            <div className="text-2xl font-bold mt-1">
+            <div className="flex items-center gap-2 text-sm">
+              <Gift className="h-4 w-4" />
+              <span className={payout.ifood_ultrameta_autorizado ? 'text-green-500' : 'text-muted-foreground'}>
+                iFood Ultrameta
+              </span>
+              {payout.ifood_ultrameta_autorizado && (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              )}
+            </div>
+            <div className={`text-2xl font-bold mt-1 ${payout.ifood_ultrameta_autorizado ? 'text-green-500' : ''}`}>
               {formatCurrency(payout.ifood_ultrameta || 0)}
             </div>
+            {metUltrameta && isAdmin && !payout.ifood_ultrameta_autorizado && payout.status !== 'LOCKED' && (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="mt-2 w-full text-xs"
+                onClick={handleAuthorizeUltrameta}
+                disabled={authorizeUltrameta.isPending}
+              >
+                Autorizar
+              </Button>
+            )}
+            {payout.ifood_ultrameta_autorizado && isAdmin && payout.status !== 'LOCKED' && (
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="mt-2 w-full text-xs text-muted-foreground"
+                onClick={handleAuthorizeUltrameta}
+                disabled={authorizeUltrameta.isPending}
+              >
+                Remover autorização
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Indicators */}
+      {/* KPI Edit Form (for admin/manager) */}
+      {canEdit && (
+        <KpiEditForm
+          kpi={kpi || null}
+          compPlan={compPlan || null}
+          sdrId={payout.sdr_id}
+          anoMes={payout.ano_mes}
+          disabled={!canEdit}
+          onSave={handleSaveKpi}
+          isSaving={recalculateWithKpi.isPending}
+          intermediacoes={intermediacaoCount}
+        />
+      )}
+
+      {/* Indicators Grid */}
       <div>
         <h2 className="text-lg font-semibold mb-4">Indicadores de Meta</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <SdrIndicatorCard
             title="Reuniões Agendadas"
-            meta={compPlan?.meta_reunioes_agendadas || 115}
+            meta={compPlan?.meta_reunioes_agendadas || 0}
             realizado={kpi?.reunioes_agendadas || 0}
             pct={payout.pct_reunioes_agendadas || 0}
             multiplicador={payout.mult_reunioes_agendadas || 0}
-            valorBase={compPlan?.valor_meta_rpg || 300}
+            valorBase={compPlan?.valor_meta_rpg || 0}
             valorFinal={payout.valor_reunioes_agendadas || 0}
           />
 
           <SdrIndicatorCard
             title="Reuniões Realizadas"
-            meta={compPlan?.meta_reunioes_realizadas || 48}
+            meta={compPlan?.meta_reunioes_realizadas || 0}
             realizado={kpi?.reunioes_realizadas || 0}
             pct={payout.pct_reunioes_realizadas || 0}
             multiplicador={payout.mult_reunioes_realizadas || 0}
-            valorBase={compPlan?.valor_docs_reuniao || 600}
+            valorBase={compPlan?.valor_docs_reuniao || 0}
             valorFinal={payout.valor_reunioes_realizadas || 0}
+          />
+
+          <NoShowIndicator
+            agendadas={kpi?.reunioes_agendadas || 0}
+            noShows={kpi?.no_shows || 0}
           />
 
           <SdrIndicatorCard
             title="Tentativas de Ligações"
-            meta={compPlan?.meta_tentativas || 1932}
+            meta={compPlan?.meta_tentativas || 0}
             realizado={kpi?.tentativas_ligacoes || 0}
             pct={payout.pct_tentativas || 0}
             multiplicador={payout.mult_tentativas || 0}
@@ -271,12 +340,19 @@ const FechamentoSDRDetail = () => {
             realizado={kpi?.score_organizacao || 0}
             pct={payout.pct_organizacao || 0}
             multiplicador={payout.mult_organizacao || 0}
-            valorBase={compPlan?.valor_organizacao || 300}
+            valorBase={compPlan?.valor_organizacao || 0}
             valorFinal={payout.valor_organizacao || 0}
             isPercentage
           />
         </div>
       </div>
+
+      {/* Intermediações */}
+      <IntermediacoesList
+        sdrId={payout.sdr_id}
+        anoMes={payout.ano_mes}
+        disabled={!canEdit}
+      />
 
       {/* Adjustments (only for admin/manager) */}
       {!isReadOnly && (

@@ -1436,25 +1436,46 @@ export type Database = {
       sdr: {
         Row: {
           active: boolean | null
+          aprovado_em: string | null
+          aprovado_por: string | null
           created_at: string | null
+          criado_por: string | null
           id: string
+          meta_diaria: number | null
           name: string
+          nivel: number | null
+          observacao: string | null
+          status: string | null
           updated_at: string | null
           user_id: string | null
         }
         Insert: {
           active?: boolean | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           created_at?: string | null
+          criado_por?: string | null
           id?: string
+          meta_diaria?: number | null
           name: string
+          nivel?: number | null
+          observacao?: string | null
+          status?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
         Update: {
           active?: boolean | null
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           created_at?: string | null
+          criado_por?: string | null
           id?: string
+          meta_diaria?: number | null
           name?: string
+          nivel?: number | null
+          observacao?: string | null
+          status?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -1466,10 +1487,12 @@ export type Database = {
           aprovado_por: string | null
           created_at: string | null
           criado_por: string | null
+          dias_uteis: number | null
           fixo_valor: number
           id: string
           ifood_mensal: number | null
           ifood_ultrameta: number | null
+          meta_no_show_pct: number | null
           meta_organizacao: number | null
           meta_reunioes_agendadas: number | null
           meta_reunioes_realizadas: number | null
@@ -1491,10 +1514,12 @@ export type Database = {
           aprovado_por?: string | null
           created_at?: string | null
           criado_por?: string | null
+          dias_uteis?: number | null
           fixo_valor?: number
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
+          meta_no_show_pct?: number | null
           meta_organizacao?: number | null
           meta_reunioes_agendadas?: number | null
           meta_reunioes_realizadas?: number | null
@@ -1516,10 +1541,12 @@ export type Database = {
           aprovado_por?: string | null
           created_at?: string | null
           criado_por?: string | null
+          dias_uteis?: number | null
           fixo_valor?: number
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
+          meta_no_show_pct?: number | null
           meta_organizacao?: number | null
           meta_reunioes_agendadas?: number | null
           meta_reunioes_realizadas?: number | null
@@ -1546,15 +1573,87 @@ export type Database = {
           },
         ]
       }
+      sdr_intermediacoes: {
+        Row: {
+          ano_mes: string
+          created_at: string | null
+          created_by: string | null
+          hubla_transaction_id: string | null
+          id: string
+          observacao: string | null
+          produto_nome: string | null
+          sdr_id: string
+          valor_venda: number | null
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string | null
+          created_by?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          observacao?: string | null
+          produto_nome?: string | null
+          sdr_id: string
+          valor_venda?: number | null
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string | null
+          created_by?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          observacao?: string | null
+          produto_nome?: string | null
+          sdr_id?: string
+          valor_venda?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_intermediacoes_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdr_intermediacoes_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_levels: {
+        Row: {
+          description: string | null
+          fixo_valor: number
+          level: number
+        }
+        Insert: {
+          description?: string | null
+          fixo_valor: number
+          level: number
+        }
+        Update: {
+          description?: string | null
+          fixo_valor?: number
+          level?: number
+        }
+        Relationships: []
+      }
       sdr_month_kpi: {
         Row: {
           ano_mes: string
           created_at: string | null
           id: string
+          intermediacoes_contrato: number | null
+          no_shows: number | null
           reunioes_agendadas: number | null
           reunioes_realizadas: number | null
           score_organizacao: number | null
           sdr_id: string
+          taxa_no_show: number | null
           tentativas_ligacoes: number | null
           updated_at: string | null
         }
@@ -1562,10 +1661,13 @@ export type Database = {
           ano_mes: string
           created_at?: string | null
           id?: string
+          intermediacoes_contrato?: number | null
+          no_shows?: number | null
           reunioes_agendadas?: number | null
           reunioes_realizadas?: number | null
           score_organizacao?: number | null
           sdr_id: string
+          taxa_no_show?: number | null
           tentativas_ligacoes?: number | null
           updated_at?: string | null
         }
@@ -1573,10 +1675,13 @@ export type Database = {
           ano_mes?: string
           created_at?: string | null
           id?: string
+          intermediacoes_contrato?: number | null
+          no_shows?: number | null
           reunioes_agendadas?: number | null
           reunioes_realizadas?: number | null
           score_organizacao?: number | null
           sdr_id?: string
+          taxa_no_show?: number | null
           tentativas_ligacoes?: number | null
           updated_at?: string | null
         }
@@ -1600,6 +1705,9 @@ export type Database = {
           id: string
           ifood_mensal: number | null
           ifood_ultrameta: number | null
+          ifood_ultrameta_autorizado: boolean | null
+          ifood_ultrameta_autorizado_em: string | null
+          ifood_ultrameta_autorizado_por: string | null
           mult_organizacao: number | null
           mult_reunioes_agendadas: number | null
           mult_reunioes_realizadas: number | null
@@ -1629,6 +1737,9 @@ export type Database = {
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
+          ifood_ultrameta_autorizado?: boolean | null
+          ifood_ultrameta_autorizado_em?: string | null
+          ifood_ultrameta_autorizado_por?: string | null
           mult_organizacao?: number | null
           mult_reunioes_agendadas?: number | null
           mult_reunioes_realizadas?: number | null
@@ -1658,6 +1769,9 @@ export type Database = {
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
+          ifood_ultrameta_autorizado?: boolean | null
+          ifood_ultrameta_autorizado_em?: string | null
+          ifood_ultrameta_autorizado_por?: string | null
           mult_organizacao?: number | null
           mult_reunioes_agendadas?: number | null
           mult_reunioes_realizadas?: number | null

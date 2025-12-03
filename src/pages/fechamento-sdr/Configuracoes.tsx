@@ -161,8 +161,10 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
   const [metaReunioesRealizadas, setMetaReunioesRealizadas] = useState('30');
   const [metaTentativas, setMetaTentativas] = useState('300');
   const [metaOrganizacao, setMetaOrganizacao] = useState('100');
-  const [ifoodMensal, setIfoodMensal] = useState('200');
-  const [ifoodUltrameta, setIfoodUltrameta] = useState('100');
+  const [ifoodMensal, setIfoodMensal] = useState('630');
+  const [ifoodUltrameta, setIfoodUltrameta] = useState('840');
+  const [diasUteis, setDiasUteis] = useState('22');
+  const [metaNoShowPct, setMetaNoShowPct] = useState('30');
 
   const createCompPlan = useCreateCompPlan();
 
@@ -191,6 +193,8 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
       meta_organizacao: Number(metaOrganizacao),
       ifood_mensal: Number(ifoodMensal),
       ifood_ultrameta: Number(ifoodUltrameta),
+      dias_uteis: Number(diasUteis),
+      meta_no_show_pct: Number(metaNoShowPct),
     });
 
     setOpen(false);
