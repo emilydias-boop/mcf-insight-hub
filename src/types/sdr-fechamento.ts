@@ -11,6 +11,7 @@ export interface Sdr {
   id: string;
   user_id: string | null;
   name: string;
+  email: string | null;
   active: boolean;
   nivel: number;
   meta_diaria: number;
