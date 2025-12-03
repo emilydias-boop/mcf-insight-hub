@@ -19,10 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { useSdrPayouts, useRecalculateAllPayouts } from '@/hooks/useSdrFechamento';
 import { formatCurrency } from '@/lib/formatters';
 import { Calculator, Download, Eye, RefreshCw } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 const FechamentoSDRList = () => {
   const navigate = useNavigate();
@@ -32,6 +35,25 @@ const FechamentoSDRList = () => {
   const { data: payouts, isLoading } = useSdrPayouts(selectedMonth);
   const recalculateAll = useRecalculateAllPayouts();
 
+  // Fetch comp_plans for all SDRs to get OTE
+  const { data: compPlans } = useQuery({
+    queryKey: ['sdr-comp-plans', selectedMonth],
+    queryFn: async () => {
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+      
+      const { data, error } = await supabase
+        .from('sdr_comp_plan')
+        .select('*')
+        .lte('vigencia_inicio', monthStart)
+        .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+        .eq('status', 'active');
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Generate last 12 months options
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const date = subMonths(new Date(), i);
@@ -40,6 +62,10 @@ const FechamentoSDRList = () => {
       label: format(date, 'MMMM yyyy', { locale: ptBR }),
     };
   });
+
+  const getCompPlanForSdr = (sdrId: string) => {
+    return compPlans?.find(cp => cp.sdr_id === sdrId);
+  };
 
   const calculateGlobalPct = (payout: NonNullable<typeof payouts>[0]) => {
     const pcts = [
@@ -58,6 +84,7 @@ const FechamentoSDRList = () => {
 
     const headers = [
       'Nome',
+      'Nível',
       'OTE',
       '% Meta Global',
       'Variável (R$)',
@@ -66,15 +93,19 @@ const FechamentoSDRList = () => {
       'Status',
     ];
 
-    const rows = payouts.map((p) => [
-      p.sdr?.name || '',
-      formatCurrency(4000), // OTE padrão
-      `${calculateGlobalPct(p).toFixed(1)}%`,
-      formatCurrency(p.valor_variavel_total || 0),
-      formatCurrency(p.total_conta || 0),
-      formatCurrency(p.total_ifood || 0),
-      p.status,
-    ]);
+    const rows = payouts.map((p) => {
+      const compPlan = getCompPlanForSdr(p.sdr_id);
+      return [
+        p.sdr?.name || '',
+        p.sdr?.nivel || 1,
+        formatCurrency(compPlan?.ote_total || 4000),
+        `${calculateGlobalPct(p).toFixed(1)}%`,
+        formatCurrency(p.valor_variavel_total || 0),
+        formatCurrency(p.total_conta || 0),
+        formatCurrency(p.total_ifood || 0),
+        p.status,
+      ];
+    });
 
     const csvContent = [
       headers.join(','),
@@ -157,6 +188,7 @@ const FechamentoSDRList = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome do SDR</TableHead>
+                  <TableHead className="text-center">Nível</TableHead>
                   <TableHead className="text-right">OTE</TableHead>
                   <TableHead className="text-right">% Meta Global</TableHead>
                   <TableHead className="text-right">Variável</TableHead>
@@ -169,13 +201,22 @@ const FechamentoSDRList = () => {
               <TableBody>
                 {payouts.map((payout) => {
                   const globalPct = calculateGlobalPct(payout);
+                  const compPlan = getCompPlanForSdr(payout.sdr_id);
+                  const nivel = payout.sdr?.nivel || 1;
+                  const ote = compPlan?.ote_total || 4000;
+                  
                   return (
                     <TableRow key={payout.id}>
                       <TableCell className="font-medium">
                         {payout.sdr?.name || 'SDR'}
                       </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="font-mono">
+                          N{nivel}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
-                        {formatCurrency(4000)}
+                        {formatCurrency(ote)}
                       </TableCell>
                       <TableCell className="text-right">
                         <span
