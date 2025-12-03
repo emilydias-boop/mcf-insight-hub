@@ -7,6 +7,7 @@ export type TargetType = Database['public']['Enums']['target_type'];
 export type TargetPeriod = Database['public']['Enums']['target_period'];
 export type PermissionLevel = Database['public']['Enums']['permission_level'];
 export type ResourceType = Database['public']['Enums']['resource_type'];
+export type UserStatus = 'ativo' | 'ferias' | 'inativo' | 'pendente_aprovacao';
 
 export interface UserSummary {
   user_id: string;
@@ -16,6 +17,7 @@ export interface UserSummary {
   position: string | null;
   hire_date: string | null;
   is_active: boolean | null;
+  status: UserStatus | null;
   red_flags_count: number;
   yellow_flags_count: number;
   targets_achieved: number;
@@ -40,6 +42,7 @@ export interface UserDetails {
     ote: number | null;
     commission_rate: number | null;
     is_active: boolean | null;
+    status: UserStatus | null;
   } | null;
 }
 

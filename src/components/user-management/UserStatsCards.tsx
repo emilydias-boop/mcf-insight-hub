@@ -7,7 +7,8 @@ interface UserStatsCardsProps {
 }
 
 export function UserStatsCards({ users }: UserStatsCardsProps) {
-  const activeUsers = users.filter(u => u.is_active).length;
+  // Conta usuários ativos: quem não está explicitamente marcado como inativo
+  const activeUsers = users.filter(u => u.is_active !== false && u.status !== 'inativo').length;
   const admins = users.filter(u => u.role === 'admin').length;
   const managers = users.filter(u => u.role === 'manager').length;
   const usersWithRedFlags = users.filter(u => (u.red_flags_count || 0) > 0).length;

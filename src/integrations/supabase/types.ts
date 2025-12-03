@@ -2077,6 +2077,7 @@ export type Database = {
           is_active: boolean | null
           ote: number | null
           position: string | null
+          status: Database["public"]["Enums"]["user_status"]
           termination_date: string | null
           updated_at: string | null
           user_id: string
@@ -2091,6 +2092,7 @@ export type Database = {
           is_active?: boolean | null
           ote?: number | null
           position?: string | null
+          status?: Database["public"]["Enums"]["user_status"]
           termination_date?: string | null
           updated_at?: string | null
           user_id: string
@@ -2105,6 +2107,7 @@ export type Database = {
           is_active?: boolean | null
           ote?: number | null
           position?: string | null
+          status?: Database["public"]["Enums"]["user_status"]
           termination_date?: string | null
           updated_at?: string | null
           user_id?: string
@@ -2671,6 +2674,7 @@ export type Database = {
           position: string | null
           red_flags_count: number | null
           role: Database["public"]["Enums"]["app_role"] | null
+          status: Database["public"]["Enums"]["user_status"] | null
           targets_achieved: number | null
           total_targets: number | null
           user_id: string | null
@@ -2734,10 +2738,15 @@ export type Database = {
         | "relatorios"
         | "configuracoes"
         | "efeito_alavanca"
+        | "crm"
+        | "fechamento_sdr"
+        | "tv_sdr"
+        | "usuarios"
       target_period: "mensal" | "trimestral" | "anual"
       target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
       transaction_type: "receita" | "custo"
+      user_status: "ativo" | "ferias" | "inativo" | "pendente_aprovacao"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2890,11 +2899,16 @@ export const Constants = {
         "relatorios",
         "configuracoes",
         "efeito_alavanca",
+        "crm",
+        "fechamento_sdr",
+        "tv_sdr",
+        "usuarios",
       ],
       target_period: ["mensal", "trimestral", "anual"],
       target_type: ["receita", "vendas", "leads", "conversao", "custom"],
       transaction_status: ["pago", "pendente", "cancelado"],
       transaction_type: ["receita", "custo"],
+      user_status: ["ativo", "ferias", "inativo", "pendente_aprovacao"],
     },
   },
 } as const

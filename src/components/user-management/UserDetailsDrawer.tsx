@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/formatters";
 import { format } from "date-fns";
-import { AppRole, ResourceType, PermissionLevel } from "@/types/user-management";
+import { AppRole, ResourceType, PermissionLevel, UserStatus } from "@/types/user-management";
 
 interface UserDetailsDrawerProps {
   userId: string | null;
@@ -63,6 +63,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     fixed_salary: 0,
     ote: 0,
     commission_rate: 0,
+    status: "ativo" as UserStatus,
   });
 
   // Update employment data when user details load
@@ -75,6 +76,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         fixed_salary: userDetails.employment.fixed_salary || 0,
         ote: userDetails.employment.ote || 0,
         commission_rate: userDetails.employment.commission_rate || 0,
+        status: userDetails.employment.status || "ativo",
       });
     }
   }, [userDetails]);
@@ -107,7 +109,8 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
 
   const allResources: ResourceType[] = [
     'dashboard', 'receita', 'custos', 'relatorios', 'alertas',
-    'efeito_alavanca', 'projetos', 'credito', 'leilao', 'configuracoes'
+    'efeito_alavanca', 'projetos', 'credito', 'leilao', 'configuracoes',
+    'crm', 'fechamento_sdr', 'tv_sdr', 'usuarios'
   ];
 
   const [permissionLevels, setPermissionLevels] = useState<Record<ResourceType, PermissionLevel>>({} as Record<ResourceType, PermissionLevel>);
@@ -201,12 +204,30 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                     </Select>
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div>
                     <Label>Status</Label>
-                    <Badge variant={userDetails.employment?.is_active ? "default" : "secondary"}>
-                      {userDetails.employment?.is_active ? "Ativo" : "Inativo"}
-                    </Badge>
+                    <Select 
+                      value={employmentData.status} 
+                      onValueChange={(value: UserStatus) => setEmploymentData({ ...employmentData, status: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ativo">✅ Ativo</SelectItem>
+                        <SelectItem value="ferias">🏖️ Férias</SelectItem>
+                        <SelectItem value="inativo">❌ Inativo</SelectItem>
+                        <SelectItem value="pendente_aprovacao">⏳ Pendente de Aprovação</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                  <Button 
+                    onClick={handleEmploymentUpdate} 
+                    size="sm" 
+                    className="w-full mt-2"
+                  >
+                    Salvar Status
+                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>
