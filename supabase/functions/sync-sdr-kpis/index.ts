@@ -111,6 +111,103 @@ Deno.serve(async (req) => {
       ? Math.round((noShows / reunioesAgendadas) * 10000) / 100 
       : 0
 
+    // ========== INTERMEDIAÇÕES AUTOMÁTICAS ==========
+    console.log('Buscando intermediações automáticas...')
+
+    // Buscar vendas Hubla do mês (Contratos A000)
+    const monthStartDate = `${year}-${String(month).padStart(2, '0')}-01`
+    const monthEndDate = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
+
+    const { data: hublaTransactions, error: hublaError } = await supabase
+      .from('hubla_transactions')
+      .select('id, hubla_id, customer_email, customer_name, product_name, product_price, sale_date')
+      .gte('sale_date', `${monthStartDate}T00:00:00`)
+      .lte('sale_date', `${monthEndDate}T23:59:59`)
+      .eq('sale_status', 'completed')
+      .or('product_name.ilike.%contrato%,product_name.ilike.%A000%')
+
+    if (hublaError) {
+      console.error('Erro ao buscar transações Hubla:', hublaError)
+    }
+
+    console.log(`Transações Hubla (Contratos) no mês: ${hublaTransactions?.length || 0}`)
+
+    let intermediacoes = 0
+    const intermediacoesInserted: string[] = []
+
+    if (hublaTransactions && hublaTransactions.length > 0) {
+      // Para cada transação, verificar se este SDR agendou a R1 do cliente
+      for (const tx of hublaTransactions) {
+        const customerEmail = tx.customer_email?.toLowerCase()
+        const customerName = tx.customer_name?.toLowerCase()
+
+        if (!customerEmail && !customerName) continue
+
+        // Buscar se este SDR agendou alguma R1 para este cliente (no histórico todo)
+        const { data: matchActivities } = await supabase
+          .from('deal_activities')
+          .select('id, metadata, created_at')
+          .or(`to_stage.eq.Reunião 01 Agendada,to_stage.eq.${STAGE_R1_AGENDADA_UUID}`)
+          .order('created_at', { ascending: false })
+          .limit(100)
+
+        // Filtrar atividades que têm o mesmo cliente e foram feitas por este SDR
+        const sdrMatchedR1 = matchActivities?.find(a => {
+          const metadata = a.metadata as Record<string, any> || {}
+          const dealUser = metadata.deal_user || metadata.owner || ''
+          const dealEmail = metadata.contact_email?.toLowerCase() || ''
+          const dealName = metadata.contact_name?.toLowerCase() || ''
+          
+          const isSameSdr = dealUser.toLowerCase() === sdr.email.toLowerCase()
+          const matchesEmail = customerEmail && dealEmail && dealEmail === customerEmail
+          const matchesName = customerName && dealName && dealName.includes(customerName.split(' ')[0])
+          
+          return isSameSdr && (matchesEmail || matchesName)
+        })
+
+        if (sdrMatchedR1) {
+          // Verificar se já existe intermediação para esta transação
+          const { data: existingIntermed } = await supabase
+            .from('sdr_intermediacoes')
+            .select('id')
+            .eq('hubla_transaction_id', tx.id)
+            .eq('sdr_id', sdr_id)
+            .maybeSingle()
+
+          if (!existingIntermed) {
+            // Inserir nova intermediação
+            const { error: insertError } = await supabase
+              .from('sdr_intermediacoes')
+              .insert({
+                sdr_id: sdr_id,
+                ano_mes: ano_mes,
+                hubla_transaction_id: tx.id,
+                produto_nome: tx.product_name,
+                valor_venda: tx.product_price,
+                observacao: `Intermediação automática - Cliente: ${tx.customer_name}`,
+              })
+
+            if (!insertError) {
+              intermediacoes++
+              intermediacoesInserted.push(tx.customer_name || tx.customer_email || 'N/A')
+              console.log(`Intermediação inserida: ${tx.customer_name} - ${tx.product_name}`)
+            }
+          } else {
+            intermediacoes++ // Já existe, contar mesmo assim
+          }
+        }
+      }
+    }
+
+    // Contar total de intermediações do mês para este SDR
+    const { count: totalIntermediacoes } = await supabase
+      .from('sdr_intermediacoes')
+      .select('*', { count: 'exact', head: true })
+      .eq('sdr_id', sdr_id)
+      .eq('ano_mes', ano_mes)
+
+    console.log(`Total intermediações do mês: ${totalIntermediacoes || 0}`)
+
     // Atualizar ou inserir KPIs
     const { data: existingKpi, error: kpiCheckError } = await supabase
       .from('sdr_month_kpi')
@@ -130,6 +227,7 @@ Deno.serve(async (req) => {
       no_shows: noShows,
       reunioes_realizadas: reunioesRealizadas,
       taxa_no_show: taxaNoShow,
+      intermediacoes_contrato: totalIntermediacoes || 0,
       updated_at: new Date().toISOString(),
     }
 
@@ -171,6 +269,8 @@ Deno.serve(async (req) => {
           reunioes_realizadas: reunioesRealizadas,
           taxa_no_show: taxaNoShow,
           total_activities: sdrActivities.length,
+          intermediacoes_contrato: totalIntermediacoes || 0,
+          intermediacoes_inserted: intermediacoesInserted,
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
