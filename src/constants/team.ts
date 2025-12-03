@@ -38,6 +38,10 @@ export const CONFETTI_PRODUCTS = [
 // Produtos que NÃO disparam confetti (mesmo se contiverem palavras do CONFETTI_PRODUCTS)
 export const CONFETTI_EXCLUDE_PRODUCTS = [
   "Clube do Arremate",  // Exclui "Contrato - Clube do Arremate" também
+  "P2",                 // MCF P2 - não é parceria
+  "Sócio",              // Sócio MCF - não é parceria  
+  "THE CLUB",           // Não é parceria
+  "Efeito Alavanca",    // Não é parceria
 ];
 
 // ID da origem PIPELINE INSIDE SALES

@@ -70,19 +70,21 @@ interface SdrData {
   trend?: "up" | "down" | "stable";
 }
 
-export const useTVSdrData = () => {
+export const useTVSdrData = (viewDate: Date = new Date()) => {
+  const dateKey = viewDate.toISOString().split("T")[0];
+  
   return useQuery({
-    queryKey: ["tv-sdr-data"],
+    queryKey: ["tv-sdr-data", dateKey],
     queryFn: async () => {
-      const now = new Date();
-      const todayStart = startOfDay(now);
-      const todayEnd = endOfDay(now);
-      const today = now.toISOString().split("T")[0];
+      const targetDate = new Date(viewDate);
+      const todayStart = startOfDay(targetDate);
+      const todayEnd = endOfDay(targetDate);
+      const today = targetDate.toISOString().split("T")[0];
 
       // Calcular início do dia no timezone brasileiro (UTC-3)
-      const todayBrazil = new Date();
-      todayBrazil.setHours(todayBrazil.getHours() - 3);
-      const todayStartBrazil = new Date(todayBrazil);
+      const targetBrazil = new Date(targetDate);
+      targetBrazil.setHours(targetBrazil.getHours() - 3);
+      const todayStartBrazil = new Date(targetBrazil);
       todayStartBrazil.setHours(3, 0, 0, 0); // 00:00 Brasil = 03:00 UTC
       const todayEndBrazil = new Date(todayStartBrazil);
       todayEndBrazil.setDate(todayEndBrazil.getDate() + 1);

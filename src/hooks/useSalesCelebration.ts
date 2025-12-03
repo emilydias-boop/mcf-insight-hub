@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CONFETTI_PRODUCTS, CONFETTI_EXCLUDE_PRODUCTS, SDR_LIST, CLOSER_LIST } from "@/constants/team";
 
@@ -38,13 +38,108 @@ const markAsCelebrated = (saleId: string) => {
   } catch {}
 };
 
+// Normalizar telefone para comparação (apenas últimos 11 dígitos)
+const normalizePhone = (phone: string | null): string => {
+  if (!phone) return '';
+  return phone.replace(/\D/g, '').slice(-11);
+};
+
 export const useSalesCelebration = () => {
   const [celebrationQueue, setCelebrationQueue] = useState<SaleData[]>([]);
   const [currentCelebration, setCurrentCelebration] = useState<SaleData | null>(null);
   const celebratedSales = useRef<Set<string>>(getCelebratedSales());
+  const initialLoadDone = useRef(false);
+
+  // Função para buscar contato por email, telefone ou nome
+  const findContact = useCallback(async (transaction: any) => {
+    // 1. Tentar por email
+    if (transaction.customer_email) {
+      const { data } = await supabase
+        .from("crm_contacts")
+        .select(`
+          name, tags,
+          crm_deals!crm_deals_contact_id_fkey(clint_id, custom_fields)
+        `)
+        .eq("email", transaction.customer_email)
+        .single();
+      
+      if (data) {
+        console.log('📧 Contato encontrado por email:', data.name);
+        return data;
+      }
+    }
+
+    // 2. Tentar por telefone (normalizado)
+    if (transaction.customer_phone) {
+      const phoneDigits = normalizePhone(transaction.customer_phone);
+      if (phoneDigits.length >= 10) {
+        const { data: contacts } = await supabase
+          .from("crm_contacts")
+          .select(`
+            name, tags, phone,
+            crm_deals!crm_deals_contact_id_fkey(clint_id, custom_fields)
+          `)
+          .not("phone", "is", null);
+        
+        // Buscar match por telefone normalizado
+        const match = contacts?.find(c => {
+          const contactPhone = normalizePhone(c.phone);
+          return contactPhone && contactPhone.includes(phoneDigits.slice(-9));
+        });
+        
+        if (match) {
+          console.log('📱 Contato encontrado por telefone:', match.name);
+          return match;
+        }
+      }
+    }
+
+    // 3. Tentar por nome (match parcial)
+    if (transaction.customer_name) {
+      const nameParts = transaction.customer_name.split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+      
+      // Buscar por primeiro nome
+      const { data: contacts } = await supabase
+        .from("crm_contacts")
+        .select(`
+          name, tags,
+          crm_deals!crm_deals_contact_id_fkey(clint_id, custom_fields)
+        `)
+        .ilike("name", `${firstName}%`)
+        .limit(10);
+      
+      // Se tiver sobrenome, filtrar mais
+      if (contacts && contacts.length > 0) {
+        if (lastName && contacts.length > 1) {
+          const exactMatch = contacts.find(c => 
+            c.name.toLowerCase().includes(lastName.toLowerCase())
+          );
+          if (exactMatch) {
+            console.log('👤 Contato encontrado por nome completo:', exactMatch.name);
+            return exactMatch;
+          }
+        }
+        // Usar o primeiro resultado se só tiver um
+        if (contacts.length === 1) {
+          console.log('👤 Contato encontrado por primeiro nome:', contacts[0].name);
+          return contacts[0];
+        }
+      }
+    }
+
+    return null;
+  }, []);
 
   // Função para processar uma transação
-  const processTransaction = async (transaction: any): Promise<SaleData | null> => {
+  const processTransaction = useCallback(async (transaction: any): Promise<SaleData | null> => {
+    // 🚫 Ignorar transações newsale-xxx (duplicatas sem dados completos)
+    if (transaction.hubla_id?.startsWith('newsale-')) {
+      console.log('⏭️ Ignorando newsale duplicata:', transaction.hubla_id);
+      return null;
+    }
+
     // 🚫 Ignorar recorrências (parcela > 1)
     const rawData = transaction.raw_data;
     const smartInstallment = rawData?.event?.invoice?.smartInstallment;
@@ -78,24 +173,24 @@ export const useSalesCelebration = () => {
 
     console.log('🎯 Processando venda:', transaction.customer_name, '|', transaction.product_name);
 
-    // Buscar informações do lead no CRM (com o deal relacionado e custom_fields)
-    const { data: contact } = await supabase
-      .from("crm_contacts")
-      .select(`
-        name, 
-        tags,
-        crm_deals!crm_deals_contact_id_fkey(clint_id, custom_fields)
-      `)
-      .eq("email", transaction.customer_email)
-      .single();
+    // Buscar contato usando cascata: email → telefone → nome
+    const contact = await findContact(transaction);
 
     if (!contact) {
-      console.log('⚠️ Contato não encontrado no CRM:', transaction.customer_email);
-      return null;
+      console.log('⚠️ Contato não encontrado no CRM:', transaction.customer_name, transaction.customer_email);
+      // Mesmo sem contato, celebrar com dados básicos
+      return {
+        id: transaction.id,
+        leadName: transaction.customer_name || "Lead",
+        leadType: transaction.product_price >= 450 ? "A" : "B",
+        sdrName: "-",
+        closerName: "-",
+        productName: transaction.product_name,
+      };
     }
 
     // Extrair informações
-    const leadName = contact.name || "Lead";
+    const leadName = contact.name || transaction.customer_name || "Lead";
     
     // Determinar tipo de lead baseado em tags
     let leadType: "A" | "B" = "B";
@@ -230,7 +325,55 @@ export const useSalesCelebration = () => {
       closerName,
       productName: transaction.product_name,
     };
-  };
+  }, [findContact]);
+
+  // Carregar vendas do dia ao iniciar (para celebrar retroativamente)
+  useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
+    const loadTodaySales = async () => {
+      // Calcular início do dia no timezone brasileiro (UTC-3)
+      const now = new Date();
+      const todayBrazil = new Date(now);
+      todayBrazil.setHours(todayBrazil.getHours() - 3);
+      const todayStartBrazil = new Date(todayBrazil);
+      todayStartBrazil.setHours(3, 0, 0, 0); // 00:00 Brasil = 03:00 UTC
+
+      console.log('📋 Carregando vendas do dia desde:', todayStartBrazil.toISOString());
+
+      const { data: todaySales } = await supabase
+        .from("hubla_transactions")
+        .select("*")
+        .eq("sale_status", "completed")
+        .gte("sale_date", todayStartBrazil.toISOString())
+        .order("created_at", { ascending: true });
+
+      console.log('📋 Vendas do dia encontradas:', todaySales?.length);
+
+      const salesToCelebrate: SaleData[] = [];
+
+      for (const sale of todaySales || []) {
+        // Verificar se já foi celebrada
+        if (celebratedSales.current.has(sale.id)) {
+          console.log('✅ Já celebrada anteriormente:', sale.customer_name);
+          continue;
+        }
+
+        const saleData = await processTransaction(sale);
+        if (saleData) {
+          salesToCelebrate.push(saleData);
+        }
+      }
+
+      if (salesToCelebrate.length > 0) {
+        console.log('🎉 Vendas para celebrar:', salesToCelebrate.length);
+        setCelebrationQueue(prev => [...prev, ...salesToCelebrate]);
+      }
+    };
+
+    loadTodaySales();
+  }, [processTransaction]);
 
   // Escutar novas vendas via Realtime
   useEffect(() => {
@@ -274,7 +417,7 @@ export const useSalesCelebration = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [processTransaction]);
 
   // Processar fila de celebrações
   useEffect(() => {
