@@ -54,7 +54,7 @@ interface Kpi {
   no_shows: number;
 }
 
-const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi) => {
+const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, calendarIfoodMensal?: number) => {
   // Calculate percentages for regular indicators
   const pct_reunioes_agendadas = compPlan.meta_reunioes_agendadas > 0 
     ? (kpi.reunioes_agendadas / compPlan.meta_reunioes_agendadas) * 100 
@@ -97,10 +97,10 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi) => {
   const valor_fixo = compPlan.fixo_valor;
   const total_conta = valor_fixo + valor_variavel_total;
 
-  // iFood logic - only ultrameta if average >= 100%
+  // iFood logic - use calendar value if available, otherwise use comp_plan value
   // Use the 4 main indicators for average calculation
   const pct_media_global = (cappedPctAgendadas + cappedPctRealizadas + cappedPctTentativas + cappedPctOrganizacao) / 4;
-  const ifood_mensal = compPlan.ifood_mensal;
+  const ifood_mensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
   // Note: ifood_ultrameta is set here but won't be paid unless authorized
   const ifood_ultrameta = pct_media_global >= 100 ? compPlan.ifood_ultrameta : 0;
   const total_ifood = ifood_mensal + ifood_ultrameta;
@@ -150,6 +150,20 @@ serve(async (req) => {
     }
 
     console.log(`🔄 Recalculando payout para ${sdr_id ? `SDR ${sdr_id}` : 'todos os SDRs'} no mês ${ano_mes}`);
+
+    // Fetch working days calendar for this month
+    const { data: calendarData, error: calendarError } = await supabase
+      .from('working_days_calendar')
+      .select('ifood_mensal_calculado, dias_uteis_final, ifood_valor_dia')
+      .eq('ano_mes', ano_mes)
+      .single();
+
+    if (calendarError && calendarError.code !== 'PGRST116') {
+      console.log(`⚠️ Erro ao buscar calendário: ${calendarError.message}`);
+    }
+
+    const calendarIfoodMensal = calendarData?.ifood_mensal_calculado ?? null;
+    console.log(`📅 Calendário ${ano_mes}: iFood Mensal = ${calendarIfoodMensal ?? 'não definido'}`);
 
     // Get SDRs to process
     let sdrsQuery = supabase.from('sdr').select('id, name').eq('active', true);
@@ -256,8 +270,8 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = interCount;
         }
 
-        // Calculate values
-        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi);
+        // Calculate values - pass calendar iFood value if available
+        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, calendarIfoodMensal);
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
           pct_tentativas: calculatedValues.pct_tentativas.toFixed(1),
@@ -266,6 +280,7 @@ serve(async (req) => {
           mult_organizacao: calculatedValues.mult_organizacao,
           valor_tentativas: calculatedValues.valor_tentativas,
           valor_organizacao: calculatedValues.valor_organizacao,
+          ifood_mensal: calculatedValues.ifood_mensal,
         });
 
         // Get existing payout to preserve ifood_ultrameta_autorizado
@@ -323,6 +338,7 @@ serve(async (req) => {
         errors,
         total: sdrs.length,
         results,
+        calendarIfoodMensal,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
