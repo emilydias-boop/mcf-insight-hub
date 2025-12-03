@@ -1433,6 +1433,290 @@ export type Database = {
         }
         Relationships: []
       }
+      sdr: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          id: string
+          name: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string
+          name: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      sdr_comp_plan: {
+        Row: {
+          created_at: string | null
+          fixo_valor: number
+          id: string
+          ifood_mensal: number | null
+          ifood_ultrameta: number | null
+          meta_organizacao: number | null
+          meta_reunioes_agendadas: number | null
+          meta_reunioes_realizadas: number | null
+          meta_tentativas: number | null
+          ote_total: number
+          sdr_id: string
+          updated_at: string | null
+          valor_docs_reuniao: number
+          valor_meta_rpg: number
+          valor_organizacao: number
+          valor_tentativas: number
+          variavel_total: number
+          vigencia_fim: string | null
+          vigencia_inicio: string
+        }
+        Insert: {
+          created_at?: string | null
+          fixo_valor?: number
+          id?: string
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
+          meta_organizacao?: number | null
+          meta_reunioes_agendadas?: number | null
+          meta_reunioes_realizadas?: number | null
+          meta_tentativas?: number | null
+          ote_total?: number
+          sdr_id: string
+          updated_at?: string | null
+          valor_docs_reuniao?: number
+          valor_meta_rpg?: number
+          valor_organizacao?: number
+          valor_tentativas?: number
+          variavel_total?: number
+          vigencia_fim?: string | null
+          vigencia_inicio: string
+        }
+        Update: {
+          created_at?: string | null
+          fixo_valor?: number
+          id?: string
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
+          meta_organizacao?: number | null
+          meta_reunioes_agendadas?: number | null
+          meta_reunioes_realizadas?: number | null
+          meta_tentativas?: number | null
+          ote_total?: number
+          sdr_id?: string
+          updated_at?: string | null
+          valor_docs_reuniao?: number
+          valor_meta_rpg?: number
+          valor_organizacao?: number
+          valor_tentativas?: number
+          variavel_total?: number
+          vigencia_fim?: string | null
+          vigencia_inicio?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_comp_plan_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_month_kpi: {
+        Row: {
+          ano_mes: string
+          created_at: string | null
+          id: string
+          reunioes_agendadas: number | null
+          reunioes_realizadas: number | null
+          score_organizacao: number | null
+          sdr_id: string
+          tentativas_ligacoes: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ano_mes: string
+          created_at?: string | null
+          id?: string
+          reunioes_agendadas?: number | null
+          reunioes_realizadas?: number | null
+          score_organizacao?: number | null
+          sdr_id: string
+          tentativas_ligacoes?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          created_at?: string | null
+          id?: string
+          reunioes_agendadas?: number | null
+          reunioes_realizadas?: number | null
+          score_organizacao?: number | null
+          sdr_id?: string
+          tentativas_ligacoes?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_month_kpi_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_month_payout: {
+        Row: {
+          ajustes_json: Json | null
+          ano_mes: string
+          aprovado_em: string | null
+          aprovado_por: string | null
+          created_at: string | null
+          id: string
+          ifood_mensal: number | null
+          ifood_ultrameta: number | null
+          mult_organizacao: number | null
+          mult_reunioes_agendadas: number | null
+          mult_reunioes_realizadas: number | null
+          mult_tentativas: number | null
+          pct_organizacao: number | null
+          pct_reunioes_agendadas: number | null
+          pct_reunioes_realizadas: number | null
+          pct_tentativas: number | null
+          sdr_id: string
+          status: string | null
+          total_conta: number | null
+          total_ifood: number | null
+          updated_at: string | null
+          valor_fixo: number | null
+          valor_organizacao: number | null
+          valor_reunioes_agendadas: number | null
+          valor_reunioes_realizadas: number | null
+          valor_tentativas: number | null
+          valor_variavel_total: number | null
+        }
+        Insert: {
+          ajustes_json?: Json | null
+          ano_mes: string
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          id?: string
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
+          mult_organizacao?: number | null
+          mult_reunioes_agendadas?: number | null
+          mult_reunioes_realizadas?: number | null
+          mult_tentativas?: number | null
+          pct_organizacao?: number | null
+          pct_reunioes_agendadas?: number | null
+          pct_reunioes_realizadas?: number | null
+          pct_tentativas?: number | null
+          sdr_id: string
+          status?: string | null
+          total_conta?: number | null
+          total_ifood?: number | null
+          updated_at?: string | null
+          valor_fixo?: number | null
+          valor_organizacao?: number | null
+          valor_reunioes_agendadas?: number | null
+          valor_reunioes_realizadas?: number | null
+          valor_tentativas?: number | null
+          valor_variavel_total?: number | null
+        }
+        Update: {
+          ajustes_json?: Json | null
+          ano_mes?: string
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string | null
+          id?: string
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
+          mult_organizacao?: number | null
+          mult_reunioes_agendadas?: number | null
+          mult_reunioes_realizadas?: number | null
+          mult_tentativas?: number | null
+          pct_organizacao?: number | null
+          pct_reunioes_agendadas?: number | null
+          pct_reunioes_realizadas?: number | null
+          pct_tentativas?: number | null
+          sdr_id?: string
+          status?: string | null
+          total_conta?: number | null
+          total_ifood?: number | null
+          updated_at?: string | null
+          valor_fixo?: number | null
+          valor_organizacao?: number | null
+          valor_reunioes_agendadas?: number | null
+          valor_reunioes_realizadas?: number | null
+          valor_tentativas?: number | null
+          valor_variavel_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_month_payout_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdr_payout_audit_log: {
+        Row: {
+          campo: string
+          created_at: string | null
+          id: string
+          motivo: string | null
+          payout_id: string
+          user_id: string | null
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          campo: string
+          created_at?: string | null
+          id?: string
+          motivo?: string | null
+          payout_id: string
+          user_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          campo?: string
+          created_at?: string | null
+          id?: string
+          motivo?: string | null
+          payout_id?: string
+          user_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdr_payout_audit_log_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "sdr_month_payout"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           id: string
@@ -2236,6 +2520,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {

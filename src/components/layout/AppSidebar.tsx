@@ -13,7 +13,9 @@ import {
   LogOut,
   ChevronDown,
   UserCircle,
-  Tv
+  Tv,
+  Calculator,
+  Receipt
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -101,6 +103,8 @@ const menuItems: MenuItem[] = [
       { title: "Configurações", url: "/crm/configuracoes" },
     ]
   },
+  { title: "Fechamento SDR", url: "/fechamento-sdr", icon: Calculator, requiredRoles: ['admin', 'manager'] },
+  { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ['sdr'] },
   { title: "Usuários", url: "/usuarios", icon: Users, requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, requiredRoles: ['admin'] },
 ];
