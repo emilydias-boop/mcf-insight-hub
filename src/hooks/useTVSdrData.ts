@@ -214,38 +214,40 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       console.log('[TV-SDR] Intermediações por SDR:', Array.from(sdrIntermediacao.entries()));
 
-      // 3. Buscar eventos do webhook de hoje - filtrar direto no banco para performance
-      const { data: insideSalesEvents } = await supabase
-        .from("webhook_events")
-        .select("event_data, created_at")
-        .eq("event_type", "deal.stage_changed")
-        .eq("event_data->>deal_origin", "PIPELINE INSIDE SALES")
-        .gte("created_at", todayStart.toISOString())
-        .lte("created_at", todayEnd.toISOString())
-        .range(0, 4999);
+      // 3. USAR RPC PARA CONTORNAR LIMITE DE 1000 REGISTROS DO SUPABASE
+      // A função get_tv_sdr_metrics agrega dados diretamente no banco
+      const { data: sdrMetricsRpc, error: rpcError } = await supabase
+        .rpc('get_tv_sdr_metrics', { target_date: today });
 
-      console.log('[TV-SDR] Inside Sales events (limit 5000):', insideSalesEvents?.length || 0);
+      if (rpcError) {
+        console.error('[TV-SDR] RPC error:', rpcError);
+      }
 
-      // 3. Novo Lead REAL = criado HOJE (deal_created_at)
-      const events = insideSalesEvents || [];
-      
-      const novoLeadEmails = new Set(
-        events
-          .filter(e => {
-            const eventData = e.event_data as any;
-            return eventData?.deal_stage === "Novo Lead" && 
-              (!eventData?.deal_old_stage || eventData?.deal_old_stage === "") &&
-              isDealCreatedToday(eventData?.deal_created_at);
-          })
-          .map(e => {
-            const eventData = e.event_data as any;
-            return eventData?.contact_email;
-          })
-          .filter(Boolean)
-      );
-      const totalNovoLeadCount = novoLeadEmails.size;
+      // Converter resultado da RPC em Map para acesso rápido
+      const rpcMetricsMap = new Map<string, { r1_agendada: number; r1_realizada: number; no_show: number; novo_lead: number }>();
+      if (Array.isArray(sdrMetricsRpc)) {
+        sdrMetricsRpc.forEach((m: any) => {
+          if (m.sdr_email) {
+            rpcMetricsMap.set(m.sdr_email, {
+              r1_agendada: m.r1_agendada || 0,
+              r1_realizada: m.r1_realizada || 0,
+              no_show: m.no_show || 0,
+              novo_lead: m.novo_lead || 0,
+            });
+          }
+        });
+      }
 
-      console.log('[TV-SDR] Novo Lead count:', totalNovoLeadCount);
+      // Calcular totais da RPC
+      let totalR1Agendada = 0;
+      let totalNovoLeadCount = 0;
+      rpcMetricsMap.forEach((metrics) => {
+        totalR1Agendada += metrics.r1_agendada;
+        totalNovoLeadCount += metrics.novo_lead;
+      });
+
+      console.log('[TV-SDR] RPC metrics - Total R1 Agendada:', totalR1Agendada, 'Total Novo Lead:', totalNovoLeadCount);
+      console.log('[TV-SDR] RPC metrics por SDR:', Array.from(rpcMetricsMap.entries()));
 
       // 4. Buscar metas da tabela team_targets
       const { data: targets } = await supabase
@@ -262,79 +264,17 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       const totalNovoLeadMeta = dailyTargetMap.get(PIPELINE_STAGES.NOVO_LEAD) || 80;
 
-      // 5. Agrupar eventos por SDR usando deal_user
-      const sdrEventMap = new Map<string, any[]>();
-      events.forEach(e => {
-        const eventData = e.event_data as any;
-        const sdrEmail = eventData?.deal_user;
-        if (sdrEmail) {
-          if (!sdrEventMap.has(sdrEmail)) {
-            sdrEventMap.set(sdrEmail, []);
-          }
-          sdrEventMap.get(sdrEmail)!.push(e);
-        }
-      });
-
-      console.log('[TV-SDR] SDRs com eventos:', sdrEventMap.size);
-
-      // 6. Calcular métricas por SDR
+      // 5. Calcular métricas por SDR usando dados da RPC
       const sdrsData: SdrData[] = SDR_LIST.map((sdr) => {
-        const events = sdrEventMap.get(sdr.email) || [];
+        const rpcMetrics = rpcMetricsMap.get(sdr.email);
         
-        // Usar Set para contar emails únicos por stage
-        // Usar email OU nome como identificador (fallback para leads sem email)
-        const getLeadIdentifier = (eventData: any) => 
-          eventData?.contact_email || eventData?.contact_name;
-
-        const novoLeadSet = new Set(
-          events
-            .filter(e => {
-              const eventData = e.event_data as any;
-              return eventData?.deal_stage === PIPELINE_STAGES.NOVO_LEAD &&
-                (!eventData?.deal_old_stage || eventData?.deal_old_stage === "") &&
-                isDealCreatedToday(eventData?.deal_created_at);
-            })
-            .map(e => getLeadIdentifier(e.event_data as any))
-            .filter(Boolean)
-        );
-        
-        const r1AgendadaSet = new Set(
-          events
-            .filter(e => {
-              const eventData = e.event_data as any;
-              return eventData?.deal_stage === PIPELINE_STAGES.R1_AGENDADA;
-            })
-            .map(e => getLeadIdentifier(e.event_data as any))
-            .filter(Boolean)
-        );
-        
-        const noShowSet = new Set(
-          events
-            .filter(e => {
-              const eventData = e.event_data as any;
-              return eventData?.deal_stage === PIPELINE_STAGES.NO_SHOW;
-            })
-            .map(e => getLeadIdentifier(e.event_data as any))
-            .filter(Boolean)
-        );
-        
-        const r1RealizadaSet = new Set(
-          events
-            .filter(e => {
-              const eventData = e.event_data as any;
-              return eventData?.deal_stage === PIPELINE_STAGES.R1_REALIZADA;
-            })
-            .map(e => getLeadIdentifier(e.event_data as any))
-            .filter(Boolean)
-        );
+        const novoLead = rpcMetrics?.novo_lead || 0;
+        const r1Agendada = rpcMetrics?.r1_agendada || 0;
+        const noShow = rpcMetrics?.no_show || 0;
+        const r1Realizada = rpcMetrics?.r1_realizada || 0;
         
         // Intermediação: buscar do Map que rastreou o SDR original da R1
         const intermediacao = sdrIntermediacao.get(sdr.email) || 0;
-
-        const novoLead = novoLeadSet.size;
-        const r1Agendada = r1AgendadaSet.size;
-        const noShow = noShowSet.size;
-        const r1Realizada = r1RealizadaSet.size;
 
         // Conversão: (R1 Agendada / Novo Lead) * 100
         const convRate = novoLead > 0 ? Math.round((r1Agendada / novoLead) * 100) : 0;
