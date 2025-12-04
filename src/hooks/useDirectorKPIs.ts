@@ -16,8 +16,13 @@ interface DirectorKPIs {
   lucro: DirectorKPI;
   roi: DirectorKPI;
   roas: DirectorKPI;
-  leads: number;
+  vendasA010: number;
+  faturamentoIncorporador: number;
 }
+
+// Produtos do Incorporador 50k
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A009'];
+const EXCLUDED_PRODUCT_NAMES = ['A006', 'A010', 'IMERSÃO SÓCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE'];
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
@@ -26,54 +31,126 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const start = startDate ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
       const end = endDate ? format(endDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
-      // Buscar faturamento total (Hubla transactions)
+      // Buscar todas as transações Hubla no período
       const { data: hublaData } = await supabase
         .from('hubla_transactions')
-        .select('net_value, sale_date')
+        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name')
         .eq('sale_status', 'completed')
         .gte('sale_date', start)
-        .lte('sale_date', end);
+        .lte('sale_date', end + 'T23:59:59');
 
-      const faturamentoTotal = hublaData?.reduce((sum, t) => sum + (t.net_value || 0), 0) || 0;
+      // ===== FATURAMENTO INCORPORADOR (Líquido) =====
+      const seenIncorporadorIds = new Set<string>();
+      const faturamentoIncorporador = (hublaData || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+          if (seenIncorporadorIds.has(tx.hubla_id)) return false;
+          if (isIncorporador && !isExcluded) {
+            seenIncorporadorIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Buscar gastos com ads
+      // ===== OB ACESSO VITALÍCIO =====
+      const obVitalicio = (hublaData || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          return productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      // ===== OB CONSTRUIR PARA ALUGAR =====
+      const obConstruir = (hublaData || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          return productName.includes('CONSTRUIR') && productName.includes('ALUGAR');
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      // ===== FATURADO A010 =====
+      const seenA010Ids = new Set<string>();
+      const faturadoA010 = (hublaData || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+          if (seenA010Ids.has(tx.hubla_id)) return false;
+          if (isA010) {
+            seenA010Ids.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      // ===== FATURAMENTO TOTAL =====
+      // Faturamento Total = Incorporador + OB Vitalício + OB Construir + Faturado A010
+      const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
+
+      // ===== VENDAS A010 (contagem única) =====
+      const a010CountIds = new Set<string>();
+      const vendasA010 = (hublaData || []).filter(tx => {
+        const productName = (tx.product_name || '').toUpperCase();
+        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+        const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
+        const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
+        const baseId = tx.hubla_id.split('-offer-')[0].replace('newsale-', '');
+        if (a010CountIds.has(baseId)) return false;
+        if (isA010 && hasValidName && isFirstInstallment) {
+          a010CountIds.add(baseId);
+          return true;
+        }
+        return false;
+      }).length;
+
+      // ===== GASTOS ADS =====
       const { data: adsData } = await supabase
         .from('daily_costs')
-        .select('amount, date')
+        .select('amount')
         .eq('cost_type', 'ads')
         .gte('date', start)
         .lte('date', end);
 
       const gastosAds = adsData?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
 
-      // Buscar custos operacionais
+      // ===== CUSTOS OPERACIONAIS (equipe + escritório) =====
       const monthStr = format(startDate || new Date(), 'yyyy-MM');
       const { data: operationalData } = await supabase
         .from('operational_costs')
-        .select('amount')
+        .select('amount, cost_type')
         .eq('month', monthStr);
 
-      const custosOperacionais = operationalData?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+      const custoEquipe = operationalData?.filter(c => c.cost_type === 'team').reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+      const custoEscritorio = operationalData?.filter(c => c.cost_type === 'office').reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+      
+      // Custo operacional semanal = (equipe + escritório) / 4 semanas
+      const custoOperacionalSemanal = (custoEquipe + custoEscritorio) / 4;
 
-      // Buscar leads (deal_activities com stage Novo Lead)
-      const { data: leadsData } = await supabase
-        .from('deal_activities')
-        .select('deal_id')
-        .eq('to_stage', 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b') // Novo Lead UUID
-        .gte('created_at', start)
-        .lte('created_at', end + 'T23:59:59');
+      // ===== CÁLCULOS FINAIS =====
+      // CPL = Ads / Vendas A010
+      const cpl = vendasA010 > 0 ? gastosAds / vendasA010 : 0;
 
-      const uniqueLeads = new Set(leadsData?.map(l => l.deal_id) || []);
-      const leadsCount = uniqueLeads.size;
+      // Custo Total = Ads + Custo Operacional Semanal
+      const custoTotal = gastosAds + custoOperacionalSemanal;
 
-      // Calcular métricas
-      const custoTotal = gastosAds + custosOperacionais;
+      // Lucro = Faturamento Total - Custo Total
       const lucro = faturamentoTotal - custoTotal;
-      const roi = custoTotal > 0 ? (lucro / custoTotal) * 100 : 0;
-      const roas = gastosAds > 0 ? faturamentoTotal / gastosAds : 0;
-      const cpl = leadsCount > 0 ? gastosAds / leadsCount : 0;
 
-      // Calcular período anterior para comparação (mesmo número de dias antes)
+      // Lucro Operacional (para ROI) = Faturamento Incorporador - Custo Total
+      const lucroOperacional = faturamentoIncorporador - custoTotal;
+
+      // ROI = Faturamento Incorporador / (Faturamento Incorporador - Lucro Operacional)
+      // Simplificando: ROI = Faturamento / Custo quando lucro operacional = fat - custo
+      const roi = custoTotal > 0 ? (faturamentoIncorporador / custoTotal) : 0;
+
+      // ROAS = Custo Semana / Faturamento Incorporador (invertido conforme solicitado)
+      // Nota: Normalmente ROAS = Receita / Custo, mas usuário quer Custo / Receita
+      const roas = faturamentoIncorporador > 0 ? (custoTotal / faturamentoIncorporador) : 0;
+
+      // ===== PERÍODO ANTERIOR PARA COMPARAÇÃO =====
       const daysDiff = startDate && endDate 
         ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
         : 7;
@@ -86,15 +163,71 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevStartStr = format(prevStart, 'yyyy-MM-dd');
       const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
 
-      // Buscar dados do período anterior
+      // Buscar dados anteriores para comparação
       const { data: prevHubla } = await supabase
         .from('hubla_transactions')
-        .select('net_value')
+        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name')
         .eq('sale_status', 'completed')
         .gte('sale_date', prevStartStr)
-        .lte('sale_date', prevEndStr);
+        .lte('sale_date', prevEndStr + 'T23:59:59');
 
-      const prevFaturamento = prevHubla?.reduce((sum, t) => sum + (t.net_value || 0), 0) || 0;
+      // Calcular métricas anteriores
+      const prevSeenIncIds = new Set<string>();
+      const prevFatIncorporador = (prevHubla || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+          if (prevSeenIncIds.has(tx.hubla_id)) return false;
+          if (isIncorporador && !isExcluded) {
+            prevSeenIncIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      const prevObVitalicio = (prevHubla || [])
+        .filter(tx => (tx.product_name || '').toUpperCase().includes('VITALÍCIO') || (tx.product_name || '').toUpperCase().includes('VITALICIO'))
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      const prevObConstruir = (prevHubla || [])
+        .filter(tx => {
+          const name = (tx.product_name || '').toUpperCase();
+          return name.includes('CONSTRUIR') && name.includes('ALUGAR');
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      const prevSeenA010Ids = new Set<string>();
+      const prevFatA010 = (prevHubla || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+          if (prevSeenA010Ids.has(tx.hubla_id)) return false;
+          if (isA010) {
+            prevSeenA010Ids.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      const prevFaturamentoTotal = prevFatIncorporador + prevObVitalicio + prevObConstruir + prevFatA010;
+
+      const prevA010Ids = new Set<string>();
+      const prevVendasA010 = (prevHubla || []).filter(tx => {
+        const productName = (tx.product_name || '').toUpperCase();
+        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+        const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
+        const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
+        const baseId = tx.hubla_id.split('-offer-')[0].replace('newsale-', '');
+        if (prevA010Ids.has(baseId)) return false;
+        if (isA010 && hasValidName && isFirstInstallment) {
+          prevA010Ids.add(baseId);
+          return true;
+        }
+        return false;
+      }).length;
 
       const { data: prevAds } = await supabase
         .from('daily_costs')
@@ -104,24 +237,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .lte('date', prevEndStr);
 
       const prevGastosAds = prevAds?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+      const prevCustoTotal = prevGastosAds + custoOperacionalSemanal;
+      const prevCpl = prevVendasA010 > 0 ? prevGastosAds / prevVendasA010 : 0;
+      const prevLucro = prevFaturamentoTotal - prevCustoTotal;
+      const prevRoi = prevCustoTotal > 0 ? (prevFatIncorporador / prevCustoTotal) : 0;
+      const prevRoas = prevFatIncorporador > 0 ? (prevCustoTotal / prevFatIncorporador) : 0;
 
-      const { data: prevLeads } = await supabase
-        .from('deal_activities')
-        .select('deal_id')
-        .eq('to_stage', 'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b')
-        .gte('created_at', prevStartStr)
-        .lte('created_at', prevEndStr + 'T23:59:59');
-
-      const prevUniqueLeads = new Set(prevLeads?.map(l => l.deal_id) || []);
-      const prevLeadsCount = prevUniqueLeads.size;
-
-      const prevCustoTotal = prevGastosAds + custosOperacionais;
-      const prevLucro = prevFaturamento - prevCustoTotal;
-      const prevRoi = prevCustoTotal > 0 ? (prevLucro / prevCustoTotal) * 100 : 0;
-      const prevRoas = prevGastosAds > 0 ? prevFaturamento / prevGastosAds : 0;
-      const prevCpl = prevLeadsCount > 0 ? prevGastosAds / prevLeadsCount : 0;
-
-      // Calcular variações percentuais
+      // Calcular variações
       const calcChange = (current: number, previous: number) => {
         if (previous === 0) return current > 0 ? 100 : 0;
         return ((current - previous) / previous) * 100;
@@ -130,23 +252,23 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       return {
         faturamentoTotal: {
           value: faturamentoTotal,
-          change: calcChange(faturamentoTotal, prevFaturamento),
-          isPositive: faturamentoTotal >= prevFaturamento,
+          change: calcChange(faturamentoTotal, prevFaturamentoTotal),
+          isPositive: faturamentoTotal >= prevFaturamentoTotal,
         },
         gastosAds: {
           value: gastosAds,
           change: calcChange(gastosAds, prevGastosAds),
-          isPositive: gastosAds <= prevGastosAds, // Menor gasto é positivo
+          isPositive: gastosAds <= prevGastosAds,
         },
         cpl: {
           value: cpl,
           change: calcChange(cpl, prevCpl),
-          isPositive: cpl <= prevCpl, // Menor CPL é positivo
+          isPositive: cpl <= prevCpl,
         },
         custoTotal: {
           value: custoTotal,
           change: calcChange(custoTotal, prevCustoTotal),
-          isPositive: custoTotal <= prevCustoTotal, // Menor custo é positivo
+          isPositive: custoTotal <= prevCustoTotal,
         },
         lucro: {
           value: lucro,
@@ -161,9 +283,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         roas: {
           value: roas,
           change: calcChange(roas, prevRoas),
-          isPositive: roas >= prevRoas,
+          isPositive: roas <= prevRoas, // Menor ROAS (custo/receita) é melhor
         },
-        leads: leadsCount,
+        vendasA010,
+        faturamentoIncorporador,
       };
     },
     refetchInterval: 60000,

@@ -1,8 +1,10 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { TrendingUp, Wallet, Target, DollarSign } from "lucide-react";
+import { TrendingUp, Wallet, Target, DollarSign, Users } from "lucide-react";
 
 interface MetaCard {
   titulo: string;
@@ -21,6 +23,9 @@ interface MetasProgressProps {
   metaUltrametaLiquido: number;
   faturamentoLiquido: number;
   metaFaturamentoLiquido: number;
+  sdrIa: number;
+  onSdrIaChange: (value: number) => void;
+  vendasA010: number;
   isLoading?: boolean;
 }
 
@@ -94,12 +99,15 @@ export function MetasProgress({
   metaUltrametaLiquido,
   faturamentoLiquido,
   metaFaturamentoLiquido,
+  sdrIa,
+  onSdrIaChange,
+  vendasA010,
   isLoading,
 }: MetasProgressProps) {
   if (isLoading) {
     return (
       <div className="space-y-3">
-        {[...Array(4)].map((_, i) => (
+        {[...Array(5)].map((_, i) => (
           <div key={i} className="h-28 bg-card animate-pulse rounded-lg border border-border" />
         ))}
       </div>
@@ -111,7 +119,7 @@ export function MetasProgress({
       titulo: "ULTRAMETA CLINT",
       valor: ultrametaClint,
       meta: metaUltrametaClint,
-      fonte: "Fonte: Vendas A010 × R$ 1.680",
+      fonte: `Fonte: (${vendasA010} A010 × R$1.680) + (${sdrIa} SDR IA × R$700)`,
       icon: Target,
     },
     {
@@ -125,7 +133,7 @@ export function MetasProgress({
       titulo: "ULTRAMETA LÍQUIDO",
       valor: ultrametaLiquido,
       meta: metaUltrametaLiquido,
-      fonte: "Fonte: Vendas A010 × R$ 1.400",
+      fonte: `Fonte: ${vendasA010} Vendas A010 × R$1.400`,
       icon: TrendingUp,
     },
     {
@@ -139,6 +147,33 @@ export function MetasProgress({
 
   return (
     <div className="space-y-3">
+      {/* SDR IA Input */}
+      <Card className="bg-card border-border">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Users className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1">
+              <Label htmlFor="sdr-ia" className="text-sm font-semibold text-foreground">
+                SDR IA + IG (Manual)
+              </Label>
+              <p className="text-[10px] text-muted-foreground">
+                Quantidade de leads SDR IA × R$700
+              </p>
+            </div>
+            <Input
+              id="sdr-ia"
+              type="number"
+              min={0}
+              value={sdrIa}
+              onChange={(e) => onSdrIaChange(parseInt(e.target.value) || 0)}
+              className="w-20 h-8 text-center font-semibold"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {metas.map((meta) => (
         <MetaProgressCard key={meta.titulo} {...meta} />
       ))}

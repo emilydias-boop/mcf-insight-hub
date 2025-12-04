@@ -23,9 +23,9 @@ const EXCLUDED_PRODUCT_NAMES = [
   'CLUBE ARREMATE',
 ];
 
-export const useUltrameta = (startDate?: Date, endDate?: Date) => {
+export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0) => {
   return useQuery({
-    queryKey: ['ultrameta', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['ultrameta', startDate?.toISOString(), endDate?.toISOString(), sdrIa],
     queryFn: async (): Promise<Ultrameta> => {
       // Buscar transações Hubla completadas no período
       let query = supabase
@@ -46,7 +46,7 @@ export const useUltrameta = (startDate?: Date, endDate?: Date) => {
       
       if (!transactions || transactions.length === 0) {
         return {
-          ultrametaClint: 0,
+          ultrametaClint: sdrIa * 700, // Mesmo sem vendas, SDR IA conta
           faturamentoIncorporador50k: 0,
           faturamentoClintBruto: 0,
           ultrametaLiquido: 0,
@@ -137,8 +137,8 @@ export const useUltrameta = (startDate?: Date, endDate?: Date) => {
       }).length;
 
       // ===== ULTRAMETAS =====
-      // Ultrameta Clint = Vendas A010 × R$ 1.680
-      const ultrametaClint = vendasA010 * 1680;
+      // Ultrameta Clint = (Vendas A010 × R$ 1.680) + (SDR IA × R$ 700)
+      const ultrametaClint = (vendasA010 * 1680) + (sdrIa * 700);
       // Ultrameta Líquido = Vendas A010 × R$ 1.400
       const ultrametaLiquido = vendasA010 * 1400;
 
