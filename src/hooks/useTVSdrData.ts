@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { INSIDE_SALES_ORIGIN_ID, SDR_LIST, PIPELINE_STAGES } from "@/constants/team";
 import { startOfDay, endOfDay } from "date-fns";
@@ -72,8 +73,37 @@ interface SdrData {
 
 export const useTVSdrData = (viewDate: Date = new Date()) => {
   const dateKey = viewDate.toISOString().split("T")[0];
+  const queryClient = useQueryClient();
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   
-  return useQuery({
+  // Listener Realtime para webhook_events
+  useEffect(() => {
+    const channel = supabase
+      .channel('tv-sdr-webhook-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'webhook_events'
+        },
+        (payload) => {
+          console.log('[TV-SDR Realtime] Novo evento recebido:', payload);
+          // Invalidar cache e forçar refetch
+          queryClient.invalidateQueries({ queryKey: ["tv-sdr-data", dateKey] });
+          setLastUpdate(new Date());
+        }
+      )
+      .subscribe((status) => {
+        console.log('[TV-SDR Realtime] Status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dateKey, queryClient]);
+
+  const query = useQuery({
     queryKey: ["tv-sdr-data", dateKey],
     queryFn: async () => {
       const targetDate = new Date(viewDate);
@@ -427,5 +457,11 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       };
     },
     refetchInterval: 30000, // Auto-refresh a cada 30 segundos
+    staleTime: 0, // Sempre considerar dados stale para forçar refetch
   });
+
+  return {
+    ...query,
+    lastUpdate,
+  };
 };

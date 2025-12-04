@@ -1,24 +1,43 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TVContent } from "@/components/tv/TVContent";
 import { SaleCelebration } from "@/components/tv/SaleCelebration";
 import { useTVSdrData } from "@/hooks/useTVSdrData";
 import { useSalesCelebration } from "@/hooks/useSalesCelebration";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { RotateCcw, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format, subDays, addDays, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function TVSdrFullscreen() {
   const [viewDate, setViewDate] = useState<Date>(new Date());
   const isViewingToday = isToday(viewDate);
+  const queryClient = useQueryClient();
   
-  const { data, isLoading } = useTVSdrData(viewDate);
+  const { data, isLoading, lastUpdate, isFetching } = useTVSdrData(viewDate);
   const { currentCelebration, handleCelebrationComplete } = useSalesCelebration();
+  const [displayTime, setDisplayTime] = useState<string>("");
+
+  // Atualizar display do horário a cada segundo
+  useEffect(() => {
+    const updateDisplayTime = () => {
+      if (lastUpdate) {
+        setDisplayTime(format(lastUpdate, "HH:mm:ss"));
+      }
+    };
+    updateDisplayTime();
+    const interval = setInterval(updateDisplayTime, 1000);
+    return () => clearInterval(interval);
+  }, [lastUpdate]);
 
   const handleResetCelebrations = () => {
     localStorage.removeItem('celebrated_sales');
     window.location.reload();
+  };
+
+  const handleForceRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["tv-sdr-data"] });
   };
 
   const handlePreviousDay = () => {
@@ -134,6 +153,31 @@ export default function TVSdrFullscreen() {
           Visualizando: {format(viewDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
         </div>
       )}
+
+      {/* Indicador de última atualização */}
+      <div className="fixed bottom-4 left-4 flex items-center gap-2 text-xs text-muted-foreground opacity-50 hover:opacity-100 transition-opacity">
+        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/80 ${isFetching ? 'animate-pulse' : ''}`}>
+          <RefreshCw className={`h-3 w-3 ${isFetching ? 'animate-spin' : ''}`} />
+          <span>Atualizado: {displayTime}</span>
+        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleForceRefresh}
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Forçar atualização</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
 
       <TooltipProvider>
         <Tooltip>
