@@ -4,36 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { INSIDE_SALES_ORIGIN_ID, SDR_LIST, PIPELINE_STAGES } from "@/constants/team";
 import { startOfDay, endOfDay } from "date-fns";
 
-// Helper para verificar se deal_created_at é de hoje (formato: "DD/MM/YYYY HH:mm:ss")
-const isDealCreatedToday = (dealCreatedAt: string | null): boolean => {
-  if (!dealCreatedAt) return false;
-  
-  // Formato brasileiro: "28/11/2025 00:48:06"
-  const parts = dealCreatedAt.split(' ')[0]?.split('/');
-  if (!parts || parts.length !== 3) return false;
-  
-  const [day, month, year] = parts;
-  
-  // Comparar apenas dia/mês/ano (sem problemas de timezone)
-  const today = new Date();
-  const todayDay = today.getDate();
-  const todayMonth = today.getMonth() + 1; // getMonth() retorna 0-11
-  const todayYear = today.getFullYear();
-  
-  return parseInt(day) === todayDay && 
-         parseInt(month) === todayMonth && 
-         parseInt(year) === todayYear;
-};
-
-// Função para determinar tipo de lead baseado na tag
-const getLeadType = (contactTag: string | string[] | null): 'A' | 'B' | null => {
-  if (!contactTag) return null;
-  const tagStr = Array.isArray(contactTag) ? contactTag.join(' ') : String(contactTag);
-  const lower = tagStr.toLowerCase();
-  if (lower.includes('lead a')) return 'A';
-  if (lower.includes('lead b')) return 'B';
-  return null;
-};
+// Funções isDealCreatedToday e getLeadType foram movidas para RPCs do banco
+// para contornar limite de 1000 registros do Supabase client
 
 // Função para determinar tipo de lead baseado no VALOR do produto Hubla
 // Lead A = R$ 497 (valor >= 450), Lead B = R$ 397 (valor >= 350)
@@ -317,44 +289,33 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         );
       }).length || 0;
 
-      // 9. Preparar dados do funil separados por Lead A/B
+      // 9. Buscar métricas do funil via RPC
+      const { data: funnelMetricsRpc } = await supabase
+        .rpc('get_tv_funnel_metrics', { target_date: today });
+
+      // Processar resultado da RPC do funil
+      const stageCountsA = new Map<string, number>();
+      const stageCountsB = new Map<string, number>();
+      
+      if (Array.isArray(funnelMetricsRpc)) {
+        funnelMetricsRpc.forEach((m: any) => {
+          if (m.lead_type === 'A') {
+            stageCountsA.set(m.stage_name, m.unique_leads || 0);
+          } else if (m.lead_type === 'B') {
+            stageCountsB.set(m.stage_name, m.unique_leads || 0);
+          }
+        });
+      }
+
+      console.log('[TV-SDR] Funnel RPC - Lead A:', Array.from(stageCountsA.entries()));
+      console.log('[TV-SDR] Funnel RPC - Lead B:', Array.from(stageCountsB.entries()));
+
       const funnelStages = [
         PIPELINE_STAGES.R1_AGENDADA,
         PIPELINE_STAGES.R1_REALIZADA,
         PIPELINE_STAGES.NO_SHOW,
         PIPELINE_STAGES.CONTRATO_PAGO,
       ];
-
-      // Contar por stage E por tipo de lead (A/B)
-      const stageCountsA = new Map<string, number>();
-      const stageCountsB = new Map<string, number>();
-      
-      funnelStages.forEach(stageName => {
-        const emailsInStageA = new Set<string>();
-        const emailsInStageB = new Set<string>();
-        
-        events
-          .filter(e => {
-            const eventData = e.event_data as any;
-            return eventData?.deal_stage === stageName;
-          })
-          .forEach(e => {
-            const eventData = e.event_data as any;
-            const email = eventData?.contact_email;
-            const tag = eventData?.contact_tag;
-            if (email) {
-              const leadType = getLeadType(tag);
-              if (leadType === 'A') {
-                emailsInStageA.add(email);
-              } else if (leadType === 'B') {
-                emailsInStageB.add(email);
-              }
-            }
-          });
-        
-        stageCountsA.set(stageName, emailsInStageA.size);
-        stageCountsB.set(stageName, emailsInStageB.size);
-      });
 
       const funnelDataA = funnelStages.map((stageName) => ({
         etapa: stageName,

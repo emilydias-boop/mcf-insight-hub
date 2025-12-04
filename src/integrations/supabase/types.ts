@@ -2684,6 +2684,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_sdr_metrics: { Args: { target_date: string }; Returns: Json }
       get_user_role: {
         Args: { _user_id: string }
