@@ -90,21 +90,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Faturamento Total = Incorporador + OB Vitalício + OB Construir + Faturado A010
       const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
 
-      // ===== VENDAS A010 (contagem única por email) =====
-      const a010Emails = new Set<string>();
+      // ===== VENDAS A010 (contagem por transação, incluindo duplicatas da planilha) =====
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        // Usar customer_email direto da tabela
-        const customerEmail = tx.customer_email?.toLowerCase() || '';
-        if (customerEmail && a010Emails.has(customerEmail)) return false;
-        if (isA010 && hasValidName && isFirstInstallment) {
-          if (customerEmail) a010Emails.add(customerEmail);
-          return true;
-        }
-        return false;
+        return isA010 && hasValidName && isFirstInstallment;
       }).length;
 
       // ===== GASTOS ADS =====
@@ -215,19 +207,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const prevFaturamentoTotal = prevFatIncorporador + prevObVitalicio + prevObConstruir + prevFatA010;
 
-      const prevA010Emails = new Set<string>();
       const prevVendasA010 = (prevHubla || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        const customerEmail = tx.customer_email?.toLowerCase() || '';
-        if (customerEmail && prevA010Emails.has(customerEmail)) return false;
-        if (isA010 && hasValidName && isFirstInstallment) {
-          if (customerEmail) prevA010Emails.add(customerEmail);
-          return true;
-        }
-        return false;
+        return isA010 && hasValidName && isFirstInstallment;
       }).length;
 
       const { data: prevAds } = await supabase

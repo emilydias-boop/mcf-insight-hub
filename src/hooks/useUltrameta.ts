@@ -46,7 +46,7 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       
       if (!transactions || transactions.length === 0) {
         return {
-          ultrametaClint: sdrIa * 700, // Mesmo sem vendas, SDR IA conta
+          ultrametaClint: sdrIa * 1400, // Mesmo sem vendas, SDR IA conta
           faturamentoIncorporador50k: 0,
           faturamentoClintBruto: 0,
           ultrametaLiquido: 0,
