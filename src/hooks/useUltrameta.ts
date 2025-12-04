@@ -9,11 +9,12 @@ export interface Ultrameta {
   vendasA010: number;
 }
 
-// Produtos que ENTRAM no Incorporador 50k
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A009'];
+// Produtos que ENTRAM no Incorporador 50k (A005 EXCLUÍDO conforme correção)
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 
 // Produtos EXCLUÍDOS do Incorporador 50k
 const EXCLUDED_PRODUCT_NAMES = [
+  'A005', // P2 excluído
   'A006', // Renovação
   'A010', // A010 é contado separadamente
   'IMERSÃO SÓCIOS',
@@ -118,22 +119,15 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         }, 0);
 
       // ===== VENDAS A010 =====
-      // Contar vendas únicas de A010 (primeira parcela, com customer_name)
-      const a010SeenIds = new Set<string>();
+      // Contar vendas A010 (excluindo -offer- para corresponder à planilha = 179)
       const vendasA010 = transactions.filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        
-        // Deduplicar por base hubla_id (sem -offer-)
-        const baseId = tx.hubla_id.split('-offer-')[0].replace('newsale-', '');
-        if (a010SeenIds.has(baseId)) return false;
-        if (isA010 && hasValidName && isFirstInstallment) {
-          a010SeenIds.add(baseId);
-          return true;
-        }
-        return false;
+        // Excluir Order Bumps (-offer-)
+        const isNotOffer = !tx.hubla_id.includes('-offer-');
+        return isA010 && hasValidName && isFirstInstallment && isNotOffer;
       }).length;
 
       // ===== ULTRAMETAS =====
