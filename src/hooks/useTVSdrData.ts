@@ -222,7 +222,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         .eq("event_data->>deal_origin", "PIPELINE INSIDE SALES")
         .gte("created_at", todayStart.toISOString())
         .lte("created_at", todayEnd.toISOString())
-        .limit(5000);
+        .range(0, 4999);
 
       console.log('[TV-SDR] Inside Sales events (limit 5000):', insideSalesEvents?.length || 0);
 
