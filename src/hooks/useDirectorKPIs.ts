@@ -20,9 +20,16 @@ interface DirectorKPIs {
   faturamentoIncorporador: number;
 }
 
-// Produtos do Incorporador 50k (A005 EXCLUÍDO conforme correção)
+// Produtos do Incorporador 50k (A005 EXCLUÍDO)
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
-const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE'];
+const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
+
+// Função para extrair base_id (remove -offer-N e newsale- prefixos)
+const getBaseId = (hublaId: string): string => {
+  return hublaId
+    .replace(/^newsale-/, '')
+    .replace(/-offer-\d+$/, '');
+};
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
@@ -87,18 +94,24 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // Faturamento Total = Incorporador + OB Vitalício + OB Construir + Faturado A010
       const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
 
-      // ===== VENDAS A010 (contagem por transação, excluindo -offer- para chegar em 179) =====
+      // ===== VENDAS A010 (deduplicação por base_id para chegar em 180) =====
+      const seenA010BaseIds = new Set<string>();
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        // Excluir Order Bumps (-offer-) para corresponder à planilha
-        const isNotOffer = !tx.hubla_id.includes('-offer-');
-        return isA010 && hasValidName && isFirstInstallment && isNotOffer;
+        
+        if (!isA010 || !hasValidName || !isFirstInstallment) return false;
+        
+        // Deduplicar por base_id (remove -offer-N e newsale- prefixos)
+        const baseId = getBaseId(tx.hubla_id);
+        if (seenA010BaseIds.has(baseId)) return false;
+        seenA010BaseIds.add(baseId);
+        
+        return true;
       }).length;
 
       // ===== GASTOS ADS =====
@@ -134,15 +147,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Lucro = Faturamento Total - Custo Total
       const lucro = faturamentoTotal - custoTotal;
 
-      // Lucro Operacional (para ROI) = Faturamento Incorporador - Custo Total
-      const lucroOperacional = faturamentoIncorporador - custoTotal;
-
-      // ROI = Faturamento Incorporador / (Faturamento Incorporador - Lucro Operacional)
-      // Simplificando: ROI = Faturamento / Custo quando lucro operacional = fat - custo
+      // ROI = Faturamento Incorporador / Custo Total (em %)
       const roi = custoTotal > 0 ? (faturamentoIncorporador / custoTotal) : 0;
 
-      // ROAS = Custo Semana / Faturamento Incorporador (invertido conforme solicitado)
-      // Nota: Normalmente ROAS = Receita / Custo, mas usuário quer Custo / Receita
+      // ROAS = Custo Total / Faturamento Incorporador
       const roas = faturamentoIncorporador > 0 ? (custoTotal / faturamentoIncorporador) : 0;
 
       // ===== PERÍODO ANTERIOR PARA COMPARAÇÃO =====
@@ -209,13 +217,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const prevFaturamentoTotal = prevFatIncorporador + prevObVitalicio + prevObConstruir + prevFatA010;
 
+      // Vendas A010 período anterior com mesma lógica de deduplicação
+      const prevSeenA010BaseIds = new Set<string>();
       const prevVendasA010 = (prevHubla || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        const isNotOffer = !tx.hubla_id.includes('-offer-');
-        return isA010 && hasValidName && isFirstInstallment && isNotOffer;
+        
+        if (!isA010 || !hasValidName || !isFirstInstallment) return false;
+        
+        const baseId = getBaseId(tx.hubla_id);
+        if (prevSeenA010BaseIds.has(baseId)) return false;
+        prevSeenA010BaseIds.add(baseId);
+        
+        return true;
       }).length;
 
       const { data: prevAds } = await supabase
@@ -272,12 +288,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         roas: {
           value: roas,
           change: calcChange(roas, prevRoas),
-          isPositive: roas <= prevRoas, // Menor ROAS (custo/receita) é melhor
+          isPositive: roas <= prevRoas,
         },
         vendasA010,
         faturamentoIncorporador,
       };
     },
-    refetchInterval: 30000, // 30s para atualização mais rápida
+    refetchInterval: 30000,
   });
 }

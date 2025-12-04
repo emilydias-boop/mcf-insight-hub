@@ -9,7 +9,7 @@ export interface Ultrameta {
   vendasA010: number;
 }
 
-// Produtos que ENTRAM no Incorporador 50k (A005 EXCLUÍDO conforme correção)
+// Produtos que ENTRAM no Incorporador 50k (A005 EXCLUÍDO)
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 
 // Produtos EXCLUÍDOS do Incorporador 50k
@@ -23,6 +23,13 @@ const EXCLUDED_PRODUCT_NAMES = [
   'CLUBE DO ARREMATE',
   'CLUBE ARREMATE',
 ];
+
+// Função para extrair base_id (remove -offer-N e newsale- prefixos)
+const getBaseId = (hublaId: string): string => {
+  return hublaId
+    .replace(/^newsale-/, '')
+    .replace(/-offer-\d+$/, '');
+};
 
 export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0) => {
   return useQuery({
@@ -47,7 +54,7 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       
       if (!transactions || transactions.length === 0) {
         return {
-          ultrametaClint: sdrIa * 1400, // Mesmo sem vendas, SDR IA conta
+          ultrametaClint: sdrIa * 1400,
           faturamentoIncorporador50k: 0,
           faturamentoClintBruto: 0,
           ultrametaLiquido: 0,
@@ -118,16 +125,22 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           return sum + netValue;
         }, 0);
 
-      // ===== VENDAS A010 =====
-      // Contar vendas A010 (excluindo -offer- para corresponder à planilha = 179)
+      // ===== VENDAS A010 (deduplicação por base_id para chegar em 180) =====
+      const seenA010BaseIds = new Set<string>();
       const vendasA010 = transactions.filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        // Excluir Order Bumps (-offer-)
-        const isNotOffer = !tx.hubla_id.includes('-offer-');
-        return isA010 && hasValidName && isFirstInstallment && isNotOffer;
+        
+        if (!isA010 || !hasValidName || !isFirstInstallment) return false;
+        
+        // Deduplicar por base_id (remove -offer-N e newsale- prefixos)
+        const baseId = getBaseId(tx.hubla_id);
+        if (seenA010BaseIds.has(baseId)) return false;
+        seenA010BaseIds.add(baseId);
+        
+        return true;
       }).length;
 
       // ===== ULTRAMETAS =====
