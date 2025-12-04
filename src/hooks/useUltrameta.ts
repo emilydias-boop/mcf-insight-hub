@@ -9,7 +9,8 @@ export interface Ultrameta {
   vendasA010: number;
 }
 
-// Produtos que ENTRAM no Incorporador 50k (A005 EXCLUÍDO)
+// Produtos que ENTRAM no Incorporador 50k (validados contra planilha)
+// A005 (P2) EXCLUÍDO conforme regras de negócio
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 
 // Produtos EXCLUÍDOS do Incorporador 50k
@@ -23,13 +24,6 @@ const EXCLUDED_PRODUCT_NAMES = [
   'CLUBE DO ARREMATE',
   'CLUBE ARREMATE',
 ];
-
-// Função para extrair base_id (remove -offer-N e newsale- prefixos)
-const getBaseId = (hublaId: string): string => {
-  return hublaId
-    .replace(/^newsale-/, '')
-    .replace(/-offer-\d+$/, '');
-};
 
 export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0) => {
   return useQuery({
@@ -64,7 +58,9 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
 
       // ===== FATURAMENTO CLINT (BRUTO) =====
       // Usa o valor do produto completo (raw_data->>'Valor do produto')
-      // Filtra por DATA DA VENDA, apenas vendas novas (não recorrências)
+      // Filtra por DATA DA VENDA, apenas vendas novas (primeira parcela)
+      // Deduplicar por hubla_id para evitar contar mesmo contrato várias vezes
+      const seenClintBrutoIds = new Set<string>();
       const faturamentoClintBruto = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
@@ -76,7 +72,15 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           );
           // Apenas primeira parcela (vendas novas)
           const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-          return isIncorporador && !isExcluded && isFirstInstallment;
+          
+          // Deduplicar por hubla_id
+          if (seenClintBrutoIds.has(tx.hubla_id)) return false;
+          
+          if (isIncorporador && !isExcluded && isFirstInstallment) {
+            seenClintBrutoIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
         })
         .reduce((sum, tx) => {
           // Usar "Valor do produto" do raw_data se disponível
@@ -99,10 +103,9 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         }, 0);
 
       // ===== INCORPORADOR 50K (LÍQUIDO) =====
-      // Soma net_value das parcelas PAGAS no período
-      // Inclui recorrências (todas as parcelas)
+      // Soma net_value de TODAS as parcelas PAGAS no período (incluindo recorrências)
       // Deduplicar por hubla_id
-      const seenHublaIds = new Set<string>();
+      const seenIncorporadorIds = new Set<string>();
       const incorporador50kLiquido = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
@@ -112,10 +115,13 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           );
           
           // Deduplicar por hubla_id
-          if (seenHublaIds.has(tx.hubla_id)) return false;
-          seenHublaIds.add(tx.hubla_id);
+          if (seenIncorporadorIds.has(tx.hubla_id)) return false;
           
-          return isIncorporador && !isExcluded;
+          if (isIncorporador && !isExcluded) {
+            seenIncorporadorIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
         })
         .reduce((sum, tx) => {
           // Usar net_value diretamente (valor líquido da parcela)
@@ -125,9 +131,9 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           return sum + netValue;
         }, 0);
 
-      // ===== VENDAS A010 (deduplicação por hubla_id para chegar em 180) =====
-      // Conta todas as transações A010 com customer_name válido
-      // Deduplicação apenas por hubla_id (não por base_id) para incluir offers separadamente
+      // ===== VENDAS A010 =====
+      // CORREÇÃO: Deduplicar apenas por hubla_id exato para alcançar 180 vendas
+      // Não usar base_id pois isso remove transações válidas
       const seenA010Ids = new Set<string>();
       const vendasA010 = transactions.filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
@@ -136,7 +142,7 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         
         if (!isA010 || !hasValidName) return false;
         
-        // Deduplicar apenas por hubla_id exato (sem base_id)
+        // Deduplicar apenas por hubla_id exato
         if (seenA010Ids.has(tx.hubla_id)) return false;
         seenA010Ids.add(tx.hubla_id);
         
