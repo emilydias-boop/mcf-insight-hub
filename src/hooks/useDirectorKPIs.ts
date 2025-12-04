@@ -34,7 +34,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Buscar todas as transações Hubla no período
       const { data: hublaData } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name')
+        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data')
         .eq('sale_status', 'completed')
         .gte('sale_date', start)
         .lte('sale_date', end + 'T23:59:59');
@@ -90,17 +90,18 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Faturamento Total = Incorporador + OB Vitalício + OB Construir + Faturado A010
       const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
 
-      // ===== VENDAS A010 (contagem única) =====
-      const a010CountIds = new Set<string>();
+      // ===== VENDAS A010 (contagem única por email) =====
+      const a010Emails = new Set<string>();
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        const baseId = tx.hubla_id.split('-offer-')[0].replace('newsale-', '');
-        if (a010CountIds.has(baseId)) return false;
+        // Usar customer_email direto da tabela
+        const customerEmail = tx.customer_email?.toLowerCase() || '';
+        if (customerEmail && a010Emails.has(customerEmail)) return false;
         if (isA010 && hasValidName && isFirstInstallment) {
-          a010CountIds.add(baseId);
+          if (customerEmail) a010Emails.add(customerEmail);
           return true;
         }
         return false;
@@ -166,7 +167,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Buscar dados anteriores para comparação
       const { data: prevHubla } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name')
+        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data')
         .eq('sale_status', 'completed')
         .gte('sale_date', prevStartStr)
         .lte('sale_date', prevEndStr + 'T23:59:59');
@@ -214,16 +215,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const prevFaturamentoTotal = prevFatIncorporador + prevObVitalicio + prevObConstruir + prevFatA010;
 
-      const prevA010Ids = new Set<string>();
+      const prevA010Emails = new Set<string>();
       const prevVendasA010 = (prevHubla || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        const baseId = tx.hubla_id.split('-offer-')[0].replace('newsale-', '');
-        if (prevA010Ids.has(baseId)) return false;
+        const customerEmail = tx.customer_email?.toLowerCase() || '';
+        if (customerEmail && prevA010Emails.has(customerEmail)) return false;
         if (isA010 && hasValidName && isFirstInstallment) {
-          prevA010Ids.add(baseId);
+          if (customerEmail) prevA010Emails.add(customerEmail);
           return true;
         }
         return false;

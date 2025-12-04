@@ -137,8 +137,8 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       }).length;
 
       // ===== ULTRAMETAS =====
-      // Ultrameta Clint = (Vendas A010 × R$ 1.680) + (SDR IA × R$ 700)
-      const ultrametaClint = (vendasA010 * 1680) + (sdrIa * 700);
+      // Ultrameta Clint = (Vendas A010 × R$ 1.680) + (SDR IA × R$ 1.400)
+      const ultrametaClint = (vendasA010 * 1680) + (sdrIa * 1400);
       // Ultrameta Líquido = Vendas A010 × R$ 1.400
       const ultrametaLiquido = vendasA010 * 1400;
 
