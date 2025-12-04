@@ -214,27 +214,23 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       console.log('[TV-SDR] Intermediações por SDR:', Array.from(sdrIntermediacao.entries()));
 
-      // 3. Buscar eventos do webhook de hoje
-      const { data: webhookEvents } = await supabase
+      // 3. Buscar eventos do webhook de hoje - filtrar direto no banco para performance
+      const { data: insideSalesEvents } = await supabase
         .from("webhook_events")
         .select("event_data, created_at")
         .eq("event_type", "deal.stage_changed")
+        .eq("event_data->>deal_origin", "PIPELINE INSIDE SALES")
         .gte("created_at", todayStart.toISOString())
-        .lte("created_at", todayEnd.toISOString());
+        .lte("created_at", todayEnd.toISOString())
+        .limit(5000);
 
-      console.log('[TV-SDR] Total webhook events:', webhookEvents?.length);
-
-      // 2. Filtrar apenas origem "PIPELINE INSIDE SALES"
-      const insideSalesEvents = webhookEvents?.filter(e => {
-        const eventData = e.event_data as any;
-        return eventData?.deal_origin === "PIPELINE INSIDE SALES";
-      }) || [];
-
-      console.log('[TV-SDR] Inside Sales events:', insideSalesEvents.length);
+      console.log('[TV-SDR] Inside Sales events (limit 5000):', insideSalesEvents?.length || 0);
 
       // 3. Novo Lead REAL = criado HOJE (deal_created_at)
+      const events = insideSalesEvents || [];
+      
       const novoLeadEmails = new Set(
-        insideSalesEvents
+        events
           .filter(e => {
             const eventData = e.event_data as any;
             return eventData?.deal_stage === "Novo Lead" && 
@@ -268,7 +264,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       // 5. Agrupar eventos por SDR usando deal_user
       const sdrEventMap = new Map<string, any[]>();
-      insideSalesEvents.forEach(e => {
+      events.forEach(e => {
         const eventData = e.event_data as any;
         const sdrEmail = eventData?.deal_user;
         if (sdrEmail) {
@@ -397,7 +393,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         const emailsInStageA = new Set<string>();
         const emailsInStageB = new Set<string>();
         
-        insideSalesEvents
+        events
           .filter(e => {
             const eventData = e.event_data as any;
             return eventData?.deal_stage === stageName;
