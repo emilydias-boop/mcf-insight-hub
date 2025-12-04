@@ -3,20 +3,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { Filter } from "lucide-react";
 import { FunilLista } from "./FunilLista";
 import { useClintFunnelByLeadType } from "@/hooks/useClintFunnelByLeadType";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRange } from "@/lib/dateHelpers";
+import { cn } from "@/lib/utils";
 
+// Etapas que devem aparecer no funil (sem Novo Lead, que vai no header)
 const DEFAULT_STAGES = [
-  "cf4a369c-c4a6-4299-933d-5ae3dcc39d4b", // Novo Lead
   "a8365215-fd31-4bdc-bbe7-77100fa39e53", // Reunião 01 Agendada
+  "9b8c7d6e-5f4a-3b2c-1a0b-9c8d7e6f5a4b", // No Show (placeholder - ajustar UUID real)
   "34995d75-933e-4d67-b7fc-19fcb8b81680", // Reunião 01 Realizada
   "062927f5-b7a3-496a-9d47-eb03b3d69b10", // Contrato Pago
-  "3a2776e2-a536-4a2a-bb7b-a2f53c8941df", // Venda realizada
+  "r2-agendada-placeholder", // R2 Agendada
+  "r2-realizada-placeholder", // R2 Realizada
+  "3a2776e2-a536-4a2a-bb7b-a2f53c8941df", // Venda Realizada
 ];
+
+// UUID do Novo Lead
+const NOVO_LEAD_STAGE_ID = "cf4a369c-c4a6-4299-933d-5ae3dcc39d4b";
 
 interface FunilDuploProps {
   originId: string;
@@ -64,8 +72,8 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     "A",
     periodStart,
     periodEnd,
-    false, // Sempre usar período histórico com os botões
-    selectedPeriod, // Passar o tipo de período para calcular meta correta
+    false,
+    selectedPeriod,
   );
 
   const { data: etapasLeadB = [], isLoading: isLoadingB } = useClintFunnelByLeadType(
@@ -73,20 +81,34 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     "B",
     periodStart,
     periodEnd,
-    false, // Sempre usar período histórico com os botões
-    selectedPeriod, // Passar o tipo de período para calcular meta correta
+    false,
+    selectedPeriod,
   );
 
   const isLoading = isLoadingA || isLoadingB;
 
-  // Combinar todas as etapas únicas para o filtro
+  // Calcular Novo Lead total (Lead A + Lead B)
+  const novoLeadA = etapasLeadA.find(e => e.stage_id === NOVO_LEAD_STAGE_ID);
+  const novoLeadB = etapasLeadB.find(e => e.stage_id === NOVO_LEAD_STAGE_ID);
+  const totalNovoLead = (novoLeadA?.leads || 0) + (novoLeadB?.leads || 0);
+  const metaNovoLead = (novoLeadA?.meta || 0) + (novoLeadB?.meta || 0);
+  const percentNovoLead = metaNovoLead > 0 ? (totalNovoLead / metaNovoLead) * 100 : 0;
+
+  // Filtrar etapas sem Novo Lead (que vai no header)
+  const etapasLeadASemNovoLead = etapasLeadA.filter(e => e.stage_id !== NOVO_LEAD_STAGE_ID);
+  const etapasLeadBSemNovoLead = etapasLeadB.filter(e => e.stage_id !== NOVO_LEAD_STAGE_ID);
+
+  // Combinar todas as etapas únicas para o filtro (sem Novo Lead)
   const allStages = Array.from(
-    new Set([...etapasLeadA.map((e) => e.stage_id || e.etapa), ...etapasLeadB.map((e) => e.stage_id || e.etapa)]),
+    new Set([
+      ...etapasLeadASemNovoLead.map((e) => e.stage_id || e.etapa), 
+      ...etapasLeadBSemNovoLead.map((e) => e.stage_id || e.etapa)
+    ]),
   );
 
   // Mapear nomes das etapas
   const stageNames: Record<string, string> = {};
-  [...etapasLeadA, ...etapasLeadB].forEach((etapa) => {
+  [...etapasLeadASemNovoLead, ...etapasLeadBSemNovoLead].forEach((etapa) => {
     if (etapa.stage_id) {
       stageNames[etapa.stage_id] = etapa.etapa;
     }
@@ -112,9 +134,16 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
 
   const visibleCount = selectedStages.length;
 
+  // Cor da barra de progresso do Novo Lead
+  const novoLeadProgressColor = percentNovoLead >= 80 
+    ? "bg-success" 
+    : percentNovoLead >= 35 
+      ? "bg-warning" 
+      : "bg-destructive";
+
   return (
     <Card className="bg-card border-border">
-      <CardHeader>
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
           <div className="flex items-center gap-2">
@@ -161,12 +190,43 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {/* Barra de Novo Lead no topo */}
+        <div className="bg-secondary/30 rounded-lg p-4 border border-border">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-semibold text-foreground">Novo Lead (Total)</span>
+            <div className="flex items-center gap-3 text-sm">
+              <span className="text-muted-foreground">
+                {totalNovoLead}/{metaNovoLead || '-'} leads
+              </span>
+              {metaNovoLead > 0 && (
+                <span className={cn(
+                  "font-semibold",
+                  percentNovoLead >= 80 ? "text-success" : percentNovoLead >= 35 ? "text-warning" : "text-destructive"
+                )}>
+                  {percentNovoLead.toFixed(1)}%
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="relative">
+            <Progress 
+              value={metaNovoLead > 0 ? Math.min(percentNovoLead, 100) : 0} 
+              className="h-3 bg-secondary"
+            />
+            <div 
+              className={cn("absolute top-0 left-0 h-3 rounded-full transition-all", novoLeadProgressColor)}
+              style={{ width: `${metaNovoLead > 0 ? Math.min(percentNovoLead, 100) : 0}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Divisão Lead A | Lead B */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
             <FunilLista
               titulo="Leads A"
-              etapas={etapasLeadA}
+              etapas={etapasLeadASemNovoLead}
               selectedStages={selectedStages}
               isLoading={isLoading}
               hideFilter
@@ -175,7 +235,7 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
           <div className="space-y-4">
             <FunilLista
               titulo="Leads B"
-              etapas={etapasLeadB}
+              etapas={etapasLeadBSemNovoLead}
               selectedStages={selectedStages}
               isLoading={isLoading}
               hideFilter

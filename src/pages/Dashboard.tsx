@@ -20,7 +20,7 @@ import { useClintFunnel } from "@/hooks/useClintFunnel";
 import { useUltrameta } from "@/hooks/useUltrameta";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { useDirectorKPIs } from "@/hooks/useDirectorKPIs";
-import { formatCurrency, formatNumber } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
 import type { DashboardWidget } from "@/types/dashboard";
@@ -35,6 +35,7 @@ export default function Dashboard() {
     fim: getCustomWeekEnd(new Date()),
   });
   const [canal, setCanal] = useState('todos');
+  const [sdrIa, setSdrIa] = useState(0); // Estado para SDR IA manual
 
   // Hooks de dados
   const { data: directorKPIs, isLoading: loadingKPIs, error: errorKPIs } = useDirectorKPIs(periodo.inicio, periodo.fim);
@@ -46,7 +47,8 @@ export default function Dashboard() {
     periodo.fim,
     false
   );
-  const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim);
+  // Passar sdrIa para o hook
+  const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim, sdrIa);
 
   // Realtime listener
   useEffect(() => {
@@ -194,7 +196,7 @@ export default function Dashboard() {
 
         {/* Linha 2: Metas (esquerda) + Funil (direita) */}
         <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
-          {/* Coluna Esquerda - Metas */}
+          {/* Coluna Esquerda - Metas com SDR IA */}
           {isWidgetVisible('ultrameta') && (
             <MetasProgress
               ultrametaClint={ultrameta?.ultrametaClint || 0}
@@ -205,6 +207,9 @@ export default function Dashboard() {
               metaUltrametaLiquido={metas.ultrametaLiquido}
               faturamentoLiquido={ultrameta?.faturamentoIncorporador50k || 0}
               metaFaturamentoLiquido={metas.faturamentoLiquido}
+              sdrIa={sdrIa}
+              onSdrIaChange={setSdrIa}
+              vendasA010={ultrameta?.vendasA010 || 0}
               isLoading={loadingUltrameta}
             />
           )}
