@@ -20,16 +20,10 @@ interface DirectorKPIs {
   faturamentoIncorporador: number;
 }
 
-// Produtos do Incorporador 50k (A005 EXCLUÍDO)
+// Produtos do Incorporador 50k (validados contra planilha)
+// A005 (P2) EXCLUÍDO conforme regras de negócio
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
-
-// Função para extrair base_id (remove -offer-N e newsale- prefixos)
-const getBaseId = (hublaId: string): string => {
-  return hublaId
-    .replace(/^newsale-/, '')
-    .replace(/-offer-\d+$/, '');
-};
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
@@ -41,12 +35,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Buscar todas as transações Hubla no período
       const { data: hublaData } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data')
+        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price')
         .eq('sale_status', 'completed')
         .gte('sale_date', start)
         .lte('sale_date', end + 'T23:59:59');
 
       // ===== FATURAMENTO INCORPORADOR (Líquido) =====
+      // Inclui TODAS as parcelas pagas (não só primeira), deduplicando por hubla_id
       const seenIncorporadorIds = new Set<string>();
       const faturamentoIncorporador = (hublaData || [])
         .filter(tx => {
@@ -63,18 +58,32 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== OB ACESSO VITALÍCIO =====
+      const seenObVitalicioIds = new Set<string>();
       const obVitalicio = (hublaData || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
-          return productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
+          const isOB = productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
+          if (seenObVitalicioIds.has(tx.hubla_id)) return false;
+          if (isOB) {
+            seenObVitalicioIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== OB CONSTRUIR PARA ALUGAR =====
+      const seenObConstruirIds = new Set<string>();
       const obConstruir = (hublaData || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
-          return productName.includes('CONSTRUIR') && productName.includes('ALUGAR');
+          const isOB = productName.includes('CONSTRUIR') && productName.includes('ALUGAR');
+          if (seenObConstruirIds.has(tx.hubla_id)) return false;
+          if (isOB) {
+            seenObConstruirIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
@@ -96,9 +105,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ===== FATURAMENTO TOTAL =====
       const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
 
-      // ===== VENDAS A010 (deduplicação por hubla_id para chegar em 180) =====
-      // Conta todas as transações A010 com customer_name válido
-      // Deduplicação apenas por hubla_id (não por base_id) para incluir offers separadamente
+      // ===== VENDAS A010 =====
+      // CORREÇÃO: Deduplicar apenas por hubla_id exato para alcançar 180 vendas
       const seenA010CountIds = new Set<string>();
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
@@ -107,7 +115,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         
         if (!isA010 || !hasValidName) return false;
         
-        // Deduplicar apenas por hubla_id exato (sem base_id)
+        // Deduplicar apenas por hubla_id exato
         if (seenA010CountIds.has(tx.hubla_id)) return false;
         seenA010CountIds.add(tx.hubla_id);
         
@@ -125,7 +133,6 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const gastosAds = adsData?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
 
       // ===== CUSTOS OPERACIONAIS (equipe + escritório) =====
-      // Coluna month é DATE (yyyy-MM-dd), então usar primeiro dia do mês
       const monthDate = format(startOfMonth(startDate || new Date()), 'yyyy-MM-dd');
       const { data: operationalData } = await supabase
         .from('operational_costs')
@@ -191,14 +198,31 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
+      const prevSeenObVitalicioIds = new Set<string>();
       const prevObVitalicio = (prevHubla || [])
-        .filter(tx => (tx.product_name || '').toUpperCase().includes('VITALÍCIO') || (tx.product_name || '').toUpperCase().includes('VITALICIO'))
+        .filter(tx => {
+          const name = (tx.product_name || '').toUpperCase();
+          const isOB = name.includes('VITALÍCIO') || name.includes('VITALICIO');
+          if (prevSeenObVitalicioIds.has(tx.hubla_id)) return false;
+          if (isOB) {
+            prevSeenObVitalicioIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
+      const prevSeenObConstruirIds = new Set<string>();
       const prevObConstruir = (prevHubla || [])
         .filter(tx => {
           const name = (tx.product_name || '').toUpperCase();
-          return name.includes('CONSTRUIR') && name.includes('ALUGAR');
+          const isOB = name.includes('CONSTRUIR') && name.includes('ALUGAR');
+          if (prevSeenObConstruirIds.has(tx.hubla_id)) return false;
+          if (isOB) {
+            prevSeenObConstruirIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 

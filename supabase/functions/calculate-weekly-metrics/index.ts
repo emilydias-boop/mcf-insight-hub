@@ -9,23 +9,28 @@ const corsHeaders = {
 const HUBLA_PLATFORM_FEE = 0.0583;
 const HUBLA_NET_MULTIPLIER = 1 - HUBLA_PLATFORM_FEE; // 0.9417
 
-// Produtos que ENTRAM no Incorporador 50k (apenas códigos A00x específicos)
-const INCORPORADOR_50K_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A008', 'A009'];
+// Produtos que ENTRAM no Incorporador 50k (CORRIGIDO - validado contra planilha)
+// A005 (P2), A002, A004, A006, A008 EXCLUÍDOS
+const INCORPORADOR_50K_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 
 // Mapeamento de preços fixos (BRUTO) para Incorporador 50k
 const INCORPORADOR_PRODUCT_PRICES: Record<string, number> = {
   'A001': 14500,  // MCF INCORPORADOR COMPLETO
-  'A002': 14000,  // MCF INCORPORADOR BÁSICO
   'A003': 7503,   // MCF Plano Anticrise Completo
-  'A004': 5503,   // MCF Plano Anticrise Básico
-  'A006': 2997,   // Renovação Parceiro MCF
   'A009': 19500,  // MCF INCORPORADOR COMPLETO + THE CLUB
   'SÓCIO JANTAR': 297,
   'SOCIO JANTAR': 297,
   'CONTRATO - ANTICRISE': 249,
   'CONTRATO-ANTICRISE': 249,
-  // A000 (Contrato), A005 (P2), A008 (The Club) = preço variável, usar product_price
+  // A000 (Contrato) = preço variável, usar product_price
 };
+
+// Produtos EXCLUÍDOS do Incorporador
+const EXCLUDED_PRODUCT_NAMES = [
+  'A005', 'A006', 'A010', 'A002', 'A004', 'A008',
+  'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS',
+  'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'
+];
 
 // Mapeamento completo de 19 categorias
 const REVENUE_CATEGORIES = [
@@ -38,7 +43,7 @@ const REVENUE_CATEGORIES = [
 
 // Mapeamento de categoria → nome da coluna (quando diferente)
 const COLUMN_NAME_MAP: Record<string, string> = {
-  'contrato': 'contract',  // tabela usa contract_revenue, não contrato_revenue
+  'contrato': 'contract',
 };
 
 // Extrair smartInstallment do raw_data
@@ -58,9 +63,9 @@ function getSmartInstallment(transaction: any): { installment: number | null; in
 }
 
 // Limite para identificar recorrência baseado no valor líquido do seller
-const RECO_VALUE_THRESHOLD = 20; // R$ 20 - valores abaixo são recorrências
+const RECO_VALUE_THRESHOLD = 20;
 
-// Extrair valor líquido do seller dos receivers (movido para cima)
+// Extrair valor líquido do seller dos receivers
 function extractSellerNetValue(transaction: any): number | null {
   const rawData = transaction.raw_data;
   const invoice = rawData?.event?.invoice || rawData?.invoice;
@@ -76,31 +81,16 @@ function extractSellerNetValue(transaction: any): number | null {
 function isFirstInstallment(transaction: any): boolean {
   const { installment } = getSmartInstallment(transaction);
   
-  // Se tem smartInstallment e não é parcela 1 = recorrência
   if (installment !== null && installment > 1) {
     return false;
   }
   
-  // Fallback: verificar pelo valor líquido do seller (RECO tem valor baixo < R$20)
   const sellerNetValue = extractSellerNetValue(transaction);
   if (sellerNetValue !== null && sellerNetValue < RECO_VALUE_THRESHOLD) {
-    return false; // Valor muito baixo = recorrência
+    return false;
   }
   
-  return true; // É venda nova
-}
-
-// Verificar se a transação é um "container" (tem childInvoiceIds = compra principal com OBs)
-function isContainerTransaction(transaction: any): boolean {
-  const rawData = transaction.raw_data;
-  const invoice = rawData?.event?.invoice || rawData?.invoice;
-  const childInvoiceIds = invoice?.childInvoiceIds || [];
-  
-  // É container se NÃO é offer E tem childInvoiceIds
-  const hublaId = transaction.hubla_id || '';
-  const isOffer = hublaId.includes('-offer-');
-  
-  return !isOffer && Array.isArray(childInvoiceIds) && childInvoiceIds.length > 0;
+  return true;
 }
 
 // Verificar se é uma transação de Order Bump (offer)
@@ -110,21 +100,37 @@ function isOfferTransaction(transaction: any): boolean {
 }
 
 function parseValorLiquido(transaction: any): number {
-  // Primeiro, tentar extrair valor líquido do seller dos receivers
   const sellerNetValue = extractSellerNetValue(transaction);
   if (sellerNetValue !== null && sellerNetValue > 0) {
     return sellerNetValue;
   }
   
-  // Fallback: Usar Valor Líquido do Hubla se disponível no raw_data (formato antigo)
   const valorLiquidoStr = transaction.raw_data?.['Valor Líquido'];
   if (valorLiquidoStr) {
     const cleaned = String(valorLiquidoStr).replace(/[^\d.,-]/g, '').replace(',', '.');
     return parseFloat(cleaned) || 0;
   }
   
-  // Último fallback: calcular baseado no product_price
   return (transaction.product_price || 0) * HUBLA_NET_MULTIPLIER;
+}
+
+// Extrair valor bruto do produto
+function parseValorBruto(transaction: any): number {
+  const rawData = transaction.raw_data;
+  
+  // Tentar "Valor do produto" do CSV
+  if (rawData?.['Valor do produto']) {
+    const valorStr = String(rawData['Valor do produto']);
+    return parseFloat(valorStr.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+  }
+  
+  // Tentar subtotalCents do webhook
+  if (rawData?.event?.invoice?.amount?.subtotalCents) {
+    return rawData.event.invoice.amount.subtotalCents / 100;
+  }
+  
+  // Fallback: usar product_price
+  return transaction.product_price || 0;
 }
 
 Deno.serve(async (req) => {
@@ -160,12 +166,10 @@ Deno.serve(async (req) => {
     const ads_cost = dailyCosts?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
     console.log(`💰 Custo de Ads: R$ ${ads_cost.toFixed(2)}`);
 
-    // 2. CUSTOS OPERACIONAIS - apenas ads_cost (simplificado)
     const team_cost = 0;
     const office_cost = 0;
 
-    // 3. BUSCAR TRANSAÇÕES HUBLA DA SEMANA (TODAS AS VENDAS CONFIRMADAS)
-    // Removido filtro de event_type para incluir NewSale e invoice.payment_succeeded
+    // 2. BUSCAR TRANSAÇÕES HUBLA DA SEMANA
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
@@ -173,7 +177,6 @@ Deno.serve(async (req) => {
       .lt('sale_date', `${week_end}T23:59:59Z`)
       .eq('sale_status', 'completed');
 
-    // 4. BUSCAR REEMBOLSOS DA SEMANA (APENAS PARA INFORMAÇÃO)
     const { data: refundedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
@@ -183,214 +186,128 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 5. CONTAR VENDAS A010 (ÚNICA POR CLIENTE, PRIMEIRA PARCELA)
-    // REGRAS ATUALIZADAS:
-    //   - INCLUIR A010 vendido como Order Bump (offer) - são vendas válidas
-    //   - EXCLUIR transações sem customer_name (dados incompletos)
-    //   - DEDUZIR duplicatas usando base_id (hubla_id sem -offer-N)
-    //   - NÃO excluir containers - são vendas A010 válidas que têm OBs juntos
-    
-    // Função para extrair base_id (sem -offer-N e sem newsale-)
-    const getBaseId = (hublaId: string): string => {
-      let baseId = hublaId;
-      // Remover sufixo -offer-N
-      if (baseId.includes('-offer-')) {
-        baseId = baseId.split('-offer-')[0];
-      }
-      // Remover prefixo newsale-
-      if (baseId.startsWith('newsale-')) {
-        baseId = baseId.replace('newsale-', '');
-      }
-      return baseId;
-    };
-    
-    // Filtrar todas transações A010 (incluindo offers = A010 vendido como OB)
-    const a010AllTransactions = completedTransactions?.filter(t => {
+    // 3. CONTAR VENDAS A010 - CORREÇÃO: Deduplicar apenas por hubla_id exato
+    const seenA010Ids = new Set<string>();
+    const a010Transactions = (completedTransactions || []).filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
-      
-      // MUDANÇA 1: NÃO excluir offers - A010 pode ser vendido como OB
-      // MUDANÇA 2: Excluir transações sem customer_name (dados incompletos)
       const hasValidName = t.customer_name && t.customer_name.trim() !== '';
-      if (!hasValidName) return false;
       
-      return isA010;
-    }) || [];
-    
-    // Filtrar apenas primeira parcela (não recorrência)
-    const a010FirstInstallments = a010AllTransactions.filter(t => isFirstInstallment(t));
-    const a010Recurrences = a010AllTransactions.filter(t => !isFirstInstallment(t));
-    
-    // MUDANÇA 3: Deduzir duplicatas usando base_id
-    // Agrupar por base_id e manter apenas uma transação por cliente
-    const uniqueBaseIds = new Map<string, any>();
-    a010FirstInstallments.forEach(t => {
-      const baseId = getBaseId(t.hubla_id);
-      // Se já existe, preferir a transação direta (sem offer) sobre a offer
-      if (!uniqueBaseIds.has(baseId)) {
-        uniqueBaseIds.set(baseId, t);
-      } else {
-        const existing = uniqueBaseIds.get(baseId);
-        const existingIsOffer = existing.hubla_id.includes('-offer-');
-        const currentIsOffer = t.hubla_id.includes('-offer-');
-        // Preferir direto sobre offer
-        if (existingIsOffer && !currentIsOffer) {
-          uniqueBaseIds.set(baseId, t);
-        }
-      }
+      if (!isA010 || !hasValidName) return false;
+      
+      // Deduplicar apenas por hubla_id exato (não usar base_id)
+      if (seenA010Ids.has(t.hubla_id)) return false;
+      seenA010Ids.add(t.hubla_id);
+      
+      return true;
     });
     
-    const a010NewSales = Array.from(uniqueBaseIds.values());
-    const duplicatesRemoved = a010FirstInstallments.length - a010NewSales.length;
+    const vendas_a010 = a010Transactions.length;
+    const faturado_a010 = a010Transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    // Contar transações sem nome para log
-    const a010WithoutName = completedTransactions?.filter(t => {
-      const productName = (t.product_name || '').toUpperCase();
-      const isA010 = t.product_category === 'a010' || productName.includes('A010');
-      const hasValidName = t.customer_name && t.customer_name.trim() !== '';
-      return isA010 && !hasValidName && isFirstInstallment(t);
-    }) || [];
-    
-    // Contar A010 que são offers para log
-    const a010AsOffers = a010NewSales.filter(t => isOfferTransaction(t));
-    
-    const vendas_a010 = a010NewSales.length;
-    const faturado_a010 = a010NewSales.reduce((sum, t) => sum + parseValorLiquido(t), 0);
-    const a010_reco_revenue = a010Recurrences.reduce((sum, t) => sum + parseValorLiquido(t), 0);
-    
-    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas`);
-    console.log(`   ├─ A010 como Order Bump (incluídos): ${a010AsOffers.length}`);
-    console.log(`   ├─ Sem nome (excluídos): ${a010WithoutName.length}`);
-    console.log(`   ├─ Duplicatas removidas: ${duplicatesRemoved}`);
-    console.log(`   └─ Recorrências excluídas: ${a010Recurrences.length}`);
-    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (RECO: R$ ${a010_reco_revenue.toFixed(2)})`);
+    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas (dedup por hubla_id)`);
+    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)}`);
 
-    // 6. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K (apenas produtos A000-A009, APENAS PRIMEIRA PARCELA)
-    const incorporadorTransactions = completedTransactions?.filter(t => {
+    // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORRIGIDO
+    // Apenas produtos: A000, A001, A003, A009
+    // Exclui: A002, A004, A005, A006, A008
+    const seenIncorporadorBrutoIds = new Set<string>();
+    const incorporadorBrutoTransactions = (completedTransactions || []).filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       // Verificar se começa com algum dos códigos válidos
       const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
-      // Apenas primeira parcela
-      return isIncorporador && isFirstInstallment(t);
-    }) || [];
-    
-    // Também contar recorrências do Incorporador para log
-    const incorporadorRecurrences = completedTransactions?.filter(t => {
-      const productName = (t.product_name || '').toUpperCase();
-      const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
-      return isIncorporador && !isFirstInstallment(t);
-    }) || [];
-
-    console.log(`💼 Incorporador 50k: ${incorporadorTransactions.length} vendas novas (${incorporadorRecurrences.length} recorrências excluídas)`);
-
-    // 7. CALCULAR MÉTRICAS INCORPORADOR 50K
-    // Faturamento Clint (BRUTO) - usar preço fixo do mapeamento quando disponível
-    const faturamento_clint = incorporadorTransactions.reduce((sum, t) => {
-      const productName = (t.product_name || '').toUpperCase();
+      // Verificar se está na lista de excluídos
+      const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+      // Apenas primeira parcela para BRUTO
+      const isFirst = isFirstInstallment(t);
       
-      // Tentar encontrar preço fixo no mapeamento
-      let fixedPrice = 0;
-      for (const [key, price] of Object.entries(INCORPORADOR_PRODUCT_PRICES)) {
-        if (productName.includes(key.toUpperCase())) {
-          fixedPrice = price;
-          break;
-        }
-      }
+      if (!isIncorporador || isExcluded || !isFirst) return false;
       
-      // Se encontrou preço fixo, usar; senão usar product_price (caso do A000, A005/P2, A008)
-      const grossValue = fixedPrice > 0 ? fixedPrice : (t.product_price || 0);
-      return sum + grossValue;
+      // Deduplicar
+      if (seenIncorporadorBrutoIds.has(t.hubla_id)) return false;
+      seenIncorporadorBrutoIds.add(t.hubla_id);
+      
+      return true;
+    });
+
+    // FATURAMENTO CLINT (BRUTO) - usar Valor do produto
+    const faturamento_clint = incorporadorBrutoTransactions.reduce((sum, t) => {
+      return sum + parseValorBruto(t);
     }, 0);
 
-    // Incorporador 50k (LÍQUIDO) - soma do valor líquido das parcelas (apenas vendas novas)
-    const incorporador_50k = incorporadorTransactions.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0);
-    
-    // Também somar recorrências do Incorporador para revenue total (mas não contam como vendas novas)
-    const incorporador_reco_revenue = incorporadorRecurrences.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0);
+    console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)} (${incorporadorBrutoTransactions.length} vendas)`);
 
-    console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)}`);
-    console.log(`💰 Incorporador 50k (líquido novas vendas): R$ ${incorporador_50k.toFixed(2)}`);
-    console.log(`💰 Incorporador 50k (líquido recorrências): R$ ${incorporador_reco_revenue.toFixed(2)}`);
-
-    // 8. CALCULAR ORDER BUMPS (APENAS transações -offer- = OBs reais)
-    // IMPORTANTE: OBs são SEMPRE transações com "-offer-" no hubla_id
-    // Transações sem "-offer-" são vendas diretas do produto, NÃO order bumps
-    
-    const ob_construir_alugar_transactions = completedTransactions?.filter(t => {
-      // DEVE ser uma transação -offer- para ser OB
-      if (!isOfferTransaction(t)) return false;
+    // INCORPORADOR 50K (LÍQUIDO) - incluir TODAS as parcelas pagas, não só primeira
+    const seenIncorporadorLiqIds = new Set<string>();
+    const incorporador50kTransactions = (completedTransactions || []).filter(t => {
+      const productName = (t.product_name || '').toUpperCase();
+      const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
+      const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
       
+      if (!isIncorporador || isExcluded) return false;
+      
+      // Deduplicar por hubla_id
+      if (seenIncorporadorLiqIds.has(t.hubla_id)) return false;
+      seenIncorporadorLiqIds.add(t.hubla_id);
+      
+      return true;
+    });
+    
+    const incorporador_50k = incorporador50kTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+
+    console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)} (${incorporador50kTransactions.length} transações)`);
+
+    // 5. CALCULAR ORDER BUMPS (APENAS transações -offer-)
+    const ob_construir_alugar_transactions = (completedTransactions || []).filter(t => {
+      if (!isOfferTransaction(t)) return false;
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
       return category === 'ob_construir_alugar' || 
              productName.includes('CONSTRUIR PARA ALUGAR') ||
              productName.includes('VIVER DE ALUGUEL');
-    }) || [];
+    });
     
-    const ob_vitalicio_transactions = completedTransactions?.filter(t => {
-      // DEVE ser uma transação -offer- para ser OB
+    const ob_vitalicio_transactions = (completedTransactions || []).filter(t => {
       if (!isOfferTransaction(t)) return false;
-      
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
-      return category === 'ob_vitalicio' || 
-             productName.includes('ACESSO VITALIC');
-    }) || [];
+      return category === 'ob_vitalicio' || productName.includes('ACESSO VITALIC');
+    });
     
-    const ob_evento_transactions = completedTransactions?.filter(t => {
-      // DEVE ser uma transação -offer- para ser OB
+    const ob_evento_transactions = (completedTransactions || []).filter(t => {
       if (!isOfferTransaction(t)) return false;
-      
       const productName = (t.product_name || '').toUpperCase();
-      // Normalizar removendo acentos para evitar problemas com IMERSÃO vs IMERSAO
       const normalizedName = productName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const price = t.product_price || 0;
       return normalizedName.includes('IMERSAO PRESENCIAL') && price <= 300;
-    }) || [];
+    });
     
-    const ob_construir_vender_transactions = completedTransactions?.filter(t => {
-      // DEVE ser uma transação -offer- para ser OB
+    const ob_construir_vender_transactions = (completedTransactions || []).filter(t => {
       if (!isOfferTransaction(t)) return false;
       return t.product_category === 'ob_construir_vender';
-    }) || [];
+    });
 
-    const ob_construir_alugar = ob_construir_alugar_transactions.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0
-    );
-    
-    const ob_vitalicio = ob_vitalicio_transactions.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0
-    );
-    
-    const ob_evento = ob_evento_transactions.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0
-    );
-    
-    const ob_construir_vender = ob_construir_vender_transactions.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0
-    );
+    const ob_construir_alugar = ob_construir_alugar_transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    const ob_vitalicio = ob_vitalicio_transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    const ob_evento = ob_evento_transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    const ob_construir_vender = ob_construir_vender_transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
 
     const ob_construir_alugar_sales = ob_construir_alugar_transactions.length;
     const ob_vitalicio_sales = ob_vitalicio_transactions.length;
     const ob_evento_sales = ob_evento_transactions.length;
     const ob_construir_vender_sales = ob_construir_vender_transactions.length;
 
-    console.log(`📦 OB Construir Alugar: ${ob_construir_alugar_sales} vendas (offers), R$ ${ob_construir_alugar.toFixed(2)}`);
-    console.log(`📦 OB Vitalício: ${ob_vitalicio_sales} vendas (offers), R$ ${ob_vitalicio.toFixed(2)}`);
-    console.log(`📦 OB Evento: ${ob_evento_sales} vendas (offers), R$ ${ob_evento.toFixed(2)}`);
-    console.log(`📦 OB Construir Vender: ${ob_construir_vender_sales} vendas (offers), R$ ${ob_construir_vender.toFixed(2)}`);
+    console.log(`📦 OB Construir Alugar: ${ob_construir_alugar_sales} vendas, R$ ${ob_construir_alugar.toFixed(2)}`);
+    console.log(`📦 OB Vitalício: ${ob_vitalicio_sales} vendas, R$ ${ob_vitalicio.toFixed(2)}`);
+    console.log(`📦 OB Evento: ${ob_evento_sales} vendas, R$ ${ob_evento.toFixed(2)}`);
 
-    // 9. CALCULAR RECEITAS POR CATEGORIA (TODAS AS 19)
+    // 6. CALCULAR RECEITAS POR CATEGORIA
     const revenueByCategory: Record<string, { revenue: number; sales: number }> = {};
     
-    // Inicializar todas as categorias
     REVENUE_CATEGORIES.forEach(cat => {
       revenueByCategory[cat] = { revenue: 0, sales: 0 };
     });
 
-    // Somar vendas completadas usando Valor Líquido real do Hubla
     completedTransactions?.forEach(t => {
       const category = t.product_category?.toLowerCase() || 'outros';
       const netValue = parseValorLiquido(t);
@@ -401,50 +318,37 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Log por categoria
-    REVENUE_CATEGORIES.forEach(cat => {
-      const { revenue, sales } = revenueByCategory[cat];
-      if (revenue > 0) {
-        console.log(`   ${cat}: R$ ${revenue.toFixed(2)} (${sales} vendas)`);
-      }
-    });
-
-    // 10. CALCULAR ULTRAMETAS (baseado em vendas A010 NOVAS, excluindo RECOs)
+    // 7. CALCULAR ULTRAMETAS
     const ultrameta_clint = vendas_a010 * 1680;
     const ultrameta_liquido = vendas_a010 * 1400;
 
     console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)} (${vendas_a010} vendas × R$ 1.680)`);
     console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)} (${vendas_a010} vendas × R$ 1.400)`);
 
-    // 11. CALCULAR FATURAMENTO TOTAL (TODOS os valores líquidos da Hubla)
-    const faturamento_total = completedTransactions?.reduce(
+    // 8. CALCULAR FATURAMENTO TOTAL
+    const faturamento_total = (completedTransactions || []).reduce(
       (sum, t) => sum + parseValorLiquido(t), 0
-    ) || 0;
+    );
 
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
 
-    // 12. CALCULAR FATURADO CONTRATO (apenas A000-Contrato e Anticrise)
-    // Incluir de TODAS as categorias (contrato, incorporador, etc)
-    const contractTransactions = completedTransactions?.filter(t => {
+    // 9. CALCULAR FATURADO CONTRATO
+    const contractTransactions = (completedTransactions || []).filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const isA000Contrato = productName.includes('A000') && productName.includes('CONTRATO');
       const isAnticrise = productName.includes('ANTICRISE');
       return isA000Contrato || isAnticrise;
-    }) || [];
+    });
     
-    const contract_revenue = contractTransactions.reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0
-    );
+    const contract_revenue = contractTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     const contract_sales = contractTransactions.length;
     
     console.log(`📋 Faturado Contrato: ${contract_sales} vendas, R$ ${contract_revenue.toFixed(2)}`);
 
-    // 13. CALCULAR CUSTO REAL (incluir todos OBs)
+    // 10. CALCULAR CUSTO REAL
     const custo_real = ads_cost - (faturado_a010 + ob_construir_alugar + ob_vitalicio + ob_evento + ob_construir_vender);
 
-    console.log(`💸 Custo Real: R$ ${custo_real.toFixed(2)}`);
-
-    // 14. CALCULAR MÉTRICAS DERIVADAS (fórmulas corrigidas)
+    // 11. CALCULAR MÉTRICAS DERIVADAS
     const operating_cost = ads_cost + team_cost + office_cost;
     const lucro_operacional = faturamento_total - operating_cost;
     
@@ -454,25 +358,19 @@ Deno.serve(async (req) => {
     const cpl = vendas_a010 > 0 ? (ads_cost / vendas_a010) : 0;
     const cplr = vendas_a010 > 0 ? (custo_real / vendas_a010) : 0;
 
-    console.log(`📊 ROI: ${roi.toFixed(2)}%`);
-    console.log(`📊 CIR: ${cir.toFixed(2)}%`);
-    console.log(`📊 ROAS: ${roas.toFixed(2)}`);
     console.log(`📊 CPL: R$ ${cpl.toFixed(2)}`);
-    console.log(`📊 CPLR: R$ ${cplr.toFixed(2)}`);
 
-    // Calcular gross revenue e platform fees para informação
-    const gross_revenue = completedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
-    const net_revenue = completedTransactions?.reduce((sum, t) => sum + parseValorLiquido(t), 0) || 0;
+    // 12. PREPARAR DADOS PARA UPSERT
+    const gross_revenue = (completedTransactions || []).reduce((sum, t) => sum + (t.product_price || 0), 0);
+    const net_revenue = faturamento_total;
     const platform_fees = gross_revenue - net_revenue;
-    const refunds_amount = refundedTransactions?.reduce((sum, t) => sum + (t.product_price || 0), 0) || 0;
+    const refunds_amount = (refundedTransactions || []).reduce((sum, t) => sum + (t.product_price || 0), 0);
 
-    // 15. PREPARAR DADOS PARA UPSERT
     const metricsData: any = {
       start_date: week_start,
       end_date: week_end,
       week_label: `${week_start} - ${week_end}`,
       
-      // Custos
       ads_cost,
       team_cost,
       office_cost,
@@ -480,7 +378,6 @@ Deno.serve(async (req) => {
       operating_cost,
       real_cost: custo_real,
       
-      // Novas métricas
       faturamento_clint,
       incorporador_50k,
       faturamento_total,
@@ -490,22 +387,19 @@ Deno.serve(async (req) => {
       cpl,
       cplr,
       
-      // Order Bumps separados
       ob_construir_alugar_revenue: ob_construir_alugar,
-      ob_construir_alugar_sales: ob_construir_alugar_sales,
+      ob_construir_alugar_sales,
       ob_vitalicio_revenue: ob_vitalicio,
-      ob_vitalicio_sales: ob_vitalicio_sales,
+      ob_vitalicio_sales,
       ob_evento_revenue: ob_evento,
-      ob_evento_sales: ob_evento_sales,
+      ob_evento_sales,
       ob_construir_revenue: ob_construir_vender,
       ob_construir_sales: ob_construir_vender_sales,
       
-      // Contratos
       contract_revenue,
       contract_sales,
       
-      // Métricas antigas (manter compatibilidade)
-      clint_revenue: faturamento_clint, // Receita BRUTA Incorporador 50k (preço cheio)
+      clint_revenue: faturamento_clint,
       total_revenue: faturamento_total,
       operating_profit: lucro_operacional,
       roi,
@@ -517,7 +411,6 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
 
-    // Adicionar receitas por categoria (19 categorias)
     REVENUE_CATEGORIES.forEach(cat => {
       const { revenue, sales } = revenueByCategory[cat];
       const columnName = COLUMN_NAME_MAP[cat] || cat;
@@ -525,24 +418,16 @@ Deno.serve(async (req) => {
       metricsData[`${columnName}_sales`] = sales;
     });
 
-    // IMPORTANTE: Sobrescrever contract_revenue com o valor calculado manualmente
-    // (não usar o da categoria 'contrato' que vem de product_category)
     metricsData.contract_revenue = contract_revenue;
     metricsData.contract_sales = contract_sales;
-    
-    // IMPORTANTE: Sobrescrever a010_sales e a010_revenue com valores corrigidos
-    // (excluindo containers e offers, apenas vendas diretas)
     metricsData.a010_sales = vendas_a010;
     metricsData.a010_revenue = faturado_a010;
-    
-    // IMPORTANTE: Sobrescrever OB values com os calculados corretamente
-    // (apenas transações -offer-)
     metricsData.ob_construir_alugar_revenue = ob_construir_alugar;
     metricsData.ob_construir_alugar_sales = ob_construir_alugar_sales;
     metricsData.ob_vitalicio_revenue = ob_vitalicio;
     metricsData.ob_vitalicio_sales = ob_vitalicio_sales;
 
-    // 16. UPSERT EM WEEKLY_METRICS
+    // 13. UPSERT EM WEEKLY_METRICS
     const { data, error } = await supabase
       .from('weekly_metrics')
       .upsert(metricsData, {
@@ -567,21 +452,15 @@ Deno.serve(async (req) => {
         data,
         summary: {
           vendas_a010,
-          a010_recorrencias_excluidas: a010Recurrences.length,
           faturado_a010,
-          a010_reco_revenue,
           faturamento_clint,
           incorporador_50k,
-          incorporador_recorrencias_excluidas: incorporadorRecurrences.length,
-          incorporador_reco_revenue,
           ob_construir_alugar,
           ob_construir_alugar_sales,
           ob_vitalicio,
           ob_vitalicio_sales,
           ob_evento,
           ob_evento_sales,
-          ob_construir_vender,
-          ob_construir_vender_sales,
           contract_revenue,
           contract_sales,
           faturamento_total,
@@ -593,9 +472,6 @@ Deno.serve(async (req) => {
           lucro_operacional,
           ultrameta_clint,
           ultrameta_liquido,
-          roi: `${roi.toFixed(2)}%`,
-          roas: roas.toFixed(2),
-          cir: `${cir.toFixed(2)}%`,
           cpl: `R$ ${cpl.toFixed(2)}`,
           cplr: `R$ ${cplr.toFixed(2)}`,
         }
