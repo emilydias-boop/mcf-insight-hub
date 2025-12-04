@@ -50,28 +50,44 @@ export default function Dashboard() {
   // Passar sdrIa para o hook
   const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim, sdrIa);
 
-  // Realtime listener
+  // Realtime listeners para atualização automática
   useEffect(() => {
-    const channel = supabase
+    // Listener para weekly_metrics
+    const metricsChannel = supabase
       .channel('weekly-metrics-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'weekly_metrics' },
-        (payload) => {
-          console.log('📊 Dados atualizados em tempo real:', payload);
+        () => {
           queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
           queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
           queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+        }
+      )
+      .subscribe();
+
+    // Listener para hubla_transactions (vendas em tempo real)
+    const hublaChannel = supabase
+      .channel('hubla-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'hubla_transactions' },
+        (payload) => {
+          console.log('💰 Nova venda Hubla:', payload);
+          queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+          queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+          queryClient.invalidateQueries({ queryKey: ['a010-novo-lead'] });
           toast({
-            title: "📊 Dados atualizados",
-            description: "Novas métricas foram recebidas!",
+            title: "💰 Nova venda registrada",
+            description: "Os dados foram atualizados automaticamente!",
           });
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(metricsChannel);
+      supabase.removeChannel(hublaChannel);
     };
   }, [queryClient, toast]);
 

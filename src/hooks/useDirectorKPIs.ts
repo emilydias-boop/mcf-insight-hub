@@ -20,9 +20,9 @@ interface DirectorKPIs {
   faturamentoIncorporador: number;
 }
 
-// Produtos do Incorporador 50k
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A009'];
-const EXCLUDED_PRODUCT_NAMES = ['A006', 'A010', 'IMERSÃO SÓCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE'];
+// Produtos do Incorporador 50k (A005 EXCLUÍDO conforme correção)
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
+const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE'];
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
@@ -90,13 +90,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Faturamento Total = Incorporador + OB Vitalício + OB Construir + Faturado A010
       const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
 
-      // ===== VENDAS A010 (contagem por transação, incluindo duplicatas da planilha) =====
+      // ===== VENDAS A010 (contagem por transação, excluindo -offer- para chegar em 179) =====
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        return isA010 && hasValidName && isFirstInstallment;
+        // Excluir Order Bumps (-offer-) para corresponder à planilha
+        const isNotOffer = !tx.hubla_id.includes('-offer-');
+        return isA010 && hasValidName && isFirstInstallment && isNotOffer;
       }).length;
 
       // ===== GASTOS ADS =====
@@ -212,7 +214,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
-        return isA010 && hasValidName && isFirstInstallment;
+        const isNotOffer = !tx.hubla_id.includes('-offer-');
+        return isA010 && hasValidName && isFirstInstallment && isNotOffer;
       }).length;
 
       const { data: prevAds } = await supabase
@@ -275,6 +278,6 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         faturamentoIncorporador,
       };
     },
-    refetchInterval: 60000,
+    refetchInterval: 30000, // 30s para atualização mais rápida
   });
 }

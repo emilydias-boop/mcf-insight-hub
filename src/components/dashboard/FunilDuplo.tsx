@@ -6,11 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Filter } from "lucide-react";
 import { FunilLista } from "./FunilLista";
 import { useClintFunnelByLeadType } from "@/hooks/useClintFunnelByLeadType";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRange } from "@/lib/dateHelpers";
+import { useEffect } from "react";
 
-// Etapas que devem aparecer no funil (sem Novo Lead, que vai no header)
+// Etapas que devem aparecer no funil (sem Novo Lead, que vai acima)
 const DEFAULT_STAGES = [
   "a8365215-fd31-4bdc-bbe7-77100fa39e53", // Reunião 01 Agendada
   "9b8c7d6e-5f4a-3b2c-1a0b-9c8d7e6f5a4b", // No Show (placeholder - ajustar UUID real)
@@ -20,9 +23,6 @@ const DEFAULT_STAGES = [
   "r2-realizada-placeholder", // R2 Realizada
   "3a2776e2-a536-4a2a-bb7b-a2f53c8941df", // Venda Realizada
 ];
-
-// UUID do Novo Lead
-const NOVO_LEAD_STAGE_ID = "cf4a369c-c4a6-4299-933d-5ae3dcc39d4b";
 
 interface FunilDuploProps {
   originId: string;
@@ -35,7 +35,8 @@ type PeriodType = "hoje" | "semana" | "mes";
 
 export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: FunilDuploProps) {
   const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("hoje");
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("semana");
+  const queryClient = useQueryClient();
 
   // Calcular datas baseado no período selecionado
   const { periodStart, periodEnd } = useMemo(() => {
@@ -65,6 +66,52 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     }
   }, [selectedPeriod, weekStart]);
 
+  // ===== NOVO LEAD = Vendas A010 de Hubla =====
+  const { data: novoLeadCount = 0 } = useQuery({
+    queryKey: ['a010-novo-lead', selectedPeriod, periodStart.toISOString(), periodEnd.toISOString()],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('hubla_transactions')
+        .select('hubla_id, customer_name, installment_number, product_name, product_category')
+        .eq('sale_status', 'completed')
+        .gte('sale_date', periodStart.toISOString())
+        .lte('sale_date', periodEnd.toISOString());
+
+      if (!data) return 0;
+
+      // Contar vendas A010 (excluindo -offer-)
+      const a010Sales = data.filter(tx => {
+        const productName = (tx.product_name || '').toUpperCase();
+        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+        const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
+        const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
+        const isNotOffer = !tx.hubla_id.includes('-offer-');
+        return isA010 && hasValidName && isFirstInstallment && isNotOffer;
+      });
+
+      return a010Sales.length;
+    },
+    refetchInterval: 30000, // 30s
+  });
+
+  // Realtime listener para hubla_transactions
+  useEffect(() => {
+    const channel = supabase
+      .channel('funil-hubla-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'hubla_transactions' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['a010-novo-lead'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   const { data: etapasLeadA = [], isLoading: isLoadingA } = useClintFunnelByLeadType(
     originId,
     "A",
@@ -85,17 +132,11 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
 
   const isLoading = isLoadingA || isLoadingB;
 
-  // Filtrar etapas sem Novo Lead
-  const etapasLeadASemNovoLead = etapasLeadA.filter(e => e.stage_id !== NOVO_LEAD_STAGE_ID);
-  const etapasLeadBSemNovoLead = etapasLeadB.filter(e => e.stage_id !== NOVO_LEAD_STAGE_ID);
+  // Filtrar etapas (todas exceto placeholders inexistentes)
+  const etapasLeadASemNovoLead = etapasLeadA.filter(e => e.stage_id !== "cf4a369c-c4a6-4299-933d-5ae3dcc39d4b");
+  const etapasLeadBSemNovoLead = etapasLeadB.filter(e => e.stage_id !== "cf4a369c-c4a6-4299-933d-5ae3dcc39d4b");
 
-  // Buscar dados do Novo Lead (total de ambos os tipos)
-  const novoLeadA = etapasLeadA.find(e => e.stage_id === NOVO_LEAD_STAGE_ID);
-  const novoLeadB = etapasLeadB.find(e => e.stage_id === NOVO_LEAD_STAGE_ID);
-  const novoLeadTotal = (novoLeadA?.leads || 0) + (novoLeadB?.leads || 0);
-  const novoLeadMeta = (novoLeadA?.meta || 0) + (novoLeadB?.meta || 0);
-
-  // Combinar todas as etapas únicas para o filtro (sem Novo Lead)
+  // Combinar todas as etapas únicas para o filtro
   const allStages = Array.from(
     new Set([
       ...etapasLeadASemNovoLead.map((e) => e.stage_id || e.etapa), 
@@ -135,13 +176,7 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
-            <span className="text-sm text-muted-foreground">
-              Novo Lead: <span className="font-semibold text-foreground">{novoLeadTotal}</span>
-              {novoLeadMeta > 0 && <span>/{novoLeadMeta}</span>}
-            </span>
-          </div>
+          <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
           <div className="flex items-center gap-2">
             <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as PeriodType)}>
               <SelectTrigger className="w-auto h-8 min-w-[200px]">
@@ -187,6 +222,14 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
         </div>
       </CardHeader>
       <CardContent>
+        {/* Linha do Novo Lead (Vendas A010) acima da divisão */}
+        <div className="mb-4 p-3 bg-muted/50 rounded-lg border border-border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">Novo Lead (Vendas A010)</span>
+            <span className="text-lg font-bold text-foreground">{novoLeadCount}</span>
+          </div>
+        </div>
+
         {/* Divisão Lead A | Lead B com divisor central */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
           <div className="pr-4 md:border-r border-border">
