@@ -186,18 +186,32 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 3. CONTAR VENDAS A010 - CORREÇÃO: Deduplicar apenas por hubla_id exato
+    // 3. CONTAR VENDAS A010 - CORREÇÃO FINAL:
+    // - Excluir transações -offer- (são Order Bumps, não vendas A010)
+    // - Excluir newsale- sem customer_email (duplicatas/incompletos)
+    // - Requer customer_name válido
+    // - Deduplicar por hubla_id
     const seenA010Ids = new Set<string>();
     const a010Transactions = (completedTransactions || []).filter(t => {
+      const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
+      
+      if (!isA010) return false;
+      
+      // Excluir transações -offer- (são Order Bumps vendidos junto com outros produtos)
+      if (hublaId.includes('-offer-')) return false;
+      
+      // Excluir newsale- sem customer_email (registros duplicados/incompletos)
+      if (hublaId.startsWith('newsale-') && !t.customer_email) return false;
+      
+      // Requer customer_name válido
       const hasValidName = t.customer_name && t.customer_name.trim() !== '';
+      if (!hasValidName) return false;
       
-      if (!isA010 || !hasValidName) return false;
-      
-      // Deduplicar apenas por hubla_id exato (não usar base_id)
-      if (seenA010Ids.has(t.hubla_id)) return false;
-      seenA010Ids.add(t.hubla_id);
+      // Deduplicar por hubla_id exato
+      if (seenA010Ids.has(hublaId)) return false;
+      seenA010Ids.add(hublaId);
       
       return true;
     });
@@ -205,27 +219,36 @@ Deno.serve(async (req) => {
     const vendas_a010 = a010Transactions.length;
     const faturado_a010 = a010Transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas (dedup por hubla_id)`);
+    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)}`);
 
-    // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORRIGIDO
+    // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORREÇÃO FINAL
     // Apenas produtos: A000, A001, A003, A009
-    // Exclui: A002, A004, A005, A006, A008
+    // Exclui: A002, A004, A005, A006, A008, newsale- sem dados, -offer-
     const seenIncorporadorBrutoIds = new Set<string>();
     const incorporadorBrutoTransactions = (completedTransactions || []).filter(t => {
+      const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
-      // Verificar se começa com algum dos códigos válidos
+      
+      // Excluir -offer- (são Order Bumps)
+      if (hublaId.includes('-offer-')) return false;
+      
+      // Excluir newsale- sem customer_email ou customer_name
+      if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) return false;
+      
+      // Verificar se é produto Incorporador válido
       const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
-      // Verificar se está na lista de excluídos
       const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+      
+      if (!isIncorporador || isExcluded) return false;
+      
       // Apenas primeira parcela para BRUTO
       const isFirst = isFirstInstallment(t);
+      if (!isFirst) return false;
       
-      if (!isIncorporador || isExcluded || !isFirst) return false;
-      
-      // Deduplicar
-      if (seenIncorporadorBrutoIds.has(t.hubla_id)) return false;
-      seenIncorporadorBrutoIds.add(t.hubla_id);
+      // Deduplicar por hubla_id
+      if (seenIncorporadorBrutoIds.has(hublaId)) return false;
+      seenIncorporadorBrutoIds.add(hublaId);
       
       return true;
     });
@@ -237,18 +260,32 @@ Deno.serve(async (req) => {
 
     console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)} (${incorporadorBrutoTransactions.length} vendas)`);
 
-    // INCORPORADOR 50K (LÍQUIDO) - incluir TODAS as parcelas pagas, não só primeira
+    // INCORPORADOR 50K (LÍQUIDO) - CORREÇÃO FINAL
+    // Incluir todas parcelas pagas, mas excluir transações inválidas
     const seenIncorporadorLiqIds = new Set<string>();
     const incorporador50kTransactions = (completedTransactions || []).filter(t => {
+      const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
+      
+      // Excluir -offer- (são Order Bumps)
+      if (hublaId.includes('-offer-')) return false;
+      
+      // Excluir newsale- sem customer_email ou customer_name
+      if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) return false;
+      
+      // Excluir transações com net_value = 0 ou NULL
+      const netValue = parseValorLiquido(t);
+      if (!netValue || netValue <= 0) return false;
+      
+      // Verificar se é produto Incorporador válido
       const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
       const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
       
       if (!isIncorporador || isExcluded) return false;
       
       // Deduplicar por hubla_id
-      if (seenIncorporadorLiqIds.has(t.hubla_id)) return false;
-      seenIncorporadorLiqIds.add(t.hubla_id);
+      if (seenIncorporadorLiqIds.has(hublaId)) return false;
+      seenIncorporadorLiqIds.add(hublaId);
       
       return true;
     });
