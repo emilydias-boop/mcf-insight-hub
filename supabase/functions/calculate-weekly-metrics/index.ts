@@ -170,18 +170,19 @@ Deno.serve(async (req) => {
     const office_cost = 0;
 
     // 2. BUSCAR TRANSAÇÕES HUBLA DA SEMANA
+    // CORREÇÃO: usar .lte() para incluir todas vendas do último dia
     const { data: completedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', `${week_start}T00:00:00Z`)
-      .lt('sale_date', `${week_end}T23:59:59Z`)
+      .lte('sale_date', `${week_end}T23:59:59.999Z`)
       .eq('sale_status', 'completed');
 
     const { data: refundedTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', `${week_start}T00:00:00Z`)
-      .lt('sale_date', `${week_end}T23:59:59Z`)
+      .lte('sale_date', `${week_end}T23:59:59.999Z`)
       .eq('event_type', 'invoice.refunded');
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
