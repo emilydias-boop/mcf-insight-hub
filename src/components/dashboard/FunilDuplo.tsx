@@ -73,33 +73,31 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
       .replace(/-offer-\d+$/, '');
   };
 
-  // ===== NOVO LEAD = Vendas A010 de Hubla (deduplicação por base_id) =====
+   // ===== NOVO LEAD = Vendas A010 de Hubla (deduplicação por hubla_id) =====
   const { data: novoLeadCount = 0 } = useQuery({
     queryKey: ['a010-novo-lead', selectedPeriod, periodStart.toISOString(), periodEnd.toISOString()],
     queryFn: async () => {
       const { data } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, customer_name, installment_number, product_name, product_category')
+        .select('hubla_id, customer_name, product_name, product_category')
         .eq('sale_status', 'completed')
         .gte('sale_date', periodStart.toISOString())
         .lte('sale_date', periodEnd.toISOString());
 
       if (!data) return 0;
 
-      // Contar vendas A010 (deduplicação por base_id para chegar em 180)
-      const seenBaseIds = new Set<string>();
+      // Contar vendas A010 (deduplicação por hubla_id para chegar em 180)
+      const seenIds = new Set<string>();
       const a010Sales = data.filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
         
-        if (!isA010 || !hasValidName || !isFirstInstallment) return false;
+        if (!isA010 || !hasValidName) return false;
         
-        // Deduplicar por base_id
-        const baseId = getBaseId(tx.hubla_id);
-        if (seenBaseIds.has(baseId)) return false;
-        seenBaseIds.add(baseId);
+        // Deduplicar por hubla_id exato
+        if (seenIds.has(tx.hubla_id)) return false;
+        seenIds.add(tx.hubla_id);
         
         return true;
       });

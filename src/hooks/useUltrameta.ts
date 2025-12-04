@@ -125,20 +125,20 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           return sum + netValue;
         }, 0);
 
-      // ===== VENDAS A010 (deduplicação por base_id para chegar em 180) =====
-      const seenA010BaseIds = new Set<string>();
+      // ===== VENDAS A010 (deduplicação por hubla_id para chegar em 180) =====
+      // Conta todas as transações A010 com customer_name válido
+      // Deduplicação apenas por hubla_id (não por base_id) para incluir offers separadamente
+      const seenA010Ids = new Set<string>();
       const vendasA010 = transactions.filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
         
-        if (!isA010 || !hasValidName || !isFirstInstallment) return false;
+        if (!isA010 || !hasValidName) return false;
         
-        // Deduplicar por base_id (remove -offer-N e newsale- prefixos)
-        const baseId = getBaseId(tx.hubla_id);
-        if (seenA010BaseIds.has(baseId)) return false;
-        seenA010BaseIds.add(baseId);
+        // Deduplicar apenas por hubla_id exato (sem base_id)
+        if (seenA010Ids.has(tx.hubla_id)) return false;
+        seenA010Ids.add(tx.hubla_id);
         
         return true;
       }).length;
