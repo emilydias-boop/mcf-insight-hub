@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, startOfMonth } from "date-fns";
 
 interface DirectorKPI {
   value: number;
@@ -79,14 +79,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURADO A010 =====
-      const seenA010Ids = new Set<string>();
+      const seenA010FatIds = new Set<string>();
       const faturadoA010 = (hublaData || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
           const isA010 = tx.product_category === 'a010' || productName.includes('A010');
-          if (seenA010Ids.has(tx.hubla_id)) return false;
+          if (seenA010FatIds.has(tx.hubla_id)) return false;
           if (isA010) {
-            seenA010Ids.add(tx.hubla_id);
+            seenA010FatIds.add(tx.hubla_id);
             return true;
           }
           return false;
@@ -96,20 +96,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ===== FATURAMENTO TOTAL =====
       const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
 
-      // ===== VENDAS A010 (deduplicação por base_id para chegar em 180) =====
-      const seenA010BaseIds = new Set<string>();
+      // ===== VENDAS A010 (deduplicação por hubla_id para chegar em 180) =====
+      // Conta todas as transações A010 com customer_name válido
+      // Deduplicação apenas por hubla_id (não por base_id) para incluir offers separadamente
+      const seenA010CountIds = new Set<string>();
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
         
-        if (!isA010 || !hasValidName || !isFirstInstallment) return false;
+        if (!isA010 || !hasValidName) return false;
         
-        // Deduplicar por base_id (remove -offer-N e newsale- prefixos)
-        const baseId = getBaseId(tx.hubla_id);
-        if (seenA010BaseIds.has(baseId)) return false;
-        seenA010BaseIds.add(baseId);
+        // Deduplicar apenas por hubla_id exato (sem base_id)
+        if (seenA010CountIds.has(tx.hubla_id)) return false;
+        seenA010CountIds.add(tx.hubla_id);
         
         return true;
       }).length;
@@ -125,11 +125,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const gastosAds = adsData?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
 
       // ===== CUSTOS OPERACIONAIS (equipe + escritório) =====
-      const monthStr = format(startDate || new Date(), 'yyyy-MM');
+      // Coluna month é DATE (yyyy-MM-dd), então usar primeiro dia do mês
+      const monthDate = format(startOfMonth(startDate || new Date()), 'yyyy-MM-dd');
       const { data: operationalData } = await supabase
         .from('operational_costs')
         .select('amount, cost_type')
-        .eq('month', monthStr);
+        .eq('month', monthDate);
 
       const custoEquipe = operationalData?.filter(c => c.cost_type === 'team').reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
       const custoEscritorio = operationalData?.filter(c => c.cost_type === 'office').reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
@@ -201,14 +202,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      const prevSeenA010Ids = new Set<string>();
+      const prevSeenA010FatIds = new Set<string>();
       const prevFatA010 = (prevHubla || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
           const isA010 = tx.product_category === 'a010' || productName.includes('A010');
-          if (prevSeenA010Ids.has(tx.hubla_id)) return false;
+          if (prevSeenA010FatIds.has(tx.hubla_id)) return false;
           if (isA010) {
-            prevSeenA010Ids.add(tx.hubla_id);
+            prevSeenA010FatIds.add(tx.hubla_id);
             return true;
           }
           return false;
@@ -218,18 +219,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevFaturamentoTotal = prevFatIncorporador + prevObVitalicio + prevObConstruir + prevFatA010;
 
       // Vendas A010 período anterior com mesma lógica de deduplicação
-      const prevSeenA010BaseIds = new Set<string>();
+      const prevSeenA010CountIds = new Set<string>();
       const prevVendasA010 = (prevHubla || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
         
-        if (!isA010 || !hasValidName || !isFirstInstallment) return false;
+        if (!isA010 || !hasValidName) return false;
         
-        const baseId = getBaseId(tx.hubla_id);
-        if (prevSeenA010BaseIds.has(baseId)) return false;
-        prevSeenA010BaseIds.add(baseId);
+        if (prevSeenA010CountIds.has(tx.hubla_id)) return false;
+        prevSeenA010CountIds.add(tx.hubla_id);
         
         return true;
       }).length;
