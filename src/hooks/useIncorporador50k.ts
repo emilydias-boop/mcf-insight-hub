@@ -1,28 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-// Categorias que ENTRAM no Incorporador 50k
-// A006 (renovação) é EXCLUÍDO
-const INCORPORADOR_CATEGORIES = [
-  'incorporador',
-  'contrato-anticrise',
-];
+// Produtos que ENTRAM no Incorporador 50k
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A009'];
 
-// Categorias explicitamente excluídas
-const EXCLUDED_CATEGORIES = [
-  'renovacao',
-  'imersao_socios',
-  'efeito_alavanca',
-  'clube_arremate',
-  'a010',
-  'ob_construir_alugar',
-  'ob_vitalicio',
-  'ob_evento',
+// Produtos EXCLUÍDOS
+const EXCLUDED_PRODUCT_NAMES = [
+  'A006', // Renovação
+  'A010', // A010 é separado
+  'IMERSÃO SÓCIOS',
+  'IMERSAO SOCIOS',
+  'EFEITO ALAVANCA',
+  'CLUBE DO ARREMATE',
+  'CLUBE ARREMATE',
 ];
 
 export interface Incorporador50kData {
-  total: number;
-  netTotal: number;
+  total: number;           // Faturamento Bruto (Valor do Produto completo)
+  netTotal: number;        // Incorporador 50k Líquido (net_value das parcelas)
   transactionCount: number;
   transactions: {
     id: string;
@@ -36,6 +31,7 @@ export interface Incorporador50kData {
     installment_number: number;
     total_installments: number;
     is_offer: boolean;
+    valor_produto: number;  // Valor do produto completo
   }[];
 }
 
@@ -45,7 +41,7 @@ export const useIncorporador50k = (startDate?: Date, endDate?: Date) => {
     queryFn: async (): Promise<Incorporador50kData> => {
       let query = supabase
         .from('hubla_transactions')
-        .select('id, hubla_id, product_name, product_category, product_price, net_value, customer_name, sale_date, installment_number, total_installments, is_offer, sale_status')
+        .select('id, hubla_id, product_name, product_category, product_price, net_value, customer_name, sale_date, installment_number, total_installments, is_offer, sale_status, raw_data')
         .eq('sale_status', 'completed')
         .order('sale_date', { ascending: false });
 
@@ -60,73 +56,91 @@ export const useIncorporador50k = (startDate?: Date, endDate?: Date) => {
 
       if (error) throw error;
 
-      // Filtrar apenas transações válidas para Incorporador 50k
+      // Filtrar apenas produtos válidos do Incorporador 50k
       const validTransactions = (data || []).filter(tx => {
-        const category = tx.product_category?.toLowerCase() || '';
+        const productName = (tx.product_name || '').toUpperCase();
         
-        // Verificar se está nas categorias incluídas
-        const isIncluded = INCORPORADOR_CATEGORIES.some(cat => 
-          category === cat || category.includes(cat)
+        // Verificar se é produto válido
+        const isIncorporador = INCORPORADOR_PRODUCTS.some(code => 
+          productName.startsWith(code)
         );
         
-        // Verificar se não está nas categorias excluídas
-        const isExcluded = EXCLUDED_CATEGORIES.some(cat => 
-          category === cat || category.includes(cat)
+        // Excluir produtos específicos
+        const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => 
+          productName.includes(name.toUpperCase())
         );
         
-        // Verificar pelo nome do produto também (casos especiais)
-        const productName = tx.product_name?.toUpperCase() || '';
-        
-        // A006 é renovação, excluir
-        if (productName.includes('A006') || productName.includes('RENOVAÇÃO PARCEIRO')) {
-          return false;
-        }
-        
-        // Imersão Sócios não conta
-        if (productName.includes('IMERSÃO SÓCIOS') || productName.includes('IMERSAO SOCIOS')) {
-          return false;
-        }
-        
-        // Efeito Alavanca e Clube Arremate não contam
-        if (productName.includes('EFEITO ALAVANCA') || productName.includes('CLUBE')) {
-          return false;
-        }
-        
-        return isIncluded && !isExcluded;
+        return isIncorporador && !isExcluded;
       });
 
-      // Calcular totais usando net_value (valor líquido corrigido)
-      const netTotal = validTransactions.reduce((sum, tx) => {
-        // Usar net_value se disponível, senão calcular aproximadamente
+      // Deduplicar por hubla_id para evitar contagem dupla
+      const seenHublaIds = new Set<string>();
+      const uniqueTransactions = validTransactions.filter(tx => {
+        if (seenHublaIds.has(tx.hubla_id)) return false;
+        seenHublaIds.add(tx.hubla_id);
+        return true;
+      });
+
+      // Calcular Faturamento Bruto (Valor do Produto completo)
+      // Apenas vendas novas (primeira parcela)
+      const grossTotal = uniqueTransactions
+        .filter(tx => !tx.installment_number || tx.installment_number === 1)
+        .reduce((sum, tx) => {
+          const rawData = tx.raw_data as Record<string, any> | null;
+          let valorProduto = 0;
+          
+          if (rawData?.['Valor do produto']) {
+            const valorStr = String(rawData['Valor do produto']);
+            valorProduto = parseFloat(valorStr.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+          } else if (rawData?.event?.invoice?.amount?.subtotalCents) {
+            valorProduto = rawData.event.invoice.amount.subtotalCents / 100;
+          } else {
+            valorProduto = tx.product_price || 0;
+          }
+          
+          return sum + valorProduto;
+        }, 0);
+
+      // Calcular Incorporador 50k Líquido (todas as parcelas pagas)
+      const netTotal = uniqueTransactions.reduce((sum, tx) => {
         const netValue = tx.net_value && tx.net_value > 0 
           ? tx.net_value 
           : (tx.product_price || 0) * 0.9417;
         return sum + netValue;
       }, 0);
 
-      const grossTotal = validTransactions.reduce((sum, tx) => {
-        return sum + (tx.product_price || 0);
-      }, 0);
-
       return {
         total: grossTotal,
         netTotal,
-        transactionCount: validTransactions.length,
-        transactions: validTransactions.map(tx => ({
-          id: tx.id,
-          hubla_id: tx.hubla_id,
-          product_name: tx.product_name,
-          product_category: tx.product_category || 'outros',
-          product_price: tx.product_price || 0,
-          net_value: tx.net_value && tx.net_value > 0 ? tx.net_value : (tx.product_price || 0) * 0.9417,
-          customer_name: tx.customer_name || 'Cliente',
-          sale_date: tx.sale_date,
-          installment_number: tx.installment_number || 1,
-          total_installments: tx.total_installments || 1,
-          is_offer: tx.is_offer || false,
-        })),
+        transactionCount: uniqueTransactions.length,
+        transactions: uniqueTransactions.map(tx => {
+          const rawData = tx.raw_data as Record<string, any> | null;
+          let valorProduto = tx.product_price || 0;
+          
+          if (rawData?.['Valor do produto']) {
+            const valorStr = String(rawData['Valor do produto']);
+            valorProduto = parseFloat(valorStr.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+          } else if (rawData?.event?.invoice?.amount?.subtotalCents) {
+            valorProduto = rawData.event.invoice.amount.subtotalCents / 100;
+          }
+          
+          return {
+            id: tx.id,
+            hubla_id: tx.hubla_id,
+            product_name: tx.product_name,
+            product_category: tx.product_category || 'outros',
+            product_price: tx.product_price || 0,
+            net_value: tx.net_value && tx.net_value > 0 ? tx.net_value : (tx.product_price || 0) * 0.9417,
+            customer_name: tx.customer_name || 'Cliente',
+            sale_date: tx.sale_date,
+            installment_number: tx.installment_number || 1,
+            total_installments: tx.total_installments || 1,
+            is_offer: tx.is_offer || false,
+            valor_produto: valorProduto,
+          };
+        }),
       };
     },
-    refetchInterval: 60000, // Atualizar a cada minuto
+    refetchInterval: 60000,
   });
 };
