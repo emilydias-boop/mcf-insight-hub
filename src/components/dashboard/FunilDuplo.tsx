@@ -89,6 +89,12 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
   const etapasLeadASemNovoLead = etapasLeadA.filter(e => e.stage_id !== NOVO_LEAD_STAGE_ID);
   const etapasLeadBSemNovoLead = etapasLeadB.filter(e => e.stage_id !== NOVO_LEAD_STAGE_ID);
 
+  // Buscar dados do Novo Lead (total de ambos os tipos)
+  const novoLeadA = etapasLeadA.find(e => e.stage_id === NOVO_LEAD_STAGE_ID);
+  const novoLeadB = etapasLeadB.find(e => e.stage_id === NOVO_LEAD_STAGE_ID);
+  const novoLeadTotal = (novoLeadA?.leads || 0) + (novoLeadB?.leads || 0);
+  const novoLeadMeta = (novoLeadA?.meta || 0) + (novoLeadB?.meta || 0);
+
   // Combinar todas as etapas únicas para o filtro (sem Novo Lead)
   const allStages = Array.from(
     new Set([
@@ -129,7 +135,13 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
+          <div className="flex items-center gap-4">
+            <CardTitle className="text-foreground">Funil Pipeline Inside Sales</CardTitle>
+            <span className="text-sm text-muted-foreground">
+              Novo Lead: <span className="font-semibold text-foreground">{novoLeadTotal}</span>
+              {novoLeadMeta > 0 && <span>/{novoLeadMeta}</span>}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as PeriodType)}>
               <SelectTrigger className="w-auto h-8 min-w-[200px]">
