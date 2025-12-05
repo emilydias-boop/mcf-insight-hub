@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.sync-sdr-kpis]
 verify_jwt = false
+
+[functions.kiwify-webhook-handler]
+verify_jwt = false
