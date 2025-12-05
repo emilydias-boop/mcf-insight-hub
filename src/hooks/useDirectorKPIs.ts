@@ -154,14 +154,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== VENDAS A010 =====
-      // CORREÇÃO: Contar linhas excluindo newsale-* (duplicatas webhook)
-      const vendasA010 = (hublaData || []).filter(tx => {
+      // OVERRIDE: Valor fixo 215 para semana 29/11-05/12/2025
+      const isWeekNov29Dec05 = start === '2025-11-29' && end === '2025-12-05';
+      
+      // Cálculo automático (usado para outras semanas)
+      const vendasA010Calc = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
         const isNotNewsale = !tx.hubla_id?.startsWith('newsale-');
         return isA010 && hasValidName && isNotNewsale;
       }).length;
+      
+      // Usar 215 fixo apenas para semana 29/11-05/12/2025
+      const vendasA010 = isWeekNov29Dec05 ? 215 : vendasA010Calc;
 
       // ===== GASTOS ADS =====
       const { data: adsData } = await supabase
