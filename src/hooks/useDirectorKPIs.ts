@@ -238,9 +238,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
-      // ROI = Faturamento Clint / (Faturamento Clint - Lucro)
-      const denominadorRoi = faturamentoClint - lucro;
-      const roi = denominadorRoi !== 0 ? (faturamentoClint / denominadorRoi) : 0;
+      // ROI = (Faturamento Total / Custo Total) × 100
+      const roi = custoTotal > 0 ? (faturamentoTotal / custoTotal) * 100 : 0;
 
       // ROAS = Faturamento Total / Gastos Ads
       const roas = gastosAds > 0 ? (faturamentoTotal / gastosAds) : 0;
@@ -381,9 +380,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
-      // ROI anterior = Faturamento Clint / (Faturamento Clint - Lucro)
-      const prevDenominadorRoi = prevFaturamentoClint - prevLucro;
-      const prevRoi = prevDenominadorRoi !== 0 ? (prevFaturamentoClint / prevDenominadorRoi) : 0;
+      // ROI anterior = (Faturamento Total / Custo Total) × 100
+      const prevRoi = prevCustoTotal > 0 ? (prevFaturamentoTotal / prevCustoTotal) * 100 : 0;
       
       // ROAS anterior = Faturamento Total / Gastos Ads
       const prevRoas = prevGastosAds > 0 ? (prevFaturamentoTotal / prevGastosAds) : 0;
