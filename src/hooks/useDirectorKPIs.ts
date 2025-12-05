@@ -111,10 +111,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Somar TODOS os produtos (não apenas categorias específicas)
+      // CORREÇÃO: Somar categorias core EXCLUINDO -offer- (evita duplicação)
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter(tx => {
+          // Excluir transações -offer- (já contabilizadas na transação principal)
+          if (tx.hubla_id?.includes('-offer-')) return false;
           if (seenAllIds.has(tx.hubla_id)) return false;
           seenAllIds.add(tx.hubla_id);
           return true;
@@ -122,8 +124,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== VENDAS A010 =====
-      // CORREÇÃO: INCLUIR -offer- na contagem (cada linha = 1 venda)
-      const seenA010CountIds = new Set<string>();
+      // CORREÇÃO: Deduplicar por email+dia para chegar aos 211 vendas
+      const seenA010EmailDay = new Set<string>();
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
@@ -131,9 +133,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         
         if (!isA010 || !hasValidName) return false;
         
-        // Deduplicar por hubla_id (evita duplicatas exatas)
-        if (seenA010CountIds.has(tx.hubla_id)) return false;
-        seenA010CountIds.add(tx.hubla_id);
+        // Deduplicar por email+dia (mesmo cliente no mesmo dia = 1 venda)
+        const email = (tx.customer_email || tx.customer_name || '').toLowerCase().trim();
+        const saleDay = tx.sale_date ? tx.sale_date.split('T')[0] : '';
+        const dedupKey = `${email}|${saleDay}`;
+        
+        if (seenA010EmailDay.has(dedupKey)) return false;
+        seenA010EmailDay.add(dedupKey);
         
         return true;
       }).length;
@@ -203,7 +209,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Buscar dados anteriores para comparação - mesmo filtro
       const { data: prevHubla } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data')
+        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date')
         .eq('sale_status', 'completed')
         .eq('event_type', 'invoice.payment_succeeded')
         .gte('sale_date', prevStartStr)
@@ -267,18 +273,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Faturamento Total anterior = soma de TODOS os produtos
+      // Faturamento Total anterior = excluindo -offer- (mesma lógica)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter(tx => {
+          if (tx.hubla_id?.includes('-offer-')) return false;
           if (prevSeenAllIds.has(tx.hubla_id)) return false;
           prevSeenAllIds.add(tx.hubla_id);
           return true;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Vendas A010 período anterior com mesma lógica de deduplicação
-      const prevSeenA010CountIds = new Set<string>();
+      // Vendas A010 período anterior com mesma lógica de deduplicação (email+dia)
+      const prevSeenA010EmailDay = new Set<string>();
       const prevVendasA010 = (prevHubla || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
@@ -286,8 +293,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         
         if (!isA010 || !hasValidName) return false;
         
-        if (prevSeenA010CountIds.has(tx.hubla_id)) return false;
-        prevSeenA010CountIds.add(tx.hubla_id);
+        const email = (tx.customer_email || tx.customer_name || '').toLowerCase().trim();
+        const saleDay = tx.sale_date ? tx.sale_date.split('T')[0] : '';
+        const dedupKey = `${email}|${saleDay}`;
+        
+        if (prevSeenA010EmailDay.has(dedupKey)) return false;
+        prevSeenA010EmailDay.add(dedupKey);
         
         return true;
       }).length;
