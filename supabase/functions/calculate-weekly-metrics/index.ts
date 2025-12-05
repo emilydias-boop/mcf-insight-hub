@@ -226,9 +226,10 @@ Deno.serve(async (req) => {
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
     // 3. CONTAR VENDAS A010 - CORREÇÃO FINAL:
-    // - Contar TODAS as transações A010 (sem deduplicar por email)
+    // - Deduplicar por BASE hubla_id (removendo sufixo -offer-N)
     // - Incluir transações com sale_status 'completed' E 'refunded'
-    // - Cada linha/transação = 1 venda (conforme planilha do usuário)
+    // - Cada venda única = 1 (evita duplicatas parent + offer)
+    const seenA010BaseIds = new Set<string>();
     const allA010Transactions = (allTransactions || []).filter(t => {
       const saleDateBR = toSaoPauloDateString(t.sale_date);
       if (saleDateBR < week_start || saleDateBR > week_end) return false;
@@ -245,16 +246,24 @@ Deno.serve(async (req) => {
       const hasCustomer = (t.customer_name || '').trim() || (t.customer_email || '').trim();
       if (!hasCustomer) return false;
       
+      // Deduplicar por base_id (removendo -offer-N)
+      const hublaId = t.hubla_id || '';
+      const baseId = hublaId.includes('-offer-') ? hublaId.split('-offer-')[0] : hublaId;
+      
+      if (seenA010BaseIds.has(baseId)) return false;
+      seenA010BaseIds.add(baseId);
+      
       return true;
     });
     
     const vendas_a010 = allA010Transactions.length;
     
     // Faturado A010: soma do valor líquido de TODAS transações A010 completed (não refunded)
+    // Usar as transações já deduplicadas para evitar duplicar receita
     const a010CompletedTransactions = allA010Transactions.filter(t => t.sale_status === 'completed');
     const faturado_a010 = a010CompletedTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} transações (incluindo refunds)`);
+    console.log(`📈 Vendas A010: ${vendas_a010} transações únicas (deduplicado por base_id)`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (${a010CompletedTransactions.length} completed)`);
 
     // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORREÇÃO FINAL
