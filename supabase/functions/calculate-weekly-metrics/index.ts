@@ -216,46 +216,46 @@ Deno.serve(async (req) => {
     });
 
     const refundedTransactions = (allTransactions || []).filter(t => {
-      if (t.event_type !== 'invoice.refunded') return false;
-      const saleDateBR = toSaoPauloDateString(t.sale_date);
-      return saleDateBR >= week_start && saleDateBR <= week_end;
+      if (t.sale_status === 'refunded' || t.event_type === 'invoice.refunded') {
+        const saleDateBR = toSaoPauloDateString(t.sale_date);
+        return saleDateBR >= week_start && saleDateBR <= week_end;
+      }
+      return false;
     });
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 3. CONTAR VENDAS A010 - CORREÇÃO COM TIMEZONE BR:
-    // - Deduplicar por customer_email (COUNT DISTINCT customer_email)
-    // - Usar data no fuso BR para filtrar corretamente
-    // - Incluir transações -offer- se forem A010
-    const seenA010Emails = new Set<string>();
-    const a010Transactions = completedTransactions.filter(t => {
+    // 3. CONTAR VENDAS A010 - CORREÇÃO FINAL:
+    // - Contar TODAS as transações A010 (sem deduplicar por email)
+    // - Incluir transações com sale_status 'completed' E 'refunded'
+    // - Cada linha/transação = 1 venda (conforme planilha do usuário)
+    const allA010Transactions = (allTransactions || []).filter(t => {
+      const saleDateBR = toSaoPauloDateString(t.sale_date);
+      if (saleDateBR < week_start || saleDateBR > week_end) return false;
+      
+      // Incluir completed E refunded
+      if (t.sale_status !== 'completed' && t.sale_status !== 'refunded') return false;
+      
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
       
       if (!isA010) return false;
       
-      // Requer customer_email válido para deduplicação
-      const email = (t.customer_email || '').toLowerCase().trim();
-      if (!email) return false;
-      
-      // Deduplicar por customer_email (cada email = 1 venda única)
-      if (seenA010Emails.has(email)) return false;
-      seenA010Emails.add(email);
+      // Requer customer_name ou customer_email válido
+      const hasCustomer = (t.customer_name || '').trim() || (t.customer_email || '').trim();
+      if (!hasCustomer) return false;
       
       return true;
     });
     
-    const vendas_a010 = a010Transactions.length;
+    const vendas_a010 = allA010Transactions.length;
     
-    // Faturado A010: soma do valor líquido de TODAS transações A010 (incluindo parcelas)
-    const a010AllTransactions = completedTransactions.filter(t => {
-      const productName = (t.product_name || '').toUpperCase();
-      return t.product_category === 'a010' || productName.includes('A010');
-    });
-    const faturado_a010 = a010AllTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    // Faturado A010: soma do valor líquido de TODAS transações A010 completed (não refunded)
+    const a010CompletedTransactions = allA010Transactions.filter(t => t.sale_status === 'completed');
+    const faturado_a010 = a010CompletedTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} clientes únicos (emails)`);
-    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (${a010AllTransactions.length} transações)`);
+    console.log(`📈 Vendas A010: ${vendas_a010} transações (incluindo refunds)`);
+    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (${a010CompletedTransactions.length} completed)`);
 
     // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORREÇÃO FINAL
     // Apenas produtos: A000, A001, A003, A009
