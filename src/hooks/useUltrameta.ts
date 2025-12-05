@@ -10,12 +10,11 @@ export interface Ultrameta {
 }
 
 // Produtos que ENTRAM no Incorporador 50k (validados contra planilha)
-// A005 (P2) EXCLUÍDO conforme regras de negócio
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
+// Inclui A002, A004, A005 conforme planilha do usuário
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A009'];
 
 // Produtos EXCLUÍDOS do Incorporador 50k
 const EXCLUDED_PRODUCT_NAMES = [
-  'A005', // P2 excluído
   'A006', // Renovação
   'A010', // A010 é contado separadamente
   'IMERSÃO SÓCIOS',
@@ -24,6 +23,19 @@ const EXCLUDED_PRODUCT_NAMES = [
   'CLUBE DO ARREMATE',
   'CLUBE ARREMATE',
 ];
+
+// Helper para formatar data no fuso horário de Brasília (UTC-3)
+const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  // Para início do dia: 00:00:00 em Brasília = 03:00:00 UTC
+  // Para fim do dia: 23:59:59 em Brasília = 02:59:59 UTC do dia seguinte
+  if (isEndOfDay) {
+    return `${year}-${month}-${day}T23:59:59-03:00`;
+  }
+  return `${year}-${month}-${day}T00:00:00-03:00`;
+};
 
 export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0) => {
   return useQuery({
@@ -35,11 +47,12 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name')
         .eq('sale_status', 'completed');
       
+      // Aplicar filtro de data com fuso horário de Brasília (America/Sao_Paulo)
       if (startDate) {
-        query = query.gte('sale_date', startDate.toISOString());
+        query = query.gte('sale_date', formatDateForBrazil(startDate, false));
       }
       if (endDate) {
-        query = query.lte('sale_date', endDate.toISOString());
+        query = query.lte('sale_date', formatDateForBrazil(endDate, true));
       }
       
       const { data: transactions, error } = await query;
