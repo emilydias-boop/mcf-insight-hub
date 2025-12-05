@@ -166,8 +166,24 @@ Deno.serve(async (req) => {
     const ads_cost = dailyCosts?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
     console.log(`💰 Custo de Ads: R$ ${ads_cost.toFixed(2)}`);
 
-    const team_cost = 0;
-    const office_cost = 0;
+    // CORREÇÃO: Buscar custos operacionais mensais do mês correspondente
+    const weekStartDate = new Date(week_start);
+    const monthStart = `${weekStartDate.getFullYear()}-${String(weekStartDate.getMonth() + 1).padStart(2, '0')}-01`;
+    
+    const { data: operationalCosts } = await supabase
+      .from('operational_costs')
+      .select('*')
+      .eq('month', monthStart);
+    
+    const team_cost_monthly = operationalCosts?.find(c => c.cost_type === 'team')?.amount || 0;
+    const office_cost_monthly = operationalCosts?.find(c => c.cost_type === 'office')?.amount || 0;
+    
+    // Dividir por 4 para obter custo semanal
+    const team_cost = team_cost_monthly / 4;
+    const office_cost = office_cost_monthly / 4;
+    
+    console.log(`💼 Custos Operacionais Mensais: Equipe R$ ${team_cost_monthly.toFixed(2)} + Escritório R$ ${office_cost_monthly.toFixed(2)}`);
+    console.log(`💼 Custos Operacionais Semanais: Equipe R$ ${team_cost.toFixed(2)} + Escritório R$ ${office_cost.toFixed(2)}`);
 
     // 2. BUSCAR TRANSAÇÕES HUBLA DA SEMANA
     // CORREÇÃO: usar .lte() para incluir todas vendas do último dia
@@ -188,39 +204,36 @@ Deno.serve(async (req) => {
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
     // 3. CONTAR VENDAS A010 - CORREÇÃO FINAL:
-    // - Excluir transações -offer- (são Order Bumps, não vendas A010)
-    // - Excluir newsale- sem customer_email (duplicatas/incompletos)
-    // - Requer customer_name válido
-    // - Deduplicar por hubla_id
-    const seenA010Ids = new Set<string>();
+    // - INCLUIR transações -offer- (contam como venda A010)
+    // - Deduplicar por customer_email (COUNT DISTINCT customer_email)
+    // - Requer customer_email válido
+    const seenA010Emails = new Set<string>();
     const a010Transactions = (completedTransactions || []).filter(t => {
-      const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
       
       if (!isA010) return false;
       
-      // Excluir transações -offer- (são Order Bumps vendidos junto com outros produtos)
-      if (hublaId.includes('-offer-')) return false;
+      // Requer customer_email válido para deduplicação
+      const email = (t.customer_email || '').toLowerCase().trim();
+      if (!email) return false;
       
-      // Excluir newsale- sem customer_email (registros duplicados/incompletos)
-      if (hublaId.startsWith('newsale-') && !t.customer_email) return false;
-      
-      // Requer customer_name válido
-      const hasValidName = t.customer_name && t.customer_name.trim() !== '';
-      if (!hasValidName) return false;
-      
-      // Deduplicar por hubla_id exato
-      if (seenA010Ids.has(hublaId)) return false;
-      seenA010Ids.add(hublaId);
+      // Deduplicar por customer_email (cada email = 1 venda)
+      if (seenA010Emails.has(email)) return false;
+      seenA010Emails.add(email);
       
       return true;
     });
     
     const vendas_a010 = a010Transactions.length;
-    const faturado_a010 = a010Transactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas`);
+    // Faturado A010: soma do valor líquido de TODAS transações A010 (incluindo parcelas)
+    const faturado_a010 = (completedTransactions || []).filter(t => {
+      const productName = (t.product_name || '').toUpperCase();
+      return t.product_category === 'a010' || productName.includes('A010');
+    }).reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    
+    console.log(`📈 Vendas A010: ${vendas_a010} clientes únicos (emails)`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)}`);
 
     // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORREÇÃO FINAL
@@ -363,12 +376,11 @@ Deno.serve(async (req) => {
     console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)} (${vendas_a010} vendas × R$ 1.680)`);
     console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)} (${vendas_a010} vendas × R$ 1.400)`);
 
-    // 8. CALCULAR FATURAMENTO TOTAL
-    const faturamento_total = (completedTransactions || []).reduce(
-      (sum, t) => sum + parseValorLiquido(t), 0
-    );
+    // 8. CALCULAR FATURAMENTO TOTAL - CORREÇÃO:
+    // Faturamento Total = Incorporador 50k + OB Acesso Vitalício + OB Construir Para Alugar + Faturado A010
+    const faturamento_total = incorporador_50k + ob_vitalicio + ob_construir_alugar + faturado_a010;
 
-    console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)}`);
+    console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)} (Inc50k: ${incorporador_50k.toFixed(2)} + OBVit: ${ob_vitalicio.toFixed(2)} + OBAlug: ${ob_construir_alugar.toFixed(2)} + A010: ${faturado_a010.toFixed(2)})`);
 
     // 9. CALCULAR FATURADO CONTRATO
     const contractTransactions = (completedTransactions || []).filter(t => {
