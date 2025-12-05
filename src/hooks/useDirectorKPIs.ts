@@ -30,44 +30,6 @@ interface DirectorKPIs {
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
 
-// Lista EXATA de 34 produtos para Faturamento Total (conforme planilha do usuário)
-const FATURAMENTO_TOTAL_PRODUCTS_EXACT = [
-  '000 - Pré Reserva Minha Casa Financiada',
-  '000 - Contrato',
-  '001- Pré-Reserva Anticrise',
-  '003 - Imersão SÓCIOS MCF',
-  '016-Análise e defesa de proposta de crédito',
-  'A000 - Contrato',
-  'A000 - Pré-Reserva Plano Anticrise',
-  'A001 - MCF INCORPORADOR COMPLETO',
-  'A002 - MCF INCORPORADOR BÁSICO',
-  'A003 - MCF Incorporador - P2',
-  'A003 - MCF Plano Anticrise Completo',
-  'A004 - MCF INCORPORADOR BÁSICO',
-  'A004 - MCF Plano Anticrise Básico',
-  'A005 - Anticrise Completo',
-  'A005 - MCF P2',
-  'A005 - MCF P2 - ASAAS',
-  'A006 - Anticrise Básico',
-  'A007 - Imersão SÓCIOS MCF',
-  'A008 - The CLUB',
-  'A008 - The CLUB - CONSULTORIA CLUB',
-  'A009 - MCF INCORPORADOR COMPLETO + THE CLUB',
-  'A009 - Renovação Parceiro MCF',
-  'ASAAS',
-  'COBRANÇAS ASAAS',
-  'CONTRATO ANTICRISE',
-  'Contrato - Anticrise',
-  'Jantar Networking',
-  'R001 - Incorporador Completo 50K',
-  'R004 - Incorporador 50k Básico',
-  'R005 - Anticrise Completo',
-  'R006 - Anticrise Básico',
-  'R009 - Renovação Parceiro MCF',
-  'R21- MCF Incorporador P2 (Assinatura)',
-  'Sócio Jantar'
-];
-
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
     queryKey: ['director-kpis', startDate?.toISOString(), endDate?.toISOString()],
@@ -77,12 +39,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const start = startDate ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
       const end = endDate ? format(endDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
-      // Buscar transações Hubla no período - FILTRAR apenas invoice.payment_succeeded e completed
+      // Buscar transações Hubla + Kiwify no período
       const { data: hublaData } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price, event_type')
+        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price, event_type, source')
         .eq('sale_status', 'completed')
-        .eq('event_type', 'invoice.payment_succeeded')
+        .or('event_type.eq.invoice.payment_succeeded,source.eq.kiwify')
         .gte('sale_date', start)
         .lte('sale_date', end + 'T23:59:59');
 
@@ -149,21 +111,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // Match EXATO com lista de 34 produtos, excluindo offers (-offer-)
+      // TODAS as receitas (Hubla + Kiwify), excluindo apenas Order Bumps (-offer-)
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter(tx => {
-          const productName = (tx.product_name || '').trim();
           const hublaId = tx.hubla_id || '';
           
-          // Excluir offers (Order Bumps)
+          // Excluir Order Bumps (para não duplicar)
           if (hublaId.includes('-offer-')) return false;
           
-          // Match EXATO com a lista (case insensitive)
-          const isInList = FATURAMENTO_TOTAL_PRODUCTS_EXACT.some(prod => 
-            prod.toUpperCase() === productName.toUpperCase()
-          );
-          if (!isInList) return false;
+          // Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
           seenAllIds.add(tx.hubla_id);
           return true;
@@ -257,12 +214,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevStartStr = format(prevStart, 'yyyy-MM-dd');
       const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
 
-      // Buscar dados anteriores para comparação - mesmo filtro
+      // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify)
       const { data: prevHubla } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date, product_price')
+        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date, product_price, source')
         .eq('sale_status', 'completed')
-        .eq('event_type', 'invoice.payment_succeeded')
+        .or('event_type.eq.invoice.payment_succeeded,source.eq.kiwify')
         .gte('sale_date', prevStartStr)
         .lte('sale_date', prevEndStr + 'T23:59:59');
 
@@ -324,21 +281,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Faturamento Total anterior = mesma lógica (match exato, sem offers)
+      // Faturamento Total anterior = mesma lógica (todas receitas, sem offers)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter(tx => {
-          const productName = (tx.product_name || '').trim();
           const hublaId = tx.hubla_id || '';
           
-          // Excluir offers (Order Bumps)
+          // Excluir Order Bumps
           if (hublaId.includes('-offer-')) return false;
           
-          // Match EXATO com a lista (case insensitive)
-          const isInList = FATURAMENTO_TOTAL_PRODUCTS_EXACT.some(prod => 
-            prod.toUpperCase() === productName.toUpperCase()
-          );
-          if (!isInList) return false;
+          // Deduplicar por hubla_id
           if (prevSeenAllIds.has(tx.hubla_id)) return false;
           prevSeenAllIds.add(tx.hubla_id);
           return true;
