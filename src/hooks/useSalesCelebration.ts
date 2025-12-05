@@ -149,17 +149,28 @@ export const useSalesCelebration = () => {
     }
 
     // Verificar se é produto de confetti
+    const productNameLower = transaction.product_name?.toLowerCase() || '';
+    
+    // Verificar match explícito (A009, etc) - tem prioridade sobre exclusões
+    const hasExplicitMatch = CONFETTI_PRODUCTS.some((p) => {
+      const pLower = p.toLowerCase();
+      // Match explícito = padrão curto (ex: "A009", "Contrato") que é código/identificador
+      return pLower.length <= 10 && productNameLower.includes(pLower);
+    });
+    
     const isConfettiProduct = CONFETTI_PRODUCTS.some((p) =>
-      transaction.product_name?.toLowerCase().includes(p.toLowerCase())
+      productNameLower.includes(p.toLowerCase())
     );
 
     // Verificar se está na lista de exclusão
     const isExcludedProduct = CONFETTI_EXCLUDE_PRODUCTS.some((p) =>
-      transaction.product_name?.toLowerCase().includes(p.toLowerCase())
+      productNameLower.includes(p.toLowerCase())
     );
 
-    if (!isConfettiProduct || isExcludedProduct) {
-      if (isExcludedProduct) {
+    // Se tem match explícito (ex: A009), celebrar mesmo que tenha exclusão
+    // Caso contrário, excluir se estiver na lista de exclusão
+    if (!isConfettiProduct || (isExcludedProduct && !hasExplicitMatch)) {
+      if (isExcludedProduct && !hasExplicitMatch) {
         console.log('🚫 Produto excluído:', transaction.product_name);
       }
       return null;
