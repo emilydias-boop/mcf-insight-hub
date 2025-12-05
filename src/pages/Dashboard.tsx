@@ -17,9 +17,8 @@ import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 import { useClintFunnel } from "@/hooks/useClintFunnel";
-import { useUltrameta } from "@/hooks/useUltrameta";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
-import { useDirectorKPIs } from "@/hooks/useDirectorKPIs";
+import { useDirectorKPIsFromMetrics } from "@/hooks/useDirectorKPIsFromMetrics";
 import { formatCurrency } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
@@ -37,8 +36,8 @@ export default function Dashboard() {
   const [canal, setCanal] = useState('todos');
   const [sdrIa, setSdrIa] = useState(0); // Estado para SDR IA manual
 
-  // Hooks de dados
-  const { data: directorKPIs, isLoading: loadingKPIs, error: errorKPIs } = useDirectorKPIs(periodo.inicio, periodo.fim);
+  // Hooks de dados - AGORA USA DADOS PRÉ-CALCULADOS DA TABELA weekly_metrics
+  const { data: directorKPIs, isLoading: loadingKPIs, error: errorKPIs } = useDirectorKPIsFromMetrics(periodo.inicio, periodo.fim);
   const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(canal, 52);
   const PIPELINE_INSIDE_SALES_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
   const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useClintFunnel(
@@ -47,8 +46,6 @@ export default function Dashboard() {
     periodo.fim,
     false
   );
-  // Passar sdrIa para o hook
-  const { data: ultrameta, isLoading: loadingUltrameta, error: errorUltrameta } = useUltrameta(periodo.inicio, periodo.fim, sdrIa);
 
   // Realtime listeners para atualização automática
   useEffect(() => {
@@ -59,9 +56,8 @@ export default function Dashboard() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'weekly_metrics' },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+          queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
           queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
-          queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
         }
       )
       .subscribe();
@@ -74,8 +70,7 @@ export default function Dashboard() {
         { event: 'INSERT', schema: 'public', table: 'hubla_transactions' },
         (payload) => {
           console.log('💰 Nova venda Hubla:', payload);
-          queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
-          queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+          queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
           queryClient.invalidateQueries({ queryKey: ['a010-novo-lead'] });
           toast({
             title: "💰 Nova venda registrada",
@@ -99,10 +94,9 @@ export default function Dashboard() {
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
     setPeriodo(filters.periodo);
     setCanal(filters.canal);
-    queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+    queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
     queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
     queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
-    queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
     toast({
       title: "Filtros aplicados",
       description: "Os dados do dashboard foram atualizados.",
@@ -116,10 +110,9 @@ export default function Dashboard() {
       fim: getCustomWeekEnd(new Date()),
     });
     setCanal('todos');
-    queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+    queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
     queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
     queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
-    queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
     toast({
       title: "Filtros limpos",
       description: "Os filtros foram resetados para a semana atual.",
@@ -177,7 +170,7 @@ export default function Dashboard() {
         />
 
         {/* Erros */}
-        {(errorKPIs || errorEvolution || errorA010 || errorUltrameta) && (
+        {(errorKPIs || errorEvolution || errorA010) && (
           <Card className="bg-destructive/10 border-destructive">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 text-destructive">
@@ -188,7 +181,6 @@ export default function Dashboard() {
                     {errorKPIs && 'KPIs: ' + (errorKPIs as Error).message}
                     {errorEvolution && ' | Evolução: ' + (errorEvolution as Error).message}
                     {errorA010 && ' | Funil: ' + (errorA010 as Error).message}
-                    {errorUltrameta && ' | Ultrameta: ' + (errorUltrameta as Error).message}
                   </p>
                 </div>
               </div>
@@ -212,21 +204,21 @@ export default function Dashboard() {
 
         {/* Linha 2: Metas (esquerda) + Funil (direita) */}
         <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
-          {/* Coluna Esquerda - Metas com SDR IA */}
-          {isWidgetVisible('ultrameta') && (
+          {/* Coluna Esquerda - Metas com SDR IA (agora usando dados pré-calculados) */}
+          {isWidgetVisible('ultrameta') && directorKPIs && (
             <MetasProgress
-              ultrametaClint={ultrameta?.ultrametaClint || 0}
+              ultrametaClint={directorKPIs.ultrametaClint + (sdrIa * 1400)}
               metaUltrametaClint={metas.ultrametaClint}
-              faturamentoClintBruto={ultrameta?.faturamentoClintBruto || 0}
+              faturamentoClintBruto={directorKPIs.faturamentoClint}
               metaFaturamentoClint={metas.faturamentoClint}
-              ultrametaLiquido={ultrameta?.ultrametaLiquido || 0}
+              ultrametaLiquido={directorKPIs.ultrametaLiquido}
               metaUltrametaLiquido={metas.ultrametaLiquido}
-              faturamentoLiquido={ultrameta?.faturamentoIncorporador50k || 0}
+              faturamentoLiquido={directorKPIs.faturamentoLiquido}
               metaFaturamentoLiquido={metas.faturamentoLiquido}
               sdrIa={sdrIa}
               onSdrIaChange={setSdrIa}
-              vendasA010={ultrameta?.vendasA010 || 0}
-              isLoading={loadingUltrameta}
+              vendasA010={directorKPIs.vendasA010}
+              isLoading={loadingKPIs}
             />
           )}
 
