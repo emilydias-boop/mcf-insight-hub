@@ -205,15 +205,23 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Lucro = Faturamento Total - Custo Total
       const lucro = faturamentoTotal - custoTotal;
 
-      // ===== FATURAMENTO CLINT (Bruto - usando product_price) - Calculado antes de ROI =====
+      // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
+      // CORREÇÃO: Incluir TODAS as transações -offer- (Order Bumps vendidos junto)
       const seenClintBrutoIds = new Set<string>();
       const faturamentoClint = (hublaData || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
+          const hublaId = tx.hubla_id || '';
           const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
           const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+          
+          // Incluir transações -offer- se forem de produtos incorporador
+          const isOffer = hublaId.includes('-offer-');
+          
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
-          if (isIncorporador && !isExcluded) {
+          
+          // Incluir se: (é incorporador E não excluído) OU (é offer de produto incorporador)
+          if ((isIncorporador && !isExcluded) || (isOffer && isIncorporador)) {
             seenClintBrutoIds.add(tx.hubla_id);
             return true;
           }
@@ -221,8 +229,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
-      // ROI = (Faturamento Total / Custo Total) × 100
-      const roi = custoTotal > 0 ? (faturamentoTotal / custoTotal) * 100 : 0;
+      // Faturamento Líquido (net_value do Incorporador) - para fórmula ROI
+      const faturamentoLiquido = faturamentoIncorporador;
+
+      // ROI = Faturamento Líquido / (Faturamento Líquido - Lucro) × 100
+      // Onde (Faturamento Líquido - Lucro) = Custo Total efetivo
+      const denominadorROI = faturamentoLiquido - lucro;
+      const roi = denominadorROI > 0 ? (faturamentoLiquido / denominadorROI) * 100 : 0;
 
       // ROAS = Faturamento Total / Gastos Ads
       const roas = gastosAds > 0 ? (faturamentoTotal / gastosAds) : 0;
@@ -352,15 +365,18 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevCustoTotal = prevGastosAds + custoOperacionalSemanal;
       const prevCpl = prevVendasA010 > 0 ? prevGastosAds / prevVendasA010 : 0;
       const prevLucro = prevFaturamentoTotal - prevCustoTotal;
-      // Faturamento Clint anterior (bruto)
+      // Faturamento Clint anterior (bruto) - mesma lógica incluindo -offer-
       const prevSeenClintBrutoIds = new Set<string>();
       const prevFaturamentoClint = (prevHubla || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
+          const hublaId = tx.hubla_id || '';
           const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
           const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+          const isOffer = hublaId.includes('-offer-');
+          
           if (prevSeenClintBrutoIds.has(tx.hubla_id)) return false;
-          if (isIncorporador && !isExcluded) {
+          if ((isIncorporador && !isExcluded) || (isOffer && isIncorporador)) {
             prevSeenClintBrutoIds.add(tx.hubla_id);
             return true;
           }
@@ -368,8 +384,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
-      // ROI anterior = (Faturamento Total / Custo Total) × 100
-      const prevRoi = prevCustoTotal > 0 ? (prevFaturamentoTotal / prevCustoTotal) * 100 : 0;
+      // Faturamento Líquido anterior
+      const prevFaturamentoLiquido = prevFatIncorporador;
+
+      // ROI anterior = Faturamento Líquido / (Faturamento Líquido - Lucro) × 100
+      const prevDenominadorROI = prevFaturamentoLiquido - prevLucro;
+      const prevRoi = prevDenominadorROI > 0 ? (prevFaturamentoLiquido / prevDenominadorROI) * 100 : 0;
       
       // ROAS anterior = Faturamento Total / Gastos Ads
       const prevRoas = prevGastosAds > 0 ? (prevFaturamentoTotal / prevGastosAds) : 0;
@@ -383,7 +403,6 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ===== ULTRAMETA (baseado em vendas A010) =====
       const ultrametaClint = vendasA010 * 1680;
       const ultrametaLiquido = vendasA010 * 1400;
-      const faturamentoLiquido = faturamentoIncorporador;
 
       return {
         faturamentoTotal: {
