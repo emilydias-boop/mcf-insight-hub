@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 import { useClintFunnel } from "@/hooks/useClintFunnel";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
-import { useDirectorKPIsFromMetrics } from "@/hooks/useDirectorKPIsFromMetrics";
+import { useDirectorKPIs } from "@/hooks/useDirectorKPIs";
 import { formatCurrency } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
@@ -36,8 +36,8 @@ export default function Dashboard() {
   const [canal, setCanal] = useState('todos');
   const [sdrIa, setSdrIa] = useState(0); // Estado para SDR IA manual
 
-  // Hooks de dados - AGORA USA DADOS PRÉ-CALCULADOS DA TABELA weekly_metrics
-  const { data: directorKPIs, isLoading: loadingKPIs, error: errorKPIs } = useDirectorKPIsFromMetrics(periodo.inicio, periodo.fim);
+  // Hooks de dados - CALCULA EM TEMPO REAL de hubla_transactions
+  const { data: directorKPIs, isLoading: loadingKPIs, error: errorKPIs } = useDirectorKPIs(periodo.inicio, periodo.fim);
   const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(canal, 52);
   const PIPELINE_INSIDE_SALES_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
   const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useClintFunnel(
@@ -49,19 +49,6 @@ export default function Dashboard() {
 
   // Realtime listeners para atualização automática
   useEffect(() => {
-    // Listener para weekly_metrics
-    const metricsChannel = supabase
-      .channel('weekly-metrics-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'weekly_metrics' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
-          queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
-        }
-      )
-      .subscribe();
-
     // Listener para hubla_transactions (vendas em tempo real)
     const hublaChannel = supabase
       .channel('hubla-realtime')
@@ -70,8 +57,10 @@ export default function Dashboard() {
         { event: 'INSERT', schema: 'public', table: 'hubla_transactions' },
         (payload) => {
           console.log('💰 Nova venda Hubla:', payload);
-          queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
+          // Invalida a query de tempo real para forçar recálculo
+          queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
           queryClient.invalidateQueries({ queryKey: ['a010-novo-lead'] });
+          queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
           toast({
             title: "💰 Nova venda registrada",
             description: "Os dados foram atualizados automaticamente!",
@@ -80,9 +69,21 @@ export default function Dashboard() {
       )
       .subscribe();
 
+    // Listener para daily_costs (gastos ads)
+    const costsChannel = supabase
+      .channel('costs-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_costs' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(metricsChannel);
       supabase.removeChannel(hublaChannel);
+      supabase.removeChannel(costsChannel);
     };
   }, [queryClient, toast]);
 
@@ -94,7 +95,7 @@ export default function Dashboard() {
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
     setPeriodo(filters.periodo);
     setCanal(filters.canal);
-    queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
+    queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
     queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
     queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
     toast({
@@ -110,7 +111,7 @@ export default function Dashboard() {
       fim: getCustomWeekEnd(new Date()),
     });
     setCanal('todos');
-    queryClient.invalidateQueries({ queryKey: ['director-kpis-metrics'] });
+    queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
     queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
     queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
     toast({

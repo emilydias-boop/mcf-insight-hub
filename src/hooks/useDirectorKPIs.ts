@@ -18,6 +18,11 @@ interface DirectorKPIs {
   roas: DirectorKPI;
   vendasA010: number;
   faturamentoIncorporador: number;
+  // Campos Ultrameta para tempo real
+  ultrametaClint: number;
+  faturamentoClint: number;
+  ultrametaLiquido: number;
+  faturamentoLiquido: number;
 }
 
 // Produtos do Incorporador 50k (validados contra planilha)
@@ -277,6 +282,27 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         return ((current - previous) / previous) * 100;
       };
 
+      // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
+      const seenClintBrutoIds = new Set<string>();
+      const faturamentoClint = (hublaData || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+          if (seenClintBrutoIds.has(tx.hubla_id)) return false;
+          if (isIncorporador && !isExcluded) {
+            seenClintBrutoIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+
+      // ===== ULTRAMETA (baseado em vendas A010) =====
+      const ultrametaClint = vendasA010 * 1680;
+      const ultrametaLiquido = vendasA010 * 1400;
+      const faturamentoLiquido = faturamentoIncorporador;
+
       return {
         faturamentoTotal: {
           value: faturamentoTotal,
@@ -315,6 +341,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         },
         vendasA010,
         faturamentoIncorporador,
+        // Novos campos Ultrameta
+        ultrametaClint,
+        faturamentoClint,
+        ultrametaLiquido,
+        faturamentoLiquido,
       };
     },
     refetchInterval: 30000,
