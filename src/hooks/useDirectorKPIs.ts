@@ -30,19 +30,42 @@ interface DirectorKPIs {
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
 
-// Lista completa de produtos para Faturamento Total (34 produtos)
-const FATURAMENTO_TOTAL_PRODUCTS = [
-  '000 - PRÉ RESERVA', '000 - CONTRATO', '001- PRÉ-RESERVA', '003 - IMERSÃO', '016-ANÁLISE',
-  'A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006 - ANTICRISE', 'A007', 'A008', 'A009',
-  'ASAAS', 'COBRANÇAS ASAAS', 'CONTRATO ANTICRISE', 'CONTRATO - ANTICRISE',
-  'JANTAR NETWORKING', 'R001', 'R004', 'R005', 'R006', 'R009', 'R21', 'SÓCIO JANTAR'
-];
-
-// Produtos a EXCLUIR do Faturamento Total
-const FATURAMENTO_TOTAL_EXCLUSIONS = [
-  'RENOVAÇÃO PARCEIRO', 'A006 - RENOVAÇÃO',
-  'CLUBE DO ARREMATE', 'CLUBE ARREMATE',
-  'CREDENCIAMENTO', 'CONTRATO CREDENCIAMENTO'
+// Lista EXATA de 34 produtos para Faturamento Total (conforme planilha do usuário)
+const FATURAMENTO_TOTAL_PRODUCTS_EXACT = [
+  '000 - Pré Reserva Minha Casa Financiada',
+  '000 - Contrato',
+  '001- Pré-Reserva Anticrise',
+  '003 - Imersão SÓCIOS MCF',
+  '016-Análise e defesa de proposta de crédito',
+  'A000 - Contrato',
+  'A000 - Pré-Reserva Plano Anticrise',
+  'A001 - MCF INCORPORADOR COMPLETO',
+  'A002 - MCF INCORPORADOR BÁSICO',
+  'A003 - MCF Incorporador - P2',
+  'A003 - MCF Plano Anticrise Completo',
+  'A004 - MCF INCORPORADOR BÁSICO',
+  'A004 - MCF Plano Anticrise Básico',
+  'A005 - Anticrise Completo',
+  'A005 - MCF P2',
+  'A005 - MCF P2 - ASAAS',
+  'A006 - Anticrise Básico',
+  'A007 - Imersão SÓCIOS MCF',
+  'A008 - The CLUB',
+  'A008 - The CLUB - CONSULTORIA CLUB',
+  'A009 - MCF INCORPORADOR COMPLETO + THE CLUB',
+  'A009 - Renovação Parceiro MCF',
+  'ASAAS',
+  'COBRANÇAS ASAAS',
+  'CONTRATO ANTICRISE',
+  'Contrato - Anticrise',
+  'Jantar Networking',
+  'R001 - Incorporador Completo 50K',
+  'R004 - Incorporador 50k Básico',
+  'R005 - Anticrise Completo',
+  'R006 - Anticrise Básico',
+  'R009 - Renovação Parceiro MCF',
+  'R21- MCF Incorporador P2 (Assinatura)',
+  'Sócio Jantar'
 ];
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
@@ -126,21 +149,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Somar apenas produtos da lista específica, EXCLUINDO Renovação, Clube Arremate, Credenciamento
+      // Match EXATO com lista de 34 produtos, excluindo offers (-offer-)
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
+          const productName = (tx.product_name || '').trim();
+          const hublaId = tx.hubla_id || '';
           
-          // Primeiro verificar se deve EXCLUIR
-          const shouldExclude = FATURAMENTO_TOTAL_EXCLUSIONS.some(excl => 
-            productName.includes(excl.toUpperCase())
-          );
-          if (shouldExclude) return false;
+          // Excluir offers (Order Bumps)
+          if (hublaId.includes('-offer-')) return false;
           
-          // Depois verificar se está na lista de inclusão
-          const isInList = FATURAMENTO_TOTAL_PRODUCTS.some(prod => 
-            productName.includes(prod.toUpperCase())
+          // Match EXATO com a lista (case insensitive)
+          const isInList = FATURAMENTO_TOTAL_PRODUCTS_EXACT.some(prod => 
+            prod.toUpperCase() === productName.toUpperCase()
           );
           if (!isInList) return false;
           if (seenAllIds.has(tx.hubla_id)) return false;
@@ -304,20 +325,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Faturamento Total anterior = mesma lógica (lista de produtos com exclusões)
+      // Faturamento Total anterior = mesma lógica (match exato, sem offers)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
+          const productName = (tx.product_name || '').trim();
+          const hublaId = tx.hubla_id || '';
           
-          // Primeiro verificar se deve EXCLUIR
-          const shouldExclude = FATURAMENTO_TOTAL_EXCLUSIONS.some(excl => 
-            productName.includes(excl.toUpperCase())
-          );
-          if (shouldExclude) return false;
+          // Excluir offers (Order Bumps)
+          if (hublaId.includes('-offer-')) return false;
           
-          const isInList = FATURAMENTO_TOTAL_PRODUCTS.some(prod => 
-            productName.includes(prod.toUpperCase())
+          // Match EXATO com a lista (case insensitive)
+          const isInList = FATURAMENTO_TOTAL_PRODUCTS_EXACT.some(prod => 
+            prod.toUpperCase() === productName.toUpperCase()
           );
           if (!isInList) return false;
           if (prevSeenAllIds.has(tx.hubla_id)) return false;
