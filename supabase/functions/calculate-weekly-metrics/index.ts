@@ -9,11 +9,63 @@ const corsHeaders = {
 const HUBLA_PLATFORM_FEE = 0.0583;
 const HUBLA_NET_MULTIPLIER = 1 - HUBLA_PLATFORM_FEE; // 0.9417
 
-// Produtos que ENTRAM no Incorporador 50k (CORRIGIDO - validado contra planilha)
-// A005 (P2), A002, A004, A006, A008 EXCLUÍDOS
-const INCORPORADOR_50K_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
+// LISTA COMPLETA de produtos Incorporador 50k / Faturamento Clint
+// Validada contra planilha do usuário em 05/12/2025
+const INCORPORADOR_PRODUCT_PATTERNS = [
+  // Contratos
+  '000 - PRÉ RESERVA',
+  '000 - CONTRATO',
+  '001- PRÉ-RESERVA',
+  '003 - IMERSÃO SÓCIOS',
+  '016-ANÁLISE',
+  // A000-A009
+  'A000 - CONTRATO',
+  'A000 - PRÉ-RESERVA',
+  'A001 - MCF',
+  'A001',
+  'A002 - MCF',
+  'A002',
+  'A003 - MCF',
+  'A003',
+  'A004 - MCF',
+  'A004',
+  'A005 - ANTICRISE',
+  'A005 - MCF',
+  'A005',
+  'A006 - ANTICRISE',
+  'A006',
+  'A007 - IMERSÃO',
+  'A007',
+  'A008 - THE CLUB',
+  'A008',
+  'A009 - MCF',
+  'A009 - RENOVAÇÃO',
+  'A009',
+  // ASAAS e outros
+  'ASAAS',
+  'COBRANÇAS ASAAS',
+  'CONTRATO ANTICRISE',
+  'CONTRATO - ANTICRISE',
+  'JANTAR NETWORKING',
+  // R001-R21
+  'R001 - INCORPORADOR',
+  'R001',
+  'R004 - INCORPORADOR',
+  'R004',
+  'R005 - ANTICRISE',
+  'R005',
+  'R006 - ANTICRISE',
+  'R006',
+  'R009 - RENOVAÇÃO',
+  'R009',
+  'R21- MCF',
+  'R21',
+  // Sócio Jantar
+  'SÓCIO JANTAR',
+  'SOCIO JANTAR',
+];
 
-// Mapeamento de preços fixos (BRUTO) para Incorporador 50k
+// Mapeamento de preços fixos (BRUTO) para produtos específicos
 const INCORPORADOR_PRODUCT_PRICES: Record<string, number> = {
   'A001': 14500,  // MCF INCORPORADOR COMPLETO
   'A003': 7503,   // MCF Plano Anticrise Completo
@@ -22,14 +74,18 @@ const INCORPORADOR_PRODUCT_PRICES: Record<string, number> = {
   'SOCIO JANTAR': 297,
   'CONTRATO - ANTICRISE': 249,
   'CONTRATO-ANTICRISE': 249,
-  // A000 (Contrato) = preço variável, usar product_price
 };
 
-// Produtos EXCLUÍDOS do Incorporador
+// Produtos EXPLICITAMENTE EXCLUÍDOS (não entram em Incorporador 50k)
 const EXCLUDED_PRODUCT_NAMES = [
-  'A005', 'A006', 'A010', 'A002', 'A004', 'A008',
-  'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS',
-  'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'
+  'A010', 'A011', 'A012', // A010+ são categoria separada
+  'EFEITO ALAVANCA',
+  'CLUBE DO ARREMATE',
+  'CLUBE ARREMATE',
+  'CONSTRUIR PARA ALUGAR', // Order Bump
+  'ACESSO VITALÍCIO', // Order Bump
+  'ACESSO VITALICIO', // Order Bump
+  'IMERSÃO PRESENCIAL', // Order Bump Evento
 ];
 
 // Mapeamento completo de 19 categorias
@@ -108,10 +164,32 @@ function isOfferTransaction(transaction: any): boolean {
   return hublaId.includes('-offer-');
 }
 
+// Verificar se o produto está na lista de Incorporador 50k
+function isIncorporadorProduct(productName: string): boolean {
+  const upperName = productName.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Verificar exclusões primeiro
+  if (EXCLUDED_PRODUCT_NAMES.some(excl => upperName.includes(excl.toUpperCase()))) {
+    return false;
+  }
+  
+  // Verificar se começa com algum padrão da lista
+  return INCORPORADOR_PRODUCT_PATTERNS.some(pattern => {
+    const upperPattern = pattern.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return upperName.includes(upperPattern) || upperName.startsWith(upperPattern.split(' ')[0]);
+  });
+}
+
 function parseValorLiquido(transaction: any): number {
   const sellerNetValue = extractSellerNetValue(transaction);
   if (sellerNetValue !== null && sellerNetValue > 0) {
     return sellerNetValue;
+  }
+  
+  // CORREÇÃO: Verificar se net_value já está em reais (não centavos)
+  // CSV imports agora têm net_value corrigido via migration
+  if (transaction.net_value && transaction.net_value > 0) {
+    return transaction.net_value;
   }
   
   const valorLiquidoStr = transaction.raw_data?.['Valor Líquido'];
@@ -208,71 +286,61 @@ Deno.serve(async (req) => {
       .gte('sale_date', startDateUTC.toISOString())
       .lte('sale_date', endDateUTC.toISOString());
 
-    // Filtrar por data BR (America/Sao_Paulo)
-    const completedTransactions = (allTransactions || []).filter(t => {
-      if (t.sale_status !== 'completed') return false;
+    // METODOLOGIA CORRIGIDA: Incluir TODAS transações (completed + refunded) no faturamento
+    // Conforme planilha do usuário que conta reembolsos também
+    const allWeekTransactions = (allTransactions || []).filter(t => {
       const saleDateBR = toSaoPauloDateString(t.sale_date);
       return saleDateBR >= week_start && saleDateBR <= week_end;
     });
 
-    const refundedTransactions = (allTransactions || []).filter(t => {
-      if (t.sale_status === 'refunded' || t.event_type === 'invoice.refunded') {
-        const saleDateBR = toSaoPauloDateString(t.sale_date);
-        return saleDateBR >= week_start && saleDateBR <= week_end;
-      }
-      return false;
-    });
+    const completedTransactions = allWeekTransactions.filter(t => t.sale_status === 'completed');
+    const refundedTransactions = allWeekTransactions.filter(t => 
+      t.sale_status === 'refunded' || t.event_type === 'invoice.refunded'
+    );
 
-    console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
+    console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} completed | ${refundedTransactions?.length || 0} refunds`);
 
-    // 3. CONTAR VENDAS A010 - CORREÇÃO FINAL:
-    // - Deduplicar por BASE hubla_id (removendo sufixo -offer-N)
-    // - Incluir transações com sale_status 'completed' E 'refunded'
-    // - Cada venda única = 1 (evita duplicatas parent + offer)
-    const seenA010BaseIds = new Set<string>();
-    const allA010Transactions = (allTransactions || []).filter(t => {
-      const saleDateBR = toSaoPauloDateString(t.sale_date);
-      if (saleDateBR < week_start || saleDateBR > week_end) return false;
-      
-      // Incluir completed E refunded
-      if (t.sale_status !== 'completed' && t.sale_status !== 'refunded') return false;
-      
+    // 3. CONTAR VENDAS A010 - METODOLOGIA PLANILHA:
+    // - Contar CADA linha/transação (não deduplicar por email)
+    // - Excluir apenas newsale- sem dados válidos
+    // - Incluir completed E refunded
+    const a010Transactions = allWeekTransactions.filter(t => {
+      const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
-      const isA010 = t.product_category === 'a010' || productName.includes('A010');
       
+      // Verificar se é A010
+      const isA010 = t.product_category === 'a010' || productName.includes('A010');
       if (!isA010) return false;
       
-      // Requer customer_name ou customer_email válido
+      // Excluir newsale- sem customer válido
+      if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) {
+        return false;
+      }
+      
+      // Requer customer_name ou customer_email
       const hasCustomer = (t.customer_name || '').trim() || (t.customer_email || '').trim();
       if (!hasCustomer) return false;
       
-      // Deduplicar por base_id (removendo -offer-N)
-      const hublaId = t.hubla_id || '';
-      const baseId = hublaId.includes('-offer-') ? hublaId.split('-offer-')[0] : hublaId;
-      
-      if (seenA010BaseIds.has(baseId)) return false;
-      seenA010BaseIds.add(baseId);
+      // Excluir -offer- (Order Bumps vendidos junto com A010)
+      if (hublaId.includes('-offer-')) return false;
       
       return true;
     });
     
-    const vendas_a010 = allA010Transactions.length;
+    const vendas_a010 = a010Transactions.length;
     
-    // Faturado A010: soma do valor líquido de TODAS transações A010 completed (não refunded)
-    // Usar as transações já deduplicadas para evitar duplicar receita
-    const a010CompletedTransactions = allA010Transactions.filter(t => t.sale_status === 'completed');
+    // Faturado A010: soma do valor líquido de TODAS transações A010 (completed)
+    const a010CompletedTransactions = a010Transactions.filter(t => t.sale_status === 'completed');
     const faturado_a010 = a010CompletedTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} transações únicas (deduplicado por base_id)`);
+    console.log(`📈 Vendas A010: ${vendas_a010} transações (metodologia planilha)`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (${a010CompletedTransactions.length} completed)`);
 
-    // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORREÇÃO FINAL
-    // Apenas produtos: A000, A001, A003, A009
-    // Exclui: A002, A004, A005, A006, A008, newsale- sem dados, -offer-
-    const seenIncorporadorBrutoIds = new Set<string>();
-    const incorporadorBrutoTransactions = completedTransactions.filter(t => {
+    // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K / FATURAMENTO CLINT
+    // Usar lista completa de produtos da planilha do usuário
+    const incorporadorTransactions = completedTransactions.filter(t => {
       const hublaId = t.hubla_id || '';
-      const productName = (t.product_name || '').toUpperCase();
+      const productName = t.product_name || '';
       
       // Excluir -offer- (são Order Bumps)
       if (hublaId.includes('-offer-')) return false;
@@ -280,63 +348,22 @@ Deno.serve(async (req) => {
       // Excluir newsale- sem customer_email ou customer_name
       if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) return false;
       
-      // Verificar se é produto Incorporador válido
-      const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
-      const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
-      
-      if (!isIncorporador || isExcluded) return false;
-      
-      // Apenas primeira parcela para BRUTO
-      const isFirst = isFirstInstallment(t);
-      if (!isFirst) return false;
-      
-      // Deduplicar por hubla_id
-      if (seenIncorporadorBrutoIds.has(hublaId)) return false;
-      seenIncorporadorBrutoIds.add(hublaId);
-      
-      return true;
+      // Verificar se é produto Incorporador usando a lista completa
+      return isIncorporadorProduct(productName);
     });
 
-    // FATURAMENTO CLINT (BRUTO) - usar Valor do produto
+    // FATURAMENTO CLINT (BRUTO) - primeira parcela apenas, usar Valor do produto
+    const incorporadorBrutoTransactions = incorporadorTransactions.filter(t => isFirstInstallment(t));
     const faturamento_clint = incorporadorBrutoTransactions.reduce((sum, t) => {
       return sum + parseValorBruto(t);
     }, 0);
 
     console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)} (${incorporadorBrutoTransactions.length} vendas)`);
 
-    // INCORPORADOR 50K (LÍQUIDO) - CORREÇÃO FINAL
-    // Incluir todas parcelas pagas, mas excluir transações inválidas
-    const seenIncorporadorLiqIds = new Set<string>();
-    const incorporador50kTransactions = completedTransactions.filter(t => {
-      const hublaId = t.hubla_id || '';
-      const productName = (t.product_name || '').toUpperCase();
-      
-      // Excluir -offer- (são Order Bumps)
-      if (hublaId.includes('-offer-')) return false;
-      
-      // Excluir newsale- sem customer_email ou customer_name
-      if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) return false;
-      
-      // Excluir transações com net_value = 0 ou NULL
-      const netValue = parseValorLiquido(t);
-      if (!netValue || netValue <= 0) return false;
-      
-      // Verificar se é produto Incorporador válido
-      const isIncorporador = INCORPORADOR_50K_PRODUCTS.some(code => productName.startsWith(code));
-      const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
-      
-      if (!isIncorporador || isExcluded) return false;
-      
-      // Deduplicar por hubla_id
-      if (seenIncorporadorLiqIds.has(hublaId)) return false;
-      seenIncorporadorLiqIds.add(hublaId);
-      
-      return true;
-    });
-    
-    const incorporador_50k = incorporador50kTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    // INCORPORADOR 50K (LÍQUIDO) - TODAS parcelas pagas
+    const incorporador_50k = incorporadorTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
 
-    console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)} (${incorporador50kTransactions.length} transações)`);
+    console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)} (${incorporadorTransactions.length} transações)`);
 
     // 5. CALCULAR ORDER BUMPS (APENAS transações -offer-)
     const ob_construir_alugar_transactions = completedTransactions.filter(t => {
@@ -406,11 +433,11 @@ Deno.serve(async (req) => {
     console.log(`🎯 Ultrameta Clint: R$ ${ultrameta_clint.toFixed(2)} (${vendas_a010} vendas × R$ 1.680)`);
     console.log(`🎯 Ultrameta Líquido: R$ ${ultrameta_liquido.toFixed(2)} (${vendas_a010} vendas × R$ 1.400)`);
 
-    // 8. CALCULAR FATURAMENTO TOTAL - CORREÇÃO:
-    // Faturamento Total = Incorporador 50k + OB Acesso Vitalício + OB Construir Para Alugar + Faturado A010
-    const faturamento_total = incorporador_50k + ob_vitalicio + ob_construir_alugar + faturado_a010;
+    // 8. CALCULAR FATURAMENTO TOTAL
+    // Faturamento Total = Incorporador 50k (líquido) + Order Bumps + Faturado A010
+    const faturamento_total = incorporador_50k + ob_vitalicio + ob_construir_alugar + ob_evento + faturado_a010;
 
-    console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)} (Inc50k: ${incorporador_50k.toFixed(2)} + OBVit: ${ob_vitalicio.toFixed(2)} + OBAlug: ${ob_construir_alugar.toFixed(2)} + A010: ${faturado_a010.toFixed(2)})`);
+    console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)} (Inc50k: ${incorporador_50k.toFixed(2)} + OBs: ${(ob_vitalicio + ob_construir_alugar + ob_evento).toFixed(2)} + A010: ${faturado_a010.toFixed(2)})`);
 
     // 9. CALCULAR FATURADO CONTRATO
     const contractTransactions = completedTransactions.filter(t => {
@@ -428,7 +455,7 @@ Deno.serve(async (req) => {
     // 10. CALCULAR CUSTO REAL
     const custo_real = ads_cost - (faturado_a010 + ob_construir_alugar + ob_vitalicio + ob_evento + ob_construir_vender);
 
-    // 11. CALCULAR MÉTRICAS DERIVADAS - CORREÇÃO FINAL:
+    // 11. CALCULAR MÉTRICAS DERIVADAS
     // Custo Total = Gastos Ads + (Team + Office) / 4
     const operating_cost = ads_cost + team_cost + office_cost;
     const lucro_operacional = faturamento_total - operating_cost;
