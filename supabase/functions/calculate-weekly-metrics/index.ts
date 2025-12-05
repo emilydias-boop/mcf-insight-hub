@@ -46,6 +46,15 @@ const COLUMN_NAME_MAP: Record<string, string> = {
   'contrato': 'contract',
 };
 
+// Converter data UTC para data no fuso BR (America/Sao_Paulo)
+function toSaoPauloDateString(utcDateStr: string): string {
+  const date = new Date(utcDateStr);
+  // São Paulo é UTC-3 (sem horário de verão atualmente)
+  const offset = -3 * 60; // offset em minutos
+  const localDate = new Date(date.getTime() + offset * 60 * 1000);
+  return localDate.toISOString().split('T')[0];
+}
+
 // Extrair smartInstallment do raw_data
 function getSmartInstallment(transaction: any): { installment: number | null; installments: number | null } {
   const rawData = transaction.raw_data;
@@ -164,7 +173,7 @@ Deno.serve(async (req) => {
       .lte('date', week_end);
 
     const ads_cost = dailyCosts?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
-    console.log(`💰 Custo de Ads: R$ ${ads_cost.toFixed(2)}`);
+    console.log(`💰 Custo de Ads: R$ ${ads_cost.toFixed(2)} (${dailyCosts?.length || 0} dias)`);
 
     // CORREÇÃO: Buscar custos operacionais mensais do mês correspondente
     const weekStartDate = new Date(week_start);
@@ -186,29 +195,40 @@ Deno.serve(async (req) => {
     console.log(`💼 Custos Operacionais Semanais: Equipe R$ ${team_cost.toFixed(2)} + Escritório R$ ${office_cost.toFixed(2)}`);
 
     // 2. BUSCAR TRANSAÇÕES HUBLA DA SEMANA
-    // CORREÇÃO: usar .lte() para incluir todas vendas do último dia
-    const { data: completedTransactions } = await supabase
+    // CORREÇÃO: Buscar com margem para timezone e filtrar por data BR depois
+    const startDateUTC = new Date(`${week_start}T00:00:00Z`);
+    startDateUTC.setHours(startDateUTC.getHours() - 6); // Margem de segurança
+    
+    const endDateUTC = new Date(`${week_end}T23:59:59Z`);
+    endDateUTC.setHours(endDateUTC.getHours() + 6); // Margem de segurança
+    
+    const { data: allTransactions } = await supabase
       .from('hubla_transactions')
       .select('*')
-      .gte('sale_date', `${week_start}T00:00:00Z`)
-      .lte('sale_date', `${week_end}T23:59:59.999Z`)
-      .eq('sale_status', 'completed');
+      .gte('sale_date', startDateUTC.toISOString())
+      .lte('sale_date', endDateUTC.toISOString());
 
-    const { data: refundedTransactions } = await supabase
-      .from('hubla_transactions')
-      .select('*')
-      .gte('sale_date', `${week_start}T00:00:00Z`)
-      .lte('sale_date', `${week_end}T23:59:59.999Z`)
-      .eq('event_type', 'invoice.refunded');
+    // Filtrar por data BR (America/Sao_Paulo)
+    const completedTransactions = (allTransactions || []).filter(t => {
+      if (t.sale_status !== 'completed') return false;
+      const saleDateBR = toSaoPauloDateString(t.sale_date);
+      return saleDateBR >= week_start && saleDateBR <= week_end;
+    });
+
+    const refundedTransactions = (allTransactions || []).filter(t => {
+      if (t.event_type !== 'invoice.refunded') return false;
+      const saleDateBR = toSaoPauloDateString(t.sale_date);
+      return saleDateBR >= week_start && saleDateBR <= week_end;
+    });
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} | Reembolsos: ${refundedTransactions?.length || 0}`);
 
-    // 3. CONTAR VENDAS A010 - CORREÇÃO FINAL:
-    // - INCLUIR transações -offer- (contam como venda A010)
+    // 3. CONTAR VENDAS A010 - CORREÇÃO COM TIMEZONE BR:
     // - Deduplicar por customer_email (COUNT DISTINCT customer_email)
-    // - Requer customer_email válido
+    // - Usar data no fuso BR para filtrar corretamente
+    // - Incluir transações -offer- se forem A010
     const seenA010Emails = new Set<string>();
-    const a010Transactions = (completedTransactions || []).filter(t => {
+    const a010Transactions = completedTransactions.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const isA010 = t.product_category === 'a010' || productName.includes('A010');
       
@@ -218,7 +238,7 @@ Deno.serve(async (req) => {
       const email = (t.customer_email || '').toLowerCase().trim();
       if (!email) return false;
       
-      // Deduplicar por customer_email (cada email = 1 venda)
+      // Deduplicar por customer_email (cada email = 1 venda única)
       if (seenA010Emails.has(email)) return false;
       seenA010Emails.add(email);
       
@@ -228,19 +248,20 @@ Deno.serve(async (req) => {
     const vendas_a010 = a010Transactions.length;
     
     // Faturado A010: soma do valor líquido de TODAS transações A010 (incluindo parcelas)
-    const faturado_a010 = (completedTransactions || []).filter(t => {
+    const a010AllTransactions = completedTransactions.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       return t.product_category === 'a010' || productName.includes('A010');
-    }).reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    });
+    const faturado_a010 = a010AllTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
     console.log(`📈 Vendas A010: ${vendas_a010} clientes únicos (emails)`);
-    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)}`);
+    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (${a010AllTransactions.length} transações)`);
 
     // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K - CORREÇÃO FINAL
     // Apenas produtos: A000, A001, A003, A009
     // Exclui: A002, A004, A005, A006, A008, newsale- sem dados, -offer-
     const seenIncorporadorBrutoIds = new Set<string>();
-    const incorporadorBrutoTransactions = (completedTransactions || []).filter(t => {
+    const incorporadorBrutoTransactions = completedTransactions.filter(t => {
       const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
       
@@ -277,7 +298,7 @@ Deno.serve(async (req) => {
     // INCORPORADOR 50K (LÍQUIDO) - CORREÇÃO FINAL
     // Incluir todas parcelas pagas, mas excluir transações inválidas
     const seenIncorporadorLiqIds = new Set<string>();
-    const incorporador50kTransactions = (completedTransactions || []).filter(t => {
+    const incorporador50kTransactions = completedTransactions.filter(t => {
       const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
       
@@ -309,7 +330,7 @@ Deno.serve(async (req) => {
     console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)} (${incorporador50kTransactions.length} transações)`);
 
     // 5. CALCULAR ORDER BUMPS (APENAS transações -offer-)
-    const ob_construir_alugar_transactions = (completedTransactions || []).filter(t => {
+    const ob_construir_alugar_transactions = completedTransactions.filter(t => {
       if (!isOfferTransaction(t)) return false;
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
@@ -318,14 +339,14 @@ Deno.serve(async (req) => {
              productName.includes('VIVER DE ALUGUEL');
     });
     
-    const ob_vitalicio_transactions = (completedTransactions || []).filter(t => {
+    const ob_vitalicio_transactions = completedTransactions.filter(t => {
       if (!isOfferTransaction(t)) return false;
       const category = t.product_category?.toLowerCase() || '';
       const productName = (t.product_name || '').toUpperCase();
       return category === 'ob_vitalicio' || productName.includes('ACESSO VITALIC');
     });
     
-    const ob_evento_transactions = (completedTransactions || []).filter(t => {
+    const ob_evento_transactions = completedTransactions.filter(t => {
       if (!isOfferTransaction(t)) return false;
       const productName = (t.product_name || '').toUpperCase();
       const normalizedName = productName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -333,7 +354,7 @@ Deno.serve(async (req) => {
       return normalizedName.includes('IMERSAO PRESENCIAL') && price <= 300;
     });
     
-    const ob_construir_vender_transactions = (completedTransactions || []).filter(t => {
+    const ob_construir_vender_transactions = completedTransactions.filter(t => {
       if (!isOfferTransaction(t)) return false;
       return t.product_category === 'ob_construir_vender';
     });
@@ -383,7 +404,7 @@ Deno.serve(async (req) => {
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)} (Inc50k: ${incorporador_50k.toFixed(2)} + OBVit: ${ob_vitalicio.toFixed(2)} + OBAlug: ${ob_construir_alugar.toFixed(2)} + A010: ${faturado_a010.toFixed(2)})`);
 
     // 9. CALCULAR FATURADO CONTRATO
-    const contractTransactions = (completedTransactions || []).filter(t => {
+    const contractTransactions = completedTransactions.filter(t => {
       const productName = (t.product_name || '').toUpperCase();
       const isA000Contrato = productName.includes('A000') && productName.includes('CONTRATO');
       const isAnticrise = productName.includes('ANTICRISE');
@@ -398,23 +419,37 @@ Deno.serve(async (req) => {
     // 10. CALCULAR CUSTO REAL
     const custo_real = ads_cost - (faturado_a010 + ob_construir_alugar + ob_vitalicio + ob_evento + ob_construir_vender);
 
-    // 11. CALCULAR MÉTRICAS DERIVADAS
+    // 11. CALCULAR MÉTRICAS DERIVADAS - CORREÇÃO FINAL:
+    // Custo Total = Gastos Ads + (Team + Office) / 4
     const operating_cost = ads_cost + team_cost + office_cost;
     const lucro_operacional = faturamento_total - operating_cost;
     
-    const roi = incorporador_50k > 0 ? (incorporador_50k / (incorporador_50k - lucro_operacional)) * 100 : 0;
-    const cir = incorporador_50k > 0 ? (custo_real / incorporador_50k) * 100 : 0;
+    // ROI = Faturamento Incorporador / Custo Total * 100
+    const roi = operating_cost > 0 ? (incorporador_50k / operating_cost) * 100 : 0;
+    
+    // ROAS = Faturamento Total / Gastos Ads (se Ads > 0)
     const roas = ads_cost > 0 ? (faturamento_total / ads_cost) : 0;
+    
+    // CIR = Custo Real / Incorporador 50k * 100
+    const cir = incorporador_50k > 0 ? (custo_real / incorporador_50k) * 100 : 0;
+    
+    // CPL = Gastos Ads / Vendas A010
     const cpl = vendas_a010 > 0 ? (ads_cost / vendas_a010) : 0;
+    
+    // CPLR = Custo Real / Vendas A010
     const cplr = vendas_a010 > 0 ? (custo_real / vendas_a010) : 0;
 
+    console.log(`📊 Custo Total: R$ ${operating_cost.toFixed(2)} (Ads: ${ads_cost.toFixed(2)} + Op: ${(team_cost + office_cost).toFixed(2)})`);
     console.log(`📊 CPL: R$ ${cpl.toFixed(2)}`);
+    console.log(`📊 ROI: ${roi.toFixed(2)}%`);
+    console.log(`📊 ROAS: ${roas.toFixed(2)}`);
+    console.log(`📊 Lucro: R$ ${lucro_operacional.toFixed(2)}`);
 
     // 12. PREPARAR DADOS PARA UPSERT
-    const gross_revenue = (completedTransactions || []).reduce((sum, t) => sum + (t.product_price || 0), 0);
+    const gross_revenue = completedTransactions.reduce((sum, t) => sum + (t.product_price || 0), 0);
     const net_revenue = faturamento_total;
     const platform_fees = gross_revenue - net_revenue;
-    const refunds_amount = (refundedTransactions || []).reduce((sum, t) => sum + (t.product_price || 0), 0);
+    const refunds_amount = refundedTransactions.reduce((sum, t) => sum + (t.product_price || 0), 0);
 
     const metricsData: any = {
       start_date: week_start,
@@ -490,7 +525,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: error.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    );
     }
 
     console.log('✅ Métricas calculadas com sucesso!');
@@ -524,6 +559,9 @@ Deno.serve(async (req) => {
           ultrameta_liquido,
           cpl: `R$ ${cpl.toFixed(2)}`,
           cplr: `R$ ${cplr.toFixed(2)}`,
+          roi: `${roi.toFixed(2)}%`,
+          roas: roas.toFixed(2),
+          operating_cost: `R$ ${operating_cost.toFixed(2)}`,
         }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
