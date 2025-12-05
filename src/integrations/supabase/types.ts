@@ -984,6 +984,7 @@ export type Database = {
           raw_data: Json | null
           sale_date: string
           sale_status: string | null
+          source: string | null
           subtotal_cents: number | null
           total_installments: number | null
           updated_at: string | null
@@ -1012,6 +1013,7 @@ export type Database = {
           raw_data?: Json | null
           sale_date: string
           sale_status?: string | null
+          source?: string | null
           subtotal_cents?: number | null
           total_installments?: number | null
           updated_at?: string | null
@@ -1040,6 +1042,7 @@ export type Database = {
           raw_data?: Json | null
           sale_date?: string
           sale_status?: string | null
+          source?: string | null
           subtotal_cents?: number | null
           total_installments?: number | null
           updated_at?: string | null
