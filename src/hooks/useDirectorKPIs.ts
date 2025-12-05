@@ -33,6 +33,8 @@ const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IME
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
     queryKey: ['director-kpis', startDate?.toISOString(), endDate?.toISOString()],
+    staleTime: 0,
+    gcTime: 0,
     queryFn: async (): Promise<DirectorKPIs> => {
       const start = startDate ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
       const end = endDate ? format(endDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');

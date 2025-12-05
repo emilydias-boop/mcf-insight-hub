@@ -55,15 +55,22 @@ export default function Dashboard() {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'hubla_transactions' },
-        (payload) => {
+        async (payload) => {
           console.log('💰 Nova venda Hubla:', payload);
-          // Invalida a query de tempo real para forçar recálculo
-          queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
-          queryClient.invalidateQueries({ queryKey: ['a010-novo-lead'] });
-          queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+          // Invalida E força refetch imediato
+          await queryClient.invalidateQueries({ 
+            queryKey: ['director-kpis'],
+            refetchType: 'all'
+          });
+          await queryClient.refetchQueries({ 
+            queryKey: ['director-kpis'],
+            type: 'all'
+          });
+          queryClient.invalidateQueries({ queryKey: ['a010-novo-lead'], refetchType: 'all' });
+          queryClient.invalidateQueries({ queryKey: ['evolution-data'], refetchType: 'all' });
           toast({
             title: "💰 Nova venda registrada",
-            description: "Os dados foram atualizados automaticamente!",
+            description: `${(payload.new as any)?.customer_name || 'Cliente'} - Dados atualizados!`,
           });
         }
       )
@@ -75,8 +82,15 @@ export default function Dashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'daily_costs' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+        async () => {
+          await queryClient.invalidateQueries({ 
+            queryKey: ['director-kpis'],
+            refetchType: 'all'
+          });
+          await queryClient.refetchQueries({ 
+            queryKey: ['director-kpis'],
+            type: 'all'
+          });
         }
       )
       .subscribe();
