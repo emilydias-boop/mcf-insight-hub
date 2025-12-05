@@ -33,6 +33,7 @@ export const CONFETTI_PRODUCTS = [
   "MCF INCORPORADOR",     // A001, A002, A009
   "MCF Plano Anticrise",  // A003, A004
   "Plano Construtor",     // Plano Construtor Básico
+  "A009",                 // A009 explícito (mesmo com THE CLUB no nome)
 ];
 
 // Produtos que NÃO disparam confetti (mesmo se contiverem palavras do CONFETTI_PRODUCTS)
