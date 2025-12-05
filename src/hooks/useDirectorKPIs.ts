@@ -30,6 +30,10 @@ interface DirectorKPIs {
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
 
+// Categorias e produtos excluídos do Faturamento Total (conforme planilha)
+const EXCLUDED_CATEGORIES_FATURAMENTO = ['clube_arremate', 'efeito_alavanca', 'renovacao', 'imersao'];
+const EXCLUDED_PRODUCTS_FATURAMENTO = ['SÓCIO MCF', 'SOCIO MCF', 'ALMOÇO NETWORKING', 'ALMOCO NETWORKING', 'MENTORIA INDIVIDUAL', 'CLUBE DO ARREMATE', 'CONTRATO - CLUBE DO ARREMATE'];
+
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
     queryKey: ['director-kpis', startDate?.toISOString(), endDate?.toISOString()],
@@ -111,14 +115,22 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // TODAS as receitas (Hubla + Kiwify), excluindo apenas Order Bumps (-offer-)
+      // TODAS as receitas (Hubla + Kiwify), excluindo categorias e produtos específicos
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter(tx => {
           const hublaId = tx.hubla_id || '';
+          const productName = (tx.product_name || '').toUpperCase();
+          const category = tx.product_category || '';
           
           // Excluir Order Bumps (para não duplicar)
           if (hublaId.includes('-offer-')) return false;
+          
+          // Excluir categorias específicas
+          if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
+          
+          // Excluir produtos específicos
+          if (EXCLUDED_PRODUCTS_FATURAMENTO.some(p => productName.includes(p))) return false;
           
           // Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
@@ -281,14 +293,22 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Faturamento Total anterior = mesma lógica (todas receitas, sem offers)
+      // Faturamento Total anterior = mesma lógica (excluindo categorias e produtos)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter(tx => {
           const hublaId = tx.hubla_id || '';
+          const productName = (tx.product_name || '').toUpperCase();
+          const category = tx.product_category || '';
           
           // Excluir Order Bumps
           if (hublaId.includes('-offer-')) return false;
+          
+          // Excluir categorias específicas
+          if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
+          
+          // Excluir produtos específicos
+          if (EXCLUDED_PRODUCTS_FATURAMENTO.some(p => productName.includes(p))) return false;
           
           // Deduplicar por hubla_id
           if (prevSeenAllIds.has(tx.hubla_id)) return false;
