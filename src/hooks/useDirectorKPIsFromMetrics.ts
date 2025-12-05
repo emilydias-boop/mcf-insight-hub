@@ -159,7 +159,7 @@ export function useDirectorKPIsFromMetrics(startDate?: Date, endDate?: Date) {
         roas: {
           value: roas,
           change: calcChange(roas, prevRoas),
-          isPositive: roas <= prevRoas,
+          isPositive: roas >= prevRoas,
         },
         vendasA010,
         faturamentoIncorporador,

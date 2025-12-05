@@ -30,6 +30,14 @@ interface DirectorKPIs {
 const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
 const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
 
+// Lista completa de produtos para Faturamento Total (34 produtos)
+const FATURAMENTO_TOTAL_PRODUCTS = [
+  '000 - PRÉ RESERVA', '000 - CONTRATO', '001- PRÉ-RESERVA', '003 - IMERSÃO', '016-ANÁLISE',
+  'A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008', 'A009',
+  'ASAAS', 'COBRANÇAS ASAAS', 'CONTRATO ANTICRISE', 'CONTRATO - ANTICRISE',
+  'JANTAR NETWORKING', 'R001', 'R004', 'R005', 'R006', 'R009', 'R21', 'SÓCIO JANTAR'
+];
+
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
     queryKey: ['director-kpis', startDate?.toISOString(), endDate?.toISOString()],
@@ -111,12 +119,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Somar categorias core EXCLUINDO -offer- (evita duplicação)
+      // CORREÇÃO: Somar apenas produtos da lista específica (34 produtos)
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter(tx => {
-          // Excluir transações -offer- (já contabilizadas na transação principal)
-          if (tx.hubla_id?.includes('-offer-')) return false;
+          const productName = (tx.product_name || '').toUpperCase();
+          // Verificar se o produto está na lista de Faturamento Total
+          const isInList = FATURAMENTO_TOTAL_PRODUCTS.some(prod => 
+            productName.includes(prod.toUpperCase())
+          );
+          if (!isInList) return false;
           if (seenAllIds.has(tx.hubla_id)) return false;
           seenAllIds.add(tx.hubla_id);
           return true;
@@ -187,11 +199,28 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Lucro = Faturamento Total - Custo Total
       const lucro = faturamentoTotal - custoTotal;
 
-      // ROI = Faturamento Incorporador / Custo Total (em %)
-      const roi = custoTotal > 0 ? (faturamentoIncorporador / custoTotal) : 0;
+      // ===== FATURAMENTO CLINT (Bruto - usando product_price) - Calculado antes de ROI =====
+      const seenClintBrutoIds = new Set<string>();
+      const faturamentoClint = (hublaData || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+          if (seenClintBrutoIds.has(tx.hubla_id)) return false;
+          if (isIncorporador && !isExcluded) {
+            seenClintBrutoIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
-      // ROAS = Custo Total / Faturamento Incorporador
-      const roas = faturamentoIncorporador > 0 ? (custoTotal / faturamentoIncorporador) : 0;
+      // ROI = Faturamento Clint / (Faturamento Clint - Lucro)
+      const denominadorRoi = faturamentoClint - lucro;
+      const roi = denominadorRoi !== 0 ? (faturamentoClint / denominadorRoi) : 0;
+
+      // ROAS = Faturamento Total / Gastos Ads
+      const roas = gastosAds > 0 ? (faturamentoTotal / gastosAds) : 0;
 
       // ===== PERÍODO ANTERIOR PARA COMPARAÇÃO =====
       const daysDiff = startDate && endDate 
@@ -209,7 +238,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Buscar dados anteriores para comparação - mesmo filtro
       const { data: prevHubla } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date')
+        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date, product_price')
         .eq('sale_status', 'completed')
         .eq('event_type', 'invoice.payment_succeeded')
         .gte('sale_date', prevStartStr)
@@ -273,11 +302,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Faturamento Total anterior = excluindo -offer- (mesma lógica)
+      // Faturamento Total anterior = mesma lógica (lista de 34 produtos)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter(tx => {
-          if (tx.hubla_id?.includes('-offer-')) return false;
+          const productName = (tx.product_name || '').toUpperCase();
+          const isInList = FATURAMENTO_TOTAL_PRODUCTS.some(prod => 
+            productName.includes(prod.toUpperCase())
+          );
+          if (!isInList) return false;
           if (prevSeenAllIds.has(tx.hubla_id)) return false;
           prevSeenAllIds.add(tx.hubla_id);
           return true;
@@ -314,30 +347,34 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevCustoTotal = prevGastosAds + custoOperacionalSemanal;
       const prevCpl = prevVendasA010 > 0 ? prevGastosAds / prevVendasA010 : 0;
       const prevLucro = prevFaturamentoTotal - prevCustoTotal;
-      const prevRoi = prevCustoTotal > 0 ? (prevFatIncorporador / prevCustoTotal) : 0;
-      const prevRoas = prevFatIncorporador > 0 ? (prevCustoTotal / prevFatIncorporador) : 0;
+      // Faturamento Clint anterior (bruto)
+      const prevSeenClintBrutoIds = new Set<string>();
+      const prevFaturamentoClint = (prevHubla || [])
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+          if (prevSeenClintBrutoIds.has(tx.hubla_id)) return false;
+          if (isIncorporador && !isExcluded) {
+            prevSeenClintBrutoIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+
+      // ROI anterior = Faturamento Clint / (Faturamento Clint - Lucro)
+      const prevDenominadorRoi = prevFaturamentoClint - prevLucro;
+      const prevRoi = prevDenominadorRoi !== 0 ? (prevFaturamentoClint / prevDenominadorRoi) : 0;
+      
+      // ROAS anterior = Faturamento Total / Gastos Ads
+      const prevRoas = prevGastosAds > 0 ? (prevFaturamentoTotal / prevGastosAds) : 0;
 
       // Calcular variações
       const calcChange = (current: number, previous: number) => {
         if (previous === 0) return current > 0 ? 100 : 0;
         return ((current - previous) / previous) * 100;
       };
-
-      // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      const seenClintBrutoIds = new Set<string>();
-      const faturamentoClint = (hublaData || [])
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
-          if (seenClintBrutoIds.has(tx.hubla_id)) return false;
-          if (isIncorporador && !isExcluded) {
-            seenClintBrutoIds.add(tx.hubla_id);
-            return true;
-          }
-          return false;
-        })
-        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
       // ===== ULTRAMETA (baseado em vendas A010) =====
       const ultrametaClint = vendasA010 * 1680;

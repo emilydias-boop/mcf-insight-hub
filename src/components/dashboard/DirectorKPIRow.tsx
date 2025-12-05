@@ -130,7 +130,7 @@ export function DirectorKPIRow({
       change: roi.change,
       isPositive: roi.isPositive,
       icon: Percent,
-      tooltip: "ROI = (Lucro / Custos totais) × 100",
+      tooltip: "ROI = Faturamento Clint / (Faturamento Clint - Lucro)",
     },
     {
       title: "ROAS",
@@ -138,7 +138,7 @@ export function DirectorKPIRow({
       change: roas.change,
       isPositive: roas.isPositive,
       icon: BarChart3,
-      tooltip: "ROAS = Faturamento atribuído / Gastos Ads",
+      tooltip: "ROAS = Faturamento Total / Gastos Ads",
     },
   ];
 
