@@ -110,24 +110,34 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      const faturamentoTotal = faturamentoIncorporador + obVitalicio + obConstruir + faturadoA010;
+      // CORREÇÃO: Somar TODOS os produtos (não apenas categorias específicas)
+      const seenAllIds = new Set<string>();
+      const faturamentoTotal = (hublaData || [])
+        .filter(tx => {
+          if (seenAllIds.has(tx.hubla_id)) return false;
+          seenAllIds.add(tx.hubla_id);
+          return true;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== VENDAS A010 =====
-      // CORREÇÃO: Deduplicar apenas por hubla_id exato para alcançar 180 vendas
+      // CORREÇÃO: Excluir -offer- (Order Bumps) da contagem
       const seenA010CountIds = new Set<string>();
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
+        const isOffer = tx.hubla_id?.includes('-offer-');
         
-        if (!isA010 || !hasValidName) return false;
+        if (!isA010 || !hasValidName || isOffer) return false;
         
-        // Deduplicar apenas por hubla_id exato
+        // Deduplicar por hubla_id
         if (seenA010CountIds.has(tx.hubla_id)) return false;
         seenA010CountIds.add(tx.hubla_id);
         
         return true;
       }).length;
+      
 
       // ===== GASTOS ADS =====
       const { data: adsData } = await supabase
@@ -138,6 +148,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .lte('date', end);
 
       const gastosAds = adsData?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+
+      // DEBUG: Log período e contagens
+      console.log('📊 Director KPIs Debug:', {
+        periodo: `${start} - ${end}`,
+        totalTransacoes: hublaData?.length,
+        faturamentoTotal,
+        vendasA010,
+        gastosAds
+      });
 
       // ===== CUSTOS OPERACIONAIS (equipe + escritório) =====
       const monthDate = format(startOfMonth(startDate || new Date()), 'yyyy-MM-dd');
@@ -247,7 +266,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      const prevFaturamentoTotal = prevFatIncorporador + prevObVitalicio + prevObConstruir + prevFatA010;
+      // Faturamento Total anterior = soma de TODOS os produtos
+      const prevSeenAllIds = new Set<string>();
+      const prevFaturamentoTotal = (prevHubla || [])
+        .filter(tx => {
+          if (prevSeenAllIds.has(tx.hubla_id)) return false;
+          prevSeenAllIds.add(tx.hubla_id);
+          return true;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // Vendas A010 período anterior com mesma lógica de deduplicação
       const prevSeenA010CountIds = new Set<string>();
