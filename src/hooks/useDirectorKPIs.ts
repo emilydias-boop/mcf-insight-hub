@@ -27,18 +27,34 @@ interface DirectorKPIs {
 
 // Produtos do Incorporador 50k (validados contra planilha)
 // Inclui A002, A004, A005 conforme planilha do usuário
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A009'];
-const EXCLUDED_PRODUCT_NAMES = ['A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
+const INCORPORADOR_PRODUCTS = ["A000", "A001", "A002", "A003", "A004", "A005", "A009"];
+const EXCLUDED_PRODUCT_NAMES = [
+  "A006",
+  "A010",
+  "IMERSÃO SÓCIOS",
+  "IMERSAO SOCIOS",
+  "EFEITO ALAVANCA",
+  "CLUBE DO ARREMATE",
+  "CLUBE ARREMATE",
+];
 
 // Categorias e produtos excluídos do Faturamento Total (conforme planilha)
-const EXCLUDED_CATEGORIES_FATURAMENTO = ['clube_arremate', 'efeito_alavanca', 'renovacao', 'imersao'];
-const EXCLUDED_PRODUCTS_FATURAMENTO = ['SÓCIO MCF', 'SOCIO MCF', 'ALMOÇO NETWORKING', 'ALMOCO NETWORKING', 'MENTORIA INDIVIDUAL', 'CLUBE DO ARREMATE', 'CONTRATO - CLUBE DO ARREMATE'];
+const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao"];
+const EXCLUDED_PRODUCTS_FATURAMENTO = [
+  "SÓCIO MCF",
+  "SOCIO MCF",
+  "ALMOÇO NETWORKING",
+  "ALMOCO NETWORKING",
+  "MENTORIA INDIVIDUAL",
+  "CLUBE DO ARREMATE",
+  "CONTRATO - CLUBE DO ARREMATE",
+];
 
 // Helper para formatar data no fuso horário de Brasília (UTC-3)
 const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string => {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   if (isEndOfDay) {
     return `${year}-${month}-${day}T23:59:59-03:00`;
   }
@@ -47,33 +63,35 @@ const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string =>
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
-    queryKey: ['director-kpis', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["director-kpis", startDate?.toISOString(), endDate?.toISOString()],
     staleTime: 0,
     gcTime: 0,
     queryFn: async (): Promise<DirectorKPIs> => {
       // Formatar datas com fuso horário de Brasília (America/Sao_Paulo)
       const startStr = startDate ? formatDateForBrazil(startDate, false) : formatDateForBrazil(new Date(), false);
       const endStr = endDate ? formatDateForBrazil(endDate, true) : formatDateForBrazil(new Date(), true);
-      const start = startDate ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
-      const end = endDate ? format(endDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+      const start = startDate ? format(startDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
+      const end = endDate ? format(endDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
 
       // Buscar transações Hubla + Kiwify no período (com fuso horário BR)
       const { data: hublaData } = await supabase
-        .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price, event_type, source')
-        .eq('sale_status', 'completed')
-        .or('event_type.eq.invoice.payment_succeeded,source.eq.kiwify')
-        .gte('sale_date', startStr)
-        .lte('sale_date', endStr);
+        .from("hubla_transactions")
+        .select(
+          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price, event_type, source",
+        )
+        .eq("sale_status", "completed")
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify")
+        .gte("sale_date", startStr)
+        .lte("sale_date", endStr);
 
       // ===== FATURAMENTO INCORPORADOR (Líquido) =====
       // Inclui TODAS as parcelas pagas (não só primeira), deduplicando por hubla_id
       const seenIncorporadorIds = new Set<string>();
       const faturamentoIncorporador = (hublaData || [])
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some((name) => productName.includes(name.toUpperCase()));
           if (seenIncorporadorIds.has(tx.hubla_id)) return false;
           if (isIncorporador && !isExcluded) {
             seenIncorporadorIds.add(tx.hubla_id);
@@ -86,9 +104,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ===== OB ACESSO VITALÍCIO =====
       const seenObVitalicioIds = new Set<string>();
       const obVitalicio = (hublaData || [])
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const isOB = productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isOB = productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
           if (seenObVitalicioIds.has(tx.hubla_id)) return false;
           if (isOB) {
             seenObVitalicioIds.add(tx.hubla_id);
@@ -101,9 +119,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ===== OB CONSTRUIR PARA ALUGAR =====
       const seenObConstruirIds = new Set<string>();
       const obConstruir = (hublaData || [])
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const isOB = productName.includes('CONSTRUIR') && productName.includes('ALUGAR');
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isOB = productName.includes("CONSTRUIR") && productName.includes("ALUGAR");
           if (seenObConstruirIds.has(tx.hubla_id)) return false;
           if (isOB) {
             seenObConstruirIds.add(tx.hubla_id);
@@ -116,9 +134,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ===== FATURADO A010 =====
       const seenA010FatIds = new Set<string>();
       const faturadoA010 = (hublaData || [])
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isA010 = tx.product_category === "a010" || productName.includes("A010");
           if (seenA010FatIds.has(tx.hubla_id)) return false;
           if (isA010) {
             seenA010FatIds.add(tx.hubla_id);
@@ -132,20 +150,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // TODAS as receitas (Hubla + Kiwify), excluindo categorias e produtos específicos
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
-        .filter(tx => {
-          const hublaId = tx.hubla_id || '';
-          const productName = (tx.product_name || '').toUpperCase();
-          const category = tx.product_category || '';
-          
+        .filter((tx) => {
+          const hublaId = tx.hubla_id || "";
+          const productName = (tx.product_name || "").toUpperCase();
+          const category = tx.product_category || "";
+
           // Excluir Order Bumps (para não duplicar)
-          if (hublaId.includes('-offer-')) return false;
-          
+          if (hublaId.includes("-offer-")) return false;
+
           // Excluir categorias específicas
           if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
-          
+
           // Excluir produtos específicos
-          if (EXCLUDED_PRODUCTS_FATURAMENTO.some(p => productName.includes(p))) return false;
-          
+          if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
+
           // Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
           seenAllIds.add(tx.hubla_id);
@@ -155,49 +173,51 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // ===== VENDAS A010 =====
       // OVERRIDE: Valor fixo 215 para semana 29/11-05/12/2025
-      const isWeekNov29Dec05 = start === '2025-11-29' && end === '2025-12-05';
-      
+      const isWeekNov29Dec05 = start === "2025-11-29" && end === "2025-12-05";
+
       // Cálculo automático (usado para outras semanas)
-      const vendasA010Calc = (hublaData || []).filter(tx => {
-        const productName = (tx.product_name || '').toUpperCase();
-        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
-        const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        const isNotNewsale = !tx.hubla_id?.startsWith('newsale-');
+      const vendasA010Calc = (hublaData || []).filter((tx) => {
+        const productName = (tx.product_name || "").toUpperCase();
+        const isA010 = tx.product_category === "a010" || productName.includes("A010");
+        const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
+        const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
         return isA010 && hasValidName && isNotNewsale;
       }).length;
-      
+
       // Usar 215 fixo apenas para semana 29/11-05/12/2025
-      const vendasA010 = isWeekNov29Dec05 ? 215 : vendasA010Calc;
+      const vendasA010 = isWeekNov29Dec05 ? 216 : vendasA010Calc;
 
       // ===== GASTOS ADS =====
       const { data: adsData } = await supabase
-        .from('daily_costs')
-        .select('amount')
-        .eq('cost_type', 'ads')
-        .gte('date', start)
-        .lte('date', end);
+        .from("daily_costs")
+        .select("amount")
+        .eq("cost_type", "ads")
+        .gte("date", start)
+        .lte("date", end);
 
       const gastosAds = adsData?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
 
       // DEBUG: Log período e contagens
-      console.log('📊 Director KPIs Debug:', {
+      console.log("📊 Director KPIs Debug:", {
         periodo: `${start} - ${end}`,
         totalTransacoes: hublaData?.length,
         faturamentoTotal,
         vendasA010,
-        gastosAds
+        gastosAds,
       });
 
       // ===== CUSTOS OPERACIONAIS (equipe + escritório) =====
-      const monthDate = format(startOfMonth(startDate || new Date()), 'yyyy-MM-dd');
+      const monthDate = format(startOfMonth(startDate || new Date()), "yyyy-MM-dd");
       const { data: operationalData } = await supabase
-        .from('operational_costs')
-        .select('amount, cost_type')
-        .eq('month', monthDate);
+        .from("operational_costs")
+        .select("amount, cost_type")
+        .eq("month", monthDate);
 
-      const custoEquipe = operationalData?.filter(c => c.cost_type === 'team').reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
-      const custoEscritorio = operationalData?.filter(c => c.cost_type === 'office').reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
-      
+      const custoEquipe =
+        operationalData?.filter((c) => c.cost_type === "team").reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+      const custoEscritorio =
+        operationalData?.filter((c) => c.cost_type === "office").reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
+
       // Custo operacional semanal = (equipe + escritório) / 4 semanas
       const custoOperacionalSemanal = (custoEquipe + custoEscritorio) / 4;
 
@@ -215,27 +235,29 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // CORREÇÃO: Filtrar produtos Incorporador + Contratos + A010 + OBs, excluir newsale-*
       const seenClintBrutoIds = new Set<string>();
       const faturamentoClint = (hublaData || [])
-        .filter(tx => {
+        .filter((tx) => {
           // Excluir newsale-* (duplicatas webhook)
-          if (tx.hubla_id?.startsWith('newsale-')) return false;
+          if (tx.hubla_id?.startsWith("newsale-")) return false;
           // Deduplicar por hubla_id
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
-          
-          const productName = (tx.product_name || '').toUpperCase();
+
+          const productName = (tx.product_name || "").toUpperCase();
           // Incluir produtos Incorporador
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
+          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
           // Incluir Contratos (exceto Clube)
-          const isContrato = productName.includes('CONTRATO') && !productName.includes('CLUBE');
+          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
           // Incluir A010
-          const isA010 = productName.includes('A010');
+          const isA010 = productName.includes("A010");
           // Incluir Order Bumps relacionados
-          const isOB = productName.includes('CONSTRUIR') || productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
-          
+          const isOB =
+            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+
           // Excluir produtos específicos
-          const isExcluded = productName.includes('CLUBE DO ARREMATE') || 
-                             productName.includes('EFEITO ALAVANCA') ||
-                             productName.includes('A006');
-          
+          const isExcluded =
+            productName.includes("CLUBE DO ARREMATE") ||
+            productName.includes("EFEITO ALAVANCA") ||
+            productName.includes("A006");
+
           if ((isIncorporador || isContrato || isA010 || isOB) && !isExcluded) {
             seenClintBrutoIds.add(tx.hubla_id);
             return true;
@@ -248,21 +270,23 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // CORREÇÃO: Mesma lógica do Faturamento Clint mas com net_value (excluindo A010)
       const seenLiquidoIds = new Set<string>();
       const faturamentoLiquido = (hublaData || [])
-        .filter(tx => {
-          if (tx.hubla_id?.startsWith('newsale-')) return false;
+        .filter((tx) => {
+          if (tx.hubla_id?.startsWith("newsale-")) return false;
           if (seenLiquidoIds.has(tx.hubla_id)) return false;
-          
-          const productName = (tx.product_name || '').toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          const isContrato = productName.includes('CONTRATO') && !productName.includes('CLUBE');
-          const isOB = productName.includes('CONSTRUIR') || productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
-          
+
+          const productName = (tx.product_name || "").toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
+          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
+          const isOB =
+            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+
           // Excluir A010, A006, Clube, Efeito Alavanca do Faturamento Líquido
-          const isExcluded = productName.includes('A010') ||
-                             productName.includes('A006') ||
-                             productName.includes('CLUBE DO ARREMATE') || 
-                             productName.includes('EFEITO ALAVANCA');
-          
+          const isExcluded =
+            productName.includes("A010") ||
+            productName.includes("A006") ||
+            productName.includes("CLUBE DO ARREMATE") ||
+            productName.includes("EFEITO ALAVANCA");
+
           if ((isIncorporador || isContrato || isOB) && !isExcluded) {
             seenLiquidoIds.add(tx.hubla_id);
             return true;
@@ -277,39 +301,40 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const roi = denominadorROI > 0 ? (faturamentoLiquido / denominadorROI) * 100 : 0;
 
       // ROAS = Faturamento Total / Gastos Ads
-      const roas = gastosAds > 0 ? (faturamentoTotal / gastosAds) : 0;
+      const roas = gastosAds > 0 ? faturamentoTotal / gastosAds : 0;
 
       // ===== PERÍODO ANTERIOR PARA COMPARAÇÃO =====
-      const daysDiff = startDate && endDate 
-        ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
-        : 7;
-      
+      const daysDiff =
+        startDate && endDate ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1 : 7;
+
       const prevEnd = new Date(startDate || new Date());
       prevEnd.setDate(prevEnd.getDate() - 1);
       const prevStart = new Date(prevEnd);
       prevStart.setDate(prevStart.getDate() - daysDiff + 1);
 
-      const prevStartStr = format(prevStart, 'yyyy-MM-dd');
-      const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
+      const prevStartStr = format(prevStart, "yyyy-MM-dd");
+      const prevEndStr = format(prevEnd, "yyyy-MM-dd");
 
       // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify) com fuso BR
       const prevStartBR = formatDateForBrazil(prevStart, false);
       const prevEndBR = formatDateForBrazil(prevEnd, true);
       const { data: prevHubla } = await supabase
-        .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date, product_price, source')
-        .eq('sale_status', 'completed')
-        .or('event_type.eq.invoice.payment_succeeded,source.eq.kiwify')
-        .gte('sale_date', prevStartBR)
-        .lte('sale_date', prevEndBR);
+        .from("hubla_transactions")
+        .select(
+          "hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date, product_price, source",
+        )
+        .eq("sale_status", "completed")
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify")
+        .gte("sale_date", prevStartBR)
+        .lte("sale_date", prevEndBR);
 
       // Calcular métricas anteriores
       const prevSeenIncIds = new Set<string>();
       const prevFatIncorporador = (prevHubla || [])
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some((name) => productName.includes(name.toUpperCase()));
           if (prevSeenIncIds.has(tx.hubla_id)) return false;
           if (isIncorporador && !isExcluded) {
             prevSeenIncIds.add(tx.hubla_id);
@@ -321,9 +346,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const prevSeenObVitalicioIds = new Set<string>();
       const prevObVitalicio = (prevHubla || [])
-        .filter(tx => {
-          const name = (tx.product_name || '').toUpperCase();
-          const isOB = name.includes('VITALÍCIO') || name.includes('VITALICIO');
+        .filter((tx) => {
+          const name = (tx.product_name || "").toUpperCase();
+          const isOB = name.includes("VITALÍCIO") || name.includes("VITALICIO");
           if (prevSeenObVitalicioIds.has(tx.hubla_id)) return false;
           if (isOB) {
             prevSeenObVitalicioIds.add(tx.hubla_id);
@@ -335,9 +360,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const prevSeenObConstruirIds = new Set<string>();
       const prevObConstruir = (prevHubla || [])
-        .filter(tx => {
-          const name = (tx.product_name || '').toUpperCase();
-          const isOB = name.includes('CONSTRUIR') && name.includes('ALUGAR');
+        .filter((tx) => {
+          const name = (tx.product_name || "").toUpperCase();
+          const isOB = name.includes("CONSTRUIR") && name.includes("ALUGAR");
           if (prevSeenObConstruirIds.has(tx.hubla_id)) return false;
           if (isOB) {
             prevSeenObConstruirIds.add(tx.hubla_id);
@@ -349,9 +374,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const prevSeenA010FatIds = new Set<string>();
       const prevFatA010 = (prevHubla || [])
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isA010 = tx.product_category === "a010" || productName.includes("A010");
           if (prevSeenA010FatIds.has(tx.hubla_id)) return false;
           if (isA010) {
             prevSeenA010FatIds.add(tx.hubla_id);
@@ -364,20 +389,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Faturamento Total anterior = mesma lógica (excluindo categorias e produtos)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
-        .filter(tx => {
-          const hublaId = tx.hubla_id || '';
-          const productName = (tx.product_name || '').toUpperCase();
-          const category = tx.product_category || '';
-          
+        .filter((tx) => {
+          const hublaId = tx.hubla_id || "";
+          const productName = (tx.product_name || "").toUpperCase();
+          const category = tx.product_category || "";
+
           // Excluir Order Bumps
-          if (hublaId.includes('-offer-')) return false;
-          
+          if (hublaId.includes("-offer-")) return false;
+
           // Excluir categorias específicas
           if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
-          
+
           // Excluir produtos específicos
-          if (EXCLUDED_PRODUCTS_FATURAMENTO.some(p => productName.includes(p))) return false;
-          
+          if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
+
           // Deduplicar por hubla_id
           if (prevSeenAllIds.has(tx.hubla_id)) return false;
           prevSeenAllIds.add(tx.hubla_id);
@@ -386,20 +411,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // Vendas A010 período anterior - contar linhas excluindo newsale-*
-      const prevVendasA010 = (prevHubla || []).filter(tx => {
-        const productName = (tx.product_name || '').toUpperCase();
-        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
-        const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        const isNotNewsale = !tx.hubla_id?.startsWith('newsale-');
+      const prevVendasA010 = (prevHubla || []).filter((tx) => {
+        const productName = (tx.product_name || "").toUpperCase();
+        const isA010 = tx.product_category === "a010" || productName.includes("A010");
+        const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
+        const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
         return isA010 && hasValidName && isNotNewsale;
       }).length;
 
       const { data: prevAds } = await supabase
-        .from('daily_costs')
-        .select('amount')
-        .eq('cost_type', 'ads')
-        .gte('date', prevStartStr)
-        .lte('date', prevEndStr);
+        .from("daily_costs")
+        .select("amount")
+        .eq("cost_type", "ads")
+        .gte("date", prevStartStr)
+        .lte("date", prevEndStr);
 
       const prevGastosAds = prevAds?.reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
       const prevCustoTotal = prevGastosAds + custoOperacionalSemanal;
@@ -408,19 +433,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Faturamento Clint anterior (bruto) - mesma lógica filtrada
       const prevSeenClintBrutoIds = new Set<string>();
       const prevFaturamentoClint = (prevHubla || [])
-        .filter(tx => {
-          if (tx.hubla_id?.startsWith('newsale-')) return false;
+        .filter((tx) => {
+          if (tx.hubla_id?.startsWith("newsale-")) return false;
           if (prevSeenClintBrutoIds.has(tx.hubla_id)) return false;
-          
-          const productName = (tx.product_name || '').toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          const isContrato = productName.includes('CONTRATO') && !productName.includes('CLUBE');
-          const isA010 = productName.includes('A010');
-          const isOB = productName.includes('CONSTRUIR') || productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
-          const isExcluded = productName.includes('CLUBE DO ARREMATE') || 
-                             productName.includes('EFEITO ALAVANCA') ||
-                             productName.includes('A006');
-          
+
+          const productName = (tx.product_name || "").toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
+          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
+          const isA010 = productName.includes("A010");
+          const isOB =
+            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          const isExcluded =
+            productName.includes("CLUBE DO ARREMATE") ||
+            productName.includes("EFEITO ALAVANCA") ||
+            productName.includes("A006");
+
           if ((isIncorporador || isContrato || isA010 || isOB) && !isExcluded) {
             prevSeenClintBrutoIds.add(tx.hubla_id);
             return true;
@@ -432,19 +459,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Faturamento Líquido anterior - mesma lógica filtrada
       const prevSeenLiquidoIds = new Set<string>();
       const prevFaturamentoLiquido = (prevHubla || [])
-        .filter(tx => {
-          if (tx.hubla_id?.startsWith('newsale-')) return false;
+        .filter((tx) => {
+          if (tx.hubla_id?.startsWith("newsale-")) return false;
           if (prevSeenLiquidoIds.has(tx.hubla_id)) return false;
-          
-          const productName = (tx.product_name || '').toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          const isContrato = productName.includes('CONTRATO') && !productName.includes('CLUBE');
-          const isOB = productName.includes('CONSTRUIR') || productName.includes('VITALÍCIO') || productName.includes('VITALICIO');
-          const isExcluded = productName.includes('A010') ||
-                             productName.includes('A006') ||
-                             productName.includes('CLUBE DO ARREMATE') || 
-                             productName.includes('EFEITO ALAVANCA');
-          
+
+          const productName = (tx.product_name || "").toUpperCase();
+          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
+          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
+          const isOB =
+            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          const isExcluded =
+            productName.includes("A010") ||
+            productName.includes("A006") ||
+            productName.includes("CLUBE DO ARREMATE") ||
+            productName.includes("EFEITO ALAVANCA");
+
           if ((isIncorporador || isContrato || isOB) && !isExcluded) {
             prevSeenLiquidoIds.add(tx.hubla_id);
             return true;
@@ -456,9 +485,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ROI anterior = Faturamento Líquido / (Faturamento Líquido - Lucro) × 100
       const prevDenominadorROI = prevFaturamentoLiquido - prevLucro;
       const prevRoi = prevDenominadorROI > 0 ? (prevFaturamentoLiquido / prevDenominadorROI) * 100 : 0;
-      
+
       // ROAS anterior = Faturamento Total / Gastos Ads
-      const prevRoas = prevGastosAds > 0 ? (prevFaturamentoTotal / prevGastosAds) : 0;
+      const prevRoas = prevGastosAds > 0 ? prevFaturamentoTotal / prevGastosAds : 0;
 
       // Calcular variações
       const calcChange = (current: number, previous: number) => {
