@@ -39,11 +39,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const start = startDate ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
       const end = endDate ? format(endDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
-      // Buscar todas as transações Hubla no período
+      // Buscar transações Hubla no período - FILTRAR apenas invoice.payment_succeeded e completed
       const { data: hublaData } = await supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price')
+        .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price, event_type')
         .eq('sale_status', 'completed')
+        .eq('event_type', 'invoice.payment_succeeded')
         .gte('sale_date', start)
         .lte('sale_date', end + 'T23:59:59');
 
@@ -121,17 +122,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== VENDAS A010 =====
-      // CORREÇÃO: Excluir -offer- (Order Bumps) da contagem
+      // CORREÇÃO: INCLUIR -offer- na contagem (cada linha = 1 venda)
       const seenA010CountIds = new Set<string>();
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        const isOffer = tx.hubla_id?.includes('-offer-');
         
-        if (!isA010 || !hasValidName || isOffer) return false;
+        if (!isA010 || !hasValidName) return false;
         
-        // Deduplicar por hubla_id
+        // Deduplicar por hubla_id (evita duplicatas exatas)
         if (seenA010CountIds.has(tx.hubla_id)) return false;
         seenA010CountIds.add(tx.hubla_id);
         
@@ -200,11 +200,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevStartStr = format(prevStart, 'yyyy-MM-dd');
       const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
 
-      // Buscar dados anteriores para comparação
+      // Buscar dados anteriores para comparação - mesmo filtro
       const { data: prevHubla } = await supabase
         .from('hubla_transactions')
         .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data')
         .eq('sale_status', 'completed')
+        .eq('event_type', 'invoice.payment_succeeded')
         .gte('sale_date', prevStartStr)
         .lte('sale_date', prevEndStr + 'T23:59:59');
 
