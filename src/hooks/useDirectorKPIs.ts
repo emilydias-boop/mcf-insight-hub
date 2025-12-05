@@ -26,13 +26,24 @@ interface DirectorKPIs {
 }
 
 // Produtos do Incorporador 50k (validados contra planilha)
-// A005 (P2) EXCLUÍDO conforme regras de negócio
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A009'];
-const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
+// Inclui A002, A004, A005 conforme planilha do usuário
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A009'];
+const EXCLUDED_PRODUCT_NAMES = ['A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
 
 // Categorias e produtos excluídos do Faturamento Total (conforme planilha)
 const EXCLUDED_CATEGORIES_FATURAMENTO = ['clube_arremate', 'efeito_alavanca', 'renovacao', 'imersao'];
 const EXCLUDED_PRODUCTS_FATURAMENTO = ['SÓCIO MCF', 'SOCIO MCF', 'ALMOÇO NETWORKING', 'ALMOCO NETWORKING', 'MENTORIA INDIVIDUAL', 'CLUBE DO ARREMATE', 'CONTRATO - CLUBE DO ARREMATE'];
+
+// Helper para formatar data no fuso horário de Brasília (UTC-3)
+const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  if (isEndOfDay) {
+    return `${year}-${month}-${day}T23:59:59-03:00`;
+  }
+  return `${year}-${month}-${day}T00:00:00-03:00`;
+};
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
@@ -40,17 +51,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
     staleTime: 0,
     gcTime: 0,
     queryFn: async (): Promise<DirectorKPIs> => {
+      // Formatar datas com fuso horário de Brasília (America/Sao_Paulo)
+      const startStr = startDate ? formatDateForBrazil(startDate, false) : formatDateForBrazil(new Date(), false);
+      const endStr = endDate ? formatDateForBrazil(endDate, true) : formatDateForBrazil(new Date(), true);
       const start = startDate ? format(startDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
       const end = endDate ? format(endDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
 
-      // Buscar transações Hubla + Kiwify no período
+      // Buscar transações Hubla + Kiwify no período (com fuso horário BR)
       const { data: hublaData } = await supabase
         .from('hubla_transactions')
         .select('hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price, event_type, source')
         .eq('sale_status', 'completed')
         .or('event_type.eq.invoice.payment_succeeded,source.eq.kiwify')
-        .gte('sale_date', start)
-        .lte('sale_date', end + 'T23:59:59');
+        .gte('sale_date', startStr)
+        .lte('sale_date', endStr);
 
       // ===== FATURAMENTO INCORPORADOR (Líquido) =====
       // Inclui TODAS as parcelas pagas (não só primeira), deduplicando por hubla_id
@@ -226,14 +240,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevStartStr = format(prevStart, 'yyyy-MM-dd');
       const prevEndStr = format(prevEnd, 'yyyy-MM-dd');
 
-      // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify)
+      // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify) com fuso BR
+      const prevStartBR = formatDateForBrazil(prevStart, false);
+      const prevEndBR = formatDateForBrazil(prevEnd, true);
       const { data: prevHubla } = await supabase
         .from('hubla_transactions')
         .select('hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date, product_price, source')
         .eq('sale_status', 'completed')
         .or('event_type.eq.invoice.payment_succeeded,source.eq.kiwify')
-        .gte('sale_date', prevStartStr)
-        .lte('sale_date', prevEndStr + 'T23:59:59');
+        .gte('sale_date', prevStartBR)
+        .lte('sale_date', prevEndBR);
 
       // Calcular métricas anteriores
       const prevSeenIncIds = new Set<string>();
