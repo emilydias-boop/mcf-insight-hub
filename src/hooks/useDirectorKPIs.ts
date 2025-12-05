@@ -33,9 +33,16 @@ const EXCLUDED_PRODUCT_NAMES = ['A005', 'A006', 'A010', 'IMERSÃO SÓCIOS', 'IME
 // Lista completa de produtos para Faturamento Total (34 produtos)
 const FATURAMENTO_TOTAL_PRODUCTS = [
   '000 - PRÉ RESERVA', '000 - CONTRATO', '001- PRÉ-RESERVA', '003 - IMERSÃO', '016-ANÁLISE',
-  'A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006', 'A007', 'A008', 'A009',
+  'A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A006 - ANTICRISE', 'A007', 'A008', 'A009',
   'ASAAS', 'COBRANÇAS ASAAS', 'CONTRATO ANTICRISE', 'CONTRATO - ANTICRISE',
   'JANTAR NETWORKING', 'R001', 'R004', 'R005', 'R006', 'R009', 'R21', 'SÓCIO JANTAR'
+];
+
+// Produtos a EXCLUIR do Faturamento Total
+const FATURAMENTO_TOTAL_EXCLUSIONS = [
+  'RENOVAÇÃO PARCEIRO', 'A006 - RENOVAÇÃO',
+  'CLUBE DO ARREMATE', 'CLUBE ARREMATE',
+  'CREDENCIAMENTO', 'CONTRATO CREDENCIAMENTO'
 ];
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
@@ -119,12 +126,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Somar apenas produtos da lista específica (34 produtos)
+      // CORREÇÃO: Somar apenas produtos da lista específica, EXCLUINDO Renovação, Clube Arremate, Credenciamento
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
-          // Verificar se o produto está na lista de Faturamento Total
+          
+          // Primeiro verificar se deve EXCLUIR
+          const shouldExclude = FATURAMENTO_TOTAL_EXCLUSIONS.some(excl => 
+            productName.includes(excl.toUpperCase())
+          );
+          if (shouldExclude) return false;
+          
+          // Depois verificar se está na lista de inclusão
           const isInList = FATURAMENTO_TOTAL_PRODUCTS.some(prod => 
             productName.includes(prod.toUpperCase())
           );
@@ -136,24 +150,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== VENDAS A010 =====
-      // CORREÇÃO: Deduplicar por email+dia para chegar aos 211 vendas
-      const seenA010EmailDay = new Set<string>();
+      // CORREÇÃO: Contar TODAS as linhas sem deduplicação
       const vendasA010 = (hublaData || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        
-        if (!isA010 || !hasValidName) return false;
-        
-        // Deduplicar por email+dia (mesmo cliente no mesmo dia = 1 venda)
-        const email = (tx.customer_email || tx.customer_name || '').toLowerCase().trim();
-        const saleDay = tx.sale_date ? tx.sale_date.split('T')[0] : '';
-        const dedupKey = `${email}|${saleDay}`;
-        
-        if (seenA010EmailDay.has(dedupKey)) return false;
-        seenA010EmailDay.add(dedupKey);
-        
-        return true;
+        return isA010 && hasValidName;
       }).length;
       
 
@@ -302,11 +304,18 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Faturamento Total anterior = mesma lógica (lista de 34 produtos)
+      // Faturamento Total anterior = mesma lógica (lista de produtos com exclusões)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
+          
+          // Primeiro verificar se deve EXCLUIR
+          const shouldExclude = FATURAMENTO_TOTAL_EXCLUSIONS.some(excl => 
+            productName.includes(excl.toUpperCase())
+          );
+          if (shouldExclude) return false;
+          
           const isInList = FATURAMENTO_TOTAL_PRODUCTS.some(prod => 
             productName.includes(prod.toUpperCase())
           );
@@ -317,23 +326,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Vendas A010 período anterior com mesma lógica de deduplicação (email+dia)
-      const prevSeenA010EmailDay = new Set<string>();
+      // Vendas A010 período anterior - contar TODAS as linhas sem deduplicação
       const prevVendasA010 = (prevHubla || []).filter(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        
-        if (!isA010 || !hasValidName) return false;
-        
-        const email = (tx.customer_email || tx.customer_name || '').toLowerCase().trim();
-        const saleDay = tx.sale_date ? tx.sale_date.split('T')[0] : '';
-        const dedupKey = `${email}|${saleDay}`;
-        
-        if (prevSeenA010EmailDay.has(dedupKey)) return false;
-        prevSeenA010EmailDay.add(dedupKey);
-        
-        return true;
+        return isA010 && hasValidName;
       }).length;
 
       const { data: prevAds } = await supabase
