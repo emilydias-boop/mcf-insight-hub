@@ -134,36 +134,35 @@ serve(async (req) => {
     let processed = false;
     let transactionId = null;
 
-    if (eventType === 'order_paid' || eventType === 'compra_aprovada' || eventType === 'purchase_approved') {
-      // Venda aprovada
-      const order = body.order || body.Order || body;
-      const customer = body.Customer || body.customer || order.customer || {};
-      const product = body.Product || body.product || order.product || {};
-      const payment = body.payment || order.payment || {};
+    if (eventType === 'order_paid' || eventType === 'compra_aprovada' || eventType === 'purchase_approved' || eventType === 'order_approved') {
+      // Venda aprovada - estrutura Kiwify usa Commissions, Customer, Product no root
+      const commissions = body.Commissions || body.commissions || {};
+      const customer = body.Customer || body.customer || {};
+      const product = body.Product || body.product || {};
       const subscription = body.Subscription || body.subscription || {};
       
-      const orderId = order.order_id || order.id || body.order_id || `kiwify_${Date.now()}`;
+      const orderId = body.order_id || body.Order?.order_id || `kiwify_${Date.now()}`;
       const kiwifyId = `kiwify_${orderId}`;
       
-      // Extrair valores (Kiwify envia em centavos)
-      const grossValueCents = payment.charge_amount || payment.total || order.total || 0;
-      const netValueCents = payment.net_amount || payment.seller_net_amount || grossValueCents;
+      // Extrair valores da estrutura Commissions (Kiwify envia em centavos)
+      const grossValueCents = commissions.charge_amount || commissions.product_base_price || 0;
+      const netValueCents = commissions.my_commission || grossValueCents;
       const grossValue = grossValueCents / 100;
       const netValue = netValueCents / 100;
       
-      const productName = product.name || product.product_name || 'Produto Kiwify';
-      const productCode = product.id || product.product_id || '';
+      const productName = product.product_name || product.name || 'Produto Kiwify';
+      const productCode = product.product_id || product.id || '';
       const productCategory = mapProductCategory(productName, productCode);
       
       // Verificar parcela (para assinaturas)
-      const installmentNumber = subscription.charges?.length || payment.installment || 1;
-      const totalInstallments = payment.installments || subscription.plan?.charges_limit || 1;
+      const installmentNumber = subscription.charges?.length || 1;
+      const totalInstallments = subscription.plan?.charges_limit || 1;
       
       const customerName = customer.full_name || customer.name || '';
       const customerEmail = customer.email || '';
       const customerPhone = customer.mobile || customer.phone || '';
       
-      const saleDate = order.approved_date || order.created_at || body.created_at || new Date().toISOString();
+      const saleDate = body.approved_date || body.created_at || new Date().toISOString();
 
       console.log(`[Kiwify Webhook] Processing sale: ${kiwifyId}, product: ${productName}, category: ${productCategory}, gross: ${grossValue}, net: ${netValue}`);
 
