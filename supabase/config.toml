@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.webhook-make-contrato]
 verify_jwt = false
+
+[functions.webhook-make-parceria]
+verify_jwt = false
