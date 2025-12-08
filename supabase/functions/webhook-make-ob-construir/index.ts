@@ -45,14 +45,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse monetary value
+    // Parse monetary value - handles both Brazilian (1.234,56) and international (1234.56) formats
     const parseMonetaryValue = (value: string | number): number => {
       if (typeof value === 'number') return value;
-      const cleaned = value
-        .replace(/[R$\s]/g, '')
-        .replace(/\./g, '')
-        .replace(',', '.');
-      return parseFloat(cleaned) || 0;
+      const str = value.toString().replace(/[R$\s]/g, '');
+      // Brazilian format: has comma as decimal separator (e.g., "1.234,56" or "93,18")
+      if (str.includes(',')) {
+        // Remove thousands dots, replace decimal comma with dot
+        const cleaned = str.replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleaned) || 0;
+      }
+      // International format: dot is decimal separator (e.g., "93.18")
+      return parseFloat(str) || 0;
     };
 
     const netValue = parseMonetaryValue(body.valor_liquido);
