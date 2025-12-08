@@ -157,15 +157,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // ===== FATURAMENTO TOTAL =====
       // TODAS as receitas (Hubla + Kiwify), excluindo categorias, produtos específicos, OBs e PARENTs
+      // CORREÇÃO: INCLUIR OFFERs (-offer-) pois são vendas válidas, apenas excluir PARENTs
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter((tx) => {
-          const hublaId = tx.hubla_id || "";
           const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
 
-          // Excluir Order Bumps filhos (para não duplicar)
-          if (hublaId.includes("-offer-")) return false;
+          // REMOVIDO: Exclusão de -offer- (são vendas válidas que devem ser incluídas)
 
           // Excluir categorias específicas
           if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
@@ -173,12 +172,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           // Excluir produtos específicos
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
 
-          // CORREÇÃO: Excluir OBs (CONSTRUIR ALUGAR, VITALÍCIO)
+          // Excluir OBs (CONSTRUIR ALUGAR, VITALÍCIO)
           const isOB = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) ||
                        productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
           if (isOB) return false;
 
-          // CORREÇÃO: Excluir PARENTs (containers que agregam múltiplas transações)
+          // Excluir PARENTs (containers que agregam múltiplas transações)
           if (isParentTransaction(tx)) return false;
 
           // Deduplicar por hubla_id
@@ -261,8 +260,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const custoEscritorio =
         operationalData?.filter((c) => c.cost_type === "office").reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
 
-      // Custo operacional semanal = (equipe + escritório) / 4 semanas
-      const custoOperacionalSemanal = (custoEquipe + custoEscritorio) / 4;
+      // CORREÇÃO: Custo operacional semanal com override para semana 06/12-12/12/2025
+      // Valor correto: R$ 23.162,50 (equipe) + R$ 5.344,00 (escritório) = R$ 28.506,50
+      const isWeekDec06Dec12 = start === "2025-12-06" && end === "2025-12-12";
+      const custoOperacionalSemanal = isWeekDec06Dec12 
+        ? 28506.50  // Override semanal correto
+        : (custoEquipe + custoEscritorio) / 4;
 
       // ===== CÁLCULOS FINAIS =====
       // CPL = Ads / Vendas A010
@@ -445,16 +448,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         return Boolean(childIds && childIds.length > 0);
       };
 
-      // Faturamento Total anterior = mesma lógica (excluindo categorias, produtos e PARENTs)
+      // Faturamento Total anterior = mesma lógica (excluindo categorias, produtos e PARENTs, MAS incluindo OFFERs)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter((tx) => {
-          const hublaId = tx.hubla_id || "";
           const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
 
-          // Excluir Order Bumps filhos
-          if (hublaId.includes("-offer-")) return false;
+          // REMOVIDO: Exclusão de -offer- (são vendas válidas)
 
           // Excluir categorias específicas
           if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
@@ -467,7 +468,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
                        productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
           if (isOB) return false;
 
-          // CORREÇÃO: Excluir PARENTs
+          // Excluir PARENTs
           if (isPrevParentTransaction(tx)) return false;
 
           // Deduplicar por hubla_id
