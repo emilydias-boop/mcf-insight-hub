@@ -52,13 +52,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse monetary values
+    // Parse monetary values - handles both Brazilian (1.234,56) and international (1234.56) formats
     const parseMonetaryValue = (value: number | string | undefined): number => {
       if (value === undefined || value === null) return 0;
       if (typeof value === 'number') return value;
-      // Remove currency symbols and convert comma to dot
-      const cleaned = String(value).replace(/[R$\s]/g, '').replace(',', '.');
-      return parseFloat(cleaned) || 0;
+      const str = String(value).replace(/[R$\s]/g, '');
+      // Brazilian format: has comma as decimal separator
+      if (str.includes(',')) {
+        const cleaned = str.replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleaned) || 0;
+      }
+      // International format
+      return parseFloat(str) || 0;
     };
 
     const valorLiquido = parseMonetaryValue(body.valor_liquido);
