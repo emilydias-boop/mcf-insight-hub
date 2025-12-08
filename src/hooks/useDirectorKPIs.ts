@@ -102,11 +102,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== OB ACESSO VITALÍCIO =====
+      // CORREÇÃO: Usar "VITALIC" para pegar todas variantes de acento (VITALÍCIO, VITALICIO, VITALICÍO)
       const seenObVitalicioIds = new Set<string>();
       const obVitalicio = (hublaData || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
-          const isOB = productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          const isOB = productName.includes("VITALIC"); // Pega todas variantes de acento
           if (seenObVitalicioIds.has(tx.hubla_id)) return false;
           if (isOB) {
             seenObVitalicioIds.add(tx.hubla_id);
@@ -173,8 +174,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
 
           // Excluir OBs (CONSTRUIR ALUGAR, VITALÍCIO)
+          // CORREÇÃO: Usar "VITALIC" para pegar todas variantes de acento
           const isOB = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) ||
-                       productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+                       productName.includes("VITALIC");
           if (isOB) return false;
 
           // Excluir PARENTs (containers que agregam múltiplas transações)
@@ -199,10 +201,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         faturamentoLiquido: 267661.26,
       };
 
-      // Cálculo automático de Vendas A010 (conta LINHAS, excluindo PARENTs)
+      // Helper para extrair base_id (remove sufixo -offer-N)
+      const getBaseId = (hublaId: string): string => {
+        const offerIndex = hublaId.indexOf('-offer-');
+        return offerIndex > -1 ? hublaId.substring(0, offerIndex) : hublaId;
+      };
+
+      // Cálculo automático de Vendas A010 (DEDUPLICADO por base_id)
       const vendasA010Calc = (() => {
-        let totalLinhas = 0;
-        const a010Debug: { name: string; product: string; hubla_id: string }[] = [];
+        const seenA010BaseIds = new Set<string>();
+        const a010Debug: { name: string; product: string; hubla_id: string; base_id: string }[] = [];
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
@@ -210,22 +218,29 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
           
           // CORREÇÃO: Não excluir newsale-* se tiver customer_name válido
-          // (antes excluía todos newsale-*, mas alguns são vendas válidas)
           const isInvalidNewsale = tx.hubla_id?.startsWith("newsale-") && 
                                    (!tx.customer_email || tx.customer_email === "");
           
           // Excluir PARENTs (containers com childInvoiceIds)
           const isParent = isParentTransaction(tx);
           
-          // Contar LINHAS (não emails únicos), excluindo PARENTs e newsales inválidos
-          if (isA010 && hasValidName && !isInvalidNewsale && !isParent) {
-            totalLinhas++;
-            a010Debug.push({ name: tx.customer_name || "", product: tx.product_name || "", hubla_id: tx.hubla_id });
+          // CORREÇÃO: Deduplicar por base_id (remove -offer-N suffix)
+          const baseId = getBaseId(tx.hubla_id || "");
+          
+          // Contar apenas se base_id ainda não foi contado
+          if (isA010 && hasValidName && !isInvalidNewsale && !isParent && !seenA010BaseIds.has(baseId)) {
+            seenA010BaseIds.add(baseId);
+            a010Debug.push({ 
+              name: tx.customer_name || "", 
+              product: tx.product_name || "", 
+              hubla_id: tx.hubla_id,
+              base_id: baseId 
+            });
           }
         });
 
-        console.log("🔍 Vendas A010 (linhas, sem PARENTs):", totalLinhas, a010Debug.slice(0, 5));
-        return totalLinhas;
+        console.log("🔍 Vendas A010 (deduplicado por base_id):", seenA010BaseIds.size, a010Debug.slice(0, 5));
+        return seenA010BaseIds.size;
       })();
 
       // Usar valores fixos apenas para semana 29/11-05/12/2025
@@ -405,7 +420,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevObVitalicio = (prevHubla || [])
         .filter((tx) => {
           const name = (tx.product_name || "").toUpperCase();
-          const isOB = name.includes("VITALÍCIO") || name.includes("VITALICIO");
+          const isOB = name.includes("VITALIC"); // CORREÇÃO: Pega todas variantes de acento
           if (prevSeenObVitalicioIds.has(tx.hubla_id)) return false;
           if (isOB) {
             prevSeenObVitalicioIds.add(tx.hubla_id);
