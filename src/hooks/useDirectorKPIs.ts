@@ -61,6 +61,49 @@ const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string =>
   return `${year}-${month}-${day}T00:00:00-03:00`;
 };
 
+// ===== DEDUPLICAÇÃO INTELIGENTE HUBLA + MAKE =====
+// Gera chave única para identificar mesma venda entre fontes
+// Prioriza Hubla quando mesma venda existe em ambas fontes
+type HublaTransaction = {
+  hubla_id: string;
+  product_name: string | null;
+  product_category: string | null;
+  net_value: number | null;
+  sale_date: string;
+  installment_number: number | null;
+  total_installments: number | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  raw_data: unknown;
+  product_price: number | null;
+  event_type: string;
+  source: string | null;
+};
+
+const getSaleKey = (tx: HublaTransaction): string => {
+  const email = (tx.customer_email || "").toLowerCase().trim();
+  const date = tx.sale_date.split("T")[0]; // Apenas data YYYY-MM-DD
+  const category = tx.product_category || "unknown";
+  return `${email}|${date}|${category}`;
+};
+
+// Deduplica transações priorizando Hubla sobre Make
+const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransaction[] => {
+  const byKey = new Map<string, HublaTransaction>();
+  
+  transactions.forEach((tx) => {
+    const key = getSaleKey(tx);
+    const existing = byKey.get(key);
+    
+    // Se não existe OU se existente é Make e novo é Hubla/Kiwify, usa novo
+    if (!existing || (existing.source === 'make' && tx.source !== 'make')) {
+      byKey.set(key, tx);
+    }
+  });
+  
+  return Array.from(byKey.values());
+};
+
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
   return useQuery({
     queryKey: ["director-kpis", startDate?.toISOString(), endDate?.toISOString()],
@@ -73,16 +116,29 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const start = startDate ? format(startDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
       const end = endDate ? format(endDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
 
-      // Buscar transações Hubla + Kiwify no período (com fuso horário BR)
-      const { data: hublaData } = await supabase
+      // Buscar transações Hubla + Kiwify + Make no período (com fuso horário BR)
+      const { data: hublaDataRaw } = await supabase
         .from("hubla_transactions")
         .select(
           "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
         )
         .eq("sale_status", "completed")
-        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify")
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
         .gte("sale_date", startStr)
         .lte("sale_date", endStr);
+
+      // Aplicar deduplicação inteligente Hubla > Kiwify > Make
+      const hublaData = deduplicateTransactions((hublaDataRaw || []) as HublaTransaction[]);
+      
+      console.log("📊 Deduplicação:", {
+        rawCount: hublaDataRaw?.length || 0,
+        deduplicatedCount: hublaData.length,
+        sources: {
+          hubla: hublaData.filter(tx => tx.source !== 'make' && tx.source !== 'kiwify').length,
+          kiwify: hublaData.filter(tx => tx.source === 'kiwify').length,
+          make: hublaData.filter(tx => tx.source === 'make').length,
+        }
+      });
 
       // ===== FATURAMENTO INCORPORADOR (Líquido) =====
       // Inclui TODAS as parcelas pagas (não só primeira), deduplicando por hubla_id
@@ -387,18 +443,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevStartStr = format(prevStart, "yyyy-MM-dd");
       const prevEndStr = format(prevEnd, "yyyy-MM-dd");
 
-      // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify) com fuso BR
+      // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify + Make) com fuso BR
       const prevStartBR = formatDateForBrazil(prevStart, false);
       const prevEndBR = formatDateForBrazil(prevEnd, true);
-      const { data: prevHubla } = await supabase
+      const { data: prevHublaRaw } = await supabase
         .from("hubla_transactions")
         .select(
-          "hubla_id, product_name, product_category, net_value, installment_number, total_installments, customer_name, customer_email, raw_data, sale_date, product_price, source",
+          "hubla_id, product_name, product_category, net_value, installment_number, total_installments, customer_name, customer_email, raw_data, sale_date, product_price, event_type, source",
         )
         .eq("sale_status", "completed")
-        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify")
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
         .gte("sale_date", prevStartBR)
         .lte("sale_date", prevEndBR);
+      
+      // Aplicar mesma deduplicação para período anterior
+      const prevHubla = deduplicateTransactions((prevHublaRaw || []) as HublaTransaction[]);
 
       // Calcular métricas anteriores
       const prevSeenIncIds = new Set<string>();
