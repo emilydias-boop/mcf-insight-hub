@@ -147,7 +147,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== FATURAMENTO TOTAL =====
-      // TODAS as receitas (Hubla + Kiwify), excluindo categorias e produtos específicos
+      // TODAS as receitas (Hubla + Kiwify), excluindo categorias, produtos específicos e OBs PARENT
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter((tx) => {
@@ -155,7 +155,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
 
-          // Excluir Order Bumps (para não duplicar)
+          // Excluir Order Bumps filhos (para não duplicar)
           if (hublaId.includes("-offer-")) return false;
 
           // Excluir categorias específicas
@@ -163,6 +163,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
           // Excluir produtos específicos
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
+
+          // CORREÇÃO: Excluir OBs PARENT (CONSTRUIR ALUGAR, VITALÍCIO)
+          const isOB = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) ||
+                       productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          if (isOB) return false;
 
           // Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
@@ -185,8 +190,38 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // Cálculo automático de Vendas A010 (evitando dupla contagem)
       const vendasA010Calc = (() => {
-        // 1. Identificar OBs PARENT (transações com childInvoiceIds que contêm A010 implicitamente)
-        const obParentEmails = new Set<string>();
+        // 1. Coletar TODOS os emails que compraram A010 (incluindo A010 PARENT)
+        const a010Emails = new Set<string>();
+        const a010Debug: { email: string; product: string; hubla_id: string; isParent: boolean }[] = [];
+        
+        (hublaData || []).forEach((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isA010 = tx.product_category === "a010" || productName.includes("A010");
+          const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
+          const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
+          
+          // Verificar se é PARENT (tem childInvoiceIds)
+          const rawData = tx.raw_data as Record<string, unknown> | null;
+          const eventData = rawData?.event as Record<string, unknown> | undefined;
+          const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
+          const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
+          const isParent = childIds && childIds.length > 0;
+          
+          // Incluir A010 (normal ou PARENT) - ambos são vendas legítimas
+          if (isA010 && hasValidName && isNotNewsale && tx.customer_email) {
+            const emailLower = tx.customer_email.toLowerCase();
+            if (!a010Emails.has(emailLower)) {
+              a010Emails.add(emailLower);
+              a010Debug.push({ email: tx.customer_email, product: tx.product_name || "", hubla_id: tx.hubla_id, isParent });
+            }
+          }
+        });
+
+        // DEBUG: Log A010 encontrados
+        console.log("🔍 A010 (normais + PARENT):", a010Emails.size, a010Debug);
+
+        // 2. Contar OB PARENT cujo email NÃO está em a010Emails (evita dupla contagem)
+        const obParentExtras = new Set<string>();
         const obParentDebug: { email: string; product: string; hubla_id: string }[] = [];
         
         (hublaData || []).forEach((tx) => {
@@ -194,7 +229,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productName = (tx.product_name || "").toUpperCase();
           // OB = categoria OB OU nome contém palavras-chave de OB
           const isOBCategory = ["ob_construir_alugar", "ob_vitalicio", "ob_evento"].includes(category);
-          const isOBName = productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          const isOBName = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) || 
+                           productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
           const isOB = isOBCategory || isOBName;
           
           const rawData = tx.raw_data as Record<string, unknown> | null;
@@ -203,42 +239,24 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
           const hasChildInvoices = childIds && childIds.length > 0;
           
-          // OB PARENT = produto OB + tem childInvoiceIds (indica compra combinada com A010)
+          // OB PARENT que NÃO tem transação A010 própria (evita dupla contagem)
           if (isOB && hasChildInvoices && tx.customer_email) {
-            obParentEmails.add(tx.customer_email.toLowerCase());
-            obParentDebug.push({ email: tx.customer_email, product: tx.product_name || "", hubla_id: tx.hubla_id });
+            const emailLower = tx.customer_email.toLowerCase();
+            if (!a010Emails.has(emailLower) && !obParentExtras.has(emailLower)) {
+              obParentExtras.add(emailLower);
+              obParentDebug.push({ email: tx.customer_email, product: tx.product_name || "", hubla_id: tx.hubla_id });
+            }
           }
         });
 
-        // DEBUG: Log OB Parents encontrados
-        console.log("🔍 OB Parents identificados:", obParentDebug.length, obParentDebug);
+        // DEBUG: Log OB Parents extras (não duplicados)
+        console.log("🔍 OB Parents extras (sem A010):", obParentExtras.size, obParentDebug);
 
-        // 2. Contar A010 normais EXCLUINDO clientes que já têm OB PARENT
-        const a010Normais = (hublaData || []).filter((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
-          const isA010 = tx.product_category === "a010" || productName.includes("A010");
-          const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
-          const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
-          
-          // Verificar se é transação PARENT (tem childInvoiceIds)
-          const rawData = tx.raw_data as Record<string, unknown> | null;
-          const eventData = rawData?.event as Record<string, unknown> | undefined;
-          const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
-          const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
-          const isParent = childIds && childIds.length > 0;
-          
-          // Excluir PARENT A010 (evita dupla contagem) e clientes com OB PARENT
-          const emailLower = tx.customer_email?.toLowerCase() || "";
-          const clienteComOBParent = obParentEmails.has(emailLower);
-          
-          return isA010 && hasValidName && isNotNewsale && !isParent && !clienteComOBParent;
-        }).length;
-
-        // DEBUG: Log contagem final
-        console.log("🔍 A010 Normais:", a010Normais, "OB Parents:", obParentEmails.size, "Total:", a010Normais + obParentEmails.size);
-
-        // 3. Total = A010 normais (sem duplicação) + OBs PARENT (que incluem A010)
-        return a010Normais + obParentEmails.size;
+        // 3. Total = emails únicos de A010 + OB PARENT extras (sem dupla contagem)
+        const total = a010Emails.size + obParentExtras.size;
+        console.log("🔍 Vendas A010 Total:", a010Emails.size, "+", obParentExtras.size, "=", total);
+        
+        return total;
       })();
 
       // Usar valores fixos apenas para semana 29/11-05/12/2025
