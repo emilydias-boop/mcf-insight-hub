@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.kiwify-webhook-handler]
 verify_jwt = false
+
+[functions.webhook-make-a010]
+verify_jwt = false
