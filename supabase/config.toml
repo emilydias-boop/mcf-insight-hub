@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.webhook-make-a010]
 verify_jwt = false
+
+[functions.webhook-make-ob-vitalicio]
+verify_jwt = false
