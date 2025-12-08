@@ -172,7 +172,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== VENDAS A010 =====
-      // OVERRIDE: Valor fixo 215 para semana 29/11-05/12/2025
+      // OVERRIDE: Valores fixos para semana 29/11-05/12/2025 (conforme planilha)
       const isWeekNov29Dec05 = start === "2025-11-29" && end === "2025-12-05";
 
       // Cálculo automático (usado para outras semanas)
@@ -184,8 +184,17 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         return isA010 && hasValidName && isNotNewsale;
       }).length;
 
-      // Usar 215 fixo apenas para semana 29/11-05/12/2025
-      const vendasA010 = isWeekNov29Dec05 ? 221 : vendasA010Calc;
+      // Valores fixos para semana 29/11-05/12/2025 (override temporário)
+      const OVERRIDE_VALUES = {
+        vendasA010: 221,
+        faturamentoTotal: 281422.64,
+        faturamentoClint: 399399.00,
+        faturamentoLiquido: 267661.26,
+      };
+
+      // Usar valores fixos apenas para semana 29/11-05/12/2025
+      const vendasA010 = isWeekNov29Dec05 ? OVERRIDE_VALUES.vendasA010 : vendasA010Calc;
+      const faturamentoTotalFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoTotal : faturamentoTotal;
 
       // ===== GASTOS ADS =====
       const { data: adsData } = await supabase
@@ -201,9 +210,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       console.log("📊 Director KPIs Debug:", {
         periodo: `${start} - ${end}`,
         totalTransacoes: hublaData?.length,
-        faturamentoTotal,
+        faturamentoTotal: faturamentoTotalFinal,
         vendasA010,
         gastosAds,
+        isOverride: isWeekNov29Dec05,
       });
 
       // ===== CUSTOS OPERACIONAIS (equipe + escritório) =====
@@ -229,7 +239,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const custoTotal = gastosAds + custoOperacionalSemanal;
 
       // Lucro = Faturamento Total - Custo Total
-      const lucro = faturamentoTotal - custoTotal;
+      const lucro = faturamentoTotalFinal - custoTotal;
 
       // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
       // CORREÇÃO: Filtrar produtos Incorporador + Contratos + A010 + OBs, excluir newsale-*
@@ -295,13 +305,17 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
+      // Valores finais (com override para semana específica)
+      const faturamentoClintFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoClint : faturamentoClint;
+      const faturamentoLiquidoFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoLiquido : faturamentoLiquido;
+
       // ROI = Faturamento Líquido / (Faturamento Líquido - Lucro) × 100
       // Onde (Faturamento Líquido - Lucro) = Custo Total efetivo
-      const denominadorROI = faturamentoLiquido - lucro;
-      const roi = denominadorROI > 0 ? (faturamentoLiquido / denominadorROI) * 100 : 0;
+      const denominadorROI = faturamentoLiquidoFinal - lucro;
+      const roi = denominadorROI > 0 ? (faturamentoLiquidoFinal / denominadorROI) * 100 : 0;
 
       // ROAS = Faturamento Total / Gastos Ads
-      const roas = gastosAds > 0 ? faturamentoTotal / gastosAds : 0;
+      const roas = gastosAds > 0 ? faturamentoTotalFinal / gastosAds : 0;
 
       // ===== PERÍODO ANTERIOR PARA COMPARAÇÃO =====
       const daysDiff =
@@ -501,9 +515,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       return {
         faturamentoTotal: {
-          value: faturamentoTotal,
-          change: calcChange(faturamentoTotal, prevFaturamentoTotal),
-          isPositive: faturamentoTotal >= prevFaturamentoTotal,
+          value: faturamentoTotalFinal,
+          change: calcChange(faturamentoTotalFinal, prevFaturamentoTotal),
+          isPositive: faturamentoTotalFinal >= prevFaturamentoTotal,
         },
         gastosAds: {
           value: gastosAds,
@@ -537,11 +551,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         },
         vendasA010,
         faturamentoIncorporador,
-        // Novos campos Ultrameta
+        // Novos campos Ultrameta (com override para semana específica)
         ultrametaClint,
-        faturamentoClint,
+        faturamentoClint: faturamentoClintFinal,
         ultrametaLiquido,
-        faturamentoLiquido,
+        faturamentoLiquido: faturamentoLiquidoFinal,
       };
     },
     refetchInterval: 30000,
