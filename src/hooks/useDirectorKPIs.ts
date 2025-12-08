@@ -175,15 +175,6 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // OVERRIDE: Valores fixos para semana 29/11-05/12/2025 (conforme planilha)
       const isWeekNov29Dec05 = start === "2025-11-29" && end === "2025-12-05";
 
-      // Cálculo automático (usado para outras semanas)
-      const vendasA010Calc = (hublaData || []).filter((tx) => {
-        const productName = (tx.product_name || "").toUpperCase();
-        const isA010 = tx.product_category === "a010" || productName.includes("A010");
-        const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
-        const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
-        return isA010 && hasValidName && isNotNewsale;
-      }).length;
-
       // Valores fixos para semana 29/11-05/12/2025 (override temporário)
       const OVERRIDE_VALUES = {
         vendasA010: 221,
@@ -191,6 +182,50 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         faturamentoClint: 399399.00,
         faturamentoLiquido: 267661.26,
       };
+
+      // Cálculo automático de Vendas A010 (evitando dupla contagem)
+      const vendasA010Calc = (() => {
+        // 1. Identificar OBs PARENT (transações com childInvoiceIds que contêm A010 implicitamente)
+        const obParentEmails = new Set<string>();
+        (hublaData || []).forEach((tx) => {
+          const category = tx.product_category || "";
+          const isOBCategory = ["ob_construir_alugar", "ob_vitalicio", "ob_evento"].includes(category);
+          const rawData = tx.raw_data as Record<string, unknown> | null;
+          const eventData = rawData?.event as Record<string, unknown> | undefined;
+          const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
+          const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
+          const hasChildInvoices = childIds && childIds.length > 0;
+          
+          // OB PARENT = categoria OB + tem childInvoiceIds (indica compra combinada com A010)
+          if (isOBCategory && hasChildInvoices && tx.customer_email) {
+            obParentEmails.add(tx.customer_email.toLowerCase());
+          }
+        });
+
+        // 2. Contar A010 normais EXCLUINDO clientes que já têm OB PARENT
+        const a010Normais = (hublaData || []).filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isA010 = tx.product_category === "a010" || productName.includes("A010");
+          const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
+          const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
+          
+          // Verificar se é transação PARENT (tem childInvoiceIds)
+          const rawData = tx.raw_data as Record<string, unknown> | null;
+          const eventData = rawData?.event as Record<string, unknown> | undefined;
+          const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
+          const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
+          const isParent = childIds && childIds.length > 0;
+          
+          // Excluir PARENT A010 (evita dupla contagem) e clientes com OB PARENT
+          const emailLower = tx.customer_email?.toLowerCase() || "";
+          const clienteComOBParent = obParentEmails.has(emailLower);
+          
+          return isA010 && hasValidName && isNotNewsale && !isParent && !clienteComOBParent;
+        }).length;
+
+        // 3. Total = A010 normais (sem duplicação) + OBs PARENT (que incluem A010)
+        return a010Normais + obParentEmails.size;
+      })();
 
       // Usar valores fixos apenas para semana 29/11-05/12/2025
       const vendasA010 = isWeekNov29Dec05 ? OVERRIDE_VALUES.vendasA010 : vendasA010Calc;
