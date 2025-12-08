@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.webhook-make-ob-vitalicio]
 verify_jwt = false
+
+[functions.webhook-make-ob-evento]
+verify_jwt = false
