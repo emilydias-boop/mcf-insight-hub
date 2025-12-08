@@ -146,8 +146,17 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
+      // ===== HELPER: Verificar se é PARENT (container com childInvoiceIds) =====
+      const isParentTransaction = (tx: { raw_data: unknown }): boolean => {
+        const rawData = tx.raw_data as Record<string, unknown> | null;
+        const eventData = rawData?.event as Record<string, unknown> | undefined;
+        const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
+        const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
+        return Boolean(childIds && childIds.length > 0);
+      };
+
       // ===== FATURAMENTO TOTAL =====
-      // TODAS as receitas (Hubla + Kiwify), excluindo categorias, produtos específicos e OBs PARENT
+      // TODAS as receitas (Hubla + Kiwify), excluindo categorias, produtos específicos, OBs e PARENTs
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter((tx) => {
@@ -164,10 +173,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           // Excluir produtos específicos
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
 
-          // CORREÇÃO: Excluir OBs PARENT (CONSTRUIR ALUGAR, VITALÍCIO)
+          // CORREÇÃO: Excluir OBs (CONSTRUIR ALUGAR, VITALÍCIO)
           const isOB = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) ||
                        productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
           if (isOB) return false;
+
+          // CORREÇÃO: Excluir PARENTs (containers que agregam múltiplas transações)
+          if (isParentTransaction(tx)) return false;
 
           // Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
@@ -188,9 +200,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         faturamentoLiquido: 267661.26,
       };
 
-      // Cálculo automático de Vendas A010 (somente transações A010, sem OB Parents)
+      // Cálculo automático de Vendas A010 (conta LINHAS, excluindo PARENTs)
       const vendasA010Calc = (() => {
-        const a010Emails = new Set<string>();
+        let totalLinhas = 0;
+        const a010Debug: { name: string; product: string; hubla_id: string }[] = [];
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
@@ -198,13 +211,18 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
           const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
           
-          if (isA010 && hasValidName && isNotNewsale && tx.customer_email) {
-            a010Emails.add(tx.customer_email.toLowerCase());
+          // CORREÇÃO: Excluir PARENTs (containers com childInvoiceIds)
+          const isParent = isParentTransaction(tx);
+          
+          // Contar LINHAS (não emails únicos), excluindo PARENTs
+          if (isA010 && hasValidName && isNotNewsale && !isParent) {
+            totalLinhas++;
+            a010Debug.push({ name: tx.customer_name || "", product: tx.product_name || "", hubla_id: tx.hubla_id });
           }
         });
 
-        console.log("🔍 Vendas A010 (emails únicos):", a010Emails.size);
-        return a010Emails.size;
+        console.log("🔍 Vendas A010 (linhas, sem PARENTs):", totalLinhas, a010Debug.slice(0, 5));
+        return totalLinhas;
       })();
 
       // Usar valores fixos apenas para semana 29/11-05/12/2025
@@ -418,7 +436,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Faturamento Total anterior = mesma lógica (excluindo categorias e produtos)
+      // Helper para verificar PARENT no período anterior
+      const isPrevParentTransaction = (tx: { raw_data: unknown }): boolean => {
+        const rawData = tx.raw_data as Record<string, unknown> | null;
+        const eventData = rawData?.event as Record<string, unknown> | undefined;
+        const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
+        const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
+        return Boolean(childIds && childIds.length > 0);
+      };
+
+      // Faturamento Total anterior = mesma lógica (excluindo categorias, produtos e PARENTs)
       const prevSeenAllIds = new Set<string>();
       const prevFaturamentoTotal = (prevHubla || [])
         .filter((tx) => {
@@ -426,7 +453,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
 
-          // Excluir Order Bumps
+          // Excluir Order Bumps filhos
           if (hublaId.includes("-offer-")) return false;
 
           // Excluir categorias específicas
@@ -435,6 +462,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           // Excluir produtos específicos
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
 
+          // Excluir OBs
+          const isOB = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) ||
+                       productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          if (isOB) return false;
+
+          // CORREÇÃO: Excluir PARENTs
+          if (isPrevParentTransaction(tx)) return false;
+
           // Deduplicar por hubla_id
           if (prevSeenAllIds.has(tx.hubla_id)) return false;
           prevSeenAllIds.add(tx.hubla_id);
@@ -442,13 +477,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Vendas A010 período anterior - contar linhas excluindo newsale-*
+      // Vendas A010 período anterior - contar LINHAS excluindo newsale-* e PARENTs
       const prevVendasA010 = (prevHubla || []).filter((tx) => {
         const productName = (tx.product_name || "").toUpperCase();
         const isA010 = tx.product_category === "a010" || productName.includes("A010");
         const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
         const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
-        return isA010 && hasValidName && isNotNewsale;
+        const isParent = isPrevParentTransaction(tx);
+        return isA010 && hasValidName && isNotNewsale && !isParent;
       }).length;
 
       const { data: prevAds } = await supabase
