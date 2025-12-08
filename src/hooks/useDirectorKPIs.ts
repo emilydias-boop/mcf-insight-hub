@@ -188,11 +188,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         faturamentoLiquido: 267661.26,
       };
 
-      // Cálculo automático de Vendas A010 (evitando dupla contagem)
+      // Cálculo automático de Vendas A010 (somente transações A010, sem OB Parents)
       const vendasA010Calc = (() => {
-        // 1. Coletar TODOS os emails que compraram A010 (incluindo A010 PARENT)
         const a010Emails = new Set<string>();
-        const a010Debug: { email: string; product: string; hubla_id: string; isParent: boolean }[] = [];
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
@@ -200,63 +198,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
           const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
           
-          // Verificar se é PARENT (tem childInvoiceIds)
-          const rawData = tx.raw_data as Record<string, unknown> | null;
-          const eventData = rawData?.event as Record<string, unknown> | undefined;
-          const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
-          const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
-          const isParent = childIds && childIds.length > 0;
-          
-          // Incluir A010 (normal ou PARENT) - ambos são vendas legítimas
           if (isA010 && hasValidName && isNotNewsale && tx.customer_email) {
-            const emailLower = tx.customer_email.toLowerCase();
-            if (!a010Emails.has(emailLower)) {
-              a010Emails.add(emailLower);
-              a010Debug.push({ email: tx.customer_email, product: tx.product_name || "", hubla_id: tx.hubla_id, isParent });
-            }
+            a010Emails.add(tx.customer_email.toLowerCase());
           }
         });
 
-        // DEBUG: Log A010 encontrados
-        console.log("🔍 A010 (normais + PARENT):", a010Emails.size, a010Debug);
-
-        // 2. Contar OB PARENT cujo email NÃO está em a010Emails (evita dupla contagem)
-        const obParentExtras = new Set<string>();
-        const obParentDebug: { email: string; product: string; hubla_id: string }[] = [];
-        
-        (hublaData || []).forEach((tx) => {
-          const category = tx.product_category || "";
-          const productName = (tx.product_name || "").toUpperCase();
-          // OB = categoria OB OU nome contém palavras-chave de OB
-          const isOBCategory = ["ob_construir_alugar", "ob_vitalicio", "ob_evento"].includes(category);
-          const isOBName = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) || 
-                           productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
-          const isOB = isOBCategory || isOBName;
-          
-          const rawData = tx.raw_data as Record<string, unknown> | null;
-          const eventData = rawData?.event as Record<string, unknown> | undefined;
-          const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
-          const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
-          const hasChildInvoices = childIds && childIds.length > 0;
-          
-          // OB PARENT que NÃO tem transação A010 própria (evita dupla contagem)
-          if (isOB && hasChildInvoices && tx.customer_email) {
-            const emailLower = tx.customer_email.toLowerCase();
-            if (!a010Emails.has(emailLower) && !obParentExtras.has(emailLower)) {
-              obParentExtras.add(emailLower);
-              obParentDebug.push({ email: tx.customer_email, product: tx.product_name || "", hubla_id: tx.hubla_id });
-            }
-          }
-        });
-
-        // DEBUG: Log OB Parents extras (não duplicados)
-        console.log("🔍 OB Parents extras (sem A010):", obParentExtras.size, obParentDebug);
-
-        // 3. Total = emails únicos de A010 + OB PARENT extras (sem dupla contagem)
-        const total = a010Emails.size + obParentExtras.size;
-        console.log("🔍 Vendas A010 Total:", a010Emails.size, "+", obParentExtras.size, "=", total);
-        
-        return total;
+        console.log("🔍 Vendas A010 (emails únicos):", a010Emails.size);
+        return a010Emails.size;
       })();
 
       // Usar valores fixos apenas para semana 29/11-05/12/2025
