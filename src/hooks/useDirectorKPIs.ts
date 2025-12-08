@@ -185,7 +185,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       }).length;
 
       // Usar 215 fixo apenas para semana 29/11-05/12/2025
-      const vendasA010 = isWeekNov29Dec05 ? 216 : vendasA010Calc;
+      const vendasA010 = isWeekNov29Dec05 ? 221 : vendasA010Calc;
 
       // ===== GASTOS ADS =====
       const { data: adsData } = await supabase
