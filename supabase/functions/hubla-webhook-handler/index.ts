@@ -230,8 +230,9 @@ serve(async (req) => {
           raw_data: body,
           // Novos campos
           net_value: netValue,
-          subtotal_cents: subtotalCents,
-          installment_fee_cents: installmentFeeCents,
+          // CORREÇÃO: Math.round para evitar erro "invalid input syntax for type integer"
+          subtotal_cents: Math.round(subtotalCents || 0),
+          installment_fee_cents: Math.round(installmentFeeCents || 0),
           installment_number: installment,
           total_installments: installments,
           is_offer: false,
@@ -300,8 +301,9 @@ serve(async (req) => {
             raw_data: body,
             // Novos campos
             net_value: netValue,
-            subtotal_cents: subtotalCents,
-            installment_fee_cents: installmentFeeCents,
+            // CORREÇÃO: Math.round para evitar erro "invalid input syntax for type integer"
+            subtotal_cents: Math.round(subtotalCents || 0),
+            installment_fee_cents: Math.round(installmentFeeCents || 0),
             installment_number: installment,
             total_installments: installments,
             is_offer: false,
@@ -381,8 +383,9 @@ serve(async (req) => {
             raw_data: body,
             // Novos campos
             net_value: itemNetValue,
-            subtotal_cents: isOffer ? Math.round(itemPrice * 100) : subtotalCents,
-            installment_fee_cents: isOffer ? 0 : installmentFeeCents,
+            // CORREÇÃO: Math.round para evitar erro "invalid input syntax for type integer"
+            subtotal_cents: Math.round(isOffer ? itemPrice * 100 : (subtotalCents || 0)),
+            installment_fee_cents: Math.round(isOffer ? 0 : (installmentFeeCents || 0)),
             installment_number: installment,
             total_installments: installments,
             is_offer: isOffer,

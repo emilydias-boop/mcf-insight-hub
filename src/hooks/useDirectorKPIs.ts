@@ -208,13 +208,17 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = tx.product_category === "a010" || productName.includes("A010");
           const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
-          const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
           
-          // CORREÇÃO: Excluir PARENTs (containers com childInvoiceIds)
+          // CORREÇÃO: Não excluir newsale-* se tiver customer_name válido
+          // (antes excluía todos newsale-*, mas alguns são vendas válidas)
+          const isInvalidNewsale = tx.hubla_id?.startsWith("newsale-") && 
+                                   (!tx.customer_email || tx.customer_email === "");
+          
+          // Excluir PARENTs (containers com childInvoiceIds)
           const isParent = isParentTransaction(tx);
           
-          // Contar LINHAS (não emails únicos), excluindo PARENTs
-          if (isA010 && hasValidName && isNotNewsale && !isParent) {
+          // Contar LINHAS (não emails únicos), excluindo PARENTs e newsales inválidos
+          if (isA010 && hasValidName && !isInvalidNewsale && !isParent) {
             totalLinhas++;
             a010Debug.push({ name: tx.customer_name || "", product: tx.product_name || "", hubla_id: tx.hubla_id });
           }
