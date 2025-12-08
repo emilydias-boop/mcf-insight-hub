@@ -77,7 +77,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const { data: hublaData } = await supabase
         .from("hubla_transactions")
         .select(
-          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, customer_name, customer_email, raw_data, product_price, event_type, source",
+          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
         )
         .eq("sale_status", "completed")
         .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify")
@@ -187,20 +187,31 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const vendasA010Calc = (() => {
         // 1. Identificar OBs PARENT (transações com childInvoiceIds que contêm A010 implicitamente)
         const obParentEmails = new Set<string>();
+        const obParentDebug: { email: string; product: string; hubla_id: string }[] = [];
+        
         (hublaData || []).forEach((tx) => {
           const category = tx.product_category || "";
+          const productName = (tx.product_name || "").toUpperCase();
+          // OB = categoria OB OU nome contém palavras-chave de OB
           const isOBCategory = ["ob_construir_alugar", "ob_vitalicio", "ob_evento"].includes(category);
+          const isOBName = productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          const isOB = isOBCategory || isOBName;
+          
           const rawData = tx.raw_data as Record<string, unknown> | null;
           const eventData = rawData?.event as Record<string, unknown> | undefined;
           const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
           const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
           const hasChildInvoices = childIds && childIds.length > 0;
           
-          // OB PARENT = categoria OB + tem childInvoiceIds (indica compra combinada com A010)
-          if (isOBCategory && hasChildInvoices && tx.customer_email) {
+          // OB PARENT = produto OB + tem childInvoiceIds (indica compra combinada com A010)
+          if (isOB && hasChildInvoices && tx.customer_email) {
             obParentEmails.add(tx.customer_email.toLowerCase());
+            obParentDebug.push({ email: tx.customer_email, product: tx.product_name || "", hubla_id: tx.hubla_id });
           }
         });
+
+        // DEBUG: Log OB Parents encontrados
+        console.log("🔍 OB Parents identificados:", obParentDebug.length, obParentDebug);
 
         // 2. Contar A010 normais EXCLUINDO clientes que já têm OB PARENT
         const a010Normais = (hublaData || []).filter((tx) => {
@@ -222,6 +233,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           
           return isA010 && hasValidName && isNotNewsale && !isParent && !clienteComOBParent;
         }).length;
+
+        // DEBUG: Log contagem final
+        console.log("🔍 A010 Normais:", a010Normais, "OB Parents:", obParentEmails.size, "Total:", a010Normais + obParentEmails.size);
 
         // 3. Total = A010 normais (sem duplicação) + OBs PARENT (que incluem A010)
         return a010Normais + obParentEmails.size;
@@ -277,8 +291,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const lucro = faturamentoTotalFinal - custoTotal;
 
       // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      // CORREÇÃO: Filtrar produtos Incorporador + Contratos + A010 + OBs, excluir newsale-*
+      // CORREÇÃO: APENAS A000 e A003 com pagamento ÚNICO (installment_number=1 AND total_installments=1)
       const seenClintBrutoIds = new Set<string>();
+      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number }[] = [];
       const faturamentoClint = (hublaData || [])
         .filter((tx) => {
           // Excluir newsale-* (duplicatas webhook)
@@ -287,58 +302,60 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
 
           const productName = (tx.product_name || "").toUpperCase();
-          // Incluir produtos Incorporador
-          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
-          // Incluir Contratos (exceto Clube)
-          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
-          // Incluir A010
-          const isA010 = productName.includes("A010");
-          // Incluir Order Bumps relacionados
-          const isOB =
-            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          
+          // REGRA CORRIGIDA: APENAS A000 ou A003
+          const isA000ouA003 = productName.startsWith("A000") || productName.startsWith("A003");
+          
+          // REGRA CORRIGIDA: Apenas pagamento único (não parcelado ou primeira parcela de parcelamento)
+          const installmentNum = tx.installment_number || 1;
+          const totalInstallments = tx.total_installments || 1;
+          const isPagamentoUnico = installmentNum === 1 && totalInstallments === 1;
 
-          // Excluir produtos específicos
-          const isExcluded =
-            productName.includes("CLUBE DO ARREMATE") ||
-            productName.includes("EFEITO ALAVANCA") ||
-            productName.includes("A006");
-
-          if ((isIncorporador || isContrato || isA010 || isOB) && !isExcluded) {
+          if (isA000ouA003 && isPagamentoUnico) {
             seenClintBrutoIds.add(tx.hubla_id);
+            faturamentoClintDebug.push({
+              product: tx.product_name || "",
+              price: tx.product_price || 0,
+              installment: installmentNum,
+              total: totalInstallments
+            });
             return true;
           }
           return false;
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+      
+      // DEBUG: Log Faturamento Clint
+      console.log("💰 Faturamento Clint Debug:", faturamentoClintDebug.length, "transações, Total:", faturamentoClint, faturamentoClintDebug);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // CORREÇÃO: Mesma lógica do Faturamento Clint mas com net_value (excluindo A010)
+      // CORREÇÃO: APENAS produtos A000-A009 (excluindo OBs e A010)
       const seenLiquidoIds = new Set<string>();
+      const faturamentoLiquidoDebug: { product: string; net: number }[] = [];
       const faturamentoLiquido = (hublaData || [])
         .filter((tx) => {
           if (tx.hubla_id?.startsWith("newsale-")) return false;
           if (seenLiquidoIds.has(tx.hubla_id)) return false;
 
           const productName = (tx.product_name || "").toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
-          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
-          const isOB =
-            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
+          
+          // REGRA CORRIGIDA: Apenas produtos A000-A009 (regex)
+          const isIncorporadorA00x = /^A00[0-9]/.test(productName);
+          
+          // Excluir A010 e A006 (renovações)
+          const isExcluded = productName.includes("A010") || productName.includes("A006");
 
-          // Excluir A010, A006, Clube, Efeito Alavanca do Faturamento Líquido
-          const isExcluded =
-            productName.includes("A010") ||
-            productName.includes("A006") ||
-            productName.includes("CLUBE DO ARREMATE") ||
-            productName.includes("EFEITO ALAVANCA");
-
-          if ((isIncorporador || isContrato || isOB) && !isExcluded) {
+          if (isIncorporadorA00x && !isExcluded) {
             seenLiquidoIds.add(tx.hubla_id);
+            faturamentoLiquidoDebug.push({ product: tx.product_name || "", net: tx.net_value || 0 });
             return true;
           }
           return false;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+      
+      // DEBUG: Log Faturamento Líquido
+      console.log("💵 Faturamento Líquido Debug:", faturamentoLiquidoDebug.length, "transações, Total:", faturamentoLiquido);
 
       // Valores finais (com override para semana específica)
       const faturamentoClintFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoClint : faturamentoClint;
@@ -370,7 +387,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const { data: prevHubla } = await supabase
         .from("hubla_transactions")
         .select(
-          "hubla_id, product_name, product_category, net_value, installment_number, customer_name, customer_email, raw_data, sale_date, product_price, source",
+          "hubla_id, product_name, product_category, net_value, installment_number, total_installments, customer_name, customer_email, raw_data, sale_date, product_price, source",
         )
         .eq("sale_status", "completed")
         .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify")
@@ -479,7 +496,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevCustoTotal = prevGastosAds + custoOperacionalSemanal;
       const prevCpl = prevVendasA010 > 0 ? prevGastosAds / prevVendasA010 : 0;
       const prevLucro = prevFaturamentoTotal - prevCustoTotal;
-      // Faturamento Clint anterior (bruto) - mesma lógica filtrada
+      // Faturamento Clint anterior (bruto) - APENAS A000/A003 com pagamento único
       const prevSeenClintBrutoIds = new Set<string>();
       const prevFaturamentoClint = (prevHubla || [])
         .filter((tx) => {
@@ -487,17 +504,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (prevSeenClintBrutoIds.has(tx.hubla_id)) return false;
 
           const productName = (tx.product_name || "").toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
-          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
-          const isA010 = productName.includes("A010");
-          const isOB =
-            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
-          const isExcluded =
-            productName.includes("CLUBE DO ARREMATE") ||
-            productName.includes("EFEITO ALAVANCA") ||
-            productName.includes("A006");
+          const isA000ouA003 = productName.startsWith("A000") || productName.startsWith("A003");
+          const installmentNum = tx.installment_number || 1;
+          const totalInstallments = tx.total_installments || 1;
+          const isPagamentoUnico = installmentNum === 1 && totalInstallments === 1;
 
-          if ((isIncorporador || isContrato || isA010 || isOB) && !isExcluded) {
+          if (isA000ouA003 && isPagamentoUnico) {
             prevSeenClintBrutoIds.add(tx.hubla_id);
             return true;
           }
@@ -505,7 +517,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
-      // Faturamento Líquido anterior - mesma lógica filtrada
+      // Faturamento Líquido anterior - APENAS A000-A009 (excluindo A010 e A006)
       const prevSeenLiquidoIds = new Set<string>();
       const prevFaturamentoLiquido = (prevHubla || [])
         .filter((tx) => {
@@ -513,17 +525,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (prevSeenLiquidoIds.has(tx.hubla_id)) return false;
 
           const productName = (tx.product_name || "").toUpperCase();
-          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
-          const isContrato = productName.includes("CONTRATO") && !productName.includes("CLUBE");
-          const isOB =
-            productName.includes("CONSTRUIR") || productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
-          const isExcluded =
-            productName.includes("A010") ||
-            productName.includes("A006") ||
-            productName.includes("CLUBE DO ARREMATE") ||
-            productName.includes("EFEITO ALAVANCA");
+          const isIncorporadorA00x = /^A00[0-9]/.test(productName);
+          const isExcluded = productName.includes("A010") || productName.includes("A006");
 
-          if ((isIncorporador || isContrato || isOB) && !isExcluded) {
+          if (isIncorporadorA00x && !isExcluded) {
             prevSeenLiquidoIds.add(tx.hubla_id);
             return true;
           }
