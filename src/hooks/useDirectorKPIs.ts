@@ -50,6 +50,13 @@ const EXCLUDED_PRODUCTS_FATURAMENTO = [
   "CONTRATO - CLUBE DO ARREMATE",
 ];
 
+// ===== TAXAS FIXAS POR PRODUTO (conforme planilha do usuário) =====
+// Estas taxas são aplicadas ao valor BRUTO para obter o valor faturado
+const TAXA_OB_VITALICIO = 0.8356;    // 83.56% (taxa fixa Hubla: 16.44%)
+const TAXA_OB_CONSTRUIR = 0.8980;    // 89.80% (taxa fixa Hubla: 10.20%)
+const TAXA_A010 = 0.8156;            // 81.56% (taxa fixa Hubla: 18.44%)
+const PRECO_A010 = 47;               // R$ 47 preço padrão A010
+
 // Helper para formatar data no fuso horário de Brasília (UTC-3)
 const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string => {
   const year = date.getFullYear();
@@ -173,10 +180,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ===== OB ACESSO VITALÍCIO =====
-      // CORREÇÃO: Usar "VITALIC" para pegar todas variantes de acento (VITALÍCIO, VITALICIO, VITALICÍO)
+      // ===== OB ACESSO VITALÍCIO (BRUTO × TAXA FIXA) =====
+      // Fórmula: SUM(product_price) × 83.56%
       const seenObVitalicioIds = new Set<string>();
-      const obVitalicio = (hublaData || [])
+      const obVitalicioBruto = (hublaData || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isOB = productName.includes("VITALIC"); // Pega todas variantes de acento
@@ -187,11 +194,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           }
           return false;
         })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+      const obVitalicioFaturado = obVitalicioBruto * TAXA_OB_VITALICIO;
+      const vendasObVitalicio = seenObVitalicioIds.size;
 
-      // ===== OB CONSTRUIR PARA ALUGAR =====
+      // ===== OB CONSTRUIR PARA ALUGAR (BRUTO × TAXA FIXA) =====
+      // Fórmula: SUM(product_price) × 89.80%
       const seenObConstruirIds = new Set<string>();
-      const obConstruir = (hublaData || [])
+      const obConstruirBruto = (hublaData || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isOB = productName.includes("CONSTRUIR") && productName.includes("ALUGAR");
@@ -202,22 +212,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           }
           return false;
         })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+      const obConstruirFaturado = obConstruirBruto * TAXA_OB_CONSTRUIR;
+      const vendasObConstruir = seenObConstruirIds.size;
 
-      // ===== FATURADO A010 =====
-      const seenA010FatIds = new Set<string>();
-      const faturadoA010 = (hublaData || [])
-        .filter((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
-          const isA010 = tx.product_category === "a010" || productName.includes("A010");
-          if (seenA010FatIds.has(tx.hubla_id)) return false;
-          if (isA010) {
-            seenA010FatIds.add(tx.hubla_id);
-            return true;
-          }
-          return false;
-        })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+      // ===== CONTAGEM A010 para fórmula fixa =====
+      // Faturado A010 será calculado após vendas A010 (vendas × R$ 47 × 81.56%)
 
       // ===== HELPER: Verificar se é PARENT (container com childInvoiceIds) =====
       const isParentTransaction = (tx: { raw_data: unknown }): boolean => {
@@ -229,36 +229,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       };
 
       // ===== FATURAMENTO TOTAL =====
-      // Fórmula: Incorporador + OB Vitalício + OB Construir + A010
-      // Apenas source='hubla' e 'kiwify', excluir 'make' e 'manual'
-      const FATURAMENTO_TOTAL_CATEGORIES = ['incorporador', 'contrato', 'ob_vitalicio', 'ob_construir_alugar', 'a010'];
-      
-      const seenFatTotalIds = new Set<string>();
-      const faturamentoTotal = ((hublaDataRaw || []) as HublaTransaction[])
-        .filter((tx) => {
-          const category = tx.product_category || "";
-
-          // FILTRO 1: Apenas Hubla e Kiwify (excluir make e manual)
-          if (tx.source !== 'hubla' && tx.source !== 'kiwify') return false;
-
-          // FILTRO 2: Apenas transações completadas com event_type correto
-          if (tx.event_type !== 'invoice.payment_succeeded' && tx.source !== 'kiwify') return false;
-
-          // FILTRO 3: Apenas as 4 categorias da fórmula (Incorporador + OB Vitalício + OB Construir + A010)
-          if (!FATURAMENTO_TOTAL_CATEGORIES.includes(category)) return false;
-
-          // FILTRO 4: Excluir newsale-* (duplicatas webhook)
-          if (tx.hubla_id?.startsWith("newsale-")) return false;
-
-          // FILTRO 5: Excluir -offer- (valores já contabilizados no PARENT)
-          if (tx.hubla_id?.includes('-offer-')) return false;
-
-          // FILTRO 6: Deduplicar por hubla_id
-          if (seenFatTotalIds.has(tx.hubla_id)) return false;
-          seenFatTotalIds.add(tx.hubla_id);
-          return true;
-        })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+      // Fórmula FIXA: Incorporador (net_value) + OB Vitalício (bruto × 83.56%) + OB Construir (bruto × 89.80%) + A010 (vendas × R$ 47 × 81.56%)
+      // NOTA: faturamentoTotal será calculado APÓS vendasA010 ser determinado
 
       // ===== VENDAS A010 =====
       // OVERRIDE: Valores fixos para semana 29/11-05/12/2025 (conforme planilha)
@@ -314,7 +286,23 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // Usar valores fixos apenas para semana 29/11-05/12/2025
       const vendasA010 = isWeekNov29Dec05 ? OVERRIDE_VALUES.vendasA010 : vendasA010Calc;
-      const faturamentoTotalFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoTotal : faturamentoTotal;
+
+      // ===== FATURAMENTO A010 (FÓRMULA FIXA) =====
+      // Fórmula: vendas × R$ 47 × 81.56%
+      const a010Faturado = vendasA010 * PRECO_A010 * TAXA_A010;
+
+      // ===== FATURAMENTO TOTAL (FÓRMULA FIXA) =====
+      // Fórmula: Incorporador (net_value) + OB Vitalício (bruto × 83.56%) + OB Construir (bruto × 89.80%) + A010 (vendas × R$ 47 × 81.56%)
+      const faturamentoTotalCalc = faturamentoIncorporador + obVitalicioFaturado + obConstruirFaturado + a010Faturado;
+      const faturamentoTotalFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoTotal : faturamentoTotalCalc;
+
+      console.log("💰 Faturamento Total Debug:", {
+        incorporador: faturamentoIncorporador,
+        obVitalicio: { bruto: obVitalicioBruto, faturado: obVitalicioFaturado, vendas: vendasObVitalicio },
+        obConstruir: { bruto: obConstruirBruto, faturado: obConstruirFaturado, vendas: vendasObConstruir },
+        a010: { vendas: vendasA010, faturado: a010Faturado },
+        total: faturamentoTotalCalc,
+      });
 
       // ===== GASTOS ADS =====
       const { data: adsData } = await supabase
