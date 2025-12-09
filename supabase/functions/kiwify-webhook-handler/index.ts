@@ -154,9 +154,16 @@ serve(async (req) => {
       const productCode = product.product_id || product.id || '';
       const productCategory = mapProductCategory(productName, productCode);
       
-      // Verificar parcela (para assinaturas)
-      const installmentNumber = subscription.charges?.length || 1;
-      const totalInstallments = subscription.plan?.charges_limit || 1;
+      // Verificar parcela (para assinaturas e parcelamentos)
+      // Kiwify pode enviar em diferentes formatos: Subscription.charges, installment_number, etc.
+      const subscriptionCharges = subscription.charges?.length || 0;
+      const bodyInstallment = body.installment_number || body.installment || 0;
+      const orderInstallment = body.Order?.installment_number || body.order?.installment_number || 0;
+      // Priorizar: subscription > body > order > default
+      const installmentNumber = subscriptionCharges > 0 ? subscriptionCharges : (bodyInstallment || orderInstallment || 1);
+      const totalInstallments = subscription.plan?.charges_limit || body.total_installments || body.Order?.total_installments || 1;
+      
+      console.log(`[Kiwify Webhook] Installment detection: subscriptionCharges=${subscriptionCharges}, bodyInstallment=${bodyInstallment}, orderInstallment=${orderInstallment}, final=${installmentNumber}/${totalInstallments}`);
       
       const customerName = customer.full_name || customer.name || '';
       const customerEmail = customer.email || '';
