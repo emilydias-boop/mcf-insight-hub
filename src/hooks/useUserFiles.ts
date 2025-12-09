@@ -237,5 +237,11 @@ export async function getSignedDownloadUrl(storagePath: string): Promise<string 
     return null;
   }
 
-  return data.signedUrl;
+  // Se a URL já é completa, retorna como está
+  if (data.signedUrl.startsWith('http')) {
+    return data.signedUrl;
+  }
+  
+  // Caso contrário, constrói a URL completa
+  return `https://rehcfgqvigfcekiipqkc.supabase.co/storage/v1${data.signedUrl}`;
 }
