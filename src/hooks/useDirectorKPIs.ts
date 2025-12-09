@@ -369,9 +369,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const lucro = faturamentoTotalFinal - custoTotal;
 
       // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      // CORREÇÃO: APENAS A000 e A003 com pagamento ÚNICO (installment_number=1 AND total_installments=1)
+      // CORREÇÃO: Bruto só conta PRIMEIRA PARCELA (installment_number = 1 ou null)
+      // Recorrências (installment_number > 1) tem Bruto = 0 conforme planilha
       const seenClintBrutoIds = new Set<string>();
-      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number }[] = [];
+      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number }[] = [];
       const faturamentoClint = (hublaData || [])
         .filter((tx) => {
           // Excluir newsale-* (duplicatas webhook)
@@ -381,27 +382,31 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
           const productName = (tx.product_name || "").toUpperCase();
           
-          // REGRA CORRIGIDA: APENAS A000 ou A003
-          const isA000ouA003 = productName.startsWith("A000") || productName.startsWith("A003");
-          
-          // REGRA CORRIGIDA: Apenas pagamento único (não parcelado ou primeira parcela de parcelamento)
-          const installmentNum = tx.installment_number || 1;
-          const totalInstallments = tx.total_installments || 1;
-          const isPagamentoUnico = installmentNum === 1 && totalInstallments === 1;
+          // REGRA: Produtos Incorporador (A000-A009)
+          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some((name) => productName.includes(name.toUpperCase()));
 
-          if (isA000ouA003 && isPagamentoUnico) {
+          if (isIncorporador && !isExcluded) {
             seenClintBrutoIds.add(tx.hubla_id);
+            const installmentNum = tx.installment_number || 1;
+            // REGRA: Bruto = product_price APENAS se primeira parcela, senão = 0
+            const brutoUsado = installmentNum === 1 ? (tx.product_price || 0) : 0;
             faturamentoClintDebug.push({
               product: tx.product_name || "",
               price: tx.product_price || 0,
               installment: installmentNum,
-              total: totalInstallments
+              total: tx.total_installments || 1,
+              brutoUsado
             });
             return true;
           }
           return false;
         })
-        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+        .reduce((sum, tx) => {
+          const installmentNum = tx.installment_number || 1;
+          // Bruto = product_price APENAS se primeira parcela
+          return sum + (installmentNum === 1 ? (tx.product_price || 0) : 0);
+        }, 0);
       
       // DEBUG: Log Faturamento Clint
       console.log("💰 Faturamento Clint Debug:", faturamentoClintDebug.length, "transações, Total:", faturamentoClint, faturamentoClintDebug);
