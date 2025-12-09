@@ -164,11 +164,22 @@ export function useToggleNotionPlaybookActive() {
   });
 }
 
+interface NotionFileInfo {
+  name: string;
+  url: string;
+  type: 'pdf' | 'image' | 'other';
+}
+
+interface NotionPlaybookContentResponse {
+  content: string;
+  files: NotionFileInfo[];
+}
+
 // Hook para buscar conteúdo de uma página do Notion
 export function useNotionPlaybookContent(pageId: string | null) {
   return useQuery({
     queryKey: ["notion-playbook-content", pageId],
-    queryFn: async () => {
+    queryFn: async (): Promise<NotionPlaybookContentResponse | null> => {
       if (!pageId) return null;
 
       const { data, error } = await supabase.functions.invoke('notion-playbook-content', {
@@ -178,7 +189,10 @@ export function useNotionPlaybookContent(pageId: string | null) {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      return data.content as string;
+      return {
+        content: data.content as string,
+        files: (data.files || []) as NotionFileInfo[],
+      };
     },
     enabled: !!pageId,
     staleTime: 5 * 60 * 1000,
