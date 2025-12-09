@@ -1302,6 +1302,110 @@ export type Database = {
         }
         Relationships: []
       }
+      playbook_docs: {
+        Row: {
+          ativo: boolean
+          categoria: Database["public"]["Enums"]["playbook_categoria"]
+          conteudo_rico: string | null
+          created_at: string
+          criado_por: string | null
+          data_publicacao: string
+          descricao: string | null
+          id: string
+          link_url: string | null
+          obrigatorio: boolean
+          role: Database["public"]["Enums"]["playbook_role"]
+          storage_path: string | null
+          storage_url: string | null
+          tipo_conteudo: Database["public"]["Enums"]["playbook_tipo_conteudo"]
+          titulo: string
+          updated_at: string
+          versao: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: Database["public"]["Enums"]["playbook_categoria"]
+          conteudo_rico?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_publicacao?: string
+          descricao?: string | null
+          id?: string
+          link_url?: string | null
+          obrigatorio?: boolean
+          role: Database["public"]["Enums"]["playbook_role"]
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo_conteudo: Database["public"]["Enums"]["playbook_tipo_conteudo"]
+          titulo: string
+          updated_at?: string
+          versao?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: Database["public"]["Enums"]["playbook_categoria"]
+          conteudo_rico?: string | null
+          created_at?: string
+          criado_por?: string | null
+          data_publicacao?: string
+          descricao?: string | null
+          id?: string
+          link_url?: string | null
+          obrigatorio?: boolean
+          role?: Database["public"]["Enums"]["playbook_role"]
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo_conteudo?: Database["public"]["Enums"]["playbook_tipo_conteudo"]
+          titulo?: string
+          updated_at?: string
+          versao?: string
+        }
+        Relationships: []
+      }
+      playbook_reads: {
+        Row: {
+          confirmado_em: string | null
+          created_at: string
+          id: string
+          lido_em: string | null
+          playbook_doc_id: string
+          status: Database["public"]["Enums"]["playbook_read_status"]
+          ultima_acao_em: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confirmado_em?: string | null
+          created_at?: string
+          id?: string
+          lido_em?: string | null
+          playbook_doc_id: string
+          status?: Database["public"]["Enums"]["playbook_read_status"]
+          ultima_acao_em?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confirmado_em?: string | null
+          created_at?: string
+          id?: string
+          lido_em?: string | null
+          playbook_doc_id?: string
+          status?: Database["public"]["Enums"]["playbook_read_status"]
+          ultima_acao_em?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playbook_reads_playbook_doc_id_fkey"
+            columns: ["playbook_doc_id"]
+            isOneToOne: false
+            referencedRelation: "playbook_docs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -2785,6 +2889,25 @@ export type Database = {
         | "outros"
       flag_type: "red" | "yellow" | "green"
       permission_level: "none" | "view" | "edit" | "full"
+      playbook_categoria:
+        | "onboarding"
+        | "processo"
+        | "politica"
+        | "script"
+        | "treinamento"
+        | "outro"
+      playbook_read_status: "nao_lido" | "lido" | "confirmado"
+      playbook_role:
+        | "sdr"
+        | "closer"
+        | "coordenador"
+        | "gestor_sdr"
+        | "gestor_closer"
+        | "master"
+        | "admin"
+        | "manager"
+        | "viewer"
+      playbook_tipo_conteudo: "arquivo" | "link" | "texto"
       project_status: "a_fazer" | "em_andamento" | "concluido" | "cancelado"
       resource_type:
         | "dashboard"
@@ -2951,6 +3074,27 @@ export const Constants = {
       ],
       flag_type: ["red", "yellow", "green"],
       permission_level: ["none", "view", "edit", "full"],
+      playbook_categoria: [
+        "onboarding",
+        "processo",
+        "politica",
+        "script",
+        "treinamento",
+        "outro",
+      ],
+      playbook_read_status: ["nao_lido", "lido", "confirmado"],
+      playbook_role: [
+        "sdr",
+        "closer",
+        "coordenador",
+        "gestor_sdr",
+        "gestor_closer",
+        "master",
+        "admin",
+        "manager",
+        "viewer",
+      ],
+      playbook_tipo_conteudo: ["arquivo", "link", "texto"],
       project_status: ["a_fazer", "em_andamento", "concluido", "cancelado"],
       resource_type: [
         "dashboard",
