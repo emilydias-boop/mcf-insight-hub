@@ -126,7 +126,7 @@ export function DirectorKPIRow({
     },
     {
       title: "ROI",
-      value: formatPercent(roi.value, 0),
+      value: formatPercent(roi.value, 2),
       change: roi.change,
       isPositive: roi.isPositive,
       icon: Percent,

@@ -251,8 +251,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
                        productName.includes("VITALIC");
           if (isOB) return false;
 
-          // Excluir PARENTs (containers que agregam múltiplas transações)
-          if (isParentTransaction(tx)) return false;
+          // CORREÇÃO: NÃO excluir PARENTs - são vendas válidas
+          // Os OBs já são excluídos por categoria acima
 
           // Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
