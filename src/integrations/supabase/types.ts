@@ -1368,6 +1368,7 @@ export type Database = {
           created_at: string
           id: string
           lido_em: string | null
+          notion_page_id: string | null
           playbook_doc_id: string
           status: Database["public"]["Enums"]["playbook_read_status"]
           ultima_acao_em: string
@@ -1380,6 +1381,7 @@ export type Database = {
           created_at?: string
           id?: string
           lido_em?: string | null
+          notion_page_id?: string | null
           playbook_doc_id: string
           status?: Database["public"]["Enums"]["playbook_read_status"]
           ultima_acao_em?: string
@@ -1392,6 +1394,7 @@ export type Database = {
           created_at?: string
           id?: string
           lido_em?: string | null
+          notion_page_id?: string | null
           playbook_doc_id?: string
           status?: Database["public"]["Enums"]["playbook_read_status"]
           ultima_acao_em?: string
