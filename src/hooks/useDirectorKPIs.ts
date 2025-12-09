@@ -229,26 +229,29 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       };
 
       // ===== FATURAMENTO TOTAL =====
-      // TODAS as receitas (Hubla + Kiwify), excluindo categorias, produtos específicos, OBs e PARENTs
-      // CORREÇÃO: INCLUIR OFFERs (-offer-) pois são vendas válidas, apenas excluir PARENTs
+      // CORREÇÃO: Usar mesma lógica de filtros do Bruto e Líquido para manter consistência
       const seenAllIds = new Set<string>();
       const faturamentoTotal = (hublaData || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
 
-          // REMOVIDO: Exclusão de -offer- (são vendas válidas que devem ser incluídas)
+          // FILTRO 1: Excluir newsale-* (duplicatas webhook) - PARALELO ao Bruto/Líquido
+          if (tx.hubla_id?.startsWith("newsale-")) return false;
 
-          // Excluir categorias específicas
+          // FILTRO 2: Excluir source='make' (duplicados com Hubla)
+          if (tx.source === 'make') return false;
+
+          // FILTRO 3: Excluir -offer- (valores já contabilizados no PARENT)
+          if (tx.hubla_id?.includes('-offer-')) return false;
+
+          // FILTRO 4: Excluir categorias específicas
           if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
 
-          // Excluir produtos específicos
+          // FILTRO 5: Excluir produtos específicos
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
 
-          // CORREÇÃO: NÃO excluir OBs nem PARENTs - são receitas válidas
-          // OBs (Vitalício, Construir) fazem parte do Faturamento Total
-
-          // Deduplicar por hubla_id
+          // FILTRO 6: Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
           seenAllIds.add(tx.hubla_id);
           return true;
