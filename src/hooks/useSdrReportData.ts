@@ -61,11 +61,17 @@ function extractSdrEmail(activity: DealActivity): string | null {
   const metadata = activity.metadata;
   if (!metadata) return null;
   
-  // Webhook format
-  if (metadata.deal_user) return metadata.deal_user;
+  // Webhook format (deal_user)
+  if (metadata.deal_user && typeof metadata.deal_user === 'string' 
+      && metadata.deal_user.includes('@')) {
+    return metadata.deal_user.toLowerCase();
+  }
   
-  // Bubble format
-  if (metadata.owner) return metadata.owner;
+  // Bubble format (owner)
+  if (metadata.owner && typeof metadata.owner === 'string' 
+      && metadata.owner.includes('@')) {
+    return metadata.owner.toLowerCase();
+  }
   
   return null;
 }
@@ -85,7 +91,7 @@ export function useSdrReportData(startDate: Date | null, endDate: Date | null) {
         .select('*')
         .gte('created_at', `${start}T00:00:00`)
         .lte('created_at', `${end}T23:59:59`)
-        .eq('activity_type', 'stage_changed');
+        .eq('activity_type', 'stage_change');
       
       if (error) throw error;
       
