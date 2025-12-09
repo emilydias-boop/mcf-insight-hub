@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfDay, endOfDay, format } from 'date-fns';
 
-// UUID mappings from Bubble imports
+// UUID mappings from Bubble imports - CORRIGIDO
 const STAGE_UUID_MAP: Record<string, string> = {
   'a8365215-fd31-4bdc-bbe7-77100fa39e53': 'Reunião 01 Agendada',
   '34995d75-933e-4d67-b7fc-19fcb8b81680': 'Reunião 01 Realizada',
-  '062927f5-b7a3-496a-9d47-eb03b3d69b10': 'No-Show',
-  '4f7e8a9c-1234-5678-90ab-cdef12345678': 'Contrato Pago',
+  '062927f5-b7a3-496a-9d47-eb03b3d69b10': 'Contrato Pago', // Corrigido de No-Show
+  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b': 'Novo Lead',
+  '3a2776e2-a536-4a2a-bb7b-a2f53c8941df': 'Venda realizada',
 };
 
 // Text stage names from webhooks
@@ -85,6 +86,27 @@ export function useSdrReportData(startDate: Date | null, endDate: Date | null) {
       const start = format(startOfDay(startDate), 'yyyy-MM-dd');
       const end = format(endOfDay(endDate), 'yyyy-MM-dd');
       
+      // Buscar lista de SDRs válidos do banco
+      const { data: sdrList, error: sdrError } = await supabase
+        .from('sdr')
+        .select('email, name')
+        .eq('active', true);
+      
+      if (sdrError) throw sdrError;
+      
+      // Criar Set com emails válidos (lowercase) e mapa de nomes
+      const validSdrEmails = new Set(
+        (sdrList || [])
+          .filter(sdr => sdr.email)
+          .map(sdr => sdr.email!.toLowerCase())
+      );
+      
+      const sdrNameMap = new Map(
+        (sdrList || [])
+          .filter(sdr => sdr.email)
+          .map(sdr => [sdr.email!.toLowerCase(), sdr.name])
+      );
+      
       // Query deal_activities for the period
       const { data: activities, error } = await supabase
         .from('deal_activities')
@@ -105,7 +127,9 @@ export function useSdrReportData(startDate: Date | null, endDate: Date | null) {
       
       (activities || []).forEach((activity: DealActivity) => {
         const sdrEmail = extractSdrEmail(activity);
-        if (!sdrEmail) return;
+        
+        // REGRA: só processar se email estiver na lista de SDRs cadastrados
+        if (!sdrEmail || !validSdrEmails.has(sdrEmail)) return;
         
         if (!sdrMetrics.has(sdrEmail)) {
           sdrMetrics.set(sdrEmail, {
@@ -145,7 +169,7 @@ export function useSdrReportData(startDate: Date | null, endDate: Date | null) {
         
         result.push({
           sdr_email: email,
-          sdr_name: email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          sdr_name: sdrNameMap.get(email) || email, // Usa nome do banco
           r1_agendada: agendadas,
           r1_realizada: realizadas,
           no_shows: noShows,
