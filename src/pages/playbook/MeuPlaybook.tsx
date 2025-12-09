@@ -5,11 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMyPlaybook } from "@/hooks/usePlaybookReads";
+import { useAuth } from "@/contexts/AuthContext";
 import { PlaybookViewer } from "@/components/playbook/PlaybookViewer";
+import { PlaybookConfigSection } from "@/components/playbook/PlaybookConfigSection";
 import { PlaybookDocWithRead, PLAYBOOK_CATEGORIA_LABELS, PLAYBOOK_STATUS_LABELS, PLAYBOOK_STATUS_COLORS, PLAYBOOK_TIPO_LABELS, PLAYBOOK_CATEGORIAS_LIST } from "@/types/playbook";
-import { Loader2, FileText, Link, FileType, Eye, BookOpen } from "lucide-react";
+import { Loader2, FileText, Link, FileType, Eye, BookOpen, Settings } from "lucide-react";
 
 export default function MeuPlaybook() {
+  const { role } = useAuth();
+  const isGestor = role === 'admin' || role === 'manager' || role === 'coordenador';
+
   const { data: docs, isLoading } = useMyPlaybook();
   const [selectedDoc, setSelectedDoc] = useState<PlaybookDocWithRead | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -42,6 +47,25 @@ export default function MeuPlaybook() {
     obrigatorios_confirmados: docs?.filter(d => d.obrigatorio && d.read_status === 'confirmado').length || 0,
   };
 
+  // View para gestores (admin, manager, coordenador)
+  if (isGestor) {
+    return (
+      <div className="space-y-6 p-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Settings className="h-8 w-8" />
+            Gestão do Playbook
+          </h1>
+          <p className="text-muted-foreground">
+            Gerencie os materiais oficiais por cargo.
+          </p>
+        </div>
+        <PlaybookConfigSection />
+      </div>
+    );
+  }
+
+  // View para usuários comuns
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -54,128 +78,128 @@ export default function MeuPlaybook() {
         </p>
       </div>
 
-        {/* Cards de resumo */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold">{statusCounts.total}</div>
-              <p className="text-xs text-muted-foreground">Total de documentos</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-muted-foreground">{statusCounts.nao_lido}</div>
-              <p className="text-xs text-muted-foreground">Não lidos</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-blue-600">{statusCounts.lido}</div>
-              <p className="text-xs text-muted-foreground">Lidos</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-green-600">
-                {statusCounts.obrigatorios_confirmados}/{statusCounts.obrigatorios}
-              </div>
-              <p className="text-xs text-muted-foreground">Obrigatórios confirmados</p>
-            </CardContent>
-          </Card>
-        </div>
-
+      {/* Cards de resumo */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Documentos</CardTitle>
-                <CardDescription>
-                  Clique em "Abrir" para visualizar o conteúdo.
-                </CardDescription>
-              </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filtrar por categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas categorias</SelectItem>
-                  {PLAYBOOK_CATEGORIAS_LIST.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {PLAYBOOK_CATEGORIA_LABELS[cat]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredDocs.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                {docs?.length === 0 
-                  ? "Nenhum documento disponível para o seu cargo."
-                  : "Nenhum documento encontrado com este filtro."
-                }
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Obrigatório</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredDocs.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.titulo}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {PLAYBOOK_CATEGORIA_LABELS[doc.categoria]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getTipoIcon(doc.tipo_conteudo)}
-                          <span>{PLAYBOOK_TIPO_LABELS[doc.tipo_conteudo]}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {doc.obrigatorio ? (
-                          <Badge variant="destructive">Sim</Badge>
-                        ) : (
-                          <Badge variant="secondary">Não</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={PLAYBOOK_STATUS_COLORS[doc.read_status || 'nao_lido']}>
-                          {PLAYBOOK_STATUS_LABELS[doc.read_status || 'nao_lido']}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedDoc(doc)}
-                        >
-                          <Eye className="mr-2 h-4 w-4" />
-                          Abrir
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold">{statusCounts.total}</div>
+            <p className="text-xs text-muted-foreground">Total de documentos</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold text-muted-foreground">{statusCounts.nao_lido}</div>
+            <p className="text-xs text-muted-foreground">Não lidos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold text-blue-600">{statusCounts.lido}</div>
+            <p className="text-xs text-muted-foreground">Lidos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold text-green-600">
+              {statusCounts.obrigatorios_confirmados}/{statusCounts.obrigatorios}
+            </div>
+            <p className="text-xs text-muted-foreground">Obrigatórios confirmados</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Documentos</CardTitle>
+              <CardDescription>
+                Clique em "Abrir" para visualizar o conteúdo.
+              </CardDescription>
+            </div>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas categorias</SelectItem>
+                {PLAYBOOK_CATEGORIAS_LIST.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {PLAYBOOK_CATEGORIA_LABELS[cat]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredDocs.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              {docs?.length === 0 
+                ? "Nenhum documento disponível para o seu cargo."
+                : "Nenhum documento encontrado com este filtro."
+              }
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Título</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Obrigatório</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDocs.map((doc) => (
+                  <TableRow key={doc.id}>
+                    <TableCell className="font-medium">{doc.titulo}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {PLAYBOOK_CATEGORIA_LABELS[doc.categoria]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getTipoIcon(doc.tipo_conteudo)}
+                        <span>{PLAYBOOK_TIPO_LABELS[doc.tipo_conteudo]}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {doc.obrigatorio ? (
+                        <Badge variant="destructive">Sim</Badge>
+                      ) : (
+                        <Badge variant="secondary">Não</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={PLAYBOOK_STATUS_COLORS[doc.read_status || 'nao_lido']}>
+                        {PLAYBOOK_STATUS_LABELS[doc.read_status || 'nao_lido']}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedDoc(doc)}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Abrir
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Viewer dialog */}
       <PlaybookViewer
