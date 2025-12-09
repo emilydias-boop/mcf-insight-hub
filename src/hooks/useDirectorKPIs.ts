@@ -293,14 +293,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const isInvalidNewsale = tx.hubla_id?.startsWith("newsale-") && 
                                    (!tx.customer_email || tx.customer_email === "");
           
-          // Excluir PARENTs (containers com childInvoiceIds)
-          const isParent = isParentTransaction(tx);
-          
           // CORREÇÃO: Deduplicar por base_id (remove -offer-N suffix)
           const baseId = getBaseId(tx.hubla_id || "");
           
+          // CORREÇÃO: NÃO excluir PARENTs - são vendas A010 válidas (os -offer- são OBs)
           // Contar apenas se base_id ainda não foi contado
-          if (isA010 && hasValidName && !isInvalidNewsale && !isParent && !seenA010BaseIds.has(baseId)) {
+          if (isA010 && hasValidName && !isInvalidNewsale && !seenA010BaseIds.has(baseId)) {
             seenA010BaseIds.add(baseId);
             a010Debug.push({ 
               name: tx.customer_name || "", 
