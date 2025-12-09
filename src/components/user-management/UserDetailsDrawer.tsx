@@ -10,7 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, CheckCircle, Target as TargetIcon, Flag, FileText, Shield, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle, Target as TargetIcon, Flag, FileText, Shield, Loader2, BookOpen } from "lucide-react";
+import { PlaybookUserProgress } from "@/components/playbook/PlaybookUserProgress";
 import { useUserDetails, useUserTargets, useUserFlags, useUserObservations, useUserPermissions } from "@/hooks/useUsers";
 import { useUpdateUserRole, useUpdateUserEmployment, useCreateUserTarget, useUpdateUserTarget, useCreateUserFlag, useResolveUserFlag, useCreateUserObservation, useUpdateUserPermissions } from "@/hooks/useUserMutations";
 import { UserTargetsForm } from "./UserTargetsForm";
@@ -182,6 +183,14 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
             </TabsList>
 
             <TabsContent value="general" className="space-y-4">
+              {/* Bloco Playbook Progress */}
+              {userId && userDetails.role && (
+                <PlaybookUserProgress 
+                  userId={userId} 
+                  userRole={userDetails.role} 
+                />
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle>Informações Gerais</CardTitle>
