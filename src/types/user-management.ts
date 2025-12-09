@@ -99,3 +99,33 @@ export interface UserPermission {
   created_at: string;
   updated_at: string;
 }
+
+// ===== ARQUIVOS DE USUÁRIO =====
+export type UserFileType = 'contrato_trabalho' | 'politica_comissao' | 'metas' | 'outro';
+
+export interface UserFile {
+  id: string;
+  user_id: string;
+  tipo: UserFileType;
+  titulo: string;
+  descricao: string | null;
+  storage_url: string;
+  storage_path: string;
+  file_name: string;
+  file_size: number | null;
+  data_upload: string;
+  uploaded_by: string;
+  visivel_para_usuario: boolean;
+  categoria_cargo: string | null;
+  created_at: string;
+  updated_at: string;
+  // Campo de join para exibição
+  uploader_name?: string;
+}
+
+export const USER_FILE_TYPE_LABELS: Record<UserFileType, string> = {
+  contrato_trabalho: 'Contrato de Trabalho',
+  politica_comissao: 'Política de Comissão',
+  metas: 'Metas',
+  outro: 'Outro',
+};

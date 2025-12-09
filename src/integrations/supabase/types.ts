@@ -2117,6 +2117,60 @@ export type Database = {
         }
         Relationships: []
       }
+      user_files: {
+        Row: {
+          categoria_cargo: string | null
+          created_at: string | null
+          data_upload: string
+          descricao: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          storage_path: string
+          storage_url: string
+          tipo: Database["public"]["Enums"]["user_file_type"]
+          titulo: string
+          updated_at: string | null
+          uploaded_by: string
+          user_id: string
+          visivel_para_usuario: boolean
+        }
+        Insert: {
+          categoria_cargo?: string | null
+          created_at?: string | null
+          data_upload?: string
+          descricao?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          storage_path: string
+          storage_url: string
+          tipo: Database["public"]["Enums"]["user_file_type"]
+          titulo: string
+          updated_at?: string | null
+          uploaded_by: string
+          user_id: string
+          visivel_para_usuario?: boolean
+        }
+        Update: {
+          categoria_cargo?: string | null
+          created_at?: string | null
+          data_upload?: string
+          descricao?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          storage_path?: string
+          storage_url?: string
+          tipo?: Database["public"]["Enums"]["user_file_type"]
+          titulo?: string
+          updated_at?: string | null
+          uploaded_by?: string
+          user_id?: string
+          visivel_para_usuario?: boolean
+        }
+        Relationships: []
+      }
       user_flags: {
         Row: {
           category: Database["public"]["Enums"]["flag_category"]
@@ -2751,6 +2805,11 @@ export type Database = {
       target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
       transaction_type: "receita" | "custo"
+      user_file_type:
+        | "contrato_trabalho"
+        | "politica_comissao"
+        | "metas"
+        | "outro"
       user_status: "ativo" | "ferias" | "inativo" | "pendente_aprovacao"
     }
     CompositeTypes: {
@@ -2913,6 +2972,12 @@ export const Constants = {
       target_type: ["receita", "vendas", "leads", "conversao", "custom"],
       transaction_status: ["pago", "pendente", "cancelado"],
       transaction_type: ["receita", "custo"],
+      user_file_type: [
+        "contrato_trabalho",
+        "politica_comissao",
+        "metas",
+        "outro",
+      ],
       user_status: ["ativo", "ferias", "inativo", "pendente_aprovacao"],
     },
   },
