@@ -124,22 +124,48 @@ export function DrawerArquivosUsuario({
   };
 
   const handleDownload = async (storagePath: string, fileName: string) => {
-    const url = await getSignedDownloadUrl(storagePath);
-    if (url) {
+    try {
+      const url = await getSignedDownloadUrl(storagePath);
+      if (!url) return;
+      
+      // Baixa o arquivo via fetch (não bloqueado por extensões)
+      const response = await fetch(url);
+      const blob = await response.blob();
+      
+      // Cria URL local do blob
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Cria link de download
       const link = document.createElement("a");
-      link.href = url;
+      link.href = blobUrl;
       link.download = fileName;
-      link.target = "_blank";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Limpa o blob URL
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Erro ao baixar arquivo:", error);
     }
   };
 
   const handleView = async (storagePath: string) => {
-    const url = await getSignedDownloadUrl(storagePath);
-    if (url) {
-      window.open(url, "_blank");
+    try {
+      const url = await getSignedDownloadUrl(storagePath);
+      if (!url) return;
+      
+      // Baixa o arquivo via fetch (não bloqueado por extensões)
+      const response = await fetch(url);
+      const blob = await response.blob();
+      
+      // Cria URL local do blob (blob URLs não são bloqueados)
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Abre em nova aba
+      window.open(blobUrl, "_blank");
+    } catch (error) {
+      console.error("Erro ao visualizar arquivo:", error);
     }
   };
 
