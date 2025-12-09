@@ -72,6 +72,8 @@ export function DrawerArquivosUsuario({
   const { user } = useAuth();
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; fileId: string; storagePath: string } | null>(null);
+  const [viewingFile, setViewingFile] = useState<{ url: string; name: string; type: string; storagePath: string } | null>(null);
+  const [isLoadingView, setIsLoadingView] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -150,7 +152,8 @@ export function DrawerArquivosUsuario({
     }
   };
 
-  const handleView = async (storagePath: string) => {
+  const handleView = async (storagePath: string, fileName: string) => {
+    setIsLoadingView(true);
     try {
       const url = await getSignedDownloadUrl(storagePath);
       if (!url) return;
@@ -159,14 +162,42 @@ export function DrawerArquivosUsuario({
       const response = await fetch(url);
       const blob = await response.blob();
       
-      // Cria URL local do blob (blob URLs não são bloqueados)
+      // Cria URL local do blob
       const blobUrl = URL.createObjectURL(blob);
       
-      // Abre em nova aba
-      window.open(blobUrl, "_blank");
+      // Determina o tipo do arquivo
+      const mimeType = blob.type || getMimeType(fileName);
+      
+      setViewingFile({ url: blobUrl, name: fileName, type: mimeType, storagePath });
     } catch (error) {
       console.error("Erro ao visualizar arquivo:", error);
+    } finally {
+      setIsLoadingView(false);
     }
+  };
+
+  const getMimeType = (fileName: string): string => {
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    const mimeTypes: Record<string, string> = {
+      pdf: 'application/pdf',
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  };
+
+  const closeViewer = () => {
+    if (viewingFile) {
+      URL.revokeObjectURL(viewingFile.url);
+    }
+    setViewingFile(null);
   };
 
   const handleDelete = () => {
@@ -410,10 +441,11 @@ export function DrawerArquivosUsuario({
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleView(file.storage_path)}
+                          onClick={() => handleView(file.storage_path, file.file_name)}
                           title="Ver arquivo"
+                          disabled={isLoadingView}
                         >
-                          <Eye className="h-4 w-4" />
+                          {isLoadingView ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                         </Button>
                         <Button
                           variant="ghost"
@@ -445,6 +477,57 @@ export function DrawerArquivosUsuario({
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+
+          {/* Visualizador inline de arquivos */}
+          {viewingFile && (
+            <div className="fixed inset-0 bg-background/95 z-[60] flex flex-col">
+              <div className="flex justify-between items-center p-4 border-b bg-background">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText className="h-5 w-5 text-primary flex-shrink-0" />
+                  <span className="font-medium truncate">{viewingFile.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownload(viewingFile.storagePath, viewingFile.name)}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Baixar
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={closeViewer}>
+                    <X className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto p-4 flex items-center justify-center">
+                {viewingFile.type === 'application/pdf' ? (
+                  <iframe
+                    src={viewingFile.url}
+                    className="w-full h-full min-h-[70vh] rounded-lg border"
+                    title={viewingFile.name}
+                  />
+                ) : viewingFile.type.startsWith('image/') ? (
+                  <img
+                    src={viewingFile.url}
+                    alt={viewingFile.name}
+                    className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-lg"
+                  />
+                ) : (
+                  <div className="text-center space-y-4">
+                    <FileIcon className="h-16 w-16 text-muted-foreground mx-auto" />
+                    <p className="text-muted-foreground">
+                      Visualização não disponível para este tipo de arquivo.
+                    </p>
+                    <Button onClick={() => handleDownload(viewingFile.storagePath, viewingFile.name)}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Baixar arquivo
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </SheetContent>
