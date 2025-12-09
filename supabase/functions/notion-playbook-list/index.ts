@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 const NOTION_API_KEY = Deno.env.get('NOTION_API_KEY');
-const NOTION_DATABASE_ID = '0297a9586e9d4a0f99165ecb2a71d8e9';
+const NOTION_DATABASE_ID = '4fcfc9d5-2521-4576-b761-a00424d29d92';
 
 interface NotionPage {
   id: string;
