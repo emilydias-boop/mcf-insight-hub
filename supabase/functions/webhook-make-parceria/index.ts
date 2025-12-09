@@ -61,8 +61,73 @@ Deno.serve(async (req) => {
       return parseFloat(str) || 0
     }
 
-    const valorLiquido = parseMonetaryValue(body.valor_liquido)
+    let valorLiquido = parseMonetaryValue(body.valor_liquido)
     const valorBruto = body.valor_bruto ? parseMonetaryValue(body.valor_bruto) : valorLiquido
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // ===== VALIDAÇÃO CONTRA HUBLA =====
+    // Detectar se valor parece ser taxa da Hubla (< 15% do bruto)
+    const pareceSerTaxa = valorBruto > 0 && valorLiquido < valorBruto * 0.15
+    let valorCorrigido = false
+    let valorOriginalMake = valorLiquido
+
+    if (pareceSerTaxa) {
+      console.log('⚠️ Valor parece ser taxa da Hubla:', { valorLiquido, valorBruto, ratio: valorLiquido / valorBruto })
+      
+      // Buscar registro Hubla correspondente (mesmo email, data ±1 dia, mesmo valor bruto)
+      const parsedDate = new Date(body.data)
+      const dataInicio = new Date(parsedDate)
+      dataInicio.setDate(dataInicio.getDate() - 1)
+      const dataFim = new Date(parsedDate)
+      dataFim.setDate(dataFim.getDate() + 1)
+
+      const { data: hublaMatch, error: hublaError } = await supabase
+        .from('hubla_transactions')
+        .select('net_value, product_price, customer_email')
+        .eq('source', 'hubla')
+        .ilike('customer_email', body.email.toLowerCase())
+        .gte('sale_date', dataInicio.toISOString())
+        .lte('sale_date', dataFim.toISOString())
+        .gte('product_price', valorBruto * 0.95)
+        .lte('product_price', valorBruto * 1.05)
+        .limit(1)
+        .maybeSingle()
+
+      if (!hublaError && hublaMatch && hublaMatch.net_value) {
+        console.log('✅ Match encontrado na Hubla! Corrigindo valor:', {
+          makeOriginal: valorLiquido,
+          hublaCorreto: hublaMatch.net_value
+        })
+        
+        valorLiquido = hublaMatch.net_value
+        valorCorrigido = true
+
+        // Criar alerta sobre a correção
+        const { error: alertError } = await supabase.from('alertas').insert({
+          tipo: 'correcao_valor',
+          titulo: `Valor corrigido: ${body.nome}`,
+          descricao: `Make enviou R$ ${valorOriginalMake.toFixed(2)} (taxa Hubla), corrigido para R$ ${valorLiquido.toFixed(2)} (valor líquido Hubla)`,
+          user_id: '00000000-0000-0000-0000-000000000000', // System user
+          metadata: { 
+            email: body.email, 
+            valorOriginal: valorOriginalMake, 
+            valorCorrigido: valorLiquido,
+            produto: body.tipo_parceria || 'Parceria',
+            dataVenda: body.data
+          }
+        })
+        
+        if (alertError) {
+          console.warn('⚠️ Não foi possível criar alerta:', alertError)
+        }
+      } else {
+        console.log('⚠️ Nenhum match encontrado na Hubla, mantendo valor do Make')
+      }
+    }
 
     // Generate unique hubla_id
     const timestamp = Date.now()
@@ -78,11 +143,6 @@ Deno.serve(async (req) => {
       saleDate = new Date().toISOString()
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
     // Prepare transaction data
     const transactionData = {
       hubla_id: hublaId,
@@ -97,7 +157,7 @@ Deno.serve(async (req) => {
       event_type: 'invoice.payment_succeeded',
       sale_status: 'completed',
       source: 'make',
-      raw_data: body
+      raw_data: { ...body, valor_corrigido: valorCorrigido, valor_original_make: valorOriginalMake }
     }
 
     console.log('💾 Inserting transaction:', JSON.stringify(transactionData, null, 2))
@@ -127,6 +187,8 @@ Deno.serve(async (req) => {
         hubla_id: hublaId,
         tipo_parceria: body.tipo_parceria || 'Parceria',
         valor_liquido: valorLiquido,
+        valor_corrigido: valorCorrigido,
+        valor_original_make: valorCorrigido ? valorOriginalMake : undefined,
         processing_time_ms: processingTime
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
