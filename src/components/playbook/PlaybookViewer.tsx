@@ -5,13 +5,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMarkAsRead, useConfirmReading } from "@/hooks/usePlaybookReads";
-import { useNotionPlaybookContent, NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
+import { useNotionPlaybookContent } from "@/hooks/useNotionPlaybook";
+import { PlaybookDocWithRead } from "@/types/playbook";
 import { Loader2, ExternalLink, FileText } from "lucide-react";
 
 interface PlaybookViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  doc: NotionPlaybookDoc | null;
+  doc: PlaybookDocWithRead | null;
   currentStatus?: string;
 }
 
@@ -23,14 +24,14 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
 
   // Buscar conteúdo do Notion se for tipo texto
   const { data: notionContent, isLoading: loadingContent } = useNotionPlaybookContent(
-    open && doc?.tipo_conteudo === 'texto' ? doc.notion_page_id : null
+    open && doc?.tipo_conteudo === 'texto' && doc?.notion_page_id ? doc.notion_page_id : null
   );
 
   // Marcar como lido ao abrir
   useEffect(() => {
     if (open && doc && currentStatus === 'nao_lido') {
-      // Usar notion_page_id como identificador
-      markAsRead.mutate(doc.notion_page_id);
+      // Usar id local ou notion_page_id como identificador
+      markAsRead.mutate(doc.id);
     }
   }, [open, doc, currentStatus]);
 
@@ -42,7 +43,7 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
 
   const handleConfirm = async () => {
     if (!doc) return;
-    await confirmReading.mutateAsync(doc.notion_page_id);
+    await confirmReading.mutateAsync(doc.id);
     onOpenChange(false);
   };
 
@@ -50,7 +51,7 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
     if (doc?.link_url) {
       window.open(doc.link_url, '_blank');
       if (currentStatus === 'nao_lido') {
-        markAsRead.mutate(doc.notion_page_id);
+        markAsRead.mutate(doc.id);
       }
     }
   };
