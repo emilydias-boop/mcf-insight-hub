@@ -245,14 +245,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           // Excluir produtos específicos
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
 
-          // Excluir OBs (CONSTRUIR ALUGAR, VITALÍCIO)
-          // CORREÇÃO: Usar "VITALIC" para pegar todas variantes de acento
-          const isOB = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) ||
-                       productName.includes("VITALIC");
-          if (isOB) return false;
-
-          // CORREÇÃO: NÃO excluir PARENTs - são vendas válidas
-          // Os OBs já são excluídos por categoria acima
+          // CORREÇÃO: NÃO excluir OBs nem PARENTs - são receitas válidas
+          // OBs (Vitalício, Construir) fazem parte do Faturamento Total
 
           // Deduplicar por hubla_id
           if (seenAllIds.has(tx.hubla_id)) return false;
