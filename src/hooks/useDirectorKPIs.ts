@@ -39,7 +39,7 @@ const EXCLUDED_PRODUCT_NAMES = [
 ];
 
 // Categorias e produtos excluídos do Faturamento Total (conforme planilha)
-const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao", "ob_vitalicio", "ob_construir_alugar"];
+const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao"];
 const EXCLUDED_PRODUCTS_FATURAMENTO = [
   "SÓCIO MCF",
   "SOCIO MCF",
@@ -229,31 +229,35 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       };
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Usar mesma lógica de filtros do Bruto e Líquido para manter consistência
-      const seenAllIds = new Set<string>();
-      const faturamentoTotal = (hublaData || [])
+      // CORREÇÃO: Usar hublaDataRaw (sem deduplicação por email) para não perder transações válidas
+      // A deduplicação por email|data|categoria remove vendas de mesmo cliente no mesmo dia
+      const seenFatTotalIds = new Set<string>();
+      const faturamentoTotal = ((hublaDataRaw || []) as HublaTransaction[])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
 
-          // FILTRO 1: Excluir newsale-* (duplicatas webhook) - PARALELO ao Bruto/Líquido
+          // FILTRO 1: Apenas transações completadas com event_type correto
+          if (tx.event_type !== 'invoice.payment_succeeded' && tx.source !== 'kiwify') return false;
+
+          // FILTRO 2: Excluir newsale-* (duplicatas webhook)
           if (tx.hubla_id?.startsWith("newsale-")) return false;
 
-          // FILTRO 2: Excluir source='make' (duplicados com Hubla)
+          // FILTRO 3: Excluir source='make' (duplicados com Hubla)
           if (tx.source === 'make') return false;
 
-          // FILTRO 3: Excluir -offer- (valores já contabilizados no PARENT)
+          // FILTRO 4: Excluir -offer- (valores já contabilizados no PARENT)
           if (tx.hubla_id?.includes('-offer-')) return false;
 
-          // FILTRO 4: Excluir categorias específicas
+          // FILTRO 5: Excluir categorias específicas
           if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
 
-          // FILTRO 5: Excluir produtos específicos
+          // FILTRO 6: Excluir produtos específicos
           if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
 
-          // FILTRO 6: Deduplicar por hubla_id
-          if (seenAllIds.has(tx.hubla_id)) return false;
-          seenAllIds.add(tx.hubla_id);
+          // FILTRO 7: Deduplicar por hubla_id
+          if (seenFatTotalIds.has(tx.hubla_id)) return false;
+          seenFatTotalIds.add(tx.hubla_id);
           return true;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
