@@ -229,33 +229,31 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       };
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Usar hublaDataRaw (sem deduplicação por email) para não perder transações válidas
-      // A deduplicação por email|data|categoria remove vendas de mesmo cliente no mesmo dia
+      // Fórmula: Incorporador + OB Vitalício + OB Construir + A010
+      // Apenas source='hubla' e 'kiwify', excluir 'make' e 'manual'
+      const FATURAMENTO_TOTAL_CATEGORIES = ['incorporador', 'contrato', 'ob_vitalicio', 'ob_construir_alugar', 'a010'];
+      
       const seenFatTotalIds = new Set<string>();
       const faturamentoTotal = ((hublaDataRaw || []) as HublaTransaction[])
         .filter((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
 
-          // FILTRO 1: Apenas transações completadas com event_type correto
+          // FILTRO 1: Apenas Hubla e Kiwify (excluir make e manual)
+          if (tx.source !== 'hubla' && tx.source !== 'kiwify') return false;
+
+          // FILTRO 2: Apenas transações completadas com event_type correto
           if (tx.event_type !== 'invoice.payment_succeeded' && tx.source !== 'kiwify') return false;
 
-          // FILTRO 2: Excluir newsale-* (duplicatas webhook)
+          // FILTRO 3: Apenas as 4 categorias da fórmula (Incorporador + OB Vitalício + OB Construir + A010)
+          if (!FATURAMENTO_TOTAL_CATEGORIES.includes(category)) return false;
+
+          // FILTRO 4: Excluir newsale-* (duplicatas webhook)
           if (tx.hubla_id?.startsWith("newsale-")) return false;
 
-          // FILTRO 3: Excluir source='make' (duplicados com Hubla)
-          if (tx.source === 'make') return false;
-
-          // FILTRO 4: Excluir -offer- (valores já contabilizados no PARENT)
+          // FILTRO 5: Excluir -offer- (valores já contabilizados no PARENT)
           if (tx.hubla_id?.includes('-offer-')) return false;
 
-          // FILTRO 5: Excluir categorias específicas
-          if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
-
-          // FILTRO 6: Excluir produtos específicos
-          if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
-
-          // FILTRO 7: Deduplicar por hubla_id
+          // FILTRO 6: Deduplicar por hubla_id
           if (seenFatTotalIds.has(tx.hubla_id)) return false;
           seenFatTotalIds.add(tx.hubla_id);
           return true;
