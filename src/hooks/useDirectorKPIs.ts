@@ -56,6 +56,8 @@ const TAXA_OB_VITALICIO = 0.8356;    // 83.56% (taxa fixa Hubla: 16.44%)
 const TAXA_OB_CONSTRUIR = 0.8980;    // 89.80% (taxa fixa Hubla: 10.20%)
 const TAXA_A010 = 0.8156;            // 81.56% (taxa fixa Hubla: 18.44%)
 const PRECO_A010 = 47;               // R$ 47 preço padrão A010
+const PRECO_OB_VITALICIO = 57;       // R$ 57 preço padrão OB Vitalício
+const PRECO_OB_CONSTRUIR = 97;       // R$ 97 preço padrão OB Construir
 
 // Helper para formatar data no fuso horário de Brasília (UTC-3)
 const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string => {
@@ -180,45 +182,35 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ===== OB ACESSO VITALÍCIO (BRUTO × TAXA FIXA) =====
-      // Fórmula: SUM(product_price) × 83.56%
-      // CORREÇÃO: Apenas transações -offer- são OBs reais (exclui parent/Make)
+      // ===== OB ACESSO VITALÍCIO (FÓRMULA FIXA: quantidade × preço × taxa) =====
+      // Fórmula: COUNT(-offer- transactions) × R$ 57 × 83.56%
       const seenObVitalicioIds = new Set<string>();
-      const obVitalicioBruto = (hublaData || [])
-        .filter((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
-          const isOB = productName.includes("VITALIC"); // Pega todas variantes de acento
-          const isOfferTransaction = tx.hubla_id?.includes('-offer-'); // APENAS -offer-
-          
-          if (!isOB || !isOfferTransaction) return false;
-          if (seenObVitalicioIds.has(tx.hubla_id)) return false;
-          
+      (hublaData || []).forEach((tx) => {
+        const productName = (tx.product_name || "").toUpperCase();
+        const isOB = productName.includes("VITALIC");
+        const isOfferTransaction = tx.hubla_id?.includes('-offer-');
+        
+        if (isOB && isOfferTransaction && !seenObVitalicioIds.has(tx.hubla_id)) {
           seenObVitalicioIds.add(tx.hubla_id);
-          return true;
-        })
-        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
-      const obVitalicioFaturado = obVitalicioBruto * TAXA_OB_VITALICIO;
+        }
+      });
       const vendasObVitalicio = seenObVitalicioIds.size;
+      const obVitalicioFaturado = vendasObVitalicio * PRECO_OB_VITALICIO * TAXA_OB_VITALICIO;
 
-      // ===== OB CONSTRUIR PARA ALUGAR (BRUTO × TAXA FIXA) =====
-      // Fórmula: SUM(product_price) × 89.80%
-      // CORREÇÃO: Apenas transações -offer- são OBs reais (exclui parent/Make)
+      // ===== OB CONSTRUIR PARA ALUGAR (FÓRMULA FIXA: quantidade × preço × taxa) =====
+      // Fórmula: COUNT(-offer- transactions) × R$ 97 × 89.80%
       const seenObConstruirIds = new Set<string>();
-      const obConstruirBruto = (hublaData || [])
-        .filter((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
-          const isOB = productName.includes("CONSTRUIR") && productName.includes("ALUGAR");
-          const isOfferTransaction = tx.hubla_id?.includes('-offer-'); // APENAS -offer-
-          
-          if (!isOB || !isOfferTransaction) return false;
-          if (seenObConstruirIds.has(tx.hubla_id)) return false;
-          
+      (hublaData || []).forEach((tx) => {
+        const productName = (tx.product_name || "").toUpperCase();
+        const isOB = productName.includes("CONSTRUIR") && productName.includes("ALUGAR");
+        const isOfferTransaction = tx.hubla_id?.includes('-offer-');
+        
+        if (isOB && isOfferTransaction && !seenObConstruirIds.has(tx.hubla_id)) {
           seenObConstruirIds.add(tx.hubla_id);
-          return true;
-        })
-        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
-      const obConstruirFaturado = obConstruirBruto * TAXA_OB_CONSTRUIR;
+        }
+      });
       const vendasObConstruir = seenObConstruirIds.size;
+      const obConstruirFaturado = vendasObConstruir * PRECO_OB_CONSTRUIR * TAXA_OB_CONSTRUIR;
 
       // ===== CONTAGEM A010 para fórmula fixa =====
       // Faturado A010 será calculado após vendas A010 (vendas × R$ 47 × 81.56%)
@@ -302,8 +294,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       console.log("💰 Faturamento Total Debug:", {
         incorporador: faturamentoIncorporador,
-        obVitalicio: { bruto: obVitalicioBruto, faturado: obVitalicioFaturado, vendas: vendasObVitalicio },
-        obConstruir: { bruto: obConstruirBruto, faturado: obConstruirFaturado, vendas: vendasObConstruir },
+        obVitalicio: { vendas: vendasObVitalicio, bruto: vendasObVitalicio * PRECO_OB_VITALICIO, faturado: obVitalicioFaturado },
+        obConstruir: { vendas: vendasObConstruir, bruto: vendasObConstruir * PRECO_OB_CONSTRUIR, faturado: obConstruirFaturado },
         a010: { vendas: vendasA010, faturado: a010Faturado },
         total: faturamentoTotalCalc,
       });
