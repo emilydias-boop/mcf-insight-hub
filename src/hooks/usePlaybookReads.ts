@@ -90,32 +90,60 @@ export function useMyPlaybook() {
       // Mapear app_role para playbook_role
       const playbookRole = role as PlaybookRole;
       
-      // Buscar documentos ativos do cargo
-      const { data: docs, error: docsError } = await supabase
-        .from("playbook_docs")
-        .select("*")
-        .eq("role", playbookRole)
-        .eq("ativo", true)
-        .order("categoria", { ascending: true })
-        .order("titulo", { ascending: true });
+      // Buscar documentos ativos do cargo via Notion
+      const { data: notionResponse, error: notionError } = await supabase.functions.invoke(
+        'notion-playbook-list',
+        { body: { role: playbookRole, ativo: true } }
+      );
 
-      if (docsError) throw docsError;
+      if (notionError) {
+        console.error('Erro ao buscar playbook do Notion:', notionError);
+        throw notionError;
+      }
 
-      // Buscar leituras do usuário
+      const docs = notionResponse?.docs || [];
+      
+      if (docs.length === 0) {
+        return [];
+      }
+
+      // Buscar leituras do usuário usando notion_page_id
+      const notionPageIds = docs.map((d: any) => d.notion_page_id);
       const { data: reads, error: readsError } = await supabase
         .from("playbook_reads")
         .select("*")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .in("notion_page_id", notionPageIds);
 
-      if (readsError) throw readsError;
+      if (readsError) {
+        console.error('Erro ao buscar leituras:', readsError);
+      }
 
-      // Combinar dados
-      const readsMap = new Map((reads || []).map(r => [r.playbook_doc_id, r]));
+      // Combinar dados usando notion_page_id como chave
+      const readsMap = new Map((reads || []).map(r => [r.notion_page_id, r]));
       
-      const docsWithReads: PlaybookDocWithRead[] = (docs || []).map(doc => {
-        const read = readsMap.get(doc.id);
+      const docsWithReads: PlaybookDocWithRead[] = docs.map((doc: any) => {
+        const read = readsMap.get(doc.notion_page_id);
         return {
-          ...doc,
+          id: doc.notion_page_id, // Usar notion_page_id como id
+          notion_page_id: doc.notion_page_id,
+          notion_url: doc.notion_url,
+          titulo: doc.titulo,
+          descricao: doc.descricao || null,
+          role: doc.role,
+          categoria: doc.categoria,
+          tipo_conteudo: doc.tipo_conteudo,
+          obrigatorio: doc.obrigatorio,
+          ativo: doc.ativo,
+          versao: doc.versao,
+          link_url: doc.link_url,
+          storage_url: null,
+          storage_path: null,
+          conteudo_rico: null,
+          data_publicacao: new Date().toISOString(),
+          criado_por: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
           read_status: read?.status || 'nao_lido',
           lido_em: read?.lido_em || null,
           confirmado_em: read?.confirmado_em || null,
@@ -133,14 +161,14 @@ export function useMarkAsRead() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (docId: string) => {
+    mutationFn: async (notionPageId: string) => {
       if (!user?.id) throw new Error("Usuário não autenticado");
 
-      // Verificar se já existe registro
+      // Verificar se já existe registro usando notion_page_id
       const { data: existing } = await supabase
         .from("playbook_reads")
         .select("id, status, visualizacoes_qtd")
-        .eq("playbook_doc_id", docId)
+        .eq("notion_page_id", notionPageId)
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -169,11 +197,12 @@ export function useMarkAsRead() {
         return existing;
       }
 
-      // Criar novo registro com visualizacoes_qtd = 1
+      // Criar novo registro com notion_page_id
       const { data, error } = await supabase
         .from("playbook_reads")
         .insert({
-          playbook_doc_id: docId,
+          playbook_doc_id: notionPageId, // Manter compatibilidade
+          notion_page_id: notionPageId,
           user_id: user.id,
           status: 'lido',
           lido_em: now,
@@ -199,16 +228,16 @@ export function useConfirmReading() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (docId: string) => {
+    mutationFn: async (notionPageId: string) => {
       if (!user?.id) throw new Error("Usuário não autenticado");
 
       const now = new Date().toISOString();
 
-      // Verificar se já existe registro
+      // Verificar se já existe registro usando notion_page_id
       const { data: existing } = await supabase
         .from("playbook_reads")
         .select("id, visualizacoes_qtd")
-        .eq("playbook_doc_id", docId)
+        .eq("notion_page_id", notionPageId)
         .eq("user_id", user.id)
         .maybeSingle();
 
@@ -228,11 +257,12 @@ export function useConfirmReading() {
         return existing;
       }
 
-      // Criar novo registro já confirmado
+      // Criar novo registro já confirmado com notion_page_id
       const { data, error } = await supabase
         .from("playbook_reads")
         .insert({
-          playbook_doc_id: docId,
+          playbook_doc_id: notionPageId, // Manter compatibilidade
+          notion_page_id: notionPageId,
           user_id: user.id,
           status: 'confirmado',
           lido_em: now,
