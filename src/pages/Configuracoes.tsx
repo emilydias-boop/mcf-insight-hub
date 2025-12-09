@@ -7,10 +7,9 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { User, Bell, Shield, Settings, DollarSign, Mail, BookOpen } from "lucide-react";
+import { User, Bell, Shield, Settings, DollarSign, Mail } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { OperationalCostsConfig } from "@/components/dashboard/OperationalCostsConfig";
-import { PlaybookConfigSection } from "@/components/playbook/PlaybookConfigSection";
 
 export default function Configuracoes() {
   const handleSave = () => {
@@ -26,7 +25,7 @@ export default function Configuracoes() {
         </div>
 
         <Tabs defaultValue="perfil" className="w-full">
-          <TabsList className="grid w-full md:w-[720px] grid-cols-6">
+          <TabsList className="grid w-full md:w-[600px] grid-cols-5">
             <TabsTrigger value="perfil" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Perfil
@@ -42,10 +41,6 @@ export default function Configuracoes() {
             <TabsTrigger value="financeiro" className="flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
               Financeiro
-            </TabsTrigger>
-            <TabsTrigger value="playbook" className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4" />
-              Playbook
             </TabsTrigger>
             <TabsTrigger value="integracoes" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
@@ -215,9 +210,6 @@ export default function Configuracoes() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="playbook" className="space-y-4 mt-6">
-            <PlaybookConfigSection />
-          </TabsContent>
 
           <TabsContent value="integracoes" className="space-y-4 mt-6">
             <Card className="bg-card border-border">
