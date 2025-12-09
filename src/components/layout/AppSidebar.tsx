@@ -17,7 +17,8 @@ import {
   Tv,
   Calculator,
   Receipt,
-  FolderOpen
+  FolderOpen,
+  BookOpen
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -116,6 +117,7 @@ const menuItems: MenuItem[] = [
     ]
   },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ['sdr'] },
+  { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "Usuários", url: "/usuarios", icon: Users, requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, requiredRoles: ['admin'] },
 ];

@@ -46,6 +46,7 @@ import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
 import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
 import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
+import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -98,6 +99,7 @@ const App = () => (
               <Route path="fechamento-sdr/configuracoes" element={<FechamentoSDRConfiguracoes />} />
               <Route path="fechamento-sdr/:payoutId" element={<FechamentoSDRDetail />} />
               <Route path="meu-fechamento" element={<MeuFechamento />} />
+              <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="crm" element={<CRM />}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
