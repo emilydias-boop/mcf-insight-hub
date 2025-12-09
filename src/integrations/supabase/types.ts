@@ -1373,6 +1373,7 @@ export type Database = {
           ultima_acao_em: string
           updated_at: string
           user_id: string
+          visualizacoes_qtd: number
         }
         Insert: {
           confirmado_em?: string | null
@@ -1384,6 +1385,7 @@ export type Database = {
           ultima_acao_em?: string
           updated_at?: string
           user_id: string
+          visualizacoes_qtd?: number
         }
         Update: {
           confirmado_em?: string | null
@@ -1395,6 +1397,7 @@ export type Database = {
           ultima_acao_em?: string
           updated_at?: string
           user_id?: string
+          visualizacoes_qtd?: number
         }
         Relationships: [
           {

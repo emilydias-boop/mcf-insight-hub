@@ -179,9 +179,19 @@ export default function MeuPlaybook() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={PLAYBOOK_STATUS_COLORS[doc.read_status || 'nao_lido']}>
-                        {PLAYBOOK_STATUS_LABELS[doc.read_status || 'nao_lido']}
-                      </Badge>
+                      {!doc.read_status || doc.read_status === 'nao_lido' ? (
+                        <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                          Nunca visto
+                        </Badge>
+                      ) : doc.read_status === 'lido' ? (
+                        <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                          Visto
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                          Visto e confirmado
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

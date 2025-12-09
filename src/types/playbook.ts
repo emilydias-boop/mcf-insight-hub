@@ -31,8 +31,18 @@ export interface PlaybookRead {
   lido_em: string | null;
   confirmado_em: string | null;
   ultima_acao_em: string;
+  visualizacoes_qtd: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface PlaybookReadWithUser extends PlaybookRead {
+  user: {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+    avatar_url: string | null;
+  };
 }
 
 export interface PlaybookDocWithRead extends PlaybookDoc {
