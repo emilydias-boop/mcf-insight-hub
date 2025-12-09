@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { PlaybookDoc, PLAYBOOK_STATUS_LABELS, PLAYBOOK_STATUS_COLORS, PLAYBOOK_ROLE_LABELS } from "@/types/playbook";
+import { PLAYBOOK_STATUS_LABELS, PLAYBOOK_STATUS_COLORS, PLAYBOOK_ROLE_LABELS } from "@/types/playbook";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePlaybookStatsForDoc, usePlaybookReadsForDoc, usePlaybookViewers } from "@/hooks/usePlaybookReads";
+import { NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format, formatDistanceToNow } from "date-fns";
@@ -16,7 +17,7 @@ import { PlaybookViewedBy } from "./PlaybookViewedBy";
 interface PlaybookReadStatsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  doc: PlaybookDoc | null;
+  doc: NotionPlaybookDoc | null;
 }
 
 type FilterType = "all" | "never_seen" | "seen_not_confirmed";
@@ -25,12 +26,12 @@ export function PlaybookReadStats({ open, onOpenChange, doc }: PlaybookReadStats
   const [filter, setFilter] = useState<FilterType>("all");
 
   const { data: stats, isLoading: statsLoading } = usePlaybookStatsForDoc(
-    doc?.id || null,
+    doc?.notion_page_id || null,
     doc?.role || null
   );
   
-  const { data: reads } = usePlaybookReadsForDoc(doc?.id || null);
-  const { data: viewers } = usePlaybookViewers(doc?.id || null);
+  const { data: reads } = usePlaybookReadsForDoc(doc?.notion_page_id || null);
+  const { data: viewers } = usePlaybookViewers(doc?.notion_page_id || null);
 
   // Buscar usuários do cargo
   const { data: usersData } = useQuery({

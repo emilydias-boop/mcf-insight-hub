@@ -1,19 +1,19 @@
-import { PlaybookDoc, PLAYBOOK_TIPO_LABELS, PLAYBOOK_CATEGORIA_LABELS } from "@/types/playbook";
+import { PLAYBOOK_TIPO_LABELS, PLAYBOOK_CATEGORIA_LABELS } from "@/types/playbook";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Pencil, BarChart3, FileText, Link, FileType } from "lucide-react";
-import { useTogglePlaybookDocActive } from "@/hooks/usePlaybookDocs";
+import { Pencil, BarChart3, FileText, Link, FileType, ExternalLink } from "lucide-react";
+import { useToggleNotionPlaybookActive, NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
 
 interface PlaybookDocTableProps {
-  docs: PlaybookDoc[];
-  onEdit: (doc: PlaybookDoc) => void;
-  onViewStats: (doc: PlaybookDoc) => void;
+  docs: NotionPlaybookDoc[];
+  onEdit: (doc: NotionPlaybookDoc) => void;
+  onViewStats: (doc: NotionPlaybookDoc) => void;
 }
 
 export function PlaybookDocTable({ docs, onEdit, onViewStats }: PlaybookDocTableProps) {
-  const toggleActive = useTogglePlaybookDocActive();
+  const toggleActive = useToggleNotionPlaybookActive();
 
   const getTipoIcon = (tipo: string) => {
     switch (tipo) {
@@ -31,7 +31,7 @@ export function PlaybookDocTable({ docs, onEdit, onViewStats }: PlaybookDocTable
   if (docs.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        Nenhum documento cadastrado para este cargo.
+        Nenhum documento cadastrado para este cargo no Notion.
       </div>
     );
   }
@@ -51,8 +51,17 @@ export function PlaybookDocTable({ docs, onEdit, onViewStats }: PlaybookDocTable
       </TableHeader>
       <TableBody>
         {docs.map((doc) => (
-          <TableRow key={doc.id}>
-            <TableCell className="font-medium">{doc.titulo}</TableCell>
+          <TableRow key={doc.notion_page_id}>
+            <TableCell className="font-medium">
+              <div className="flex items-center gap-2">
+                {doc.titulo}
+                {doc.notion_url && (
+                  <a href={doc.notion_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            </TableCell>
             <TableCell>
               <div className="flex items-center gap-2">
                 {getTipoIcon(doc.tipo_conteudo)}
@@ -76,7 +85,7 @@ export function PlaybookDocTable({ docs, onEdit, onViewStats }: PlaybookDocTable
               <Switch
                 checked={doc.ativo}
                 onCheckedChange={(checked) => 
-                  toggleActive.mutate({ id: doc.id, ativo: checked })
+                  toggleActive.mutate({ pageId: doc.notion_page_id, ativo: checked })
                 }
               />
             </TableCell>

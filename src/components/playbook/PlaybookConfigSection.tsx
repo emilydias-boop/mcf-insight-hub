@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { PlaybookDoc, PlaybookRole, PLAYBOOK_ROLE_LABELS, PLAYBOOK_ROLES_LIST } from "@/types/playbook";
+import { PlaybookRole, PLAYBOOK_ROLE_LABELS } from "@/types/playbook";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { usePlaybookDocsByRole } from "@/hooks/usePlaybookDocs";
+import { useNotionPlaybookDocs, NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
 import { PlaybookDocTable } from "./PlaybookDocTable";
 import { PlaybookDocForm } from "./PlaybookDocForm";
 import { PlaybookReadStats } from "./PlaybookReadStats";
@@ -12,12 +12,12 @@ import { Plus, Loader2 } from "lucide-react";
 export function PlaybookConfigSection() {
   const [selectedRole, setSelectedRole] = useState<PlaybookRole>('sdr');
   const [formOpen, setFormOpen] = useState(false);
-  const [editingDoc, setEditingDoc] = useState<PlaybookDoc | null>(null);
-  const [statsDoc, setStatsDoc] = useState<PlaybookDoc | null>(null);
+  const [editingDoc, setEditingDoc] = useState<NotionPlaybookDoc | null>(null);
+  const [statsDoc, setStatsDoc] = useState<NotionPlaybookDoc | null>(null);
 
-  const { data: docs, isLoading } = usePlaybookDocsByRole(selectedRole);
+  const { data: docs, isLoading } = useNotionPlaybookDocs(selectedRole);
 
-  const handleEdit = (doc: PlaybookDoc) => {
+  const handleEdit = (doc: NotionPlaybookDoc) => {
     setEditingDoc(doc);
     setFormOpen(true);
   };
@@ -34,7 +34,6 @@ export function PlaybookConfigSection() {
     }
   };
 
-  // Filtrar apenas as roles mais usadas para exibição
   const displayRoles: PlaybookRole[] = ['sdr', 'closer', 'coordenador', 'admin', 'manager'];
 
   return (
@@ -42,11 +41,10 @@ export function PlaybookConfigSection() {
       <CardHeader>
         <CardTitle>Playbook por Cargo</CardTitle>
         <CardDescription>
-          Gerencie os documentos e materiais oficiais por cargo.
+          Gerencie os documentos no Notion por cargo.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Tabs de cargo */}
         <div className="flex items-center justify-between">
           <Tabs value={selectedRole} onValueChange={(v) => setSelectedRole(v as PlaybookRole)}>
             <TabsList>
@@ -64,17 +62,15 @@ export function PlaybookConfigSection() {
           </Button>
         </div>
 
-        {/* Título do cargo selecionado */}
         <div>
           <h3 className="text-lg font-semibold">
             Playbook do cargo {PLAYBOOK_ROLE_LABELS[selectedRole]}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {docs?.length || 0} documento(s) cadastrado(s)
+            {docs?.length || 0} documento(s) no Notion
           </p>
         </div>
 
-        {/* Tabela de documentos */}
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -87,7 +83,6 @@ export function PlaybookConfigSection() {
           />
         )}
 
-        {/* Dialog de formulário */}
         <PlaybookDocForm
           open={formOpen}
           onOpenChange={handleFormClose}
@@ -95,7 +90,6 @@ export function PlaybookConfigSection() {
           defaultRole={selectedRole}
         />
 
-        {/* Dialog de estatísticas */}
         <PlaybookReadStats
           open={!!statsDoc}
           onOpenChange={(open) => !open && setStatsDoc(null)}

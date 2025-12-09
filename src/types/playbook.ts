@@ -21,6 +21,9 @@ export interface PlaybookDoc {
   ativo: boolean;
   created_at: string;
   updated_at: string;
+  // Campos para integração Notion
+  notion_page_id?: string;
+  notion_url?: string;
 }
 
 export interface PlaybookRead {

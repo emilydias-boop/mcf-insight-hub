@@ -113,3 +113,18 @@ verify_jwt = false
 
 [functions.webhook-make-parceria]
 verify_jwt = false
+
+[functions.notion-playbook-list]
+verify_jwt = false
+
+[functions.notion-playbook-create]
+verify_jwt = false
+
+[functions.notion-playbook-update]
+verify_jwt = false
+
+[functions.notion-playbook-content]
+verify_jwt = false
+
+[functions.import-a010-sales]
+verify_jwt = false
