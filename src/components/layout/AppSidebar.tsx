@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { 
   LayoutDashboard, 
   DollarSign, 
@@ -15,8 +16,10 @@ import {
   UserCircle,
   Tv,
   Calculator,
-  Receipt
+  Receipt,
+  FolderOpen
 } from "lucide-react";
+import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -122,6 +125,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
   const isCollapsed = state === "collapsed";
+  const [myFilesOpen, setMyFilesOpen] = useState(false);
 
   const getRoleBadgeVariant = (userRole: AppRole | null) => {
     if (userRole === 'admin') return 'default';
@@ -232,7 +236,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">
-        <div className="space-y-3">
+        <div className="space-y-2">
           {!isCollapsed && (
             <div className="flex items-center gap-3">
               <Avatar className="h-8 w-8">
@@ -254,6 +258,16 @@ export function AppSidebar() {
             variant="ghost" 
             size={isCollapsed ? "icon" : "sm"}
             className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent"
+            onClick={() => setMyFilesOpen(true)}
+            title="Meus arquivos"
+          >
+            <FolderOpen className="h-4 w-4" />
+            {!isCollapsed && <span className="ml-2">Meus arquivos</span>}
+          </Button>
+          <Button 
+            variant="ghost" 
+            size={isCollapsed ? "icon" : "sm"}
+            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent"
             onClick={signOut}
             title="Sair"
           >
@@ -262,6 +276,13 @@ export function AppSidebar() {
           </Button>
         </div>
       </SidebarFooter>
+
+      {/* Drawer de Meus Arquivos */}
+      <DrawerArquivosUsuario
+        open={myFilesOpen}
+        onOpenChange={setMyFilesOpen}
+        mode="pessoal"
+      />
     </Sidebar>
   );
 }
