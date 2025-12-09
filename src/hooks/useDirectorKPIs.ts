@@ -182,17 +182,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // ===== OB ACESSO VITALÍCIO (BRUTO × TAXA FIXA) =====
       // Fórmula: SUM(product_price) × 83.56%
+      // CORREÇÃO: Apenas transações -offer- são OBs reais (exclui parent/Make)
       const seenObVitalicioIds = new Set<string>();
       const obVitalicioBruto = (hublaData || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isOB = productName.includes("VITALIC"); // Pega todas variantes de acento
+          const isOfferTransaction = tx.hubla_id?.includes('-offer-'); // APENAS -offer-
+          
+          if (!isOB || !isOfferTransaction) return false;
           if (seenObVitalicioIds.has(tx.hubla_id)) return false;
-          if (isOB) {
-            seenObVitalicioIds.add(tx.hubla_id);
-            return true;
-          }
-          return false;
+          
+          seenObVitalicioIds.add(tx.hubla_id);
+          return true;
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
       const obVitalicioFaturado = obVitalicioBruto * TAXA_OB_VITALICIO;
@@ -200,17 +202,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // ===== OB CONSTRUIR PARA ALUGAR (BRUTO × TAXA FIXA) =====
       // Fórmula: SUM(product_price) × 89.80%
+      // CORREÇÃO: Apenas transações -offer- são OBs reais (exclui parent/Make)
       const seenObConstruirIds = new Set<string>();
       const obConstruirBruto = (hublaData || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isOB = productName.includes("CONSTRUIR") && productName.includes("ALUGAR");
+          const isOfferTransaction = tx.hubla_id?.includes('-offer-'); // APENAS -offer-
+          
+          if (!isOB || !isOfferTransaction) return false;
           if (seenObConstruirIds.has(tx.hubla_id)) return false;
-          if (isOB) {
-            seenObConstruirIds.add(tx.hubla_id);
-            return true;
-          }
-          return false;
+          
+          seenObConstruirIds.add(tx.hubla_id);
+          return true;
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
       const obConstruirFaturado = obConstruirBruto * TAXA_OB_CONSTRUIR;
