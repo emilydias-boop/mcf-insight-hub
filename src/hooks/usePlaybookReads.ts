@@ -40,6 +40,45 @@ export function usePlaybookReadsForUser(userId: string | null) {
   });
 }
 
+// Hook para buscar visualizadores com perfis (estilo Notion "Viewed by")
+export function usePlaybookViewers(docId: string | null, limit: number = 50) {
+  return useQuery({
+    queryKey: ["playbook-viewers", docId, limit],
+    queryFn: async () => {
+      if (!docId) return [];
+      
+      // Buscar reads do documento
+      const { data: reads, error: readsError } = await supabase
+        .from("playbook_reads")
+        .select("id, user_id, ultima_acao_em, visualizacoes_qtd")
+        .eq("playbook_doc_id", docId)
+        .order("ultima_acao_em", { ascending: false })
+        .limit(limit);
+
+      if (readsError) throw readsError;
+      if (!reads || reads.length === 0) return [];
+
+      // Buscar profiles dos usuários
+      const userIds = reads.map(r => r.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_url")
+        .in("id", userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Combinar dados
+      const profilesMap = new Map((profiles || []).map(p => [p.id, p]));
+      
+      return reads.map(read => ({
+        ...read,
+        profiles: profilesMap.get(read.user_id) || null,
+      }));
+    },
+    enabled: !!docId,
+  });
+}
+
 export function useMyPlaybook() {
   const { user, role } = useAuth();
   
@@ -100,37 +139,46 @@ export function useMarkAsRead() {
       // Verificar se já existe registro
       const { data: existing } = await supabase
         .from("playbook_reads")
-        .select("id, status")
+        .select("id, status, visualizacoes_qtd")
         .eq("playbook_doc_id", docId)
         .eq("user_id", user.id)
         .maybeSingle();
 
+      const now = new Date().toISOString();
+
       if (existing) {
-        // Só atualizar se ainda não foi lido
+        // Sempre incrementar visualizações e atualizar ultima_acao_em
+        const currentCount = (existing.visualizacoes_qtd as number) || 1;
+        const updates: any = {
+          ultima_acao_em: now,
+          visualizacoes_qtd: currentCount + 1,
+        };
+
+        // Se ainda não foi lido, marcar como lido
         if (existing.status === 'nao_lido') {
-          const { error } = await supabase
-            .from("playbook_reads")
-            .update({
-              status: 'lido',
-              lido_em: new Date().toISOString(),
-              ultima_acao_em: new Date().toISOString(),
-            })
-            .eq("id", existing.id);
-          
-          if (error) throw error;
+          updates.status = 'lido';
+          updates.lido_em = now;
         }
+
+        const { error } = await supabase
+          .from("playbook_reads")
+          .update(updates)
+          .eq("id", existing.id);
+        
+        if (error) throw error;
         return existing;
       }
 
-      // Criar novo registro
+      // Criar novo registro com visualizacoes_qtd = 1
       const { data, error } = await supabase
         .from("playbook_reads")
         .insert({
           playbook_doc_id: docId,
           user_id: user.id,
           status: 'lido',
-          lido_em: new Date().toISOString(),
-          ultima_acao_em: new Date().toISOString(),
+          lido_em: now,
+          ultima_acao_em: now,
+          visualizacoes_qtd: 1,
         })
         .select()
         .single();
@@ -141,6 +189,7 @@ export function useMarkAsRead() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-playbook"] });
       queryClient.invalidateQueries({ queryKey: ["playbook-reads"] });
+      queryClient.invalidateQueries({ queryKey: ["playbook-viewers"] });
     },
   });
 }
@@ -153,21 +202,25 @@ export function useConfirmReading() {
     mutationFn: async (docId: string) => {
       if (!user?.id) throw new Error("Usuário não autenticado");
 
+      const now = new Date().toISOString();
+
       // Verificar se já existe registro
       const { data: existing } = await supabase
         .from("playbook_reads")
-        .select("id")
+        .select("id, visualizacoes_qtd")
         .eq("playbook_doc_id", docId)
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (existing) {
+        const currentCount = (existing.visualizacoes_qtd as number) || 1;
         const { error } = await supabase
           .from("playbook_reads")
           .update({
             status: 'confirmado',
-            confirmado_em: new Date().toISOString(),
-            ultima_acao_em: new Date().toISOString(),
+            confirmado_em: now,
+            ultima_acao_em: now,
+            visualizacoes_qtd: currentCount + 1,
           })
           .eq("id", existing.id);
         
@@ -182,9 +235,10 @@ export function useConfirmReading() {
           playbook_doc_id: docId,
           user_id: user.id,
           status: 'confirmado',
-          lido_em: new Date().toISOString(),
-          confirmado_em: new Date().toISOString(),
-          ultima_acao_em: new Date().toISOString(),
+          lido_em: now,
+          confirmado_em: now,
+          ultima_acao_em: now,
+          visualizacoes_qtd: 1,
         })
         .select()
         .single();
@@ -195,6 +249,7 @@ export function useConfirmReading() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-playbook"] });
       queryClient.invalidateQueries({ queryKey: ["playbook-reads"] });
+      queryClient.invalidateQueries({ queryKey: ["playbook-viewers"] });
       toast.success("Leitura confirmada com sucesso");
     },
     onError: (error) => {
