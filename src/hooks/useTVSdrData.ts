@@ -91,14 +91,42 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       const todayEndBrazil = new Date(todayStartBrazil);
       todayEndBrazil.setDate(todayEndBrazil.getDate() + 1);
 
-      // 1. Buscar contratos pagos do Hubla (mais confiável que Clint)
-      const { data: allHublaContracts } = await supabase
+      // 1. Buscar contratos pagos do HUBLA (fonte primária)
+      const { data: hublaSourceContracts } = await supabase
         .from("hubla_transactions")
         .select("customer_email, customer_name, product_name, product_price, raw_data")
         .gte("sale_date", todayStartBrazil.toISOString())
         .lt("sale_date", todayEndBrazil.toISOString())
         .eq("sale_status", "completed")
+        .eq("source", "hubla")
         .ilike("product_name", "%contrato%");
+
+      // 2. Buscar contratos do MAKE (fallback)
+      const { data: makeSourceContracts } = await supabase
+        .from("hubla_transactions")
+        .select("customer_email, customer_name, product_name, product_price, raw_data")
+        .gte("sale_date", todayStartBrazil.toISOString())
+        .lt("sale_date", todayEndBrazil.toISOString())
+        .eq("sale_status", "completed")
+        .eq("source", "make")
+        .ilike("product_name", "%contrato%");
+
+      // 3. Combinar: Hubla como primário, Make como fallback (só se email não existe no Hubla)
+      const hublaContractEmails = new Set(
+        hublaSourceContracts?.map(c => c.customer_email?.toLowerCase()).filter(Boolean) || []
+      );
+      
+      const makeFallbackContracts = makeSourceContracts?.filter(c => {
+        const email = c.customer_email?.toLowerCase();
+        return email && !hublaContractEmails.has(email);
+      }) || [];
+
+      const allHublaContracts = [
+        ...(hublaSourceContracts || []),
+        ...makeFallbackContracts
+      ];
+
+      console.log('[TV-SDR] Contratos - Hubla:', hublaSourceContracts?.length || 0, 'Make fallback:', makeFallbackContracts.length);
 
       // Filtrar apenas vendas NOVAS (não recorrências e não duplicados)
       const hublaContracts = allHublaContracts?.filter(contract => {
