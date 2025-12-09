@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PlaybookDoc, PlaybookRole, PlaybookCategoria, PlaybookTipoConteudo, PLAYBOOK_ROLE_LABELS, PLAYBOOK_CATEGORIA_LABELS, PLAYBOOK_TIPO_LABELS, PLAYBOOK_ROLES_LIST, PLAYBOOK_CATEGORIAS_LIST } from "@/types/playbook";
+import { PlaybookRole, PlaybookCategoria, PlaybookTipoConteudo, PLAYBOOK_ROLE_LABELS, PLAYBOOK_CATEGORIA_LABELS, PLAYBOOK_ROLES_LIST, PLAYBOOK_CATEGORIAS_LIST } from "@/types/playbook";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,29 +7,26 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useCreatePlaybookDoc, useUpdatePlaybookDoc, uploadPlaybookFile } from "@/hooks/usePlaybookDocs";
-import { Loader2, Upload } from "lucide-react";
+import { useCreateNotionPlaybook, useUpdateNotionPlaybook, NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface PlaybookDocFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  doc?: PlaybookDoc | null;
+  doc?: NotionPlaybookDoc | null;
   defaultRole?: PlaybookRole;
 }
 
 export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: PlaybookDocFormProps) {
   const isEditing = !!doc;
-  const createDoc = useCreatePlaybookDoc();
-  const updateDoc = useUpdatePlaybookDoc();
+  const createDoc = useCreateNotionPlaybook();
+  const updateDoc = useUpdateNotionPlaybook();
 
   const [formData, setFormData] = useState({
     role: defaultRole || 'sdr' as PlaybookRole,
     titulo: '',
-    descricao: '',
-    tipo_conteudo: 'arquivo' as PlaybookTipoConteudo,
-    storage_url: '',
-    storage_path: '',
+    tipo_conteudo: 'texto' as PlaybookTipoConteudo,
     link_url: '',
     conteudo_rico: '',
     obrigatorio: false,
@@ -38,20 +35,14 @@ export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: Playbo
     ativo: true,
   });
 
-  const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
   useEffect(() => {
     if (doc) {
       setFormData({
         role: doc.role,
         titulo: doc.titulo,
-        descricao: doc.descricao || '',
         tipo_conteudo: doc.tipo_conteudo,
-        storage_url: doc.storage_url || '',
-        storage_path: doc.storage_path || '',
         link_url: doc.link_url || '',
-        conteudo_rico: doc.conteudo_rico || '',
+        conteudo_rico: '',
         obrigatorio: doc.obrigatorio,
         categoria: doc.categoria,
         versao: doc.versao,
@@ -61,10 +52,7 @@ export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: Playbo
       setFormData({
         role: defaultRole || 'sdr',
         titulo: '',
-        descricao: '',
-        tipo_conteudo: 'arquivo',
-        storage_url: '',
-        storage_path: '',
+        tipo_conteudo: 'texto',
         link_url: '',
         conteudo_rico: '',
         obrigatorio: false,
@@ -73,58 +61,46 @@ export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: Playbo
         ativo: true,
       });
     }
-    setSelectedFile(null);
   }, [doc, defaultRole, open]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      let finalData = { ...formData };
-
-      // Upload arquivo se necessário
-      if (formData.tipo_conteudo === 'arquivo' && selectedFile) {
-        setUploading(true);
-        const { url, path } = await uploadPlaybookFile(selectedFile, formData.role);
-        finalData.storage_url = url;
-        finalData.storage_path = path;
-        setUploading(false);
-      }
-
-      // Limpar campos não usados
-      if (formData.tipo_conteudo !== 'arquivo') {
-        finalData.storage_url = '';
-        finalData.storage_path = '';
-      }
-      if (formData.tipo_conteudo !== 'link') {
-        finalData.link_url = '';
-      }
-      if (formData.tipo_conteudo !== 'texto') {
-        finalData.conteudo_rico = '';
-      }
-
       if (isEditing && doc) {
-        await updateDoc.mutateAsync({ id: doc.id, ...finalData });
+        await updateDoc.mutateAsync({
+          pageId: doc.notion_page_id,
+          titulo: formData.titulo,
+          role: formData.role,
+          categoria: formData.categoria,
+          tipo_conteudo: formData.tipo_conteudo,
+          obrigatorio: formData.obrigatorio,
+          ativo: formData.ativo,
+          link_url: formData.tipo_conteudo === 'link' ? formData.link_url : undefined,
+          versao: formData.versao,
+        });
       } else {
-        await createDoc.mutateAsync(finalData);
+        await createDoc.mutateAsync({
+          titulo: formData.titulo,
+          role: formData.role,
+          categoria: formData.categoria,
+          tipo_conteudo: formData.tipo_conteudo,
+          obrigatorio: formData.obrigatorio,
+          ativo: formData.ativo,
+          link_url: formData.tipo_conteudo === 'link' ? formData.link_url : undefined,
+          versao: formData.versao,
+          conteudo_rico: formData.tipo_conteudo === 'texto' ? formData.conteudo_rico : undefined,
+        });
       }
 
       onOpenChange(false);
     } catch (error) {
       console.error('Erro ao salvar documento:', error);
       toast.error('Erro ao salvar documento');
-      setUploading(false);
     }
   };
 
-  const isLoading = createDoc.isPending || updateDoc.isPending || uploading;
+  const isLoading = createDoc.isPending || updateDoc.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,6 +109,9 @@ export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: Playbo
           <DialogTitle>
             {isEditing ? 'Editar Documento' : 'Novo Documento'}
           </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Os documentos são salvos diretamente no Notion
+          </p>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -187,16 +166,6 @@ export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: Playbo
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição</Label>
-            <Textarea
-              id="descricao"
-              value={formData.descricao}
-              onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-              rows={2}
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="tipo_conteudo">Tipo de Conteúdo</Label>
             <Select
               value={formData.tipo_conteudo}
@@ -206,35 +175,12 @@ export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: Playbo
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="arquivo">Arquivo (PDF, etc.)</SelectItem>
+                <SelectItem value="texto">Texto (conteúdo no Notion)</SelectItem>
                 <SelectItem value="link">Link externo</SelectItem>
-                <SelectItem value="texto">Texto rico</SelectItem>
+                <SelectItem value="arquivo">Arquivo (anexo no Notion)</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
-          {formData.tipo_conteudo === 'arquivo' && (
-            <div className="space-y-2">
-              <Label>Arquivo</Label>
-              <div className="flex items-center gap-4">
-                <Input
-                  type="file"
-                  onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg"
-                />
-                {selectedFile && (
-                  <span className="text-sm text-muted-foreground">
-                    {selectedFile.name}
-                  </span>
-                )}
-              </div>
-              {formData.storage_url && !selectedFile && (
-                <p className="text-sm text-muted-foreground">
-                  Arquivo atual: {formData.storage_path?.split('/').pop()}
-                </p>
-              )}
-            </div>
-          )}
 
           {formData.tipo_conteudo === 'link' && (
             <div className="space-y-2">
@@ -249,16 +195,27 @@ export function PlaybookDocForm({ open, onOpenChange, doc, defaultRole }: Playbo
             </div>
           )}
 
-          {formData.tipo_conteudo === 'texto' && (
+          {formData.tipo_conteudo === 'texto' && !isEditing && (
             <div className="space-y-2">
-              <Label htmlFor="conteudo_rico">Conteúdo</Label>
+              <Label htmlFor="conteudo_rico">Conteúdo inicial (opcional)</Label>
               <Textarea
                 id="conteudo_rico"
                 value={formData.conteudo_rico}
                 onChange={(e) => setFormData({ ...formData, conteudo_rico: e.target.value })}
-                rows={8}
-                placeholder="Digite o conteúdo do documento..."
+                rows={6}
+                placeholder="Digite o conteúdo inicial... (pode ser editado depois no Notion)"
               />
+              <p className="text-xs text-muted-foreground">
+                Após criar, você pode editar o conteúdo diretamente no Notion
+              </p>
+            </div>
+          )}
+
+          {formData.tipo_conteudo === 'arquivo' && (
+            <div className="p-4 border rounded-lg bg-muted/50">
+              <p className="text-sm text-muted-foreground">
+                Para documentos do tipo arquivo, adicione os arquivos diretamente na página do Notion após criar o documento.
+              </p>
             </div>
           )}
 
