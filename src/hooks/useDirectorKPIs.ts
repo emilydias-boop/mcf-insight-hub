@@ -182,8 +182,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ===== OB ACESSO VITALÍCIO (FÓRMULA FIXA: quantidade × preço × taxa) =====
-      // Fórmula: COUNT(-offer- transactions) × R$ 57 × 83.56%
+      // ===== OB ACESSO VITALÍCIO (FÓRMULA FIXA: quantidade × preço) =====
+      // Fórmula: COUNT(-offer- transactions) × R$ 57
       const seenObVitalicioIds = new Set<string>();
       (hublaData || []).forEach((tx) => {
         const productName = (tx.product_name || "").toUpperCase();
@@ -195,10 +195,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         }
       });
       const vendasObVitalicio = seenObVitalicioIds.size;
-      const obVitalicioFaturado = vendasObVitalicio * PRECO_OB_VITALICIO * TAXA_OB_VITALICIO;
+      const obVitalicioFaturado = vendasObVitalicio * PRECO_OB_VITALICIO;
 
-      // ===== OB CONSTRUIR PARA ALUGAR (FÓRMULA FIXA: quantidade × preço × taxa) =====
-      // Fórmula: COUNT(-offer- transactions) × R$ 97 × 89.80%
+      // ===== OB CONSTRUIR PARA ALUGAR (FÓRMULA FIXA: quantidade × preço) =====
+      // Fórmula: COUNT(-offer- transactions) × R$ 97
       const seenObConstruirIds = new Set<string>();
       (hublaData || []).forEach((tx) => {
         const productName = (tx.product_name || "").toUpperCase();
@@ -210,7 +210,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         }
       });
       const vendasObConstruir = seenObConstruirIds.size;
-      const obConstruirFaturado = vendasObConstruir * PRECO_OB_CONSTRUIR * TAXA_OB_CONSTRUIR;
+      const obConstruirFaturado = vendasObConstruir * PRECO_OB_CONSTRUIR;
 
       // ===== CONTAGEM A010 para fórmula fixa =====
       // Faturado A010 será calculado após vendas A010 (vendas × R$ 47 × 81.56%)
@@ -284,11 +284,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const vendasA010 = isWeekNov29Dec05 ? OVERRIDE_VALUES.vendasA010 : vendasA010Calc;
 
       // ===== FATURAMENTO A010 (FÓRMULA FIXA) =====
-      // Fórmula: vendas × R$ 47 × 81.56%
-      const a010Faturado = vendasA010 * PRECO_A010 * TAXA_A010;
+      // Fórmula: vendas × R$ 47
+      const a010Faturado = vendasA010 * PRECO_A010;
 
       // ===== FATURAMENTO TOTAL (FÓRMULA FIXA) =====
-      // Fórmula: Incorporador (net_value) + OB Vitalício (bruto × 83.56%) + OB Construir (bruto × 89.80%) + A010 (vendas × R$ 47 × 81.56%)
+      // Fórmula: Incorporador (net_value) + OB Vitalício (qtd × R$57) + OB Construir (qtd × R$97) + A010 (qtd × R$47)
       const faturamentoTotalCalc = faturamentoIncorporador + obVitalicioFaturado + obConstruirFaturado + a010Faturado;
       const faturamentoTotalFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoTotal : faturamentoTotalCalc;
 
