@@ -7,7 +7,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMarkAsRead, useConfirmReading } from "@/hooks/usePlaybookReads";
 import { useNotionPlaybookContent } from "@/hooks/useNotionPlaybook";
 import { PlaybookDocWithRead } from "@/types/playbook";
-import { Loader2, ExternalLink, FileText } from "lucide-react";
+import { Loader2, ExternalLink, FileText, Download, Image as ImageIcon, File } from "lucide-react";
+
+interface FileInfo {
+  name: string;
+  url: string;
+  type: 'pdf' | 'image' | 'other';
+}
 
 interface PlaybookViewerProps {
   open: boolean;
@@ -22,15 +28,15 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
   const markAsRead = useMarkAsRead();
   const confirmReading = useConfirmReading();
 
-  // Buscar conteúdo do Notion se for tipo texto
-  const { data: notionContent, isLoading: loadingContent } = useNotionPlaybookContent(
-    open && doc?.tipo_conteudo === 'texto' && doc?.notion_page_id ? doc.notion_page_id : null
+  // Buscar conteúdo do Notion para texto OU arquivo
+  const shouldFetchContent = open && doc?.notion_page_id && (doc?.tipo_conteudo === 'texto' || doc?.tipo_conteudo === 'arquivo');
+  const { data: notionData, isLoading: loadingContent } = useNotionPlaybookContent(
+    shouldFetchContent ? doc.notion_page_id : null
   );
 
   // Marcar como lido ao abrir
   useEffect(() => {
     if (open && doc && currentStatus === 'nao_lido') {
-      // Usar id local ou notion_page_id como identificador
       markAsRead.mutate(doc.id);
     }
   }, [open, doc, currentStatus]);
@@ -62,10 +68,33 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
     }
   };
 
+  const handleDownloadFile = async (file: FileInfo) => {
+    try {
+      const response = await fetch(file.url);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro ao baixar arquivo:', error);
+      // Fallback: abrir em nova aba
+      window.open(file.url, '_blank');
+    }
+  };
+
   if (!doc) return null;
 
   const isConfirmed = currentStatus === 'confirmado';
   const showConfirmButton = doc.obrigatorio && !isConfirmed;
+  
+  // Extrair conteúdo e arquivos
+  const notionContent = notionData?.content || '';
+  const notionFiles: FileInfo[] = (notionData?.files as FileInfo[]) || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -115,16 +144,83 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
               </Button>
             </div>
           ) : doc.tipo_conteudo === 'arquivo' ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-12 border rounded-lg bg-muted/50">
-              <FileText className="h-16 w-16 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                Os arquivos estão anexados na página do Notion.
-              </p>
-              <Button onClick={handleOpenNotion}>
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Abrir no Notion
-              </Button>
-            </div>
+            <ScrollArea className="h-[500px]">
+              {notionFiles.length > 0 ? (
+                <div className="space-y-4 p-4">
+                  {notionFiles.map((file, index) => (
+                    <div key={index} className="border rounded-lg overflow-hidden">
+                      {file.type === 'pdf' ? (
+                        <div className="flex flex-col">
+                          <iframe
+                            src={file.url}
+                            className="w-full h-[400px] border-0"
+                            title={file.name}
+                          />
+                          <div className="flex items-center justify-between p-3 bg-muted/50 border-t">
+                            <span className="text-sm font-medium truncate">{file.name}</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadFile(file)}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Baixar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : file.type === 'image' ? (
+                        <div className="flex flex-col">
+                          <img
+                            src={file.url}
+                            alt={file.name}
+                            className="w-full max-h-[400px] object-contain bg-background"
+                          />
+                          <div className="flex items-center justify-between p-3 bg-muted/50 border-t">
+                            <span className="text-sm font-medium truncate">{file.name}</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadFile(file)}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Baixar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between p-4 bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            <File className="h-8 w-8 text-muted-foreground" />
+                            <span className="font-medium">{file.name}</span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadFile(file)}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            Baixar
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-4 py-12 border rounded-lg bg-muted/50">
+                  <FileText className="h-16 w-16 text-muted-foreground" />
+                  <p className="text-muted-foreground text-center">
+                    Nenhum arquivo encontrado nesta página.
+                    <br />
+                    <span className="text-sm">Anexe arquivos diretamente no Notion.</span>
+                  </p>
+                  <Button onClick={handleOpenNotion}>
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Abrir no Notion para anexar
+                  </Button>
+                </div>
+              )}
+            </ScrollArea>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Conteúdo não disponível.

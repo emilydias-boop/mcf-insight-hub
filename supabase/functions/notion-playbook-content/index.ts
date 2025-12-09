@@ -12,6 +12,62 @@ function extractRichText(richText: any[]): string {
   return richText.map(t => t.plain_text || '').join('');
 }
 
+interface FileInfo {
+  name: string;
+  url: string;
+  type: 'pdf' | 'image' | 'other';
+  mimeType?: string;
+}
+
+function getFileType(url: string, name: string): 'pdf' | 'image' | 'other' {
+  const lower = (name || url).toLowerCase();
+  if (lower.endsWith('.pdf')) return 'pdf';
+  if (lower.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)$/)) return 'image';
+  return 'other';
+}
+
+function extractFilesFromBlock(block: any): FileInfo[] {
+  const files: FileInfo[] = [];
+  const type = block.type;
+  const content = block[type];
+
+  if (type === 'file') {
+    const fileUrl = content?.file?.url || content?.external?.url || '';
+    const fileName = content?.name || 'Arquivo';
+    if (fileUrl) {
+      files.push({
+        name: fileName,
+        url: fileUrl,
+        type: getFileType(fileUrl, fileName),
+      });
+    }
+  }
+
+  if (type === 'pdf') {
+    const pdfUrl = content?.file?.url || content?.external?.url || '';
+    if (pdfUrl) {
+      files.push({
+        name: extractRichText(content?.caption) || 'Documento PDF',
+        url: pdfUrl,
+        type: 'pdf',
+      });
+    }
+  }
+
+  if (type === 'image') {
+    const imageUrl = content?.file?.url || content?.external?.url || '';
+    if (imageUrl) {
+      files.push({
+        name: extractRichText(content?.caption) || 'Imagem',
+        url: imageUrl,
+        type: 'image',
+      });
+    }
+  }
+
+  return files;
+}
+
 function blockToMarkdown(block: any): string {
   const type = block.type;
   const content = block[type];
@@ -126,17 +182,24 @@ serve(async (req) => {
 
     const data = await response.json();
     
-    // Converter blocos para markdown
+    // Converter blocos para markdown e extrair arquivos
     let markdown = '';
+    const files: FileInfo[] = [];
+    
     for (const block of data.results) {
       markdown += blockToMarkdown(block);
+      
+      // Extrair arquivos dos blocos
+      const blockFiles = extractFilesFromBlock(block);
+      files.push(...blockFiles);
     }
 
-    console.log(`✅ Conteúdo extraído: ${markdown.length} caracteres`);
+    console.log(`✅ Conteúdo extraído: ${markdown.length} caracteres, ${files.length} arquivos`);
 
     return new Response(
       JSON.stringify({ 
         content: markdown.trim(),
+        files,
         blocks: data.results,
         hasMore: data.has_more 
       }),
