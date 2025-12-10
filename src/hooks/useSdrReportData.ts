@@ -77,6 +77,33 @@ function extractSdrEmail(activity: DealActivity): string | null {
   return null;
 }
 
+// Função para buscar todos os dados com paginação (bypassa limite de 1000)
+async function fetchAllActivities(start: string, end: string): Promise<DealActivity[]> {
+  const allActivities: DealActivity[] = [];
+  const pageSize = 1000;
+  let page = 0;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('deal_activities')
+      .select('*')
+      .gte('created_at', `${start}T00:00:00`)
+      .lte('created_at', `${end}T23:59:59`)
+      .eq('activity_type', 'stage_change')
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    
+    allActivities.push(...(data || []));
+    hasMore = (data?.length || 0) === pageSize;
+    page++;
+  }
+  
+  return allActivities;
+}
+
 export function useSdrReportData(startDate: Date | null, endDate: Date | null) {
   return useQuery({
     queryKey: ['sdr-report', startDate?.toISOString(), endDate?.toISOString()],
@@ -107,15 +134,8 @@ export function useSdrReportData(startDate: Date | null, endDate: Date | null) {
           .map(sdr => [sdr.email!.toLowerCase(), sdr.name])
       );
       
-      // Query deal_activities for the period
-      const { data: activities, error } = await supabase
-        .from('deal_activities')
-        .select('*')
-        .gte('created_at', `${start}T00:00:00`)
-        .lte('created_at', `${end}T23:59:59`)
-        .eq('activity_type', 'stage_change');
-      
-      if (error) throw error;
+      // Query deal_activities com paginação para buscar TODOS os registros
+      const activities = await fetchAllActivities(start, end);
       
       // Group by SDR email
       const sdrMetrics = new Map<string, {
