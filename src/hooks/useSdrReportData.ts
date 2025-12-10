@@ -4,11 +4,11 @@ import { startOfDay, endOfDay, format } from 'date-fns';
 
 // UUID mappings from Bubble imports - CORRIGIDO
 const STAGE_UUID_MAP: Record<string, string> = {
+  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b': 'Novo Lead',
   'a8365215-fd31-4bdc-bbe7-77100fa39e53': 'Reunião 01 Agendada',
   '34995d75-933e-4d67-b7fc-19fcb8b81680': 'Reunião 01 Realizada',
-  '062927f5-b7a3-496a-9d47-eb03b3d69b10': 'Contrato Pago', // Corrigido de No-Show
-  'cf4a369c-c4a6-4299-933d-5ae3dcc39d4b': 'Novo Lead',
-  '3a2776e2-a536-4a2a-bb7b-a2f53c8941df': 'Venda realizada',
+  '062927f5-b7a3-496a-9d47-eb03b3d69b10': 'No-Show', // Corrigido para No-Show
+  '3a2776e2-a536-4a2a-bb7b-a2f53c8941df': 'Venda realizada', // Usado como Contrato
 };
 
 // Text stage names from webhooks
@@ -16,7 +16,7 @@ const STAGE_NAMES = {
   AGENDADA: ['Reunião 01 Agendada', 'R1 Agendada'],
   REALIZADA: ['Reunião 01 Realizada', 'R1 Realizada'],
   NO_SHOW: ['No-Show', 'No Show', 'NoShow'],
-  CONTRATO: ['Contrato Pago', 'Contrato'],
+  CONTRATO: ['Contrato Pago', 'Contrato', 'Venda realizada', 'Venda Realizada'],
 };
 
 export interface SdrReportMetrics {
