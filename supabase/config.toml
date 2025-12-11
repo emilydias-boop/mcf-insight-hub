@@ -128,3 +128,12 @@ verify_jwt = false
 
 [functions.import-a010-sales]
 verify_jwt = false
+
+[functions.twilio-token]
+verify_jwt = false
+
+[functions.twilio-voice-webhook]
+verify_jwt = false
+
+[functions.twilio-voice-twiml]
+verify_jwt = false
