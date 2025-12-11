@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -6,8 +7,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
-import { useMemo } from 'react';
 import { DealKanbanCard } from './DealKanbanCard';
+import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { AlertCircle, Inbox } from 'lucide-react';
 
@@ -33,6 +34,9 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   const createActivity = useCreateDealActivity();
   const { data: stages } = useCRMStages(originId);
   
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  
   const visibleStageIds = getVisibleStages();
   const visibleStages = (stages || []).filter((s: any) => s.is_active);
   
@@ -43,6 +47,11 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
       deal.name && 
       deal.stage_id === stageId
     );
+  };
+
+  const handleDealClick = (dealId: string) => {
+    setSelectedDealId(dealId);
+    setDrawerOpen(true);
   };
 
   // Empty state
@@ -96,57 +105,66 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   };
   
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {visibleStages.map((stage: any) => {
-          const stageDeals = getDealsByStage(stage.id);
-          
-          return (
-            <div key={stage.id} className="flex-shrink-0 w-80">
-              <Card className="h-full">
-                <CardHeader className={stage.color || 'bg-muted'}>
-                  <CardTitle className="text-sm font-medium flex items-center justify-between">
-                    <span>{stage.stage_name}</span>
-                    <Badge variant="secondary">{stageDeals.length}</Badge>
-                  </CardTitle>
-                </CardHeader>
-                
-                <Droppable droppableId={stage.id}>
-                  {(provided) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className="p-4 space-y-3 min-h-[200px]"
-                    >
-                      {stageDeals.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                          <Inbox className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            Nenhum negócio neste estágio
-                          </p>
-                        </div>
-                      ) : (
-                        stageDeals.map((deal, index) => (
-                          <Draggable key={deal.id} draggableId={deal.id} index={index}>
-                            {(provided, snapshot) => (
-                              <DealKanbanCard
-                                deal={deal}
-                                isDragging={snapshot.isDragging}
-                                provided={provided}
-                              />
-                            )}
-                          </Draggable>
-                        ))
-                      )}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </Card>
-            </div>
-          );
-        })}
-      </div>
-    </DragDropContext>
+    <>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {visibleStages.map((stage: any) => {
+            const stageDeals = getDealsByStage(stage.id);
+            
+            return (
+              <div key={stage.id} className="flex-shrink-0 w-80">
+                <Card className="h-full">
+                  <CardHeader className={stage.color || 'bg-muted'}>
+                    <CardTitle className="text-sm font-medium flex items-center justify-between">
+                      <span>{stage.stage_name}</span>
+                      <Badge variant="secondary">{stageDeals.length}</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  
+                  <Droppable droppableId={stage.id}>
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className="p-4 space-y-3 min-h-[200px]"
+                      >
+                        {stageDeals.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <Inbox className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              Nenhum negócio neste estágio
+                            </p>
+                          </div>
+                        ) : (
+                          stageDeals.map((deal, index) => (
+                            <Draggable key={deal.id} draggableId={deal.id} index={index}>
+                              {(provided, snapshot) => (
+                                <DealKanbanCard
+                                  deal={deal}
+                                  isDragging={snapshot.isDragging}
+                                  provided={provided}
+                                  onClick={() => handleDealClick(deal.id)}
+                                />
+                              )}
+                            </Draggable>
+                          ))
+                        )}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </Card>
+              </div>
+            );
+          })}
+        </div>
+      </DragDropContext>
+      
+      <DealDetailsDrawer
+        dealId={selectedDealId}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
+    </>
   );
 };
