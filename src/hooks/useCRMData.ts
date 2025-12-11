@@ -48,15 +48,31 @@ const buildOriginTree = (origins: any[], groups: any[]): Group[] => {
     groupsMap.set(g.id, { ...g, children: [] });
   });
   
-  // Adicionar origins aos seus grupos
+  // Coletar origens sem grupo
+  const ungroupedOrigins: Origin[] = [];
+  
+  // Adicionar origins aos seus grupos ou à lista de sem grupo
   origins.forEach(origin => {
     if (origin.group_id && groupsMap.has(origin.group_id)) {
       groupsMap.get(origin.group_id)!.children.push(origin);
+    } else if (!origin.group_id) {
+      ungroupedOrigins.push(origin);
     }
   });
   
-  // Retornar apenas grupos que têm origins
-  return Array.from(groupsMap.values()).filter(g => g.children.length > 0);
+  // Construir resultado com grupos que têm origins
+  const result = Array.from(groupsMap.values()).filter(g => g.children.length > 0);
+  
+  // Adicionar grupo virtual "Sem Grupo" se houver origens órfãs
+  if (ungroupedOrigins.length > 0) {
+    result.push({
+      id: '__ungrouped__',
+      name: 'Sem Grupo',
+      children: ungroupedOrigins
+    });
+  }
+  
+  return result;
 };
 
 export const useCRMOrigins = () => {
