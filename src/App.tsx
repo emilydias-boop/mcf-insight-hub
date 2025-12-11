@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { TwilioProvider } from "./contexts/TwilioContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { MainLayout } from "./components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
@@ -58,7 +59,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
+          <TwilioProvider>
+            <Routes>
             {/* Public auth route */}
             <Route path="/auth" element={<Auth />} />
             
@@ -119,7 +121,8 @@ const App = () => (
             <Route path="/tv-sdr/demo-celebration" element={<TVSdrCelebrationDemo />} />
             
             <Route path="*" element={<NotFound />} />
-          </Routes>
+            </Routes>
+          </TwilioProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
