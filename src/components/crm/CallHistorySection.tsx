@@ -88,10 +88,12 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
       
       // Fetch user names separately
       const userIds = (data || []).map((c: any) => c.user_id).filter((id: any): id is string => typeof id === 'string');
-      const uniqueUserIds = [...new Set(userIds)];
+      const uniqueUserIds = [...new Set<string>(userIds)];
+      
+      const { data: profiles } = await supabase
         .from('profiles')
         .select('id, full_name')
-        .in('id', userIds);
+        .in('id', uniqueUserIds);
       
       const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
       
