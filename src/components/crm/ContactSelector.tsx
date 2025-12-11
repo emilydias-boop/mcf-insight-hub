@@ -26,9 +26,12 @@ export function ContactSelector({ value, onValueChange }: ContactSelectorProps) 
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const { data: contacts = [], isLoading } = useClintContacts(
+  const { data: contactsResponse, isLoading } = useClintContacts(
     searchQuery ? { search: searchQuery } : undefined
   );
+  
+  // Extract array from API response structure
+  const contacts = Array.isArray(contactsResponse) ? contactsResponse : (contactsResponse?.data || []);
 
   const selectedContact = contacts.find((contact) => contact.id === value);
 
