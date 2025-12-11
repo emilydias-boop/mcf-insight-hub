@@ -5,6 +5,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Phone, MessageCircle, Mail, Clock, Pin } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useTwilio } from '@/contexts/TwilioContext';
+import { toast } from 'sonner';
 
 interface DealKanbanCardProps {
   deal: any;
@@ -14,6 +16,27 @@ interface DealKanbanCardProps {
 }
 
 export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanbanCardProps) => {
+  const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
+  const isTestDeal = isTestPipeline(deal.origin_id);
+  
+  const handleCall = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    const phone = deal.contact?.phone || deal.custom_fields?.telefone;
+    if (!phone) {
+      toast.error('Contato não possui telefone cadastrado');
+      return;
+    }
+    
+    if (deviceStatus !== 'ready') {
+      toast.info('Inicializando Twilio...');
+      await initializeDevice();
+      return;
+    }
+    
+    await makeCall(phone, deal.id, deal.contact_id, deal.origin_id);
+  };
+  
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -73,9 +96,10 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
             <div className="flex gap-1">
               <Button
                 size="icon"
-                variant="ghost"
-                className="h-6 w-6"
-                onClick={(e) => e.stopPropagation()}
+                variant={isTestDeal ? "default" : "ghost"}
+                className={`h-6 w-6 ${isTestDeal ? 'bg-green-500 hover:bg-green-600 text-white' : ''}`}
+                onClick={handleCall}
+                title={isTestDeal ? 'Ligar (Pipeline de Teste)' : 'Ligar'}
               >
                 <Phone className="h-3 w-3" />
               </Button>

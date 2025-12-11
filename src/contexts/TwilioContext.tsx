@@ -207,12 +207,6 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       }
       
       const callId = insertResult.data.id;
-
-        if (insertResult.error) {
-          console.error('Error creating call record:', insertResult.error);
-          setCallStatus('failed');
-          return null;
-        }
       setCurrentCallId(callId);
 
       // Make the call via Twilio
