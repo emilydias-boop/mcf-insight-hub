@@ -80,9 +80,13 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
   const { user } = useAuth();
   
   const { data: stages = [], isLoading: stagesLoading } = useDealStages();
-  const { data: origins = [] } = useClintOrigins();
-  const { data: users = [] } = useClintUsers();
+  const { data: originsResponse } = useClintOrigins();
+  const { data: usersResponse } = useClintUsers();
   const { canMoveToStage } = useStagePermissions();
+  
+  // Extract arrays from API response structure
+  const origins = Array.isArray(originsResponse) ? originsResponse : (originsResponse?.data || []);
+  const users = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.data || []);
   
   const createDealMutation = useCreateClintDeal();
   const createActivityMutation = useCreateDealActivity();

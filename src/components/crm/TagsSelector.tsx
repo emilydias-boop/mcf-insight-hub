@@ -26,7 +26,10 @@ interface TagsSelectorProps {
 export function TagsSelector({ value = [], onValueChange }: TagsSelectorProps) {
   const [open, setOpen] = useState(false);
   
-  const { data: tags = [], isLoading } = useClintTags();
+  const { data: tagsResponse, isLoading } = useClintTags();
+  
+  // Extract array from API response structure
+  const tags = Array.isArray(tagsResponse) ? tagsResponse : (tagsResponse?.data || []);
 
   const selectedTags = tags.filter((tag) => value.includes(tag.id));
 
