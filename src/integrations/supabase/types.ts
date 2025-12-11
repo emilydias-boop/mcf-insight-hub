@@ -274,6 +274,91 @@ export type Database = {
         }
         Relationships: []
       }
+      calls: {
+        Row: {
+          contact_id: string | null
+          created_at: string | null
+          deal_id: string | null
+          direction: string | null
+          duration_seconds: number | null
+          ended_at: string | null
+          from_number: string | null
+          id: string
+          notes: string | null
+          origin_id: string | null
+          outcome: string | null
+          recording_url: string | null
+          started_at: string | null
+          status: string | null
+          to_number: string
+          twilio_call_sid: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          direction?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
+          id?: string
+          notes?: string | null
+          origin_id?: string | null
+          outcome?: string | null
+          recording_url?: string | null
+          started_at?: string | null
+          status?: string | null
+          to_number: string
+          twilio_call_sid?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          direction?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
+          id?: string
+          notes?: string | null
+          origin_id?: string | null
+          outcome?: string | null
+          recording_url?: string | null
+          started_at?: string | null
+          status?: string | null
+          to_number?: string
+          twilio_call_sid?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           color: string | null
