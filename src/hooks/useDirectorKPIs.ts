@@ -36,6 +36,8 @@ const EXCLUDED_PRODUCT_NAMES = [
   "EFEITO ALAVANCA",
   "CLUBE DO ARREMATE",
   "CLUBE ARREMATE",
+  "SÓCIO MCF",
+  "SOCIO MCF",
 ];
 
 // Categorias e produtos excluídos do Faturamento Total (conforme planilha)
@@ -92,9 +94,34 @@ type HublaTransaction = {
 const getSaleKey = (tx: HublaTransaction): string => {
   const email = (tx.customer_email || "").toLowerCase().trim();
   const date = tx.sale_date.split("T")[0]; // Apenas data YYYY-MM-DD
-  // CORREÇÃO: Usar apenas email+data para deduplicar vendas entre Hubla/Make
-  // Removido product_category que causava duplicatas (ex: "contrato" vs "incorporador")
-  return `${email}|${date}`;
+  const category = tx.product_category || "unknown";
+  const productName = (tx.product_name || "").toUpperCase();
+  
+  // Normalizar tipo de produto para deduplicar corretamente:
+  // - A010 = "a010" (vendas do curso A010)
+  // - Contratos/Incorporador = "contrato" (ambos são mesma venda)
+  // - Outros = categoria original (OBs, etc)
+  let tipoNormalizado: string;
+  if (category === "a010" || productName.includes("A010")) {
+    tipoNormalizado = "a010";
+  } else if (
+    category === "incorporador" || 
+    category === "contrato" || 
+    productName.includes("CONTRATO") ||
+    productName.startsWith("A00") ||
+    productName.startsWith("A001") ||
+    productName.startsWith("A002") ||
+    productName.startsWith("A003") ||
+    productName.startsWith("A004") ||
+    productName.startsWith("A005") ||
+    productName.startsWith("A009")
+  ) {
+    tipoNormalizado = "contrato";
+  } else {
+    tipoNormalizado = category;
+  }
+  
+  return `${email}|${date}|${tipoNormalizado}`;
 };
 
 // Deduplica transações priorizando o registro com MAIOR net_value
