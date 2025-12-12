@@ -92,8 +92,9 @@ type HublaTransaction = {
 const getSaleKey = (tx: HublaTransaction): string => {
   const email = (tx.customer_email || "").toLowerCase().trim();
   const date = tx.sale_date.split("T")[0]; // Apenas data YYYY-MM-DD
-  const category = tx.product_category || "unknown";
-  return `${email}|${date}|${category}`;
+  // CORREÇÃO: Usar apenas email+data para deduplicar vendas entre Hubla/Make
+  // Removido product_category que causava duplicatas (ex: "contrato" vs "incorporador")
+  return `${email}|${date}`;
 };
 
 // Deduplica transações priorizando o registro com MAIOR net_value
