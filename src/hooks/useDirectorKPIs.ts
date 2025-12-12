@@ -263,11 +263,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const end = endDate ? format(endDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
 
       // Buscar transações de TODAS AS FONTES (Hubla + Kiwify + Make) no período
-      // CORREÇÃO: Incluir todas as fontes para deduplicação correta por email+data
+      // CORREÇÃO: Usar created_at com timezone America/Sao_Paulo para contagem A010
       const { data: hublaDataRaw } = await supabase
         .from("hubla_transactions")
         .select(
-          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
+          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source, created_at",
         )
         .eq("sale_status", "completed")
         .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
@@ -276,8 +276,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .not("customer_name", "is", null)
         .neq("customer_name", "")
         .gt("net_value", 0)
-        .gte("sale_date", startStr)
-        .lte("sale_date", endStr);
+        .gte("created_at", startStr)
+        .lte("created_at", endStr);
 
       // Aplicar deduplicação inteligente: Make > Hubla/Kiwify (Make tem taxa real)
       const hublaData = deduplicateTransactions((hublaDataRaw || []) as HublaTransaction[]);
