@@ -151,12 +151,12 @@ export default function Dashboard() {
     });
   };
 
-  // Metas padrão (podem vir de configuração)
+  // Metas padrão (atualizadas conforme planilha)
   const metas = {
-    ultrametaClint: 267120,
-    faturamentoClint: 267120,
-    ultrametaLiquido: 222600,
-    faturamentoLiquido: 200000,
+    ultrametaClint: 337680,     // 201 × R$ 1.680
+    faturamentoClint: 198377,   // R$ 198.377,00
+    ultrametaLiquido: 281400,   // 201 × R$ 1.400
+    faturamentoLiquido: 159276, // R$ 159.275,52
   };
 
   return (
