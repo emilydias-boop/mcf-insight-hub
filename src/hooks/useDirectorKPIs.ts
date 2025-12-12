@@ -90,12 +90,18 @@ const EXCLUDED_PRODUCT_NAMES = [
 ];
 
 // Categorias e produtos excluídos do Faturamento Total (conforme planilha)
-const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao"];
+// CORREÇÃO: Adicionar "contrato" como categoria excluída (duplicata com A000 - Contrato)
+const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao", "contrato"];
 const EXCLUDED_PRODUCTS_FATURAMENTO = [
   "SÓCIO MCF",
   "SOCIO MCF",
+  "SÓCIO",
+  "SOCIO",
+  "PARCERIA",
   "ALMOÇO NETWORKING",
   "ALMOCO NETWORKING",
+  "ALMOÇO",
+  "ALMOCO",
   "MENTORIA INDIVIDUAL",
   "CLUBE DO ARREMATE",
   "CONTRATO - CLUBE DO ARREMATE",

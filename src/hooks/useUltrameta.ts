@@ -52,6 +52,16 @@ const FATURAMENTO_CLINT_PRODUCTS = [
   'SÓCIO JANTAR',
 ];
 
+// Categorias excluídas do Faturamento Total (sincronizado com useDirectorKPIs)
+const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao", "contrato"];
+const EXCLUDED_PRODUCTS_FATURAMENTO = [
+  "SÓCIO MCF", "SOCIO MCF", "SÓCIO", "SOCIO",
+  "PARCERIA",
+  "ALMOÇO NETWORKING", "ALMOCO NETWORKING", "ALMOÇO", "ALMOCO",
+  "MENTORIA INDIVIDUAL",
+  "CLUBE DO ARREMATE", "CONTRATO - CLUBE DO ARREMATE",
+];
+
 // Helper para verificar se produto está na lista de Faturamento Clint
 const isProductInFaturamentoClint = (productName: string): boolean => {
   const normalized = productName.toUpperCase().trim();
