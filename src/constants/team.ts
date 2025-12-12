@@ -26,8 +26,9 @@ export const CLOSER_LIST = [
 
 // Produtos que disparam confetti (case insensitive, busca parcial)
 export const CONFETTI_PRODUCTS = [
-  // Contratos (contêm "Contrato" no nome)
-  "Contrato",
+  // Contratos específicos (apenas A000 e Anticrise)
+  "A000 - Contrato",      // Contrato Lead A/B
+  "Contrato - Anticrise", // Anticrise explícito
   
   // Parcerias (A001, A002, A003, A004, A009)
   "MCF INCORPORADOR",     // A001, A002, A009

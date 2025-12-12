@@ -4,7 +4,7 @@ import { SaleCelebration } from "@/components/tv/SaleCelebration";
 import { useTVSdrData } from "@/hooks/useTVSdrData";
 import { useSalesCelebration } from "@/hooks/useSalesCelebration";
 import { Button } from "@/components/ui/button";
-import { RotateCcw, Calendar, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { RotateCcw, Calendar, ChevronLeft, ChevronRight, RefreshCw, PartyPopper } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format, subDays, addDays, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function TVSdrFullscreen() {
   const [viewDate, setViewDate] = useState<Date>(new Date());
+  const [celebrationsPaused, setCelebrationsPaused] = useState(false);
   const isViewingToday = isToday(viewDate);
   const queryClient = useQueryClient();
   
@@ -66,8 +67,8 @@ export default function TVSdrFullscreen() {
         lastUpdate={new Date()}
       />
 
-      {/* Celebração apenas para o dia atual */}
-      {currentCelebration && isViewingToday && (
+      {/* Celebração apenas para o dia atual e se não estiver pausado */}
+      {currentCelebration && isViewingToday && !celebrationsPaused && (
         <SaleCelebration
           leadName={currentCelebration.leadName}
           leadType={currentCelebration.leadType}
@@ -75,6 +76,7 @@ export default function TVSdrFullscreen() {
           closerName={currentCelebration.closerName}
           productName={currentCelebration.productName}
           onComplete={handleCelebrationComplete}
+          onDismiss={handleCelebrationComplete}
         />
       )}
 
@@ -179,23 +181,44 @@ export default function TVSdrFullscreen() {
         </TooltipProvider>
       </div>
 
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="fixed bottom-4 right-4 opacity-30 hover:opacity-100 transition-opacity h-8 w-8"
-              onClick={handleResetCelebrations}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Resetar celebrações e reexibir vendas de hoje</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      {/* Controles inferiores direitos */}
+      <div className="fixed bottom-4 right-4 flex items-center gap-2 opacity-30 hover:opacity-100 transition-opacity">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={celebrationsPaused ? "default" : "ghost"}
+                size="icon"
+                className={`h-8 w-8 ${celebrationsPaused ? 'opacity-100' : ''}`}
+                onClick={() => setCelebrationsPaused(!celebrationsPaused)}
+              >
+                <PartyPopper className={`h-4 w-4 ${celebrationsPaused ? 'opacity-50' : ''}`} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{celebrationsPaused ? "Ativar celebrações" : "Pausar celebrações"}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleResetCelebrations}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Resetar celebrações e reexibir vendas de hoje</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
     </div>
   );
 }
