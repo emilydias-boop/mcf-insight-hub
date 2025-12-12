@@ -124,8 +124,8 @@ const getSaleKey = (tx: HublaTransaction): string => {
   return `${email}|${date}|${tipoNormalizado}`;
 };
 
-// Deduplica transações priorizando o registro com MAIOR net_value
-// Isso garante que usamos o valor correto (não a taxa da Hubla quando Make envia errado)
+// Deduplica transações priorizando Make (taxa real/menor) sobre Hubla
+// Make entra primeiro e tem o valor correto, Hubla é fallback
 const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransaction[] => {
   const byKey = new Map<string, HublaTransaction>();
   
@@ -139,14 +139,18 @@ const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransac
       return;
     }
     
-    // Se existente é Make e novo é Hubla/Kiwify, prioriza Hubla/Kiwify
-    if (existing.source === 'make' && tx.source !== 'make') {
+    // CORREÇÃO: Prioriza Make sobre Hubla/Kiwify (Make tem taxa real)
+    if (existing.source !== 'make' && tx.source === 'make') {
       byKey.set(key, tx);
       return;
     }
     
-    // Se ambos são da mesma fonte ou existente é Hubla, prioriza maior net_value
-    // Isso evita usar a taxa da Hubla como valor líquido
+    // Se existente já é Make, mantém (não substitui por Hubla)
+    if (existing.source === 'make') {
+      return;
+    }
+    
+    // Se ambos são Hubla/Kiwify, prioriza maior net_value
     const existingValue = existing.net_value || 0;
     const newValue = tx.net_value || 0;
     if (newValue > existingValue) {
