@@ -91,7 +91,7 @@ const EXCLUDED_PRODUCT_NAMES = [
 
 // Categorias e produtos excluídos do Faturamento Total (conforme planilha)
 // CORREÇÃO: Adicionar "contrato" como categoria excluída (duplicata com A000 - Contrato)
-const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao", "contrato", "projetos"];
+const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao", "contrato"];
 const EXCLUDED_PRODUCTS_FATURAMENTO = [
   "SÓCIO MCF",
   "SOCIO MCF",
