@@ -128,12 +128,25 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       console.log('[TV-SDR] Contratos - Hubla:', hublaSourceContracts?.length || 0, 'Make fallback:', makeFallbackContracts.length);
 
-      // Filtrar apenas vendas NOVAS (não recorrências e não duplicados)
+      // Filtrar apenas vendas NOVAS (não recorrências, não duplicados, apenas contratos válidos)
       const hublaContracts = allHublaContracts?.filter(contract => {
         const rawData = contract.raw_data as any;
+        const productName = contract.product_name?.toLowerCase() || '';
         
         // Ignorar transações sem customer_email (newsale-xxx duplicados)
         if (!contract.customer_email) return false;
+        
+        // EXCLUIR Sócio MCF - não é contrato Inside Sales válido
+        if (productName.includes('sócio mcf') || productName.includes('socio mcf')) {
+          return false;
+        }
+        
+        // Manter apenas "A000 - Contrato" e "Contrato - Anticrise"
+        const isValidContract = 
+          (productName.includes('a000') && productName.includes('contrato')) ||
+          (productName.includes('contrato') && productName.includes('anticrise'));
+        
+        if (!isValidContract) return false;
         
         const smartInstallment = rawData?.event?.invoice?.smartInstallment;
         
