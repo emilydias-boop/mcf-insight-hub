@@ -56,8 +56,6 @@ const EXCLUDED_PRODUCTS_FATURAMENTO = [
 // Estas taxas são aplicadas ao valor BRUTO para obter o valor faturado
 const TAXA_OB_VITALICIO = 0.8356;    // 83.56% (taxa fixa Hubla: 16.44%)
 const TAXA_OB_CONSTRUIR = 0.8980;    // 89.80% (taxa fixa Hubla: 10.20%)
-const TAXA_A010 = 0.8156;            // 81.56% (taxa fixa Hubla: 18.44%)
-const PRECO_A010 = 47;               // R$ 47 preço padrão A010
 const PRECO_OB_VITALICIO = 57;       // R$ 57 preço padrão OB Vitalício
 const PRECO_OB_CONSTRUIR = 97;       // R$ 97 preço padrão OB Construir
 
@@ -174,6 +172,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const end = endDate ? format(endDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
 
       // Buscar transações Hubla + Kiwify + Make no período (com fuso horário BR)
+      // CORREÇÃO: Adicionar filtros para excluir registros inválidos na query
       const { data: hublaDataRaw } = await supabase
         .from("hubla_transactions")
         .select(
@@ -181,10 +180,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         )
         .eq("sale_status", "completed")
         .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
+        .not("customer_email", "is", null)
+        .neq("customer_email", "")
+        .not("customer_name", "is", null)
+        .neq("customer_name", "")
+        .gt("net_value", 0)
         .gte("sale_date", startStr)
         .lte("sale_date", endStr);
 
-      // Aplicar deduplicação inteligente Hubla > Kiwify > Make
+      // Aplicar deduplicação inteligente: Make > Hubla/Kiwify (Make tem taxa real)
       const hublaData = deduplicateTransactions((hublaDataRaw || []) as HublaTransaction[]);
       
       console.log("📊 Deduplicação:", {
@@ -261,75 +265,95 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // NOTA: faturamentoTotal será calculado APÓS vendasA010 ser determinado
 
       // ===== VENDAS A010 =====
-      // OVERRIDE: Valores fixos para semana 29/11-05/12/2025 (conforme planilha)
-      const isWeekNov29Dec05 = start === "2025-11-29" && end === "2025-12-05";
+      // CORREÇÃO: Contagem linha por linha, deduplicando por email+data (não por hubla_id)
+      // Cada transação com email diferente no mesmo dia conta como venda separada
 
-      // Valores fixos para semana 29/11-05/12/2025 (override temporário)
-      const OVERRIDE_VALUES = {
-        vendasA010: 221,
-        faturamentoTotal: 281422.64,
-        faturamentoClint: 399399.00,
-        faturamentoLiquido: 267661.26,
-      };
+      // ===== FATURAMENTO TOTAL =====
+      // CORREÇÃO: Soma de TODOS os net_value válidos (já filtrados na query)
+      // Exclui apenas OBs (contados separadamente) e categorias específicas
+      const seenFaturamentoIds = new Set<string>();
+      const faturamentoTotalCalc = (hublaData || [])
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const category = tx.product_category || "";
 
-      // Helper para extrair base_id (remove sufixo -offer-N)
-      const getBaseId = (hublaId: string): string => {
-        const offerIndex = hublaId.indexOf('-offer-');
-        return offerIndex > -1 ? hublaId.substring(0, offerIndex) : hublaId;
-      };
+          // Excluir categorias específicas
+          if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
 
-      // Cálculo automático de Vendas A010 (DEDUPLICADO por base_id)
+          // Excluir produtos específicos
+          if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
+
+          // Deduplicar por hubla_id
+          if (seenFaturamentoIds.has(tx.hubla_id)) return false;
+          seenFaturamentoIds.add(tx.hubla_id);
+          return true;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+
+      // Cálculo automático de Vendas A010 (DEDUPLICADO por email+data)
       const vendasA010Calc = (() => {
-        const seenA010BaseIds = new Set<string>();
-        const a010Debug: { name: string; product: string; hubla_id: string; base_id: string }[] = [];
+        const seenA010Keys = new Set<string>();
+        const a010Debug: { name: string; email: string; date: string; product: string }[] = [];
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = tx.product_category === "a010" || productName.includes("A010");
-          const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
           
-          // CORREÇÃO: Não excluir newsale-* se tiver customer_name válido
-          const isInvalidNewsale = tx.hubla_id?.startsWith("newsale-") && 
-                                   (!tx.customer_email || tx.customer_email === "");
+          // Excluir Order Bumps (são OBs vendidos junto com A010, não A010 em si)
+          const isOfferTransaction = tx.hubla_id?.includes('-offer-');
+          if (isOfferTransaction) return;
           
-          // CORREÇÃO: Deduplicar por base_id (remove -offer-N suffix)
-          const baseId = getBaseId(tx.hubla_id || "");
-          
-          // CORREÇÃO: NÃO excluir PARENTs - são vendas A010 válidas (os -offer- são OBs)
-          // Contar apenas se base_id ainda não foi contado
-          if (isA010 && hasValidName && !isInvalidNewsale && !seenA010BaseIds.has(baseId)) {
-            seenA010BaseIds.add(baseId);
-            a010Debug.push({ 
-              name: tx.customer_name || "", 
-              product: tx.product_name || "", 
-              hubla_id: tx.hubla_id,
-              base_id: baseId 
-            });
+          if (isA010) {
+            // Chave: email normalizado + data
+            const email = (tx.customer_email || "").toLowerCase().trim();
+            const date = tx.sale_date.split("T")[0];
+            const key = `${email}|${date}`;
+            
+            if (!seenA010Keys.has(key)) {
+              seenA010Keys.add(key);
+              a010Debug.push({ 
+                name: tx.customer_name || "", 
+                email: email,
+                date: date,
+                product: tx.product_name || ""
+              });
+            }
           }
         });
 
-        console.log("🔍 Vendas A010 (deduplicado por base_id):", seenA010BaseIds.size, a010Debug.slice(0, 5));
-        return seenA010BaseIds.size;
+        console.log("🔍 Vendas A010 (deduplicado por email+data):", seenA010Keys.size, a010Debug.slice(0, 5));
+        return seenA010Keys.size;
       })();
 
-      // Usar valores fixos apenas para semana 29/11-05/12/2025
-      const vendasA010 = isWeekNov29Dec05 ? OVERRIDE_VALUES.vendasA010 : vendasA010Calc;
+      const vendasA010 = vendasA010Calc;
 
-      // ===== FATURAMENTO A010 (FÓRMULA FIXA) =====
-      // Fórmula: vendas × R$ 47
-      const a010Faturado = vendasA010 * PRECO_A010;
+      // ===== FATURAMENTO A010 (soma real dos net_value A010) =====
+      const seenA010FatIds = new Set<string>();
+      const a010Faturado = (hublaData || [])
+        .filter((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          const isA010 = tx.product_category === "a010" || productName.includes("A010");
+          // Excluir Order Bumps
+          const isOfferTransaction = tx.hubla_id?.includes('-offer-');
+          if (isOfferTransaction) return false;
+          if (seenA010FatIds.has(tx.hubla_id)) return false;
+          if (isA010) {
+            seenA010FatIds.add(tx.hubla_id);
+            return true;
+          }
+          return false;
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ===== FATURAMENTO TOTAL (FÓRMULA FIXA) =====
-      // Fórmula: Incorporador (net_value) + OB Vitalício (qtd × R$57) + OB Construir (qtd × R$97) + A010 (qtd × R$47)
-      const faturamentoTotalCalc = faturamentoIncorporador + obVitalicioFaturado + obConstruirFaturado + a010Faturado;
-      const faturamentoTotalFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoTotal : faturamentoTotalCalc;
+      const faturamentoTotalFinal = faturamentoTotalCalc;
 
       console.log("💰 Faturamento Total Debug:", {
+        totalTransacoes: hublaData?.length,
+        faturamentoTotal: faturamentoTotalCalc,
         incorporador: faturamentoIncorporador,
-        obVitalicio: { vendas: vendasObVitalicio, bruto: vendasObVitalicio * PRECO_OB_VITALICIO, faturado: obVitalicioFaturado },
-        obConstruir: { vendas: vendasObConstruir, bruto: vendasObConstruir * PRECO_OB_CONSTRUIR, faturado: obConstruirFaturado },
+        obVitalicio: { vendas: vendasObVitalicio, faturado: obVitalicioFaturado },
+        obConstruir: { vendas: vendasObConstruir, faturado: obConstruirFaturado },
         a010: { vendas: vendasA010, faturado: a010Faturado },
-        total: faturamentoTotalCalc,
       });
 
       // ===== GASTOS ADS =====
@@ -349,7 +373,6 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         faturamentoTotal: faturamentoTotalFinal,
         vendasA010,
         gastosAds,
-        isOverride: isWeekNov29Dec05,
       });
 
       // ===== CUSTOS OPERACIONAIS (equipe + escritório) =====
@@ -453,9 +476,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // DEBUG: Log Faturamento Líquido
       console.log("💵 Faturamento Líquido Debug:", faturamentoLiquidoDebug.length, "transações, Total:", faturamentoLiquido);
 
-      // Valores finais (com override para semana específica)
-      const faturamentoClintFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoClint : faturamentoClint;
-      const faturamentoLiquidoFinal = isWeekNov29Dec05 ? OVERRIDE_VALUES.faturamentoLiquido : faturamentoLiquido;
+      // Valores finais (sem override, cálculo real)
+      const faturamentoClintFinal = faturamentoClint;
+      const faturamentoLiquidoFinal = faturamentoLiquido;
 
       // ROI = Faturamento Líquido / (Faturamento Líquido - Lucro) × 100
       // Onde (Faturamento Líquido - Lucro) = Custo Total efetivo
@@ -487,6 +510,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         )
         .eq("sale_status", "completed")
         .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
+        .not("customer_email", "is", null)
+        .neq("customer_email", "")
+        .not("customer_name", "is", null)
+        .neq("customer_name", "")
+        .gt("net_value", 0)
         .gte("sale_date", prevStartBR)
         .lte("sale_date", prevEndBR);
       
