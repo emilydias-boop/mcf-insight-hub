@@ -46,6 +46,7 @@ const PRODUTOS_FATURAMENTO_CLINT = [
   "A005 - MCF P2",
   "A005 - MCF P2 - ASAAS",
   "A006 - Anticrise Básico",
+  "A006 - Renovação Parceiro MCF",  // ADICIONADO
   "A007 - Imersão SÓCIOS MCF",
   "A008 - The CLUB",
   "A008 - The CLUB - CONSULTORIA CLUB",
@@ -256,13 +257,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // Buscar transações Hubla + Kiwify + Make no período (com fuso horário BR)
       // CORREÇÃO: Adicionar filtros para excluir registros inválidos na query
+      // CORREÇÃO: Filtrar APENAS source='hubla' e excluir newsale-* (duplicatas)
       const { data: hublaDataRaw } = await supabase
         .from("hubla_transactions")
         .select(
           "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
         )
         .eq("sale_status", "completed")
-        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
+        .eq("source", "hubla")  // APENAS HUBLA
+        .eq("event_type", "invoice.payment_succeeded")
+        .not("hubla_id", "ilike", "newsale-%")  // Excluir newsale-*
         .not("customer_email", "is", null)
         .neq("customer_email", "")
         .not("customer_name", "is", null)
@@ -494,8 +498,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number }[] = [];
       const faturamentoClint = (hublaData || [])
         .filter((tx) => {
-          // Excluir newsale-* (duplicatas webhook)
-          if (tx.hubla_id?.startsWith("newsale-")) return false;
+          // Excluir -offer- (OBs são separados do Faturamento Clint)
+          if (tx.hubla_id?.includes("-offer-")) return false;
           // Deduplicar por hubla_id
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
 
@@ -535,7 +539,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const faturamentoLiquidoDebug: { product: string; net: number }[] = [];
       const faturamentoLiquido = (hublaData || [])
         .filter((tx) => {
-          if (tx.hubla_id?.startsWith("newsale-")) return false;
+          // Excluir -offer- (OBs são separados do Faturamento Líquido)
+          if (tx.hubla_id?.includes("-offer-")) return false;
           if (seenLiquidoIds.has(tx.hubla_id)) return false;
 
           const productName = tx.product_name || "";
@@ -582,13 +587,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify + Make) com fuso BR
       const prevStartBR = formatDateForBrazil(prevStart, false);
       const prevEndBR = formatDateForBrazil(prevEnd, true);
+      // CORREÇÃO: Mesmo filtro para período anterior (source='hubla', excluir newsale-*)
       const { data: prevHublaRaw } = await supabase
         .from("hubla_transactions")
         .select(
           "hubla_id, product_name, product_category, net_value, installment_number, total_installments, customer_name, customer_email, raw_data, sale_date, product_price, event_type, source",
         )
         .eq("sale_status", "completed")
-        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
+        .eq("source", "hubla")  // APENAS HUBLA
+        .eq("event_type", "invoice.payment_succeeded")
+        .not("hubla_id", "ilike", "newsale-%")  // Excluir newsale-*
         .not("customer_email", "is", null)
         .neq("customer_email", "")
         .not("customer_name", "is", null)
