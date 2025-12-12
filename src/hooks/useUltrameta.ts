@@ -84,17 +84,18 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
     queryKey: ['ultrameta', startDate?.toISOString(), endDate?.toISOString(), sdrIa],
     queryFn: async (): Promise<Ultrameta> => {
       // Buscar transações Hubla completadas no período
+      // CORREÇÃO: Usar created_at com timezone America/Sao_Paulo para contagem A010
       let query = supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name, customer_email, source')
+        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name, customer_email, source, created_at')
         .eq('sale_status', 'completed');
       
-      // Aplicar filtro de data com fuso horário de Brasília
+      // Aplicar filtro de data usando created_at com fuso horário de Brasília
       if (startDate) {
-        query = query.gte('sale_date', formatDateForBrazil(startDate, false));
+        query = query.gte('created_at', formatDateForBrazil(startDate, false));
       }
       if (endDate) {
-        query = query.lte('sale_date', formatDateForBrazil(endDate, true));
+        query = query.lte('created_at', formatDateForBrazil(endDate, true));
       }
       
       const { data: transactions, error } = await query;
