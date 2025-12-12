@@ -421,9 +421,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = tx.product_category === "a010" || productName.includes("A010");
           
-          // FILTROS: Excluir duplicatas Make, newsale-, e -offer-
-          const source = tx.source || "hubla";
-          if (source === "make") return; // Excluir Make (duplicatas)
+          // CORREÇÃO: INCLUIR Make no A010 (não excluir mais)
+          // Excluir apenas newsale- e -offer-
           if (tx.hubla_id?.startsWith("newsale-")) return;
           if (tx.hubla_id?.includes("-offer-")) return;
           
@@ -434,6 +433,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
             // Deduplicar por EMAIL ÚNICO (não email+data)
             if (!seenA010Emails.has(email)) {
               seenA010Emails.add(email);
+              const source = tx.source || "hubla";
               a010Debug.push({ 
                 name: tx.customer_name || "", 
                 email: email,
@@ -444,7 +444,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           }
         });
 
-        console.log("🔍 Vendas A010 (emails únicos, excl. Make):", seenA010Emails.size, a010Debug.slice(0, 5));
+        console.log("🔍 Vendas A010 (emails únicos, INCL. Make):", seenA010Emails.size, a010Debug.slice(0, 5));
         return seenA010Emails.size;
       })();
 
@@ -544,6 +544,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
 
           const productName = tx.product_name || "";
+          const productNameUpper = productName.toUpperCase();
+          
+          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
+          if (productNameUpper.includes("A006") && productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO")) return false;
+          
           const isInList = isProductInFaturamentoClint(productName);
 
           if (isInList) {
@@ -585,6 +590,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (seenLiquidoIds.has(tx.hubla_id)) return false;
 
           const productName = tx.product_name || "";
+          const productNameUpper = productName.toUpperCase();
+          
+          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
+          if (productNameUpper.includes("A006") && productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO")) return false;
+          
           const isInList = isProductInFaturamentoClint(productName);
 
           if (isInList) {
