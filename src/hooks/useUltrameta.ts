@@ -120,31 +120,57 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       });
       const vendasA010 = a010Emails.size;
 
+      // ===== IDENTIFICAR PARENTS COM OFFERS =====
+      // Parents que têm offers correspondentes serão excluídos (são containers)
+      const parentIdsWithOffers = new Set<string>();
+      transactions.forEach(tx => {
+        const hublaId = tx.hubla_id || '';
+        if (hublaId.includes('-offer-')) {
+          const parentId = hublaId.split('-offer-')[0];
+          parentIdsWithOffers.add(parentId);
+        }
+      });
+
       // ===== FATURAMENTO CLINT (BRUTO) =====
-      // CORREÇÃO: Exclui source='make' E produtos A006 - Renovação Parceiro MCF
+      // NOVA LÓGICA: Incluir offers OU transações normais sem offers correspondentes
+      // Excluir parents que são containers (têm offers filhos)
+      const seenClintBrutoIds = new Set<string>();
       const faturamentoClintBruto = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
           const hublaId = tx.hubla_id || '';
           const source = tx.source || 'hubla';
           
-          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
+          // Excluir A006 - Renovação Parceiro MCF
           if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return false;
           
           // Verificar se é produto válido do Faturamento Clint
-          const isValidProduct = isProductInFaturamentoClint(productName);
+          const isValidProduct = isProductInFaturamentoClint(tx.product_name || '');
           
           // Excluir source='make' (duplicatas)
           const isValidSource = ['hubla', 'kiwify', 'manual'].includes(source);
           
-          // Excluir newsale-% e %-offer-%
-          const isNotNewsale = !hublaId.startsWith('newsale-');
-          const isNotOffer = !hublaId.includes('-offer-');
+          // Excluir newsale-%
+          if (hublaId.startsWith('newsale-')) return false;
+          
+          // NOVA LÓGICA: Identificar offers vs parents
+          const isOffer = hublaId.includes('-offer-');
+          const isParentWithOffers = parentIdsWithOffers.has(hublaId);
+          
+          // Excluir parents que são containers (têm offers filhos)
+          if (!isOffer && isParentWithOffers) return false;
           
           // Exigir customer_email válido
           const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
           
-          return isValidProduct && isValidSource && isNotNewsale && isNotOffer && hasValidEmail;
+          // Deduplicar por hubla_id
+          if (seenClintBrutoIds.has(hublaId)) return false;
+          
+          if (isValidProduct && isValidSource && hasValidEmail) {
+            seenClintBrutoIds.add(hublaId);
+            return true;
+          }
+          return false;
         })
         .reduce((sum, tx) => {
           // Usar "Valor do produto" do raw_data se disponível
@@ -164,23 +190,40 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         }, 0);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // CORREÇÃO: Exclui source='make' E produtos A006 - Renovação Parceiro MCF
+      // NOVA LÓGICA: Mesma deduplicação parent/offer do Faturamento Clint
+      const seenLiquidoIds = new Set<string>();
       const faturamentoLiquido = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
           const hublaId = tx.hubla_id || '';
           const source = tx.source || 'hubla';
           
-          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
+          // Excluir A006 - Renovação Parceiro MCF
           if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return false;
           
-          const isValidProduct = isProductInFaturamentoClint(productName);
+          const isValidProduct = isProductInFaturamentoClint(tx.product_name || '');
           const isValidSource = ['hubla', 'kiwify', 'manual'].includes(source);
-          const isNotNewsale = !hublaId.startsWith('newsale-');
-          const isNotOffer = !hublaId.includes('-offer-');
+          
+          // Excluir newsale-%
+          if (hublaId.startsWith('newsale-')) return false;
+          
+          // NOVA LÓGICA: Identificar offers vs parents
+          const isOffer = hublaId.includes('-offer-');
+          const isParentWithOffers = parentIdsWithOffers.has(hublaId);
+          
+          // Excluir parents que são containers (têm offers filhos)
+          if (!isOffer && isParentWithOffers) return false;
+          
           const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
           
-          return isValidProduct && isValidSource && isNotNewsale && isNotOffer && hasValidEmail;
+          // Deduplicar por hubla_id
+          if (seenLiquidoIds.has(hublaId)) return false;
+          
+          if (isValidProduct && isValidSource && hasValidEmail) {
+            seenLiquidoIds.add(hublaId);
+            return true;
+          }
+          return false;
         })
         .reduce((sum, tx) => {
           const netValue = tx.net_value && tx.net_value > 0 
