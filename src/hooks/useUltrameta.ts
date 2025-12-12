@@ -29,6 +29,7 @@ const FATURAMENTO_CLINT_PRODUCTS = [
   'A005 - MCF P2',
   'A005 - MCF P2 - ASAAS',
   'A006 - ANTICRISE BÁSICO',
+  // EXCLUÍDO: 'A006 - RENOVAÇÃO PARCEIRO MCF' (não faz parte do Faturamento Clint)
   'A007 - IMERSÃO SÓCIOS MCF',
   'A008 - THE CLUB',
   'A008 - THE CLUB - CONSULTORIA CLUB',
@@ -102,12 +103,16 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       }
 
       // ===== VENDAS A010 (EMAILS ÚNICOS) =====
-      // Conta apenas emails únicos para produto A010
+      // CORREÇÃO: Conta emails únicos para A010, INCLUINDO source='make'
       const a010Emails = new Set<string>();
       transactions.forEach(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const isA010 = tx.product_category === 'a010' || productName.includes('A010');
         const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
+        const hublaId = tx.hubla_id || '';
+        
+        // Excluir newsale- e -offer- mas INCLUIR Make
+        if (hublaId.startsWith('newsale-') || hublaId.includes('-offer-')) return;
         
         if (isA010 && hasValidEmail) {
           a010Emails.add(tx.customer_email!.toLowerCase().trim());
@@ -116,12 +121,15 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       const vendasA010 = a010Emails.size;
 
       // ===== FATURAMENTO CLINT (BRUTO) =====
-      // Filtra: source IN ('hubla', 'kiwify', 'manual'), exclui newsale-% e %-offer-%, exige customer_email
+      // CORREÇÃO: Exclui source='make' E produtos A006 - Renovação Parceiro MCF
       const faturamentoClintBruto = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
           const hublaId = tx.hubla_id || '';
           const source = tx.source || 'hubla';
+          
+          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
+          if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return false;
           
           // Verificar se é produto válido do Faturamento Clint
           const isValidProduct = isProductInFaturamentoClint(productName);
@@ -156,12 +164,15 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         }, 0);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // Mesma lógica do bruto, mas usa net_value
+      // CORREÇÃO: Exclui source='make' E produtos A006 - Renovação Parceiro MCF
       const faturamentoLiquido = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
           const hublaId = tx.hubla_id || '';
           const source = tx.source || 'hubla';
+          
+          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
+          if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return false;
           
           const isValidProduct = isProductInFaturamentoClint(productName);
           const isValidSource = ['hubla', 'kiwify', 'manual'].includes(source);
