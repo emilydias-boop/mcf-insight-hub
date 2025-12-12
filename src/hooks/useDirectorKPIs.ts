@@ -71,8 +71,7 @@ const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string =>
 };
 
 // ===== DEDUPLICAÇÃO INTELIGENTE HUBLA + MAKE =====
-// Gera chave única para identificar mesma venda entre fontes
-// Prioriza Hubla quando mesma venda existe em ambas fontes
+// Detecta quando Make recebeu apenas taxa em vez de valor real e usa Hubla nesses casos
 type HublaTransaction = {
   hubla_id: string;
   product_name: string | null;
@@ -89,19 +88,22 @@ type HublaTransaction = {
   source: string | null;
 };
 
-const getSaleKey = (tx: HublaTransaction): string => {
-  const email = (tx.customer_email || "").toLowerCase().trim();
-  const date = tx.sale_date.split("T")[0]; // Apenas data YYYY-MM-DD
+// Valores mínimos esperados por categoria (se abaixo, provavelmente é taxa)
+const VALOR_MINIMO_POR_CATEGORIA: Record<string, number> = {
+  a010: 35,           // A010 mínimo ~R$ 41, taxa ~R$ 5-10
+  contrato: 100,      // Contratos mínimo ~R$ 367, taxa ~R$ 30-45
+  incorporador: 100,  // Incorporador mínimo ~R$ 300
+  ob_vitalicio: 35,   // OB Vitalício mínimo ~R$ 47
+  ob_construir: 70,   // OB Construir mínimo ~R$ 87
+};
+
+// Normaliza tipo de produto para chave de deduplicação
+const getNormalizedProductType = (tx: HublaTransaction): string => {
   const category = tx.product_category || "unknown";
   const productName = (tx.product_name || "").toUpperCase();
   
-  // Normalizar tipo de produto para deduplicar corretamente:
-  // - A010 = "a010" (vendas do curso A010)
-  // - Contratos/Incorporador = "contrato" (ambos são mesma venda)
-  // - Outros = categoria original (OBs, etc)
-  let tipoNormalizado: string;
   if (category === "a010" || productName.includes("A010")) {
-    tipoNormalizado = "a010";
+    return "a010";
   } else if (
     category === "incorporador" || 
     category === "contrato" || 
@@ -114,49 +116,76 @@ const getSaleKey = (tx: HublaTransaction): string => {
     productName.startsWith("A005") ||
     productName.startsWith("A009")
   ) {
-    tipoNormalizado = "contrato";
-  } else {
-    tipoNormalizado = category;
+    return "contrato";
+  } else if (productName.includes("VITALIC")) {
+    return "ob_vitalicio";
+  } else if (productName.includes("CONSTRUIR")) {
+    return "ob_construir";
   }
-  
+  return category;
+};
+
+const getSaleKey = (tx: HublaTransaction): string => {
+  const email = (tx.customer_email || "").toLowerCase().trim();
+  const date = tx.sale_date.split("T")[0];
+  const tipoNormalizado = getNormalizedProductType(tx);
   return `${email}|${date}|${tipoNormalizado}`;
 };
 
-// Deduplica transações priorizando Make (taxa real/menor) sobre Hubla
-// Make entra primeiro e tem o valor correto, Hubla é fallback
+// Deduplicação INTELIGENTE: detecta quando Make recebeu taxa e usa Hubla
 const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransaction[] => {
-  const byKey = new Map<string, HublaTransaction>();
+  // Agrupar por chave (email+data+tipo)
+  const groups = new Map<string, HublaTransaction[]>();
   
   transactions.forEach((tx) => {
     const key = getSaleKey(tx);
-    const existing = byKey.get(key);
-    
-    // Se não existe, adiciona
-    if (!existing) {
-      byKey.set(key, tx);
-      return;
-    }
-    
-    // CORREÇÃO: Prioriza Make sobre Hubla/Kiwify (Make tem taxa real)
-    if (existing.source !== 'make' && tx.source === 'make') {
-      byKey.set(key, tx);
-      return;
-    }
-    
-    // Se existente já é Make, mantém (não substitui por Hubla)
-    if (existing.source === 'make') {
-      return;
-    }
-    
-    // Se ambos são Hubla/Kiwify, prioriza maior net_value
-    const existingValue = existing.net_value || 0;
-    const newValue = tx.net_value || 0;
-    if (newValue > existingValue) {
-      byKey.set(key, tx);
-    }
+    const existing = groups.get(key) || [];
+    existing.push(tx);
+    groups.set(key, existing);
   });
   
-  return Array.from(byKey.values());
+  let taxaFixedCount = 0;
+  
+  // Para cada grupo, escolher a melhor transação
+  const result = Array.from(groups.entries()).map(([key, txs]) => {
+    const tipoNormalizado = key.split('|')[2];
+    const minValue = VALOR_MINIMO_POR_CATEGORIA[tipoNormalizado] || 30;
+    
+    const makeTx = txs.find(t => t.source === 'make');
+    const hublaTx = txs.find(t => t.source === 'hubla' || !t.source);
+    
+    // REGRA 1: Se Make existe E tem valor válido (>= mínimo) → usar Make
+    if (makeTx && (makeTx.net_value || 0) >= minValue) {
+      return makeTx;
+    }
+    
+    // REGRA 2: Se Make tem valor baixo (taxa) E Hubla existe com valor válido → usar Hubla
+    if (makeTx && (makeTx.net_value || 0) < minValue && hublaTx && (hublaTx.net_value || 0) >= minValue) {
+      taxaFixedCount++;
+      return hublaTx;
+    }
+    
+    // REGRA 3: Se só Make existe (mesmo com valor baixo) → usar Make
+    if (makeTx && !hublaTx) {
+      return makeTx;
+    }
+    
+    // REGRA 4: Se só Hubla existe → usar Hubla
+    if (hublaTx && !makeTx) {
+      return hublaTx;
+    }
+    
+    // REGRA 5: Fallback - usar o de maior valor
+    return txs.reduce((best, tx) => 
+      (tx.net_value || 0) > (best.net_value || 0) ? tx : best
+    , txs[0]);
+  });
+  
+  if (taxaFixedCount > 0) {
+    console.log(`🔧 Deduplicação: ${taxaFixedCount} transações Make com taxa corrigidas usando Hubla`);
+  }
+  
+  return result;
 };
 
 export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
