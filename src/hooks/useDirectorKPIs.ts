@@ -125,16 +125,22 @@ const getNormalizedProductType = (tx: HublaTransaction): string => {
   return category;
 };
 
+// NOVA CHAVE: email + data + tipo + valor arredondado
+// Isso permite múltiplas compras do mesmo cliente no mesmo dia (valores diferentes)
+// Mas agrupa a MESMA transação entre Hubla e Make (valores similares)
 const getSaleKey = (tx: HublaTransaction): string => {
   const email = (tx.customer_email || "").toLowerCase().trim();
   const date = tx.sale_date.split("T")[0];
   const tipoNormalizado = getNormalizedProductType(tx);
-  return `${email}|${date}|${tipoNormalizado}`;
+  // Arredondar valor para 1 casa decimal (tolera centavos de diferença entre fontes)
+  const valorArredondado = Math.round((tx.net_value || 0) * 10);
+  return `${email}|${date}|${tipoNormalizado}|${valorArredondado}`;
 };
 
-// Deduplicação INTELIGENTE: detecta quando Make recebeu taxa e usa Hubla
+// Deduplicação INTELIGENTE por TRANSAÇÃO (email+data+tipo+valor)
+// Permite múltiplas compras do mesmo cliente, mas remove duplicatas entre Hubla e Make
 const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransaction[] => {
-  // Agrupar por chave (email+data+tipo)
+  // Agrupar por chave (email+data+tipo+valor)
   const groups = new Map<string, HublaTransaction[]>();
   
   transactions.forEach((tx) => {
@@ -145,14 +151,18 @@ const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransac
   });
   
   let taxaFixedCount = 0;
+  let duplicatesRemoved = 0;
   
   // Para cada grupo, escolher a melhor transação
   const result = Array.from(groups.entries()).map(([key, txs]) => {
+    if (txs.length > 1) duplicatesRemoved++;
+    
     const tipoNormalizado = key.split('|')[2];
     const minValue = VALOR_MINIMO_POR_CATEGORIA[tipoNormalizado] || 30;
     
     const makeTx = txs.find(t => t.source === 'make');
     const hublaTx = txs.find(t => t.source === 'hubla' || !t.source);
+    const kiwifyTx = txs.find(t => t.source === 'kiwify');
     
     // REGRA 1: Se Make existe E tem valor válido (>= mínimo) → usar Make
     if (makeTx && (makeTx.net_value || 0) >= minValue) {
@@ -166,24 +176,27 @@ const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransac
     }
     
     // REGRA 3: Se só Make existe (mesmo com valor baixo) → usar Make
-    if (makeTx && !hublaTx) {
+    if (makeTx && !hublaTx && !kiwifyTx) {
       return makeTx;
     }
     
-    // REGRA 4: Se só Hubla existe → usar Hubla
-    if (hublaTx && !makeTx) {
+    // REGRA 4: Se Hubla existe → usar Hubla
+    if (hublaTx) {
       return hublaTx;
     }
     
-    // REGRA 5: Fallback - usar o de maior valor
+    // REGRA 5: Se Kiwify existe → usar Kiwify
+    if (kiwifyTx) {
+      return kiwifyTx;
+    }
+    
+    // REGRA 6: Fallback - usar o de maior valor
     return txs.reduce((best, tx) => 
       (tx.net_value || 0) > (best.net_value || 0) ? tx : best
     , txs[0]);
   });
   
-  if (taxaFixedCount > 0) {
-    console.log(`🔧 Deduplicação: ${taxaFixedCount} transações Make com taxa corrigidas usando Hubla`);
-  }
+  console.log(`🔧 Deduplicação: ${transactions.length} → ${result.length} (${duplicatesRemoved} duplicatas removidas, ${taxaFixedCount} taxas corrigidas)`);
   
   return result;
 };
