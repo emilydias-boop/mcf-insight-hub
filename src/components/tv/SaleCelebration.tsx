@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import confetti from "canvas-confetti";
 import { Card, CardContent } from "@/components/ui/card";
-import { Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Sparkles, X } from "lucide-react";
 
 interface SaleCelebrationProps {
   leadName: string;
@@ -10,6 +11,7 @@ interface SaleCelebrationProps {
   closerName: string;
   productName: string;
   onComplete: () => void;
+  onDismiss?: () => void; // Fechar imediatamente
   duration?: number; // Duração em ms (padrão: 50000)
 }
 
@@ -20,6 +22,7 @@ export function SaleCelebration({
   closerName,
   productName,
   onComplete,
+  onDismiss,
   duration = 15000,
 }: SaleCelebrationProps) {
   const isContrato = productName.toLowerCase().includes("contrato");
@@ -74,8 +77,20 @@ export function SaleCelebration({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm animate-fade-in">
+      {/* Botão X para fechar imediatamente */}
+      {onDismiss && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-4 right-4 z-50 h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          onClick={onDismiss}
+        >
+          <X className="h-6 w-6" />
+        </Button>
+      )}
+      
       <Card className={`max-w-2xl w-full mx-4 bg-gradient-to-br ${bgColor} border-2 shadow-2xl animate-scale-in`}>
-        <CardContent className="p-12 space-y-6 text-center">
+        <CardContent className="p-12 space-y-6 text-center relative">
           <div className="flex justify-center">
             <Sparkles className={`h-20 w-20 ${accentColor} animate-pulse`} />
           </div>
