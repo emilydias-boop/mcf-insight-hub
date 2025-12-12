@@ -255,18 +255,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const start = startDate ? format(startDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
       const end = endDate ? format(endDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
 
-      // Buscar transações Hubla + Kiwify + Make no período (com fuso horário BR)
-      // CORREÇÃO: Adicionar filtros para excluir registros inválidos na query
-      // CORREÇÃO: Filtrar APENAS source='hubla' e excluir newsale-* (duplicatas)
+      // Buscar transações de TODAS AS FONTES (Hubla + Kiwify + Make) no período
+      // CORREÇÃO: Incluir todas as fontes para deduplicação correta por email+data
       const { data: hublaDataRaw } = await supabase
         .from("hubla_transactions")
         .select(
           "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
         )
         .eq("sale_status", "completed")
-        .eq("source", "hubla")  // APENAS HUBLA
-        .eq("event_type", "invoice.payment_succeeded")
-        .not("hubla_id", "ilike", "newsale-%")  // Excluir newsale-*
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
         .not("customer_email", "is", null)
         .neq("customer_email", "")
         .not("customer_name", "is", null)
@@ -377,21 +374,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Cálculo automático de Vendas A010 (DEDUPLICADO por email+data)
+      // Cálculo automático de Vendas A010 (DEDUPLICADO por email+data entre TODAS as fontes)
+      // CORREÇÃO: Incluir -offer- como vendas A010 válidas, deduplicar por email+data
       const vendasA010Calc = (() => {
         const seenA010Keys = new Set<string>();
-        const a010Debug: { name: string; email: string; date: string; product: string }[] = [];
+        const a010Debug: { name: string; email: string; date: string; product: string; source: string }[] = [];
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = tx.product_category === "a010" || productName.includes("A010");
           
-          // Excluir Order Bumps (são OBs vendidos junto com A010, não A010 em si)
-          const isOfferTransaction = tx.hubla_id?.includes('-offer-');
-          if (isOfferTransaction) return;
+          // CORREÇÃO: Incluir -offer- (são vendas A010 válidas)
+          // Não excluir mais as transações com -offer-
           
           if (isA010) {
-            // Chave: email normalizado + data
+            // Chave: email normalizado + data (deduplicar entre Hubla/Make/Kiwify)
             const email = (tx.customer_email || "").toLowerCase().trim();
             const date = tx.sale_date.split("T")[0];
             const key = `${email}|${date}`;
@@ -402,13 +399,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
                 name: tx.customer_name || "", 
                 email: email,
                 date: date,
-                product: tx.product_name || ""
+                product: tx.product_name || "",
+                source: tx.source || "hubla"
               });
             }
           }
         });
 
-        console.log("🔍 Vendas A010 (deduplicado por email+data):", seenA010Keys.size, a010Debug.slice(0, 5));
+        console.log("🔍 Vendas A010 (deduplicado por email+data entre fontes):", seenA010Keys.size, a010Debug.slice(0, 5));
         return seenA010Keys.size;
       })();
 
@@ -584,19 +582,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const prevStartStr = format(prevStart, "yyyy-MM-dd");
       const prevEndStr = format(prevEnd, "yyyy-MM-dd");
 
-      // Buscar dados anteriores para comparação - mesmo filtro (Hubla + Kiwify + Make) com fuso BR
+      // Buscar dados anteriores para comparação - TODAS AS FONTES (Hubla + Kiwify + Make)
       const prevStartBR = formatDateForBrazil(prevStart, false);
       const prevEndBR = formatDateForBrazil(prevEnd, true);
-      // CORREÇÃO: Mesmo filtro para período anterior (source='hubla', excluir newsale-*)
       const { data: prevHublaRaw } = await supabase
         .from("hubla_transactions")
         .select(
           "hubla_id, product_name, product_category, net_value, installment_number, total_installments, customer_name, customer_email, raw_data, sale_date, product_price, event_type, source",
         )
         .eq("sale_status", "completed")
-        .eq("source", "hubla")  // APENAS HUBLA
-        .eq("event_type", "invoice.payment_succeeded")
-        .not("hubla_id", "ilike", "newsale-%")  // Excluir newsale-*
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
         .not("customer_email", "is", null)
         .neq("customer_email", "")
         .not("customer_name", "is", null)
