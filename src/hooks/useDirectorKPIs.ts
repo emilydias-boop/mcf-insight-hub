@@ -25,8 +25,55 @@ interface DirectorKPIs {
   faturamentoLiquido: number;
 }
 
-// Produtos do Incorporador 50k (validados contra planilha)
-// Inclui A002, A004, A005 conforme planilha do usuário
+// ===== LISTA EXATA de produtos para Faturamento Clint (Bruto e Líquido) =====
+// Conforme planilha fornecida pelo usuário - SEM regex/startsWith
+// NOTA: "Contrato" puro NÃO está incluído (não está na lista do usuário)
+const PRODUTOS_FATURAMENTO_CLINT = [
+  "000 - Pré Reserva Minha Casa Financiada",
+  "000 - Contrato",
+  "001- Pré-Reserva Anticrise",
+  "003 - Imersão SÓCIOS MCF",
+  "016-Análise e defesa de proposta de crédito",
+  "A000 - Contrato",
+  "A000 - Pré-Reserva Plano Anticrise",
+  "A001 - MCF INCORPORADOR COMPLETO",
+  "A002 - MCF INCORPORADOR BÁSICO",
+  "A003 - MCF Incorporador - P2",
+  "A003 - MCF Plano Anticrise Completo",
+  "A004 - MCF INCORPORADOR BÁSICO",
+  "A004 - MCF Plano Anticrise Básico",
+  "A005 - Anticrise Completo",
+  "A005 - MCF P2",
+  "A005 - MCF P2 - ASAAS",
+  "A006 - Anticrise Básico",
+  "A007 - Imersão SÓCIOS MCF",
+  "A008 - The CLUB",
+  "A008 - The CLUB - CONSULTORIA CLUB",
+  "A009 - MCF INCORPORADOR COMPLETO + THE CLUB",
+  "A009 - Renovação Parceiro MCF",
+  "ASAAS",
+  "COBRANÇAS ASAAS",
+  "CONTRATO ANTICRISE",
+  "Contrato - Anticrise",
+  "Jantar Networking",
+  "R001 - Incorporador Completo 50K",
+  "R004 - Incorporador 50k Básico",
+  "R005 - Anticrise Completo",
+  "R006 - Anticrise Básico",
+  "R009 - Renovação Parceiro MCF",
+  "R21- MCF Incorporador P2 (Assinatura)",
+  "Sócio Jantar",
+];
+
+// Função helper para verificar se produto está na lista exata (case-insensitive)
+const isProductInFaturamentoClint = (productName: string): boolean => {
+  const normalizedName = productName.trim().toUpperCase();
+  return PRODUTOS_FATURAMENTO_CLINT.some(
+    (p) => p.toUpperCase() === normalizedName
+  );
+};
+
+// Produtos do Incorporador 50k (para cálculos antigos - mantido para compatibilidade)
 const INCORPORADOR_PRODUCTS = ["A000", "A001", "A002", "A003", "A004", "A005", "A009"];
 const EXCLUDED_PRODUCT_NAMES = [
   "A006",
@@ -441,8 +488,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const lucro = faturamentoTotalFinal - custoTotal;
 
       // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      // CORREÇÃO: Bruto só conta PRIMEIRA PARCELA (installment_number = 1 ou null)
-      // Recorrências (installment_number > 1) tem Bruto = 0 conforme planilha
+      // CORREÇÃO: Usa LISTA EXATA de produtos (sem regex/startsWith)
+      // Bruto só conta PRIMEIRA PARCELA (installment_number = 1 ou null)
       const seenClintBrutoIds = new Set<string>();
       const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number }[] = [];
       const faturamentoClint = (hublaData || [])
@@ -452,19 +499,18 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           // Deduplicar por hubla_id
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
 
-          const productName = (tx.product_name || "").toUpperCase();
+          const productName = tx.product_name || "";
           
-          // REGRA: Produtos Incorporador (A000-A009)
-          const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
-          const isExcluded = EXCLUDED_PRODUCT_NAMES.some((name) => productName.includes(name.toUpperCase()));
+          // REGRA: Usa LISTA EXATA de produtos (case-insensitive)
+          const isInList = isProductInFaturamentoClint(productName);
 
-          if (isIncorporador && !isExcluded) {
+          if (isInList) {
             seenClintBrutoIds.add(tx.hubla_id);
             const installmentNum = tx.installment_number || 1;
             // REGRA: Bruto = product_price APENAS se primeira parcela, senão = 0
             const brutoUsado = installmentNum === 1 ? (tx.product_price || 0) : 0;
             faturamentoClintDebug.push({
-              product: tx.product_name || "",
+              product: productName,
               price: tx.product_price || 0,
               installment: installmentNum,
               total: tx.total_installments || 1,
@@ -481,10 +527,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         }, 0);
       
       // DEBUG: Log Faturamento Clint
-      console.log("💰 Faturamento Clint Debug:", faturamentoClintDebug.length, "transações, Total:", faturamentoClint, faturamentoClintDebug);
+      console.log("💰 Faturamento Clint Debug:", faturamentoClintDebug.length, "transações, Total:", faturamentoClint);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // CORREÇÃO: APENAS produtos A000-A009 (excluindo OBs e A010)
+      // CORREÇÃO: Usa LISTA EXATA de produtos (sem regex/startsWith)
       const seenLiquidoIds = new Set<string>();
       const faturamentoLiquidoDebug: { product: string; net: number }[] = [];
       const faturamentoLiquido = (hublaData || [])
@@ -492,17 +538,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (tx.hubla_id?.startsWith("newsale-")) return false;
           if (seenLiquidoIds.has(tx.hubla_id)) return false;
 
-          const productName = (tx.product_name || "").toUpperCase();
+          const productName = tx.product_name || "";
           
-          // REGRA CORRIGIDA: Apenas produtos A000-A009 (regex)
-          const isIncorporadorA00x = /^A00[0-9]/.test(productName);
-          
-          // Excluir A010 e A006 (renovações)
-          const isExcluded = productName.includes("A010") || productName.includes("A006");
+          // REGRA: Usa LISTA EXATA de produtos (case-insensitive)
+          const isInList = isProductInFaturamentoClint(productName);
 
-          if (isIncorporadorA00x && !isExcluded) {
+          if (isInList) {
             seenLiquidoIds.add(tx.hubla_id);
-            faturamentoLiquidoDebug.push({ product: tx.product_name || "", net: tx.net_value || 0 });
+            faturamentoLiquidoDebug.push({ product: productName, net: tx.net_value || 0 });
             return true;
           }
           return false;
