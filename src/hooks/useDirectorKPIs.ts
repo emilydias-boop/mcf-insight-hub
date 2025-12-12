@@ -528,17 +528,38 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const lucro = faturamentoTotalFinal - custoTotal;
 
       // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      // CORREÇÃO: Exclui source='make', 'newsale-', '-offer-', requer customer_email
+      // NOVA LÓGICA: Identificar parents que têm offers correspondentes
+      // - Incluir OFFERS (-offer-) 
+      // - Incluir transações normais SEM offers correspondentes
+      // - EXCLUIR parents que são containers (têm offers filhos)
+      
+      // 1. Primeiro, identificar quais hubla_ids são PARENTS que têm offers
+      const parentIdsWithOffers = new Set<string>();
+      (hublaData || []).forEach((tx) => {
+        if (tx.hubla_id?.includes('-offer-')) {
+          // Extrair o parent_id removendo o sufixo -offer-N
+          const parentId = tx.hubla_id.split('-offer-')[0];
+          parentIdsWithOffers.add(parentId);
+        }
+      });
+      
+      console.log("🔍 Parents com offers:", parentIdsWithOffers.size);
+      
       const seenClintBrutoIds = new Set<string>();
-      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number }[] = [];
+      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number; type: string }[] = [];
       const faturamentoClint = (hublaData || [])
         .filter((tx) => {
-          // FILTROS: Excluir duplicatas
           const source = tx.source || "hubla";
           if (source === "make") return false; // Excluir Make (duplicatas)
           if (tx.hubla_id?.startsWith("newsale-")) return false;
-          if (tx.hubla_id?.includes("-offer-")) return false;
           if (!tx.customer_email) return false; // Requer email válido
+          
+          const isOffer = tx.hubla_id?.includes('-offer-');
+          const isParentWithOffers = parentIdsWithOffers.has(tx.hubla_id);
+          
+          // NOVA LÓGICA: Incluir offers OU transações normais sem offers correspondentes
+          // Excluir parents que são containers (têm offers filhos)
+          if (!isOffer && isParentWithOffers) return false; // É um container, não contar
           
           // Deduplicar por hubla_id
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
@@ -547,7 +568,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productNameUpper = productName.toUpperCase();
           
           // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
-          if (productNameUpper.includes("A006") && productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO")) return false;
+          if (productNameUpper.includes("A006") && (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO"))) return false;
           
           const isInList = isProductInFaturamentoClint(productName);
 
@@ -560,7 +581,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
               price: tx.product_price || 0,
               installment: installmentNum,
               total: tx.total_installments || 1,
-              brutoUsado
+              brutoUsado,
+              type: isOffer ? 'offer' : 'normal'
             });
             return true;
           }
@@ -575,17 +597,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       console.log("💰 Faturamento Clint Debug:", faturamentoClintDebug.length, "transações, Total:", faturamentoClint);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // CORREÇÃO: Exclui source='make', 'newsale-', '-offer-', requer customer_email
+      // NOVA LÓGICA: Mesma deduplicação parent/offer do Faturamento Clint
       const seenLiquidoIds = new Set<string>();
       const faturamentoLiquidoDebug: { product: string; net: number }[] = [];
       const faturamentoLiquido = (hublaData || [])
         .filter((tx) => {
-          // FILTROS: Excluir duplicatas
           const source = tx.source || "hubla";
           if (source === "make") return false; // Excluir Make (duplicatas)
           if (tx.hubla_id?.startsWith("newsale-")) return false;
-          if (tx.hubla_id?.includes("-offer-")) return false;
           if (!tx.customer_email) return false; // Requer email válido
+          
+          const isOffer = tx.hubla_id?.includes('-offer-');
+          const isParentWithOffers = parentIdsWithOffers.has(tx.hubla_id);
+          
+          // NOVA LÓGICA: Incluir offers OU transações normais sem offers correspondentes
+          if (!isOffer && isParentWithOffers) return false; // É um container, não contar
           
           if (seenLiquidoIds.has(tx.hubla_id)) return false;
 
@@ -593,7 +619,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productNameUpper = productName.toUpperCase();
           
           // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
-          if (productNameUpper.includes("A006") && productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO")) return false;
+          if (productNameUpper.includes("A006") && (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO"))) return false;
           
           const isInList = isProductInFaturamentoClint(productName);
 
