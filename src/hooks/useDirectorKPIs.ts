@@ -408,40 +408,44 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Cálculo automático de Vendas A010 (DEDUPLICADO por email+data entre TODAS as fontes)
-      // CORREÇÃO: Incluir -offer- como vendas A010 válidas, deduplicar por email+data
+      // ===== VENDAS A010: Contagem por EMAILS ÚNICOS =====
+      // CORREÇÃO: Deduplicar por EMAIL ÚNICO (não email+data)
+      // Exclui source='make' (duplicatas já contabilizadas no Hubla)
+      // Exclui hubla_id com 'newsale-' e '-offer-'
+      // Requer customer_email válido
       const vendasA010Calc = (() => {
-        const seenA010Keys = new Set<string>();
-        const a010Debug: { name: string; email: string; date: string; product: string; source: string }[] = [];
+        const seenA010Emails = new Set<string>();
+        const a010Debug: { name: string; email: string; product: string; source: string }[] = [];
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = tx.product_category === "a010" || productName.includes("A010");
           
-          // CORREÇÃO: Incluir -offer- (são vendas A010 válidas)
-          // Não excluir mais as transações com -offer-
+          // FILTROS: Excluir duplicatas Make, newsale-, e -offer-
+          const source = tx.source || "hubla";
+          if (source === "make") return; // Excluir Make (duplicatas)
+          if (tx.hubla_id?.startsWith("newsale-")) return;
+          if (tx.hubla_id?.includes("-offer-")) return;
           
           if (isA010) {
-            // Chave: email normalizado + data (deduplicar entre Hubla/Make/Kiwify)
             const email = (tx.customer_email || "").toLowerCase().trim();
-            const date = tx.sale_date.split("T")[0];
-            const key = `${email}|${date}`;
+            if (!email) return; // Requer email válido
             
-            if (!seenA010Keys.has(key)) {
-              seenA010Keys.add(key);
+            // Deduplicar por EMAIL ÚNICO (não email+data)
+            if (!seenA010Emails.has(email)) {
+              seenA010Emails.add(email);
               a010Debug.push({ 
                 name: tx.customer_name || "", 
                 email: email,
-                date: date,
                 product: tx.product_name || "",
-                source: tx.source || "hubla"
+                source: source
               });
             }
           }
         });
 
-        console.log("🔍 Vendas A010 (deduplicado por email+data entre fontes):", seenA010Keys.size, a010Debug.slice(0, 5));
-        return seenA010Keys.size;
+        console.log("🔍 Vendas A010 (emails únicos, excl. Make):", seenA010Emails.size, a010Debug.slice(0, 5));
+        return seenA010Emails.size;
       })();
 
       const vendasA010 = vendasA010Calc;
@@ -524,26 +528,27 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const lucro = faturamentoTotalFinal - custoTotal;
 
       // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      // CORREÇÃO: Usa LISTA EXATA de produtos (sem regex/startsWith)
-      // Bruto só conta PRIMEIRA PARCELA (installment_number = 1 ou null)
+      // CORREÇÃO: Exclui source='make', 'newsale-', '-offer-', requer customer_email
       const seenClintBrutoIds = new Set<string>();
       const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number }[] = [];
       const faturamentoClint = (hublaData || [])
         .filter((tx) => {
-          // Excluir -offer- (OBs são separados do Faturamento Clint)
+          // FILTROS: Excluir duplicatas
+          const source = tx.source || "hubla";
+          if (source === "make") return false; // Excluir Make (duplicatas)
+          if (tx.hubla_id?.startsWith("newsale-")) return false;
           if (tx.hubla_id?.includes("-offer-")) return false;
+          if (!tx.customer_email) return false; // Requer email válido
+          
           // Deduplicar por hubla_id
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
 
           const productName = tx.product_name || "";
-          
-          // REGRA: Usa LISTA EXATA de produtos (case-insensitive)
           const isInList = isProductInFaturamentoClint(productName);
 
           if (isInList) {
             seenClintBrutoIds.add(tx.hubla_id);
             const installmentNum = tx.installment_number || 1;
-            // REGRA: Bruto = product_price APENAS se primeira parcela, senão = 0
             const brutoUsado = installmentNum === 1 ? (tx.product_price || 0) : 0;
             faturamentoClintDebug.push({
               product: productName,
@@ -558,7 +563,6 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => {
           const installmentNum = tx.installment_number || 1;
-          // Bruto = product_price APENAS se primeira parcela
           return sum + (installmentNum === 1 ? (tx.product_price || 0) : 0);
         }, 0);
       
@@ -566,18 +570,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       console.log("💰 Faturamento Clint Debug:", faturamentoClintDebug.length, "transações, Total:", faturamentoClint);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // CORREÇÃO: Usa LISTA EXATA de produtos (sem regex/startsWith)
+      // CORREÇÃO: Exclui source='make', 'newsale-', '-offer-', requer customer_email
       const seenLiquidoIds = new Set<string>();
       const faturamentoLiquidoDebug: { product: string; net: number }[] = [];
       const faturamentoLiquido = (hublaData || [])
         .filter((tx) => {
-          // Excluir -offer- (OBs são separados do Faturamento Líquido)
+          // FILTROS: Excluir duplicatas
+          const source = tx.source || "hubla";
+          if (source === "make") return false; // Excluir Make (duplicatas)
+          if (tx.hubla_id?.startsWith("newsale-")) return false;
           if (tx.hubla_id?.includes("-offer-")) return false;
+          if (!tx.customer_email) return false; // Requer email válido
+          
           if (seenLiquidoIds.has(tx.hubla_id)) return false;
 
           const productName = tx.product_name || "";
-          
-          // REGRA: Usa LISTA EXATA de produtos (case-insensitive)
           const isInList = isProductInFaturamentoClint(productName);
 
           if (isInList) {
