@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
-import { Ultrameta } from "@/data/mockData";
+import { Ultrameta } from "@/hooks/useUltrameta";
 
 interface UltrametaCardProps {
   data: Ultrameta;
@@ -40,6 +40,11 @@ export function UltrametaCard({ data }: UltrametaCardProps) {
             <div className="space-y-1 pt-2 border-t border-border/50">
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Ultrameta Líquido</p>
               <p className="text-lg font-bold text-success">{formatCurrency(data.ultrametaLiquido)}</p>
+            </div>
+            
+            <div className="space-y-1 pt-2 border-t border-border/50">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Faturamento Líquido</p>
+              <p className="text-lg font-bold text-foreground">{formatCurrency(data.faturamentoLiquido)}</p>
             </div>
           </div>
         </div>

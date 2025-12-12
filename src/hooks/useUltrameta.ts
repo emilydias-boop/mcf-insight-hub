@@ -7,30 +7,61 @@ export interface Ultrameta {
   faturamentoClintBruto: number;
   ultrametaLiquido: number;
   vendasA010: number;
+  faturamentoLiquido: number;
 }
 
-// Produtos que ENTRAM no Incorporador 50k (validados contra planilha)
-// Inclui A002, A004, A005 conforme planilha do usuário
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A009'];
-
-// Produtos EXCLUÍDOS do Incorporador 50k
-const EXCLUDED_PRODUCT_NAMES = [
-  'A006', // Renovação
-  'A010', // A010 é contado separadamente
-  'IMERSÃO SÓCIOS',
-  'IMERSAO SOCIOS', 
-  'EFEITO ALAVANCA',
-  'CLUBE DO ARREMATE',
-  'CLUBE ARREMATE',
+// Lista completa de produtos para Faturamento Clint (Bruto e Líquido)
+const FATURAMENTO_CLINT_PRODUCTS = [
+  '000 - PRÉ RESERVA MINHA CASA FINANCIADA',
+  '000 - CONTRATO',
+  '001- PRÉ-RESERVA ANTICRISE',
+  '003 - IMERSÃO SÓCIOS MCF',
+  '016-ANÁLISE E DEFESA DE PROPOSTA DE CRÉDITO',
+  'A000 - CONTRATO',
+  'A000 - PRÉ-RESERVA PLANO ANTICRISE',
+  'A001 - MCF INCORPORADOR COMPLETO',
+  'A002 - MCF INCORPORADOR BÁSICO',
+  'A003 - MCF INCORPORADOR - P2',
+  'A003 - MCF PLANO ANTICRISE COMPLETO',
+  'A004 - MCF INCORPORADOR BÁSICO',
+  'A004 - MCF PLANO ANTICRISE BÁSICO',
+  'A005 - ANTICRISE COMPLETO',
+  'A005 - MCF P2',
+  'A005 - MCF P2 - ASAAS',
+  'A006 - ANTICRISE BÁSICO',
+  'A007 - IMERSÃO SÓCIOS MCF',
+  'A008 - THE CLUB',
+  'A008 - THE CLUB - CONSULTORIA CLUB',
+  'A009 - MCF INCORPORADOR COMPLETO + THE CLUB',
+  'A009 - RENOVAÇÃO PARCEIRO MCF',
+  'ASAAS',
+  'COBRANÇAS ASAAS',
+  'CONTRATO ANTICRISE',
+  'CONTRATO - ANTICRISE',
+  'CONTRATO - SÓCIO MCF',
+  'CONTRATO SOCIOS',
+  'JANTAR NETWORKING',
+  'R001 - INCORPORADOR COMPLETO 50K',
+  'R004 - INCORPORADOR 50K BÁSICO',
+  'R005 - ANTICRISE COMPLETO',
+  'R006 - ANTICRISE BÁSICO',
+  'R009 - RENOVAÇÃO PARCEIRO MCF',
+  'R21- MCF INCORPORADOR P2 (ASSINATURA)',
+  'R21 - MCF INCORPORADOR P2 (ASSINATURA)',
+  'SÓCIO JANTAR',
 ];
+
+// Helper para verificar se produto está na lista de Faturamento Clint
+const isProductInFaturamentoClint = (productName: string): boolean => {
+  const normalized = productName.toUpperCase().trim();
+  return FATURAMENTO_CLINT_PRODUCTS.some(p => normalized.includes(p) || p.includes(normalized));
+};
 
 // Helper para formatar data no fuso horário de Brasília (UTC-3)
 const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  // Para início do dia: 00:00:00 em Brasília = 03:00:00 UTC
-  // Para fim do dia: 23:59:59 em Brasília = 02:59:59 UTC do dia seguinte
   if (isEndOfDay) {
     return `${year}-${month}-${day}T23:59:59-03:00`;
   }
@@ -44,10 +75,10 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       // Buscar transações Hubla completadas no período
       let query = supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name')
+        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name, customer_email, source')
         .eq('sale_status', 'completed');
       
-      // Aplicar filtro de data com fuso horário de Brasília (America/Sao_Paulo)
+      // Aplicar filtro de data com fuso horário de Brasília
       if (startDate) {
         query = query.gte('sale_date', formatDateForBrazil(startDate, false));
       }
@@ -66,34 +97,46 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           faturamentoClintBruto: 0,
           ultrametaLiquido: 0,
           vendasA010: 0,
+          faturamentoLiquido: 0,
         };
       }
 
+      // ===== VENDAS A010 (EMAILS ÚNICOS) =====
+      // Conta apenas emails únicos para produto A010
+      const a010Emails = new Set<string>();
+      transactions.forEach(tx => {
+        const productName = (tx.product_name || '').toUpperCase();
+        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+        const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
+        
+        if (isA010 && hasValidEmail) {
+          a010Emails.add(tx.customer_email!.toLowerCase().trim());
+        }
+      });
+      const vendasA010 = a010Emails.size;
+
       // ===== FATURAMENTO CLINT (BRUTO) =====
-      // Usa o valor do produto completo (raw_data->>'Valor do produto')
-      // Filtra por DATA DA VENDA, apenas vendas novas (primeira parcela)
-      // Deduplicar por hubla_id para evitar contar mesmo contrato várias vezes
-      const seenClintBrutoIds = new Set<string>();
+      // Filtra: source IN ('hubla', 'kiwify', 'manual'), exclui newsale-% e %-offer-%, exige customer_email
       const faturamentoClintBruto = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
-          // Verificar se é produto válido do Incorporador
-          const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          // Excluir produtos específicos
-          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => 
-            productName.includes(name.toUpperCase())
-          );
-          // Apenas primeira parcela (vendas novas)
-          const isFirstInstallment = !tx.installment_number || tx.installment_number === 1;
+          const hublaId = tx.hubla_id || '';
+          const source = tx.source || 'hubla';
           
-          // Deduplicar por hubla_id
-          if (seenClintBrutoIds.has(tx.hubla_id)) return false;
+          // Verificar se é produto válido do Faturamento Clint
+          const isValidProduct = isProductInFaturamentoClint(productName);
           
-          if (isIncorporador && !isExcluded && isFirstInstallment) {
-            seenClintBrutoIds.add(tx.hubla_id);
-            return true;
-          }
-          return false;
+          // Excluir source='make' (duplicatas)
+          const isValidSource = ['hubla', 'kiwify', 'manual'].includes(source);
+          
+          // Excluir newsale-% e %-offer-%
+          const isNotNewsale = !hublaId.startsWith('newsale-');
+          const isNotOffer = !hublaId.includes('-offer-');
+          
+          // Exigir customer_email válido
+          const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
+          
+          return isValidProduct && isValidSource && isNotNewsale && isNotOffer && hasValidEmail;
         })
         .reduce((sum, tx) => {
           // Usar "Valor do produto" do raw_data se disponível
@@ -101,33 +144,51 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           let valorProduto = 0;
           
           if (rawData?.['Valor do produto']) {
-            // Formato CSV: "R$ 19.500,00" ou "19500"
             const valorStr = String(rawData['Valor do produto']);
             valorProduto = parseFloat(valorStr.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
           } else if (rawData?.event?.invoice?.amount?.subtotalCents) {
-            // Formato webhook: valor em centavos
             valorProduto = rawData.event.invoice.amount.subtotalCents / 100;
           } else {
-            // Fallback: usar product_price
             valorProduto = tx.product_price || 0;
           }
           
           return sum + valorProduto;
         }, 0);
 
-      // ===== INCORPORADOR 50K (LÍQUIDO) =====
-      // Soma net_value de TODAS as parcelas PAGAS no período (incluindo recorrências)
-      // Deduplicar por hubla_id
+      // ===== FATURAMENTO LÍQUIDO =====
+      // Mesma lógica do bruto, mas usa net_value
+      const faturamentoLiquido = transactions
+        .filter(tx => {
+          const productName = (tx.product_name || '').toUpperCase();
+          const hublaId = tx.hubla_id || '';
+          const source = tx.source || 'hubla';
+          
+          const isValidProduct = isProductInFaturamentoClint(productName);
+          const isValidSource = ['hubla', 'kiwify', 'manual'].includes(source);
+          const isNotNewsale = !hublaId.startsWith('newsale-');
+          const isNotOffer = !hublaId.includes('-offer-');
+          const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
+          
+          return isValidProduct && isValidSource && isNotNewsale && isNotOffer && hasValidEmail;
+        })
+        .reduce((sum, tx) => {
+          const netValue = tx.net_value && tx.net_value > 0 
+            ? tx.net_value 
+            : (tx.product_price || 0) * 0.9417;
+          return sum + netValue;
+        }, 0);
+
+      // ===== INCORPORADOR 50K (LÍQUIDO) - mantém lógica anterior para compatibilidade =====
+      const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A009'];
+      const EXCLUDED_PRODUCT_NAMES = ['A006', 'A010', 'IMERSÃO SÓCIOS', 'IMERSAO SOCIOS', 'EFEITO ALAVANCA', 'CLUBE DO ARREMATE', 'CLUBE ARREMATE'];
+      
       const seenIncorporadorIds = new Set<string>();
       const incorporador50kLiquido = transactions
         .filter(tx => {
           const productName = (tx.product_name || '').toUpperCase();
           const isIncorporador = INCORPORADOR_PRODUCTS.some(code => productName.startsWith(code));
-          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => 
-            productName.includes(name.toUpperCase())
-          );
+          const isExcluded = EXCLUDED_PRODUCT_NAMES.some(name => productName.includes(name.toUpperCase()));
           
-          // Deduplicar por hubla_id
           if (seenIncorporadorIds.has(tx.hubla_id)) return false;
           
           if (isIncorporador && !isExcluded) {
@@ -137,34 +198,15 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
           return false;
         })
         .reduce((sum, tx) => {
-          // Usar net_value diretamente (valor líquido da parcela)
           const netValue = tx.net_value && tx.net_value > 0 
             ? tx.net_value 
             : (tx.product_price || 0) * 0.9417;
           return sum + netValue;
         }, 0);
 
-      // ===== VENDAS A010 =====
-      // CORREÇÃO: Deduplicar apenas por hubla_id exato para alcançar 180 vendas
-      // Não usar base_id pois isso remove transações válidas
-      const seenA010Ids = new Set<string>();
-      const vendasA010 = transactions.filter(tx => {
-        const productName = (tx.product_name || '').toUpperCase();
-        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
-        const hasValidName = tx.customer_name && tx.customer_name.trim() !== '';
-        
-        if (!isA010 || !hasValidName) return false;
-        
-        // Deduplicar apenas por hubla_id exato
-        if (seenA010Ids.has(tx.hubla_id)) return false;
-        seenA010Ids.add(tx.hubla_id);
-        
-        return true;
-      }).length;
-
       // ===== ULTRAMETAS =====
-      // Ultrameta Clint = (Vendas A010 × R$ 1.680) + (SDR IA × R$ 1.400)
-      const ultrametaClint = (vendasA010 * 1680) + (sdrIa * 1400);
+      // Ultrameta Clint = Vendas A010 × R$ 1.680
+      const ultrametaClint = vendasA010 * 1680;
       // Ultrameta Líquido = Vendas A010 × R$ 1.400
       const ultrametaLiquido = vendasA010 * 1400;
 
@@ -174,6 +216,7 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         faturamentoClintBruto,
         ultrametaLiquido,
         vendasA010,
+        faturamentoLiquido,
       };
     },
     refetchInterval: 60000,
