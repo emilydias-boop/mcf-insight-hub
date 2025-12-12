@@ -46,7 +46,7 @@ const PRODUTOS_FATURAMENTO_CLINT = [
   "A005 - MCF P2",
   "A005 - MCF P2 - ASAAS",
   "A006 - Anticrise Básico",
-  "A006 - Renovação Parceiro MCF",  // ADICIONADO
+  "A006 - Renovação Parceiro MCF",
   "A007 - Imersão SÓCIOS MCF",
   "A008 - The CLUB",
   "A008 - The CLUB - CONSULTORIA CLUB",
@@ -56,6 +56,7 @@ const PRODUTOS_FATURAMENTO_CLINT = [
   "COBRANÇAS ASAAS",
   "CONTRATO ANTICRISE",
   "Contrato - Anticrise",
+  "Contrato - Sócio MCF",  // ADICIONADO: Contrato de Sócios
   "Jantar Networking",
   "R001 - Incorporador Completo 50K",
   "R004 - Incorporador 50k Básico",
@@ -302,35 +303,68 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ===== OB ACESSO VITALÍCIO (FÓRMULA FIXA: quantidade × preço) =====
-      // Fórmula: COUNT(-offer- transactions) × R$ 57
-      const seenObVitalicioIds = new Set<string>();
+      // ===== OB ACESSO VITALÍCIO =====
+      // CORREÇÃO: Deduplicar por EMAIL ÚNICO (não email+data), priorizar Make para net_value
+      // Conta vendas únicas por cliente (mesmo email em dias diferentes = 1 venda)
+      const obVitalicioByEmail = new Map<string, { netValue: number; source: string }>();
       (hublaData || []).forEach((tx) => {
         const productName = (tx.product_name || "").toUpperCase();
-        const isOB = productName.includes("VITALIC");
-        const isOfferTransaction = tx.hubla_id?.includes('-offer-');
+        const isOB = productName.includes("VITALIC") || tx.product_category === "ob_vitalicio";
         
-        if (isOB && isOfferTransaction && !seenObVitalicioIds.has(tx.hubla_id)) {
-          seenObVitalicioIds.add(tx.hubla_id);
+        if (isOB) {
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          if (!email) return;
+          
+          const existing = obVitalicioByEmail.get(email);
+          const txValue = tx.net_value || 0;
+          const txSource = tx.source || "hubla";
+          
+          // Priorizar Make (maior precisão de valor), depois maior valor
+          if (!existing) {
+            obVitalicioByEmail.set(email, { netValue: txValue, source: txSource });
+          } else if (txSource === "make" && existing.source !== "make") {
+            obVitalicioByEmail.set(email, { netValue: txValue, source: txSource });
+          } else if (txSource === existing.source && txValue > existing.netValue) {
+            obVitalicioByEmail.set(email, { netValue: txValue, source: txSource });
+          }
         }
       });
-      const vendasObVitalicio = seenObVitalicioIds.size;
-      const obVitalicioFaturado = vendasObVitalicio * PRECO_OB_VITALICIO;
+      const vendasObVitalicio = obVitalicioByEmail.size;
+      const obVitalicioFaturado = Array.from(obVitalicioByEmail.values()).reduce((sum, v) => sum + v.netValue, 0);
+      
+      console.log("🎁 OB Vitalício:", { vendas: vendasObVitalicio, faturado: obVitalicioFaturado });
 
-      // ===== OB CONSTRUIR PARA ALUGAR (FÓRMULA FIXA: quantidade × preço) =====
-      // Fórmula: COUNT(-offer- transactions) × R$ 97
-      const seenObConstruirIds = new Set<string>();
+      // ===== OB CONSTRUIR PARA ALUGAR =====
+      // CORREÇÃO: Deduplicar por EMAIL ÚNICO, EXCLUIR "Viver de Aluguel", priorizar Make
+      const obConstruirByEmail = new Map<string, { netValue: number; source: string }>();
       (hublaData || []).forEach((tx) => {
         const productName = (tx.product_name || "").toUpperCase();
-        const isOB = productName.includes("CONSTRUIR") && productName.includes("ALUGAR");
-        const isOfferTransaction = tx.hubla_id?.includes('-offer-');
+        // Incluir "CONSTRUIR" mas EXCLUIR "Viver de Aluguel"
+        const isOB = (productName.includes("CONSTRUIR") || tx.product_category === "ob_construir") 
+          && !productName.includes("VIVER");
         
-        if (isOB && isOfferTransaction && !seenObConstruirIds.has(tx.hubla_id)) {
-          seenObConstruirIds.add(tx.hubla_id);
+        if (isOB) {
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          if (!email) return;
+          
+          const existing = obConstruirByEmail.get(email);
+          const txValue = tx.net_value || 0;
+          const txSource = tx.source || "hubla";
+          
+          // Priorizar Make, depois maior valor
+          if (!existing) {
+            obConstruirByEmail.set(email, { netValue: txValue, source: txSource });
+          } else if (txSource === "make" && existing.source !== "make") {
+            obConstruirByEmail.set(email, { netValue: txValue, source: txSource });
+          } else if (txSource === existing.source && txValue > existing.netValue) {
+            obConstruirByEmail.set(email, { netValue: txValue, source: txSource });
+          }
         }
       });
-      const vendasObConstruir = seenObConstruirIds.size;
-      const obConstruirFaturado = vendasObConstruir * PRECO_OB_CONSTRUIR;
+      const vendasObConstruir = obConstruirByEmail.size;
+      const obConstruirFaturado = Array.from(obConstruirByEmail.values()).reduce((sum, v) => sum + v.netValue, 0);
+      
+      console.log("🏠 OB Construir:", { vendas: vendasObConstruir, faturado: obConstruirFaturado });
 
       // ===== CONTAGEM A010 para fórmula fixa =====
       // Faturado A010 será calculado após vendas A010 (vendas × R$ 47 × 81.56%)
