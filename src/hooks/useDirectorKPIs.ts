@@ -125,22 +125,17 @@ const getNormalizedProductType = (tx: HublaTransaction): string => {
   return category;
 };
 
-// NOVA CHAVE: email + data + tipo + valor arredondado
-// Isso permite múltiplas compras do mesmo cliente no mesmo dia (valores diferentes)
-// Mas agrupa a MESMA transação entre Hubla e Make (valores similares)
+// CHAVE SIMPLES: email + data + tipo (SEM valor)
+// Make e Hubla têm valores diferentes para mesma transação, então valor não pode estar na chave
 const getSaleKey = (tx: HublaTransaction): string => {
   const email = (tx.customer_email || "").toLowerCase().trim();
   const date = tx.sale_date.split("T")[0];
   const tipoNormalizado = getNormalizedProductType(tx);
-  // Arredondar valor para 1 casa decimal (tolera centavos de diferença entre fontes)
-  const valorArredondado = Math.round((tx.net_value || 0) * 10);
-  return `${email}|${date}|${tipoNormalizado}|${valorArredondado}`;
+  return `${email}|${date}|${tipoNormalizado}`;
 };
 
-// Deduplicação INTELIGENTE por TRANSAÇÃO (email+data+tipo+valor)
-// Permite múltiplas compras do mesmo cliente, mas remove duplicatas entre Hubla e Make
+// Deduplicação por email+data+tipo, priorizando MAIOR VALOR válido
 const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransaction[] => {
-  // Agrupar por chave (email+data+tipo+valor)
   const groups = new Map<string, HublaTransaction[]>();
   
   transactions.forEach((tx) => {
@@ -150,12 +145,14 @@ const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransac
     groups.set(key, existing);
   });
   
-  let taxaFixedCount = 0;
   let duplicatesRemoved = 0;
   
-  // Para cada grupo, escolher a melhor transação
+  // Para cada grupo, escolher a transação com MAIOR VALOR
   const result = Array.from(groups.entries()).map(([key, txs]) => {
-    if (txs.length > 1) duplicatesRemoved++;
+    if (txs.length > 1) duplicatesRemoved += txs.length - 1;
+    
+    // Se só 1 transação, usar ela
+    if (txs.length === 1) return txs[0];
     
     const tipoNormalizado = key.split('|')[2];
     const minValue = VALOR_MINIMO_POR_CATEGORIA[tipoNormalizado] || 30;
@@ -164,39 +161,36 @@ const deduplicateTransactions = (transactions: HublaTransaction[]): HublaTransac
     const hublaTx = txs.find(t => t.source === 'hubla' || !t.source);
     const kiwifyTx = txs.find(t => t.source === 'kiwify');
     
-    // REGRA 1: Se Make existe E tem valor válido (>= mínimo) → usar Make
-    if (makeTx && (makeTx.net_value || 0) >= minValue) {
-      return makeTx;
+    // Se Make e Hubla existem, escolher o de MAIOR VALOR válido
+    if (makeTx && hublaTx) {
+      const makeValue = makeTx.net_value || 0;
+      const hublaValue = hublaTx.net_value || 0;
+      
+      // Se Make tem taxa (valor baixo) e Hubla tem valor real → usar Hubla
+      if (makeValue < minValue && hublaValue >= minValue) {
+        return hublaTx;
+      }
+      
+      // Se ambos têm valores válidos → usar o MAIOR
+      return makeValue >= hublaValue ? makeTx : hublaTx;
     }
     
-    // REGRA 2: Se Make tem valor baixo (taxa) E Hubla existe com valor válido → usar Hubla
-    if (makeTx && (makeTx.net_value || 0) < minValue && hublaTx && (hublaTx.net_value || 0) >= minValue) {
-      taxaFixedCount++;
-      return hublaTx;
-    }
+    // Se só Make existe → usar Make
+    if (makeTx) return makeTx;
     
-    // REGRA 3: Se só Make existe (mesmo com valor baixo) → usar Make
-    if (makeTx && !hublaTx && !kiwifyTx) {
-      return makeTx;
-    }
+    // Se só Hubla existe → usar Hubla
+    if (hublaTx) return hublaTx;
     
-    // REGRA 4: Se Hubla existe → usar Hubla
-    if (hublaTx) {
-      return hublaTx;
-    }
+    // Se só Kiwify existe → usar Kiwify
+    if (kiwifyTx) return kiwifyTx;
     
-    // REGRA 5: Se Kiwify existe → usar Kiwify
-    if (kiwifyTx) {
-      return kiwifyTx;
-    }
-    
-    // REGRA 6: Fallback - usar o de maior valor
+    // Fallback - usar o de maior valor
     return txs.reduce((best, tx) => 
       (tx.net_value || 0) > (best.net_value || 0) ? tx : best
     , txs[0]);
   });
   
-  console.log(`🔧 Deduplicação: ${transactions.length} → ${result.length} (${duplicatesRemoved} duplicatas removidas, ${taxaFixedCount} taxas corrigidas)`);
+  console.log(`🔧 Deduplicação: ${transactions.length} → ${result.length} (${duplicatesRemoved} duplicatas removidas)`);
   
   return result;
 };
