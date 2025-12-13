@@ -1,12 +1,14 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, MessageCircle, Mail, Clock, Pin } from 'lucide-react';
+import { Phone, MessageCircle, Mail, Clock, Pin, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { toast } from 'sonner';
+import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from '@/lib/phoneUtils';
 
 interface DealKanbanCardProps {
   deal: any;
@@ -18,15 +20,36 @@ interface DealKanbanCardProps {
 export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
   const isTestDeal = isTestPipeline(deal.origin_id);
+  const [isSearchingPhone, setIsSearchingPhone] = useState(false);
   
   const handleCall = async (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    const phone = deal.contact?.phone || deal.custom_fields?.telefone;
+    // 1. Buscar telefone em múltiplas fontes do deal
+    let phone = extractPhoneFromDeal(deal);
+    
+    // 2. Se não encontrou, buscar na Hubla pelo email
+    if (!phone && deal.contact?.email) {
+      setIsSearchingPhone(true);
+      try {
+        phone = await findPhoneByEmail(deal.contact.email);
+      } finally {
+        setIsSearchingPhone(false);
+      }
+    }
+    
     if (!phone) {
       toast.error('Contato não possui telefone cadastrado');
       return;
     }
+    
+    // 3. Validar e normalizar número
+    if (!isValidPhoneNumber(phone)) {
+      toast.error('Número de telefone inválido');
+      return;
+    }
+    
+    const normalizedPhone = normalizePhoneNumber(phone);
     
     if (deviceStatus !== 'ready') {
       toast.info('Inicializando Twilio...');
@@ -34,7 +57,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
       return;
     }
     
-    await makeCall(phone, deal.id, deal.contact_id, deal.origin_id);
+    await makeCall(normalizedPhone, deal.id, deal.contact_id, deal.origin_id);
   };
   
   const getInitials = (name: string) => {
@@ -99,9 +122,14 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
                 variant={isTestDeal ? "default" : "ghost"}
                 className={`h-6 w-6 ${isTestDeal ? 'bg-green-500 hover:bg-green-600 text-white' : ''}`}
                 onClick={handleCall}
+                disabled={isSearchingPhone}
                 title={isTestDeal ? 'Ligar (Pipeline de Teste)' : 'Ligar'}
               >
-                <Phone className="h-3 w-3" />
+                {isSearchingPhone ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Phone className="h-3 w-3" />
+                )}
               </Button>
               <Button
                 size="icon"
