@@ -126,12 +126,12 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   return (
     <>
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-3 pb-4">
           {visibleStages.map((stage: any) => {
             const stageDeals = getDealsByStage(stage.id);
             
             return (
-              <div key={stage.id} className="flex-shrink-0 w-80">
+              <div key={stage.id} className="flex-1 min-w-[200px] max-w-[320px]">
                 <Card className="h-full">
                   <CardHeader className={stage.color || 'bg-muted'}>
                     <CardTitle className="text-sm font-medium flex items-center justify-between">
