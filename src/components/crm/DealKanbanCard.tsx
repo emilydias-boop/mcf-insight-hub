@@ -197,14 +197,14 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
           )}
         </div>
         
-        {/* Linha 2: Nome do deal */}
-        <div className="font-medium text-sm line-clamp-2">{deal.name}</div>
+        {/* Linha 2: Nome do Lead */}
+        <div className="font-medium text-sm line-clamp-2">{contactName || deal.name}</div>
         
-        {/* Linha 3: Contato */}
-        {contactName && (
+        {/* Linha 3: SDR Responsável */}
+        {(deal.owner_name || deal.owner_id) && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <User className="h-3 w-3" />
-            <span className="truncate">{contactName}</span>
+            <span className="truncate">SDR: {deal.owner_name || deal.owner_id}</span>
           </div>
         )}
         
@@ -217,42 +217,32 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
           </div>
         )}
         
-        {/* Linha 5: Ações + Valor */}
+        {/* Linha 5: Ações + Valor + Tempo */}
         <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            {deal.owner_name && (
-              <Avatar className="h-5 w-5">
-                <AvatarFallback className="text-[10px] bg-primary/10">
-                  {getInitials(deal.owner_name)}
-                </AvatarFallback>
-              </Avatar>
-            )}
-            
-            <div className="flex gap-0.5">
-              <Button
-                size="icon"
-                variant={isTestDeal ? "default" : "ghost"}
-                className={`h-6 w-6 ${isTestDeal ? 'bg-green-500 hover:bg-green-600 text-white' : ''}`}
-                onClick={handleCall}
-                disabled={isSearchingPhone}
-                title="Ligar"
-              >
-                {isSearchingPhone ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Phone className="h-3 w-3" />
-                )}
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-green-500/20 hover:text-green-500"
-                onClick={handleWhatsApp}
-                title="WhatsApp"
-              >
-                <MessageCircle className="h-3 w-3" />
-              </Button>
-            </div>
+          <div className="flex gap-0.5">
+            <Button
+              size="icon"
+              variant={isTestDeal ? "default" : "ghost"}
+              className={`h-6 w-6 ${isTestDeal ? 'bg-green-500 hover:bg-green-600 text-white' : ''}`}
+              onClick={handleCall}
+              disabled={isSearchingPhone}
+              title="Ligar"
+            >
+              {isSearchingPhone ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Phone className="h-3 w-3" />
+              )}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 hover:bg-green-500/20 hover:text-green-500"
+              onClick={handleWhatsApp}
+              title="WhatsApp"
+            >
+              <MessageCircle className="h-3 w-3" />
+            </Button>
           </div>
           
           <div className="flex items-center gap-2">
@@ -263,6 +253,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
             {timeAgo && (
               <span className="flex items-center gap-1 text-muted-foreground">
                 <Clock className="h-3 w-3" />
+                {timeAgo}
               </span>
             )}
           </div>
