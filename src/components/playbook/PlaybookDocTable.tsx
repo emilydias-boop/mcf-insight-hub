@@ -3,17 +3,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Pencil, BarChart3, FileText, Link, FileType, ExternalLink, Eye } from "lucide-react";
+import { Pencil, FileText, Link, FileType, ExternalLink } from "lucide-react";
 import { useToggleNotionPlaybookActive, NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
 
 interface PlaybookDocTableProps {
   docs: NotionPlaybookDoc[];
   onEdit: (doc: NotionPlaybookDoc) => void;
-  onViewStats: (doc: NotionPlaybookDoc) => void;
-  onViewContent?: (doc: NotionPlaybookDoc) => void;
 }
 
-export function PlaybookDocTable({ docs, onEdit, onViewStats, onViewContent }: PlaybookDocTableProps) {
+export function PlaybookDocTable({ docs, onEdit }: PlaybookDocTableProps) {
   const toggleActive = useToggleNotionPlaybookActive();
 
   const getTipoIcon = (tipo: string) => {
@@ -91,34 +89,14 @@ export function PlaybookDocTable({ docs, onEdit, onViewStats, onViewContent }: P
               />
             </TableCell>
             <TableCell className="text-right">
-              <div className="flex justify-end gap-2">
-                {onViewContent && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onViewContent(doc)}
-                    title="Ver conteúdo"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onEdit(doc)}
-                  title="Editar metadados"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onViewStats(doc)}
-                  title="Ver leitura"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                </Button>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(doc)}
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Editar
+              </Button>
             </TableCell>
           </TableRow>
         ))}

@@ -6,34 +6,18 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNotionPlaybookDocs, NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
 import { PlaybookDocTable } from "./PlaybookDocTable";
 import { PlaybookDocForm } from "./PlaybookDocForm";
-import { PlaybookReadStats } from "./PlaybookReadStats";
-import { PlaybookViewer } from "./PlaybookViewer";
+import { PlaybookDocEditor } from "./PlaybookDocEditor";
 import { Plus, Loader2 } from "lucide-react";
 
 export function PlaybookConfigSection() {
   const [selectedRole, setSelectedRole] = useState<PlaybookRole>('sdr');
   const [formOpen, setFormOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<NotionPlaybookDoc | null>(null);
-  const [statsDoc, setStatsDoc] = useState<NotionPlaybookDoc | null>(null);
-  const [viewingDoc, setViewingDoc] = useState<NotionPlaybookDoc | null>(null);
 
   const { data: docs, isLoading } = useNotionPlaybookDocs(selectedRole);
 
-  const handleEdit = (doc: NotionPlaybookDoc) => {
-    setEditingDoc(doc);
-    setFormOpen(true);
-  };
-
   const handleNew = () => {
-    setEditingDoc(null);
     setFormOpen(true);
-  };
-
-  const handleFormClose = (open: boolean) => {
-    setFormOpen(open);
-    if (!open) {
-      setEditingDoc(null);
-    }
   };
 
   const displayRoles: PlaybookRole[] = ['sdr', 'closer', 'coordenador', 'admin', 'manager'];
@@ -80,30 +64,22 @@ export function PlaybookConfigSection() {
         ) : (
           <PlaybookDocTable
             docs={docs || []}
-            onEdit={handleEdit}
-            onViewStats={setStatsDoc}
-            onViewContent={setViewingDoc}
+            onEdit={setEditingDoc}
           />
         )}
 
+        {/* Form para criar novo documento */}
         <PlaybookDocForm
           open={formOpen}
-          onOpenChange={handleFormClose}
-          doc={editingDoc}
+          onOpenChange={setFormOpen}
           defaultRole={selectedRole}
         />
 
-        <PlaybookReadStats
-          open={!!statsDoc}
-          onOpenChange={(open) => !open && setStatsDoc(null)}
-          doc={statsDoc}
-        />
-
-        <PlaybookViewer
-          open={!!viewingDoc}
-          onOpenChange={(open) => !open && setViewingDoc(null)}
-          doc={viewingDoc}
-          currentStatus="lido"
+        {/* Editor unificado com Tabs (Conteúdo, Configurações, Estatísticas) */}
+        <PlaybookDocEditor
+          open={!!editingDoc}
+          onOpenChange={(open) => !open && setEditingDoc(null)}
+          doc={editingDoc}
         />
       </CardContent>
     </Card>
