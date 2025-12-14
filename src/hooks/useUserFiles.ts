@@ -226,6 +226,119 @@ export function useUpdateUserFileVisibility() {
   });
 }
 
+// Atualizar metadados e/ou substituir arquivo
+interface UpdateUserFileParams {
+  fileId: string;
+  userId: string;
+  tipo: UserFileType;
+  titulo: string;
+  descricao?: string;
+  visivelParaUsuario: boolean;
+  newFile?: File; // Se presente, substitui o arquivo
+  oldStoragePath: string;
+}
+
+export function useUpdateUserFile() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      fileId,
+      userId,
+      tipo,
+      titulo,
+      descricao,
+      visivelParaUsuario,
+      newFile,
+      oldStoragePath,
+    }: UpdateUserFileParams) => {
+      if (!user?.id) throw new Error("Usuário não autenticado");
+
+      let newStoragePath = oldStoragePath;
+      let newStorageUrl: string | undefined;
+      let newFileName: string | undefined;
+      let newFileSize: number | undefined;
+
+      // Se há novo arquivo, fazer upload
+      if (newFile) {
+        const timestamp = Date.now();
+        const safeFileName = newFile.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        newStoragePath = `${userId}/${timestamp}_${safeFileName}`;
+
+        // Upload do novo arquivo
+        const { error: uploadError } = await supabase.storage
+          .from("user-files")
+          .upload(newStoragePath, newFile);
+
+        if (uploadError) throw uploadError;
+
+        // Gerar URL assinada
+        const { data: urlData } = await supabase.storage
+          .from("user-files")
+          .createSignedUrl(newStoragePath, 60 * 60 * 24 * 365);
+
+        if (!urlData?.signedUrl) throw new Error("Erro ao gerar URL do arquivo");
+
+        newStorageUrl = urlData.signedUrl;
+        newFileName = newFile.name;
+        newFileSize = newFile.size;
+      }
+
+      // Atualizar registro no banco
+      const updateData: Record<string, unknown> = {
+        tipo,
+        titulo,
+        descricao: descricao || null,
+        visivel_para_usuario: visivelParaUsuario,
+      };
+
+      if (newFile && newStorageUrl && newFileName) {
+        updateData.storage_url = newStorageUrl;
+        updateData.storage_path = newStoragePath;
+        updateData.file_name = newFileName;
+        updateData.file_size = newFileSize;
+      }
+
+      const { error } = await supabase
+        .from("user_files")
+        .update(updateData)
+        .eq("id", fileId);
+
+      if (error) {
+        // Se falhou ao atualizar e havia upload novo, deletar arquivo novo
+        if (newFile && newStoragePath !== oldStoragePath) {
+          await supabase.storage.from("user-files").remove([newStoragePath]);
+        }
+        throw error;
+      }
+
+      // Se substituiu arquivo, deletar o antigo
+      if (newFile && newStoragePath !== oldStoragePath) {
+        await supabase.storage.from("user-files").remove([oldStoragePath]);
+      }
+
+      return { userId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["user-files", data.userId] });
+      queryClient.invalidateQueries({ queryKey: ["my-files"] });
+      toast({
+        title: "Arquivo atualizado",
+        description: "As alterações foram salvas com sucesso.",
+      });
+    },
+    onError: (error) => {
+      console.error("Erro ao atualizar arquivo:", error);
+      toast({
+        title: "Erro ao atualizar",
+        description: "Ocorreu um erro ao atualizar o arquivo. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 // Gerar nova URL assinada para download
 export async function getSignedDownloadUrl(storagePath: string): Promise<string | null> {
   const { data, error } = await supabase.storage
