@@ -16,35 +16,28 @@ const CRM = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-border bg-card">
-        <div className="container py-6">
-          <h1 className="text-3xl font-bold text-foreground mb-2">CRM Clint</h1>
-          <p className="text-muted-foreground">Gerencie seus contatos, negócios e relacionamentos</p>
-        </div>
-        
-        <div className="container">
-          <nav className="flex gap-1 overflow-x-auto pb-px">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors border-b-2 border-transparent whitespace-nowrap"
-                  activeClassName="text-primary border-primary"
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
+      <div className="border-b border-border bg-card px-6">
+        <nav className="flex gap-1 overflow-x-auto">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className="flex items-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors border-b-2 border-transparent whitespace-nowrap"
+                activeClassName="text-primary border-primary"
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </NavLink>
+            );
+          })}
+        </nav>
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="py-6 px-6 w-full max-w-[1920px] mx-auto">
+        <div className="py-4 px-6 w-full max-w-[1920px] mx-auto">
           <Outlet />
         </div>
       </div>
