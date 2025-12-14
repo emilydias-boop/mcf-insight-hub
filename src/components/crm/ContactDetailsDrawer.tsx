@@ -148,7 +148,7 @@ export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactD
               {/* Notes Section */}
               <ContactNotesSection 
                 contactId={contactData.id} 
-                initialNotes={contactData.notes}
+                initialNotes={(contactData as any).notes}
               />
               
               {/* Campos Customizados */}
