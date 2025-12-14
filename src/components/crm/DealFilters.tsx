@@ -138,11 +138,11 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos</SelectItem>
-        {users
-            .filter((user: any) => user.id && user.email && user.email.trim() !== '' && user.name && user.name.trim() !== '')
+{users
+            .filter((user: any) => user.id && user.email && user.email.trim() !== '' && user.first_name)
             .map((user: any) => (
               <SelectItem key={user.id} value={user.email}>
-                {user.name}
+                {`${user.first_name} ${user.last_name || ''}`.trim()}
               </SelectItem>
             ))}
         </SelectContent>
