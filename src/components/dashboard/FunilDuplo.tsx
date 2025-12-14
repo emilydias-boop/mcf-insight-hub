@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Filter, Save } from "lucide-react";
 import { FunilLista } from "./FunilLista";
 import { useClintFunnelByLeadType } from "@/hooks/useClintFunnelByLeadType";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCustomWeekStart, getCustomWeekEnd, getCustomWeekNumber, formatCustomWeekRange } from "@/lib/dateHelpers";
-import { useEffect } from "react";
+import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
 
 // Etapas que devem aparecer no funil (sem Novo Lead, que vai acima)
 const DEFAULT_STAGES = [
@@ -34,9 +35,17 @@ interface FunilDuploProps {
 type PeriodType = "hoje" | "semana" | "mes";
 
 export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: FunilDuploProps) {
+  const { preferences, updatePreferences, isUpdating } = useDashboardPreferences();
   const [selectedStages, setSelectedStages] = useState<string[]>(DEFAULT_STAGES);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("semana");
   const queryClient = useQueryClient();
+
+  // Carregar etapas salvas das preferências
+  useEffect(() => {
+    if (preferences?.funnel_stages?.length) {
+      setSelectedStages(preferences.funnel_stages);
+    }
+  }, [preferences]);
 
   // Calcular datas baseado no período selecionado
   const { periodStart, periodEnd } = useMemo(() => {
@@ -183,6 +192,10 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
     setSelectedStages((prev) => (prev.includes(stageId) ? prev.filter((id) => id !== stageId) : [...prev, stageId]));
   };
 
+  const handleSaveStages = () => {
+    updatePreferences({ funnel_stages: selectedStages } as any);
+  };
+
   const visibleCount = selectedStages.length;
 
   return (
@@ -211,7 +224,7 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
               <PopoverContent className="w-80">
                 <div className="space-y-4">
                   <h4 className="font-semibold text-sm">Selecionar Etapas</h4>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
                     {allStages.map((stageId) => (
                       <div key={stageId} className="flex items-center space-x-2">
                         <Checkbox
@@ -227,6 +240,17 @@ export function FunilDuplo({ originId, weekStart, weekEnd, showCurrentState }: F
                         </label>
                       </div>
                     ))}
+                  </div>
+                  <div className="pt-2 border-t">
+                    <Button 
+                      size="sm" 
+                      onClick={handleSaveStages}
+                      disabled={isUpdating}
+                      className="w-full"
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      {isUpdating ? "Salvando..." : "Salvar Preferências"}
+                    </Button>
                   </div>
                 </div>
               </PopoverContent>

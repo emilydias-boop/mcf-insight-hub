@@ -30,6 +30,7 @@ export type DashboardPreferences = {
   default_canal: string;
   auto_refresh: boolean;
   refresh_interval: number;
+  funnel_stages?: string[];
   created_at: string;
   updated_at: string;
 };

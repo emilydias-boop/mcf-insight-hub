@@ -861,6 +861,7 @@ export type Database = {
           created_at: string
           default_canal: string
           default_period: string
+          funnel_stages: string[] | null
           id: string
           refresh_interval: number
           updated_at: string
@@ -873,6 +874,7 @@ export type Database = {
           created_at?: string
           default_canal?: string
           default_period?: string
+          funnel_stages?: string[] | null
           id?: string
           refresh_interval?: number
           updated_at?: string
@@ -885,6 +887,7 @@ export type Database = {
           created_at?: string
           default_canal?: string
           default_period?: string
+          funnel_stages?: string[] | null
           id?: string
           refresh_interval?: number
           updated_at?: string
