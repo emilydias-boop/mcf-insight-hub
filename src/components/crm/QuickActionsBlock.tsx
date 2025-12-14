@@ -5,6 +5,8 @@ import { useTwilio } from '@/contexts/TwilioContext';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from '@/lib/phoneUtils';
+import { buildWhatsAppMessage } from '@/lib/whatsappTemplates';
+import { format, parseISO } from 'date-fns';
 import {
   Select,
   SelectContent,
@@ -77,9 +79,32 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
     const cleanPhone = phone.replace(/\D/g, '');
     const whatsappNumber = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
     
-    // Mensagem padrão personalizada
-    const contactName = contact?.name?.split(' ')[0] || 'Cliente';
-    const message = encodeURIComponent(`Olá ${contactName}! Tudo bem?`);
+    // Get contact name (first name only)
+    const contactName = contact?.name?.split(' ')[0] || deal?.name?.split(' ')[0] || 'Cliente';
+    
+    // Get SDR name (first name only)
+    const sdrName = deal?.custom_fields?.deal_user_name?.split(' ')[0] || '';
+    
+    // Get stage name for template selection
+    const stageName = deal?.crm_stages?.stage_name || 'default';
+    
+    // Format next action date if available
+    let actionDate = '';
+    if (deal?.next_action_date) {
+      try {
+        actionDate = format(parseISO(deal.next_action_date), "dd/MM 'às' HH:mm");
+      } catch {
+        actionDate = '';
+      }
+    }
+    
+    // Build message using template
+    const message = buildWhatsAppMessage(stageName, {
+      nome: contactName,
+      sdr: sdrName,
+      data: actionDate,
+      produto: deal?.product_name || ''
+    });
     
     window.open(`https://wa.me/${whatsappNumber}?text=${message}`, '_blank');
   };

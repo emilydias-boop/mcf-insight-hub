@@ -23,8 +23,10 @@ serve(async (req) => {
     const to = formData.get('To')?.toString();
     const direction = formData.get('Direction')?.toString();
     const recordingUrl = formData.get('RecordingUrl')?.toString();
+    const recordingSid = formData.get('RecordingSid')?.toString();
+    const recordingDuration = formData.get('RecordingDuration')?.toString();
 
-    console.log(`Webhook received: CallSid=${callSid}, Status=${callStatus}, Duration=${callDuration}`);
+    console.log(`Webhook received: CallSid=${callSid}, Status=${callStatus}, Duration=${callDuration}, RecordingSid=${recordingSid}`);
 
     if (!callSid) {
       console.error('Missing CallSid in webhook');
@@ -69,9 +71,11 @@ serve(async (req) => {
       updates.duration_seconds = parseInt(callDuration || '0') || 0;
     }
 
-    // Add recording URL if available
+    // Add recording URL if available (ensure .mp3 extension)
     if (recordingUrl) {
-      updates.recording_url = recordingUrl;
+      // Twilio sends URL without .mp3, add it for direct playback
+      updates.recording_url = recordingUrl.endsWith('.mp3') ? recordingUrl : `${recordingUrl}.mp3`;
+      console.log(`Recording saved: ${updates.recording_url}`);
     }
 
     // Update the call record

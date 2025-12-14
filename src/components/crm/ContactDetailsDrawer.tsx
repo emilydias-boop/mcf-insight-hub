@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCRMContacts, useCRMDeals } from '@/hooks/useCRMData';
 import { Mail, Phone, MapPin, Layers, Calendar, Briefcase, Edit } from 'lucide-react';
+import { ContactNotesSection } from './ContactNotesSection';
 
 interface ContactDetailsDrawerProps {
   contactId: string | null;
@@ -143,6 +144,12 @@ export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactD
                   </div>
                 )}
               </div>
+              
+              {/* Notes Section */}
+              <ContactNotesSection 
+                contactId={contactData.id} 
+                initialNotes={contactData.notes}
+              />
               
               {/* Campos Customizados */}
               {contactData.custom_fields && Object.keys(contactData.custom_fields).length > 0 && (
