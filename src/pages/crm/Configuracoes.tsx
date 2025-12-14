@@ -1,9 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Settings, Users, Zap, Database, Shield } from 'lucide-react';
-import { SyncMonitor } from '@/components/crm/SyncMonitor';
-import { CronJobSetup } from '@/components/crm/CronJobSetup';
-import { SyncControls } from '@/components/crm/SyncControls';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 
 const Configuracoes = () => {
@@ -42,12 +39,6 @@ const Configuracoes = () => {
       </div>
 
       <WebhookMonitor />
-      
-      <CronJobSetup />
-      
-      <SyncControls />
-      
-      <SyncMonitor />
 
       <div className="grid gap-6 md:grid-cols-2">
         {settingsSections.map((section) => {
