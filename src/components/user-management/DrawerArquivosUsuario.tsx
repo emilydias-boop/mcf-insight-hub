@@ -45,10 +45,12 @@ import {
   CheckCircle,
   XCircle,
   FolderOpen,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useUserFiles, useMyFiles, useUploadUserFile, useDeleteUserFile, getSignedDownloadUrl } from "@/hooks/useUserFiles";
+import { useUserFiles, useMyFiles, useUploadUserFile, useDeleteUserFile, useUpdateUserFile, getSignedDownloadUrl } from "@/hooks/useUserFiles";
+import { UserFile } from "@/types/user-management";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserFileType, USER_FILE_TYPE_LABELS } from "@/types/user-management";
 
@@ -74,6 +76,7 @@ export function DrawerArquivosUsuario({
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; fileId: string; storagePath: string } | null>(null);
   const [viewingFile, setViewingFile] = useState<{ url: string; name: string; type: string; storagePath: string } | null>(null);
   const [isLoadingView, setIsLoadingView] = useState(false);
+  const [editingFile, setEditingFile] = useState<UserFile | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -83,6 +86,16 @@ export function DrawerArquivosUsuario({
     visivelParaUsuario: true,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Edit form state
+  const [editFormData, setEditFormData] = useState({
+    tipo: "outro" as UserFileType,
+    titulo: "",
+    descricao: "",
+    visivelParaUsuario: true,
+    substituirArquivo: false,
+  });
+  const [editSelectedFile, setEditSelectedFile] = useState<File | null>(null);
 
   // Queries
   const { data: gestorFiles = [], isLoading: loadingGestor } = useUserFiles(mode === "gestor" ? userId || null : null);
@@ -91,6 +104,7 @@ export function DrawerArquivosUsuario({
   // Mutations
   const uploadFile = useUploadUserFile();
   const deleteFile = useDeleteUserFile();
+  const updateFile = useUpdateUserFile();
 
   const files = mode === "gestor" ? gestorFiles : myFiles;
   const isLoading = mode === "gestor" ? loadingGestor : loadingMy;
@@ -214,6 +228,52 @@ export function DrawerArquivosUsuario({
     setFormData({ tipo: "outro", titulo: "", descricao: "", visivelParaUsuario: true });
     setSelectedFile(null);
     setShowUploadForm(false);
+  };
+
+  const handleStartEdit = (file: UserFile) => {
+    setEditingFile(file);
+    setEditFormData({
+      tipo: file.tipo,
+      titulo: file.titulo,
+      descricao: file.descricao || "",
+      visivelParaUsuario: file.visivel_para_usuario,
+      substituirArquivo: false,
+    });
+    setEditSelectedFile(null);
+  };
+
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setEditSelectedFile(file);
+    }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingFile || !targetUserId || !editFormData.titulo) return;
+    
+    // Se marcou substituir mas não selecionou arquivo
+    if (editFormData.substituirArquivo && !editSelectedFile) return;
+
+    await updateFile.mutateAsync({
+      fileId: editingFile.id,
+      userId: targetUserId,
+      tipo: editFormData.tipo,
+      titulo: editFormData.titulo,
+      descricao: editFormData.descricao || undefined,
+      visivelParaUsuario: editFormData.visivelParaUsuario,
+      newFile: editFormData.substituirArquivo ? editSelectedFile || undefined : undefined,
+      oldStoragePath: editingFile.storage_path,
+    });
+
+    setEditingFile(null);
+    setEditSelectedFile(null);
+  };
+
+  const resetEditForm = () => {
+    setEditingFile(null);
+    setEditFormData({ tipo: "outro", titulo: "", descricao: "", visivelParaUsuario: true, substituirArquivo: false });
+    setEditSelectedFile(null);
   };
 
   return (
@@ -456,21 +516,31 @@ export function DrawerArquivosUsuario({
                           <Download className="h-4 w-4" />
                         </Button>
                         {mode === "gestor" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() =>
-                              setDeleteConfirm({
-                                open: true,
-                                fileId: file.id,
-                                storagePath: file.storage_path,
-                              })
-                            }
-                            title="Excluir arquivo"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleStartEdit(file)}
+                              title="Editar arquivo"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  open: true,
+                                  fileId: file.id,
+                                  storagePath: file.storage_path,
+                                })
+                              }
+                              title="Excluir arquivo"
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -532,6 +602,146 @@ export function DrawerArquivosUsuario({
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Dialog de edição de arquivo */}
+      <AlertDialog
+        open={!!editingFile}
+        onOpenChange={(open) => !open && resetEditForm()}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Editar arquivo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Altere os dados do arquivo ou substitua por um novo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Tipo *</Label>
+              <Select
+                value={editFormData.tipo}
+                onValueChange={(value: UserFileType) =>
+                  setEditFormData((prev) => ({ ...prev, tipo: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(USER_FILE_TYPE_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Título *</Label>
+              <Input
+                value={editFormData.titulo}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, titulo: e.target.value }))}
+                placeholder="Ex: Contrato CLT - Janeiro 2025"
+              />
+            </div>
+
+            <div>
+              <Label>Descrição (opcional)</Label>
+              <Textarea
+                value={editFormData.descricao}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, descricao: e.target.value }))}
+                placeholder="Adicione uma descrição..."
+                rows={2}
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="edit-visivel"
+                checked={editFormData.visivelParaUsuario}
+                onCheckedChange={(checked) =>
+                  setEditFormData((prev) => ({ ...prev, visivelParaUsuario: !!checked }))
+                }
+              />
+              <Label htmlFor="edit-visivel" className="text-sm cursor-pointer">
+                Visível para o usuário
+              </Label>
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="substituir-arquivo"
+                checked={editFormData.substituirArquivo}
+                onCheckedChange={(checked) => {
+                  setEditFormData((prev) => ({ ...prev, substituirArquivo: !!checked }));
+                  if (!checked) setEditSelectedFile(null);
+                }}
+              />
+              <Label htmlFor="substituir-arquivo" className="text-sm cursor-pointer">
+                Substituir arquivo
+              </Label>
+            </div>
+
+            {editFormData.substituirArquivo && (
+              <div>
+                <Label>Novo arquivo *</Label>
+                <div className="mt-1">
+                  {editSelectedFile ? (
+                    <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
+                      <FileIcon className="h-5 w-5 text-primary" />
+                      <span className="text-sm flex-1 truncate">{editSelectedFile.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditSelectedFile(null)}
+                        className="h-6 w-6"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                      <Upload className="h-6 w-6 text-muted-foreground mb-1" />
+                      <span className="text-xs text-muted-foreground">Clique para selecionar</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={handleEditFileSelect}
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={resetEditForm}>Cancelar</AlertDialogCancel>
+            <Button
+              onClick={handleEditSubmit}
+              disabled={
+                !editFormData.titulo ||
+                (editFormData.substituirArquivo && !editSelectedFile) ||
+                updateFile.isPending
+              }
+            >
+              {updateFile.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                "Salvar alterações"
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog de confirmação de exclusão */}
       <AlertDialog
