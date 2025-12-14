@@ -89,15 +89,15 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 </TabsList>
                 
                 <TabsContent value="atividades" className="mt-3">
-                  <DealHistory dealId={dealId} limit={5} />
+                  <DealHistory dealId={deal.clint_id} limit={5} />
                 </TabsContent>
                 
                 <TabsContent value="ligacoes" className="mt-3">
-                  <CallHistorySection dealId={dealId} />
+                  <CallHistorySection dealId={deal.id} />
                 </TabsContent>
                 
                 <TabsContent value="notas" className="mt-3">
-                  <DealNotesTab dealId={dealId} />
+                  <DealNotesTab dealId={deal.clint_id} />
                 </TabsContent>
               </Tabs>
               

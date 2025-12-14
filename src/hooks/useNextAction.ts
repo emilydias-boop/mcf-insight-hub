@@ -73,6 +73,7 @@ export const useAddDealNote = () => {
       return data;
     },
     onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['deal-notes', variables.dealId] });
       queryClient.invalidateQueries({ queryKey: ['deal-activities', variables.dealId] });
       toast.success('Nota adicionada');
     },
