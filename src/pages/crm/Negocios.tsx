@@ -2,22 +2,39 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
+import { useAuth } from '@/contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 const Negocios = () => {
+  const { role, user } = useAuth();
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const [filters, setFilters] = useState<DealFiltersState>({
     search: '',
     dateRange: undefined,
     tags: [],
     owner: null,
+  });
+  
+  // Buscar email do usuário logado
+  const { data: userProfile } = useQuery({
+    queryKey: ['user-profile', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', user?.id)
+        .single();
+      return data;
+    },
+    enabled: !!user?.id
   });
   
   const { data: deals, isLoading, error } = useCRMDeals({
@@ -29,6 +46,9 @@ const Negocios = () => {
   const dealsData = deals || [];
   const visibleStages = getVisibleStages();
   
+  // Verificar se é SDR ou Closer (veem apenas próprios deals)
+  const isRestrictedRole = role === 'sdr' || role === 'closer';
+  
   const handleSync = () => {
     toast.info('Sincronizando dados do Clint...');
     syncMutation.mutate(undefined, {
@@ -39,6 +59,11 @@ const Negocios = () => {
   
   const filteredDeals = dealsData.filter((deal: any) => {
     if (!deal || !deal.id || !deal.name) return false;
+    
+    // Filtro por role: SDR/Closer veem apenas seus próprios deals
+    if (isRestrictedRole && userProfile?.email) {
+      if (deal.owner_id !== userProfile.email) return false;
+    }
     
     if (filters.search && !deal.name.toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
@@ -73,7 +98,9 @@ const Negocios = () => {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="flex items-center justify-between p-4 border-b">
           <div>
-            <h2 className="text-2xl font-bold">Pipeline de Vendas</h2>
+            <h2 className="text-2xl font-bold">
+              {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
+            </h2>
             <p className="text-sm text-muted-foreground">
               {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''} de negócio
             </p>
