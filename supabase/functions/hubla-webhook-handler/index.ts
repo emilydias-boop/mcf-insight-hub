@@ -166,6 +166,155 @@ function extractCorrectValues(invoice: any): {
   };
 }
 
+// ============= HELPER: Criar/Atualizar Contato e Deal no CRM =============
+interface CRMContactData {
+  email: string | null;
+  phone: string | null;
+  name: string | null;
+  originName: string;
+  productName: string;
+  value: number;
+}
+
+async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Promise<void> {
+  if (!data.email && !data.phone) {
+    console.log('[CRM] Sem email ou telefone, pulando criação de contato');
+    return;
+  }
+  
+  try {
+    // 1. Buscar ou criar origem
+    let originId: string | null = null;
+    const { data: existingOrigin } = await supabase
+      .from('crm_origins')
+      .select('id')
+      .ilike('name', data.originName)
+      .maybeSingle();
+    
+    if (existingOrigin) {
+      originId = existingOrigin.id;
+    } else {
+      // Criar nova origem
+      const { data: newOrigin } = await supabase
+        .from('crm_origins')
+        .insert({
+          clint_id: `hubla-origin-${Date.now()}`,
+          name: data.originName,
+          description: 'Criada automaticamente via webhook Hubla'
+        })
+        .select('id')
+        .single();
+      
+      if (newOrigin) {
+        originId = newOrigin.id;
+        console.log(`[CRM] Origem criada: ${data.originName} (${originId})`);
+      }
+    }
+    
+    // 2. Buscar contato existente pelo email
+    let contactId: string | null = null;
+    if (data.email) {
+      const { data: existingContact } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .eq('email', data.email)
+        .maybeSingle();
+      
+      if (existingContact) {
+        contactId = existingContact.id;
+        console.log(`[CRM] Contato existente encontrado: ${contactId}`);
+      } else {
+        // Criar novo contato
+        const { data: newContact, error: contactError } = await supabase
+          .from('crm_contacts')
+          .insert({
+            clint_id: `hubla-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+            name: data.name || 'Cliente A010',
+            email: data.email,
+            phone: data.phone,
+            origin_id: originId,
+            tags: ['A010', 'Hubla'],
+            custom_fields: { source: 'hubla', product: data.productName }
+          })
+          .select('id')
+          .single();
+        
+        if (!contactError && newContact) {
+          contactId = newContact.id;
+          console.log(`[CRM] Contato criado: ${data.name} (${contactId})`);
+        }
+      }
+    }
+    
+    // 3. Buscar estágio "Novo Lead" para a origem
+    let stageId: string | null = null;
+    if (originId) {
+      const { data: stage } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .eq('origin_id', originId)
+        .order('stage_order', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      
+      stageId = stage?.id;
+    }
+    
+    // Se não encontrou stage da origem, buscar stage genérico "Novo Lead"
+    if (!stageId) {
+      const { data: genericStage } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .ilike('stage_name', '%novo lead%')
+        .limit(1)
+        .maybeSingle();
+      
+      stageId = genericStage?.id;
+    }
+    
+    // 4. Verificar se já existe deal para este contato com A010
+    if (contactId) {
+      const { data: existingDeal } = await supabase
+        .from('crm_deals')
+        .select('id')
+        .eq('contact_id', contactId)
+        .ilike('product_name', '%A010%')
+        .maybeSingle();
+      
+      if (existingDeal) {
+        console.log(`[CRM] Deal A010 já existe para este contato: ${existingDeal.id}`);
+        return;
+      }
+      
+      // 5. Criar novo deal
+      const { data: newDeal, error: dealError } = await supabase
+        .from('crm_deals')
+        .insert({
+          clint_id: `hubla-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+          name: `${data.name || 'Cliente'} - A010`,
+          value: data.value || 0,
+          contact_id: contactId,
+          origin_id: originId,
+          stage_id: stageId,
+          product_name: data.productName,
+          tags: ['A010', 'Hubla'],
+          custom_fields: { source: 'hubla', product: data.productName },
+          data_source: 'webhook'
+        })
+        .select('id')
+        .single();
+      
+      if (!dealError && newDeal) {
+        console.log(`[CRM] Deal criado: ${data.name} - A010 (${newDeal.id})`);
+      } else if (dealError) {
+        console.error('[CRM] Erro ao criar deal:', dealError);
+      }
+    }
+  } catch (err) {
+    console.error('[CRM] Erro ao criar/atualizar contato:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -244,7 +393,7 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        // Se for A010 e for primeira parcela, inserir na tabela a010_sales
+        // Se for A010 e for primeira parcela, inserir na tabela a010_sales e criar contato/deal no CRM
         if (productCategory === 'a010' && installment === 1) {
           await supabase
             .from('a010_sales')
@@ -256,9 +405,17 @@ serve(async (req) => {
               sale_date: saleDate,
               status: 'completed',
             }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+          
+          // Criar contato e deal no CRM para leads A010
+          await createOrUpdateCRMContact(supabase, {
+            email: transactionData.customer_email,
+            phone: transactionData.customer_phone,
+            name: transactionData.customer_name,
+            originName: 'A010 Hubla',
+            productName: productName,
+            value: netValue
+          });
         }
-
-        console.log(`✅ NewSale processado: ${productName} - Bruto: R$ ${productPrice} | Líquido: R$ ${netValue} (parcela ${installment}/${installments})`);
       }
 
       // invoice.payment_succeeded - extrair items individuais
@@ -320,7 +477,7 @@ serve(async (req) => {
             throw error;
           }
 
-          // Se for A010 e for primeira parcela, inserir na tabela a010_sales
+          // Se for A010 e for primeira parcela, inserir na tabela a010_sales e criar contato/deal no CRM
           if (productCategory === 'a010' && installment === 1) {
             await supabase
               .from('a010_sales')
@@ -332,9 +489,17 @@ serve(async (req) => {
                 sale_date: saleDate,
                 status: 'completed',
               }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+            
+            // Criar contato e deal no CRM para leads A010
+            await createOrUpdateCRMContact(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              originName: 'A010 Hubla',
+              productName: productName,
+              value: netValue
+            });
           }
-
-          console.log(`✅ Invoice sem items: ${productName} - ${productCategory} - Bruto: R$ ${grossValue} | Líquido: R$ ${netValue}`);
         }
 
         // Processar items individuais
@@ -402,7 +567,7 @@ serve(async (req) => {
             throw error;
           }
 
-          // Se for A010, não for offer, e for primeira parcela, inserir na tabela a010_sales
+          // Se for A010, não for offer, e for primeira parcela, inserir na tabela a010_sales e criar contato/deal
           if (productCategory === 'a010' && !isOffer && installment === 1) {
             await supabase
               .from('a010_sales')
@@ -414,9 +579,17 @@ serve(async (req) => {
                 sale_date: saleDate,
                 status: 'completed',
               }, { onConflict: 'customer_email,sale_date', ignoreDuplicates: true });
+            
+            // Criar contato e deal no CRM para leads A010
+            await createOrUpdateCRMContact(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              originName: 'A010 Hubla',
+              productName: productName,
+              value: itemNetValue
+            });
           }
-
-          console.log(`✅ Item ${i + 1}/${items.length}: ${productName} - ${productCategory} - Bruto: R$ ${transactionData.product_price} | Líquido: R$ ${itemNetValue}`);
         }
       }
 

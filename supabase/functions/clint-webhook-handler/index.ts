@@ -415,7 +415,7 @@ async function handleDealCreated(supabase: any, data: any) {
     console.log('[DEAL.CREATED] Stage found:', stageId);
   }
 
-  // 3. Buscar origin pelo nome
+  // 3. Buscar origin pelo nome - AUTO-CRIAR SE NÃO EXISTIR
   let originId = null;
   if (originName) {
     const { data: origin } = await supabase
@@ -423,8 +423,27 @@ async function handleDealCreated(supabase: any, data: any) {
       .select('id')
       .ilike('name', originName)
       .maybeSingle();
-    originId = origin?.id;
-    console.log('[DEAL.CREATED] Origin found:', originId);
+    
+    if (origin) {
+      originId = origin.id;
+      console.log('[DEAL.CREATED] Origin found:', originId);
+    } else {
+      // Auto-criar origem
+      const { data: newOrigin, error: originError } = await supabase
+        .from('crm_origins')
+        .insert({
+          clint_id: `auto-${Date.now()}`,
+          name: originName,
+          description: 'Criada automaticamente via webhook Clint'
+        })
+        .select('id')
+        .single();
+      
+      if (!originError && newOrigin) {
+        originId = newOrigin.id;
+        console.log('[DEAL.CREATED] Origin auto-created:', originName, originId);
+      }
+    }
   }
 
   // 4. Buscar owner (usuário responsável) - assumindo que temos profiles
@@ -439,7 +458,11 @@ async function handleDealCreated(supabase: any, data: any) {
     console.log('[DEAL.CREATED] Owner found:', ownerId);
   }
 
-  // 5. Processar custom_fields - tudo que não é campo padrão + deal_user
+  // 5. Detectar product_name baseado em tags, nome do deal ou origem
+  const productName = extractProductFromDeal(data, originName);
+  console.log('[DEAL.CREATED] Product detected:', productName);
+
+  // 6. Processar custom_fields - tudo que não é campo padrão + deal_user
   const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'user', 'deal', 'event', 'timestamp', 'action', 'event_type'];
   const customFields: any = {
     deal_user: data.deal_user || dealData.user,
@@ -454,7 +477,7 @@ async function handleDealCreated(supabase: any, data: any) {
   });
   console.log('[DEAL.CREATED] Custom fields:', customFields);
 
-  // 6. Criar deal com UPSERT para evitar duplicação
+  // 7. Criar deal com UPSERT para evitar duplicação
   const { data: deal, error } = await supabase
     .from('crm_deals')
     .upsert({
@@ -469,6 +492,7 @@ async function handleDealCreated(supabase: any, data: any) {
       probability: data.probability || dealData.probability,
       expected_close_date: data.expected_close_date || dealData.expected_close_date,
       custom_fields: customFields,
+      product_name: productName,
       data_source: 'webhook'
     }, { onConflict: 'clint_id' })
     .select()
@@ -479,11 +503,45 @@ async function handleDealCreated(supabase: any, data: any) {
     throw error;
   }
 
-  // 7. Registrar atividade
+  // 8. Registrar atividade
   await createDealActivity(supabase, deal.id, 'created', 'Deal criado via webhook', null, null, data);
 
-  console.log('[DEAL.CREATED] Success - Deal ID:', deal.id);
-  return { action: 'created', deal_id: deal.id, deal_name: deal.name };
+  console.log('[DEAL.CREATED] Success - Deal ID:', deal.id, 'Product:', productName);
+  return { action: 'created', deal_id: deal.id, deal_name: deal.name, product_name: productName };
+}
+
+// ============= HELPER: Detectar produto do deal =============
+function extractProductFromDeal(data: any, originName?: string): string | null {
+  // 1. Verificar tags primeiro
+  const tags = data.tags || data.deal?.tags || [];
+  for (const tag of tags) {
+    const tagUpper = String(tag).toUpperCase();
+    if (tagUpper.includes('A010')) return 'A010';
+    if (tagUpper.includes('CONTRATO')) return 'Contrato';
+    if (tagUpper.includes('A001') || tagUpper.includes('MCF INCORPORADOR')) return 'MCF Incorporador';
+    if (tagUpper.includes('A003') || tagUpper.includes('ANTICRISE')) return 'Plano Anticrise';
+    if (tagUpper.includes('VITALÍCIO') || tagUpper.includes('VITALICIO')) return 'Acesso Vitalício';
+  }
+  
+  // 2. Verificar nome do deal
+  const dealName = (data.deal?.name || data.deal_name || data.name || '').toUpperCase();
+  if (dealName.includes('A010')) return 'A010';
+  if (dealName.includes('CONTRATO')) return 'Contrato';
+  if (dealName.includes('MCF') || dealName.includes('INCORPORADOR')) return 'MCF Incorporador';
+  if (dealName.includes('ANTICRISE')) return 'Plano Anticrise';
+  
+  // 3. Verificar origem (A010 Hubla, Inside Sales, etc)
+  const origin = (originName || '').toUpperCase();
+  if (origin.includes('A010')) return 'A010';
+  if (origin.includes('HUBLA')) return 'A010';
+  if (origin.includes('KIWIFY')) return 'A010';
+  if (origin.includes('INSIDE SALES')) return 'Contrato';
+  
+  // 4. Verificar custom_fields
+  const customProduct = data.product_name || data.deal?.product_name || data.custom_fields?.product_name;
+  if (customProduct) return customProduct;
+  
+  return null;
 }
 
 async function handleDealUpdated(supabase: any, data: any) {
