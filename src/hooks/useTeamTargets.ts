@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 export interface TeamTarget {
   id: string;
-  target_type: 'funnel_stage' | 'ultrameta' | 'closer' | 'sdr' | 'team_revenue' | 'team_sales';
+  target_type: 'funnel_stage' | 'ultrameta' | 'closer' | 'sdr' | 'team_revenue' | 'team_sales' | 'ultrameta_clint' | 'faturamento_clint' | 'ultrameta_liquido' | 'faturamento_liquido';
   target_name: string;
   reference_id: string | null;
   week_start: string;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 import { useClintFunnel } from "@/hooks/useClintFunnel";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { useDirectorKPIs } from "@/hooks/useDirectorKPIs";
+import { useTeamTargets } from "@/hooks/useTeamTargets";
 import { formatCurrency } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
@@ -46,6 +47,9 @@ export default function Dashboard() {
     periodo.fim,
     false
   );
+  
+  // Buscar metas dinâmicas da tabela team_targets
+  const { data: teamTargets } = useTeamTargets(periodo.inicio, periodo.fim);
 
   // Realtime listeners para atualização automática
   useEffect(() => {
@@ -151,13 +155,13 @@ export default function Dashboard() {
     });
   };
 
-  // Metas padrão (atualizadas conforme planilha)
-  const metas = {
-    ultrametaClint: 337680,     // 201 × R$ 1.680
-    faturamentoClint: 198377,   // R$ 198.377,00
-    ultrametaLiquido: 281400,   // 201 × R$ 1.400
-    faturamentoLiquido: 159276, // R$ 159.275,52
-  };
+  // Metas dinâmicas (busca da tabela team_targets, com fallback para valores padrão)
+  const metas = useMemo(() => ({
+    ultrametaClint: teamTargets?.find(t => t.target_type === 'ultrameta_clint')?.target_value || 337680,
+    faturamentoClint: teamTargets?.find(t => t.target_type === 'faturamento_clint')?.target_value || 198377,
+    ultrametaLiquido: teamTargets?.find(t => t.target_type === 'ultrameta_liquido')?.target_value || 281400,
+    faturamentoLiquido: teamTargets?.find(t => t.target_type === 'faturamento_liquido')?.target_value || 159276,
+  }), [teamTargets]);
 
   return (
     <ResourceGuard resource="dashboard">
