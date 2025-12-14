@@ -225,9 +225,9 @@ export const useCRMDeal = (id: string) => {
         .from('crm_deals')
         .select(`
           *,
-          crm_contacts(name, email),
+          crm_contacts(name, email, phone),
           crm_origins(name),
-          crm_stages(stage_name, color)
+          crm_stages(stage_name, color, stage_order)
         `)
         .eq('id', id)
         .single();
