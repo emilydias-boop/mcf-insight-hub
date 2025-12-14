@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useMarkAsRead, useConfirmReading } from "@/hooks/usePlaybookReads";
-import { useNotionPlaybookContent, useUpdateNotionPlaybookContent } from "@/hooks/useNotionPlaybook";
+import { useNotionPlaybookContent, useUpdateNotionPlaybookContent, NotionPlaybookDoc } from "@/hooks/useNotionPlaybook";
 import { useAuth } from "@/contexts/AuthContext";
 import { PlaybookDocWithRead } from "@/types/playbook";
 import { Loader2, ExternalLink, FileText, Download, File, Pencil, X, Save } from "lucide-react";
@@ -17,10 +17,13 @@ interface FileInfo {
   type: 'pdf' | 'image' | 'other';
 }
 
+// Aceitar tanto PlaybookDocWithRead (MeuPlaybook) quanto NotionPlaybookDoc (gestão)
+type ViewerDoc = PlaybookDocWithRead | NotionPlaybookDoc;
+
 interface PlaybookViewerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  doc: PlaybookDocWithRead | null;
+  doc: ViewerDoc | null;
   currentStatus?: string;
 }
 
@@ -43,9 +46,15 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
     shouldFetchContent ? doc.notion_page_id : null
   );
 
-  // Marcar como lido ao abrir
+  // Helper para obter ID do documento (PlaybookDocWithRead tem 'id', NotionPlaybookDoc usa 'notion_page_id')
+  const getDocId = () => {
+    if (!doc) return null;
+    return 'id' in doc ? doc.id : doc.notion_page_id;
+  };
+
+  // Marcar como lido ao abrir (apenas para PlaybookDocWithRead)
   useEffect(() => {
-    if (open && doc && currentStatus === 'nao_lido') {
+    if (open && doc && currentStatus === 'nao_lido' && 'id' in doc) {
       markAsRead.mutate(doc.id);
     }
   }, [open, doc, currentStatus]);
@@ -65,7 +74,7 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
   }, [notionData?.content]);
 
   const handleConfirm = async () => {
-    if (!doc) return;
+    if (!doc || !('id' in doc)) return;
     await confirmReading.mutateAsync(doc.id);
     onOpenChange(false);
   };
@@ -73,7 +82,7 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
   const handleOpenLink = () => {
     if (doc?.link_url) {
       window.open(doc.link_url, '_blank');
-      if (currentStatus === 'nao_lido') {
+      if (currentStatus === 'nao_lido' && 'id' in doc) {
         markAsRead.mutate(doc.id);
       }
     }

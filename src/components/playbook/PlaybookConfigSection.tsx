@@ -7,6 +7,7 @@ import { useNotionPlaybookDocs, NotionPlaybookDoc } from "@/hooks/useNotionPlayb
 import { PlaybookDocTable } from "./PlaybookDocTable";
 import { PlaybookDocForm } from "./PlaybookDocForm";
 import { PlaybookReadStats } from "./PlaybookReadStats";
+import { PlaybookViewer } from "./PlaybookViewer";
 import { Plus, Loader2 } from "lucide-react";
 
 export function PlaybookConfigSection() {
@@ -14,6 +15,7 @@ export function PlaybookConfigSection() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<NotionPlaybookDoc | null>(null);
   const [statsDoc, setStatsDoc] = useState<NotionPlaybookDoc | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<NotionPlaybookDoc | null>(null);
 
   const { data: docs, isLoading } = useNotionPlaybookDocs(selectedRole);
 
@@ -80,6 +82,7 @@ export function PlaybookConfigSection() {
             docs={docs || []}
             onEdit={handleEdit}
             onViewStats={setStatsDoc}
+            onViewContent={setViewingDoc}
           />
         )}
 
@@ -94,6 +97,13 @@ export function PlaybookConfigSection() {
           open={!!statsDoc}
           onOpenChange={(open) => !open && setStatsDoc(null)}
           doc={statsDoc}
+        />
+
+        <PlaybookViewer
+          open={!!viewingDoc}
+          onOpenChange={(open) => !open && setViewingDoc(null)}
+          doc={viewingDoc}
+          currentStatus="lido"
         />
       </CardContent>
     </Card>
