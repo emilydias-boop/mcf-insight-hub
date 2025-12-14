@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Phone, Clock, User, FileText } from 'lucide-react';
+import { Phone, Clock, User, FileText, Volume2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -21,6 +21,7 @@ interface CallRecord {
   outcome: string | null;
   notes: string | null;
   created_at: string;
+  recording_url: string | null;
   profiles?: { full_name: string | null };
 }
 
@@ -71,7 +72,8 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
           duration_seconds,
           outcome,
           notes,
-          created_at
+          created_at,
+          recording_url
         `)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -188,6 +190,24 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
                 <div className="mt-2 flex gap-1 text-xs text-muted-foreground">
                   <FileText className="h-3 w-3 mt-0.5 flex-shrink-0" />
                   <p className="line-clamp-2">{call.notes}</p>
+                </div>
+              )}
+
+              {/* Audio Player for Recording */}
+              {call.recording_url && (
+                <div className="mt-2 pt-2 border-t border-border">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Volume2 className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Gravação</span>
+                  </div>
+                  <audio 
+                    controls 
+                    className="w-full h-8"
+                    src={call.recording_url}
+                    preload="none"
+                  >
+                    Seu navegador não suporta o player de áudio.
+                  </audio>
                 </div>
               )}
             </div>

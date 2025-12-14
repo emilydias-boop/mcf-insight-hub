@@ -34,10 +34,16 @@ serve(async (req) => {
       cleanNumber = '+55' + cleanNumber.replace(/\D/g, '');
     }
 
-    // Generate TwiML to dial the number
+    // Generate TwiML to dial the number with recording enabled
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial callerId="${callerId}" timeout="30" action="https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook">
+  <Dial 
+    callerId="${callerId}" 
+    timeout="30" 
+    record="record-from-answer-dual"
+    recordingStatusCallback="https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook"
+    recordingStatusCallbackEvent="completed"
+    action="https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook">
     <Number>${cleanNumber}</Number>
   </Dial>
 </Response>`;
