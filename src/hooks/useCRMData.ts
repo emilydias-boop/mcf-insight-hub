@@ -198,7 +198,7 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         .from('crm_deals')
         .select(`
           *,
-          crm_contacts(name, email),
+          crm_contacts(name, email, phone),
           crm_origins(name),
           crm_stages(stage_name, color)
         `)
