@@ -557,12 +557,30 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const lucro = faturamentoTotalFinal - custoTotal;
 
       // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      // NOVA LÓGICA: Identificar parents que têm offers correspondentes
-      // - Incluir OFFERS (-offer-) 
-      // - Incluir transações normais SEM offers correspondentes
-      // - EXCLUIR parents que são containers (têm offers filhos)
+      // NOVA LÓGICA: Primeira compra na parceria
+      // Bruto = product_price APENAS para clientes que NUNCA compraram antes (primeira compra ever)
+      // Se cliente já comprou qualquer produto Clint antes do período, Bruto = 0
       
-      // 1. Primeiro, identificar quais hubla_ids são PARENTS que têm offers
+      // 1. Buscar TODOS os clientes que já compraram produtos Clint ANTES do período atual
+      const { data: existingClientsData } = await supabase
+        .from("hubla_transactions")
+        .select("customer_email")
+        .lt("sale_date", startStr)
+        .eq("sale_status", "completed")
+        .not("customer_email", "is", null)
+        .neq("customer_email", "");
+      
+      // Filtrar apenas clientes que compraram produtos Clint
+      const existingClientEmails = new Set<string>();
+      (existingClientsData || []).forEach((row) => {
+        if (row.customer_email) {
+          existingClientEmails.add(row.customer_email.toLowerCase().trim());
+        }
+      });
+      
+      console.log("📜 Clientes existentes antes do período:", existingClientEmails.size);
+      
+      // 2. Identificar quais hubla_ids são PARENTS que têm offers
       const parentIdsWithOffers = new Set<string>();
       (hublaData || []).forEach((tx) => {
         if (tx.hubla_id?.includes('-offer-')) {
@@ -574,8 +592,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       console.log("🔍 Parents com offers:", parentIdsWithOffers.size);
       
+      // 3. Calcular Faturamento Clint Bruto
+      // NOVA LÓGICA: Apenas clientes NOVOS (não existem no histórico) contam no Bruto
       const seenClintBrutoIds = new Set<string>();
-      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number; type: string }[] = [];
+      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number; type: string; isNew: boolean }[] = [];
       const faturamentoClint = (hublaData || [])
         .filter((tx) => {
           const source = tx.source || "hubla";
@@ -586,9 +606,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const isOffer = tx.hubla_id?.includes('-offer-');
           const isParentWithOffers = parentIdsWithOffers.has(tx.hubla_id);
           
-          // NOVA LÓGICA: Incluir offers OU transações normais sem offers correspondentes
           // Excluir parents que são containers (têm offers filhos)
-          if (!isOffer && isParentWithOffers) return false; // É um container, não contar
+          if (!isOffer && isParentWithOffers) return false;
           
           // Deduplicar por hubla_id
           if (seenClintBrutoIds.has(tx.hubla_id)) return false;
@@ -596,7 +615,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productName = tx.product_name || "";
           const productNameUpper = productName.toUpperCase();
           
-          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
+          // Excluir A006 - Renovação Parceiro MCF
           if (productNameUpper.includes("A006") && (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO"))) return false;
           
           const isInList = isProductInFaturamentoClint(productName);
@@ -604,14 +623,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           if (isInList) {
             seenClintBrutoIds.add(tx.hubla_id);
             const installmentNum = tx.installment_number || 1;
-            const brutoUsado = installmentNum === 1 ? (tx.product_price || 0) : 0;
+            const email = (tx.customer_email || "").toLowerCase().trim();
+            const isNewClient = !existingClientEmails.has(email);
+            
+            // Bruto = product_price APENAS para clientes NOVOS e primeira parcela
+            const brutoUsado = (isNewClient && installmentNum === 1) ? (tx.product_price || 0) : 0;
             faturamentoClintDebug.push({
               product: productName,
               price: tx.product_price || 0,
               installment: installmentNum,
               total: tx.total_installments || 1,
               brutoUsado,
-              type: isOffer ? 'offer' : 'normal'
+              type: isOffer ? 'offer' : 'normal',
+              isNew: isNewClient
             });
             return true;
           }
@@ -619,11 +643,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => {
           const installmentNum = tx.installment_number || 1;
-          return sum + (installmentNum === 1 ? (tx.product_price || 0) : 0);
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          const isNewClient = !existingClientEmails.has(email);
+          // Bruto = product_price APENAS para clientes NOVOS e primeira parcela
+          return sum + ((isNewClient && installmentNum === 1) ? (tx.product_price || 0) : 0);
         }, 0);
       
-      // DEBUG: Log Faturamento Clint
-      console.log("💰 Faturamento Clint Debug:", faturamentoClintDebug.length, "transações, Total:", faturamentoClint);
+      // DEBUG: Log Faturamento Clint com info de clientes novos vs existentes
+      const newClientCount = faturamentoClintDebug.filter(d => d.isNew).length;
+      const existingClientCount = faturamentoClintDebug.filter(d => !d.isNew).length;
+      console.log("💰 Faturamento Clint Debug:", {
+        total: faturamentoClintDebug.length,
+        novos: newClientCount,
+        existentes: existingClientCount,
+        brutoTotal: faturamentoClint
+      });
 
       // ===== FATURAMENTO LÍQUIDO =====
       // NOVA LÓGICA: Mesma deduplicação parent/offer do Faturamento Clint
