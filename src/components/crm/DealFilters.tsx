@@ -26,8 +26,6 @@ export interface DealFiltersState {
   dateRange: DateRange | undefined;
   tags: string[];
   owner: string | null;
-  minValue: number | null;
-  maxValue: number | null;
 }
 
 interface DealFiltersProps {
@@ -49,8 +47,6 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
     filters.dateRange?.from,
     filters.tags.length > 0,
     filters.owner,
-    filters.minValue,
-    filters.maxValue,
   ].filter(Boolean).length;
   
   return (
@@ -142,45 +138,15 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos</SelectItem>
-          {users
-            .filter((user: any) => user.id && user.id.trim() !== '' && user.name && user.name.trim() !== '')
+        {users
+            .filter((user: any) => user.id && user.email && user.email.trim() !== '' && user.name && user.name.trim() !== '')
             .map((user: any) => (
-              <SelectItem key={user.id} value={user.id}>
+              <SelectItem key={user.id} value={user.email}>
                 {user.name}
               </SelectItem>
             ))}
         </SelectContent>
       </Select>
-      
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline">
-            Valor
-            {(filters.minValue || filters.maxValue) && (
-              <Badge variant="secondary" className="ml-2">!</Badge>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-64">
-          <div className="space-y-3">
-            <h4 className="font-medium text-sm">Faixa de Valor</h4>
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                placeholder="Min"
-                value={filters.minValue || ''}
-                onChange={(e) => onChange({ ...filters, minValue: e.target.value ? Number(e.target.value) : null })}
-              />
-              <Input
-                type="number"
-                placeholder="Max"
-                value={filters.maxValue || ''}
-                onChange={(e) => onChange({ ...filters, maxValue: e.target.value ? Number(e.target.value) : null })}
-              />
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
       
       {activeFiltersCount > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>

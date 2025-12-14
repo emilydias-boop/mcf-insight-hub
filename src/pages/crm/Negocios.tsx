@@ -18,8 +18,6 @@ const Negocios = () => {
     dateRange: undefined,
     tags: [],
     owner: null,
-    minValue: null,
-    maxValue: null,
   });
   
   const { data: deals, isLoading, error } = useCRMDeals({
@@ -46,9 +44,6 @@ const Negocios = () => {
       return false;
     }
     
-    if (filters.minValue && deal.value < filters.minValue) return false;
-    if (filters.maxValue && deal.value > filters.maxValue) return false;
-    
     if (filters.tags && filters.tags.length > 0) {
       const dealTags = deal.tags || [];
       if (!filters.tags.some(tag => dealTags.includes(tag))) return false;
@@ -65,8 +60,6 @@ const Negocios = () => {
       dateRange: undefined,
       tags: [],
       owner: null,
-      minValue: null,
-      maxValue: null,
     });
   };
   
