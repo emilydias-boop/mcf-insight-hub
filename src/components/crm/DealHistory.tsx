@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { RefreshCw } from 'lucide-react';
 import {
   ArrowRight,
   Phone,
@@ -38,18 +39,26 @@ const activityIcons: Record<string, any> = {
 export const DealHistory = ({ dealId, limit }: DealHistoryProps) => {
   const [showAll, setShowAll] = useState(false);
   
-  const { data: activities = [], isLoading } = useQuery({
+  const { data: activities = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['deal-activities', dealId],
     queryFn: async () => {
+      console.log('[DealHistory] Buscando atividades para dealId:', dealId);
+      
       const { data, error } = await supabase
         .from('deal_activities')
         .select('*, profiles:user_id(full_name)')
         .eq('deal_id', dealId)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('[DealHistory] Erro na query:', error);
+        throw error;
+      }
+      
+      console.log('[DealHistory] Atividades encontradas:', data?.length || 0);
       return data;
     },
+    enabled: !!dealId,
   });
   
   const displayedActivities = limit && !showAll 
@@ -64,8 +73,23 @@ export const DealHistory = ({ dealId, limit }: DealHistoryProps) => {
   
   if (activities.length === 0) {
     return (
-      <div className="text-sm text-muted-foreground text-center py-8">
-        Nenhuma atividade registrada ainda
+      <div className="text-center py-6 space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Nenhuma atividade registrada para este lead
+        </p>
+        <p className="text-xs text-muted-foreground/70">
+          ID: {dealId?.slice(0, 8)}...
+        </p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => refetch()}
+          disabled={isRefetching}
+          className="gap-2"
+        >
+          <RefreshCw className={`h-3 w-3 ${isRefetching ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
       </div>
     );
   }
