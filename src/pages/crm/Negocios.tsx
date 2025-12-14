@@ -64,7 +64,7 @@ const Negocios = () => {
   };
   
   return (
-    <div className="flex h-[calc(100vh-180px)]">
+    <div className="flex h-[calc(100vh-120px)]">
       <OriginsSidebar
         selectedOriginId={selectedOriginId}
         onSelectOrigin={setSelectedOriginId}
