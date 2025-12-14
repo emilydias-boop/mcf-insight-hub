@@ -201,10 +201,10 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
         <div className="font-medium text-sm line-clamp-2">{contactName || deal.name}</div>
         
         {/* Linha 3: SDR Responsável */}
-        {(deal.owner_name || deal.owner_id) && (
+        {(deal.custom_fields?.deal_user_name || deal.custom_fields?.user_name) && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <User className="h-3 w-3" />
-            <span className="truncate">SDR: {deal.owner_name || deal.owner_id}</span>
+            <span className="truncate">SDR: {deal.custom_fields?.deal_user_name || deal.custom_fields?.user_name}</span>
           </div>
         )}
         
