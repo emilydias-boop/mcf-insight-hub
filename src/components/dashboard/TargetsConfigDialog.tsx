@@ -128,7 +128,7 @@ export function TargetsConfigDialog() {
       }
     });
 
-    // Salvar metas de vendas
+    // Salvar metas de vendas (diárias convertidas para semanais)
     const salesTargets = [
       { type: 'team_revenue', name: 'Faturamento Semanal' },
       { type: 'team_sales', name: 'Vendas Semanais' },
@@ -139,6 +139,47 @@ export function TargetsConfigDialog() {
       const daily = getDailyTarget(type, name, null);
       if (daily > 0) {
         const weeklyValue = calculateWeekly(daily);
+        const existingTarget = targets?.find(
+          t => t.target_type === type && t.target_name === name
+        );
+
+        if (existingTarget) {
+          promises.push(
+            updateTarget.mutateAsync({
+              id: existingTarget.id,
+              updates: { target_value: weeklyValue },
+            })
+          );
+        } else {
+          promises.push(
+            createTarget.mutateAsync({
+              target_type: type as any,
+              target_name: name,
+              reference_id: null,
+              week_start: formatDateForDB(selectedWeekStart),
+              week_end: formatDateForDB(weekEnd),
+              target_value: weeklyValue,
+              current_value: 0,
+              origin_id: null,
+            })
+          );
+        }
+      }
+    });
+
+    // Salvar metas Clint (valores semanais diretos)
+    const clintTargets = [
+      { type: 'ultrameta_clint', name: 'Ultrameta Clint' },
+      { type: 'faturamento_clint', name: 'Faturamento Clint (Bruto)' },
+      { type: 'ultrameta_liquido', name: 'Ultrameta Líquido' },
+      { type: 'faturamento_liquido', name: 'Faturamento Líquido' },
+    ];
+
+    clintTargets.forEach(({ type, name }) => {
+      const key = `${type}-${name}`;
+      const weeklyValue = dailyTargets[key];
+      
+      if (weeklyValue !== undefined && weeklyValue > 0) {
         const existingTarget = targets?.find(
           t => t.target_type === type && t.target_name === name
         );
@@ -435,6 +476,86 @@ export function TargetsConfigDialog() {
                       </div>
                     ) : null;
                   })()}
+                </div>
+
+                {/* Metas Clint - Valores semanais diretos */}
+                <div className="col-span-2 border-t pt-4 mt-2">
+                  <h4 className="text-sm font-medium mb-3">Metas do MetasProgress (valores semanais)</h4>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Configure os valores absolutos das metas semanais exibidas no painel de metas
+                  </p>
+                </div>
+
+                {/* Ultrameta Clint */}
+                <div className="p-4 border rounded-lg space-y-3 bg-card">
+                  <Label className="text-sm font-medium">Ultrameta Clint</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground w-20">Meta:</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-sm"
+                        placeholder="337680"
+                        value={dailyTargets['ultrameta_clint-Ultrameta Clint'] ?? (targets?.find(t => t.target_type === 'ultrameta_clint')?.target_value || '')}
+                        onChange={(e) => setDailyTargets(prev => ({ ...prev, 'ultrameta_clint-Ultrameta Clint': Number(e.target.value) }))}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Fórmula: (A010 × R$1.680) + (SDR IA × R$700)</p>
+                  </div>
+                </div>
+
+                {/* Faturamento Clint (Bruto) */}
+                <div className="p-4 border rounded-lg space-y-3 bg-card">
+                  <Label className="text-sm font-medium">Faturamento Clint (Bruto)</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground w-20">Meta:</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-sm"
+                        placeholder="198377"
+                        value={dailyTargets['faturamento_clint-Faturamento Clint (Bruto)'] ?? (targets?.find(t => t.target_type === 'faturamento_clint')?.target_value || '')}
+                        onChange={(e) => setDailyTargets(prev => ({ ...prev, 'faturamento_clint-Faturamento Clint (Bruto)': Number(e.target.value) }))}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Valor bruto das vendas Clint na semana</p>
+                  </div>
+                </div>
+
+                {/* Ultrameta Líquido */}
+                <div className="p-4 border rounded-lg space-y-3 bg-card">
+                  <Label className="text-sm font-medium">Ultrameta Líquido</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground w-20">Meta:</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-sm"
+                        placeholder="281400"
+                        value={dailyTargets['ultrameta_liquido-Ultrameta Líquido'] ?? (targets?.find(t => t.target_type === 'ultrameta_liquido')?.target_value || '')}
+                        onChange={(e) => setDailyTargets(prev => ({ ...prev, 'ultrameta_liquido-Ultrameta Líquido': Number(e.target.value) }))}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Fórmula: A010 × R$1.400</p>
+                  </div>
+                </div>
+
+                {/* Faturamento Líquido */}
+                <div className="p-4 border rounded-lg space-y-3 bg-card">
+                  <Label className="text-sm font-medium">Faturamento Líquido</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground w-20">Meta:</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-sm"
+                        placeholder="159276"
+                        value={dailyTargets['faturamento_liquido-Faturamento Líquido'] ?? (targets?.find(t => t.target_type === 'faturamento_liquido')?.target_value || '')}
+                        onChange={(e) => setDailyTargets(prev => ({ ...prev, 'faturamento_liquido-Faturamento Líquido': Number(e.target.value) }))}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Valor líquido recebido na semana</p>
+                  </div>
                 </div>
                 </div>
               </TabsContent>
