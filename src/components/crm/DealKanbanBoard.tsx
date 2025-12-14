@@ -2,22 +2,21 @@ import { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
+import { StageChangeModal } from './StageChangeModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
-import { AlertCircle, Inbox } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 
 interface Deal {
   id: string;
   name: string;
   value: number;
-  stage_id: string;  // ID do estágio (UUID)
-  stage: string;      // Nome do estágio (para exibição)
+  stage_id: string;
+  stage: string;
   probability?: number;
   expected_close_date?: string;
   contact_id?: string;
@@ -37,7 +36,14 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   
-  const visibleStageIds = getVisibleStages();
+  // State para modal de mudança de estágio
+  const [stageChangeModal, setStageChangeModal] = useState<{
+    open: boolean;
+    dealId: string;
+    dealName: string;
+    newStageName: string;
+  }>({ open: false, dealId: '', dealName: '', newStageName: '' });
+  
   const visibleStages = (stages || []).filter((s: any) => s.is_active);
   
   const getDealsByStage = (stageId: string) => {
@@ -54,7 +60,6 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
     setDrawerOpen(true);
   };
 
-  // Empty state
   if (!stages || stages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -71,31 +76,45 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
     if (!result.destination) return;
 
     const dealId = result.draggableId;
-    const oldStage = result.source.droppableId;
-    const newStage = result.destination.droppableId;
+    const oldStageId = result.source.droppableId;
+    const newStageId = result.destination.droppableId;
 
-    if (!canMoveFromStage(oldStage)) {
+    if (oldStageId === newStageId) return;
+
+    if (!canMoveFromStage(oldStageId)) {
       toast.error('Você não tem permissão para mover deste estágio');
       return;
     }
 
-    if (!canMoveToStage(newStage)) {
+    if (!canMoveToStage(newStageId)) {
       toast.error('Você não tem permissão para mover para este estágio');
       return;
     }
     
+    const deal = deals.find(d => d.id === dealId);
+    const newStage = visibleStages.find((s: any) => s.id === newStageId);
+    
     updateDealMutation.mutate(
-      { id: dealId, stage_id: newStage },
+      { id: dealId, stage_id: newStageId },
       {
         onSuccess: () => {
           createActivity.mutate({
             deal_id: dealId,
             activity_type: 'stage_change',
-            description: `Negócio movido entre estágios`,
-            from_stage: oldStage,
-            to_stage: newStage,
+            description: `Negócio movido para ${newStage?.stage_name || 'novo estágio'}`,
+            from_stage: oldStageId,
+            to_stage: newStageId,
           });
-          toast.success('Negócio movido com sucesso');
+          
+          // Abrir modal para definir próxima ação
+          if (deal && newStage) {
+            setStageChangeModal({
+              open: true,
+              dealId: dealId,
+              dealName: deal.name,
+              newStageName: newStage.stage_name,
+            });
+          }
         },
         onError: () => {
           toast.error('Erro ao mover negócio');
@@ -164,6 +183,14 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
         dealId={selectedDealId}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+      />
+      
+      <StageChangeModal
+        open={stageChangeModal.open}
+        onOpenChange={(open) => setStageChangeModal(prev => ({ ...prev, open }))}
+        dealId={stageChangeModal.dealId}
+        dealName={stageChangeModal.dealName}
+        newStageName={stageChangeModal.newStageName}
       />
     </>
   );
