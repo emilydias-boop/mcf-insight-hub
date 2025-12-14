@@ -56,7 +56,8 @@ const PRODUTOS_FATURAMENTO_CLINT = [
   "COBRANÇAS ASAAS",
   "CONTRATO ANTICRISE",
   "Contrato - Anticrise",
-  "Contrato - Sócio MCF",  // ADICIONADO: Contrato de Sócios
+  "Contrato - Sócio MCF",
+  "Contrato",  // ADICIONADO: Fallback para transações Make sem prefixo A000
   "Jantar Networking",
   "R001 - Incorporador Completo 50K",
   "R004 - Incorporador 50k Básico",
