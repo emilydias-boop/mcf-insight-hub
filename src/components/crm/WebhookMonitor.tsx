@@ -81,41 +81,22 @@ export function WebhookMonitor() {
           </div>
         )}
 
-        {/* Movimentações Hoje */}
+        {/* Movimentações Hoje - 3 KPIs lado a lado */}
         <div>
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Movimentações Hoje</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {stats?.eventTypeCounts && Object.keys(stats.eventTypeCounts).length > 0 ? (
-              Object.entries(stats.eventTypeCounts)
-                .filter(([type]) => ['deal.stage_changed', 'deal.created', 'contact.created', 'deal.updated'].includes(type))
-                .map(([type, count]) => (
-                  <div key={type} className="p-4 border rounded-lg bg-card text-center">
-                    <p className="text-xs text-muted-foreground mb-1">
-                      {eventTypeLabels[type] || type}
-                    </p>
-                    <p className="text-2xl font-bold">{count}</p>
-                  </div>
-                ))
-            ) : (
-              <>
-                <div className="p-4 border rounded-lg bg-card text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Estágio Alterado</p>
-                  <p className="text-2xl font-bold">0</p>
-                </div>
-                <div className="p-4 border rounded-lg bg-card text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Deal Criado</p>
-                  <p className="text-2xl font-bold">0</p>
-                </div>
-                <div className="p-4 border rounded-lg bg-card text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Contato Criado</p>
-                  <p className="text-2xl font-bold">0</p>
-                </div>
-                <div className="p-4 border rounded-lg bg-card text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Deal Atualizado</p>
-                  <p className="text-2xl font-bold">0</p>
-                </div>
-              </>
-            )}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 border rounded-lg bg-card text-center">
+              <p className="text-xs text-muted-foreground mb-1">Estágio Alterado</p>
+              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['deal.stage_changed'] || 0}</p>
+            </div>
+            <div className="p-3 border rounded-lg bg-card text-center">
+              <p className="text-xs text-muted-foreground mb-1">Deal Criado</p>
+              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['deal.created'] || 0}</p>
+            </div>
+            <div className="p-3 border rounded-lg bg-card text-center">
+              <p className="text-xs text-muted-foreground mb-1">Contato Criado</p>
+              <p className="text-2xl font-bold">{stats?.eventTypeCounts?.['contact.created'] || 0}</p>
+            </div>
           </div>
         </div>
 
