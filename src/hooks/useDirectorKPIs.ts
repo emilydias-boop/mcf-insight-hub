@@ -427,10 +427,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = tx.product_category === "a010" || productName.includes("A010");
           
-          // CORREÇÃO: INCLUIR Make no A010 (não excluir mais)
-          // Excluir apenas newsale- e -offer-
+          // CORREÇÃO: INCLUIR Make e -offer- no A010 (são vendas legítimas como Order Bump)
+          // Excluir apenas newsale- (duplicatas sem dados completos)
           if (tx.hubla_id?.startsWith("newsale-")) return;
-          if (tx.hubla_id?.includes("-offer-")) return;
+          // REMOVIDO: if (tx.hubla_id?.includes("-offer-")) return; // -offer- são vendas A010 válidas
           
           if (isA010) {
             const email = (tx.customer_email || "").toLowerCase().trim();
