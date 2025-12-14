@@ -46,6 +46,8 @@ export function useDashboardPreferences() {
           user_id: user.id,
           ...newPrefs,
           updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
         });
 
       if (error) throw error;
