@@ -17,6 +17,7 @@ import {
   Calendar,
   DollarSign,
   AlertCircle,
+  Bell,
 } from 'lucide-react';
 
 interface DealHistoryProps {
@@ -34,6 +35,7 @@ const activityIcons: Record<string, any> = {
   meeting_scheduled: Calendar,
   payment_received: DollarSign,
   no_show: AlertCircle,
+  next_action_scheduled: Bell,
 };
 
 export const DealHistory = ({ dealId, limit }: DealHistoryProps) => {
