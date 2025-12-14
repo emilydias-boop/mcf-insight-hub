@@ -126,6 +126,9 @@ verify_jwt = false
 [functions.notion-playbook-content]
 verify_jwt = false
 
+[functions.notion-playbook-update-content]
+verify_jwt = false
+
 [functions.import-a010-sales]
 verify_jwt = false
 
