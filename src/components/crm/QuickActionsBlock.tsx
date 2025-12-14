@@ -107,11 +107,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   const hasPhone = extractPhoneFromDeal(deal) || contact?.phone;
   
   return (
-    <div className="space-y-3">
-      <h3 className="font-semibold text-foreground flex items-center gap-2">
-        🎯 Ações Rápidas
-      </h3>
-      
+    <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
         {/* Botão Ligar */}
         <Button
