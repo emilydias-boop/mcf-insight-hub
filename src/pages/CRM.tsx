@@ -44,7 +44,7 @@ const CRM = () => {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="container py-6">
+        <div className="px-6 py-6 w-full">
           <Outlet />
         </div>
       </div>
