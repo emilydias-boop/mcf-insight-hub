@@ -616,9 +616,13 @@ export type Database = {
           expected_close_date: string | null
           id: string
           name: string
+          next_action_date: string | null
+          next_action_note: string | null
+          next_action_type: string | null
           origin_id: string | null
           owner_id: string | null
           probability: number | null
+          product_name: string | null
           stage_id: string | null
           tags: string[] | null
           updated_at: string | null
@@ -633,9 +637,13 @@ export type Database = {
           expected_close_date?: string | null
           id?: string
           name: string
+          next_action_date?: string | null
+          next_action_note?: string | null
+          next_action_type?: string | null
           origin_id?: string | null
           owner_id?: string | null
           probability?: number | null
+          product_name?: string | null
           stage_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
@@ -650,9 +658,13 @@ export type Database = {
           expected_close_date?: string | null
           id?: string
           name?: string
+          next_action_date?: string | null
+          next_action_note?: string | null
+          next_action_type?: string | null
           origin_id?: string | null
           owner_id?: string | null
           probability?: number | null
+          product_name?: string | null
           stage_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
