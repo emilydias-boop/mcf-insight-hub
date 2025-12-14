@@ -115,6 +115,42 @@ const TAXA_OB_CONSTRUIR = 0.8980;    // 89.80% (taxa fixa Hubla: 10.20%)
 const PRECO_OB_VITALICIO = 57;       // R$ 57 preço padrão OB Vitalício
 const PRECO_OB_CONSTRUIR = 97;       // R$ 97 preço padrão OB Construir
 
+// ===== VALORES FIXOS POR PRODUTO (valor total do contrato, não da parcela) =====
+// Quando product_price no banco é menor que esperado (é parcela), usar valor fixo
+const VALORES_FIXOS_PRODUTOS: Record<string, number> = {
+  'A009': 19500,  // MCF INCORPORADOR + THE CLUB
+  'A001': 14500,  // MCF INCORPORADOR COMPLETO
+  'A003': 7503,   // MCF Plano Anticrise Completo (e variantes)
+  'A004': 5503,   // MCF Plano Anticrise Básico
+  'A005': 7500,   // MCF P2
+  'A002': 7500,   // MCF INCORPORADOR BÁSICO
+  'A008': 5000,   // The CLUB
+  'R001': 14500,  // Incorporador Completo 50K (renovação)
+  'R004': 7500,   // Incorporador 50k Básico (renovação)
+  'R005': 7500,   // Anticrise Completo (renovação)
+  'R009': 14500,  // Renovação Parceiro MCF
+  // Contratos A000 têm valores variáveis (397/497), usar o que está no banco
+};
+
+// Função para obter valor fixo do produto quando product_price é muito baixo (parcela)
+const getValorFixoProduto = (productName: string, productPriceFromDB: number): number => {
+  const upperName = productName.toUpperCase();
+  
+  // Procurar código do produto no nome
+  for (const [codigo, valorFixo] of Object.entries(VALORES_FIXOS_PRODUTOS)) {
+    if (upperName.includes(codigo)) {
+      // Se product_price do banco é muito menor que esperado (< 50%), usar valor fixo
+      if (productPriceFromDB < valorFixo * 0.5) {
+        return valorFixo;
+      }
+      return productPriceFromDB;
+    }
+  }
+  
+  // Para produtos sem valor fixo, usar o do banco
+  return productPriceFromDB;
+};
+
 // Helper para formatar data no fuso horário de Brasília (UTC-3)
 const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string => {
   const year = date.getFullYear();
@@ -556,35 +592,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Lucro = Faturamento Total - Custo Total
       const lucro = faturamentoTotalFinal - custoTotal;
 
-      // ===== FATURAMENTO CLINT (Bruto - usando product_price) =====
-      // NOVA LÓGICA: Primeira compra na parceria
-      // Bruto = product_price APENAS para clientes que NUNCA compraram antes (primeira compra ever)
-      // Se cliente já comprou qualquer produto Clint antes do período, Bruto = 0
+      // ===== FATURAMENTO CLINT (Bruto - usando product_price ou valor fixo) =====
+      // NOVA LÓGICA: Todas as transações com installment_number = 1 contam
+      // Se product_price é muito baixo (parcela), usar valor fixo do produto
+      // Incluir Make quando não duplicado no Hubla
       
-      // 1. Buscar TODOS os clientes que já compraram produtos Clint ANTES do período atual
-      const { data: existingClientsData } = await supabase
-        .from("hubla_transactions")
-        .select("customer_email")
-        .lt("sale_date", startStr)
-        .eq("sale_status", "completed")
-        .not("customer_email", "is", null)
-        .neq("customer_email", "");
-      
-      // Filtrar apenas clientes que compraram produtos Clint
-      const existingClientEmails = new Set<string>();
-      (existingClientsData || []).forEach((row) => {
-        if (row.customer_email) {
-          existingClientEmails.add(row.customer_email.toLowerCase().trim());
-        }
-      });
-      
-      console.log("📜 Clientes existentes antes do período:", existingClientEmails.size);
-      
-      // 2. Identificar quais hubla_ids são PARENTS que têm offers
+      // 1. Identificar quais hubla_ids são PARENTS que têm offers
       const parentIdsWithOffers = new Set<string>();
       (hublaData || []).forEach((tx) => {
         if (tx.hubla_id?.includes('-offer-')) {
-          // Extrair o parent_id removendo o sufixo -offer-N
           const parentId = tx.hubla_id.split('-offer-')[0];
           parentIdsWithOffers.add(parentId);
         }
@@ -592,111 +608,91 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       console.log("🔍 Parents com offers:", parentIdsWithOffers.size);
       
+      // 2. Deduplicar transações: Hubla tem prioridade sobre Make para email+data+produto
+      const seenClintKeys = new Map<string, { source: string; hubla_id: string }>();
+      const deduplicatedClintTransactions: HublaTransaction[] = [];
+      
+      (hublaData || []).forEach((tx) => {
+        if (tx.hubla_id?.startsWith("newsale-")) return;
+        if (!tx.customer_email) return;
+        
+        const isOffer = tx.hubla_id?.includes('-offer-');
+        const isParentWithOffers = parentIdsWithOffers.has(tx.hubla_id);
+        if (!isOffer && isParentWithOffers) return; // Container, skip
+        
+        const productName = tx.product_name || "";
+        if (!isProductInFaturamentoClint(productName)) return;
+        
+        const productNameUpper = productName.toUpperCase();
+        // Excluir A006 - Renovação Parceiro MCF
+        if (productNameUpper.includes("A006") && (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO"))) return;
+        
+        const email = (tx.customer_email || "").toLowerCase().trim();
+        const date = tx.sale_date.split("T")[0];
+        const key = `${email}|${date}|${productNameUpper.substring(0, 10)}`;
+        const source = tx.source || "hubla";
+        
+        const existing = seenClintKeys.get(key);
+        if (!existing) {
+          seenClintKeys.set(key, { source, hubla_id: tx.hubla_id });
+          deduplicatedClintTransactions.push(tx);
+        } else if (source === "hubla" && existing.source === "make") {
+          // Hubla substitui Make
+          const idx = deduplicatedClintTransactions.findIndex(t => t.hubla_id === existing.hubla_id);
+          if (idx >= 0) deduplicatedClintTransactions[idx] = tx;
+          seenClintKeys.set(key, { source, hubla_id: tx.hubla_id });
+        }
+        // Se já existe Hubla, não adiciona Make
+      });
+      
+      console.log("📊 Transações Clint deduplicadas:", deduplicatedClintTransactions.length);
+      
       // 3. Calcular Faturamento Clint Bruto
-      // NOVA LÓGICA: Apenas clientes NOVOS (não existem no histórico) contam no Bruto
-      const seenClintBrutoIds = new Set<string>();
-      const faturamentoClintDebug: { product: string; price: number; installment: number; total: number; brutoUsado: number; type: string; isNew: boolean }[] = [];
-      const faturamentoClint = (hublaData || [])
+      const faturamentoClintDebug: { product: string; price: number; valorUsado: number; installment: number; source: string }[] = [];
+      const faturamentoClint = deduplicatedClintTransactions
         .filter((tx) => {
-          const source = tx.source || "hubla";
-          if (source === "make") return false; // Excluir Make (duplicatas)
-          if (tx.hubla_id?.startsWith("newsale-")) return false;
-          if (!tx.customer_email) return false; // Requer email válido
-          
-          const isOffer = tx.hubla_id?.includes('-offer-');
-          const isParentWithOffers = parentIdsWithOffers.has(tx.hubla_id);
-          
-          // Excluir parents que são containers (têm offers filhos)
-          if (!isOffer && isParentWithOffers) return false;
-          
-          // Deduplicar por hubla_id
-          if (seenClintBrutoIds.has(tx.hubla_id)) return false;
-
-          const productName = tx.product_name || "";
-          const productNameUpper = productName.toUpperCase();
-          
-          // Excluir A006 - Renovação Parceiro MCF
-          if (productNameUpper.includes("A006") && (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO"))) return false;
-          
-          const isInList = isProductInFaturamentoClint(productName);
-
-          if (isInList) {
-            seenClintBrutoIds.add(tx.hubla_id);
-            const installmentNum = tx.installment_number || 1;
-            const email = (tx.customer_email || "").toLowerCase().trim();
-            const isNewClient = !existingClientEmails.has(email);
-            
-            // Bruto = product_price APENAS para clientes NOVOS e primeira parcela
-            const brutoUsado = (isNewClient && installmentNum === 1) ? (tx.product_price || 0) : 0;
-            faturamentoClintDebug.push({
-              product: productName,
-              price: tx.product_price || 0,
-              installment: installmentNum,
-              total: tx.total_installments || 1,
-              brutoUsado,
-              type: isOffer ? 'offer' : 'normal',
-              isNew: isNewClient
-            });
-            return true;
-          }
-          return false;
+          const installmentNum = tx.installment_number || 1;
+          return installmentNum === 1; // Apenas primeira parcela para Bruto
         })
         .reduce((sum, tx) => {
-          const installmentNum = tx.installment_number || 1;
-          const email = (tx.customer_email || "").toLowerCase().trim();
-          const isNewClient = !existingClientEmails.has(email);
-          // Bruto = product_price APENAS para clientes NOVOS e primeira parcela
-          return sum + ((isNewClient && installmentNum === 1) ? (tx.product_price || 0) : 0);
+          const productName = tx.product_name || "";
+          const productPriceDB = tx.product_price || 0;
+          // Usar valor fixo quando product_price é muito baixo (parcela)
+          const valorUsado = getValorFixoProduto(productName, productPriceDB);
+          
+          faturamentoClintDebug.push({
+            product: productName,
+            price: productPriceDB,
+            valorUsado,
+            installment: tx.installment_number || 1,
+            source: tx.source || "hubla"
+          });
+          
+          return sum + valorUsado;
         }, 0);
       
-      // DEBUG: Log Faturamento Clint com info de clientes novos vs existentes
-      const newClientCount = faturamentoClintDebug.filter(d => d.isNew).length;
-      const existingClientCount = faturamentoClintDebug.filter(d => !d.isNew).length;
-      console.log("💰 Faturamento Clint Debug:", {
+      // DEBUG: Log Faturamento Clint
+      console.log("💰 Faturamento Clint Bruto Debug:", {
         total: faturamentoClintDebug.length,
-        novos: newClientCount,
-        existentes: existingClientCount,
-        brutoTotal: faturamentoClint
+        brutoTotal: faturamentoClint,
+        samples: faturamentoClintDebug.slice(0, 5)
       });
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // NOVA LÓGICA: Mesma deduplicação parent/offer do Faturamento Clint
-      const seenLiquidoIds = new Set<string>();
-      const faturamentoLiquidoDebug: { product: string; net: number }[] = [];
-      const faturamentoLiquido = (hublaData || [])
-        .filter((tx) => {
-          const source = tx.source || "hubla";
-          if (source === "make") return false; // Excluir Make (duplicatas)
-          if (tx.hubla_id?.startsWith("newsale-")) return false;
-          if (!tx.customer_email) return false; // Requer email válido
-          
-          const isOffer = tx.hubla_id?.includes('-offer-');
-          const isParentWithOffers = parentIdsWithOffers.has(tx.hubla_id);
-          
-          // NOVA LÓGICA: Incluir offers OU transações normais sem offers correspondentes
-          if (!isOffer && isParentWithOffers) return false; // É um container, não contar
-          
-          if (seenLiquidoIds.has(tx.hubla_id)) return false;
-
-          const productName = tx.product_name || "";
-          const productNameUpper = productName.toUpperCase();
-          
-          // CORREÇÃO: Excluir A006 - Renovação Parceiro MCF
-          if (productNameUpper.includes("A006") && (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO"))) return false;
-          
-          const isInList = isProductInFaturamentoClint(productName);
-
-          if (isInList) {
-            seenLiquidoIds.add(tx.hubla_id);
-            faturamentoLiquidoDebug.push({ product: productName, net: tx.net_value || 0 });
-            return true;
-          }
-          return false;
-        })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+      // Todas as parcelas contam (não só primeira), soma de net_value
+      const faturamentoLiquidoDebug: { product: string; net: number; source: string }[] = [];
+      const faturamentoLiquido = deduplicatedClintTransactions
+        .reduce((sum, tx) => {
+          faturamentoLiquidoDebug.push({ 
+            product: tx.product_name || "", 
+            net: tx.net_value || 0,
+            source: tx.source || "hubla"
+          });
+          return sum + (tx.net_value || 0);
+        }, 0);
       
       // DEBUG: Log Faturamento Líquido
-      console.log("💵 Faturamento Líquido Debug:", faturamentoLiquidoDebug.length, "transações, Total:", faturamentoLiquido);
+      console.log("💵 Faturamento Líquido Debug:", deduplicatedClintTransactions.length, "transações, Total:", faturamentoLiquido);
 
       // Valores finais (sem override, cálculo real)
       const faturamentoClintFinal = faturamentoClint;
