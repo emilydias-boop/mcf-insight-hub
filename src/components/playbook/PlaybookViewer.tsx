@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { useMarkAsRead, useConfirmReading } from "@/hooks/usePlaybookReads";
-import { useNotionPlaybookContent } from "@/hooks/useNotionPlaybook";
+import { useNotionPlaybookContent, useUpdateNotionPlaybookContent } from "@/hooks/useNotionPlaybook";
+import { useAuth } from "@/contexts/AuthContext";
 import { PlaybookDocWithRead } from "@/types/playbook";
-import { Loader2, ExternalLink, FileText, Download, Image as ImageIcon, File } from "lucide-react";
+import { Loader2, ExternalLink, FileText, Download, File, Pencil, X, Save } from "lucide-react";
 
 interface FileInfo {
   name: string;
@@ -24,9 +26,16 @@ interface PlaybookViewerProps {
 
 export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: PlaybookViewerProps) {
   const [agreed, setAgreed] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
   
+  const { role } = useAuth();
   const markAsRead = useMarkAsRead();
   const confirmReading = useConfirmReading();
+  const updateContent = useUpdateNotionPlaybookContent();
+
+  // Roles que podem editar
+  const canEdit = ['admin', 'manager', 'coordenador', 'master', 'gestor_sdr', 'gestor_closer'].includes(role || '');
 
   // Buscar conteúdo do Notion para texto OU arquivo
   const shouldFetchContent = open && doc?.notion_page_id && (doc?.tipo_conteudo === 'texto' || doc?.tipo_conteudo === 'arquivo');
@@ -44,8 +53,16 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
   useEffect(() => {
     if (open) {
       setAgreed(false);
+      setIsEditing(false);
     }
   }, [open]);
+
+  // Sincronizar conteúdo quando carregado
+  useEffect(() => {
+    if (notionData?.content) {
+      setEditContent(notionData.content);
+    }
+  }, [notionData?.content]);
 
   const handleConfirm = async () => {
     if (!doc) return;
@@ -82,9 +99,29 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Erro ao baixar arquivo:', error);
-      // Fallback: abrir em nova aba
       window.open(file.url, '_blank');
     }
+  };
+
+  const handleStartEdit = () => {
+    setEditContent(notionData?.content || '');
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditContent(notionData?.content || '');
+    setIsEditing(false);
+  };
+
+  const handleSaveContent = async () => {
+    if (!doc?.notion_page_id) return;
+    
+    await updateContent.mutateAsync({
+      pageId: doc.notion_page_id,
+      content: editContent
+    });
+    
+    setIsEditing(false);
   };
 
   if (!doc) return null;
@@ -92,7 +129,6 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
   const isConfirmed = currentStatus === 'confirmado';
   const showConfirmButton = doc.obrigatorio && !isConfirmed;
   
-  // Extrair conteúdo e arquivos
   const notionContent = notionData?.content || '';
   const notionFiles: FileInfo[] = (notionData?.files as FileInfo[]) || [];
 
@@ -103,6 +139,12 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
           <DialogTitle>{doc.titulo}</DialogTitle>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Versão {doc.versao}</span>
+            {doc.tipo_conteudo === 'texto' && canEdit && !isEditing && (
+              <Button variant="ghost" size="sm" onClick={handleStartEdit} className="h-6 px-2">
+                <Pencil className="h-3 w-3 mr-1" />
+                Editar
+              </Button>
+            )}
             {doc.notion_url && (
               <Button variant="ghost" size="sm" onClick={handleOpenNotion} className="h-6 px-2">
                 <ExternalLink className="h-3 w-3 mr-1" />
@@ -118,20 +160,50 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : doc.tipo_conteudo === 'texto' ? (
-            <ScrollArea className="h-[500px] border rounded-lg p-4">
-              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                {notionContent || (
-                  <div className="text-center text-muted-foreground py-8">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Nenhum conteúdo encontrado.</p>
-                    <Button variant="outline" onClick={handleOpenNotion} className="mt-4">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Editar no Notion
-                    </Button>
-                  </div>
-                )}
+            isEditing ? (
+              <div className="flex flex-col h-[500px] gap-3">
+                <div className="text-xs text-muted-foreground">
+                  Suporte: # Título, ## Subtítulo, ### Seção, - lista, 1. numerada
+                </div>
+                <Textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="flex-1 font-mono text-sm resize-none"
+                  placeholder="Digite o conteúdo aqui..."
+                />
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={updateContent.isPending}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancelar
+                  </Button>
+                  <Button size="sm" onClick={handleSaveContent} disabled={updateContent.isPending}>
+                    {updateContent.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1" />
+                    )}
+                    Salvar
+                  </Button>
+                </div>
               </div>
-            </ScrollArea>
+            ) : (
+              <ScrollArea className="h-[500px] border rounded-lg p-4">
+                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+                  {notionContent || (
+                    <div className="text-center text-muted-foreground py-8">
+                      <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Nenhum conteúdo encontrado.</p>
+                      {canEdit && (
+                        <Button variant="outline" onClick={handleStartEdit} className="mt-4">
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Adicionar conteúdo
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            )
           ) : doc.tipo_conteudo === 'link' ? (
             <div className="flex flex-col items-center justify-center gap-4 py-12 border rounded-lg bg-muted/50">
               <ExternalLink className="h-16 w-16 text-muted-foreground" />
@@ -228,7 +300,7 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
           )}
         </div>
 
-        {showConfirmButton && (
+        {showConfirmButton && !isEditing && (
           <DialogFooter className="flex-col sm:flex-row gap-4">
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -252,7 +324,7 @@ export function PlaybookViewer({ open, onOpenChange, doc, currentStatus }: Playb
           </DialogFooter>
         )}
 
-        {isConfirmed && (
+        {isConfirmed && !isEditing && (
           <DialogFooter>
             <p className="text-sm text-green-600 dark:text-green-400">
               ✓ Leitura confirmada

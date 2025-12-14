@@ -198,3 +198,29 @@ export function useNotionPlaybookContent(pageId: string | null) {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// Hook para atualizar conteúdo de uma página do Notion
+export function useUpdateNotionPlaybookContent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ pageId, content }: { pageId: string; content: string }) => {
+      const { data, error } = await supabase.functions.invoke('notion-playbook-update-content', {
+        body: { pageId, content }
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["notion-playbook-content", variables.pageId] });
+      toast.success("Conteúdo salvo no Notion");
+    },
+    onError: (error) => {
+      console.error("Erro ao salvar conteúdo:", error);
+      toast.error("Erro ao salvar conteúdo no Notion");
+    },
+  });
+}
