@@ -279,8 +279,30 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .gte("sale_date", startStr)
         .lte("sale_date", endStr);
 
+      // Query secundária: buscar A010 Order Bumps com net_value=0 (excluídos pela query principal)
+      const { data: a010OfferData } = await supabase
+        .from("hubla_transactions")
+        .select(
+          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
+        )
+        .eq("sale_status", "completed")
+        .eq("product_category", "a010")
+        .ilike("hubla_id", "%-offer-%")
+        .eq("net_value", 0)
+        .not("customer_email", "is", null)
+        .neq("customer_email", "")
+        .not("customer_name", "is", null)
+        .neq("customer_name", "")
+        .gte("sale_date", startStr)
+        .lte("sale_date", endStr);
+
+      console.log("📊 A010 Order Bumps com net_value=0:", a010OfferData?.length || 0);
+
+      // Combinar dados: principal + A010 Order Bumps sem valor
+      const allHublaData = [...(hublaDataRaw || []), ...(a010OfferData || [])];
+
       // Aplicar deduplicação inteligente: Make > Hubla/Kiwify (Make tem taxa real)
-      const hublaData = deduplicateTransactions((hublaDataRaw || []) as HublaTransaction[]);
+      const hublaData = deduplicateTransactions(allHublaData as HublaTransaction[]);
       
       console.log("📊 Deduplicação:", {
         rawCount: hublaDataRaw?.length || 0,
