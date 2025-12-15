@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Phone, Copy, Check, X, Calendar } from 'lucide-react';
+import { Phone, Copy, Check, X, Calendar, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -21,6 +21,8 @@ interface TaskDetailPanelProps {
   contactPhone?: string | null;
   onComplete?: () => void;
   onCancel?: () => void;
+  onEdit?: () => void;
+  canEdit?: boolean;
 }
 
 export function TaskDetailPanel({ 
@@ -28,6 +30,8 @@ export function TaskDetailPanel({
   contactPhone, 
   onComplete,
   onCancel,
+  onEdit,
+  canEdit = false,
 }: TaskDetailPanelProps) {
   const { makeCall, deviceStatus } = useTwilio();
   const isDeviceReady = deviceStatus === 'ready';
@@ -43,7 +47,7 @@ export function TaskDetailPanel({
     );
   }
 
-  const scriptBody = task.template?.script_body;
+  const scriptBody = task.template?.script_body || task.description;
 
   const handleCall = () => {
     if (contactPhone && isDeviceReady) {
@@ -182,6 +186,23 @@ export function TaskDetailPanel({
             </TooltipTrigger>
             <TooltipContent>Cancelar</TooltipContent>
           </Tooltip>
+
+          {/* Ícone de editar - apenas para admin/gestor */}
+          {canEdit && onEdit && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="h-8 w-8 text-muted-foreground hover:text-primary" 
+                  onClick={onEdit}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Editar atividade</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       )}
 
