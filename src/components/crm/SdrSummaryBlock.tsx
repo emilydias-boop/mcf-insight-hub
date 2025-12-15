@@ -45,96 +45,71 @@ export const SdrSummaryBlock = ({ deal, contact }: SdrSummaryBlockProps) => {
   };
   
   return (
-    <div className="rounded-lg border border-border bg-secondary/30 p-3">
-      <h3 className="text-xs font-semibold text-muted-foreground mb-2">📋 Resumo</h3>
+    <div className="rounded-lg border border-border bg-secondary/30 p-2">
+      <h3 className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Contato</h3>
       
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        {/* Coluna 1: Contato */}
-        <div className="space-y-1.5">
-          {contact?.name && (
-            <div>
-              <span className="text-xs text-muted-foreground">Nome:</span>
-              <p className="font-medium text-foreground truncate">{contact.name}</p>
-            </div>
-          )}
-          
-          {contact?.email && (
-            <div className="flex items-center gap-1.5">
-              <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
-              <a 
-                href={`mailto:${contact.email}`} 
-                className="text-xs text-muted-foreground hover:text-primary transition-colors truncate"
-              >
-                {contact.email}
-              </a>
-            </div>
-          )}
-          
-          {/* Telefone editável */}
-          <div className="flex items-center gap-1.5">
-            <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
-            {editingPhone ? (
-              <div className="flex items-center gap-1 flex-1">
-                <Input
-                  value={phoneValue}
-                  onChange={(e) => setPhoneValue(e.target.value)}
-                  placeholder="+5511999990001"
-                  className="h-6 text-xs bg-background flex-1"
-                />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6 text-primary hover:text-primary/80"
-                  onClick={handleSavePhone}
-                  disabled={updateContact.isPending}
-                >
-                  <Check className="h-3 w-3" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6 text-destructive hover:text-destructive/80"
-                  onClick={handleCancelEditPhone}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 flex-1">
-                <span className="text-xs text-muted-foreground truncate">
-                  {contact?.phone || 'Não cadastrado'}
-                </span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-5 w-5 shrink-0"
-                  onClick={handleStartEditPhone}
-                >
-                  <Edit2 className="h-2.5 w-2.5" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Layout inline compacto */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {/* Nome */}
+        {contact?.name && (
+          <span className="font-medium text-foreground">{contact.name}</span>
+        )}
         
-        {/* Coluna 2: Negócio */}
-        <div className="space-y-1.5">
-          <div>
-            <span className="text-xs text-muted-foreground">Valor:</span>
-            <p className="font-bold text-primary">
-              R$ {(deal.value || 0).toLocaleString('pt-BR')}
-            </p>
-          </div>
-          
-          <div>
-            <span className="text-xs text-muted-foreground">Produto:</span>
-            <p className="text-foreground text-xs">{productName}</p>
-          </div>
-          
-          <div>
-            <span className="text-xs text-muted-foreground">Origem:</span>
-            <p className="text-foreground text-xs truncate">{originName}</p>
-          </div>
+        {/* Email clicável */}
+        {contact?.email && (
+          <a 
+            href={`mailto:${contact.email}`} 
+            className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
+          >
+            <Mail className="h-3 w-3" />
+            <span className="truncate max-w-[180px]">{contact.email}</span>
+          </a>
+        )}
+        
+        {/* Telefone editável */}
+        <div className="flex items-center gap-1">
+          <Phone className="h-3 w-3 text-muted-foreground" />
+          {editingPhone ? (
+            <div className="flex items-center gap-1">
+              <Input
+                value={phoneValue}
+                onChange={(e) => setPhoneValue(e.target.value)}
+                placeholder="+5511999990001"
+                className="h-6 w-32 text-xs bg-background"
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5 text-primary hover:text-primary/80"
+                onClick={handleSavePhone}
+                disabled={updateContact.isPending}
+              >
+                <Check className="h-3 w-3" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5 text-destructive hover:text-destructive/80"
+                onClick={handleCancelEditPhone}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">
+                {contact?.phone || 'Sem telefone'}
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5"
+                onClick={handleStartEditPhone}
+              >
+                <Edit2 className="h-2.5 w-2.5" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

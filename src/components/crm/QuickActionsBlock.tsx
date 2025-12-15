@@ -132,39 +132,39 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   const hasPhone = extractPhoneFromDeal(deal) || contact?.phone;
   
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2">
-        {/* Botão Ligar */}
-        <Button
-          className="bg-primary hover:bg-primary/90"
-          onClick={handleCall}
-          disabled={isSearchingPhone}
-        >
-          {isSearchingPhone ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Phone className="h-4 w-4 mr-2" />
-          )}
-          {isTestDeal ? 'Ligar (Teste)' : 'Ligar'}
-        </Button>
-        
-        {/* Botão WhatsApp */}
-        <Button
-          variant="secondary"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white"
-          onClick={handleWhatsApp}
-          disabled={!hasPhone}
-        >
-          <MessageCircle className="h-4 w-4 mr-2" />
-          WhatsApp
-        </Button>
-      </div>
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Botão Ligar */}
+      <Button
+        size="sm"
+        className="bg-primary hover:bg-primary/90 h-8"
+        onClick={handleCall}
+        disabled={isSearchingPhone}
+      >
+        {isSearchingPhone ? (
+          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+        ) : (
+          <Phone className="h-3.5 w-3.5 mr-1.5" />
+        )}
+        {isTestDeal ? 'Ligar' : 'Ligar'}
+      </Button>
       
-      {/* Mover estágio */}
+      {/* Botão WhatsApp */}
+      <Button
+        size="sm"
+        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
+        onClick={handleWhatsApp}
+        disabled={!hasPhone}
+      >
+        <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+        WhatsApp
+      </Button>
+      
+      {/* Mover estágio inline */}
       {futureStages.length > 0 && (
-        <div className="flex gap-2">
+        <>
+          <div className="h-4 w-px bg-border mx-1" />
           <Select value={selectedStageId} onValueChange={setSelectedStageId}>
-            <SelectTrigger className="flex-1 bg-background">
+            <SelectTrigger className="w-[140px] h-8 bg-background text-xs">
               <SelectValue placeholder="Mover para..." />
             </SelectTrigger>
             <SelectContent>
@@ -177,13 +177,15 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
           </Select>
           
           <Button
+            size="icon"
             variant="outline"
+            className="h-8 w-8"
             onClick={handleMoveStage}
             disabled={!selectedStageId || updateDeal.isPending}
           >
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight className="h-3.5 w-3.5" />
           </Button>
-        </div>
+        </>
       )}
     </div>
   );
