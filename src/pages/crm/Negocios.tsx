@@ -208,7 +208,7 @@ const Negocios = () => {
                 ...deal,
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
               }))}
-              originId={selectedPipelineId || undefined}
+              originId={selectedOriginId || selectedPipelineId || undefined}
             />
           )}
         </div>
