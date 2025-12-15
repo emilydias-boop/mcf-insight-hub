@@ -36,13 +36,20 @@ const Contatos = () => {
     contact.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Helper to get valid tags (filter nulls)
-  const getValidTags = (tags: any[]) => {
+  // Helper to get valid tags (normalize and filter nulls)
+  const getValidTags = (tags: any[]): { name: string; color: string | null }[] => {
     if (!tags || !Array.isArray(tags)) return [];
-    return tags.filter((tag: any) => {
-      if (typeof tag === 'string') return tag && tag.trim();
-      return tag && tag.name && tag.name.trim();
-    });
+    return tags
+      .map((tag: any) => {
+        if (typeof tag === 'string' && tag.trim()) {
+          return { name: tag.trim(), color: null };
+        }
+        if (tag && typeof tag === 'object' && tag.name && tag.name.trim()) {
+          return { name: tag.name.trim(), color: tag.color || null };
+        }
+        return null;
+      })
+      .filter(Boolean) as { name: string; color: string | null }[];
   };
 
   // Helper to get latest deal info
@@ -161,9 +168,14 @@ const Contatos = () => {
                   {/* Tags */}
                   {validTags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {validTags.slice(0, 3).map((tag: any, idx: number) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {typeof tag === 'string' ? tag : tag.name}
+                      {validTags.slice(0, 3).map((tag, idx) => (
+                        <Badge 
+                          key={idx} 
+                          variant="secondary" 
+                          className="text-xs"
+                          style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
+                        >
+                          {tag.name}
                         </Badge>
                       ))}
                       {validTags.length > 3 && (

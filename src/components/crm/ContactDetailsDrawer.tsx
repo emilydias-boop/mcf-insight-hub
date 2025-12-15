@@ -29,6 +29,24 @@ export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactD
       .join('')
       .toUpperCase();
   };
+
+  // Helper to get valid tags (normalize and filter nulls)
+  const getValidTags = (tags: any[]): { name: string; color: string | null }[] => {
+    if (!tags || !Array.isArray(tags)) return [];
+    return tags
+      .map((tag: any) => {
+        if (typeof tag === 'string' && tag.trim()) {
+          return { name: tag.trim(), color: null };
+        }
+        if (tag && typeof tag === 'object' && tag.name && tag.name.trim()) {
+          return { name: tag.name.trim(), color: tag.color || null };
+        }
+        return null;
+      })
+      .filter(Boolean) as { name: string; color: string | null }[];
+  };
+
+  const validTags = getValidTags(contactData?.tags || []);
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -86,19 +104,23 @@ export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactD
               </div>
               
               {/* Tags */}
-              {contactData.tags && contactData.tags.length > 0 && (
+              {validTags.length > 0 && (
                 <div className="space-y-3">
                   <h3 className="font-semibold text-foreground flex items-center gap-2">
                     🏷️ Tags
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {contactData.tags.map((tag: any, idx: number) => (
+                    {validTags.map((tag, idx) => (
                       <Badge
                         key={idx}
                         variant="secondary"
-                        className="bg-primary/10 text-primary border-0"
+                        style={tag.color ? { 
+                          backgroundColor: `${tag.color}20`, 
+                          color: tag.color,
+                          borderColor: tag.color 
+                        } : undefined}
                       >
-                        {typeof tag === 'string' ? tag : tag.name || 'Tag'}
+                        {tag.name}
                       </Badge>
                     ))}
                   </div>
