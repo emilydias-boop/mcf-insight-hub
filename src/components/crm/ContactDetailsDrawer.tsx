@@ -30,14 +30,34 @@ export const ContactDetailsDrawer = ({ contactId, open, onOpenChange }: ContactD
       .toUpperCase();
   };
 
-  // Helper to get valid tags (normalize and filter nulls)
+  // Helper to get valid tags (parse JSON strings and filter nulls)
   const getValidTags = (tags: any[]): { name: string; color: string | null }[] => {
     if (!tags || !Array.isArray(tags)) return [];
     return tags
       .map((tag: any) => {
-        if (typeof tag === 'string' && tag.trim()) {
-          return { name: tag.trim(), color: null };
+        // Se for string, tentar parsear como JSON
+        if (typeof tag === 'string') {
+          const trimmed = tag.trim();
+          // Se parece ser JSON (começa com {), parsear
+          if (trimmed.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (parsed && parsed.name && parsed.name.trim()) {
+                return { name: parsed.name.trim(), color: parsed.color || null };
+              }
+            } catch {
+              // Se falhar parse, usar string diretamente se não vazia
+              if (trimmed) {
+                return { name: trimmed, color: null };
+              }
+            }
+          } else if (trimmed) {
+            // String simples não-JSON
+            return { name: trimmed, color: null };
+          }
+          return null;
         }
+        // Se já for objeto
         if (tag && typeof tag === 'object' && tag.name && tag.name.trim()) {
           return { name: tag.name.trim(), color: tag.color || null };
         }
