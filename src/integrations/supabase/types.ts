@@ -3111,7 +3111,8 @@ export type Database = {
       }
       user_performance_summary: {
         Row: {
-          avg_performance_3m: number | null
+          commission_rate: number | null
+          department: string | null
           email: string | null
           fixed_salary: number | null
           full_name: string | null
@@ -3119,13 +3120,9 @@ export type Database = {
           is_active: boolean | null
           ote: number | null
           position: string | null
-          red_flags_count: number | null
           role: Database["public"]["Enums"]["app_role"] | null
           status: Database["public"]["Enums"]["user_status"] | null
-          targets_achieved: number | null
-          total_targets: number | null
           user_id: string | null
-          yellow_flags_count: number | null
         }
         Relationships: []
       }
