@@ -86,7 +86,7 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       // Buscar transações Hubla completadas no período
       let query = supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name, customer_email, source')
+        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name, customer_email, source, sale_date')
         .eq('sale_status', 'completed');
       
       // Aplicar filtro de data com fuso horário de Brasília
@@ -142,105 +142,61 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       });
 
       // ===== FATURAMENTO CLINT (BRUTO) =====
-      // NOVA LÓGICA: Incluir offers OU transações normais sem offers correspondentes
-      // Excluir parents que são containers (têm offers filhos)
-      const seenClintBrutoIds = new Set<string>();
-      const faturamentoClintBruto = transactions
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const hublaId = tx.hubla_id || '';
-          const source = tx.source || 'hubla';
-          
-          // Excluir A006 - Renovação Parceiro MCF
-          if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return false;
-          
-          // Verificar se é produto válido do Faturamento Clint
-          const isValidProduct = isProductInFaturamentoClint(tx.product_name || '');
-          
-          // Excluir source='make' (duplicatas)
-          const isValidSource = ['hubla', 'kiwify', 'manual'].includes(source);
-          
-          // Excluir newsale-%
-          if (hublaId.startsWith('newsale-')) return false;
-          
-          // NOVA LÓGICA: Identificar offers vs parents
-          const isOffer = hublaId.includes('-offer-');
-          const isParentWithOffers = parentIdsWithOffers.has(hublaId);
-          
-          // Excluir parents que são containers (têm offers filhos)
-          if (!isOffer && isParentWithOffers) return false;
-          
-          // Exigir customer_email válido
-          const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
-          
-          // Deduplicar por hubla_id
-          if (seenClintBrutoIds.has(hublaId)) return false;
-          
-          if (isValidProduct && isValidSource && hasValidEmail) {
-            seenClintBrutoIds.add(hublaId);
-            return true;
-          }
-          return false;
-        })
-        .reduce((sum, tx) => {
-          // Usar "Valor do produto" do raw_data se disponível
-          const rawData = tx.raw_data as Record<string, any> | null;
-          let valorProduto = 0;
-          
-          if (rawData?.['Valor do produto']) {
-            const valorStr = String(rawData['Valor do produto']);
-            valorProduto = parseFloat(valorStr.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
-          } else if (rawData?.event?.invoice?.amount?.subtotalCents) {
-            valorProduto = rawData.event.invoice.amount.subtotalCents / 100;
-          } else {
-            valorProduto = tx.product_price || 0;
-          }
-          
-          return sum + valorProduto;
-        }, 0);
+      // CORREÇÃO: Usar product_price REAL do banco para primeira parcela apenas
+      // Deduplicar por email+data+produto, Hubla tem prioridade sobre Make
+      const seenClintKeys = new Map<string, { source: string; hubla_id: string }>();
+      const deduplicatedClintTransactions: typeof transactions = [];
+      
+      transactions.forEach(tx => {
+        const productName = (tx.product_name || '').toUpperCase();
+        const hublaId = tx.hubla_id || '';
+        const source = tx.source || 'hubla';
+        
+        // Excluir newsale-
+        if (hublaId.startsWith('newsale-')) return;
+        
+        // Excluir A006 - Renovação Parceiro MCF
+        if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return;
+        
+        // Verificar se é produto válido do Faturamento Clint
+        const isValidProduct = isProductInFaturamentoClint(tx.product_name || '');
+        if (!isValidProduct) return;
+        
+        // Excluir parents que são containers (têm offers filhos)
+        const isOffer = hublaId.includes('-offer-');
+        const isParentWithOffers = parentIdsWithOffers.has(hublaId);
+        if (!isOffer && isParentWithOffers) return;
+        
+        // Exigir customer_email válido
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        if (!email) return;
+        
+        // Chave de deduplicação: email + data + primeiros 10 chars do produto
+        const date = (tx.sale_date || '').split('T')[0];
+        const key = `${email}|${date}|${productName.substring(0, 10)}`;
+        
+        const existing = seenClintKeys.get(key);
+        if (!existing) {
+          seenClintKeys.set(key, { source, hubla_id: hublaId });
+          deduplicatedClintTransactions.push(tx);
+        } else if (source === 'hubla' && existing.source === 'make') {
+          // Hubla substitui Make
+          const idx = deduplicatedClintTransactions.findIndex(t => t.hubla_id === existing.hubla_id);
+          if (idx >= 0) deduplicatedClintTransactions[idx] = tx;
+          seenClintKeys.set(key, { source, hubla_id: hublaId });
+        }
+      });
+      
+      // Bruto: apenas primeira parcela, usar product_price real
+      const faturamentoClintBruto = deduplicatedClintTransactions
+        .filter(tx => (tx.installment_number || 1) === 1)
+        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // NOVA LÓGICA: Mesma deduplicação parent/offer do Faturamento Clint
-      const seenLiquidoIds = new Set<string>();
-      const faturamentoLiquido = transactions
-        .filter(tx => {
-          const productName = (tx.product_name || '').toUpperCase();
-          const hublaId = tx.hubla_id || '';
-          const source = tx.source || 'hubla';
-          
-          // Excluir A006 - Renovação Parceiro MCF
-          if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return false;
-          
-          const isValidProduct = isProductInFaturamentoClint(tx.product_name || '');
-          const isValidSource = ['hubla', 'kiwify', 'manual'].includes(source);
-          
-          // Excluir newsale-%
-          if (hublaId.startsWith('newsale-')) return false;
-          
-          // NOVA LÓGICA: Identificar offers vs parents
-          const isOffer = hublaId.includes('-offer-');
-          const isParentWithOffers = parentIdsWithOffers.has(hublaId);
-          
-          // Excluir parents que são containers (têm offers filhos)
-          if (!isOffer && isParentWithOffers) return false;
-          
-          const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
-          
-          // Deduplicar por hubla_id
-          if (seenLiquidoIds.has(hublaId)) return false;
-          
-          if (isValidProduct && isValidSource && hasValidEmail) {
-            seenLiquidoIds.add(hublaId);
-            return true;
-          }
-          return false;
-        })
-        .reduce((sum, tx) => {
-          const netValue = tx.net_value && tx.net_value > 0 
-            ? tx.net_value 
-            : (tx.product_price || 0) * 0.9417;
-          return sum + netValue;
-        }, 0);
+      // CORREÇÃO: Usar net_value REAL do banco, todas as parcelas contam
+      // Usa mesma deduplicação do Faturamento Clint (email+data+produto, Hubla prioridade)
+      const faturamentoLiquido = deduplicatedClintTransactions
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== INCORPORADOR 50K (LÍQUIDO) - mantém lógica anterior para compatibilidade =====
       const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A009'];
