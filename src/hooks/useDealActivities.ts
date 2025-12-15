@@ -12,6 +12,7 @@ export const useCreateDealActivity = () => {
       description: string;
       from_stage?: string;
       to_stage?: string;
+      user_id?: string;
       metadata?: any;
     }) => {
       const { data: result, error } = await supabase
