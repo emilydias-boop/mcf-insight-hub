@@ -71,7 +71,7 @@ export const useSdrIntermediacoes = (sdrId: string | undefined, anoMes: string) 
   return useQuery({
     queryKey: ['sdr-intermediacoes', sdrId, anoMes],
     queryFn: async () => {
-      if (!sdrId) return [];
+      if (!sdrId || !anoMes) return [];
       
       const { data, error } = await supabase
         .from('sdr_intermediacoes')
@@ -83,7 +83,7 @@ export const useSdrIntermediacoes = (sdrId: string | undefined, anoMes: string) 
       if (error) throw error;
       return data as SdrIntermediacao[];
     },
-    enabled: !!sdrId,
+    enabled: !!sdrId && !!anoMes,
   });
 };
 
