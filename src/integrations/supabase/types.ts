@@ -50,6 +50,69 @@ export type Database = {
         }
         Relationships: []
       }
+      activity_templates: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          default_due_days: number | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          order_index: number
+          origin_id: string | null
+          stage_id: string | null
+          type: Database["public"]["Enums"]["activity_task_type"]
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          default_due_days?: number | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          order_index?: number
+          origin_id?: string | null
+          stage_id?: string | null
+          type?: Database["public"]["Enums"]["activity_task_type"]
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          default_due_days?: number | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          order_index?: number
+          origin_id?: string | null
+          stage_id?: string | null
+          type?: Database["public"]["Enums"]["activity_task_type"]
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_templates_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_templates_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alert_rules: {
         Row: {
           alert_level: Database["public"]["Enums"]["alert_level"]
@@ -962,6 +1025,79 @@ export type Database = {
           stage_order?: number
         }
         Relationships: []
+      }
+      deal_tasks: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          contact_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deal_id: string
+          description: string | null
+          due_date: string | null
+          id: string
+          owner_id: string | null
+          status: Database["public"]["Enums"]["activity_task_status"]
+          template_id: string | null
+          title: string
+          type: Database["public"]["Enums"]["activity_task_type"]
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          owner_id?: string | null
+          status?: Database["public"]["Enums"]["activity_task_status"]
+          template_id?: string | null
+          title: string
+          type?: Database["public"]["Enums"]["activity_task_type"]
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          owner_id?: string | null
+          status?: Database["public"]["Enums"]["activity_task_status"]
+          template_id?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["activity_task_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_tasks_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_tasks_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_tasks_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "activity_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       funnel_data: {
         Row: {
@@ -2932,6 +3068,29 @@ export type Database = {
       }
     }
     Views: {
+      deal_task_stats_monthly: {
+        Row: {
+          completed_by: string | null
+          completion_rate: number | null
+          month: string | null
+          overdue_completed: number | null
+          tasks_canceled: number | null
+          tasks_completed: number | null
+          tasks_pending: number | null
+          tasks_total: number | null
+          template_id: string | null
+          type: Database["public"]["Enums"]["activity_task_type"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_tasks_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "activity_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_performance_summary: {
         Row: {
           avg_performance_3m: number | null
@@ -2980,6 +3139,8 @@ export type Database = {
       }
     }
     Enums: {
+      activity_task_status: "pending" | "done" | "canceled"
+      activity_task_type: "call" | "whatsapp" | "email" | "meeting" | "other"
       alert_level: "info" | "warning" | "critical"
       app_role:
         | "admin"
@@ -3170,6 +3331,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_task_status: ["pending", "done", "canceled"],
+      activity_task_type: ["call", "whatsapp", "email", "meeting", "other"],
       alert_level: ["info", "warning", "critical"],
       app_role: ["admin", "manager", "viewer", "sdr", "closer", "coordenador"],
       auction_status: ["ativo", "encerrado", "cancelado"],
