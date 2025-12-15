@@ -1,69 +1,130 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useClintContacts, useClintDeals, useClintOrigins, useClintGroups } from '@/hooks/useClintAPI';
-import { Users, Briefcase, MapPin, Layers, TrendingUp, DollarSign } from 'lucide-react';
+import { Users, Briefcase, MapPin, TrendingUp, DollarSign, CheckCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { formatCurrency } from '@/lib/formatters';
 
 const Overview = () => {
-  const { data: contacts, isLoading: loadingContacts } = useClintContacts();
-  const { data: deals, isLoading: loadingDeals } = useClintDeals();
-  const { data: origins, isLoading: loadingOrigins } = useClintOrigins();
-  const { data: groups, isLoading: loadingGroups } = useClintGroups();
+  // Estatísticas agregadas com COUNT (eficiente)
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ['crm-overview-stats'],
+    queryFn: async () => {
+      const [
+        { count: totalContacts },
+        { count: totalDeals },
+        { count: totalOrigins },
+        { data: pipelineData },
+        { data: wonDealsData }
+      ] = await Promise.all([
+        supabase.from('crm_contacts').select('*', { count: 'exact', head: true }),
+        supabase.from('crm_deals').select('*', { count: 'exact', head: true }),
+        supabase.from('crm_origins').select('*', { count: 'exact', head: true }),
+        supabase.from('crm_deals').select('value').not('value', 'is', null),
+        supabase.from('crm_deals')
+          .select('id, stage:crm_stages!inner(stage_name)')
+          .or('stage_name.ilike.%venda realizada%,stage_name.ilike.%contrato pago%', { foreignTable: 'crm_stages' })
+      ]);
 
-  const contactsData = contacts?.data || [];
-  const dealsData = deals?.data || [];
-  const originsData = origins?.data || [];
-  const groupsData = groups?.data || [];
+      const pipelineValue = pipelineData?.reduce((sum, d) => sum + (d.value || 0), 0) || 0;
+      const wonDeals = wonDealsData?.length || 0;
+      const conversionRate = totalDeals && totalDeals > 0 
+        ? ((wonDeals / totalDeals) * 100).toFixed(1) 
+        : '0';
 
-  const totalDealsValue = dealsData.reduce((sum: number, deal: any) => sum + (deal.value || 0), 0);
-  const activeDeals = dealsData.filter((deal: any) => deal.stage !== 'lost' && deal.stage !== 'won').length;
+      return {
+        totalContacts: totalContacts || 0,
+        totalDeals: totalDeals || 0,
+        totalOrigins: totalOrigins || 0,
+        pipelineValue,
+        wonDeals,
+        conversionRate
+      };
+    },
+    staleTime: 60000, // 1 minuto
+  });
 
-  const stats = [
+  // Contatos recentes (últimos 5)
+  const { data: recentContacts, isLoading: loadingContacts } = useQuery({
+    queryKey: ['crm-recent-contacts'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('crm_contacts')
+        .select('id, name, email, phone, tags, created_at')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+    staleTime: 60000,
+  });
+
+  // Negócios em destaque (top 5 por valor)
+  const { data: topDeals, isLoading: loadingDeals } = useQuery({
+    queryKey: ['crm-top-deals'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('crm_deals')
+        .select(`
+          id, 
+          name, 
+          value, 
+          stage:crm_stages(stage_name)
+        `)
+        .not('value', 'is', null)
+        .order('value', { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+    staleTime: 60000,
+  });
+
+  const statsCards = [
     {
       title: 'Total de Contatos',
-      value: contactsData.length,
+      value: stats?.totalContacts?.toLocaleString('pt-BR') || '0',
       icon: Users,
       description: 'Contatos cadastrados',
-      loading: loadingContacts,
+      loading: loadingStats,
       color: 'text-primary',
     },
     {
-      title: 'Negócios Ativos',
-      value: activeDeals,
+      title: 'Total de Negócios',
+      value: stats?.totalDeals?.toLocaleString('pt-BR') || '0',
       icon: Briefcase,
-      description: 'Em andamento',
-      loading: loadingDeals,
+      description: 'Negócios no pipeline',
+      loading: loadingStats,
       color: 'text-warning',
     },
     {
       title: 'Valor do Pipeline',
-      value: `R$ ${(totalDealsValue / 1000).toFixed(1)}k`,
+      value: formatCurrency(stats?.pipelineValue || 0),
       icon: DollarSign,
       description: 'Valor total dos negócios',
-      loading: loadingDeals,
+      loading: loadingStats,
       color: 'text-success',
     },
     {
       title: 'Origens Ativas',
-      value: originsData.length,
+      value: stats?.totalOrigins?.toLocaleString('pt-BR') || '0',
       icon: MapPin,
       description: 'Canais de captação',
-      loading: loadingOrigins,
+      loading: loadingStats,
       color: 'text-accent',
     },
     {
-      title: 'Grupos',
-      value: groupsData.length,
-      icon: Layers,
-      description: 'Segmentações ativas',
-      loading: loadingGroups,
-      color: 'text-muted-foreground',
+      title: 'Vendas Realizadas',
+      value: stats?.wonDeals?.toLocaleString('pt-BR') || '0',
+      icon: CheckCircle,
+      description: 'Negócios convertidos',
+      loading: loadingStats,
+      color: 'text-success',
     },
     {
       title: 'Taxa de Conversão',
-      value: dealsData.length > 0 ? `${((dealsData.filter((d: any) => d.stage === 'won').length / dealsData.length) * 100).toFixed(1)}%` : '0%',
+      value: `${stats?.conversionRate || '0'}%`,
       icon: TrendingUp,
       description: 'Negócios ganhos',
-      loading: loadingDeals,
+      loading: loadingStats,
       color: 'text-primary',
     },
   ];
@@ -76,7 +137,7 @@ const Overview = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {stats.map((stat) => {
+        {statsCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.title} className="bg-card border-border">
@@ -116,17 +177,17 @@ const Overview = () => {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : contactsData.length > 0 ? (
+            ) : recentContacts && recentContacts.length > 0 ? (
               <div className="space-y-4">
-                {contactsData.slice(0, 5).map((contact: any) => (
+                {recentContacts.map((contact) => (
                   <div key={contact.id} className="flex items-center justify-between border-b border-border pb-3 last:border-0 last:pb-0">
                     <div>
                       <p className="font-medium text-foreground">{contact.name}</p>
-                      <p className="text-sm text-muted-foreground">{contact.email}</p>
+                      <p className="text-sm text-muted-foreground">{contact.email || contact.phone || 'Sem contato'}</p>
                     </div>
                     {contact.tags && contact.tags.length > 0 && (
                       <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
-                        {typeof contact.tags[0] === 'string' ? contact.tags[0] : contact.tags[0]?.name || 'Tag'}
+                        {contact.tags[0]}
                       </span>
                     )}
                   </div>
@@ -140,7 +201,7 @@ const Overview = () => {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-foreground">Negócios em Destaque</CardTitle>
+            <CardTitle className="text-foreground">Maiores Negócios</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingDeals ? (
@@ -149,16 +210,18 @@ const Overview = () => {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : dealsData.length > 0 ? (
+            ) : topDeals && topDeals.length > 0 ? (
               <div className="space-y-4">
-                {dealsData.slice(0, 5).map((deal: any) => (
+                {topDeals.map((deal: any) => (
                   <div key={deal.id} className="flex items-center justify-between border-b border-border pb-3 last:border-0 last:pb-0">
                     <div>
                       <p className="font-medium text-foreground">{deal.name}</p>
-                      <p className="text-sm text-muted-foreground">{deal.stage}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {deal.stage?.stage_name || 'Sem estágio'}
+                      </p>
                     </div>
                     <span className="font-semibold text-success">
-                      R$ {(deal.value || 0).toLocaleString('pt-BR')}
+                      {formatCurrency(deal.value || 0)}
                     </span>
                   </div>
                 ))}
