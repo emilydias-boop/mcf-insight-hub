@@ -21,15 +21,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useOriginManagement, OriginUpdate, ManagedOrigin } from '@/hooks/useOriginManagement';
-import { Search, Save, MapPin, GitBranch, LayoutGrid, Undo2 } from 'lucide-react';
+import { Search, Save, MapPin, GitBranch, LayoutGrid, Undo2, Folder } from 'lucide-react';
 
 // Helper function to check if a pipeline_type value represents a main pipeline
 const isPipelineType = (type: string | null | undefined) => type && type !== 'outros';
 
 const Origens = () => {
-  const { origins, isLoading, updateOrigins, isUpdating } = useOriginManagement();
+  const { origins, groups, isLoading, updateOrigins, isUpdating } = useOriginManagement();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pipelines' | 'sub-origins'>('all');
+  const [filterGroup, setFilterGroup] = useState<string>('all');
   
   // Track local edits
   const [edits, setEdits] = useState<Map<string, Partial<ManagedOrigin>>>(new Map());
@@ -54,8 +55,17 @@ const Origens = () => {
       filtered = filtered.filter(o => !isPipelineType(o.pipeline_type));
     }
 
+    // Apply group filter
+    if (filterGroup !== 'all') {
+      if (filterGroup === 'none') {
+        filtered = filtered.filter(o => !o.group_id);
+      } else {
+        filtered = filtered.filter(o => o.group_id === filterGroup);
+      }
+    }
+
     return filtered;
-  }, [origins, searchTerm, filterType]);
+  }, [origins, searchTerm, filterType, filterGroup]);
 
   const hasChanges = edits.size > 0;
 
@@ -98,6 +108,7 @@ const Origens = () => {
       ...(changes.display_name !== undefined && { display_name: changes.display_name }),
       ...(changes.parent_id !== undefined && { parent_id: changes.parent_id }),
       ...(changes.pipeline_type !== undefined && { pipeline_type: changes.pipeline_type }),
+      ...(changes.group_id !== undefined && { group_id: changes.group_id }),
     }));
 
     if (updates.length > 0) {
@@ -118,8 +129,9 @@ const Origens = () => {
     const pipelinesCount = origins.filter(o => isPipelineType(o.pipeline_type)).length;
     const withParent = origins.filter(o => o.parent_id).length;
     const totalDeals = origins.reduce((sum, o) => sum + (o.deal_count || 0), 0);
-    return { total, pipelinesCount, withParent, totalDeals };
-  }, [origins]);
+    const totalGroups = groups.length;
+    return { total, pipelinesCount, withParent, totalDeals, totalGroups };
+  }, [origins, groups]);
 
   return (
     <div className="space-y-6">
@@ -143,7 +155,7 @@ const Origens = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Origens</CardTitle>
@@ -158,12 +170,24 @@ const Origens = () => {
 
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pipelines Principais</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pipelines</CardTitle>
             <LayoutGrid className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-16" /> : (
               <div className="text-2xl font-bold text-foreground">{stats.pipelinesCount}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Grupos</CardTitle>
+            <Folder className="h-4 w-4 text-info" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <div className="text-2xl font-bold text-foreground">{stats.totalGroups}</div>
             )}
           </CardContent>
         </Card>
@@ -183,7 +207,7 @@ const Origens = () => {
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Negócios</CardTitle>
-            <MapPin className="h-4 w-4 text-info" />
+            <MapPin className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-16" /> : (
@@ -194,8 +218,8 @@ const Origens = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
-        <div className="relative flex-1">
+      <div className="flex gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome ou grupo..."
@@ -205,13 +229,27 @@ const Origens = () => {
           />
         </div>
         <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-          <SelectTrigger className="w-[200px] bg-card border-border">
-            <SelectValue placeholder="Filtrar por tipo" />
+          <SelectTrigger className="w-[180px] bg-card border-border">
+            <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
             <SelectItem value="pipelines">Apenas Pipelines</SelectItem>
             <SelectItem value="sub-origins">Apenas Sub-origens</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterGroup} onValueChange={setFilterGroup}>
+          <SelectTrigger className="w-[200px] bg-card border-border">
+            <SelectValue placeholder="Grupo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os grupos</SelectItem>
+            <SelectItem value="none">Sem grupo</SelectItem>
+            {groups.map((group) => (
+              <SelectItem key={group.id} value={group.id}>
+                {group.display_name || group.name} ({group.origins_count})
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -298,13 +336,22 @@ const Origens = () => {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          {origin.group_name ? (
-                            <Badge variant="secondary" className="truncate max-w-[140px]">
-                              {origin.group_name}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          )}
+                          <Select
+                            value={getEditedValue(origin, 'group_id') || 'none'}
+                            onValueChange={(v) => updateEdit(origin.id, 'group_id', v === 'none' ? null : v)}
+                          >
+                            <SelectTrigger className="h-8 bg-background border-border">
+                              <SelectValue placeholder="Sem grupo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem grupo</SelectItem>
+                              {groups.map((group) => (
+                                <SelectItem key={group.id} value={group.id}>
+                                  {group.display_name || group.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell className="text-right">
                           <span className="text-foreground font-medium">
