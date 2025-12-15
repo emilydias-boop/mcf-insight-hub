@@ -177,7 +177,7 @@ const Negocios = () => {
           onClear={clearFilters}
         />
         
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
           {error ? (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
