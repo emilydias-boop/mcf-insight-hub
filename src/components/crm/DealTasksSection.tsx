@@ -3,13 +3,13 @@ import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Mail, Calendar, MessageSquare, MoreHorizontal,
-  Clock, Plus, AlertCircle, CheckSquare
+  Clock, Plus, AlertCircle, CheckSquare, Wand2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useDealTasks, useCompleteDealTask, useCancelDealTask, DealTask, TaskType } from '@/hooks/useDealTasks';
+import { useDealTasks, useCompleteDealTask, useCancelDealTask, useGenerateTasksForStage, DealTask, TaskType } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { CreateTaskDialog } from './CreateTaskDialog';
 import { TaskDetailPanel } from './TaskDetailPanel';
@@ -52,6 +52,7 @@ export function DealTasksSection({
   const { data: tasks, isLoading } = useDealTasks(dealId);
   const completeTask = useCompleteDealTask();
   const cancelTask = useCancelDealTask();
+  const generateTasks = useGenerateTasksForStage();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -179,8 +180,29 @@ export function DealTasksSection({
         {/* Task List */}
         <ScrollArea className="flex-1">
           {filteredTasks.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground text-sm">
-              {filter === 'pending' ? 'Nenhuma atividade pendente' : 'Nenhuma atividade encontrada'}
+            <div className="p-6 text-center space-y-3">
+              <p className="text-muted-foreground text-sm">
+                {filter === 'pending' ? 'Nenhuma atividade pendente' : 'Nenhuma atividade encontrada'}
+              </p>
+              {/* Botão para gerar tarefas do estágio */}
+              {filter === 'pending' && stageId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => generateTasks.mutate({
+                    dealId,
+                    stageId,
+                    originId,
+                    ownerId,
+                    createdBy: user?.id,
+                  })}
+                  disabled={generateTasks.isPending}
+                  className="gap-2"
+                >
+                  <Wand2 className="h-4 w-4" />
+                  {generateTasks.isPending ? 'Gerando...' : 'Gerar tarefas do estágio'}
+                </Button>
+              )}
             </div>
           ) : (
             <div className="divide-y">

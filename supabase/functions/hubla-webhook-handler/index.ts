@@ -306,12 +306,88 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       
       if (!dealError && newDeal) {
         console.log(`[CRM] Deal criado: ${data.name} - A010 (${newDeal.id})`);
+        
+        // 6. Gerar tarefas automáticas baseadas nos templates do estágio
+        if (stageId) {
+          await generateTasksForDeal(supabase, {
+            dealId: newDeal.id,
+            contactId: contactId,
+            ownerId: null,
+            originId,
+            stageId,
+          });
+        }
       } else if (dealError) {
         console.error('[CRM] Erro ao criar deal:', dealError);
       }
     }
   } catch (err) {
     console.error('[CRM] Erro ao criar/atualizar contato:', err);
+  }
+}
+
+// ============= HELPER: Gerar tarefas automáticas para deal =============
+async function generateTasksForDeal(supabase: any, params: {
+  dealId: string;
+  contactId: string | null;
+  ownerId: string | null;
+  originId: string | null;
+  stageId: string;
+}): Promise<void> {
+  try {
+    // Buscar templates ativos para este estágio
+    let query = supabase
+      .from('activity_templates')
+      .select('*')
+      .eq('is_active', true)
+      .eq('stage_id', params.stageId)
+      .order('order_index', { ascending: true });
+
+    if (params.originId) {
+      query = query.or(`origin_id.eq.${params.originId},origin_id.is.null`);
+    }
+
+    const { data: templates, error: fetchError } = await query;
+    if (fetchError) {
+      console.error('[Tasks] Erro ao buscar templates:', fetchError);
+      return;
+    }
+
+    if (!templates || templates.length === 0) {
+      console.log('[Tasks] Nenhum template encontrado para o estágio');
+      return;
+    }
+
+    // Criar tarefas baseadas nos templates
+    const now = new Date();
+    const tasks = templates.map((template: any) => ({
+      deal_id: params.dealId,
+      contact_id: params.contactId,
+      template_id: template.id,
+      owner_id: params.ownerId,
+      title: template.name,
+      description: template.description,
+      type: template.type,
+      status: 'pending',
+      due_date: template.sla_offset_minutes 
+        ? new Date(now.getTime() + template.sla_offset_minutes * 60000).toISOString()
+        : template.default_due_days
+          ? new Date(now.getTime() + template.default_due_days * 24 * 60 * 60000).toISOString()
+          : new Date(now.getTime() + 24 * 60 * 60000).toISOString(), // fallback: 1 day
+      created_by: null,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('deal_tasks')
+      .insert(tasks);
+
+    if (insertError) {
+      console.error('[Tasks] Erro ao criar tarefas:', insertError);
+    } else {
+      console.log(`[Tasks] ${tasks.length} tarefa(s) criada(s) para deal ${params.dealId}`);
+    }
+  } catch (err) {
+    console.error('[Tasks] Erro ao gerar tarefas:', err);
   }
 }
 
