@@ -774,6 +774,7 @@ export type Database = {
           clint_id: string
           created_at: string | null
           description: string | null
+          display_name: string | null
           id: string
           name: string
           updated_at: string | null
@@ -782,6 +783,7 @@ export type Database = {
           clint_id: string
           created_at?: string | null
           description?: string | null
+          display_name?: string | null
           id?: string
           name: string
           updated_at?: string | null
@@ -790,6 +792,7 @@ export type Database = {
           clint_id?: string
           created_at?: string | null
           description?: string | null
+          display_name?: string | null
           id?: string
           name?: string
           updated_at?: string | null
@@ -802,10 +805,12 @@ export type Database = {
           contact_count: number | null
           created_at: string | null
           description: string | null
+          display_name: string | null
           group_id: string | null
           id: string
           name: string
           parent_id: string | null
+          pipeline_type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -813,10 +818,12 @@ export type Database = {
           contact_count?: number | null
           created_at?: string | null
           description?: string | null
+          display_name?: string | null
           group_id?: string | null
           id?: string
           name: string
           parent_id?: string | null
+          pipeline_type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -824,10 +831,12 @@ export type Database = {
           contact_count?: number | null
           created_at?: string | null
           description?: string | null
+          display_name?: string | null
           group_id?: string | null
           id?: string
           name?: string
           parent_id?: string | null
+          pipeline_type?: string | null
           updated_at?: string | null
         }
         Relationships: [
