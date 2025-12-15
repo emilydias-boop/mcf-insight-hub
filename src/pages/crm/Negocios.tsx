@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -7,6 +7,7 @@ import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
+import { PipelineSelector, useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -15,6 +16,7 @@ import { toast } from 'sonner';
 
 const Negocios = () => {
   const { role, user } = useAuth();
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const [filters, setFilters] = useState<DealFiltersState>({
     search: '',
@@ -22,6 +24,24 @@ const Negocios = () => {
     tags: [],
     owner: null,
   });
+  
+  // Buscar pipelines para definir o default
+  const { data: pipelines } = useCRMPipelines();
+  
+  // Definir pipeline padrão como "PIPELINE INSIDE SALES" se disponível
+  useEffect(() => {
+    if (pipelines && pipelines.length > 0 && !selectedPipelineId) {
+      const insideSales = pipelines.find(p => 
+        p.name === 'PIPELINE INSIDE SALES' || 
+        p.display_name?.includes('Inside Sales')
+      );
+      if (insideSales) {
+        setSelectedPipelineId(insideSales.id);
+      } else {
+        setSelectedPipelineId(pipelines[0].id);
+      }
+    }
+  }, [pipelines, selectedPipelineId]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -37,8 +57,9 @@ const Negocios = () => {
     enabled: !!user?.id
   });
   
+  // Usar pipeline como filtro principal, sub-origem como filtro secundário
   const { data: deals, isLoading, error } = useCRMDeals({
-    originId: selectedOriginId || undefined,
+    originId: selectedOriginId || selectedPipelineId || undefined,
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
@@ -88,36 +109,53 @@ const Negocios = () => {
     });
   };
   
+  // Limpar sub-origem ao trocar de pipeline
+  const handlePipelineChange = (pipelineId: string | null) => {
+    setSelectedPipelineId(pipelineId);
+    setSelectedOriginId(null); // Reset sub-origem ao trocar pipeline
+  };
+  
   return (
     <div className="flex h-[calc(100vh-120px)]">
       <OriginsSidebar
+        pipelineId={selectedPipelineId}
         selectedOriginId={selectedOriginId}
         onSelectOrigin={setSelectedOriginId}
       />
       
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <div className="flex items-center justify-between p-4 border-b">
-          <div>
-            <h2 className="text-2xl font-bold">
-              {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''} de negócio
-            </p>
+        <div className="flex items-center justify-between p-4 border-b gap-4">
+          <div className="flex items-center gap-6">
+            <div>
+              <h2 className="text-xl font-bold">
+                {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            
+            {/* Seletor de Funil */}
+            <PipelineSelector
+              selectedPipelineId={selectedPipelineId}
+              onSelectPipeline={handlePipelineChange}
+            />
           </div>
+          
           <div className="flex gap-2">
             <Button 
               variant="outline" 
               onClick={handleSync}
               disabled={syncMutation.isPending}
+              size="sm"
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
               Sincronizar
             </Button>
             <DealFormDialog
-              defaultOriginId={selectedOriginId || undefined}
+              defaultOriginId={selectedOriginId || selectedPipelineId || undefined}
               trigger={
-                <Button>
+                <Button size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Novo Negócio
                 </Button>
@@ -173,7 +211,7 @@ const Negocios = () => {
                 ...deal,
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
               }))}
-              originId={selectedOriginId || undefined}
+              originId={selectedPipelineId || undefined}
             />
           )}
         </div>

@@ -3,11 +3,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useCRMOrigins } from '@/hooks/useCRMData';
+import { Search, Layers, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { cn } from '@/lib/utils';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface OriginsSidebarProps {
+  pipelineId?: string | null;
   selectedOriginId: string | null;
   onSelectOrigin: (originId: string | null) => void;
 }
@@ -15,123 +17,135 @@ interface OriginsSidebarProps {
 interface Group {
   id: string;
   name: string;
+  display_name?: string | null;
   children: Origin[];
 }
 
 interface Origin {
   id: string;
   name: string;
+  display_name?: string | null;
   group_id?: string | null;
-  groupId?: string | null; // Alias para compatibilidade
+  groupId?: string | null;
   contact_count?: number;
+  deal_count?: number;
 }
 
-// Função para construir árvore de origens agrupadas
-const buildOriginTree = (data: any[]): (Group | Origin)[] => {
-  // Grupos são identificados por terem 'children' já definidos do hook
-  return data;
-};
+// Componente principal do sidebar
 
-// Componente recursivo para renderizar árvore
-const OriginTreeItem = ({ 
-  item, 
-  level = 0,
-  selectedId,
-  onSelect 
-}: { 
-  item: Group | Origin; 
-  level?: number;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const isGroup = 'children' in item && Array.isArray(item.children);
-  const hasChildren = isGroup && item.children.length > 0;
+export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin }: OriginsSidebarProps) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   
-  return (
-    <div>
+  const { data: originData, isLoading } = useCRMOriginsByPipeline(pipelineId);
+  
+  // Verificar se é uma lista flat (pipeline específico) ou árvore (todos os funis)
+  const isGroupedTree = originData && Array.isArray(originData) && originData.length > 0 && 'children' in originData[0];
+  
+  // Filtrar origens por busca
+  const filterBySearch = (items: any[]) => {
+    if (!searchTerm) return items;
+    
+    return items.filter((item: any) => {
+      const displayName = item.display_name || item.name;
+      const nameMatch = displayName.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      if ('children' in item && Array.isArray(item.children)) {
+        const childMatch = item.children.some((child: Origin) => {
+          const childDisplay = child.display_name || child.name;
+          return childDisplay.toLowerCase().includes(searchTerm.toLowerCase());
+        });
+        return nameMatch || childMatch;
+      }
+      
+      return nameMatch;
+    });
+  };
+  
+  const filteredData = filterBySearch(originData || []);
+  
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+  
+  // Renderizar origem individual
+  const renderOriginItem = (origin: Origin, indented = false) => {
+    const displayName = origin.display_name || origin.name;
+    const dealCount = origin.deal_count || 0;
+    
+    return (
       <Button
-        variant={!isGroup && selectedId === item.id ? "secondary" : "ghost"}
+        key={origin.id}
+        variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
         className={cn(
-          "w-full justify-between mb-1 h-auto py-2",
-          !isGroup && selectedId === item.id && "bg-primary/10",
-          isGroup && "font-semibold"
+          "w-full justify-between h-auto py-2 text-left",
+          selectedOriginId === origin.id && "bg-primary/10",
+          indented && "pl-8"
         )}
-        style={{ paddingLeft: `${(level * 12) + 8}px` }}
-        onClick={() => !isGroup && onSelect(item.id)}
-        disabled={isGroup}
+        onClick={() => onSelectOrigin(origin.id)}
       >
         <span className="flex items-center gap-2 min-w-0 flex-1">
-          {hasChildren && (
-            <ChevronRight 
-              className={cn(
-                "h-3 w-3 transition-transform flex-shrink-0",
-                isExpanded && "rotate-90"
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsExpanded(!isExpanded);
-              }}
-            />
-          )}
-          {!hasChildren && <div className="w-3" />}
-          {isGroup ? (
-            <Layers className="h-3 w-3 flex-shrink-0" />
-          ) : (
-            <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-          )}
-          <span className="truncate text-xs">{item.name}</span>
-          {!isGroup && 'group_id' in item && !item.group_id && !item.groupId && (
-            <Badge variant="outline" className="text-[10px] px-1 py-0 bg-yellow-500/10 text-yellow-600 border-yellow-500/20 flex-shrink-0">
-              Sem grupo
-            </Badge>
-          )}
+          <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+          <span className="truncate text-xs">{displayName}</span>
         </span>
-        {!isGroup && 'contact_count' in item && item.contact_count !== undefined && (
+        {dealCount > 0 && (
           <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
-            {item.contact_count}
+            {dealCount}
           </Badge>
         )}
       </Button>
-      
-      {hasChildren && isExpanded && isGroup && (
-        <div>
-          {item.children.map(child => (
-            <OriginTreeItem
-              key={child.id}
-              item={child}
-              level={level + 1}
-              selectedId={selectedId}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSidebarProps) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+    );
+  };
   
-  const { data: originTree, isLoading } = useCRMOrigins();
-  
-  // Filtrar origens por busca (busca em grupos e origens)
-  const filteredTree = searchTerm 
-    ? (originTree || []).filter((item: any) => {
-        const isGroup = 'children' in item && Array.isArray(item.children);
-        if (isGroup) {
-          // Se o grupo match ou algum filho match
-          if (item.name.toLowerCase().includes(searchTerm.toLowerCase())) return true;
-          return item.children.some((child: Origin) => 
-            child.name.toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        } else {
-          return item.name.toLowerCase().includes(searchTerm.toLowerCase());
-        }
-      })
-    : (originTree || []);
+  // Renderizar grupo colapsável
+  const renderGroup = (group: Group) => {
+    const displayName = group.display_name || group.name;
+    const isExpanded = expandedGroups.has(group.id);
+    const totalDeals = group.children.reduce((sum, c) => sum + (c.deal_count || 0), 0);
+    
+    return (
+      <Collapsible
+        key={group.id}
+        open={isExpanded}
+        onOpenChange={() => toggleGroup(group.id)}
+      >
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            className="w-full justify-between h-auto py-2 font-medium"
+          >
+            <span className="flex items-center gap-2 min-w-0 flex-1">
+              <ChevronDown 
+                className={cn(
+                  "h-3 w-3 transition-transform flex-shrink-0",
+                  !isExpanded && "-rotate-90"
+                )}
+              />
+              <Layers className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate text-xs">{displayName}</span>
+            </span>
+            {totalDeals > 0 && (
+              <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
+                {totalDeals}
+              </Badge>
+            )}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-1">
+          {group.children.map(child => renderOriginItem(child, true))}
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
   
   return (
     <div className={cn(
@@ -167,7 +181,7 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar..."
+                placeholder="Buscar origem..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -176,7 +190,7 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
           </div>
           
           <ScrollArea className="flex-1">
-            <div className="p-2">
+            <div className="p-2 space-y-1">
               <Button
                 variant={selectedOriginId === null ? "secondary" : "ghost"}
                 className="w-full justify-start mb-2"
@@ -188,19 +202,16 @@ export const OriginsSidebar = ({ selectedOriginId, onSelectOrigin }: OriginsSide
               
               {isLoading ? (
                 <div className="text-sm text-muted-foreground p-4">Carregando...</div>
-              ) : filteredTree.length === 0 ? (
+              ) : filteredData.length === 0 ? (
                 <div className="text-sm text-muted-foreground p-4">
                   {searchTerm ? 'Nenhuma origem encontrada' : 'Nenhuma origem cadastrada'}
                 </div>
+              ) : isGroupedTree ? (
+                // Modo árvore (todos os funis)
+                filteredData.map((item: any) => renderGroup(item))
               ) : (
-                filteredTree.map((item: any) => (
-                  <OriginTreeItem
-                    key={item.id}
-                    item={item}
-                    selectedId={selectedOriginId}
-                    onSelect={onSelectOrigin}
-                  />
-                ))
+                // Modo lista flat (pipeline específico)
+                filteredData.map((item: any) => renderOriginItem(item))
               )}
             </div>
           </ScrollArea>
