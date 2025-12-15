@@ -26,6 +26,7 @@ export interface DealFiltersState {
   dateRange: DateRange | undefined;
   tags: string[];
   owner: string | null;
+  dealStatus: 'all' | 'open' | 'won' | 'lost';
 }
 
 interface DealFiltersProps {
@@ -47,6 +48,7 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
     filters.dateRange?.from,
     filters.tags.length > 0,
     filters.owner,
+    filters.dealStatus !== 'all',
   ].filter(Boolean).length;
   
   return (
@@ -60,6 +62,40 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
           className="pl-8"
         />
       </div>
+      
+      {/* Filtro de Status */}
+      <Select
+        value={filters.dealStatus}
+        onValueChange={(value) => onChange({ 
+          ...filters, 
+          dealStatus: value as 'all' | 'open' | 'won' | 'lost' 
+        })}
+      >
+        <SelectTrigger className="w-[140px]">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="open">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              Abertos
+            </span>
+          </SelectItem>
+          <SelectItem value="won">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              Ganhos
+            </span>
+          </SelectItem>
+          <SelectItem value="lost">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              Perdidos
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
       
       <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
         <PopoverTrigger asChild>
@@ -138,7 +174,7 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos</SelectItem>
-{users
+          {users
             .filter((user: any) => user.id && user.email && user.email.trim() !== '' && user.first_name)
             .map((user: any) => (
               <SelectItem key={user.id} value={user.email}>

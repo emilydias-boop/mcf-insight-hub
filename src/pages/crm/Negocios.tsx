@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 
 const Negocios = () => {
   const { role, user } = useAuth();
@@ -23,6 +24,7 @@ const Negocios = () => {
     dateRange: undefined,
     tags: [],
     owner: null,
+    dealStatus: 'all',
   });
   
   // Ref para garantir que só define o default UMA VEZ
@@ -101,6 +103,13 @@ const Negocios = () => {
     
     if (filters.owner && deal.owner_id !== filters.owner) return false;
     
+    // Filtro por status do negócio (baseado no estágio)
+    if (filters.dealStatus !== 'all') {
+      const stageName = deal.crm_stages?.stage_name;
+      const dealStatus = getDealStatusFromStage(stageName);
+      if (dealStatus !== filters.dealStatus) return false;
+    }
+    
     return true;
   });
   
@@ -110,6 +119,7 @@ const Negocios = () => {
       dateRange: undefined,
       tags: [],
       owner: null,
+      dealStatus: 'all',
     });
   };
   
