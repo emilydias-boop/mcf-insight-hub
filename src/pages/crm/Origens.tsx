@@ -23,6 +23,9 @@ import {
 import { useOriginManagement, OriginUpdate, ManagedOrigin } from '@/hooks/useOriginManagement';
 import { Search, Save, MapPin, GitBranch, LayoutGrid, Undo2 } from 'lucide-react';
 
+// Helper function to check if a pipeline_type value represents a main pipeline
+const isPipelineType = (type: string | null | undefined) => type && type !== 'outros';
+
 const Origens = () => {
   const { origins, isLoading, updateOrigins, isUpdating } = useOriginManagement();
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,11 +47,11 @@ const Origens = () => {
       );
     }
 
-    // Apply type filter
+    // Apply type filter - a pipeline is any origin with pipeline_type different from 'outros'
     if (filterType === 'pipelines') {
-      filtered = filtered.filter(o => o.pipeline_type === 'pipeline');
+      filtered = filtered.filter(o => isPipelineType(o.pipeline_type));
     } else if (filterType === 'sub-origins') {
-      filtered = filtered.filter(o => o.pipeline_type !== 'pipeline');
+      filtered = filtered.filter(o => !isPipelineType(o.pipeline_type));
     }
 
     return filtered;
@@ -62,10 +65,10 @@ const Origens = () => {
       const edit = edits.get(origin.id);
       // If there's a local edit for pipeline_type, use that
       if (edit && 'pipeline_type' in edit) {
-        return edit.pipeline_type === 'pipeline';
+        return isPipelineType(edit.pipeline_type);
       }
       // Otherwise use the saved value
-      return origin.pipeline_type === 'pipeline';
+      return isPipelineType(origin.pipeline_type);
     });
   }, [origins, edits]);
 
@@ -112,7 +115,7 @@ const Origens = () => {
 
   const stats = useMemo(() => {
     const total = origins.length;
-    const pipelinesCount = origins.filter(o => o.pipeline_type === 'pipeline').length;
+    const pipelinesCount = origins.filter(o => isPipelineType(o.pipeline_type)).length;
     const withParent = origins.filter(o => o.parent_id).length;
     const totalDeals = origins.reduce((sum, o) => sum + (o.deal_count || 0), 0);
     return { total, pipelinesCount, withParent, totalDeals };
@@ -237,7 +240,7 @@ const Origens = () => {
                 </TableHeader>
                 <TableBody>
                   {filteredOrigins.map((origin) => {
-                    const isPipeline = getEditedValue(origin, 'pipeline_type') === 'pipeline';
+                    const isPipeline = isPipelineType(getEditedValue(origin, 'pipeline_type'));
                     const parentId = getEditedValue(origin, 'parent_id');
                     const displayName = getEditedValue(origin, 'display_name') || '';
                     const hasEdits = edits.has(origin.id);

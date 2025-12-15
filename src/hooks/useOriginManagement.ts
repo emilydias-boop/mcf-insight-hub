@@ -140,7 +140,9 @@ export function useOriginManagement() {
   });
 
   // Get only origins marked as pipelines (for parent selection)
-  const pipelines = origins?.filter(o => o.pipeline_type === 'pipeline') || [];
+  // A pipeline is any origin with pipeline_type different from 'outros' or null
+  const isPipelineType = (type: string | null) => type && type !== 'outros';
+  const pipelines = origins?.filter(o => isPipelineType(o.pipeline_type)) || [];
 
   return {
     origins: origins || [],
