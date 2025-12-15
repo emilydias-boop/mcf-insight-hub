@@ -648,34 +648,31 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       console.log("📊 Transações Clint deduplicadas:", deduplicatedClintTransactions.length);
       
       // 3. Calcular Faturamento Clint Bruto
-      const faturamentoClintDebug: { product: string; price: number; valorUsado: number; installment: number; source: string }[] = [];
+      // CORREÇÃO: Usar product_price REAL do banco (não valores fixos artificiais)
+      const faturamentoClintDebug: { product: string; price: number; installment: number; source: string }[] = [];
       const faturamentoClint = deduplicatedClintTransactions
         .filter((tx) => {
           const installmentNum = tx.installment_number || 1;
           return installmentNum === 1; // Apenas primeira parcela para Bruto
         })
         .reduce((sum, tx) => {
-          const productName = tx.product_name || "";
           const productPriceDB = tx.product_price || 0;
-          // Usar valor fixo quando product_price é muito baixo (parcela)
-          const valorUsado = getValorFixoProduto(productName, productPriceDB);
           
           faturamentoClintDebug.push({
-            product: productName,
+            product: tx.product_name || "",
             price: productPriceDB,
-            valorUsado,
             installment: tx.installment_number || 1,
             source: tx.source || "hubla"
           });
           
-          return sum + valorUsado;
+          return sum + productPriceDB;
         }, 0);
       
       // DEBUG: Log Faturamento Clint
       console.log("💰 Faturamento Clint Bruto Debug:", {
         total: faturamentoClintDebug.length,
         brutoTotal: faturamentoClint,
-        samples: faturamentoClintDebug.slice(0, 5)
+        samples: faturamentoClintDebug.slice(0, 10)
       });
 
       // ===== FATURAMENTO LÍQUIDO =====
