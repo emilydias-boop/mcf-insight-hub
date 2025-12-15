@@ -2,21 +2,18 @@ import { useState } from 'react';
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
-  Phone, Mail, Calendar, MessageSquare, CheckSquare, MoreHorizontal,
-  Check, X, Clock, Plus, AlertCircle
+  Phone, Mail, Calendar, MessageSquare, MoreHorizontal,
+  Clock, Plus, AlertCircle, CheckSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useDealTasks, useCompleteDealTask, useCancelDealTask, TaskType, TaskStatus } from '@/hooks/useDealTasks';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useDealTasks, useCompleteDealTask, useCancelDealTask, DealTask, TaskType } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { CreateTaskDialog } from './CreateTaskDialog';
+import { TaskDetailPanel } from './TaskDetailPanel';
+import { cn } from '@/lib/utils';
 
 const taskTypeIcons: Record<TaskType, React.ElementType> = {
   call: Phone,
@@ -26,18 +23,12 @@ const taskTypeIcons: Record<TaskType, React.ElementType> = {
   other: MoreHorizontal,
 };
 
-const taskTypeLabels: Record<TaskType, string> = {
-  call: 'Ligação',
-  email: 'E-mail',
-  meeting: 'Reunião',
-  whatsapp: 'WhatsApp',
-  other: 'Outro',
-};
-
-const statusColors: Record<TaskStatus, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-600',
-  done: 'bg-green-500/20 text-green-600',
-  canceled: 'bg-muted text-muted-foreground',
+const taskTypeColors: Record<TaskType, string> = {
+  call: 'text-blue-500',
+  email: 'text-orange-500',
+  meeting: 'text-purple-500',
+  whatsapp: 'text-green-500',
+  other: 'text-muted-foreground',
 };
 
 interface DealTasksSectionProps {
@@ -45,15 +36,27 @@ interface DealTasksSectionProps {
   originId?: string;
   stageId?: string;
   ownerId?: string;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  contactName?: string | null;
 }
 
-export function DealTasksSection({ dealId, originId, stageId, ownerId }: DealTasksSectionProps) {
+export function DealTasksSection({ 
+  dealId, 
+  originId, 
+  stageId, 
+  ownerId,
+  contactPhone,
+  contactEmail,
+  contactName,
+}: DealTasksSectionProps) {
   const { user } = useAuth();
   const { data: tasks, isLoading } = useDealTasks(dealId);
   const completeTask = useCompleteDealTask();
   const cancelTask = useCancelDealTask();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const filteredTasks = tasks?.filter(task => {
     if (filter === 'all') return true;
@@ -67,13 +70,27 @@ export function DealTasksSection({ dealId, originId, stageId, ownerId }: DealTas
     t.status === 'pending' && t.due_date && isPast(new Date(t.due_date)) && !isToday(new Date(t.due_date))
   ).length || 0;
 
+  const selectedTask = tasks?.find(t => t.id === selectedTaskId) || null;
+
   const handleComplete = (taskId: string) => {
     if (!user?.id) return;
     completeTask.mutate({ id: taskId, dealId, userId: user.id });
+    if (selectedTaskId === taskId) {
+      setSelectedTaskId(null);
+    }
   };
 
   const handleCancel = (taskId: string) => {
     cancelTask.mutate({ id: taskId, dealId });
+    if (selectedTaskId === taskId) {
+      setSelectedTaskId(null);
+    }
+  };
+
+  const handleCheckboxChange = (taskId: string, checked: boolean) => {
+    if (checked && user?.id) {
+      handleComplete(taskId);
+    }
   };
 
   if (isLoading) {
@@ -81,23 +98,33 @@ export function DealTasksSection({ dealId, originId, stageId, ownerId }: DealTas
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between gap-2 p-3 border-b">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Atividades</span>
-          {pendingCount > 0 && (
-            <Badge variant="secondary" className="text-xs">{pendingCount} pendentes</Badge>
-          )}
-          {overdueCount > 0 && (
-            <Badge variant="destructive" className="text-xs">{overdueCount} atrasadas</Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="flex h-full">
+      {/* Left Panel - Task List */}
+      <div className="w-2/5 border-r flex flex-col">
+        {/* Header */}
+        <div className="p-3 border-b space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckSquare className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Atividades</span>
+              {pendingCount > 0 && (
+                <Badge variant="secondary" className="text-xs">{pendingCount}</Badge>
+              )}
+              {overdueCount > 0 && (
+                <Badge variant="destructive" className="text-xs">{overdueCount} atrasadas</Badge>
+              )}
+            </div>
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+          
+          {/* Filters */}
           <div className="flex gap-1">
             <Button
               variant={filter === 'pending' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-7 text-xs"
+              className="h-6 text-xs flex-1"
               onClick={() => setFilter('pending')}
             >
               Pendentes
@@ -105,7 +132,7 @@ export function DealTasksSection({ dealId, originId, stageId, ownerId }: DealTas
             <Button
               variant={filter === 'completed' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-7 text-xs"
+              className="h-6 text-xs flex-1"
               onClick={() => setFilter('completed')}
             >
               Concluídas
@@ -113,112 +140,102 @@ export function DealTasksSection({ dealId, originId, stageId, ownerId }: DealTas
             <Button
               variant={filter === 'all' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-7 text-xs"
+              className="h-6 text-xs flex-1"
               onClick={() => setFilter('all')}
             >
               Todas
             </Button>
           </div>
-          <Button size="sm" className="h-7" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-3 w-3 mr-1" />
-            Nova
-          </Button>
         </div>
-      </div>
 
-      <ScrollArea className="flex-1">
-        {filteredTasks.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground text-sm">
-            {filter === 'pending' ? 'Nenhuma atividade pendente' : 'Nenhuma atividade encontrada'}
-          </div>
-        ) : (
-          <div className="divide-y">
-            {filteredTasks.map((task) => {
-              const Icon = taskTypeIcons[task.type];
-              const isOverdue = task.status === 'pending' && task.due_date && 
-                isPast(new Date(task.due_date)) && !isToday(new Date(task.due_date));
-              const isDueToday = task.due_date && isToday(new Date(task.due_date));
+        {/* Task List */}
+        <ScrollArea className="flex-1">
+          {filteredTasks.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground text-sm">
+              {filter === 'pending' ? 'Nenhuma atividade pendente' : 'Nenhuma atividade encontrada'}
+            </div>
+          ) : (
+            <div className="divide-y">
+              {filteredTasks.map((task) => {
+                const Icon = taskTypeIcons[task.type];
+                const isOverdue = task.status === 'pending' && task.due_date && 
+                  isPast(new Date(task.due_date)) && !isToday(new Date(task.due_date));
+                const isDueToday = task.due_date && isToday(new Date(task.due_date));
+                const isSelected = selectedTaskId === task.id;
 
-              return (
-                <div 
-                  key={task.id} 
-                  className={`p-3 hover:bg-muted/50 transition-colors ${
-                    task.status !== 'pending' ? 'opacity-60' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      isOverdue ? 'bg-destructive/20' : 'bg-muted'
-                    }`}>
-                      <Icon className={`h-4 w-4 ${
-                        isOverdue ? 'text-destructive' : 'text-muted-foreground'
-                      }`} />
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-sm font-medium ${
-                          task.status !== 'pending' ? 'line-through' : ''
-                        }`}>
+                return (
+                  <div 
+                    key={task.id} 
+                    className={cn(
+                      "p-3 cursor-pointer transition-colors",
+                      isSelected ? "bg-accent" : "hover:bg-muted/50",
+                      task.status !== 'pending' && "opacity-60"
+                    )}
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox */}
+                      {task.status === 'pending' && (
+                        <Checkbox
+                          checked={false}
+                          onCheckedChange={(checked) => handleCheckboxChange(task.id, checked as boolean)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-0.5 h-5 w-5"
+                        />
+                      )}
+                      {task.status !== 'pending' && (
+                        <div className="h-5 w-5 flex items-center justify-center">
+                          <div className={cn(
+                            "h-3 w-3 rounded-full",
+                            task.status === 'done' ? "bg-green-500" : "bg-muted-foreground"
+                          )} />
+                        </div>
+                      )}
+
+                      {/* Icon */}
+                      <Icon className={cn("h-4 w-4 mt-0.5", taskTypeColors[task.type])} />
+                      
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <span className={cn(
+                          "text-sm font-medium block truncate",
+                          task.status !== 'pending' && "line-through"
+                        )}>
                           {task.title}
                         </span>
-                        <Badge className={`text-xs ${statusColors[task.status]}`}>
-                          {taskTypeLabels[task.type]}
-                        </Badge>
-                      </div>
-                      
-                      {task.description && (
-                        <p className="text-xs text-muted-foreground mb-1 line-clamp-2">
-                          {task.description}
-                        </p>
-                      )}
-                      
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        
                         {task.due_date && (
-                          <span className={`flex items-center gap-1 ${
-                            isOverdue ? 'text-destructive font-medium' : 
-                            isDueToday ? 'text-yellow-600 font-medium' : ''
-                          }`}>
+                          <span className={cn(
+                            "flex items-center gap-1 text-xs mt-0.5",
+                            isOverdue ? "text-destructive font-medium" : 
+                            isDueToday ? "text-yellow-600" : "text-muted-foreground"
+                          )}>
                             {isOverdue && <AlertCircle className="h-3 w-3" />}
                             <Clock className="h-3 w-3" />
                             {format(new Date(task.due_date), "dd/MM 'às' HH:mm", { locale: ptBR })}
                           </span>
                         )}
-                        {task.completed_at && (
-                          <span className="flex items-center gap-1 text-green-600">
-                            <Check className="h-3 w-3" />
-                            Concluída {format(new Date(task.completed_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
-                          </span>
-                        )}
                       </div>
                     </div>
-
-                    {task.status === 'pending' && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleComplete(task.id)}>
-                            <Check className="h-4 w-4 mr-2 text-green-600" />
-                            Concluir
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleCancel(task.id)}>
-                            <X className="h-4 w-4 mr-2 text-destructive" />
-                            Cancelar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </ScrollArea>
+                );
+              })}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+
+      {/* Right Panel - Task Detail */}
+      <div className="w-3/5 flex flex-col">
+        <TaskDetailPanel
+          task={selectedTask}
+          contactPhone={contactPhone}
+          contactEmail={contactEmail}
+          contactName={contactName}
+          onComplete={() => selectedTaskId && handleComplete(selectedTaskId)}
+          onCancel={() => selectedTaskId && handleCancel(selectedTaskId)}
+        />
+      </div>
 
       <CreateTaskDialog 
         open={showCreateDialog}

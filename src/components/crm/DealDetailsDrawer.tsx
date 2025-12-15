@@ -93,12 +93,15 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                   </TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="tarefas" className="mt-3 border rounded-lg min-h-[200px]">
+                <TabsContent value="tarefas" className="mt-3 border rounded-lg min-h-[300px]">
                   <DealTasksSection 
                     dealId={deal.id} 
                     originId={deal.origin_id || undefined}
                     stageId={deal.stage_id || undefined}
                     ownerId={deal.owner_id || undefined}
+                    contactPhone={contact?.phone}
+                    contactEmail={contact?.email}
+                    contactName={contact?.name}
                   />
                 </TabsContent>
                 

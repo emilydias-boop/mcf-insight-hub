@@ -14,6 +14,10 @@ export interface ActivityTemplate {
   is_active: boolean | null;
   created_at: string | null;
   created_by: string | null;
+  // New fields
+  script_title: string | null;
+  script_body: string | null;
+  sla_offset_minutes: number | null;
 }
 
 export function useActivityTemplates(originId?: string, stageId?: string) {
@@ -37,6 +41,31 @@ export function useActivityTemplates(originId?: string, stageId?: string) {
       if (error) throw error;
       return data as ActivityTemplate[];
     },
+  });
+}
+
+export function useActivityTemplatesByStage(originId?: string, stageId?: string) {
+  return useQuery({
+    queryKey: ['activity-templates-by-stage', originId, stageId],
+    queryFn: async () => {
+      if (!stageId) return [];
+      
+      let query = supabase
+        .from('activity_templates')
+        .select('*')
+        .eq('is_active', true)
+        .eq('stage_id', stageId)
+        .order('order_index', { ascending: true });
+
+      if (originId) {
+        query = query.or(`origin_id.eq.${originId},origin_id.is.null`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as ActivityTemplate[];
+    },
+    enabled: !!stageId,
   });
 }
 
