@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { format, addDays, differenceInMinutes } from 'date-fns';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { format, addDays, addMinutes, differenceInMinutes } from 'date-fns';
+import { Calendar as CalendarIcon, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -73,10 +73,19 @@ export function CreateTaskDialog({
   const [title, setTitle] = useState('');
   const [scriptBody, setScriptBody] = useState('');
   const [type, setType] = useState<TaskType>('call');
-  const [dueDate, setDueDate] = useState<Date | undefined>(addDays(new Date(), 1));
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [updateTemplateAlso, setUpdateTemplateAlso] = useState(false);
+
+  // Calculate default due date based on SLA from templates
+  const calculateDefaultDueDate = (): Date => {
+    const template = templates?.find(t => t.sla_offset_minutes && t.sla_offset_minutes > 0);
+    if (template?.sla_offset_minutes) {
+      return addMinutes(new Date(), template.sla_offset_minutes);
+    }
+    return addDays(new Date(), 1); // fallback: 1 day
+  };
 
   // Fill form when editing
   useEffect(() => {
@@ -127,14 +136,15 @@ export function CreateTaskDialog({
           }
         });
       } else {
-        // Create new task
+        // Create new task - use SLA-based date if no date selected
+        const finalDueDate = dueDate || calculateDefaultDueDate();
         createTask.mutate({
           deal_id: dealId,
           title: title.trim(),
           description: scriptBody.trim() || null,
           type,
           status: 'pending',
-          due_date: dueDate?.toISOString() || null,
+          due_date: finalDueDate.toISOString(),
           created_by: user.id,
           owner_id: ownerId || null,
           contact_id: null,
@@ -186,7 +196,7 @@ export function CreateTaskDialog({
     setTitle('');
     setScriptBody('');
     setType('call');
-    setDueDate(addDays(new Date(), 1));
+    setDueDate(undefined);
     setSelectedTemplates([]);
     setMode('manual');
     setSaveAsTemplate(false);
@@ -231,21 +241,22 @@ export function CreateTaskDialog({
         )}
 
         {mode === 'manual' ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
-              <Label htmlFor="title">Título *</Label>
+              <Label htmlFor="title" className="text-sm">Título *</Label>
               <Input
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex: Tentativa de Ligação 01"
+                className="mt-1"
               />
             </div>
 
             <div>
-              <Label htmlFor="type">Canal</Label>
+              <Label htmlFor="type" className="text-sm">Canal</Label>
               <Select value={type} onValueChange={(v) => setType(v as TaskType)}>
-                <SelectTrigger>
+                <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -259,33 +270,53 @@ export function CreateTaskDialog({
             </div>
 
             <div>
-              <Label>Data/Hora Limite</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !dueDate && "text-muted-foreground"
-                    )}
+              <Label className="text-sm">
+                Data/Hora Limite <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              <div className="flex gap-2 mt-1">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "flex-1 justify-start text-left font-normal",
+                        !dueDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dueDate ? format(dueDate, "dd/MM/yyyy HH:mm") : "Automático (baseado no SLA)"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 pointer-events-auto" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dueDate}
+                      onSelect={setDueDate}
+                      initialFocus
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+                {dueDate && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setDueDate(undefined)}
+                    className="shrink-0"
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "dd/MM/yyyy HH:mm") : "Selecionar data"}
+                    <X className="h-4 w-4" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dueDate}
-                    onSelect={setDueDate}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+                )}
+              </div>
+              {!dueDate && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Será calculado automaticamente baseado no SLA do estágio
+                </p>
+              )}
             </div>
 
             <div>
-              <Label htmlFor="scriptBody">Roteiro / Script da atividade</Label>
+              <Label htmlFor="scriptBody" className="text-sm">Roteiro / Script da atividade</Label>
               <p className="text-xs text-muted-foreground mb-1">
                 Este texto será exibido no painel direito para o SDR durante a execução.
               </p>
@@ -294,7 +325,8 @@ export function CreateTaskDialog({
                 value={scriptBody}
                 onChange={(e) => setScriptBody(e.target.value)}
                 placeholder="Ex: Apresentar-se como consultor MCF, confirmar interesse..."
-                rows={5}
+                rows={4}
+                className="resize-none"
               />
             </div>
 
