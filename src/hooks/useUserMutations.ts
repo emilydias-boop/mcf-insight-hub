@@ -8,9 +8,16 @@ export const useUpdateUserRole = () => {
 
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
+      // Delete existing role first to avoid constraint conflicts
+      await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId);
+
+      // Insert new role
       const { error } = await supabase
         .from("user_roles")
-        .upsert({ user_id: userId, role }, { onConflict: "user_id" });
+        .insert({ user_id: userId, role });
 
       if (error) throw error;
     },
@@ -30,9 +37,15 @@ export const useUpdateUserEmployment = () => {
 
   return useMutation({
     mutationFn: async ({ userId, data }: { userId: string; data: any }) => {
+      // Derive is_active from status
+      const is_active = data.status === 'ativo' || data.status === 'ferias';
+      
       const { error } = await supabase
         .from("user_employment_data")
-        .upsert({ user_id: userId, ...data }, { onConflict: "user_id" });
+        .upsert(
+          { user_id: userId, ...data, is_active }, 
+          { onConflict: "user_id" }
+        );
 
       if (error) throw error;
     },
