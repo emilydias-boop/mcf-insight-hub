@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { TwilioProvider } from "./contexts/TwilioContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { MainLayout } from "./components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
@@ -73,8 +74,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Dashboard />} />
-              <Route path="receita" element={<Receita />}>
+              <Route index element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
+              <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
                 <Route index element={<ReceitaOverview />} />
                 <Route path="a010" element={<A010 />} />
                 <Route path="transacoes" element={<ReceitaTransacoes />} />
@@ -82,27 +83,27 @@ const App = () => (
                 <Route path="importar-hubla" element={<ImportarHubla />} />
               </Route>
               <Route path="importar-a010" element={<ImportarA010 />} />
-              <Route path="custos" element={<Custos />}>
+              <Route path="custos" element={<ResourceGuard resource="custos"><Custos /></ResourceGuard>}>
                 <Route index element={<CustosOverview />} />
                 <Route path="despesas" element={<CustosDespesas />} />
                 <Route path="por-categoria" element={<CustosPorCategoria />} />
               </Route>
-              <Route path="relatorios" element={<Relatorios />} />
-              <Route path="relatorios/leads-sem-tag" element={<LeadsSemTag />} />
-              <Route path="alertas" element={<Alertas />} />
-              <Route path="efeito-alavanca" element={<EfeitoAlavanca />} />
-              <Route path="projetos" element={<Projetos />} />
-              <Route path="credito" element={<Credito />} />
-              <Route path="leilao" element={<Leilao />} />
-              <Route path="configuracoes" element={<Configuracoes />} />
-              <Route path="usuarios" element={<GerenciamentoUsuarios />} />
-              <Route path="tv-sdr" element={<TVSdrPerformance />} />
-              <Route path="fechamento-sdr" element={<FechamentoSDRList />} />
-              <Route path="fechamento-sdr/configuracoes" element={<FechamentoSDRConfiguracoes />} />
-              <Route path="fechamento-sdr/:payoutId" element={<FechamentoSDRDetail />} />
-              <Route path="meu-fechamento" element={<MeuFechamento />} />
+              <Route path="relatorios" element={<ResourceGuard resource="relatorios"><Relatorios /></ResourceGuard>} />
+              <Route path="relatorios/leads-sem-tag" element={<ResourceGuard resource="relatorios"><LeadsSemTag /></ResourceGuard>} />
+              <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
+              <Route path="efeito-alavanca" element={<ResourceGuard resource="efeito_alavanca"><EfeitoAlavanca /></ResourceGuard>} />
+              <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
+              <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />
+              <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
+              <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
+              <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
+              <Route path="tv-sdr" element={<ResourceGuard resource="tv_sdr"><TVSdrPerformance /></ResourceGuard>} />
+              <Route path="fechamento-sdr" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard>} />
+              <Route path="fechamento-sdr/configuracoes" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard>} />
+              <Route path="fechamento-sdr/:payoutId" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRDetail /></ResourceGuard>} />
+              <Route path="meu-fechamento" element={<ResourceGuard resource="fechamento_sdr"><MeuFechamento /></ResourceGuard>} />
               <Route path="playbook" element={<MeuPlaybook />} />
-              <Route path="crm" element={<CRM />}>
+              <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />

@@ -23,6 +23,7 @@ import {
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMyPermissions } from "@/hooks/useMyPermissions";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +48,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useLocation } from "react-router-dom";
+import { ResourceType } from "@/types/user-management";
 
 type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador';
 
@@ -55,14 +57,17 @@ interface MenuItem {
   url?: string;
   icon: any;
   requiredRoles?: AppRole[];
+  resource?: ResourceType; // Mapeamento para permissão de recurso
   items?: { title: string; url: string; }[];
 }
 
+// Mapeamento de menu item para resource type
 const menuItems: MenuItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, resource: "dashboard" },
   { 
     title: "Receita", 
     icon: DollarSign,
+    resource: "receita",
     items: [
       { title: "Overview", url: "/receita" },
       { title: "Transações", url: "/receita/transacoes" },
@@ -72,6 +77,7 @@ const menuItems: MenuItem[] = [
   { 
     title: "Custos", 
     icon: TrendingDown,
+    resource: "custos",
     items: [
       { title: "Overview", url: "/custos" },
       { title: "Despesas", url: "/custos/despesas" },
@@ -81,20 +87,22 @@ const menuItems: MenuItem[] = [
   { 
     title: "Relatórios", 
     icon: FileText,
+    resource: "relatorios",
     items: [
       { title: "Visão Geral", url: "/relatorios" },
       { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
     ]
   },
-  { title: "Alertas", url: "/alertas", icon: Bell },
-  { title: "Efeito Alavanca", url: "/efeito-alavanca", icon: Zap },
-  { title: "Projetos", url: "/projetos", icon: FolderKanban },
-  { title: "Crédito", url: "/credito", icon: CreditCard, requiredRoles: ['admin', 'manager'] },
-  { title: "Leilão", url: "/leilao", icon: Gavel, requiredRoles: ['admin', 'manager'] },
-  { title: "TV SDR", url: "/tv-sdr", icon: Tv, requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  { title: "Alertas", url: "/alertas", icon: Bell, resource: "alertas" },
+  { title: "Efeito Alavanca", url: "/efeito-alavanca", icon: Zap, resource: "efeito_alavanca" },
+  { title: "Projetos", url: "/projetos", icon: FolderKanban, resource: "projetos" },
+  { title: "Crédito", url: "/credito", icon: CreditCard, resource: "credito", requiredRoles: ['admin', 'manager'] },
+  { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
+  { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { 
     title: "CRM", 
     icon: UserCircle, 
+    resource: "crm",
     requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'],
     items: [
       { title: "Visão Geral", url: "/crm" },
@@ -110,20 +118,22 @@ const menuItems: MenuItem[] = [
   { 
     title: "Fechamento SDR", 
     icon: Calculator, 
+    resource: "fechamento_sdr",
     requiredRoles: ['admin', 'coordenador'],
     items: [
       { title: "Lista de Fechamentos", url: "/fechamento-sdr" },
       { title: "Configurações", url: "/fechamento-sdr/configuracoes" },
     ]
   },
-  { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ['sdr'] },
+  { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, resource: "fechamento_sdr", requiredRoles: ['sdr'] },
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
-  { title: "Usuários", url: "/usuarios", icon: Users, requiredRoles: ['admin'] },
-  { title: "Configurações", url: "/configuracoes", icon: Settings, requiredRoles: ['admin'] },
+  { title: "Usuários", url: "/usuarios", icon: Users, resource: "usuarios", requiredRoles: ['admin'] },
+  { title: "Configurações", url: "/configuracoes", icon: Settings, resource: "configuracoes", requiredRoles: ['admin'] },
 ];
 
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
+  const { canAccessResource, isAdmin } = useMyPermissions();
   const { state } = useSidebar();
   const location = useLocation();
   const isCollapsed = state === "collapsed";
@@ -144,9 +154,23 @@ export function AppSidebar() {
     return 'Viewer';
   };
 
-  const filteredMenuItems = menuItems.filter(
-    (item) => !item.requiredRoles || (role && item.requiredRoles.includes(role))
-  );
+  // Filtragem combinada: requiredRoles (role-based) + resource permissions
+  const filteredMenuItems = menuItems.filter((item) => {
+    // Se tem requiredRoles, verifica primeiro a role
+    if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
+      return false;
+    }
+    
+    // Admin sempre vê tudo
+    if (isAdmin) return true;
+    
+    // Se tem resource mapeado, verifica permissão
+    if (item.resource && !canAccessResource(item.resource)) {
+      return false;
+    }
+    
+    return true;
+  });
 
   const isRouteActive = (item: MenuItem) => {
     if (item.url) return location.pathname === item.url;

@@ -11,20 +11,17 @@ export type UserStatus = 'ativo' | 'ferias' | 'inativo' | 'pendente_aprovacao';
 
 export interface UserSummary {
   user_id: string;
-  email: string;
+  email: string | null;
   full_name: string | null;
   role: AppRole | null;
   position: string | null;
+  department: string | null;
   hire_date: string | null;
   is_active: boolean | null;
   status: UserStatus | null;
-  red_flags_count: number;
-  yellow_flags_count: number;
-  targets_achieved: number;
-  total_targets: number;
-  avg_performance_3m: number | null;
   fixed_salary: number | null;
   ote: number | null;
+  commission_rate: number | null;
 }
 
 export interface UserDetails {

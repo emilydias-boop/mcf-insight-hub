@@ -1,5 +1,5 @@
 import { KPICard } from "@/components/ui/KPICard";
-import { Users, Shield, AlertTriangle, Target } from "lucide-react";
+import { Users, Shield, UserCheck, Building2 } from "lucide-react";
 import { UserSummary } from "@/types/user-management";
 
 interface UserStatsCardsProps {
@@ -11,12 +11,8 @@ export function UserStatsCards({ users }: UserStatsCardsProps) {
   const activeUsers = users.filter(u => u.is_active !== false && u.status !== 'inativo').length;
   const admins = users.filter(u => u.role === 'admin').length;
   const managers = users.filter(u => u.role === 'manager').length;
-  const usersWithRedFlags = users.filter(u => (u.red_flags_count || 0) > 0).length;
-  const usersWithUnmetTargets = users.filter(u => {
-    const achieved = u.targets_achieved || 0;
-    const total = u.total_targets || 0;
-    return total > 0 && achieved < total;
-  }).length;
+  const sdrsClosers = users.filter(u => u.role === 'sdr' || u.role === 'closer').length;
+  const coordenadores = users.filter(u => u.role === 'coordenador').length;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -33,15 +29,15 @@ export function UserStatsCards({ users }: UserStatsCardsProps) {
         variant="neutral"
       />
       <KPICard
-        title="Com Red Flags"
-        value={usersWithRedFlags.toString()}
-        icon={AlertTriangle}
-        variant="danger"
+        title="SDRs / Closers"
+        value={sdrsClosers.toString()}
+        icon={UserCheck}
+        variant="neutral"
       />
       <KPICard
-        title="Metas Pendentes"
-        value={usersWithUnmetTargets.toString()}
-        icon={Target}
+        title="Coordenadores"
+        value={coordenadores.toString()}
+        icon={Building2}
         variant="neutral"
       />
     </div>
