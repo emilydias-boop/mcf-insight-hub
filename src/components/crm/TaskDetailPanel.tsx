@@ -108,20 +108,22 @@ export function TaskDetailPanel({
         </p>
       </div>
 
-      {/* Área do roteiro */}
-      <ScrollArea className="flex-1">
-        <div className="p-4 bg-muted/30 min-h-full">
-          {scriptBody ? (
-            <div className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed">
-              {renderMarkdown(scriptBody)}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              Nenhum roteiro definido para esta atividade.
-            </p>
-          )}
-        </div>
-      </ScrollArea>
+      {/* Área do roteiro com scroll limitado */}
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full max-h-[280px]">
+          <div className="p-4 bg-muted/30">
+            {scriptBody ? (
+              <div className="prose prose-sm max-w-none text-foreground text-sm leading-relaxed">
+                {renderMarkdown(scriptBody)}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                Nenhum roteiro definido para esta atividade.
+              </p>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
 
       {/* Barra de ações mínima */}
       {task.status === 'pending' && (
