@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, AlertCircle, CheckCircle, Eye, Loader2, FileText } from "lucide-react";
+import { Search, Eye, Loader2, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { format } from "date-fns";
 
@@ -29,7 +29,7 @@ export default function GerenciamentoUsuarios() {
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     const matchesStatus =
       statusFilter === "all" ||
@@ -110,8 +110,6 @@ export default function GerenciamentoUsuarios() {
                       <TableHead>Status</TableHead>
                       <TableHead>Entrada</TableHead>
                       <TableHead>Salário</TableHead>
-                      <TableHead>Flags</TableHead>
-                      <TableHead>Metas</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -122,7 +120,7 @@ export default function GerenciamentoUsuarios() {
                           <div className="flex items-center gap-3">
                             <Avatar>
                               <AvatarFallback className="bg-primary/10 text-primary">
-                                {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                                {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
                               </AvatarFallback>
                             </Avatar>
                             <div>
@@ -154,30 +152,6 @@ export default function GerenciamentoUsuarios() {
                             {user.fixed_salary ? formatCurrency(user.fixed_salary) : "-"}
                           </span>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {(user.red_flags_count || 0) > 0 && (
-                              <Badge variant="destructive" className="flex items-center gap-1">
-                                <AlertCircle className="h-3 w-3" />
-                                {user.red_flags_count}
-                              </Badge>
-                            )}
-                            {(user.yellow_flags_count || 0) > 0 && (
-                              <Badge className="bg-warning text-warning-foreground flex items-center gap-1">
-                                <AlertCircle className="h-3 w-3" />
-                                {user.yellow_flags_count}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-sm">
-                            <CheckCircle className="h-4 w-4 text-success" />
-                            <span>
-                              {user.targets_achieved || 0}/{user.total_targets || 0}
-                            </span>
-                          </div>
-                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             <Button
@@ -186,7 +160,7 @@ export default function GerenciamentoUsuarios() {
                               onClick={() =>
                                 setFilesDrawerUser({
                                   id: user.user_id,
-                                  name: user.full_name || user.email,
+                                  name: user.full_name || user.email || 'Usuário',
                                   position: user.position || "",
                                 })
                               }
