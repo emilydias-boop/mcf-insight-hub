@@ -34,7 +34,7 @@ const FATURAMENTO_CLINT_PRODUCTS = [
   'A008 - THE CLUB',
   'A008 - THE CLUB - CONSULTORIA CLUB',
   'A009 - MCF INCORPORADOR COMPLETO + THE CLUB',
-  'A009 - RENOVAÇÃO PARCEIRO MCF',
+  // REMOVIDO: 'A009 - RENOVAÇÃO PARCEIRO MCF' - Não faz parte do Faturamento Clint
   'ASAAS',
   'COBRANÇAS ASAAS',
   'CONTRATO ANTICRISE',
@@ -142,8 +142,9 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       });
 
       // ===== FATURAMENTO CLINT (BRUTO) =====
-      // CORREÇÃO: Usar product_price REAL do banco para primeira parcela apenas
-      // Deduplicar por email+data+produto, Hubla tem prioridade sobre Make
+      // CORREÇÃO: Deduplicar por timestamp_preciso + email + product_price
+      // Isso permite múltiplas compras do mesmo cliente no mesmo dia (timestamps diferentes)
+      // mas agrupa Hubla+Make da mesma transação real (mesmo timestamp e valor)
       const seenClintKeys = new Map<string, { source: string; hubla_id: string }>();
       const deduplicatedClintTransactions: typeof transactions = [];
       
@@ -152,35 +153,40 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         const hublaId = tx.hubla_id || '';
         const source = tx.source || 'hubla';
         
-        // Excluir newsale-
+        // Excluir newsale- (sem dados completos)
         if (hublaId.startsWith('newsale-')) return;
         
-        // Excluir A006 - Renovação Parceiro MCF
-        if (productName.includes('A006') && (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO'))) return;
+        // Excluir -offer- (são split transactions já contabilizadas)
+        if (hublaId.includes('-offer-')) return;
+        
+        // Excluir A006 - Renovação Parceiro MCF e A009 - Renovação
+        if (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO')) return;
         
         // Verificar se é produto válido do Faturamento Clint
         const isValidProduct = isProductInFaturamentoClint(tx.product_name || '');
         if (!isValidProduct) return;
         
         // Excluir parents que são containers (têm offers filhos)
-        const isOffer = hublaId.includes('-offer-');
         const isParentWithOffers = parentIdsWithOffers.has(hublaId);
-        if (!isOffer && isParentWithOffers) return;
+        if (isParentWithOffers) return;
         
-        // Exigir customer_email válido
+        // Exigir customer_email válido e net_value > 0
         const email = (tx.customer_email || '').toLowerCase().trim();
         if (!email) return;
+        if (!tx.net_value || tx.net_value <= 0) return;
         
-        // Chave de deduplicação: email + data + primeiros 10 chars do produto
-        const date = (tx.sale_date || '').split('T')[0];
-        const key = `${email}|${date}|${productName.substring(0, 10)}`;
+        // NOVA CHAVE: timestamp preciso (até segundo) + email + valor
+        // Isso agrupa mesma transação de fontes diferentes mas mantém compras distintas
+        const timestamp = (tx.sale_date || '').substring(0, 19); // YYYY-MM-DDTHH:MM:SS
+        const price = tx.product_price || 0;
+        const key = `${timestamp}|${email}|${price}`;
         
         const existing = seenClintKeys.get(key);
         if (!existing) {
           seenClintKeys.set(key, { source, hubla_id: hublaId });
           deduplicatedClintTransactions.push(tx);
         } else if (source === 'hubla' && existing.source === 'make') {
-          // Hubla substitui Make
+          // Hubla substitui Make (prioridade)
           const idx = deduplicatedClintTransactions.findIndex(t => t.hubla_id === existing.hubla_id);
           if (idx >= 0) deduplicatedClintTransactions[idx] = tx;
           seenClintKeys.set(key, { source, hubla_id: hublaId });
