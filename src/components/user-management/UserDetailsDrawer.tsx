@@ -69,15 +69,15 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
 
   // Update employment data when user details load
   useEffect(() => {
-    if (userDetails?.employment) {
+    if (userDetails) {
       setEmploymentData({
-        position: userDetails.employment.position || "",
-        department: userDetails.employment.department || "",
-        hire_date: userDetails.employment.hire_date || "",
-        fixed_salary: userDetails.employment.fixed_salary || 0,
-        ote: userDetails.employment.ote || 0,
-        commission_rate: userDetails.employment.commission_rate || 0,
-        status: userDetails.employment.status || "ativo",
+        position: userDetails.employment?.position || "",
+        department: userDetails.employment?.department || "",
+        hire_date: userDetails.employment?.hire_date || "",
+        fixed_salary: userDetails.employment?.fixed_salary || 0,
+        ote: userDetails.employment?.ote || 0,
+        commission_rate: userDetails.employment?.commission_rate || 0,
+        status: userDetails.employment?.status || "ativo",
       });
     }
   }, [userDetails]);
