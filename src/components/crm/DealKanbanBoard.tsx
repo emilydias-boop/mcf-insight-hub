@@ -9,6 +9,7 @@ import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
+import { useAuth } from '@/contexts/AuthContext';
 import { Inbox } from 'lucide-react';
 
 interface Deal {
@@ -32,6 +33,7 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
   const { data: stages } = useCRMStages(originId);
+  const { user } = useAuth();
   
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -92,18 +94,29 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
     }
     
     const deal = deals.find(d => d.id === dealId);
+    const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     
     updateDealMutation.mutate(
       { id: dealId, stage_id: newStageId },
       {
         onSuccess: () => {
+          const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
+          
           createActivity.mutate({
-            deal_id: dealId,
+            deal_id: (deal as any)?.clint_id || dealId,
             activity_type: 'stage_change',
-            description: `Negócio movido para ${newStage?.stage_name || 'novo estágio'}`,
-            from_stage: oldStageId,
-            to_stage: newStageId,
+            description: `Movido de "${oldStage?.stage_name || 'Estágio anterior'}" para "${newStage?.stage_name || 'Novo estágio'}"`,
+            from_stage: oldStage?.stage_name || 'Estágio anterior',
+            to_stage: newStage?.stage_name || 'Novo estágio',
+            user_id: user?.id,
+            metadata: {
+              moved_by_name: userName,
+              moved_by_email: user?.email,
+              moved_at: new Date().toISOString(),
+              from_stage_id: oldStageId,
+              to_stage_id: newStageId,
+            }
           });
           
           // Abrir modal para definir próxima ação

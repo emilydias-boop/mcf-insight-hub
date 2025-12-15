@@ -18,6 +18,7 @@ import {
   DollarSign,
   AlertCircle,
   Bell,
+  User,
 } from 'lucide-react';
 
 interface DealHistoryProps {
@@ -40,6 +41,27 @@ const activityIcons: Record<string, any> = {
 
 export const DealHistory = ({ dealId, limit }: DealHistoryProps) => {
   const [showAll, setShowAll] = useState(false);
+  
+  // Helper para obter nome de quem fez a movimentação
+  const getMovedByName = (activity: any) => {
+    // Prioridade 1: metadata do webhook Clint
+    if (activity.metadata?.deal_user_name) {
+      return activity.metadata.deal_user_name;
+    }
+    // Prioridade 2: metadata de movimentação manual
+    if (activity.metadata?.moved_by_name) {
+      return activity.metadata.moved_by_name;
+    }
+    // Prioridade 3: email do usuário que moveu
+    if (activity.metadata?.moved_by_email) {
+      return activity.metadata.moved_by_email;
+    }
+    if (activity.metadata?.deal_user) {
+      return activity.metadata.deal_user;
+    }
+    // Fallback: perfil do usuário logado que criou
+    return activity.profiles?.full_name;
+  };
   
   const { data: activities = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['deal-activities', dealId],
@@ -111,28 +133,29 @@ export const DealHistory = ({ dealId, limit }: DealHistoryProps) => {
                   </div>
                 </div>
                 
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-start justify-between">
-                    <p className="text-xs font-medium">{activity.description}</p>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                      {format(new Date(activity.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                    </span>
-                  </div>
-                  
-                  {activity.from_stage && activity.to_stage && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.from_stage}</Badge>
-                      <ArrowRight className="h-3 w-3" />
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.to_stage}</Badge>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-start justify-between">
+                      <p className="text-xs font-medium">{activity.description}</p>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                        {format(new Date(activity.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </span>
                     </div>
-                  )}
-                  
-                  {activity.profiles?.full_name && (
-                    <p className="text-[10px] text-muted-foreground">
-                      por {activity.profiles.full_name}
-                    </p>
-                  )}
-                </div>
+                    
+                    {activity.from_stage && activity.to_stage && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.from_stage}</Badge>
+                        <ArrowRight className="h-3 w-3" />
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{activity.to_stage}</Badge>
+                      </div>
+                    )}
+                    
+                    {getMovedByName(activity) && (
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        por {getMovedByName(activity)}
+                      </p>
+                    )}
+                  </div>
               </div>
             );
           })}
