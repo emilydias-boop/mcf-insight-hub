@@ -230,8 +230,6 @@ export function DealTasksSection({
         <TaskDetailPanel
           task={selectedTask}
           contactPhone={contactPhone}
-          contactEmail={contactEmail}
-          contactName={contactName}
           onComplete={() => selectedTaskId && handleComplete(selectedTaskId)}
           onCancel={() => selectedTaskId && handleCancel(selectedTaskId)}
         />
