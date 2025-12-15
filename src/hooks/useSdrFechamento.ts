@@ -55,7 +55,7 @@ export const useSdrCompPlan = (sdrId: string | undefined, anoMes: string) => {
   return useQuery({
     queryKey: ['sdr-comp-plan', sdrId, anoMes],
     queryFn: async () => {
-      if (!sdrId) return null;
+      if (!sdrId || !anoMes) return null;
       
       // Parse ano_mes to get the month's date range
       const [year, month] = anoMes.split('-').map(Number);
@@ -74,7 +74,7 @@ export const useSdrCompPlan = (sdrId: string | undefined, anoMes: string) => {
       if (error && error.code !== 'PGRST116') throw error;
       return data as SdrCompPlan | null;
     },
-    enabled: !!sdrId,
+    enabled: !!sdrId && !!anoMes,
   });
 };
 
@@ -83,7 +83,7 @@ export const useSdrMonthKpi = (sdrId: string | undefined, anoMes: string) => {
   return useQuery({
     queryKey: ['sdr-month-kpi', sdrId, anoMes],
     queryFn: async () => {
-      if (!sdrId) return null;
+      if (!sdrId || !anoMes) return null;
       
       const { data, error } = await supabase
         .from('sdr_month_kpi')
@@ -95,7 +95,7 @@ export const useSdrMonthKpi = (sdrId: string | undefined, anoMes: string) => {
       if (error && error.code !== 'PGRST116') throw error;
       return data as SdrMonthKpi | null;
     },
-    enabled: !!sdrId,
+    enabled: !!sdrId && !!anoMes,
   });
 };
 
@@ -819,7 +819,7 @@ export const useSdrIntermediacoes = (sdrId: string | undefined, anoMes: string) 
   return useQuery({
     queryKey: ['sdr-intermediacoes', sdrId, anoMes],
     queryFn: async () => {
-      if (!sdrId) return [];
+      if (!sdrId || !anoMes) return [];
       
       const { data, error } = await supabase
         .from('sdr_intermediacoes')
@@ -834,7 +834,7 @@ export const useSdrIntermediacoes = (sdrId: string | undefined, anoMes: string) 
       if (error) throw error;
       return data;
     },
-    enabled: !!sdrId,
+    enabled: !!sdrId && !!anoMes,
   });
 };
 
