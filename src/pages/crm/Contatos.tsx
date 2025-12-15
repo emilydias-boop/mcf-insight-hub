@@ -3,17 +3,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useCRMContacts, useSyncClintData } from '@/hooks/useCRMData';
-import { Search, Plus, Mail, Phone, User, RefreshCw } from 'lucide-react';
+import { useCRMContactsWithDeals, useSyncClintData } from '@/hooks/useCRMData';
+import { Search, Plus, Mail, Phone, User, RefreshCw, GitBranch } from 'lucide-react';
 import { ContactDetailsDrawer } from '@/components/crm/ContactDetailsDrawer';
+import { ContactFormDialog } from '@/components/crm/ContactFormDialog';
 import { toast } from 'sonner';
 
 const Contatos = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { data: contacts, isLoading } = useCRMContacts();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const { data: contacts, isLoading } = useCRMContactsWithDeals();
   const syncMutation = useSyncClintData();
   
   const handleContactClick = (contactId: string) => {
@@ -35,19 +36,29 @@ const Contatos = () => {
     contact.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Helper to get valid tags (filter nulls)
+  const getValidTags = (tags: any[]) => {
+    if (!tags || !Array.isArray(tags)) return [];
+    return tags.filter((tag: any) => {
+      if (typeof tag === 'string') return tag && tag.trim();
+      return tag && tag.name && tag.name.trim();
+    });
+  };
+
+  // Helper to get latest deal info
+  const getLatestDeal = (deals: any[]) => {
+    if (!deals || deals.length === 0) return null;
+    return deals.sort((a: any, b: any) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Contatos</h2>
-          <p className="text-muted-foreground">
-            Gerencie todos os seus contatos
-            {contactsData.length > 0 && (
-              <span className="ml-2 font-semibold text-foreground">
-                ({contactsData.length} total)
-              </span>
-            )}
-          </p>
+          <p className="text-muted-foreground">Gerencie todos os seus contatos</p>
         </div>
         <div className="flex gap-2">
           <Button 
@@ -58,7 +69,7 @@ const Contatos = () => {
             <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
             Sincronizar
           </Button>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Novo Contato
           </Button>
@@ -85,59 +96,87 @@ const Contatos = () => {
         </div>
       ) : filteredContacts.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredContacts.map((contact: any) => (
-            <Card 
-              key={contact.id} 
-              className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer"
-              onClick={() => handleContactClick(contact.id)}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">{contact.name}</h3>
-                      {contact.organization_name && (
-                        <p className="text-xs text-muted-foreground">{contact.organization_name}</p>
-                      )}
+          {filteredContacts.map((contact: any) => {
+            const validTags = getValidTags(contact.tags);
+            const latestDeal = getLatestDeal(contact.crm_deals);
+            
+            return (
+              <Card 
+                key={contact.id} 
+                className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer"
+                onClick={() => handleContactClick(contact.id)}
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{contact.name}</h3>
+                        {contact.organization_name && (
+                          <p className="text-xs text-muted-foreground">{contact.organization_name}</p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-2 mb-4">
-                  {contact.email && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Mail className="h-4 w-4" />
-                      <span className="truncate">{contact.email}</span>
-                    </div>
-                  )}
-                  {contact.phone && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Phone className="h-4 w-4" />
-                      <span>{contact.phone}</span>
-                    </div>
-                  )}
-                </div>
-
-                {contact.tags && contact.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {contact.tags.slice(0, 3).map((tag: any, idx: number) => (
-                      <Badge key={idx} variant="secondary" className="bg-primary/10 text-primary border-0">
-                        {typeof tag === 'string' ? tag : tag.name || 'Tag'}
-                      </Badge>
-                    ))}
-                    {contact.tags.length > 3 && (
-                      <Badge variant="secondary" className="bg-muted text-muted-foreground border-0">
-                        +{contact.tags.length - 3}
-                      </Badge>
+                  <div className="space-y-2 mb-4">
+                    {contact.email && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Mail className="h-4 w-4" />
+                        <span className="truncate">{contact.email}</span>
+                      </div>
+                    )}
+                    {contact.phone && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone className="h-4 w-4" />
+                        <span>{contact.phone}</span>
+                      </div>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+
+                  {/* Stage/Pipeline info */}
+                  {latestDeal && (
+                    <div className="flex items-center gap-2 mb-3 text-xs">
+                      <GitBranch className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-muted-foreground truncate">
+                        {latestDeal.crm_origins?.name || 'Pipeline'}
+                      </span>
+                      {latestDeal.crm_stages && (
+                        <Badge 
+                          variant="outline" 
+                          className="text-xs"
+                          style={{ 
+                            borderColor: latestDeal.crm_stages.color || undefined,
+                            color: latestDeal.crm_stages.color || undefined 
+                          }}
+                        >
+                          {latestDeal.crm_stages.stage_name}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tags */}
+                  {validTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {validTags.slice(0, 3).map((tag: any, idx: number) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {typeof tag === 'string' ? tag : tag.name}
+                        </Badge>
+                      ))}
+                      {validTags.length > 3 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{validTags.length - 3}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card className="bg-card border-border">
@@ -152,7 +191,7 @@ const Contatos = () => {
                 : 'Comece adicionando seus primeiros contatos'}
             </p>
             {!searchTerm && (
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Button onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Contato
               </Button>
@@ -165,6 +204,11 @@ const Contatos = () => {
         contactId={selectedContactId}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+      />
+      
+      <ContactFormDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
       />
     </div>
   );

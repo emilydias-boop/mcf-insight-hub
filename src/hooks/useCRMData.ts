@@ -115,6 +115,35 @@ export const useCRMContacts = (originId?: string) => {
   });
 };
 
+// Hook com informações de deals/stages para listagem
+export const useCRMContactsWithDeals = () => {
+  return useQuery({
+    queryKey: ['crm-contacts-with-deals'],
+    queryFn: async () => {
+      const { data: contacts, error } = await supabase
+        .from('crm_contacts')
+        .select(`
+          *,
+          crm_origins(name),
+          crm_deals(
+            id,
+            name,
+            stage_id,
+            origin_id,
+            created_at,
+            crm_stages(stage_name, color),
+            crm_origins(name)
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      
+      if (error) throw error;
+      return contacts;
+    },
+  });
+};
+
 export const useCRMContact = (id: string) => {
   return useQuery({
     queryKey: ['crm-contact', id],
