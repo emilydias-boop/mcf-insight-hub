@@ -322,11 +322,12 @@ export function ActivityTemplateManager() {
                         <FormLabel>Pipeline</FormLabel>
                         <Select 
                           onValueChange={(value) => {
-                            field.onChange(value);
-                            setSelectedOriginId(value || undefined);
+                            const actualValue = value === '__all__' ? '' : value;
+                            field.onChange(actualValue);
+                            setSelectedOriginId(actualValue || undefined);
                             form.setValue('stage_id', '');
                           }} 
-                          value={field.value}
+                          value={field.value || '__all__'}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -334,7 +335,7 @@ export function ActivityTemplateManager() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">Todos os pipelines</SelectItem>
+                            <SelectItem value="__all__">Todos os pipelines</SelectItem>
                             {origins?.map(origin => (
                               <SelectItem key={origin.id} value={origin.id}>
                                 {origin.name}
@@ -353,14 +354,17 @@ export function ActivityTemplateManager() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Estágio</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select 
+                          onValueChange={(value) => field.onChange(value === '__all__' ? '' : value)} 
+                          value={field.value || '__all__'}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Selecione um estágio" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">Todos os estágios</SelectItem>
+                            <SelectItem value="__all__">Todos os estágios</SelectItem>
                             {stages?.map(stage => (
                               <SelectItem key={stage.id} value={stage.id}>
                                 {stage.stage_name}
