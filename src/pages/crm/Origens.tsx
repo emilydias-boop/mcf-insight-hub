@@ -1,184 +1,320 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useClintOrigins } from '@/hooks/useClintAPI';
-import { Search, Plus, MapPin, TrendingUp, Target, Edit, BarChart3 } from 'lucide-react';
-import { OriginFormDialog } from '@/components/crm/OriginFormDialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useOriginManagement, OriginUpdate, ManagedOrigin } from '@/hooks/useOriginManagement';
+import { Search, Save, MapPin, GitBranch, LayoutGrid, Undo2 } from 'lucide-react';
 
 const Origens = () => {
+  const { origins, pipelines, isLoading, updateOrigins, isUpdating } = useOriginManagement();
   const [searchTerm, setSearchTerm] = useState('');
-  const { data: origins, isLoading } = useClintOrigins();
+  const [filterType, setFilterType] = useState<'all' | 'pipelines' | 'sub-origins'>('all');
+  
+  // Track local edits
+  const [edits, setEdits] = useState<Map<string, Partial<ManagedOrigin>>>(new Map());
 
-  const originsData = origins?.data || [];
-  const filteredOrigins = originsData.filter((origin: any) =>
-    origin.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOrigins = useMemo(() => {
+    let filtered = origins;
 
-  const totalOrigins = originsData.length;
-  const activeOrigins = originsData.filter((o: any) => o.is_active !== false).length;
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(o =>
+        o.name.toLowerCase().includes(term) ||
+        o.display_name?.toLowerCase().includes(term) ||
+        o.group_name?.toLowerCase().includes(term)
+      );
+    }
+
+    // Apply type filter
+    if (filterType === 'pipelines') {
+      filtered = filtered.filter(o => o.pipeline_type === 'pipeline');
+    } else if (filterType === 'sub-origins') {
+      filtered = filtered.filter(o => o.pipeline_type !== 'pipeline');
+    }
+
+    return filtered;
+  }, [origins, searchTerm, filterType]);
+
+  const hasChanges = edits.size > 0;
+
+  const getEditedValue = <K extends keyof ManagedOrigin>(
+    origin: ManagedOrigin,
+    field: K
+  ): ManagedOrigin[K] => {
+    const edit = edits.get(origin.id);
+    if (edit && field in edit) {
+      return edit[field] as ManagedOrigin[K];
+    }
+    return origin[field];
+  };
+
+  const updateEdit = (originId: string, field: keyof ManagedOrigin, value: any) => {
+    setEdits(prev => {
+      const newEdits = new Map(prev);
+      const current = newEdits.get(originId) || {};
+      newEdits.set(originId, { ...current, [field]: value });
+      return newEdits;
+    });
+  };
+
+  const handleSave = () => {
+    const updates: OriginUpdate[] = Array.from(edits.entries()).map(([id, changes]) => ({
+      id,
+      ...(changes.display_name !== undefined && { display_name: changes.display_name }),
+      ...(changes.parent_id !== undefined && { parent_id: changes.parent_id }),
+      ...(changes.pipeline_type !== undefined && { pipeline_type: changes.pipeline_type }),
+    }));
+
+    if (updates.length > 0) {
+      updateOrigins(updates, {
+        onSuccess: () => {
+          setEdits(new Map());
+        },
+      });
+    }
+  };
+
+  const handleReset = () => {
+    setEdits(new Map());
+  };
+
+  const stats = useMemo(() => {
+    const total = origins.length;
+    const pipelinesCount = origins.filter(o => o.pipeline_type === 'pipeline').length;
+    const withParent = origins.filter(o => o.parent_id).length;
+    const totalDeals = origins.reduce((sum, o) => sum + (o.deal_count || 0), 0);
+    return { total, pipelinesCount, withParent, totalDeals };
+  }, [origins]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Gerenciamento de Origens</h2>
-          <p className="text-muted-foreground">Gerencie os canais de captação de leads</p>
+          <h2 className="text-2xl font-bold text-foreground">Gerenciar Origens e Hierarquia</h2>
+          <p className="text-muted-foreground">Configure nomes amigáveis, pipelines principais e hierarquia pai-filho</p>
         </div>
-        <OriginFormDialog />
+        <div className="flex gap-2">
+          {hasChanges && (
+            <Button variant="outline" onClick={handleReset} disabled={isUpdating}>
+              <Undo2 className="h-4 w-4 mr-2" />
+              Descartar
+            </Button>
+          )}
+          <Button onClick={handleSave} disabled={!hasChanges || isUpdating}>
+            <Save className="h-4 w-4 mr-2" />
+            {isUpdating ? 'Salvando...' : `Salvar ${edits.size} alteração(ões)`}
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total de Origens
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Origens</CardTitle>
             <MapPin className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-2xl font-bold text-foreground">{totalOrigins}</div>
+            {isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <div className="text-2xl font-bold text-foreground">{stats.total}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">Canais cadastrados</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Origens Ativas
-            </CardTitle>
-            <Target className="h-4 w-4 text-success" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pipelines Principais</CardTitle>
+            <LayoutGrid className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-2xl font-bold text-foreground">{activeOrigins}</div>
+            {isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <div className="text-2xl font-bold text-foreground">{stats.pipelinesCount}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">Em operação</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Taxa de Utilização
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-warning" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Com Hierarquia</CardTitle>
+            <GitBranch className="h-4 w-4 text-warning" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-2xl font-bold text-foreground">
-                {totalOrigins > 0 ? Math.round((activeOrigins / totalOrigins) * 100) : 0}%
-              </div>
+            {isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <div className="text-2xl font-bold text-foreground">{stats.withParent}</div>
             )}
-            <p className="text-xs text-muted-foreground mt-1">Origens em uso</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Negócios</CardTitle>
+            <MapPin className="h-4 w-4 text-info" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? <Skeleton className="h-8 w-16" /> : (
+              <div className="text-2xl font-bold text-foreground">{stats.totalDeals.toLocaleString('pt-BR')}</div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar origens por nome..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 bg-card border-border text-foreground"
-        />
-      </div>
-
-      {/* Origins List */}
-      {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
+      {/* Filters */}
+      <div className="flex gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome ou grupo..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 bg-card border-border text-foreground"
+          />
         </div>
-      ) : filteredOrigins.length > 0 ? (
-        <div className="space-y-4">
-          {filteredOrigins.map((origin: any) => (
-            <Card key={origin.id} className="bg-card border-border hover:border-primary/50 transition-colors">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <MapPin className="h-6 w-6 text-primary" />
-                    </div>
+        <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+          <SelectTrigger className="w-[200px] bg-card border-border">
+            <SelectValue placeholder="Filtrar por tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="pipelines">Apenas Pipelines</SelectItem>
+            <SelectItem value="sub-origins">Apenas Sub-origens</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-lg font-semibold text-foreground">{origin.name}</h3>
-                        {origin.is_active !== false && (
-                          <Badge className="bg-success/10 text-success border-0">Ativa</Badge>
-                        )}
-                      </div>
+      {/* Editable Table */}
+      <Card className="bg-card border-border">
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-6 space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-muted/50">
+                    <TableHead className="w-[250px]">Nome Original</TableHead>
+                    <TableHead className="w-[200px]">Nome Amigável</TableHead>
+                    <TableHead className="w-[120px] text-center">Pipeline?</TableHead>
+                    <TableHead className="w-[200px]">Pipeline Pai</TableHead>
+                    <TableHead className="w-[150px]">Grupo</TableHead>
+                    <TableHead className="w-[100px] text-right">Negócios</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredOrigins.map((origin) => {
+                    const isPipeline = getEditedValue(origin, 'pipeline_type') === 'pipeline';
+                    const parentId = getEditedValue(origin, 'parent_id');
+                    const displayName = getEditedValue(origin, 'display_name') || '';
+                    const hasEdits = edits.has(origin.id);
 
-                      {origin.description && (
-                        <p className="text-sm text-muted-foreground mb-3">{origin.description}</p>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-4 text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <BarChart3 className="h-4 w-4" />
-                          <span>ID: {origin.id.slice(0, 8)}</span>
-                        </div>
-                        {origin.created_at && (
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <span>Criado em {new Date(origin.created_at).toLocaleDateString('pt-BR')}</span>
+                    return (
+                      <TableRow
+                        key={origin.id}
+                        className={`border-border hover:bg-muted/50 ${hasEdits ? 'bg-warning/10' : ''}`}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col">
+                            <span className="text-foreground truncate max-w-[230px]" title={origin.name}>
+                              {origin.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground truncate max-w-[230px]">
+                              {origin.clint_id.slice(0, 8)}...
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={displayName}
+                            onChange={(e) => updateEdit(origin.id, 'display_name', e.target.value || null)}
+                            placeholder="Nome amigável..."
+                            className="h-8 bg-background border-border text-foreground"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Checkbox
+                            checked={isPipeline}
+                            onCheckedChange={(checked) =>
+                              updateEdit(origin.id, 'pipeline_type', checked ? 'pipeline' : 'outros')
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={parentId || 'none'}
+                            onValueChange={(v) => updateEdit(origin.id, 'parent_id', v === 'none' ? null : v)}
+                            disabled={isPipeline}
+                          >
+                            <SelectTrigger className="h-8 bg-background border-border" disabled={isPipeline}>
+                              <SelectValue placeholder="Sem pai" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem pai</SelectItem>
+                              {pipelines
+                                .filter(p => p.id !== origin.id)
+                                .map((pipeline) => (
+                                  <SelectItem key={pipeline.id} value={pipeline.id}>
+                                    {pipeline.display_name || pipeline.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {origin.group_name ? (
+                            <Badge variant="secondary" className="truncate max-w-[140px]">
+                              {origin.group_name}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="text-foreground font-medium">
+                            {(origin.deal_count || 0).toLocaleString('pt-BR')}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-                  <div className="flex gap-2 ml-4">
-                    <Button variant="outline" size="sm" className="border-border">
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Stats
-                    </Button>
-                    <OriginFormDialog
-                      origin={origin}
-                      trigger={
-                        <Button variant="outline" size="sm" className="border-border">
-                          <Edit className="h-4 w-4 mr-2" />
-                          Editar
-                        </Button>
-                      }
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
+      {!isLoading && filteredOrigins.length === 0 && (
         <Card className="bg-card border-border">
           <CardContent className="p-12 text-center">
             <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">
-              {searchTerm ? 'Nenhuma origem encontrada' : 'Nenhuma origem cadastrada'}
+              Nenhuma origem encontrada
             </h3>
-            <p className="text-muted-foreground mb-4">
-              {searchTerm
-                ? 'Tente buscar com outros termos'
-                : 'Comece adicionando seus canais de captação de leads'}
+            <p className="text-muted-foreground">
+              Tente ajustar os filtros de busca
             </p>
-            {!searchTerm && (
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Origem
-              </Button>
-            )}
           </CardContent>
         </Card>
       )}
