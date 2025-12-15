@@ -77,7 +77,7 @@ export const DealHistory = ({ dealId, dealUuid, limit }: DealHistoryProps) => {
       
       const { data, error } = await supabase
         .from('deal_activities')
-        .select('*, profiles:user_id(full_name)')
+        .select('*')
         .or(orConditions.join(','))
         .order('created_at', { ascending: false });
       
