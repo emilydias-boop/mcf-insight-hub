@@ -95,24 +95,29 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
   const getNextActionStatus = () => {
     if (!nextActionDate) return null;
 
+    const daysDiff = Math.floor((Date.now() - nextActionDate.getTime()) / (1000 * 60 * 60 * 24));
+
     if (isPast(nextActionDate) && !isToday(nextActionDate)) {
-      return { label: "Atrasada", color: "bg-red-500/20 text-red-400", urgent: true };
+      const daysLabel = daysDiff === 1 ? "há 1 dia" : `há ${daysDiff} dias`;
+      return { label: `Atrasada ${daysLabel}`, color: "bg-destructive/20 text-destructive", urgent: true, isOverdue: true };
     }
     if (isToday(nextActionDate)) {
       return {
-        label: `Hoje ${format(nextActionDate, "HH:mm")}`,
+        label: `Próx: hoje às ${format(nextActionDate, "HH:mm")}`,
         color: "bg-yellow-500/20 text-yellow-400",
         urgent: true,
+        isOverdue: false,
       };
     }
     if (isTomorrow(nextActionDate)) {
       return {
-        label: `Amanhã ${format(nextActionDate, "HH:mm")}`,
+        label: `Próx: amanhã às ${format(nextActionDate, "HH:mm")}`,
         color: "bg-green-500/20 text-green-400",
         urgent: false,
+        isOverdue: false,
       };
     }
-    return { label: format(nextActionDate, "dd/MM HH:mm"), color: "bg-muted text-muted-foreground", urgent: false };
+    return { label: `Próx: ${format(nextActionDate, "dd/MM")} às ${format(nextActionDate, "HH:mm")}`, color: "bg-muted text-muted-foreground", urgent: false, isOverdue: false };
   };
 
   const nextActionStatus = getNextActionStatus();
@@ -197,7 +202,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick }: DealKanb
       {...provided.dragHandleProps}
       className={`cursor-pointer hover:shadow-md transition-shadow ${
         isDragging ? "shadow-lg ring-2 ring-primary" : ""
-      } ${nextActionStatus?.urgent ? "border-l-2 border-l-yellow-500" : ""}`}
+      } ${nextActionStatus?.isOverdue ? "border-l-2 border-l-destructive" : nextActionStatus?.urgent ? "border-l-2 border-l-yellow-500" : ""}`}
       onClick={onClick}
     >
       <CardContent className="p-3 space-y-2">

@@ -80,22 +80,22 @@ export const NextActionBlockCompact = ({
   
   return (
     <div className={cn(
-      "rounded-lg border p-3 space-y-2",
+      "rounded-lg border p-2 space-y-1.5",
       isOverdue ? "border-destructive/50 bg-destructive/5" : "border-border bg-secondary/30"
     )}>
-      {/* Título compacto com indicador de atraso */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">Próxima Ação</span>
+      {/* Título compacto com indicador de atraso - na mesma linha */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Próxima Ação</span>
         {isOverdue && (
-          <span className="text-xs text-destructive flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
+          <span className="text-[10px] text-destructive flex items-center gap-0.5 bg-destructive/10 px-1.5 py-0.5 rounded">
+            <AlertCircle className="h-2.5 w-2.5" />
             Atrasada
           </span>
         )}
       </div>
       
       {/* Linha 1: Tipo + Data + Hora + Salvar */}
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-1.5 items-center">
         {/* Tipo */}
         <Select 
           value={actionType || ''} 
@@ -167,12 +167,12 @@ export const NextActionBlockCompact = ({
         </Button>
       </div>
       
-      {/* Linha 2: Observação */}
+      {/* Linha 2: Observação mais compacta */}
       <Input
-        placeholder="Observação rápida..."
+        placeholder="Obs. rápida..."
         value={actionNote}
         onChange={(e) => setActionNote(e.target.value)}
-        className="h-8 bg-background text-xs"
+        className="h-7 bg-background text-xs"
       />
     </div>
   );
