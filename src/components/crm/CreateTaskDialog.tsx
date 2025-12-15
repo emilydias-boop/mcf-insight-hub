@@ -28,6 +28,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { useActivityTemplates, useCreateActivityTemplate, useUpdateActivityTemplate } from '@/hooks/useActivityTemplates';
 import { useCreateDealTask, useUpdateDealTask, useCreateTasksFromTemplates, TaskType, DealTask } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -77,6 +78,8 @@ export function CreateTaskDialog({
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [updateTemplateAlso, setUpdateTemplateAlso] = useState(false);
+  const [applyToExisting, setApplyToExisting] = useState(false);
+  const [isApplyingToExisting, setIsApplyingToExisting] = useState(false);
 
   // Calculate default due date based on SLA from templates
   const calculateDefaultDueDate = (): Date => {
@@ -154,7 +157,7 @@ export function CreateTaskDialog({
             // Optionally save as template
             if (saveAsTemplate && canManageTemplates && stageId) {
               const slaMinutes = dueDate ? differenceInMinutes(dueDate, new Date()) : null;
-              await createTemplate.mutateAsync({
+              const newTemplate = await createTemplate.mutateAsync({
                 name: title.trim(),
                 description: null,
                 type,
@@ -167,7 +170,27 @@ export function CreateTaskDialog({
                 script_body: scriptBody.trim() || null,
                 sla_offset_minutes: slaMinutes && slaMinutes > 0 ? slaMinutes : null,
               });
-              toast.success('Atividade criada e salva como modelo');
+              
+              // Apply to existing leads if checkbox is checked
+              if (applyToExisting && newTemplate) {
+                setIsApplyingToExisting(true);
+                try {
+                  const appliedCount = await applyTemplateToExistingLeads(
+                    newTemplate,
+                    stageId,
+                    originId,
+                    user.id
+                  );
+                  toast.success(`Modelo criado e aplicado a ${appliedCount} lead(s) existente(s)`);
+                } catch (err) {
+                  console.error('Erro ao aplicar template:', err);
+                  toast.success('Modelo criado (erro ao aplicar aos leads existentes)');
+                } finally {
+                  setIsApplyingToExisting(false);
+                }
+              } else {
+                toast.success('Atividade criada e salva como modelo');
+              }
             } else {
               toast.success('Atividade criada');
             }
@@ -201,6 +224,55 @@ export function CreateTaskDialog({
     setMode('manual');
     setSaveAsTemplate(false);
     setUpdateTemplateAlso(false);
+    setApplyToExisting(false);
+  };
+
+  // Apply template to existing leads in the same stage
+  const applyTemplateToExistingLeads = async (
+    template: any,
+    stageId: string,
+    originId: string | undefined,
+    userId: string
+  ): Promise<number> => {
+    // Fetch deals in this stage
+    let query = supabase
+      .from('crm_deals')
+      .select('id, contact_id, owner_id')
+      .eq('stage_id', stageId);
+    
+    if (originId) {
+      query = query.eq('origin_id', originId);
+    }
+    
+    const { data: deals, error: dealsError } = await query;
+    if (dealsError) throw dealsError;
+    if (!deals || deals.length === 0) return 0;
+
+    // Create tasks for each deal
+    const now = new Date();
+    const tasks = deals.map((deal) => ({
+      deal_id: deal.id,
+      contact_id: deal.contact_id,
+      template_id: template.id,
+      owner_id: deal.owner_id,
+      title: template.name,
+      description: template.description || null,
+      type: template.type,
+      status: 'pending' as const,
+      due_date: template.sla_offset_minutes 
+        ? addMinutes(now, template.sla_offset_minutes).toISOString()
+        : template.default_due_days
+          ? addMinutes(now, template.default_due_days * 24 * 60).toISOString()
+          : addDays(now, 1).toISOString(),
+      created_by: userId,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('deal_tasks')
+      .insert(tasks);
+    
+    if (insertError) throw insertError;
+    return tasks.length;
   };
 
   const toggleTemplate = (templateId: string) => {
@@ -212,7 +284,7 @@ export function CreateTaskDialog({
   };
 
   const hasTemplates = templates && templates.length > 0 && !isEditing;
-  const isPending = createTask.isPending || updateTask.isPending || createFromTemplates.isPending;
+  const isPending = createTask.isPending || updateTask.isPending || createFromTemplates.isPending || isApplyingToExisting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -332,15 +404,34 @@ export function CreateTaskDialog({
 
             {/* Checkbox for saving as template - only for managers/admins on new tasks */}
             {canManageTemplates && !isEditing && stageId && (
-              <div className="flex items-center space-x-2 pt-2 border-t">
-                <Checkbox
-                  id="saveAsTemplate"
-                  checked={saveAsTemplate}
-                  onCheckedChange={(checked) => setSaveAsTemplate(checked as boolean)}
-                />
-                <Label htmlFor="saveAsTemplate" className="text-sm font-normal cursor-pointer">
-                  Salvar como modelo para este estágio
-                </Label>
+              <div className="space-y-2 pt-2 border-t">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="saveAsTemplate"
+                    checked={saveAsTemplate}
+                    onCheckedChange={(checked) => {
+                      setSaveAsTemplate(checked as boolean);
+                      if (!checked) setApplyToExisting(false);
+                    }}
+                  />
+                  <Label htmlFor="saveAsTemplate" className="text-sm font-normal cursor-pointer">
+                    Salvar como modelo para este estágio
+                  </Label>
+                </div>
+                
+                {/* Option to apply to existing leads */}
+                {saveAsTemplate && (
+                  <div className="flex items-center space-x-2 ml-6">
+                    <Checkbox
+                      id="applyToExisting"
+                      checked={applyToExisting}
+                      onCheckedChange={(checked) => setApplyToExisting(checked as boolean)}
+                    />
+                    <Label htmlFor="applyToExisting" className="text-sm font-normal cursor-pointer text-muted-foreground">
+                      Aplicar também aos leads existentes neste estágio
+                    </Label>
+                  </div>
+                )}
               </div>
             )}
 
