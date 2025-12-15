@@ -20,20 +20,29 @@ export interface ManagedOrigin {
   deal_count?: number;
 }
 
+export interface ManagedGroup {
+  id: string;
+  name: string;
+  display_name: string | null;
+  clint_id: string;
+  origins_count: number;
+}
+
 export interface OriginUpdate {
   id: string;
   display_name?: string | null;
   parent_id?: string | null;
   pipeline_type?: string | null;
+  group_id?: string | null;
   description?: string | null;
 }
 
 export function useOriginManagement() {
   const queryClient = useQueryClient();
 
-  const { data: origins, isLoading, error } = useQuery({
+  const { data: originsData, isLoading, error } = useQuery({
     queryKey: ['origin-management'],
-    queryFn: async (): Promise<ManagedOrigin[]> => {
+    queryFn: async (): Promise<{ origins: ManagedOrigin[]; groups: ManagedGroup[] }> => {
       // Fetch origins with group names
       const { data: originsData, error: originsError } = await supabase
         .from('crm_origins')
@@ -57,11 +66,28 @@ export function useOriginManagement() {
       // Fetch groups for name mapping
       const { data: groupsData } = await supabase
         .from('crm_groups')
-        .select('id, name, display_name');
+        .select('id, name, display_name, clint_id');
 
       const groupMap = new Map(
         (groupsData || []).map(g => [g.id, g.display_name || g.name])
       );
+
+      // Count origins per group
+      const groupOriginsCount = new Map<string, number>();
+      (originsData || []).forEach(o => {
+        if (o.group_id) {
+          groupOriginsCount.set(o.group_id, (groupOriginsCount.get(o.group_id) || 0) + 1);
+        }
+      });
+
+      // Build groups list
+      const groups: ManagedGroup[] = (groupsData || []).map(g => ({
+        id: g.id,
+        name: g.name,
+        display_name: g.display_name,
+        clint_id: g.clint_id,
+        origins_count: groupOriginsCount.get(g.id) || 0,
+      }));
 
       // Fetch deal counts per origin
       const { data: dealCounts } = await supabase
@@ -81,19 +107,24 @@ export function useOriginManagement() {
         (originsData || []).map(o => [o.id, o.display_name || o.name])
       );
 
-      return (originsData || []).map(origin => ({
+      const origins: ManagedOrigin[] = (originsData || []).map(origin => ({
         ...origin,
         group_name: origin.group_id ? groupMap.get(origin.group_id) : undefined,
         parent_name: origin.parent_id ? originNameMap.get(origin.parent_id) : undefined,
         deal_count: dealCountMap.get(origin.id) || 0,
       }));
+
+      return { origins, groups };
     },
   });
+
+  const origins = originsData?.origins || [];
+  const groups = originsData?.groups || [];
 
   const updateOriginsMutation = useMutation({
     mutationFn: async (updates: OriginUpdate[]) => {
       // Validate no circular references
-      const originMap = new Map(origins?.map(o => [o.id, o]) || []);
+      const originMap = new Map(origins.map(o => [o.id, o]));
       
       for (const update of updates) {
         if (update.parent_id) {
@@ -142,10 +173,11 @@ export function useOriginManagement() {
   // Get only origins marked as pipelines (for parent selection)
   // A pipeline is any origin with pipeline_type different from 'outros' or null
   const isPipelineType = (type: string | null) => type && type !== 'outros';
-  const pipelines = origins?.filter(o => isPipelineType(o.pipeline_type)) || [];
+  const pipelines = origins.filter(o => isPipelineType(o.pipeline_type));
 
   return {
-    origins: origins || [],
+    origins,
+    groups,
     pipelines,
     isLoading,
     error,
