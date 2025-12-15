@@ -47,16 +47,19 @@ export function DealTasksSection({
   stageId, 
   ownerId,
   contactPhone,
-  contactEmail,
-  contactName,
 }: DealTasksSectionProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { data: tasks, isLoading } = useDealTasks(dealId);
   const completeTask = useCompleteDealTask();
   const cancelTask = useCancelDealTask();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<DealTask | null>(null);
+
+  // Permissões baseadas no role
+  const canCreateTasks = ['admin', 'coordenador', 'manager'].includes(role || '');
+  const canEditTasks = ['admin', 'coordenador', 'manager'].includes(role || '');
 
   const filteredTasks = tasks?.filter(task => {
     if (filter === 'all') return true;
@@ -93,6 +96,20 @@ export function DealTasksSection({
     }
   };
 
+  const handleEditTask = () => {
+    if (selectedTask) {
+      setEditingTask(selectedTask);
+      setShowCreateDialog(true);
+    }
+  };
+
+  const handleCloseDialog = (open: boolean) => {
+    setShowCreateDialog(open);
+    if (!open) {
+      setEditingTask(null);
+    }
+  };
+
   if (isLoading) {
     return <div className="p-4 text-center text-muted-foreground text-sm">Carregando atividades...</div>;
   }
@@ -114,9 +131,20 @@ export function DealTasksSection({
                 <Badge variant="destructive" className="text-xs">{overdueCount} atrasadas</Badge>
               )}
             </div>
-            <Button size="sm" variant="ghost" className="h-7" onClick={() => setShowCreateDialog(true)}>
-              <Plus className="h-3 w-3" />
-            </Button>
+            {/* Botão "+ Nova" apenas para admin/gestor */}
+            {canCreateTasks && (
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-7" 
+                onClick={() => {
+                  setEditingTask(null);
+                  setShowCreateDialog(true);
+                }}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            )}
           </div>
           
           {/* Filters */}
@@ -232,16 +260,19 @@ export function DealTasksSection({
           contactPhone={contactPhone}
           onComplete={() => selectedTaskId && handleComplete(selectedTaskId)}
           onCancel={() => selectedTaskId && handleCancel(selectedTaskId)}
+          onEdit={handleEditTask}
+          canEdit={canEditTasks}
         />
       </div>
 
       <CreateTaskDialog 
         open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        onOpenChange={handleCloseDialog}
         dealId={dealId}
         originId={originId}
         stageId={stageId}
         ownerId={ownerId}
+        editTask={editingTask}
       />
     </div>
   );
