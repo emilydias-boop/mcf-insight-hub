@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
+import { useUpdateCRMDeal, useCRMStages, useCRMDeal } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
+import { useGenerateTasksForStage } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { Inbox } from 'lucide-react';
 
@@ -21,6 +22,8 @@ interface Deal {
   probability?: number;
   expected_close_date?: string;
   contact_id?: string;
+  owner_id?: string;
+  origin_id?: string;
 }
 
 interface DealKanbanBoardProps {
@@ -32,6 +35,7 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
+  const generateTasks = useGenerateTasksForStage();
   const { data: stages } = useCRMStages(originId);
   const { user } = useAuth();
   
@@ -103,6 +107,7 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
         onSuccess: () => {
           const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
           
+          // Log activity for stage change
           createActivity.mutate({
             deal_id: (deal as any)?.clint_id || dealId,
             activity_type: 'stage_change',
@@ -118,6 +123,18 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
               to_stage_id: newStageId,
             }
           });
+          
+          // Generate tasks for new stage automatically
+          if (deal) {
+            generateTasks.mutate({
+              dealId: dealId,
+              contactId: deal.contact_id,
+              ownerId: deal.owner_id,
+              originId: deal.origin_id || originId,
+              stageId: newStageId,
+              createdBy: user?.id,
+            });
+          }
           
           // Abrir modal para definir próxima ação
           if (deal && newStage) {

@@ -61,6 +61,9 @@ export type Database = {
           name: string
           order_index: number
           origin_id: string | null
+          script_body: string | null
+          script_title: string | null
+          sla_offset_minutes: number | null
           stage_id: string | null
           type: Database["public"]["Enums"]["activity_task_type"]
           updated_at: string | null
@@ -76,6 +79,9 @@ export type Database = {
           name: string
           order_index?: number
           origin_id?: string | null
+          script_body?: string | null
+          script_title?: string | null
+          sla_offset_minutes?: number | null
           stage_id?: string | null
           type?: Database["public"]["Enums"]["activity_task_type"]
           updated_at?: string | null
@@ -91,6 +97,9 @@ export type Database = {
           name?: string
           order_index?: number
           origin_id?: string | null
+          script_body?: string | null
+          script_title?: string | null
+          sla_offset_minutes?: number | null
           stage_id?: string | null
           type?: Database["public"]["Enums"]["activity_task_type"]
           updated_at?: string | null

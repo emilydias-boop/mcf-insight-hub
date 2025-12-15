@@ -2,8 +2,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Settings, Users, Zap, Database, Shield } from 'lucide-react';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
+import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Configuracoes = () => {
+  const { role } = useAuth();
+  const canManageTemplates = role === 'admin' || role === 'coordenador' || role === 'manager';
+
   const settingsSections = [
     {
       icon: Database,
@@ -39,6 +44,11 @@ const Configuracoes = () => {
       </div>
 
       <WebhookMonitor />
+
+      {/* Activity Templates - Only for admin/coordenador */}
+      {canManageTemplates && (
+        <ActivityTemplateManager />
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         {settingsSections.map((section) => {
