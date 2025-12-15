@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -7,7 +7,7 @@ import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
-import { PipelineSelector, useCRMPipelines } from '@/components/crm/PipelineSelector';
+import { useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -25,12 +25,16 @@ const Negocios = () => {
     owner: null,
   });
   
+  // Ref para garantir que só define o default UMA VEZ
+  const hasSetDefault = useRef(false);
+  
   // Buscar pipelines para definir o default
   const { data: pipelines } = useCRMPipelines();
   
-  // Definir pipeline padrão como "PIPELINE INSIDE SALES" se disponível
+  // Definir pipeline padrão APENAS na primeira montagem
   useEffect(() => {
-    if (pipelines && pipelines.length > 0 && !selectedPipelineId) {
+    if (pipelines && pipelines.length > 0 && !hasSetDefault.current) {
+      hasSetDefault.current = true;
       const insideSales = pipelines.find(p => 
         p.name === 'PIPELINE INSIDE SALES' || 
         p.display_name?.includes('Inside Sales')
@@ -41,7 +45,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, selectedPipelineId]);
+  }, [pipelines]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -121,25 +125,18 @@ const Negocios = () => {
         pipelineId={selectedPipelineId}
         selectedOriginId={selectedOriginId}
         onSelectOrigin={setSelectedOriginId}
+        onSelectPipeline={handlePipelineChange}
       />
       
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="flex items-center justify-between p-4 border-b gap-4">
-          <div className="flex items-center gap-6">
-            <div>
-              <h2 className="text-xl font-bold">
-                {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-            
-            {/* Seletor de Funil */}
-            <PipelineSelector
-              selectedPipelineId={selectedPipelineId}
-              onSelectPipeline={handlePipelineChange}
-            />
+          <div>
+            <h2 className="text-xl font-bold">
+              {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
+            </p>
           </div>
           
           <div className="flex gap-2">

@@ -7,11 +7,13 @@ import { Search, Layers, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-r
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { PipelineSelector } from './PipelineSelector';
 
 interface OriginsSidebarProps {
   pipelineId?: string | null;
   selectedOriginId: string | null;
   onSelectOrigin: (originId: string | null) => void;
+  onSelectPipeline: (pipelineId: string | null) => void;
 }
 
 interface Group {
@@ -33,7 +35,7 @@ interface Origin {
 
 // Componente principal do sidebar
 
-export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin }: OriginsSidebarProps) => {
+export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline }: OriginsSidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -177,14 +179,23 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin }:
       {/* Conteúdo (esconder quando collapsed) */}
       {!isCollapsed && (
         <>
-          <div className="p-4 border-b">
+          {/* Seletor de Pipeline */}
+          <div className="p-3 border-b">
+            <PipelineSelector
+              selectedPipelineId={pipelineId || null}
+              onSelectPipeline={onSelectPipeline}
+            />
+          </div>
+          
+          {/* Busca */}
+          <div className="p-3 border-b">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar origem..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
+                className="pl-8 h-9"
               />
             </div>
           </div>
