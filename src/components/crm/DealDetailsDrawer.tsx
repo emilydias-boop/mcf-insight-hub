@@ -6,12 +6,13 @@ import { useCRMDeal, useCRMContact } from '@/hooks/useCRMData';
 import { DealHistory } from './DealHistory';
 import { CallHistorySection } from './CallHistorySection';
 import { DealNotesTab } from './DealNotesTab';
+import { DealTasksSection } from './DealTasksSection';
 import { SdrCompactHeader } from './SdrCompactHeader';
 import { SdrSummaryBlock } from './SdrSummaryBlock';
 import { NextActionBlockCompact } from './NextActionBlockCompact';
 import { A010JourneyCollapsible } from './A010JourneyCollapsible';
 import { QuickActionsBlock } from './QuickActionsBlock';
-import { Phone, History, StickyNote } from 'lucide-react';
+import { Phone, History, StickyNote, CheckSquare } from 'lucide-react';
 
 interface DealDetailsDrawerProps {
   dealId: string | null;
@@ -72,11 +73,15 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               <SdrSummaryBlock deal={deal} contact={contact} />
               
               {/* ===== 5. ABAS (com scroll) ===== */}
-              <Tabs defaultValue="atividades" className="mt-2">
-                <TabsList className="w-full grid grid-cols-3 bg-secondary">
+              <Tabs defaultValue="tarefas" className="mt-2">
+                <TabsList className="w-full grid grid-cols-4 bg-secondary">
+                  <TabsTrigger value="tarefas" className="text-xs">
+                    <CheckSquare className="h-3.5 w-3.5 mr-1" />
+                    Tarefas
+                  </TabsTrigger>
                   <TabsTrigger value="atividades" className="text-xs">
                     <History className="h-3.5 w-3.5 mr-1" />
-                    Atividades
+                    Histórico
                   </TabsTrigger>
                   <TabsTrigger value="ligacoes" className="text-xs">
                     <Phone className="h-3.5 w-3.5 mr-1" />
@@ -87,6 +92,15 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                     Notas
                   </TabsTrigger>
                 </TabsList>
+                
+                <TabsContent value="tarefas" className="mt-3 border rounded-lg min-h-[200px]">
+                  <DealTasksSection 
+                    dealId={deal.id} 
+                    originId={deal.origin_id || undefined}
+                    stageId={deal.stage_id || undefined}
+                    ownerId={deal.owner_id || undefined}
+                  />
+                </TabsContent>
                 
                 <TabsContent value="atividades" className="mt-3">
                   <DealHistory dealId={deal.clint_id} dealUuid={deal.id} limit={5} />
