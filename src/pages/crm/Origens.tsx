@@ -24,7 +24,7 @@ import { useOriginManagement, OriginUpdate, ManagedOrigin } from '@/hooks/useOri
 import { Search, Save, MapPin, GitBranch, LayoutGrid, Undo2 } from 'lucide-react';
 
 const Origens = () => {
-  const { origins, pipelines, isLoading, updateOrigins, isUpdating } = useOriginManagement();
+  const { origins, isLoading, updateOrigins, isUpdating } = useOriginManagement();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pipelines' | 'sub-origins'>('all');
   
@@ -55,6 +55,19 @@ const Origens = () => {
   }, [origins, searchTerm, filterType]);
 
   const hasChanges = edits.size > 0;
+
+  // Effective pipelines list that considers local edits
+  const effectivePipelines = useMemo(() => {
+    return origins.filter(origin => {
+      const edit = edits.get(origin.id);
+      // If there's a local edit for pipeline_type, use that
+      if (edit && 'pipeline_type' in edit) {
+        return edit.pipeline_type === 'pipeline';
+      }
+      // Otherwise use the saved value
+      return origin.pipeline_type === 'pipeline';
+    });
+  }, [origins, edits]);
 
   const getEditedValue = <K extends keyof ManagedOrigin>(
     origin: ManagedOrigin,
@@ -271,7 +284,7 @@ const Origens = () => {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Sem pai</SelectItem>
-                              {pipelines
+                              {effectivePipelines
                                 .filter(p => p.id !== origin.id)
                                 .map((pipeline) => (
                                   <SelectItem key={pipeline.id} value={pipeline.id}>
