@@ -23,6 +23,7 @@ import {
 
 interface DealHistoryProps {
   dealId: string;
+  dealUuid?: string;
   limit?: number;
 }
 
@@ -39,7 +40,7 @@ const activityIcons: Record<string, any> = {
   next_action_scheduled: Bell,
 };
 
-export const DealHistory = ({ dealId, limit }: DealHistoryProps) => {
+export const DealHistory = ({ dealId, dealUuid, limit }: DealHistoryProps) => {
   const [showAll, setShowAll] = useState(false);
   
   // Helper para obter nome de quem fez a movimentação
@@ -64,14 +65,20 @@ export const DealHistory = ({ dealId, limit }: DealHistoryProps) => {
   };
   
   const { data: activities = [], isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['deal-activities', dealId],
+    queryKey: ['deal-activities', dealId, dealUuid],
     queryFn: async () => {
-      console.log('[DealHistory] Buscando atividades para dealId:', dealId);
+      console.log('[DealHistory] Buscando atividades para dealId:', dealId, 'dealUuid:', dealUuid);
+      
+      // Busca por clint_id OU uuid do Supabase para compatibilidade com dados históricos
+      const orConditions = [`deal_id.eq.${dealId}`];
+      if (dealUuid && dealUuid !== dealId) {
+        orConditions.push(`deal_id.eq.${dealUuid}`);
+      }
       
       const { data, error } = await supabase
         .from('deal_activities')
         .select('*, profiles:user_id(full_name)')
-        .eq('deal_id', dealId)
+        .or(orConditions.join(','))
         .order('created_at', { ascending: false });
       
       if (error) {
