@@ -9,14 +9,14 @@ export function MainLayout() {
     <SidebarProvider defaultOpen={false}>
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
-        <SidebarInset className="flex-1">
+        <SidebarInset className="flex-1 overflow-hidden">
           <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-background px-6">
             <SidebarTrigger className="text-foreground" />
             <RealTimeAlerts />
           </header>
-          <main className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden">
             <Outlet />
-          </main>
+          </div>
         </SidebarInset>
         <TwilioSoftphone />
       </div>

@@ -130,7 +130,7 @@ const Negocios = () => {
   };
   
   return (
-    <div className="flex h-[calc(100vh-56px)]">
+    <div className="flex h-[calc(100vh-56px)] overflow-hidden">
       <OriginsSidebar
         pipelineId={selectedPipelineId}
         selectedOriginId={selectedOriginId}
