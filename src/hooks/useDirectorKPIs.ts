@@ -363,31 +363,14 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       });
 
       // ===== FATURAMENTO INCORPORADOR (Líquido) =====
-      // Lógica: Hubla Incorporador + Make Contrato COM deduplicação (prioridade Make)
-      // 1. Pegar emails de Make Contrato
-      const makeContratoEmails = new Set<string>();
-      const makeContratoTotal = (hublaData || [])
-        .filter((tx) => tx.source === 'make' && tx.product_category === 'contrato')
-        .reduce((sum, tx) => {
-          const email = (tx.customer_email || '').toLowerCase().trim();
-          if (email) makeContratoEmails.add(email);
-          return sum + (tx.net_value || 0);
-        }, 0);
-
-      // 2. Hubla Incorporador SEM emails que já estão no Make Contrato
+      // Inclui TODAS as parcelas pagas (não só primeira), deduplicando por hubla_id
       const seenIncorporadorIds = new Set<string>();
-      const hublaIncorporadorUnico = (hublaData || [])
+      const faturamentoIncorporador = (hublaData || [])
         .filter((tx) => {
-          if (tx.source === 'make') return false; // Ignorar Make aqui (será adicionado separadamente)
           const productName = (tx.product_name || "").toUpperCase();
           const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
           const isExcluded = EXCLUDED_PRODUCT_NAMES.some((name) => productName.includes(name.toUpperCase()));
           if (seenIncorporadorIds.has(tx.hubla_id)) return false;
-          
-          // Excluir se email já existe no Make Contrato (deduplicação)
-          const email = (tx.customer_email || '').toLowerCase().trim();
-          if (email && makeContratoEmails.has(email)) return false;
-          
           if (isIncorporador && !isExcluded) {
             seenIncorporadorIds.add(tx.hubla_id);
             return true;
@@ -395,16 +378,6 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           return false;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
-
-      // 3. Incorporador Total = Hubla único + Make Contrato
-      const faturamentoIncorporador = hublaIncorporadorUnico + makeContratoTotal;
-      
-      console.log("🏢 Incorporador Debug:", {
-        hublaUnico: hublaIncorporadorUnico,
-        makeContrato: makeContratoTotal,
-        emailsDeduplicados: makeContratoEmails.size,
-        total: faturamentoIncorporador
-      });
 
       // ===== OB ACESSO VITALÍCIO (MAKE COMO FONTE PRINCIPAL) =====
       // SIMPLIFICADO: Usar apenas source='make' com count_in_dashboard=true
@@ -435,15 +408,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       console.log("🎁 OB Vitalício (Make):", { vendas: vendasObVitalicio, faturado: obVitalicioFaturado });
 
-      // ===== OB CONSTRUIR PARA ALUGAR (MAKE + HUBLA VIVER ALUGUEL) =====
-      // Make OB Construir + Hubla "Viver de Aluguel"
+      // ===== OB CONSTRUIR PARA ALUGAR (MAKE COMO FONTE PRINCIPAL) =====
+      // SIMPLIFICADO: Usar apenas source='make' com count_in_dashboard=true
+      // Deduplicar por EMAIL ÚNICO, EXCLUIR "Viver de Aluguel"
       const obConstruirByEmail = new Map<string, number>();
-      
-      // Make OB Construir
       (hublaData || []).forEach((tx) => {
+        // Filtrar apenas Make
         if (tx.source !== "make") return;
         
         const productName = (tx.product_name || "").toUpperCase();
+        // Incluir "CONSTRUIR" mas EXCLUIR "Viver de Aluguel"
         const isOB = productName.includes("CONSTRUIR") && !productName.includes("VIVER");
         
         if (isOB) {
@@ -452,27 +426,17 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           
           const existing = obConstruirByEmail.get(email) || 0;
           const txValue = tx.net_value || 0;
+          
+          // Manter o maior valor por email
           if (txValue > existing) {
             obConstruirByEmail.set(email, txValue);
           }
         }
       });
-      
-      const obConstruirMake = Array.from(obConstruirByEmail.values()).reduce((sum, v) => sum + v, 0);
-      
-      // Hubla "Viver de Aluguel"
-      const viverAluguelHubla = (hublaData || [])
-        .filter((tx) => {
-          if (tx.source === 'make') return false;
-          const productName = (tx.product_name || "").toUpperCase();
-          return productName.includes("VIVER") && productName.includes("ALUGUEL");
-        })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
-      
       const vendasObConstruir = obConstruirByEmail.size;
-      const obConstruirFaturado = obConstruirMake + viverAluguelHubla;
+      const obConstruirFaturado = Array.from(obConstruirByEmail.values()).reduce((sum, v) => sum + v, 0);
       
-      console.log("🏠 OB Construir:", { make: obConstruirMake, viverAluguel: viverAluguelHubla, total: obConstruirFaturado });
+      console.log("🏠 OB Construir (Make):", { vendas: vendasObConstruir, faturado: obConstruirFaturado });
       
       // ===== OB EVENTO / IMERSÃO PRESENCIAL (MAKE COMO FONTE PRINCIPAL) =====
       // SIMPLIFICADO: Usar apenas source='make'
@@ -506,15 +470,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // - OBs (Vitalício, Construir, Evento) e A010: Make (count_in_dashboard=true)
       // - Incorporador 50k: Hubla
 
-      // ===== VENDAS A010 (MAKE COMO FONTE PRINCIPAL) =====
-      // Usar apenas source='make' com count_in_dashboard=true
+      // ===== VENDAS A010 (TODAS AS FONTES) =====
+      // Usar todas as fontes (Hubla, Make, Kiwify) com count_in_dashboard=true
       // Deduplicar por EMAIL ÚNICO
       const vendasA010Calc = (() => {
         const seenA010Emails = new Set<string>();
         
         (hublaData || []).forEach((tx) => {
-          if (tx.source !== "make") return;
-          
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = productName.includes("A010") || tx.product_category === 'a010';
           
@@ -526,23 +488,22 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           }
         });
 
-        console.log("🔍 Vendas A010 (Make, emails únicos):", seenA010Emails.size);
+        console.log("🔍 Vendas A010 (todas fontes, emails únicos):", seenA010Emails.size);
         return seenA010Emails.size;
       })();
 
       const vendasA010 = vendasA010Calc;
 
-      // ===== FATURAMENTO A010 (MAKE COMO FONTE PRINCIPAL) =====
-      // Soma de net_value das transações A010 do Make
+      // ===== FATURAMENTO A010 (TODAS AS FONTES) =====
+      // Soma de net_value das transações A010 de todas as fontes
       const a010Faturado = (hublaData || [])
         .filter((tx) => {
-          if (tx.source !== "make") return false;
           const productName = (tx.product_name || "").toUpperCase();
           return productName.includes("A010") || tx.product_category === 'a010';
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("💸 A010 (Make):", { vendas: vendasA010, faturado: a010Faturado });
+      console.log("💸 A010 (todas fontes):", { vendas: vendasA010, faturado: a010Faturado });
 
       // ===== FATURAMENTO TOTAL (FÓRMULA FIXA DA PLANILHA) =====
       // Faturamento Total = Incorporador50k (Hubla) + A010 (Make) + OB Construir (Make) + OB Vitalício (Make)
