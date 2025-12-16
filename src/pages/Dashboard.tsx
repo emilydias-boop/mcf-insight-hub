@@ -23,10 +23,12 @@ import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 import { useClintFunnel } from "@/hooks/useClintFunnel";
 import { useEvolutionData } from "@/hooks/useEvolutionData";
 import { useDirectorKPIs } from "@/hooks/useDirectorKPIs";
+import { useDirectorKPIsFromMetrics } from "@/hooks/useDirectorKPIsFromMetrics";
 import { useTeamTargets } from "@/hooks/useTeamTargets";
 import { formatCurrency } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
+import { isSameDay } from "date-fns";
 import type { DashboardWidget } from "@/types/dashboard";
 
 export default function Dashboard() {
@@ -42,8 +44,21 @@ export default function Dashboard() {
   const [sdrIa, setSdrIa] = useState(0); // Estado para SDR IA manual
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
 
-  // Hooks de dados - CALCULA EM TEMPO REAL de hubla_transactions
-  const { data: directorKPIs, isLoading: loadingKPIs, error: errorKPIs } = useDirectorKPIs(periodo.inicio, periodo.fim);
+  // Detectar se é a semana atual
+  const isCurrentWeek = isSameDay(periodo.inicio, getCustomWeekStart(new Date()));
+
+  // Hooks de dados - TEMPO REAL para semana atual
+  const { data: directorKPIsRealtime, isLoading: loadingKPIsRealtime, error: errorKPIs } = useDirectorKPIs(periodo.inicio, periodo.fim);
+  
+  // Hook para dados históricos (weekly_metrics) - para semanas passadas
+  const { data: directorKPIsFromDB, isLoading: loadingKPIsFromDB } = useDirectorKPIsFromMetrics(periodo.inicio, periodo.fim);
+  
+  // Estratégia híbrida: usar planilha para semanas passadas, tempo real para atual
+  const directorKPIs = (!isCurrentWeek && directorKPIsFromDB && directorKPIsFromDB.faturamentoTotal.value > 0) 
+    ? directorKPIsFromDB 
+    : directorKPIsRealtime;
+  const loadingKPIs = isCurrentWeek ? loadingKPIsRealtime : (loadingKPIsFromDB || loadingKPIsRealtime);
+
   const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(canal, 52);
   const PIPELINE_INSIDE_SALES_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
   const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useClintFunnel(

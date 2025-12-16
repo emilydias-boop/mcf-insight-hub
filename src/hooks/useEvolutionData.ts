@@ -129,13 +129,13 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
           return {
             periodo: semana.weekLabel,
             semanaLabel: semana.weekLabel,
-            faturamento: importedData.faturamento_total || 0,
-            custos: importedData.custo_total || 0,
-            lucro: importedData.lucro || 0,
+            faturamento: importedData.faturamento_total || importedData.total_revenue || 0,
+            custos: importedData.total_cost || importedData.operating_cost || 0,
+            lucro: importedData.operating_profit || 0,
             roi: importedData.roi || 0,
             roas: importedData.roas || 0,
-            vendasA010: importedData.vendas_a010 || 0,
-            vendasContratos: importedData.vendas_contrato || 0,
+            vendasA010: importedData.a010_sales || 0,
+            vendasContratos: importedData.contract_sales || 0,
             leads: 0,
           };
         }
