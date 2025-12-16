@@ -2592,6 +2592,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_notifications: {
+        Row: {
+          action_url: string | null
+          created_at: string | null
+          id: string
+          message: string
+          metadata: Json | null
+          read: boolean | null
+          title: string
+          type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_url?: string | null
+          created_at?: string | null
+          id?: string
+          message: string
+          metadata?: Json | null
+          read?: boolean | null
+          title: string
+          type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_url?: string | null
+          created_at?: string | null
+          id?: string
+          message?: string
+          metadata?: Json | null
+          read?: boolean | null
+          title?: string
+          type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_observations: {
         Row: {
           category: string | null
@@ -2762,6 +2798,10 @@ export type Database = {
           a010_revenue: number | null
           a010_sales: number | null
           ads_cost: number | null
+          approval_notes: string | null
+          approval_status: string | null
+          approved_at: string | null
+          approved_by: string | null
           captacao_revenue: number | null
           captacao_sales: number | null
           cir: number | null
@@ -2857,6 +2897,10 @@ export type Database = {
           a010_revenue?: number | null
           a010_sales?: number | null
           ads_cost?: number | null
+          approval_notes?: string | null
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           captacao_revenue?: number | null
           captacao_sales?: number | null
           cir?: number | null
@@ -2952,6 +2996,10 @@ export type Database = {
           a010_revenue?: number | null
           a010_sales?: number | null
           ads_cost?: number | null
+          approval_notes?: string | null
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           captacao_revenue?: number | null
           captacao_sales?: number | null
           cir?: number | null

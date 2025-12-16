@@ -14,6 +14,9 @@ import { RecalculateOnlyMetricsButton } from "@/components/dashboard/Recalculate
 import { ImportMetricsDialog } from "@/components/dashboard/ImportMetricsDialog";
 import { DirectorKPIRow } from "@/components/dashboard/DirectorKPIRow";
 import { MetasProgress } from "@/components/dashboard/MetasProgress";
+import { PendingMetricsAlert } from "@/components/dashboard/PendingMetricsAlert";
+import { MetricsApprovalDialog } from "@/components/dashboard/MetricsApprovalDialog";
+import { NotificationBadge } from "@/components/dashboard/NotificationBadge";
 import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
@@ -37,6 +40,7 @@ export default function Dashboard() {
   });
   const [canal, setCanal] = useState('todos');
   const [sdrIa, setSdrIa] = useState(0); // Estado para SDR IA manual
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
 
   // Hooks de dados - CALCULA EM TEMPO REAL de hubla_transactions
   const { data: directorKPIs, isLoading: loadingKPIs, error: errorKPIs } = useDirectorKPIs(periodo.inicio, periodo.fim);
@@ -167,6 +171,15 @@ export default function Dashboard() {
   return (
     <ResourceGuard resource="dashboard">
       <div className="space-y-6">
+        {/* Alert para métricas pendentes de aprovação */}
+        <PendingMetricsAlert onReviewClick={() => setApprovalDialogOpen(true)} />
+        
+        {/* Dialog de aprovação */}
+        <MetricsApprovalDialog 
+          open={approvalDialogOpen} 
+          onOpenChange={setApprovalDialogOpen} 
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -174,6 +187,7 @@ export default function Dashboard() {
             <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
           </div>
           <div className="flex gap-2">
+            <NotificationBadge />
             <ImportMetricsDialog />
             <RecalculateMetricsButton />
             <RecalculateOnlyMetricsButton />

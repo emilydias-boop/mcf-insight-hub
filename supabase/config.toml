@@ -140,3 +140,6 @@ verify_jwt = false
 
 [functions.twilio-voice-twiml]
 verify_jwt = false
+
+[functions.auto-close-weekly-metrics]
+verify_jwt = false
