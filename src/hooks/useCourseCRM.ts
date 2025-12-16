@@ -9,6 +9,8 @@ export interface CourseCRMData {
   stage_name: string | null;
   stage_color: string | null;
   origin_name: string | null;
+  owner_id: string | null;
+  created_at: string | null;
 }
 
 export const useCourseCRM = (email: string | null) => {
@@ -54,6 +56,8 @@ export const useCourseCRM = (email: string | null) => {
         stage_name: stage?.stage_name || null,
         stage_color: stage?.color || null,
         origin_name: origin?.name || null,
+        owner_id: (deal as any)?.owner_id || null,
+        created_at: (deal as any)?.created_at || null,
       } as CourseCRMData;
     },
     enabled: !!email,
