@@ -36,10 +36,8 @@ const CRM = () => {
         </nav>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <div className="py-4 px-6 w-full max-w-[1920px] mx-auto">
-          <Outlet />
-        </div>
+      <div className="flex-1 overflow-hidden">
+        <Outlet />
       </div>
     </div>
   );
