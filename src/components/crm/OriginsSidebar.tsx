@@ -357,20 +357,6 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
       {isCollapsed && (
         <ScrollArea className="flex-1">
           <div className="flex flex-col items-center py-2 gap-1">
-            {/* Botão Todas as Origens */}
-            <Button
-              variant={selectedOriginId === null ? "secondary" : "ghost"}
-              size="icon"
-              onClick={() => onSelectOrigin(null)}
-              title="Todas as Origens"
-              className="h-8 w-8"
-            >
-              <Layers className="h-4 w-4" />
-            </Button>
-            
-            {/* Separador */}
-            <div className="w-6 border-b my-1" />
-            
             {/* Favoritos no modo collapsed */}
             {favoriteOrigins.length > 0 && (
               <>
