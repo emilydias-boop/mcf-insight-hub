@@ -182,7 +182,7 @@ export default function Dashboard() {
 
   return (
     <ResourceGuard resource="dashboard">
-      <div className="space-y-6">
+      <div className="p-6 space-y-6">
         {/* Alert para métricas pendentes de aprovação */}
         <PendingMetricsAlert onReviewClick={() => setApprovalDialogOpen(true)} />
         
