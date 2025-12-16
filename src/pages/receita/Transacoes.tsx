@@ -39,7 +39,7 @@ export default function ReceitaTransacoes() {
   const [startDate, setStartDate] = useState<Date | undefined>(defaultStart);
   const [endDate, setEndDate] = useState<Date | undefined>(defaultEnd);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showOnlyCountable, setShowOnlyCountable] = useState(true);
+  const [showOnlyCountable, setShowOnlyCountable] = useState(false);
   const [productCategory, setProductCategory] = useState("all");
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -268,11 +268,11 @@ export default function ReceitaTransacoes() {
             <div className="flex items-center gap-2">
               <Checkbox 
                 id="onlyCountable"
-                checked={!showOnlyCountable}
-                onCheckedChange={(checked) => setShowOnlyCountable(!checked)}
+                checked={showOnlyCountable}
+                onCheckedChange={(checked) => setShowOnlyCountable(!!checked)}
               />
               <label htmlFor="onlyCountable" className="text-sm cursor-pointer">
-                Mostrar todas (+ duplicatas)
+                Só contando no Dash
               </label>
             </div>
 
