@@ -9,10 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { useHublaTransactionsFiltered, useUpdateTransactionDashboardFlag, useUpdateTransactionSaleDate } from "@/hooks/useHublaTransactions";
+import { 
+  useHublaTransactionsFiltered, 
+  useUpdateTransactionDashboardFlag, 
+  useUpdateTransactionSaleDate,
+  useUpdateMultipleTransactionsDashboardFlag 
+} from "@/hooks/useHublaTransactions";
 import { TransactionDetailsDrawer } from "@/components/receita/TransactionDetailsDrawer";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye } from "lucide-react";
+import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -31,6 +36,9 @@ interface SelectedTransaction {
   total_installments: number | null;
 }
 
+type SortField = 'sale_date' | 'net_value' | 'product_price' | 'customer_name';
+type SortDirection = 'asc' | 'desc';
+
 export default function ReceitaTransacoes() {
   const now = new Date();
   const defaultStart = startOfWeek(now, { weekStartsOn: 6 });
@@ -45,6 +53,13 @@ export default function ReceitaTransacoes() {
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  
+  // Estados para seleção múltipla
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
+  // Estados para ordenação
+  const [sortField, setSortField] = useState<SortField>('sale_date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const { data: transactions, isLoading, refetch } = useHublaTransactionsFiltered({
     startDate,
@@ -56,6 +71,7 @@ export default function ReceitaTransacoes() {
 
   const updateFlag = useUpdateTransactionDashboardFlag();
   const updateSaleDate = useUpdateTransactionSaleDate();
+  const updateMultipleFlags = useUpdateMultipleTransactionsDashboardFlag();
 
   const handleToggleCountInDashboard = async (id: string, currentValue: boolean | null) => {
     try {
@@ -103,24 +119,124 @@ export default function ReceitaTransacoes() {
     setDrawerOpen(true);
   };
 
-  // Filtrar duplicatas se toggle ativo (manter apenas uma por email+data+valor)
+  // Toggle seleção individual
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Selecionar/deselecionar todos
+  const toggleSelectAll = () => {
+    if (selectedIds.size === displayTransactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayTransactions.map(tx => tx.id)));
+    }
+  };
+
+  // Ações em lote
+  const handleBatchMark = async (countInDashboard: boolean) => {
+    if (selectedIds.size === 0) return;
+    
+    try {
+      await updateMultipleFlags.mutateAsync({
+        ids: Array.from(selectedIds),
+        countInDashboard,
+      });
+      setSelectedIds(new Set());
+      toast({
+        title: "Atualizado",
+        description: `${selectedIds.size} transações ${countInDashboard ? 'marcadas' : 'desmarcadas'} com sucesso`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar as transações",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Toggle ordenação
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Renderiza ícone de ordenação
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-3 w-3 ml-1 inline" />
+      : <ArrowDown className="h-3 w-3 ml-1 inline" />;
+  };
+
+  // Filtrar duplicatas, ocultar newsale zerados e aplicar ordenação
   const displayTransactions = useMemo(() => {
     if (!transactions) return [];
-    if (!hideDuplicates) return transactions;
     
-    const seen = new Map<string, typeof transactions[0]>();
-    transactions.forEach(tx => {
-      const key = `${tx.customer_email?.toLowerCase() || ''}-${tx.sale_date?.split('T')[0] || ''}-${Math.round(tx.net_value || 0)}`;
-      const existing = seen.get(key);
-      // Prioriza Hubla sobre Make, depois prioriza count_in_dashboard=true
-      if (!existing || 
-          (tx.source === 'hubla' && existing.source === 'make') ||
-          (tx.count_in_dashboard && !existing.count_in_dashboard)) {
-        seen.set(key, tx);
-      }
+    // 1. Filtrar newsale-xxx com net_value zerado (duplicados da Hubla)
+    let filtered = transactions.filter(tx => {
+      const hublaId = tx.hubla_id || "";
+      const isNewsale = hublaId.startsWith("newsale-");
+      const isZeroValue = (tx.net_value || 0) < 1;
+      
+      // Se é newsale E tem valor zerado, ocultar
+      if (isNewsale && isZeroValue) return false;
+      return true;
     });
-    return Array.from(seen.values());
-  }, [transactions, hideDuplicates]);
+    
+    // 2. Filtrar duplicatas se toggle ativo (manter apenas uma por email+data+valor)
+    if (hideDuplicates) {
+      const seen = new Map<string, typeof filtered[0]>();
+      filtered.forEach(tx => {
+        const key = `${tx.customer_email?.toLowerCase() || ''}-${tx.sale_date?.split('T')[0] || ''}-${Math.round(tx.net_value || 0)}`;
+        const existing = seen.get(key);
+        // Prioriza Hubla sobre Make, depois prioriza count_in_dashboard=true
+        if (!existing || 
+            (tx.source === 'hubla' && existing.source === 'make') ||
+            (tx.count_in_dashboard && !existing.count_in_dashboard)) {
+          seen.set(key, tx);
+        }
+      });
+      filtered = Array.from(seen.values());
+    }
+    
+    // 3. Aplicar ordenação
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case 'sale_date':
+          comparison = new Date(a.sale_date || 0).getTime() - new Date(b.sale_date || 0).getTime();
+          break;
+        case 'net_value':
+          comparison = (a.net_value || 0) - (b.net_value || 0);
+          break;
+        case 'product_price':
+          comparison = (a.product_price || 0) - (b.product_price || 0);
+          break;
+        case 'customer_name':
+          comparison = (a.customer_name || '').localeCompare(b.customer_name || '');
+          break;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }, [transactions, hideDuplicates, sortField, sortDirection]);
 
   const totals = useMemo(() => {
     if (!displayTransactions) return { bruto: 0, liquido: 0, count: 0, countable: 0 };
@@ -190,6 +306,9 @@ export default function ReceitaTransacoes() {
     setEndDate(lastWeekEnd);
   };
 
+  const isAllSelected = displayTransactions.length > 0 && selectedIds.size === displayTransactions.length;
+  const isSomeSelected = selectedIds.size > 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -210,6 +329,44 @@ export default function ReceitaTransacoes() {
           </Button>
         </div>
       </div>
+
+      {/* Barra de ações em lote */}
+      {isSomeSelected && (
+        <Card className="bg-primary/10 border-primary/30">
+          <CardContent className="py-3 flex items-center justify-between">
+            <span className="text-sm font-medium">
+              📋 {selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}
+            </span>
+            <div className="flex gap-2">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => handleBatchMark(true)}
+                disabled={updateMultipleFlags.isPending}
+              >
+                <CheckSquare className="h-4 w-4 mr-2" />
+                Marcar no Dash
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => handleBatchMark(false)}
+                disabled={updateMultipleFlags.isPending}
+              >
+                <XSquare className="h-4 w-4 mr-2" />
+                Desmarcar
+              </Button>
+              <Button 
+                size="sm" 
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Limpar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
@@ -342,16 +499,31 @@ export default function ReceitaTransacoes() {
                   <thead>
                     <tr className="border-b border-border">
                       <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground w-10">
+                        <Checkbox 
+                          checked={isAllSelected}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Selecionar todos"
+                        />
+                      </th>
+                      <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground w-10">
                         Contar
                       </th>
-                      <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">
+                      <th 
+                        className="text-left py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort('sale_date')}
+                      >
                         Data
+                        <SortIcon field="sale_date" />
                       </th>
                       <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">
                         Produto
                       </th>
-                      <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">
+                      <th 
+                        className="text-left py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort('customer_name')}
+                      >
                         Cliente
+                        <SortIcon field="customer_name" />
                       </th>
                       <th className="text-left py-3 px-2 text-sm font-medium text-muted-foreground">
                         Email
@@ -359,11 +531,19 @@ export default function ReceitaTransacoes() {
                       <th className="text-center py-3 px-2 text-sm font-medium text-muted-foreground">
                         Parcela
                       </th>
-                      <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">
+                      <th 
+                        className="text-right py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort('product_price')}
+                      >
                         Bruto
+                        <SortIcon field="product_price" />
                       </th>
-                      <th className="text-right py-3 px-2 text-sm font-medium text-muted-foreground">
+                      <th 
+                        className="text-right py-3 px-2 text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort('net_value')}
+                      >
                         Líquido
+                        <SortIcon field="net_value" />
                       </th>
                       <th className="text-center py-3 px-2 text-sm font-medium text-muted-foreground">
                         Fonte
@@ -377,6 +557,7 @@ export default function ReceitaTransacoes() {
                     {displayTransactions?.map((tx) => {
                       const isRecurring = (tx.installment_number || 1) > 1;
                       const isCountable = tx.count_in_dashboard !== false;
+                      const isSelected = selectedIds.has(tx.id);
                       
                       return (
                         <tr 
@@ -384,9 +565,16 @@ export default function ReceitaTransacoes() {
                           className={cn(
                             "border-b border-border hover:bg-muted/50 transition-colors",
                             !isCountable && 'opacity-50 bg-muted/20',
-                            isRecurring && 'bg-yellow-500/5'
+                            isRecurring && 'bg-yellow-500/5',
+                            isSelected && 'bg-primary/10'
                           )}
                         >
+                          <td className="py-2 px-2">
+                            <Checkbox 
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelection(tx.id)}
+                            />
+                          </td>
                           <td className="py-2 px-2">
                             <Checkbox 
                               checked={isCountable}
@@ -475,11 +663,11 @@ export default function ReceitaTransacoes() {
               
               <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Mostrando {transactions?.length || 0} transações
+                  Mostrando {displayTransactions?.length || 0} transações
                   {showOnlyCountable ? ' (só contando no dash)' : ''}
                 </span>
                 <span className="text-xs">
-                  Clique na data para editar | Clique no 👁 para ver detalhes
+                  Clique nos cabeçalhos para ordenar | Clique na data para editar
                 </span>
               </div>
             </>
