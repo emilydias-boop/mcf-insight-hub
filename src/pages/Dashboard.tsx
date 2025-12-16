@@ -9,9 +9,6 @@ import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { PeriodComparison } from "@/components/dashboard/PeriodComparison";
 import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer";
-import { RecalculateMetricsButton } from "@/components/dashboard/RecalculateMetricsButton";
-import { RecalculateOnlyMetricsButton } from "@/components/dashboard/RecalculateOnlyMetricsButton";
-import { ImportMetricsDialog } from "@/components/dashboard/ImportMetricsDialog";
 import { DirectorKPIRow } from "@/components/dashboard/DirectorKPIRow";
 import { MetasProgress } from "@/components/dashboard/MetasProgress";
 import { PendingMetricsAlert } from "@/components/dashboard/PendingMetricsAlert";
@@ -203,9 +200,6 @@ export default function Dashboard() {
           </div>
           <div className="flex gap-2">
             <NotificationBadge />
-            <ImportMetricsDialog />
-            <RecalculateMetricsButton />
-            <RecalculateOnlyMetricsButton />
             <TargetsConfigDialog />
             <PeriodComparison />
             <DashboardCustomizer />
