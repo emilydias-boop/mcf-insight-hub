@@ -385,90 +385,42 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ===== OB ACESSO VITALÍCIO (MAKE COMO FONTE PRINCIPAL) =====
-      // SIMPLIFICADO: Usar apenas source='make' com count_in_dashboard=true
-      // Deduplicar por EMAIL ÚNICO
-      const obVitalicioByEmail = new Map<string, number>();
-      (hublaData || []).forEach((tx) => {
-        // Filtrar apenas Make
-        if (tx.source !== "make") return;
-        
-        const productName = (tx.product_name || "").toUpperCase();
-        const isOB = productName.includes("VITAL") || tx.product_category === 'ob_vitalicio';
-        
-        if (isOB) {
-          const email = (tx.customer_email || "").toLowerCase().trim();
-          if (!email) return;
-          
-          const existing = obVitalicioByEmail.get(email) || 0;
-          const txValue = tx.net_value || 0;
-          
-          // Manter o maior valor por email
-          if (txValue > existing) {
-            obVitalicioByEmail.set(email, txValue);
-          }
-        }
-      });
-      const vendasObVitalicio = obVitalicioByEmail.size;
-      const obVitalicioFaturado = Array.from(obVitalicioByEmail.values()).reduce((sum, v) => sum + v, 0);
+      // ===== OB ACESSO VITALÍCIO (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
+      // CORREÇÃO: Somar TODAS as transações, não deduplicar por email
+      const obVitalicioFaturado = (allHublaData || [])
+        .filter((tx) => {
+          if (tx.source !== "make") return false;
+          const productName = (tx.product_name || "").toUpperCase();
+          return productName.includes("VITAL") || tx.product_category === 'ob_vitalicio';
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("🎁 OB Vitalício (Make):", { vendas: vendasObVitalicio, faturado: obVitalicioFaturado });
+      console.log("🎁 OB Vitalício (Make - soma total):", { faturado: obVitalicioFaturado });
 
-      // ===== OB CONSTRUIR PARA ALUGAR (MAKE COMO FONTE PRINCIPAL) =====
-      // SIMPLIFICADO: Usar apenas source='make' com count_in_dashboard=true
-      // Deduplicar por EMAIL ÚNICO, EXCLUIR "Viver de Aluguel"
-      const obConstruirByEmail = new Map<string, number>();
-      (hublaData || []).forEach((tx) => {
-        // Filtrar apenas Make
-        if (tx.source !== "make") return;
-        
-        const productName = (tx.product_name || "").toUpperCase();
-        // Incluir "CONSTRUIR" mas EXCLUIR "Viver de Aluguel"
-        const isOB = productName.includes("CONSTRUIR") && !productName.includes("VIVER");
-        
-        if (isOB) {
-          const email = (tx.customer_email || "").toLowerCase().trim();
-          if (!email) return;
-          
-          const existing = obConstruirByEmail.get(email) || 0;
-          const txValue = tx.net_value || 0;
-          
-          // Manter o maior valor por email
-          if (txValue > existing) {
-            obConstruirByEmail.set(email, txValue);
-          }
-        }
-      });
-      const vendasObConstruir = obConstruirByEmail.size;
-      const obConstruirFaturado = Array.from(obConstruirByEmail.values()).reduce((sum, v) => sum + v, 0);
+      // ===== OB CONSTRUIR PARA ALUGAR (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
+      // CORREÇÃO: Somar TODAS as transações, não deduplicar por email
+      // EXCLUIR "Viver de Aluguel" (produto separado)
+      const obConstruirFaturado = (allHublaData || [])
+        .filter((tx) => {
+          if (tx.source !== "make") return false;
+          const productName = (tx.product_name || "").toUpperCase();
+          return productName.includes("CONSTRUIR") && !productName.includes("VIVER");
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("🏠 OB Construir (Make):", { vendas: vendasObConstruir, faturado: obConstruirFaturado });
+      console.log("🏠 OB Construir (Make - soma total):", { faturado: obConstruirFaturado });
       
-      // ===== OB EVENTO / IMERSÃO PRESENCIAL (MAKE COMO FONTE PRINCIPAL) =====
-      // SIMPLIFICADO: Usar apenas source='make'
-      const obEventoByEmail = new Map<string, number>();
-      (hublaData || []).forEach((tx) => {
-        if (tx.source !== "make") return;
-        
-        const productName = (tx.product_name || "").toUpperCase();
-        const isOB = productName.includes("IMERSÃO") || productName.includes("IMERSAO") || productName.includes("PRESENCIAL");
-        
-        if (isOB) {
-          const email = (tx.customer_email || "").toLowerCase().trim();
-          if (!email) return;
-          
-          const existing = obEventoByEmail.get(email) || 0;
-          const txValue = tx.net_value || 0;
-          
-          if (txValue > existing) {
-            obEventoByEmail.set(email, txValue);
-          }
-        }
-      });
-      const vendasObEvento = obEventoByEmail.size;
-      const obEventoFaturado = Array.from(obEventoByEmail.values()).reduce((sum, v) => sum + v, 0);
+      // ===== OB EVENTO / IMERSÃO PRESENCIAL (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
+      // CORREÇÃO: Somar TODAS as transações, não deduplicar por email
+      const obEventoFaturado = (allHublaData || [])
+        .filter((tx) => {
+          if (tx.source !== "make") return false;
+          const productName = (tx.product_name || "").toUpperCase();
+          return productName.includes("IMERSÃO") || productName.includes("IMERSAO") || productName.includes("PRESENCIAL");
+        })
+        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("🎪 OB Evento (Make):", { vendas: vendasObEvento, faturado: obEventoFaturado });
+      console.log("🎪 OB Evento (Make - soma total):", { faturado: obEventoFaturado });
 
       // ===== CÓDIGO LEGADO REMOVIDO =====
       // A lógica de deduplicação complexa Hubla vs Make foi simplificada
@@ -500,14 +452,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const vendasA010 = vendasA010Calc;
 
-      // ===== FATURAMENTO A010 (APENAS MAKE) =====
-      // REGRA: Faturado A010 usa apenas source='make'
-      // Soma de net_value das transações A010 apenas do Make
-      const a010Faturado = (hublaData || [])
+      // ===== FATURAMENTO A010 (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
+      // CORREÇÃO: Usar allHublaData para somar TODAS as transações
+      const a010Faturado = (allHublaData || [])
         .filter((tx) => {
-          // FILTRO DE FONTE: Apenas Make
           if (tx.source !== 'make') return false;
-          
           const productName = (tx.product_name || "").toUpperCase();
           return productName.includes("A010") || tx.product_category === 'a010';
         })
