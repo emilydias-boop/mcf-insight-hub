@@ -455,10 +455,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Cada transação com email diferente no mesmo dia conta como venda separada
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Soma de TODOS os net_value válidos (já filtrados na query)
-      // Exclui apenas OBs (contados separadamente) e categorias específicas
+      // CORREÇÃO: Usar allHublaData (dados brutos) para evitar perda de transações pela deduplicação global
+      // Soma de TODOS os net_value válidos, deduplicando por hubla_id internamente
       const seenFaturamentoIds = new Set<string>();
-      const faturamentoTotalCalc = (hublaData || [])
+      const faturamentoTotalCalc = ((allHublaData as HublaTransaction[]) || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const category = tx.product_category || "";
