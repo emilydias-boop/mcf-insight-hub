@@ -214,7 +214,7 @@ const getNormalizedProductType = (tx: HublaTransaction): string => {
   if (productName.includes("R00")) return "r00_renovacao";
   
   // OBs mantém mesmo comportamento
-  if (productName.includes("VITALIC")) return "ob_vitalicio";
+  if (productName.includes("VITAL")) return "ob_vitalicio";
   if (productName.includes("CONSTRUIR")) return "ob_construir";
   
   if (category === "incorporador" || category === "contrato") {
@@ -364,9 +364,10 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // ===== FATURAMENTO INCORPORADOR (Líquido) - APENAS HUBLA =====
       // REGRA: Incorporador 50k usa apenas source='hubla'
-      // Inclui TODAS as parcelas pagas (não só primeira), deduplicando por hubla_id
+      // CORREÇÃO: Usar dados RAW (não deduplicados por email+data) para não perder parcelas
+      // Deduplicar APENAS por hubla_id para capturar todas transações únicas
       const seenIncorporadorIds = new Set<string>();
-      const faturamentoIncorporador = (hublaData || [])
+      const faturamentoIncorporador = (allHublaData || [])
         .filter((tx) => {
           // FILTRO DE FONTE: Apenas Hubla
           const source = tx.source || 'hubla';
@@ -393,7 +394,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         if (tx.source !== "make") return;
         
         const productName = (tx.product_name || "").toUpperCase();
-        const isOB = productName.includes("VITALIC") || productName === "OB ACESSO VITALÍCIO";
+        const isOB = productName.includes("VITAL") || tx.product_category === 'ob_vitalicio';
         
         if (isOB) {
           const email = (tx.customer_email || "").toLowerCase().trim();
