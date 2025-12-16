@@ -160,21 +160,32 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         return false;
       }) || [];
 
+      // Deduplicar por email único (mesmo cliente = 1 contrato)
+      const seenContractEmails = new Set<string>();
+      const uniqueHublaContracts = hublaContracts.filter(contract => {
+        const email = contract.customer_email?.toLowerCase();
+        if (!email || seenContractEmails.has(email)) return false;
+        seenContractEmails.add(email);
+        return true;
+      });
+
+      console.log('[TV-SDR] Contratos após dedup por email:', uniqueHublaContracts.length, 'de', hublaContracts.length);
+
       // Contar contratos por tipo de lead (usando VALOR)
-      const contratosLeadA = hublaContracts?.filter(c => 
+      const contratosLeadA = uniqueHublaContracts.filter(c => 
         getLeadTypeFromHubla(c.product_name, c.product_price) === 'A'
       ).length || 0;
 
-      const contratosLeadB = hublaContracts?.filter(c => 
+      const contratosLeadB = uniqueHublaContracts.filter(c => 
         getLeadTypeFromHubla(c.product_name, c.product_price) === 'B'
       ).length || 0;
 
-      console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB, 'Total filtrado:', hublaContracts.length);
+      console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB, 'Total único:', uniqueHublaContracts.length);
 
-      // 2. Rastrear SDR original usando APENAS emails dos contratos Hubla filtrados
-      const hublaEmails = hublaContracts.map(c => c.customer_email).filter(Boolean) as string[];
+      // 2. Rastrear SDR original usando APENAS emails dos contratos únicos
+      const hublaEmails = uniqueHublaContracts.map(c => c.customer_email).filter(Boolean) as string[];
       
-      console.log('[TV-SDR] Emails de contratos Hubla (sem recorrências):', hublaEmails.length);
+      console.log('[TV-SDR] Emails de contratos únicos:', hublaEmails.length);
 
       let dealIds: string[] = [];
       
