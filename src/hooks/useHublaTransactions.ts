@@ -98,6 +98,26 @@ export const useUpdateTransactionDashboardFlag = () => {
   });
 };
 
+export const useUpdateTransactionSaleDate = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, saleDate }: { id: string; saleDate: string }) => {
+      const { error } = await supabase
+        .from('hubla_transactions')
+        .update({ sale_date: saleDate })
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hubla-transactions-filtered'] });
+      queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    },
+  });
+};
+
 export const useHublaTransactions = (limit: number = 50) => {
   return useQuery({
     queryKey: ['hubla-transactions', limit],

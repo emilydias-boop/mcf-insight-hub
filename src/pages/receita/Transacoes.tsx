@@ -7,23 +7,43 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useHublaTransactionsFiltered, useUpdateTransactionDashboardFlag } from "@/hooks/useHublaTransactions";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { useHublaTransactionsFiltered, useUpdateTransactionDashboardFlag, useUpdateTransactionSaleDate } from "@/hooks/useHublaTransactions";
+import { TransactionDetailsDrawer } from "@/components/receita/TransactionDetailsDrawer";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Download, Search, RefreshCw, Filter } from "lucide-react";
+import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { startOfWeek, endOfWeek, subWeeks } from "date-fns";
+import { startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+
+interface SelectedTransaction {
+  id: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  product_name: string;
+  sale_date: string;
+  product_price: number | null;
+  net_value: number | null;
+  installment_number: number | null;
+  total_installments: number | null;
+}
 
 export default function ReceitaTransacoes() {
-  // Default to current week (Saturday-Friday)
   const now = new Date();
-  const defaultStart = startOfWeek(now, { weekStartsOn: 6 }); // Saturday
-  const defaultEnd = endOfWeek(now, { weekStartsOn: 6 }); // Friday
+  const defaultStart = startOfWeek(now, { weekStartsOn: 6 });
+  const defaultEnd = endOfWeek(now, { weekStartsOn: 6 });
   
   const [startDate, setStartDate] = useState<Date | undefined>(defaultStart);
   const [endDate, setEndDate] = useState<Date | undefined>(defaultEnd);
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnlyCountable, setShowOnlyCountable] = useState(false);
   const [productCategory, setProductCategory] = useState("all");
+  const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingDateId, setEditingDateId] = useState<string | null>(null);
 
   const { data: transactions, isLoading, refetch } = useHublaTransactionsFiltered({
     startDate,
@@ -34,6 +54,7 @@ export default function ReceitaTransacoes() {
   });
 
   const updateFlag = useUpdateTransactionDashboardFlag();
+  const updateSaleDate = useUpdateTransactionSaleDate();
 
   const handleToggleCountInDashboard = async (id: string, currentValue: boolean | null) => {
     try {
@@ -54,7 +75,33 @@ export default function ReceitaTransacoes() {
     }
   };
 
-  // Calculate totals
+  const handleDateChange = async (id: string, newDate: Date | undefined) => {
+    if (!newDate) return;
+    
+    try {
+      await updateSaleDate.mutateAsync({
+        id,
+        saleDate: newDate.toISOString(),
+      });
+      setEditingDateId(null);
+      toast({
+        title: "Data atualizada",
+        description: `Transação movida para ${format(newDate, 'dd/MM/yyyy', { locale: ptBR })}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar a data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOpenDetails = (tx: SelectedTransaction) => {
+    setSelectedTransaction(tx);
+    setDrawerOpen(true);
+  };
+
   const totals = useMemo(() => {
     if (!transactions) return { bruto: 0, liquido: 0, count: 0, countable: 0 };
     
@@ -67,7 +114,6 @@ export default function ReceitaTransacoes() {
     };
   }, [transactions]);
 
-  // Get unique categories for filter
   const categories = useMemo(() => {
     if (!transactions) return [];
     const cats = new Set(transactions.map(tx => tx.product_category).filter(Boolean));
@@ -279,6 +325,9 @@ export default function ReceitaTransacoes() {
                       <th className="text-center py-3 px-2 text-sm font-medium text-muted-foreground">
                         Fonte
                       </th>
+                      <th className="text-center py-3 px-2 text-sm font-medium text-muted-foreground w-10">
+                        
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -289,9 +338,11 @@ export default function ReceitaTransacoes() {
                       return (
                         <tr 
                           key={tx.id} 
-                          className={`border-b border-border hover:bg-muted/50 ${
-                            !isCountable ? 'opacity-50 bg-muted/20' : ''
-                          } ${isRecurring ? 'bg-yellow-500/5' : ''}`}
+                          className={cn(
+                            "border-b border-border hover:bg-muted/50 transition-colors",
+                            !isCountable && 'opacity-50 bg-muted/20',
+                            isRecurring && 'bg-yellow-500/5'
+                          )}
                         >
                           <td className="py-2 px-2">
                             <Checkbox 
@@ -301,12 +352,35 @@ export default function ReceitaTransacoes() {
                             />
                           </td>
                           <td className="py-2 px-2 text-sm text-foreground whitespace-nowrap">
-                            {formatDate(tx.sale_date)}
+                            <Popover 
+                              open={editingDateId === tx.id} 
+                              onOpenChange={(open) => setEditingDateId(open ? tx.id : null)}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-7 px-2 font-normal hover:bg-muted"
+                                >
+                                  <CalendarIcon className="h-3 w-3 mr-1 text-muted-foreground" />
+                                  {formatDate(tx.sale_date)}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={new Date(tx.sale_date)}
+                                  onSelect={(date) => handleDateChange(tx.id, date)}
+                                  locale={ptBR}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
                           </td>
                           <td className="py-2 px-2 text-sm text-foreground max-w-[200px] truncate" title={tx.product_name}>
                             {tx.product_name}
                           </td>
-                          <td className="py-2 px-2 text-sm text-foreground max-w-[150px] truncate" title={tx.customer_name || ''}>
+                          <td className="py-2 px-2 text-sm text-foreground max-w-[150px] truncate font-medium" title={tx.customer_name || ''}>
                             {tx.customer_name || '-'}
                           </td>
                           <td className="py-2 px-2 text-sm text-muted-foreground max-w-[180px] truncate" title={tx.customer_email || ''}>
@@ -328,6 +402,27 @@ export default function ReceitaTransacoes() {
                               {tx.source || 'hubla'}
                             </Badge>
                           </td>
+                          <td className="py-2 px-2 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleOpenDetails({
+                                id: tx.id,
+                                customer_name: tx.customer_name,
+                                customer_email: tx.customer_email,
+                                customer_phone: tx.customer_phone,
+                                product_name: tx.product_name,
+                                sale_date: tx.sale_date,
+                                product_price: tx.product_price,
+                                net_value: tx.net_value,
+                                installment_number: tx.installment_number,
+                                total_installments: tx.total_installments,
+                              })}
+                            >
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -341,13 +436,19 @@ export default function ReceitaTransacoes() {
                   {showOnlyCountable ? ' (só contando no dash)' : ''}
                 </span>
                 <span className="text-xs">
-                  💡 Desmarque "Contar" para excluir recorrências ou transações duplicadas do Dashboard
+                  Clique na data para editar | Clique no 👁 para ver detalhes
                 </span>
               </div>
             </>
           )}
         </CardContent>
       </Card>
+
+      <TransactionDetailsDrawer 
+        transaction={selectedTransaction}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
     </div>
   );
 }
