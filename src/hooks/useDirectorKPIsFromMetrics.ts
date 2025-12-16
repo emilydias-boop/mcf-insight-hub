@@ -76,18 +76,18 @@ export function useDirectorKPIsFromMetrics(startDate?: Date, endDate?: Date) {
         };
       }
 
-      // Extrair valores das métricas pré-calculadas
-      const faturamentoTotal = metrics.faturamento_total || metrics.total_revenue || 0;
+      // Extrair valores das métricas pré-calculadas (priorizar dados da planilha importada)
+      const faturamentoTotal = metrics.total_revenue || metrics.faturamento_total || 0;
       const gastosAds = metrics.ads_cost || 0;
       const cpl = metrics.cpl || 0;
-      const custoTotal = metrics.operating_cost || 0;
+      const custoTotal = metrics.total_cost || metrics.operating_cost || 0;
       const lucro = metrics.operating_profit || (faturamentoTotal - custoTotal);
       const roi = metrics.roi || 0;
       const roas = metrics.roas || 0;
       const vendasA010 = metrics.a010_sales || 0;
       const faturamentoIncorporador = metrics.incorporador_50k || 0;
       const ultrametaClint = metrics.ultrameta_clint || 0;
-      const faturamentoClint = metrics.faturamento_clint || metrics.clint_revenue || 0;
+      const faturamentoClint = metrics.clint_revenue || metrics.faturamento_clint || 0;
       const ultrametaLiquido = metrics.ultrameta_liquido || 0;
       const faturamentoLiquido = metrics.incorporador_50k || 0;
 
@@ -117,10 +117,10 @@ export function useDirectorKPIsFromMetrics(startDate?: Date, endDate?: Date) {
         return ((current - previous) / previous) * 100;
       };
 
-      const prevFatTotal = prevMetrics?.faturamento_total || prevMetrics?.total_revenue || 0;
+      const prevFatTotal = prevMetrics?.total_revenue || prevMetrics?.faturamento_total || 0;
       const prevGastosAds = prevMetrics?.ads_cost || 0;
       const prevCpl = prevMetrics?.cpl || 0;
-      const prevCustoTotal = prevMetrics?.operating_cost || 0;
+      const prevCustoTotal = prevMetrics?.total_cost || prevMetrics?.operating_cost || 0;
       const prevLucro = prevMetrics?.operating_profit || (prevFatTotal - prevCustoTotal);
       const prevRoi = prevMetrics?.roi || 0;
       const prevRoas = prevMetrics?.roas || 0;
