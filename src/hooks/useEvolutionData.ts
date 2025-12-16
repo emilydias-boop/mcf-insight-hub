@@ -5,8 +5,7 @@ import { getCustomWeekStart, addCustomWeeks, formatDateForDB, getCustomWeekEnd }
 import { format, startOfMonth } from 'date-fns';
 import { 
   deduplicateTransactions, 
-  calcularFaturamentoTotal, 
-  contarVendasA010,
+  calcularMetricasSemana,
   formatDateForBrazil,
   HublaTransactionBase 
 } from '@/lib/transactionHelpers';
@@ -14,7 +13,7 @@ import {
 export const useEvolutionData = (canal?: string, limit: number = 52) => {
   return useQuery({
     queryKey: ['evolution-data', canal, limit],
-    staleTime: 30000, // 30 segundos
+    staleTime: 30000,
     queryFn: async () => {
       // Calcular semana atual e início do range
       const semanaAtual = getCustomWeekStart(new Date());
@@ -25,7 +24,7 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
       const startDateStr = formatDateForDB(semanaInicio);
       const endDateStr = formatDateForDB(getCustomWeekEnd(semanaAtual));
       
-      // Buscar TODAS as transações do período completo (uma única query)
+      // Buscar TODAS as transações do período completo
       const { data: allTransactions } = await supabase
         .from("hubla_transactions")
         .select(
@@ -83,7 +82,7 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
         weekStart = addCustomWeeks(weekStart, 1);
       }
 
-      // Calcular métricas para cada semana
+      // Calcular métricas para cada semana usando função compartilhada
       const evolutionData: EvolutionData[] = semanas.map((semana) => {
         const weekStartStr = formatDateForBrazil(semana.startDate, false);
         const weekEndStr = formatDateForBrazil(semana.endDate, true);
@@ -96,11 +95,8 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
           return saleDate >= weekStartStr && saleDate <= weekEndStr;
         }) as HublaTransactionBase[];
         
-        // Deduplicar usando mesma lógica do Director KPIs
+        // Deduplicar usando mesma lógica
         const deduplicatedTx = deduplicateTransactions(weekTransactions);
-        
-        // Calcular Faturamento Total (mesma lógica do Director KPIs)
-        const faturamento = calcularFaturamentoTotal(deduplicatedTx);
         
         // Calcular custos de ads da semana
         const weekAdsCosts = (allCosts || [])
@@ -112,37 +108,26 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
         const monthCosts = (operationalCosts || []).filter((c) => c.month === monthKey);
         const custoEquipe = monthCosts.filter((c) => c.cost_type === 'team').reduce((sum, c) => sum + (c.amount || 0), 0);
         const custoEscritorio = monthCosts.filter((c) => c.cost_type === 'office').reduce((sum, c) => sum + (c.amount || 0), 0);
-        const custoOperacionalSemanal = (custoEquipe + custoEscritorio) / 4;
         
-        // Custo total = ads + operacional semanal
-        const custoTotal = weekAdsCosts + custoOperacionalSemanal;
-        
-        // Lucro = faturamento - custo total
-        const lucro = faturamento - custoTotal;
-        
-        // ROI = (faturamento / custo total) × 100
-        const roi = custoTotal > 0 ? (faturamento / custoTotal) * 100 : 0;
-        
-        // ROAS = faturamento / gastos ads
-        const roas = weekAdsCosts > 0 ? faturamento / weekAdsCosts : 0;
-        
-        // Vendas A010 (emails únicos)
-        const vendasA010 = contarVendasA010(deduplicatedTx);
-        
-        // Leads (stage_01) - mantém 0 pois não temos essa info em tempo real
-        const leads = 0;
+        // Usar função compartilhada para calcular todas as métricas
+        const metricas = calcularMetricasSemana(
+          deduplicatedTx,
+          weekAdsCosts,
+          custoEquipe,
+          custoEscritorio
+        );
         
         return {
           periodo: semana.weekLabel,
           semanaLabel: semana.weekLabel,
-          faturamento,
-          custos: custoTotal,
-          lucro,
-          roi,
-          roas,
-          vendasA010,
-          vendasContratos: 0, // Não calculamos separado por enquanto
-          leads,
+          faturamento: metricas.faturamentoTotal,
+          custos: metricas.custoTotal,
+          lucro: metricas.lucro,
+          roi: metricas.roi,
+          roas: metricas.roas,
+          vendasA010: metricas.vendasA010,
+          vendasContratos: 0,
+          leads: 0,
         };
       });
 

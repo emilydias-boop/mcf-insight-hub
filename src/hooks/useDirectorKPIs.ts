@@ -575,7 +575,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      const faturamentoTotalFinal = faturamentoTotalCalc;
+      // ===== FATURAMENTO TOTAL (FÓRMULA FIXA DA PLANILHA) =====
+      // Faturamento Total = Incorporador50k + A010 Faturado + OB Construir + OB Vitalício + OB Evento
+      const faturamentoTotalFinal = faturamentoIncorporador + a010Faturado + obConstruirFaturado + obVitalicioFaturado;
 
       console.log("💰 Faturamento Total Debug:", {
         totalTransacoes: hublaData?.length,
@@ -617,13 +619,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const custoEscritorio =
         operationalData?.filter((c) => c.cost_type === "office").reduce((sum, c) => sum + (c.amount || 0), 0) || 0;
 
-      // CORREÇÃO: Custo operacional semanal com override para semana 06/12-12/12/2025
-      // Valor correto: R$ 23.162,50 (equipe) + R$ 5.344,00 (escritório) = R$ 28.506,50
-      const isWeekDec06Dec12 = start === "2025-12-06" && end === "2025-12-12";
-      const custoOperacionalSemanal = isWeekDec06Dec12 
-        ? 28506.50  // Override semanal correto
-        : (custoEquipe + custoEscritorio) / 4;
-
+      // Custo operacional semanal = (Equipe + Escritório) / 4 (FÓRMULA FIXA DA PLANILHA)
+      const custoOperacionalSemanal = (custoEquipe + custoEscritorio) / 4;
       // ===== CÁLCULOS FINAIS =====
       // CPL = Ads / Vendas A010
       const cpl = vendasA010 > 0 ? gastosAds / vendasA010 : 0;
@@ -776,10 +773,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const faturamentoClintFinal = faturamentoClint;
       const faturamentoLiquidoFinal = faturamentoLiquido;
 
-      // ROI = Faturamento Líquido / (Faturamento Líquido - Lucro) × 100
-      // Onde (Faturamento Líquido - Lucro) = Custo Total efetivo
-      const denominadorROI = faturamentoLiquidoFinal - lucro;
-      const roi = denominadorROI > 0 ? (faturamentoLiquidoFinal / denominadorROI) * 100 : 0;
+      // ROI = Incorporador50k / (Incorporador50k - Lucro) × 100 (FÓRMULA FIXA DA PLANILHA)
+      const denominadorROI = faturamentoIncorporador - lucro;
+      const roi = denominadorROI > 0 ? (faturamentoIncorporador / denominadorROI) * 100 : 0;
 
       // ROAS = Faturamento Total / Gastos Ads
       const roas = gastosAds > 0 ? faturamentoTotalFinal / gastosAds : 0;
@@ -833,39 +829,45 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      const prevSeenObVitalicioIds = new Set<string>();
+      // OB Vitalício anterior
+      const prevSeenObVitalicioEmails = new Set<string>();
       const prevObVitalicio = (prevHubla || [])
         .filter((tx) => {
           const name = (tx.product_name || "").toUpperCase();
-          const isOB = name.includes("VITALIC"); // CORREÇÃO: Pega todas variantes de acento
-          if (prevSeenObVitalicioIds.has(tx.hubla_id)) return false;
+          const isOB = name.includes("VITALIC") || tx.product_category === "ob_vitalicio";
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          if (!email || prevSeenObVitalicioEmails.has(email)) return false;
           if (isOB) {
-            prevSeenObVitalicioIds.add(tx.hubla_id);
+            prevSeenObVitalicioEmails.add(email);
             return true;
           }
           return false;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      const prevSeenObConstruirIds = new Set<string>();
+      // OB Construir anterior
+      const prevSeenObConstruirEmails = new Set<string>();
       const prevObConstruir = (prevHubla || [])
         .filter((tx) => {
           const name = (tx.product_name || "").toUpperCase();
-          const isOB = name.includes("CONSTRUIR") && name.includes("ALUGAR");
-          if (prevSeenObConstruirIds.has(tx.hubla_id)) return false;
+          const isOB = (name.includes("CONSTRUIR") || tx.product_category === "ob_construir") && !name.includes("VIVER");
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          if (!email || prevSeenObConstruirEmails.has(email)) return false;
           if (isOB) {
-            prevSeenObConstruirIds.add(tx.hubla_id);
+            prevSeenObConstruirEmails.add(email);
             return true;
           }
           return false;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
+      // A010 Faturado anterior
       const prevSeenA010FatIds = new Set<string>();
       const prevFatA010 = (prevHubla || [])
         .filter((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
           const isA010 = tx.product_category === "a010" || productName.includes("A010");
+          if (tx.hubla_id?.includes('-offer-')) return false;
           if (prevSeenA010FatIds.has(tx.hubla_id)) return false;
           if (isA010) {
             prevSeenA010FatIds.add(tx.hubla_id);
@@ -875,54 +877,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // Helper para verificar PARENT no período anterior
-      const isPrevParentTransaction = (tx: { raw_data: unknown }): boolean => {
-        const rawData = tx.raw_data as Record<string, unknown> | null;
-        const eventData = rawData?.event as Record<string, unknown> | undefined;
-        const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
-        const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
-        return Boolean(childIds && childIds.length > 0);
-      };
+      // Faturamento Total anterior = Incorporador + A010 + OBs (FÓRMULA FIXA DA PLANILHA)
+      const prevFaturamentoTotal = prevFatIncorporador + prevFatA010 + prevObConstruir + prevObVitalicio;
 
-      // Faturamento Total anterior = mesma lógica (excluindo categorias, produtos e PARENTs, MAS incluindo OFFERs)
-      const prevSeenAllIds = new Set<string>();
-      const prevFaturamentoTotal = (prevHubla || [])
-        .filter((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
-          const category = tx.product_category || "";
-
-          // REMOVIDO: Exclusão de -offer- (são vendas válidas)
-
-          // Excluir categorias específicas
-          if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
-
-          // Excluir produtos específicos
-          if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
-
-          // Excluir OBs
-          const isOB = (productName.includes("CONSTRUIR") && productName.includes("ALUGAR")) ||
-                       productName.includes("VITALÍCIO") || productName.includes("VITALICIO");
-          if (isOB) return false;
-
-          // Excluir PARENTs
-          if (isPrevParentTransaction(tx)) return false;
-
-          // Deduplicar por hubla_id
-          if (prevSeenAllIds.has(tx.hubla_id)) return false;
-          prevSeenAllIds.add(tx.hubla_id);
-          return true;
-        })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
-
-      // Vendas A010 período anterior - contar LINHAS excluindo newsale-* e PARENTs
-      const prevVendasA010 = (prevHubla || []).filter((tx) => {
+      // Vendas A010 período anterior - contar por emails únicos (mesmo que período atual)
+      const prevA010Emails = new Set<string>();
+      (prevHubla || []).forEach((tx) => {
         const productName = (tx.product_name || "").toUpperCase();
         const isA010 = tx.product_category === "a010" || productName.includes("A010");
-        const hasValidName = tx.customer_name && tx.customer_name.trim() !== "";
-        const isNotNewsale = !tx.hubla_id?.startsWith("newsale-");
-        const isParent = isPrevParentTransaction(tx);
-        return isA010 && hasValidName && isNotNewsale && !isParent;
-      }).length;
+        if (tx.hubla_id?.startsWith("newsale-")) return;
+        if (isA010) {
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          if (email) prevA010Emails.add(email);
+        }
+      });
+      const prevVendasA010 = prevA010Emails.size;
 
       const { data: prevAds } = await supabase
         .from("daily_costs")
@@ -975,9 +944,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ROI anterior = Faturamento Líquido / (Faturamento Líquido - Lucro) × 100
-      const prevDenominadorROI = prevFaturamentoLiquido - prevLucro;
-      const prevRoi = prevDenominadorROI > 0 ? (prevFaturamentoLiquido / prevDenominadorROI) * 100 : 0;
+      // ROI anterior = Incorporador50k / (Incorporador50k - Lucro) × 100 (FÓRMULA FIXA DA PLANILHA)
+      const prevDenominadorROI = prevFatIncorporador - prevLucro;
+      const prevRoi = prevDenominadorROI > 0 ? (prevFatIncorporador / prevDenominadorROI) * 100 : 0;
 
       // ROAS anterior = Faturamento Total / Gastos Ads
       const prevRoas = prevGastosAds > 0 ? prevFaturamentoTotal / prevGastosAds : 0;

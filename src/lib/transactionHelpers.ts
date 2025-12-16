@@ -1,37 +1,47 @@
-// ===== FUNÇÕES COMPARTILHADAS DE DEDUPLICAÇÃO DE TRANSAÇÕES =====
+// ===== FUNÇÕES COMPARTILHADAS DE CÁLCULO DE MÉTRICAS =====
 // Usado por useDirectorKPIs.ts e useEvolutionData.ts para consistência
 
-// Categorias excluídas do Faturamento Total
-export const EXCLUDED_CATEGORIES_FATURAMENTO = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao", "contrato"];
-
-// Produtos excluídos do Faturamento Total
-export const EXCLUDED_PRODUCTS_FATURAMENTO = [
-  "SÓCIO MCF",
-  "SOCIO MCF",
-  "SÓCIO",
-  "SOCIO",
-  "PARCERIA",
-  "ALMOÇO NETWORKING",
-  "ALMOCO NETWORKING",
-  "ALMOÇO",
-  "ALMOCO",
-  "MENTORIA INDIVIDUAL",
-  "CLUBE DO ARREMATE",
-  "CONTRATO - CLUBE DO ARREMATE",
-  "RENOVAÇÃO PARCEIRO",
-  "RENOVACAO PARCEIRO",
-  "AVALIAÇÃO DE IMÓVEIS",
-  "AVALIACAO DE IMOVEIS",
+// ===== LISTA COMPLETA DE PRODUTOS INCORPORADOR 50K (38 produtos) =====
+// Conforme planilha fornecida pelo usuário
+export const PRODUTOS_INCORPORADOR_50K = [
+  "000 - Pré Reserva Minha Casa Financiada",
+  "000 - Contrato",
+  "001- Pré-Reserva Anticrise",
+  "003 - Imersão SÓCIOS MCF",
+  "016-Análise e defesa de proposta de crédito",
+  "A000 - Contrato",
+  "A000 - Pré-Reserva Plano Anticrise",
+  "A001 - MCF INCORPORADOR COMPLETO",
+  "A002 - MCF INCORPORADOR BÁSICO",
+  "A003 - MCF Incorporador - P2",
+  "A003 - MCF Plano Anticrise Completo",
+  "A004 - MCF INCORPORADOR BÁSICO",
+  "A004 - MCF Plano Anticrise Básico",
+  "A005 - Anticrise Completo",
+  "A005 - MCF P2",
+  "A005 - MCF P2 - ASAAS",
+  "A006 - Anticrise Básico",
+  // EXCLUÍDO: "A006 - Renovação Parceiro MCF" - Não faz parte
+  "A007 - Imersão SÓCIOS MCF",
+  "A008 - The CLUB",
+  "A008 - The CLUB - CONSULTORIA CLUB",
+  "A009 - MCF INCORPORADOR COMPLETO + THE CLUB",
+  // EXCLUÍDO: "A009 - Renovação Parceiro MCF" - Não faz parte
+  "ASAAS",
+  "COBRANÇAS ASAAS",
+  "CONTRATO ANTICRISE",
+  "Contrato - Anticrise",
+  "Contrato - Sócio MCF",
+  "Contrato",
+  "Jantar Networking",
+  "R001 - Incorporador Completo 50K",
+  "R004 - Incorporador 50k Básico",
+  "R005 - Anticrise Completo",
+  "R006 - Anticrise Básico",
+  "R009 - Renovação Parceiro MCF",
+  "R21- MCF Incorporador P2 (Assinatura)",
+  "Sócio Jantar",
 ];
-
-// Valores mínimos esperados por categoria (se abaixo, provavelmente é taxa)
-export const VALOR_MINIMO_POR_CATEGORIA: Record<string, number> = {
-  a010: 35,
-  contrato: 100,
-  incorporador: 100,
-  ob_vitalicio: 35,
-  ob_construir: 70,
-};
 
 // Tipo para transação Hubla
 export type HublaTransactionBase = {
@@ -50,8 +60,17 @@ export type HublaTransactionBase = {
   source: string | null;
 };
 
+// Valores mínimos esperados por categoria (se abaixo, provavelmente é taxa)
+const VALOR_MINIMO_POR_CATEGORIA: Record<string, number> = {
+  a010: 35,
+  contrato: 100,
+  incorporador: 100,
+  ob_vitalicio: 35,
+  ob_construir: 70,
+};
+
 // Normaliza tipo de produto para chave de deduplicação
-export const getNormalizedProductType = (tx: HublaTransactionBase): string => {
+const getNormalizedProductType = (tx: HublaTransactionBase): string => {
   const category = tx.product_category || "unknown";
   const productName = (tx.product_name || "").toUpperCase();
   
@@ -79,7 +98,7 @@ export const getNormalizedProductType = (tx: HublaTransactionBase): string => {
 };
 
 // Chave de deduplicação: email + data + tipo normalizado
-export const getSaleKey = (tx: HublaTransactionBase): string => {
+const getSaleKey = (tx: HublaTransactionBase): string => {
   const email = (tx.customer_email || "").toLowerCase().trim();
   const date = tx.sale_date.split("T")[0];
   const tipoNormalizado = getNormalizedProductType(tx);
@@ -128,44 +147,101 @@ export const deduplicateTransactions = <T extends HublaTransactionBase>(transact
   });
 };
 
-// Calcula Faturamento Total a partir de transações deduplicadas
-export const calcularFaturamentoTotal = (transactions: HublaTransactionBase[]): number => {
+// Helper para verificar se produto está na lista de Incorporador 50k
+export const isProductInIncorporador50k = (productName: string): boolean => {
+  const normalizedName = productName.trim().toUpperCase();
+  return PRODUTOS_INCORPORADOR_50K.some(
+    (p) => p.toUpperCase() === normalizedName
+  );
+};
+
+// ===== CÁLCULO INCORPORADOR 50K (LÍQUIDO) =====
+// Soma de net_value dos produtos da lista, deduplicando por hubla_id
+export const calcularIncorporador50k = (transactions: HublaTransactionBase[]): number => {
   const seenIds = new Set<string>();
-  const matchMap = new Map<string, { netValue: number; source: string }>();
+  
+  return transactions
+    .filter((tx) => {
+      if (tx.hubla_id?.startsWith("newsale-")) return false;
+      if (tx.hubla_id?.includes("-offer-")) return false;
+      if (seenIds.has(tx.hubla_id)) return false;
+      
+      const productName = tx.product_name || "";
+      if (!isProductInIncorporador50k(productName)) return false;
+      
+      // Excluir renovações
+      const upperName = productName.toUpperCase();
+      if (upperName.includes("RENOVAÇÃO") || upperName.includes("RENOVACAO")) return false;
+      
+      seenIds.add(tx.hubla_id);
+      return true;
+    })
+    .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+};
+
+// ===== CÁLCULO A010 FATURADO (LÍQUIDO) =====
+// Soma de net_value de produtos A010, excluindo Order Bumps
+export const calcularA010Faturado = (transactions: HublaTransactionBase[]): number => {
+  const seenIds = new Set<string>();
+  
+  return transactions
+    .filter((tx) => {
+      const productName = (tx.product_name || "").toUpperCase();
+      const isA010 = tx.product_category === "a010" || productName.includes("A010");
+      if (!isA010) return false;
+      
+      // Excluir Order Bumps
+      if (tx.hubla_id?.includes('-offer-')) return false;
+      if (seenIds.has(tx.hubla_id)) return false;
+      
+      seenIds.add(tx.hubla_id);
+      return true;
+    })
+    .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+};
+
+// ===== CÁLCULO OBs (LÍQUIDO) =====
+export const calcularOBs = (transactions: HublaTransactionBase[]): {
+  obConstruir: number;
+  obVitalicio: number;
+  obEvento: number;
+} => {
+  const obConstruirByEmail = new Map<string, number>();
+  const obVitalicioByEmail = new Map<string, number>();
+  const obEventoByEmail = new Map<string, number>();
   
   transactions.forEach((tx) => {
     const productName = (tx.product_name || "").toUpperCase();
-    const category = tx.product_category || "";
-    const hublaId = tx.hubla_id || "";
-
-    if (hublaId.startsWith("newsale-")) return;
-    if (hublaId.includes("-offer-")) return;
-    if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return;
-    if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return;
-    if (seenIds.has(hublaId)) return;
-    seenIds.add(hublaId);
-
-    const source = tx.source || "hubla";
-    const netValue = tx.net_value || 0;
     const email = (tx.customer_email || "").toLowerCase().trim();
-    const timestamp = tx.sale_date?.substring(0, 19) || "";
-    const price = (tx.product_price || 0).toFixed(2);
-    const matchKey = `${email}|${timestamp}|${price}`;
-
-    if (matchMap.has(matchKey)) {
-      const existing = matchMap.get(matchKey)!;
-      if (source === "make" && existing.source === "hubla") {
-        matchMap.set(matchKey, { netValue, source });
-      }
-    } else {
-      matchMap.set(matchKey, { netValue, source });
+    if (!email) return;
+    
+    const netValue = tx.net_value || 0;
+    
+    // OB Vitalício
+    if (productName.includes("VITALIC") || tx.product_category === "ob_vitalicio") {
+      const existing = obVitalicioByEmail.get(email) || 0;
+      if (netValue > existing) obVitalicioByEmail.set(email, netValue);
+    }
+    // OB Construir (excluir Viver de Aluguel)
+    else if ((productName.includes("CONSTRUIR") || tx.product_category === "ob_construir") && !productName.includes("VIVER")) {
+      const existing = obConstruirByEmail.get(email) || 0;
+      if (netValue > existing) obConstruirByEmail.set(email, netValue);
+    }
+    // OB Evento (Imersão Presencial)
+    else if (productName.includes("IMERSÃO") || productName.includes("IMERSAO") || tx.product_category === "ob_evento") {
+      const existing = obEventoByEmail.get(email) || 0;
+      if (netValue > existing) obEventoByEmail.set(email, netValue);
     }
   });
   
-  return Array.from(matchMap.values()).reduce((sum, entry) => sum + entry.netValue, 0);
+  return {
+    obConstruir: Array.from(obConstruirByEmail.values()).reduce((sum, v) => sum + v, 0),
+    obVitalicio: Array.from(obVitalicioByEmail.values()).reduce((sum, v) => sum + v, 0),
+    obEvento: Array.from(obEventoByEmail.values()).reduce((sum, v) => sum + v, 0),
+  };
 };
 
-// Conta vendas A010 por emails únicos
+// ===== CONTA VENDAS A010 (EMAILS ÚNICOS) =====
 export const contarVendasA010 = (transactions: HublaTransactionBase[]): number => {
   const seenEmails = new Set<string>();
   
@@ -184,6 +260,86 @@ export const contarVendasA010 = (transactions: HublaTransactionBase[]): number =
   });
   
   return seenEmails.size;
+};
+
+// ===== FUNÇÃO MASTER: CALCULAR TODAS AS MÉTRICAS DA SEMANA =====
+// Usa as fórmulas EXATAS da planilha do usuário
+export interface MetricasSemana {
+  // Componentes
+  incorporador50k: number;
+  a010Faturado: number;
+  obConstruir: number;
+  obVitalicio: number;
+  obEvento: number;
+  vendasA010: number;
+  
+  // Calculados
+  faturamentoTotal: number;
+  custoTotal: number;
+  lucro: number;
+  roi: number;
+  roas: number;
+  cpl: number;
+  
+  // Ultrametas
+  ultrametaClint: number;
+  ultrametaLiquido: number;
+}
+
+export const calcularMetricasSemana = (
+  transactions: HublaTransactionBase[],
+  gastosAds: number,
+  custoEquipeMensal: number,
+  custoEscritorioMensal: number
+): MetricasSemana => {
+  // 1. Calcular componentes
+  const incorporador50k = calcularIncorporador50k(transactions);
+  const a010Faturado = calcularA010Faturado(transactions);
+  const obs = calcularOBs(transactions);
+  const vendasA010 = contarVendasA010(transactions);
+  
+  // 2. Custo Operacional Semanal = (Equipe + Escritório) / 4
+  const custoOperacionalSemanal = (custoEquipeMensal + custoEscritorioMensal) / 4;
+  
+  // 3. Custo Total = Ads + Operacional Semanal
+  const custoTotal = gastosAds + custoOperacionalSemanal;
+  
+  // 4. Faturamento Total = Inc50k + A010 + OBs (FÓRMULA FIXA DA PLANILHA)
+  const faturamentoTotal = incorporador50k + a010Faturado + obs.obConstruir + obs.obVitalicio + obs.obEvento;
+  
+  // 5. Lucro = Faturamento Total - Custo Total
+  const lucro = faturamentoTotal - custoTotal;
+  
+  // 6. ROI = Incorporador50k / (Incorporador50k - Lucro) × 100 (FÓRMULA FIXA DA PLANILHA)
+  const denominadorROI = incorporador50k - lucro;
+  const roi = denominadorROI > 0 ? (incorporador50k / denominadorROI) * 100 : 0;
+  
+  // 7. ROAS = Faturamento Total / Gastos Ads
+  const roas = gastosAds > 0 ? faturamentoTotal / gastosAds : 0;
+  
+  // 8. CPL = Gastos Ads / Vendas A010
+  const cpl = vendasA010 > 0 ? gastosAds / vendasA010 : 0;
+  
+  // 9. Ultrametas
+  const ultrametaClint = vendasA010 * 1680;
+  const ultrametaLiquido = vendasA010 * 1400;
+  
+  return {
+    incorporador50k,
+    a010Faturado,
+    obConstruir: obs.obConstruir,
+    obVitalicio: obs.obVitalicio,
+    obEvento: obs.obEvento,
+    vendasA010,
+    faturamentoTotal,
+    custoTotal,
+    lucro,
+    roi,
+    roas,
+    cpl,
+    ultrametaClint,
+    ultrametaLiquido,
+  };
 };
 
 // Formata data para query no fuso de Brasília
