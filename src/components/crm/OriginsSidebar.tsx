@@ -312,15 +312,6 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
           
           <ScrollArea className="flex-1">
             <div className="p-2 space-y-1">
-              <Button
-                variant={selectedOriginId === null ? "secondary" : "ghost"}
-                className="w-full justify-start mb-2"
-                onClick={() => onSelectOrigin(null)}
-              >
-                <Layers className="h-4 w-4 mr-2" />
-                Todas as Origens
-              </Button>
-              
               {/* Seção de favoritos */}
               {favoriteOrigins.length > 0 && !searchTerm && (
                 <div className="mb-4">
