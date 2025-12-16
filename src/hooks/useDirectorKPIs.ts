@@ -463,18 +463,22 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // Cada transação com email diferente no mesmo dia conta como venda separada
 
       // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Usar allHublaData (dados brutos) para evitar perda de transações pela deduplicação global
-      // Soma de TODOS os net_value válidos, deduplicando por hubla_id internamente
-      // CORREÇÃO: Excluir -offer- (Order Bumps já contabilizados na transação pai)
-      // CORREÇÃO: Deduplicação Hubla vs Make - priorizar Make (valores mais precisos)
-      const faturamentoByKey = new Map<string, { netValue: number; source: string; hublaId: string }>();
+      // CORREÇÃO: Deduplicar por hubla_id (identificador único)
+      // Excluir newsale-xxx (net_value = 0) e -offer- (Order Bumps)
+      // Deduplicação Hubla vs Make: usar timestamp+email+price como match key
+      const seenFaturamentoIds = new Set<string>();
+      const hublaVsMakeMatch = new Map<string, { netValue: number; source: string; hublaId: string }>();
       
       ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
         const productName = (tx.product_name || "").toUpperCase();
         const category = tx.product_category || "";
+        const hublaId = tx.hubla_id || "";
+
+        // Excluir newsale-xxx (transações com net_value = 0)
+        if (hublaId.startsWith("newsale-")) return;
 
         // Excluir -offer- transactions (Order Bumps)
-        if (tx.hubla_id?.includes("-offer-")) return;
+        if (hublaId.includes("-offer-")) return;
 
         // Excluir categorias específicas
         if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return;
@@ -482,29 +486,33 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         // Excluir produtos específicos
         if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return;
 
-        // Criar chave de deduplicação: email + data + produto normalizado
-        const email = (tx.customer_email || "").toLowerCase().trim();
-        const saleDate = tx.sale_date?.split("T")[0] || "";
-        const dedupKey = `${email}|${saleDate}|${productName.substring(0, 10)}`;
+        // Deduplicar por hubla_id primeiro
+        if (seenFaturamentoIds.has(hublaId)) return;
+        seenFaturamentoIds.add(hublaId);
+
         const source = tx.source || "hubla";
         const netValue = tx.net_value || 0;
 
-        // Se já existe, priorizar Make sobre Hubla
-        if (faturamentoByKey.has(dedupKey)) {
-          const existing = faturamentoByKey.get(dedupKey)!;
-          // Make tem prioridade sobre Hubla
+        // Para deduplicação Hubla vs Make: usar timestamp (até segundo) + email + price
+        const email = (tx.customer_email || "").toLowerCase().trim();
+        const timestamp = tx.sale_date?.substring(0, 19) || ""; // até segundo (YYYY-MM-DDTHH:mm:ss)
+        const price = (tx.product_price || 0).toFixed(2);
+        const matchKey = `${email}|${timestamp}|${price}`;
+
+        // Se já existe match com mesmo timestamp+email+price, priorizar Make
+        if (hublaVsMakeMatch.has(matchKey)) {
+          const existing = hublaVsMakeMatch.get(matchKey)!;
+          // Make tem prioridade sobre Hubla (valores mais precisos)
           if (source === "make" && existing.source === "hubla") {
-            faturamentoByKey.set(dedupKey, { netValue, source, hublaId: tx.hubla_id });
-          } else if (existing.source === source && netValue > existing.netValue) {
-            // Mesmo source, usar maior valor
-            faturamentoByKey.set(dedupKey, { netValue, source, hublaId: tx.hubla_id });
+            hublaVsMakeMatch.set(matchKey, { netValue, source, hublaId });
           }
+          // Se mesmo source ou Make já existe, manter o existente
         } else {
-          faturamentoByKey.set(dedupKey, { netValue, source, hublaId: tx.hubla_id });
+          hublaVsMakeMatch.set(matchKey, { netValue, source, hublaId });
         }
       });
       
-      const faturamentoTotalCalc = Array.from(faturamentoByKey.values())
+      const faturamentoTotalCalc = Array.from(hublaVsMakeMatch.values())
         .reduce((sum, entry) => sum + entry.netValue, 0);
 
       // ===== VENDAS A010: Contagem por EMAILS ÚNICOS =====
