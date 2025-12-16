@@ -121,8 +121,9 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
         const hublaId = tx.hubla_id || '';
         
-        // Excluir newsale- e -offer- mas INCLUIR Make
-        if (hublaId.startsWith('newsale-') || hublaId.includes('-offer-')) return;
+        // Excluir apenas newsale- (sem dados completos)
+        // CORREÇÃO: -offer- são vendas A010 legítimas (Order Bump), manter
+        if (hublaId.startsWith('newsale-')) return;
         
         if (isA010 && hasValidEmail) {
           a010Emails.add(tx.customer_email!.toLowerCase().trim());
@@ -194,8 +195,14 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       });
       
       // Bruto: apenas primeira parcela, usar product_price real
+      // CORREÇÃO: Excluir produtos P2 do Bruto (mas manter no Líquido)
+      const isP2Product = (name: string) => name.toUpperCase().includes('P2');
       const faturamentoClintBruto = deduplicatedClintTransactions
-        .filter(tx => (tx.installment_number || 1) === 1)
+        .filter(tx => {
+          const installmentNum = tx.installment_number || 1;
+          const productName = tx.product_name || '';
+          return installmentNum === 1 && !isP2Product(productName);
+        })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
       // ===== FATURAMENTO LÍQUIDO =====
