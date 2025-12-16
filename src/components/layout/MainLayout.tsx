@@ -14,7 +14,7 @@ export function MainLayout() {
             <SidebarTrigger className="text-foreground" />
             <RealTimeAlerts />
           </header>
-          <main>
+          <main className="flex-1 overflow-hidden">
             <Outlet />
           </main>
         </SidebarInset>

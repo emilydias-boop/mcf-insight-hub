@@ -156,14 +156,14 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   return (
     <>
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex gap-3 pb-4">
+        <div className="flex gap-3 h-full overflow-x-auto pb-4">
           {visibleStages.map((stage: any) => {
             const stageDeals = getDealsByStage(stage.id);
             
             return (
-              <div key={stage.id} className="flex-1 min-w-[200px] max-w-[320px]">
-                <Card className="h-full">
-                  <CardHeader className={stage.color || 'bg-muted'}>
+              <div key={stage.id} className="flex-shrink-0 w-[280px] h-full">
+                <Card className="h-full flex flex-col">
+                  <CardHeader className={`flex-shrink-0 ${stage.color || 'bg-muted'}`}>
                     <CardTitle className="text-sm font-medium flex items-center justify-between">
                       <span>{stage.stage_name}</span>
                       <Badge variant="secondary">{stageDeals.length}</Badge>
@@ -175,7 +175,7 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className="p-4 space-y-3 min-h-[200px]"
+                        className="flex-1 overflow-y-auto p-4 space-y-3"
                       >
                         {stageDeals.length === 0 ? (
                           <div className="flex flex-col items-center justify-center py-8 text-center">
