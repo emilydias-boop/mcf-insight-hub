@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Layers, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { 
+  Search, Layers, ChevronLeft, ChevronRight, ChevronDown, Star,
+  Store, Users, Building2, Briefcase, Package, Megaphone, Globe, 
+  ShoppingCart, Target, Handshake, type LucideIcon
+} from 'lucide-react';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -33,12 +37,61 @@ interface Origin {
   deal_count?: number;
 }
 
-// Componente principal do sidebar
+// Mapear ícones baseado no nome do grupo/origem
+const getGroupIcon = (name: string): LucideIcon => {
+  const lowerName = name.toLowerCase();
+  
+  if (lowerName.includes('hubla')) return Store;
+  if (lowerName.includes('inside') || lowerName.includes('sales')) return Users;
+  if (lowerName.includes('capital') || lowerName.includes('mcf')) return Building2;
+  if (lowerName.includes('contrato')) return Briefcase;
+  if (lowerName.includes('pós venda') || lowerName.includes('pos venda')) return Package;
+  if (lowerName.includes('dmg') || lowerName.includes('ads') || lowerName.includes('tráfego')) return Megaphone;
+  if (lowerName.includes('bu') || lowerName.includes('produto')) return Globe;
+  if (lowerName.includes('parceria') || lowerName.includes('indicação')) return Handshake;
+  if (lowerName.includes('lead') || lowerName.includes('captação')) return Target;
+  if (lowerName.includes('loja') || lowerName.includes('ecommerce')) return ShoppingCart;
+  
+  return Layers; // Ícone padrão
+};
+
+// Hook para gerenciar favoritos com localStorage
+const useFavorites = () => {
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('crm-origin-favorites');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('crm-origin-favorites', JSON.stringify([...favorites]));
+  }, [favorites]);
+
+  const toggleFavorite = (id: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const isFavorite = (id: string) => favorites.has(id);
+
+  return { favorites, toggleFavorite, isFavorite };
+};
 
 export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline }: OriginsSidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const { favorites, toggleFavorite, isFavorite } = useFavorites();
   
   const { data: originData, isLoading } = useCRMOriginsByPipeline(pipelineId);
   
@@ -67,6 +120,19 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   
   const filteredData = filterBySearch(originData || []);
   
+  // Obter lista flat de todas as origens para favoritos
+  const getAllOrigins = (): Origin[] => {
+    if (!originData) return [];
+    
+    if (isGroupedTree) {
+      return (originData as Group[]).flatMap(group => group.children);
+    }
+    return originData as Origin[];
+  };
+  
+  // Origens favoritas
+  const favoriteOrigins = getAllOrigins().filter(origin => isFavorite(origin.id));
+  
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -80,31 +146,59 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   };
   
   // Renderizar origem individual
-  const renderOriginItem = (origin: Origin, indented = false) => {
+  const renderOriginItem = (origin: Origin, indented = false, showFavorite = true) => {
     const displayName = origin.display_name || origin.name;
     const dealCount = origin.deal_count || 0;
+    const favorited = isFavorite(origin.id);
     
     return (
-      <Button
-        key={origin.id}
-        variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
-        className={cn(
-          "w-full justify-between h-auto py-2 text-left",
-          selectedOriginId === origin.id && "bg-primary/10",
-          indented && "pl-8"
+      <div key={origin.id} className="group relative flex items-center">
+        <Button
+          variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
+          className={cn(
+            "w-full justify-between h-auto py-2 text-left pr-8",
+            selectedOriginId === origin.id && "bg-primary/10",
+            indented && "pl-8"
+          )}
+          onClick={() => onSelectOrigin(origin.id)}
+        >
+          <span className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+            <span className="truncate text-xs">{displayName}</span>
+          </span>
+          {dealCount > 0 && (
+            <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
+              {dealCount}
+            </Badge>
+          )}
+        </Button>
+        
+        {/* Botão de favorito */}
+        {showFavorite && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "absolute right-0 h-6 w-6 transition-opacity",
+              favorited ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(origin.id);
+            }}
+            title={favorited ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+          >
+            <Star 
+              className={cn(
+                "h-3 w-3",
+                favorited 
+                  ? "fill-yellow-400 text-yellow-400" 
+                  : "text-muted-foreground"
+              )}
+            />
+          </Button>
         )}
-        onClick={() => onSelectOrigin(origin.id)}
-      >
-        <span className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-          <span className="truncate text-xs">{displayName}</span>
-        </span>
-        {dealCount > 0 && (
-          <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
-            {dealCount}
-          </Badge>
-        )}
-      </Button>
+      </div>
     );
   };
   
@@ -113,6 +207,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     const displayName = group.display_name || group.name;
     const isExpanded = expandedGroups.has(group.id);
     const totalDeals = group.children.reduce((sum, c) => sum + (c.deal_count || 0), 0);
+    const Icon = getGroupIcon(group.name);
     
     return (
       <Collapsible
@@ -132,7 +227,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
                   !isExpanded && "-rotate-90"
                 )}
               />
-              <Layers className="h-3 w-3 flex-shrink-0" />
+              <Icon className="h-3 w-3 flex-shrink-0" />
               <span className="truncate text-xs">{displayName}</span>
             </span>
             {totalDeals > 0 && (
@@ -176,7 +271,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         </Button>
       </div>
       
-      {/* Conteúdo (esconder quando collapsed) */}
+      {/* Conteúdo expandido */}
       {!isCollapsed && (
         <>
           {/* Seletor de Pipeline */}
@@ -211,6 +306,20 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
                 Todas as Origens
               </Button>
               
+              {/* Seção de favoritos */}
+              {favoriteOrigins.length > 0 && !searchTerm && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2 px-2 flex items-center gap-1">
+                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                    Favoritos
+                  </h4>
+                  <div className="space-y-1">
+                    {favoriteOrigins.map(origin => renderOriginItem(origin, false, true))}
+                  </div>
+                  <div className="border-b my-3" />
+                </div>
+              )}
+              
               {isLoading ? (
                 <div className="text-sm text-muted-foreground p-4">Carregando...</div>
               ) : filteredData.length === 0 ? (
@@ -229,18 +338,98 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         </>
       )}
       
-      {/* Versão mini quando collapsed */}
+      {/* Versão mini quando collapsed - mostrar ícones dos grupos */}
       {isCollapsed && (
-        <div className="flex flex-col items-center py-2 gap-2">
-          <Button
-            variant={selectedOriginId === null ? "secondary" : "ghost"}
-            size="icon"
-            onClick={() => onSelectOrigin(null)}
-            title="Todas as Origens"
-          >
-            <Layers className="h-4 w-4" />
-          </Button>
-        </div>
+        <ScrollArea className="flex-1">
+          <div className="flex flex-col items-center py-2 gap-1">
+            {/* Botão Todas as Origens */}
+            <Button
+              variant={selectedOriginId === null ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => onSelectOrigin(null)}
+              title="Todas as Origens"
+              className="h-8 w-8"
+            >
+              <Layers className="h-4 w-4" />
+            </Button>
+            
+            {/* Separador */}
+            <div className="w-6 border-b my-1" />
+            
+            {/* Favoritos no modo collapsed */}
+            {favoriteOrigins.length > 0 && (
+              <>
+                {favoriteOrigins.map(origin => {
+                  const Icon = getGroupIcon(origin.name);
+                  const displayName = origin.display_name || origin.name;
+                  return (
+                    <Button
+                      key={`fav-${origin.id}`}
+                      variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
+                      size="icon"
+                      onClick={() => onSelectOrigin(origin.id)}
+                      title={`⭐ ${displayName}`}
+                      className="h-8 w-8 relative"
+                    >
+                      <Icon className="h-4 w-4" />
+                      <Star className="h-2 w-2 absolute -top-0.5 -right-0.5 fill-yellow-400 text-yellow-400" />
+                    </Button>
+                  );
+                })}
+                <div className="w-6 border-b my-1" />
+              </>
+            )}
+            
+            {/* Ícones de cada grupo/origem */}
+            {!isLoading && originData && (
+              isGroupedTree ? (
+                // Grupos
+                (originData as Group[]).map((group) => {
+                  const Icon = getGroupIcon(group.name);
+                  const displayName = group.display_name || group.name;
+                  const hasSelectedChild = group.children.some(c => c.id === selectedOriginId);
+                  
+                  return (
+                    <Button
+                      key={group.id}
+                      variant={hasSelectedChild ? "secondary" : "ghost"}
+                      size="icon"
+                      onClick={() => {
+                        // Selecionar primeira origem do grupo
+                        if (group.children.length > 0) {
+                          onSelectOrigin(group.children[0].id);
+                        }
+                      }}
+                      title={displayName}
+                      className="h-8 w-8"
+                    >
+                      <Icon className="h-4 w-4" />
+                    </Button>
+                  );
+                })
+              ) : (
+                // Origens flat
+                (originData as Origin[]).slice(0, 10).map((origin) => {
+                  const Icon = getGroupIcon(origin.name);
+                  const displayName = origin.display_name || origin.name;
+                  
+                  return (
+                    <Button
+                      key={origin.id}
+                      variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
+                      size="icon"
+                      onClick={() => onSelectOrigin(origin.id)}
+                      title={displayName}
+                      className="h-8 w-8"
+                    >
+                      <Icon className="h-4 w-4" />
+                    </Button>
+                  );
+                })
+              )
+            )}
+          </div>
+        </ScrollArea>
       )}
     </div>
   );
