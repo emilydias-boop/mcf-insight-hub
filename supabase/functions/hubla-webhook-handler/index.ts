@@ -462,6 +462,8 @@ serve(async (req) => {
           installment_number: installment,
           total_installments: installments,
           is_offer: false,
+          // Não contar transações com net_value=0 (são apenas notificações)
+          count_in_dashboard: (netValue || 0) > 0,
         };
 
         const { error } = await supabase
@@ -543,6 +545,7 @@ serve(async (req) => {
             installment_number: installment,
             total_installments: installments,
             is_offer: false,
+            count_in_dashboard: (netValue || 0) > 0,
           };
 
           console.log(`📝 [UPSERT] Salvando transação: ${transactionData.hubla_id} - ${productName}`);
@@ -635,6 +638,7 @@ serve(async (req) => {
             installment_number: installment,
             total_installments: installments,
             is_offer: isOffer,
+            count_in_dashboard: (itemNetValue || 0) > 0,
           };
 
           console.log(`📝 [UPSERT] Item ${i + 1}: ${hublaId} - ${productName} (offer: ${isOffer})`);

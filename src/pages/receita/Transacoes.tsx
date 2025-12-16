@@ -41,7 +41,7 @@ export default function ReceitaTransacoes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnlyCountable, setShowOnlyCountable] = useState(false);
   const [productCategory, setProductCategory] = useState("all");
-  const [hideDuplicates, setHideDuplicates] = useState(false);
+  const [hideDuplicates, setHideDuplicates] = useState(true);
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
@@ -126,9 +126,21 @@ export default function ReceitaTransacoes() {
     if (!displayTransactions) return { bruto: 0, liquido: 0, count: 0, countable: 0 };
     
     const countable = displayTransactions.filter(tx => tx.count_in_dashboard !== false);
+    
+    // Helper: verifica se é P2 (não conta no bruto)
+    const isP2 = (name: string) => name?.toLowerCase().includes('p2');
+    
+    // Bruto: só conta primeira parcela (installment_number = 1 ou null) e exclui P2
+    const bruto = countable
+      .filter(tx => (tx.installment_number || 1) === 1 && !isP2(tx.product_name))
+      .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+    
+    // Líquido: soma net_value de todas as parcelas válidas
+    const liquido = countable.reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+    
     return {
-      bruto: countable.reduce((sum, tx) => sum + (tx.product_price || 0), 0),
-      liquido: countable.reduce((sum, tx) => sum + (tx.net_value || 0), 0),
+      bruto,
+      liquido,
       count: displayTransactions.length,
       countable: countable.length,
     };
