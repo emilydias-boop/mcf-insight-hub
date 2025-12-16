@@ -14,7 +14,7 @@ export function MainLayout() {
             <SidebarTrigger className="text-foreground" />
             <RealTimeAlerts />
           </header>
-          <main className="p-8">
+          <main>
             <Outlet />
           </main>
         </SidebarInset>
