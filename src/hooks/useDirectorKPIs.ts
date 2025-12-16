@@ -106,6 +106,10 @@ const EXCLUDED_PRODUCTS_FATURAMENTO = [
   "MENTORIA INDIVIDUAL",
   "CLUBE DO ARREMATE",
   "CONTRATO - CLUBE DO ARREMATE",
+  "RENOVAÇÃO PARCEIRO",
+  "RENOVACAO PARCEIRO",
+  "AVALIAÇÃO DE IMÓVEIS",
+  "AVALIACAO DE IMOVEIS",
 ];
 
 // ===== TAXAS FIXAS POR PRODUTO (conforme planilha do usuário) =====
@@ -461,24 +465,47 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // ===== FATURAMENTO TOTAL =====
       // CORREÇÃO: Usar allHublaData (dados brutos) para evitar perda de transações pela deduplicação global
       // Soma de TODOS os net_value válidos, deduplicando por hubla_id internamente
-      const seenFaturamentoIds = new Set<string>();
-      const faturamentoTotalCalc = ((allHublaData as HublaTransaction[]) || [])
-        .filter((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
-          const category = tx.product_category || "";
+      // CORREÇÃO: Excluir -offer- (Order Bumps já contabilizados na transação pai)
+      // CORREÇÃO: Deduplicação Hubla vs Make - priorizar Make (valores mais precisos)
+      const faturamentoByKey = new Map<string, { netValue: number; source: string; hublaId: string }>();
+      
+      ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
+        const productName = (tx.product_name || "").toUpperCase();
+        const category = tx.product_category || "";
 
-          // Excluir categorias específicas
-          if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return false;
+        // Excluir -offer- transactions (Order Bumps)
+        if (tx.hubla_id?.includes("-offer-")) return;
 
-          // Excluir produtos específicos
-          if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return false;
+        // Excluir categorias específicas
+        if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return;
 
-          // Deduplicar por hubla_id
-          if (seenFaturamentoIds.has(tx.hubla_id)) return false;
-          seenFaturamentoIds.add(tx.hubla_id);
-          return true;
-        })
-        .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+        // Excluir produtos específicos
+        if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return;
+
+        // Criar chave de deduplicação: email + data + produto normalizado
+        const email = (tx.customer_email || "").toLowerCase().trim();
+        const saleDate = tx.sale_date?.split("T")[0] || "";
+        const dedupKey = `${email}|${saleDate}|${productName.substring(0, 10)}`;
+        const source = tx.source || "hubla";
+        const netValue = tx.net_value || 0;
+
+        // Se já existe, priorizar Make sobre Hubla
+        if (faturamentoByKey.has(dedupKey)) {
+          const existing = faturamentoByKey.get(dedupKey)!;
+          // Make tem prioridade sobre Hubla
+          if (source === "make" && existing.source === "hubla") {
+            faturamentoByKey.set(dedupKey, { netValue, source, hublaId: tx.hubla_id });
+          } else if (existing.source === source && netValue > existing.netValue) {
+            // Mesmo source, usar maior valor
+            faturamentoByKey.set(dedupKey, { netValue, source, hublaId: tx.hubla_id });
+          }
+        } else {
+          faturamentoByKey.set(dedupKey, { netValue, source, hublaId: tx.hubla_id });
+        }
+      });
+      
+      const faturamentoTotalCalc = Array.from(faturamentoByKey.values())
+        .reduce((sum, entry) => sum + entry.netValue, 0);
 
       // ===== VENDAS A010: Contagem por EMAILS ÚNICOS =====
       // CORREÇÃO: Deduplicar por EMAIL ÚNICO (não email+data)
