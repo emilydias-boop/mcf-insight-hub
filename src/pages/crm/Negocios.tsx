@@ -4,10 +4,9 @@ import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
-import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
+import { GroupsSidebar } from '@/components/crm/GroupsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
-import { useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +16,7 @@ import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 
 const Negocios = () => {
   const { role, user } = useAuth();
-  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const [filters, setFilters] = useState<DealFiltersState>({
     search: '',
@@ -26,28 +25,6 @@ const Negocios = () => {
     owner: null,
     dealStatus: 'all',
   });
-  
-  // Ref para garantir que só define o default UMA VEZ
-  const hasSetDefault = useRef(false);
-  
-  // Buscar pipelines para definir o default
-  const { data: pipelines } = useCRMPipelines();
-  
-  // Definir pipeline padrão APENAS na primeira montagem
-  useEffect(() => {
-    if (pipelines && pipelines.length > 0 && !hasSetDefault.current) {
-      hasSetDefault.current = true;
-      const insideSales = pipelines.find(p => 
-        p.name === 'PIPELINE INSIDE SALES' || 
-        p.display_name?.includes('Inside Sales')
-      );
-      if (insideSales) {
-        setSelectedPipelineId(insideSales.id);
-      } else {
-        setSelectedPipelineId(pipelines[0].id);
-      }
-    }
-  }, [pipelines]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -63,9 +40,38 @@ const Negocios = () => {
     enabled: !!user?.id
   });
   
-  // Usar pipeline como filtro principal, sub-origem como filtro secundário
+  // Buscar origens do grupo selecionado para filtrar deals
+  const { data: groupOrigins } = useQuery({
+    queryKey: ['group-origins', selectedGroupId],
+    queryFn: async () => {
+      if (!selectedGroupId || selectedGroupId === '__ungrouped__') {
+        if (selectedGroupId === '__ungrouped__') {
+          const { data } = await supabase
+            .from('crm_origins')
+            .select('id')
+            .is('group_id', null);
+          return data?.map(o => o.id) || [];
+        }
+        return null;
+      }
+      
+      const { data } = await supabase
+        .from('crm_origins')
+        .select('id')
+        .eq('group_id', selectedGroupId);
+      return data?.map(o => o.id) || [];
+    },
+    enabled: !!selectedGroupId
+  });
+  
+  // Determinar filtro de origem para a query
+  const getOriginFilter = () => {
+    if (selectedOriginId) return selectedOriginId;
+    return undefined; // Buscar todos e filtrar no cliente
+  };
+  
   const { data: deals, isLoading, error } = useCRMDeals({
-    originId: selectedOriginId || selectedPipelineId || undefined,
+    originId: getOriginFilter(),
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
@@ -86,6 +92,14 @@ const Negocios = () => {
   
   const filteredDeals = dealsData.filter((deal: any) => {
     if (!deal || !deal.id || !deal.name) return false;
+    
+    // Filtro por grupo (se selecionado)
+    if (selectedGroupId && groupOrigins) {
+      if (!groupOrigins.includes(deal.origin_id)) return false;
+    }
+    
+    // Filtro por origem específica
+    if (selectedOriginId && deal.origin_id !== selectedOriginId) return false;
     
     // Filtro por role: SDR/Closer veem apenas seus próprios deals
     if (isRestrictedRole && userProfile?.email) {
@@ -123,28 +137,22 @@ const Negocios = () => {
     });
   };
   
-  // Limpar sub-origem ao trocar de pipeline
-  const handlePipelineChange = (pipelineId: string | null) => {
-    setSelectedPipelineId(pipelineId);
-    setSelectedOriginId(null); // Reset sub-origem ao trocar pipeline
-  };
-  
   return (
-    <div className="flex h-[calc(100vh-120px)]">
-      <OriginsSidebar
-        pipelineId={selectedPipelineId}
+    <div className="flex h-full">
+      <GroupsSidebar
+        selectedGroupId={selectedGroupId}
         selectedOriginId={selectedOriginId}
+        onSelectGroup={setSelectedGroupId}
         onSelectOrigin={setSelectedOriginId}
-        onSelectPipeline={handlePipelineChange}
       />
       
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <div className="flex items-center justify-between p-4 border-b gap-4">
+        <div className="flex items-center justify-between px-4 py-3 border-b gap-4 flex-shrink-0">
           <div>
-            <h2 className="text-xl font-bold">
+            <h2 className="text-lg font-bold">
               {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -160,7 +168,7 @@ const Negocios = () => {
               Sincronizar
             </Button>
             <DealFormDialog
-              defaultOriginId={selectedOriginId || selectedPipelineId || undefined}
+              defaultOriginId={selectedOriginId || undefined}
               trigger={
                 <Button size="sm">
                   <Plus className="h-4 w-4 mr-2" />
@@ -171,11 +179,13 @@ const Negocios = () => {
           </div>
         </div>
         
-        <DealFilters
-          filters={filters}
-          onChange={setFilters}
-          onClear={clearFilters}
-        />
+        <div className="flex-shrink-0">
+          <DealFilters
+            filters={filters}
+            onChange={setFilters}
+            onClear={clearFilters}
+          />
+        </div>
         
         <div className="flex-1 overflow-auto p-4">
           {error ? (
@@ -218,7 +228,7 @@ const Negocios = () => {
                 ...deal,
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
               }))}
-              originId={selectedOriginId || selectedPipelineId || undefined}
+              originId={selectedOriginId || undefined}
             />
           )}
         </div>
