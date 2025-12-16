@@ -41,6 +41,7 @@ export default function ReceitaTransacoes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showOnlyCountable, setShowOnlyCountable] = useState(false);
   const [productCategory, setProductCategory] = useState("all");
+  const [hideDuplicates, setHideDuplicates] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
@@ -102,17 +103,36 @@ export default function ReceitaTransacoes() {
     setDrawerOpen(true);
   };
 
-  const totals = useMemo(() => {
-    if (!transactions) return { bruto: 0, liquido: 0, count: 0, countable: 0 };
+  // Filtrar duplicatas se toggle ativo (manter apenas uma por email+data+valor)
+  const displayTransactions = useMemo(() => {
+    if (!transactions) return [];
+    if (!hideDuplicates) return transactions;
     
-    const countable = transactions.filter(tx => tx.count_in_dashboard !== false);
+    const seen = new Map<string, typeof transactions[0]>();
+    transactions.forEach(tx => {
+      const key = `${tx.customer_email?.toLowerCase() || ''}-${tx.sale_date?.split('T')[0] || ''}-${Math.round(tx.net_value || 0)}`;
+      const existing = seen.get(key);
+      // Prioriza Hubla sobre Make, depois prioriza count_in_dashboard=true
+      if (!existing || 
+          (tx.source === 'hubla' && existing.source === 'make') ||
+          (tx.count_in_dashboard && !existing.count_in_dashboard)) {
+        seen.set(key, tx);
+      }
+    });
+    return Array.from(seen.values());
+  }, [transactions, hideDuplicates]);
+
+  const totals = useMemo(() => {
+    if (!displayTransactions) return { bruto: 0, liquido: 0, count: 0, countable: 0 };
+    
+    const countable = displayTransactions.filter(tx => tx.count_in_dashboard !== false);
     return {
       bruto: countable.reduce((sum, tx) => sum + (tx.product_price || 0), 0),
       liquido: countable.reduce((sum, tx) => sum + (tx.net_value || 0), 0),
-      count: transactions.length,
+      count: displayTransactions.length,
       countable: countable.length,
     };
-  }, [transactions]);
+  }, [displayTransactions]);
 
   const categories = useMemo(() => {
     if (!transactions) return [];
@@ -121,13 +141,13 @@ export default function ReceitaTransacoes() {
   }, [transactions]);
 
   const handleExport = () => {
-    if (!transactions || transactions.length === 0) {
+    if (!displayTransactions || displayTransactions.length === 0) {
       toast({ title: "Sem dados", description: "Nenhuma transação para exportar" });
       return;
     }
 
     const headers = ["Data", "Produto", "Cliente", "Email", "Parcela", "Bruto", "Líquido", "Contar"];
-    const rows = transactions.map(tx => [
+    const rows = displayTransactions.map(tx => [
       formatDate(tx.sale_date),
       tx.product_name,
       tx.customer_name || "",
@@ -276,6 +296,17 @@ export default function ReceitaTransacoes() {
               </label>
             </div>
 
+            <div className="flex items-center gap-2">
+              <Checkbox 
+                id="hideDuplicates"
+                checked={hideDuplicates}
+                onCheckedChange={(checked) => setHideDuplicates(!!checked)}
+              />
+              <label htmlFor="hideDuplicates" className="text-sm cursor-pointer">
+                Ocultar duplicatas
+              </label>
+            </div>
+
             <Button variant="outline" size="sm" onClick={setLastWeek}>
               Semana Anterior
             </Button>
@@ -331,7 +362,7 @@ export default function ReceitaTransacoes() {
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions?.map((tx) => {
+                    {displayTransactions?.map((tx) => {
                       const isRecurring = (tx.installment_number || 1) > 1;
                       const isCountable = tx.count_in_dashboard !== false;
                       
