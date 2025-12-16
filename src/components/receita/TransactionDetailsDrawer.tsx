@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { useCourseCRM } from '@/hooks/useCourseCRM';
 import { useCustomerJourney } from '@/hooks/useCustomerJourney';
-import { Phone, Mail, MessageCircle, User, Calendar, TrendingUp, CreditCard, ShoppingBag, Star, FileText, Trophy } from 'lucide-react';
+import { Phone, Mail, MessageCircle, User, Calendar, TrendingUp, CreditCard, ShoppingBag, Star, FileText, Trophy, ExternalLink } from 'lucide-react';
 
 interface TransactionDetailsDrawerProps {
   transaction: {
@@ -129,7 +129,56 @@ export const TransactionDetailsDrawer = ({ transaction, open, onOpenChange }: Tr
               ) : (
                 <p className="text-sm text-muted-foreground">Não encontrado no CRM</p>
               )}
+              
+              {/* Botão Ver no CRM */}
+              {crmData?.deal_id && (
+                <Button 
+                  variant="outline" 
+                  className="w-full mt-3"
+                  onClick={() => window.open(`/crm/negocios?deal=${crmData.deal_id}`, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Ver Lead no CRM
+                </Button>
+              )}
             </div>
+
+            <Separator />
+
+            {/* Resumo do Produto Atual */}
+            {journey && transaction && (() => {
+              // Calcular valores do produto atual
+              const productTransactions = journey.transactions.filter(
+                t => t.product_name === transaction.product_name
+              );
+              const firstInstallment = productTransactions.find(t => (t.installment_number || 1) === 1);
+              const productTotalValue = firstInstallment?.product_price || transaction.product_price || 0;
+              const paidValue = productTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
+              const remainingValue = Math.max(0, productTotalValue - paidValue);
+              
+              return (
+                <div className="space-y-2">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4" />
+                    Resumo do Produto
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-muted/50 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Valor Total</p>
+                      <p className="font-bold text-sm">{formatCurrency(productTotalValue)}</p>
+                    </div>
+                    <div className="bg-green-500/10 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Pago</p>
+                      <p className="font-bold text-sm text-green-600">{formatCurrency(paidValue)}</p>
+                    </div>
+                    <div className="bg-orange-500/10 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Falta</p>
+                      <p className="font-bold text-sm text-orange-600">{formatCurrency(remainingValue)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             <Separator />
 
