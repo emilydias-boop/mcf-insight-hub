@@ -153,34 +153,14 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     
     return (
       <div key={origin.id} className="group relative flex items-center">
-        <Button
-          variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
-          className={cn(
-            "w-full justify-between h-auto py-2 text-left pr-8",
-            selectedOriginId === origin.id && "bg-primary/10",
-            indented && "pl-8"
-          )}
-          onClick={() => onSelectOrigin(origin.id)}
-        >
-          <span className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-            <span className="truncate text-xs">{displayName}</span>
-          </span>
-          {dealCount > 0 && (
-            <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
-              {dealCount}
-            </Badge>
-          )}
-        </Button>
-        
-        {/* Botão de favorito */}
+        {/* Botão de favorito à esquerda */}
         {showFavorite && (
           <Button
             variant="ghost"
             size="icon"
             className={cn(
-              "absolute right-0 h-6 w-6 transition-opacity",
-              favorited ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              "absolute left-0 h-6 w-6 transition-opacity z-10",
+              favorited ? "opacity-100" : "opacity-30 hover:opacity-100"
             )}
             onClick={(e) => {
               e.stopPropagation();
@@ -198,6 +178,27 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             />
           </Button>
         )}
+        
+        <Button
+          variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
+          className={cn(
+            "w-full justify-between h-auto py-2 text-left",
+            selectedOriginId === origin.id && "bg-primary/10",
+            showFavorite && "pl-8",
+            indented && "pl-12"
+          )}
+          onClick={() => onSelectOrigin(origin.id)}
+        >
+          <span className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+            <span className="truncate text-xs">{displayName}</span>
+          </span>
+          {dealCount > 0 && (
+            <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
+              {dealCount}
+            </Badge>
+          )}
+        </Button>
       </div>
     );
   };
