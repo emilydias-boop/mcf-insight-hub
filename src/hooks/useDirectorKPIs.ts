@@ -601,8 +601,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // mas agrupa Hubla+Make da mesma transação real (mesmo timestamp e valor)
       
       // 1. Identificar quais hubla_ids são PARENTS que têm offers
+      // CORREÇÃO: Usar allHublaData (dados brutos) em vez de hublaData (já deduplicado)
       const parentIdsWithOffers = new Set<string>();
-      (hublaData || []).forEach((tx) => {
+      ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
         if (tx.hubla_id?.includes('-offer-')) {
           const parentId = tx.hubla_id.split('-offer-')[0];
           parentIdsWithOffers.add(parentId);
@@ -634,7 +635,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       };
       
       // PASSO 1: Processar TODAS as transações Hubla (cada hubla_id é único)
-      (hublaData || []).forEach((tx) => {
+      // CORREÇÃO: Usar allHublaData para evitar perda de transações pela deduplicação global
+      ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
         const source = tx.source || "hubla";
         if (source !== "hubla" && source !== null) return;
         
@@ -653,7 +655,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const seenMakeKeys = new Set<string>();
       let makeAdded = 0;
       
-      (hublaData || []).forEach((tx) => {
+      ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
         if (tx.source !== "make") return;
         if (!isValidClintTransaction(tx)) return;
         
