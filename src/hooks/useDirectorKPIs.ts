@@ -693,15 +693,13 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       // 3. Calcular Faturamento Clint Bruto
       // CORREÇÃO: Usar product_price REAL do banco (não valores fixos artificiais)
-      // CORREÇÃO: Excluir produtos P2 do Bruto (mas manter no Líquido)
-      const isP2Product = (name: string) => name.toUpperCase().includes('P2');
+      // CORREÇÃO: Incluir TODOS os produtos Faturamento Clint (incluindo P2)
       const faturamentoClintDebug: { product: string; price: number; installment: number; source: string }[] = [];
       const faturamentoClint = deduplicatedClintTransactions
         .filter((tx) => {
           const installmentNum = tx.installment_number || 1;
-          const productName = tx.product_name || '';
-          // Apenas primeira parcela E excluir P2
-          return installmentNum === 1 && !isP2Product(productName);
+          // Apenas primeira parcela (incluindo P2)
+          return installmentNum === 1;
         })
         .reduce((sum, tx) => {
           const productPriceDB = tx.product_price || 0;
