@@ -86,8 +86,9 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       // Buscar transações Hubla completadas no período
       let query = supabase
         .from('hubla_transactions')
-        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name, customer_email, source, sale_date')
-        .eq('sale_status', 'completed');
+        .select('hubla_id, product_name, product_category, product_price, net_value, sale_status, raw_data, installment_number, customer_name, customer_email, source, sale_date, count_in_dashboard')
+        .eq('sale_status', 'completed')
+        .or('count_in_dashboard.is.null,count_in_dashboard.eq.true');
       
       // Aplicar filtro de data com fuso horário de Brasília
       if (startDate) {
