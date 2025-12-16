@@ -776,7 +776,6 @@ export type Database = {
           description: string | null
           display_name: string | null
           id: string
-          is_favorite: boolean | null
           name: string
           updated_at: string | null
         }
@@ -786,7 +785,6 @@ export type Database = {
           description?: string | null
           display_name?: string | null
           id?: string
-          is_favorite?: boolean | null
           name: string
           updated_at?: string | null
         }
@@ -796,7 +794,6 @@ export type Database = {
           description?: string | null
           display_name?: string | null
           id?: string
-          is_favorite?: boolean | null
           name?: string
           updated_at?: string | null
         }
