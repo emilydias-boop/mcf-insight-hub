@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { EvolutionData } from '@/types/dashboard';
 import { getCustomWeekStart, addCustomWeeks, formatDateForDB, getCustomWeekEnd } from '@/lib/dateHelpers';
-import { format, startOfMonth } from 'date-fns';
+import { format, startOfMonth, isSameDay } from 'date-fns';
 import { 
   deduplicateTransactions, 
   calcularMetricasSemana,
@@ -24,44 +24,6 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
       const startDateStr = formatDateForDB(semanaInicio);
       const endDateStr = formatDateForDB(getCustomWeekEnd(semanaAtual));
       
-      // Buscar TODAS as transações do período completo
-      const { data: allTransactions } = await supabase
-        .from("hubla_transactions")
-        .select(
-          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source"
-        )
-        .eq("sale_status", "completed")
-        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
-        .not("customer_email", "is", null)
-        .neq("customer_email", "")
-        .not("customer_name", "is", null)
-        .neq("customer_name", "")
-        .gt("net_value", 0)
-        .or("count_in_dashboard.is.null,count_in_dashboard.eq.true")
-        .gte("sale_date", startDateRange)
-        .lte("sale_date", endDateRange);
-
-      // Buscar custos de ads do período completo
-      const { data: allCosts } = await supabase
-        .from("daily_costs")
-        .select("amount, date")
-        .eq("cost_type", "ads")
-        .gte("date", startDateStr)
-        .lte("date", endDateStr);
-
-      // Buscar custos operacionais (mensal)
-      const monthsInRange = new Set<string>();
-      let currentDate = new Date(semanaInicio);
-      while (currentDate <= semanaAtual) {
-        monthsInRange.add(format(startOfMonth(currentDate), 'yyyy-MM-dd'));
-        currentDate = new Date(currentDate.setMonth(currentDate.getMonth() + 1));
-      }
-      
-      const { data: operationalCosts } = await supabase
-        .from("operational_costs")
-        .select("amount, cost_type, month")
-        .in("month", Array.from(monthsInRange));
-
       // Gerar array de semanas customizadas (Sáb-Sex)
       const semanas: Array<{ startDate: Date; endDate: Date; weekLabel: string }> = [];
       let weekStart = new Date(semanaInicio);
@@ -82,30 +44,125 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
         weekStart = addCustomWeeks(weekStart, 1);
       }
 
-      // Calcular métricas para cada semana usando função compartilhada
+      // ===== ESTRATÉGIA HÍBRIDA =====
+      // 1. Buscar dados históricos do weekly_metrics (planilha importada)
+      const { data: weeklyMetrics } = await supabase
+        .from('weekly_metrics')
+        .select('*')
+        .gte('start_date', startDateStr)
+        .lte('start_date', endDateStr)
+        .order('start_date', { ascending: true });
+
+      // Criar mapa de semanas com dados importados (por data de início)
+      const importedWeeksMap = new Map<string, any>();
+      (weeklyMetrics || []).forEach((metric) => {
+        importedWeeksMap.set(metric.start_date, metric);
+      });
+
+      // 2. Buscar dados para cálculo em tempo real (apenas se necessário)
+      // Identificar semanas SEM dados importados
+      const semanasParaCalcular = semanas.filter((semana) => {
+        const weekStartStr = formatDateForDB(semana.startDate);
+        return !importedWeeksMap.has(weekStartStr);
+      });
+
+      let allTransactions: HublaTransactionBase[] = [];
+      let allCosts: { amount: number; date: string }[] = [];
+      let operationalCosts: { amount: number; cost_type: string; month: string }[] = [];
+
+      // Só busca dados se houver semanas para calcular em tempo real
+      if (semanasParaCalcular.length > 0) {
+        // Buscar TODAS as transações do período completo
+        const { data: txData } = await supabase
+          .from("hubla_transactions")
+          .select(
+            "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source"
+          )
+          .eq("sale_status", "completed")
+          .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
+          .not("customer_email", "is", null)
+          .neq("customer_email", "")
+          .not("customer_name", "is", null)
+          .neq("customer_name", "")
+          .gt("net_value", 0)
+          .or("count_in_dashboard.is.null,count_in_dashboard.eq.true")
+          .gte("sale_date", startDateRange)
+          .lte("sale_date", endDateRange);
+
+        allTransactions = (txData || []) as HublaTransactionBase[];
+
+        // Buscar custos de ads do período completo
+        const { data: costsData } = await supabase
+          .from("daily_costs")
+          .select("amount, date")
+          .eq("cost_type", "ads")
+          .gte("date", startDateStr)
+          .lte("date", endDateStr);
+
+        allCosts = costsData || [];
+
+        // Buscar custos operacionais (mensal)
+        const monthsInRange = new Set<string>();
+        semanasParaCalcular.forEach((semana) => {
+          monthsInRange.add(format(startOfMonth(semana.startDate), 'yyyy-MM-dd'));
+        });
+        
+        if (monthsInRange.size > 0) {
+          const { data: opCostsData } = await supabase
+            .from("operational_costs")
+            .select("amount, cost_type, month")
+            .in("month", Array.from(monthsInRange));
+          
+          operationalCosts = opCostsData || [];
+        }
+      }
+
+      // 3. Calcular métricas para cada semana
       const evolutionData: EvolutionData[] = semanas.map((semana) => {
-        const weekStartStr = formatDateForBrazil(semana.startDate, false);
-        const weekEndStr = formatDateForBrazil(semana.endDate, true);
+        const weekStartStr = formatDateForDB(semana.startDate);
+        
+        // Verificar se tem dados importados da planilha
+        const importedData = importedWeeksMap.get(weekStartStr);
+        
+        if (importedData) {
+          // ✅ USAR DADOS DA PLANILHA (histórico correto)
+          return {
+            periodo: semana.weekLabel,
+            semanaLabel: semana.weekLabel,
+            faturamento: importedData.faturamento_total || 0,
+            custos: importedData.custo_total || 0,
+            lucro: importedData.lucro || 0,
+            roi: importedData.roi || 0,
+            roas: importedData.roas || 0,
+            vendasA010: importedData.vendas_a010 || 0,
+            vendasContratos: importedData.vendas_contrato || 0,
+            leads: 0,
+          };
+        }
+
+        // ❌ SEM DADOS IMPORTADOS → Calcular em tempo real
         const weekStartDate = formatDateForDB(semana.startDate);
         const weekEndDate = formatDateForDB(semana.endDate);
+        const weekStartBrazil = formatDateForBrazil(semana.startDate, false);
+        const weekEndBrazil = formatDateForBrazil(semana.endDate, true);
         
         // Filtrar transações da semana
-        const weekTransactions = (allTransactions || []).filter((tx) => {
+        const weekTransactions = allTransactions.filter((tx) => {
           const saleDate = tx.sale_date;
-          return saleDate >= weekStartStr && saleDate <= weekEndStr;
-        }) as HublaTransactionBase[];
+          return saleDate >= weekStartBrazil && saleDate <= weekEndBrazil;
+        });
         
         // Deduplicar usando mesma lógica
         const deduplicatedTx = deduplicateTransactions(weekTransactions);
         
         // Calcular custos de ads da semana
-        const weekAdsCosts = (allCosts || [])
+        const weekAdsCosts = allCosts
           .filter((c) => c.date >= weekStartDate && c.date <= weekEndDate)
           .reduce((sum, c) => sum + (c.amount || 0), 0);
         
         // Calcular custo operacional semanal (mensal / 4)
         const monthKey = format(startOfMonth(semana.startDate), 'yyyy-MM-dd');
-        const monthCosts = (operationalCosts || []).filter((c) => c.month === monthKey);
+        const monthCosts = operationalCosts.filter((c) => c.month === monthKey);
         const custoEquipe = monthCosts.filter((c) => c.cost_type === 'team').reduce((sum, c) => sum + (c.amount || 0), 0);
         const custoEscritorio = monthCosts.filter((c) => c.cost_type === 'office').reduce((sum, c) => sum + (c.amount || 0), 0);
         

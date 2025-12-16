@@ -11,6 +11,7 @@ import { PeriodComparison } from "@/components/dashboard/PeriodComparison";
 import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer";
 import { RecalculateMetricsButton } from "@/components/dashboard/RecalculateMetricsButton";
 import { RecalculateOnlyMetricsButton } from "@/components/dashboard/RecalculateOnlyMetricsButton";
+import { ImportMetricsDialog } from "@/components/dashboard/ImportMetricsDialog";
 import { DirectorKPIRow } from "@/components/dashboard/DirectorKPIRow";
 import { MetasProgress } from "@/components/dashboard/MetasProgress";
 import { exportDashboardData } from "@/lib/exportHelpers";
@@ -173,6 +174,7 @@ export default function Dashboard() {
             <p className="text-muted-foreground mt-1">Visão geral dos principais indicadores de desempenho</p>
           </div>
           <div className="flex gap-2">
+            <ImportMetricsDialog />
             <RecalculateMetricsButton />
             <RecalculateOnlyMetricsButton />
             <TargetsConfigDialog />

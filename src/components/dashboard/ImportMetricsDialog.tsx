@@ -30,10 +30,13 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.name.endsWith('.csv')) {
+      const validExtensions = ['.xlsx', '.xls'];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      
+      if (!validExtensions.includes(fileExtension)) {
         toast({
           title: "Formato inválido",
-          description: "Por favor, selecione um arquivo CSV",
+          description: "Por favor, selecione um arquivo Excel (.xlsx ou .xls)",
           variant: "destructive",
         });
         return;
@@ -64,9 +67,9 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
       // Simulate progress
       const progressInterval = setInterval(() => {
         setProgress((prev) => Math.min(prev + 10, 90));
-      }, 200);
+      }, 300);
 
-      const { data, error } = await supabase.functions.invoke('import-weekly-metrics', {
+      const { data, error } = await supabase.functions.invoke('import-spreadsheet-data', {
         body: formData,
       });
 
@@ -77,13 +80,13 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
 
       setStats({
         success: true,
-        message: data.message || 'Importação concluída com sucesso',
+        message: data.message || 'Importação iniciada! Processamento em background.',
         processed: data.processed || 0,
       });
 
       toast({
-        title: "Importação concluída",
-        description: `${data.processed || 0} registros processados com sucesso`,
+        title: "Importação iniciada",
+        description: "A planilha está sendo processada em background. Os dados serão atualizados em breve.",
       });
 
       // Invalidate all queries to refresh dashboard data
@@ -93,6 +96,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
       await queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
       await queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
       await queryClient.invalidateQueries({ queryKey: ['weekly-resumo'] });
+      await queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
 
       if (onImportSuccess) {
         onImportSuccess();
@@ -132,16 +136,15 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
         <DialogHeader>
           <DialogTitle>Importar Métricas Semanais</DialogTitle>
           <DialogDescription className="space-y-2">
-            <p>Importe um arquivo CSV com suas métricas semanais</p>
+            <p>Importe sua planilha Excel com as métricas semanais</p>
             <div className="text-xs bg-muted p-3 rounded-md space-y-1 mt-2">
-              <p className="font-semibold">Como preparar o arquivo:</p>
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Abra sua planilha Excel</li>
-                <li>Vá para a aba "Resultados Semanais"</li>
-                <li>Clique em Arquivo → Salvar Como</li>
-                <li>Escolha o formato "CSV UTF-8 (*.csv)"</li>
-                <li>Faça o upload do arquivo CSV aqui</li>
-              </ol>
+              <p className="font-semibold">Requisitos do arquivo:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Formato Excel (.xlsx ou .xls)</li>
+                <li>Aba chamada "Resultados Semanais"</li>
+                <li>Colunas: Data Inicio, Data Fim, Custo Ads, etc.</li>
+                <li>Datas no formato DD/MM/AAAA</li>
+              </ul>
             </div>
           </DialogDescription>
         </DialogHeader>
@@ -151,7 +154,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
           <div className="border-2 border-dashed border-border rounded-lg p-6 text-center space-y-2">
             <input
               type="file"
-              accept=".csv"
+              accept=".xlsx,.xls"
               onChange={handleFileChange}
               className="hidden"
               id="file-upload"
@@ -173,7 +176,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
                 <div className="text-sm text-muted-foreground">
                   <p className="font-medium">Clique para selecionar</p>
                   <p>ou arraste seu arquivo aqui</p>
-                  <p className="text-xs mt-1">Apenas arquivos CSV</p>
+                  <p className="text-xs mt-1">Arquivos Excel (.xlsx, .xls)</p>
                 </div>
               )}
             </label>
@@ -184,7 +187,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
             <div className="space-y-2">
               <Progress value={progress} className="w-full" />
               <p className="text-sm text-center text-muted-foreground">
-                Importando dados... {progress}%
+                Enviando arquivo... {progress}%
               </p>
             </div>
           )}
@@ -205,7 +208,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
               )}
               <div className="flex-1 space-y-1">
                 <p className="text-sm font-medium text-foreground">{stats.message}</p>
-                {stats.processed !== undefined && (
+                {stats.processed !== undefined && stats.processed > 0 && (
                   <p className="text-xs text-muted-foreground">
                     {stats.processed} registros processados
                   </p>
@@ -221,7 +224,7 @@ export function ImportMetricsDialog({ onImportSuccess }: ImportMetricsDialogProp
             </Button>
             {!stats && (
               <Button onClick={handleImport} disabled={!selectedFile || isImporting}>
-                {isImporting ? 'Importando...' : 'Importar'}
+                {isImporting ? 'Enviando...' : 'Importar'}
               </Button>
             )}
           </div>
