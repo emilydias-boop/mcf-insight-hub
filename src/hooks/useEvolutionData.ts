@@ -1,55 +1,148 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { EvolutionData } from '@/types/dashboard';
-import { getCustomWeekStart, addCustomWeeks, formatDateForDB } from '@/lib/dateHelpers';
+import { getCustomWeekStart, addCustomWeeks, formatDateForDB, getCustomWeekEnd } from '@/lib/dateHelpers';
+import { format, startOfMonth } from 'date-fns';
+import { 
+  deduplicateTransactions, 
+  calcularFaturamentoTotal, 
+  contarVendasA010,
+  formatDateForBrazil,
+  HublaTransactionBase 
+} from '@/lib/transactionHelpers';
 
 export const useEvolutionData = (canal?: string, limit: number = 52) => {
   return useQuery({
     queryKey: ['evolution-data', canal, limit],
+    staleTime: 30000, // 30 segundos
     queryFn: async () => {
       // Calcular semana atual e início do range
       const semanaAtual = getCustomWeekStart(new Date());
-      const semanaInicio = addCustomWeeks(semanaAtual, -(limit - 1)); // X semanas atrás
+      const semanaInicio = addCustomWeeks(semanaAtual, -(limit - 1));
       
-      const startDate = formatDateForDB(semanaInicio);
-      const endDate = formatDateForDB(semanaAtual);
+      const startDateRange = formatDateForBrazil(semanaInicio, false);
+      const endDateRange = formatDateForBrazil(getCustomWeekEnd(semanaAtual), true);
+      const startDateStr = formatDateForDB(semanaInicio);
+      const endDateStr = formatDateForDB(getCustomWeekEnd(semanaAtual));
       
-      const { data, error } = await supabase
-        .from('weekly_metrics')
-        .select('*')
-        .gte('start_date', startDate)  // >= semana início
-        .lte('start_date', endDate)    // <= semana atual
-        .order('start_date', { ascending: true }); // Ordem cronológica
-      
-      if (error) throw error;
+      // Buscar TODAS as transações do período completo (uma única query)
+      const { data: allTransactions } = await supabase
+        .from("hubla_transactions")
+        .select(
+          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source"
+        )
+        .eq("sale_status", "completed")
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
+        .not("customer_email", "is", null)
+        .neq("customer_email", "")
+        .not("customer_name", "is", null)
+        .neq("customer_name", "")
+        .gt("net_value", 0)
+        .or("count_in_dashboard.is.null,count_in_dashboard.eq.true")
+        .gte("sale_date", startDateRange)
+        .lte("sale_date", endDateRange);
 
-      // Transformar dados para formato do gráfico
-      const evolutionData: EvolutionData[] = data.map((week) => {
-        let faturamento = week.total_revenue || 0;
-        let vendas = (week.a010_sales || 0) + (week.contract_sales || 0);
+      // Buscar custos de ads do período completo
+      const { data: allCosts } = await supabase
+        .from("daily_costs")
+        .select("amount, date")
+        .eq("cost_type", "ads")
+        .gte("date", startDateStr)
+        .lte("date", endDateStr);
+
+      // Buscar custos operacionais (mensal)
+      const monthsInRange = new Set<string>();
+      let currentDate = new Date(semanaInicio);
+      while (currentDate <= semanaAtual) {
+        monthsInRange.add(format(startOfMonth(currentDate), 'yyyy-MM-dd'));
+        currentDate = new Date(currentDate.setMonth(currentDate.getMonth() + 1));
+      }
+      
+      const { data: operationalCosts } = await supabase
+        .from("operational_costs")
+        .select("amount, cost_type, month")
+        .in("month", Array.from(monthsInRange));
+
+      // Gerar array de semanas customizadas (Sáb-Sex)
+      const semanas: Array<{ startDate: Date; endDate: Date; weekLabel: string }> = [];
+      let weekStart = new Date(semanaInicio);
+      
+      while (weekStart <= semanaAtual) {
+        const weekEnd = getCustomWeekEnd(weekStart);
+        const startDay = weekStart.getDate().toString().padStart(2, '0');
+        const startMonth = (weekStart.getMonth() + 1).toString().padStart(2, '0');
+        const endDay = weekEnd.getDate().toString().padStart(2, '0');
+        const endMonth = (weekEnd.getMonth() + 1).toString().padStart(2, '0');
         
-        if (canal === 'a010') {
-          faturamento = week.a010_revenue || 0;
-          vendas = week.a010_sales || 0;
-        } else if (canal === 'contratos') {
-          faturamento = week.contract_revenue || 0;
-          vendas = week.contract_sales || 0;
-        } else if (canal === 'instagram') {
-          faturamento = 0; // Instagram não tem revenue direto
-          vendas = 0;
-        }
+        semanas.push({
+          startDate: new Date(weekStart),
+          endDate: weekEnd,
+          weekLabel: `${startDay}/${startMonth} - ${endDay}/${endMonth}`,
+        });
+        
+        weekStart = addCustomWeeks(weekStart, 1);
+      }
+
+      // Calcular métricas para cada semana
+      const evolutionData: EvolutionData[] = semanas.map((semana) => {
+        const weekStartStr = formatDateForBrazil(semana.startDate, false);
+        const weekEndStr = formatDateForBrazil(semana.endDate, true);
+        const weekStartDate = formatDateForDB(semana.startDate);
+        const weekEndDate = formatDateForDB(semana.endDate);
+        
+        // Filtrar transações da semana
+        const weekTransactions = (allTransactions || []).filter((tx) => {
+          const saleDate = tx.sale_date;
+          return saleDate >= weekStartStr && saleDate <= weekEndStr;
+        }) as HublaTransactionBase[];
+        
+        // Deduplicar usando mesma lógica do Director KPIs
+        const deduplicatedTx = deduplicateTransactions(weekTransactions);
+        
+        // Calcular Faturamento Total (mesma lógica do Director KPIs)
+        const faturamento = calcularFaturamentoTotal(deduplicatedTx);
+        
+        // Calcular custos de ads da semana
+        const weekAdsCosts = (allCosts || [])
+          .filter((c) => c.date >= weekStartDate && c.date <= weekEndDate)
+          .reduce((sum, c) => sum + (c.amount || 0), 0);
+        
+        // Calcular custo operacional semanal (mensal / 4)
+        const monthKey = format(startOfMonth(semana.startDate), 'yyyy-MM-dd');
+        const monthCosts = (operationalCosts || []).filter((c) => c.month === monthKey);
+        const custoEquipe = monthCosts.filter((c) => c.cost_type === 'team').reduce((sum, c) => sum + (c.amount || 0), 0);
+        const custoEscritorio = monthCosts.filter((c) => c.cost_type === 'office').reduce((sum, c) => sum + (c.amount || 0), 0);
+        const custoOperacionalSemanal = (custoEquipe + custoEscritorio) / 4;
+        
+        // Custo total = ads + operacional semanal
+        const custoTotal = weekAdsCosts + custoOperacionalSemanal;
+        
+        // Lucro = faturamento - custo total
+        const lucro = faturamento - custoTotal;
+        
+        // ROI = (faturamento / custo total) × 100
+        const roi = custoTotal > 0 ? (faturamento / custoTotal) * 100 : 0;
+        
+        // ROAS = faturamento / gastos ads
+        const roas = weekAdsCosts > 0 ? faturamento / weekAdsCosts : 0;
+        
+        // Vendas A010 (emails únicos)
+        const vendasA010 = contarVendasA010(deduplicatedTx);
+        
+        // Leads (stage_01) - mantém 0 pois não temos essa info em tempo real
+        const leads = 0;
         
         return {
-          periodo: week.week_label,
-          semanaLabel: week.week_label,
+          periodo: semana.weekLabel,
+          semanaLabel: semana.weekLabel,
           faturamento,
-          custos: week.operating_cost || 0,
-          lucro: week.operating_profit || 0,
-          roi: week.roi || 0,
-          roas: week.roas || 0,
-          vendasA010: week.a010_sales || 0,
-          vendasContratos: week.contract_sales || 0,
-          leads: week.stage_01_actual || 0,
+          custos: custoTotal,
+          lucro,
+          roi,
+          roas,
+          vendasA010,
+          vendasContratos: 0, // Não calculamos separado por enquanto
+          leads,
         };
       });
 
