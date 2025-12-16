@@ -1221,6 +1221,7 @@ export type Database = {
       }
       hubla_transactions: {
         Row: {
+          count_in_dashboard: boolean | null
           created_at: string | null
           customer_email: string | null
           customer_name: string | null
@@ -1250,6 +1251,7 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          count_in_dashboard?: boolean | null
           created_at?: string | null
           customer_email?: string | null
           customer_name?: string | null
@@ -1279,6 +1281,7 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          count_in_dashboard?: boolean | null
           created_at?: string | null
           customer_email?: string | null
           customer_name?: string | null

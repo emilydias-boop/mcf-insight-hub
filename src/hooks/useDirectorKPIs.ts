@@ -304,10 +304,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // Buscar transações de TODAS AS FONTES (Hubla + Kiwify + Make) no período
       // CORREÇÃO: Incluir todas as fontes para deduplicação correta por email+data
+      // NOVO: Filtrar apenas transações marcadas para contar no dashboard (count_in_dashboard = true ou null)
       const { data: hublaDataRaw } = await supabase
         .from("hubla_transactions")
         .select(
-          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
+          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source, count_in_dashboard",
         )
         .eq("sale_status", "completed")
         .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
@@ -316,14 +317,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .not("customer_name", "is", null)
         .neq("customer_name", "")
         .gt("net_value", 0)
+        .or("count_in_dashboard.is.null,count_in_dashboard.eq.true")
         .gte("sale_date", startStr)
         .lte("sale_date", endStr);
 
       // Query secundária: buscar A010 Order Bumps com net_value=0 (excluídos pela query principal)
+      // NOVO: Também respeitar count_in_dashboard
       const { data: a010OfferData } = await supabase
         .from("hubla_transactions")
         .select(
-          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source",
+          "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source, count_in_dashboard",
         )
         .eq("sale_status", "completed")
         .eq("product_category", "a010")
@@ -333,6 +336,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         .neq("customer_email", "")
         .not("customer_name", "is", null)
         .neq("customer_name", "")
+        .or("count_in_dashboard.is.null,count_in_dashboard.eq.true")
         .gte("sale_date", startStr)
         .lte("sale_date", endStr);
 
