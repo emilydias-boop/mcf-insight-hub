@@ -130,7 +130,7 @@ const Negocios = () => {
   };
   
   return (
-    <div className="flex h-[calc(100vh-120px)]">
+    <div className="flex h-[calc(100vh-56px)]">
       <OriginsSidebar
         pipelineId={selectedPipelineId}
         selectedOriginId={selectedOriginId}
@@ -177,7 +177,7 @@ const Negocios = () => {
           onClear={clearFilters}
         />
         
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-hidden p-4">
           {error ? (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
