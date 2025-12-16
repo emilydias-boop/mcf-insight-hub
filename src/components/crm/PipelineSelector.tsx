@@ -15,34 +15,19 @@ interface PipelineSelectorProps {
   onSelectPipeline: (id: string | null) => void;
 }
 
-// Hook para buscar pipelines principais (origens que têm estágios)
+// Hook para buscar grupos principais (funis)
 export const useCRMPipelines = () => {
   return useQuery({
     queryKey: ['crm-pipelines'],
     queryFn: async () => {
-      // Buscar origens que têm estágios associados (são pipelines)
-      const { data: stages, error: stagesError } = await supabase
-        .from('crm_stages')
-        .select('origin_id')
-        .eq('is_active', true);
+      // Buscar grupos (que são os funis principais)
+      const { data, error } = await supabase
+        .from('crm_groups')
+        .select('id, name, display_name')
+        .order('name');
       
-      if (stagesError) throw stagesError;
-      
-      // IDs únicos de origens que têm estágios
-      const originIdsWithStages = [...new Set(stages?.map(s => s.origin_id).filter(Boolean))];
-      
-      if (originIdsWithStages.length === 0) return [];
-      
-      // Buscar dados dessas origens
-      const { data: origins, error: originsError } = await supabase
-        .from('crm_origins')
-        .select('id, name, display_name, pipeline_type, group_id')
-        .in('id', originIdsWithStages)
-        .order('display_name');
-      
-      if (originsError) throw originsError;
-      
-      return origins || [];
+      if (error) throw error;
+      return data || [];
     },
   });
 };
