@@ -362,11 +362,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         }
       });
 
-      // ===== FATURAMENTO INCORPORADOR (Líquido) =====
+      // ===== FATURAMENTO INCORPORADOR (Líquido) - APENAS HUBLA =====
+      // REGRA: Incorporador 50k usa apenas source='hubla'
       // Inclui TODAS as parcelas pagas (não só primeira), deduplicando por hubla_id
       const seenIncorporadorIds = new Set<string>();
       const faturamentoIncorporador = (hublaData || [])
         .filter((tx) => {
+          // FILTRO DE FONTE: Apenas Hubla
+          const source = tx.source || 'hubla';
+          if (source !== 'hubla') return false;
+          
           const productName = (tx.product_name || "").toUpperCase();
           const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
           const isExcluded = EXCLUDED_PRODUCT_NAMES.some((name) => productName.includes(name.toUpperCase()));
@@ -494,16 +499,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       const vendasA010 = vendasA010Calc;
 
-      // ===== FATURAMENTO A010 (TODAS AS FONTES) =====
-      // Soma de net_value das transações A010 de todas as fontes
+      // ===== FATURAMENTO A010 (APENAS MAKE) =====
+      // REGRA: Faturado A010 usa apenas source='make'
+      // Soma de net_value das transações A010 apenas do Make
       const a010Faturado = (hublaData || [])
         .filter((tx) => {
+          // FILTRO DE FONTE: Apenas Make
+          if (tx.source !== 'make') return false;
+          
           const productName = (tx.product_name || "").toUpperCase();
           return productName.includes("A010") || tx.product_category === 'a010';
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("💸 A010 (todas fontes):", { vendas: vendasA010, faturado: a010Faturado });
+      console.log("💸 A010 (Make apenas):", { vendas: vendasA010, faturado: a010Faturado });
 
       // ===== FATURAMENTO TOTAL (FÓRMULA FIXA DA PLANILHA) =====
       // Faturamento Total = Incorporador50k (Hubla) + A010 (Make) + OB Construir (Make) + OB Vitalício (Make)
