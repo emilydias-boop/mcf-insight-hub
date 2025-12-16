@@ -379,213 +379,150 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
-      // ===== OB ACESSO VITALÍCIO =====
-      // CORREÇÃO: Deduplicar por EMAIL ÚNICO (não email+data), priorizar Make para net_value
-      // Conta vendas únicas por cliente (mesmo email em dias diferentes = 1 venda)
-      const obVitalicioByEmail = new Map<string, { netValue: number; source: string }>();
+      // ===== OB ACESSO VITALÍCIO (MAKE COMO FONTE PRINCIPAL) =====
+      // SIMPLIFICADO: Usar apenas source='make' com count_in_dashboard=true
+      // Deduplicar por EMAIL ÚNICO
+      const obVitalicioByEmail = new Map<string, number>();
       (hublaData || []).forEach((tx) => {
+        // Filtrar apenas Make
+        if (tx.source !== "make") return;
+        
         const productName = (tx.product_name || "").toUpperCase();
-        const isOB = productName.includes("VITALIC") || tx.product_category === "ob_vitalicio";
+        const isOB = productName.includes("VITALIC") || productName === "OB ACESSO VITALÍCIO";
         
         if (isOB) {
           const email = (tx.customer_email || "").toLowerCase().trim();
           if (!email) return;
           
-          const existing = obVitalicioByEmail.get(email);
+          const existing = obVitalicioByEmail.get(email) || 0;
           const txValue = tx.net_value || 0;
-          const txSource = tx.source || "hubla";
           
-          // Priorizar Make (maior precisão de valor), depois maior valor
-          if (!existing) {
-            obVitalicioByEmail.set(email, { netValue: txValue, source: txSource });
-          } else if (txSource === "make" && existing.source !== "make") {
-            obVitalicioByEmail.set(email, { netValue: txValue, source: txSource });
-          } else if (txSource === existing.source && txValue > existing.netValue) {
-            obVitalicioByEmail.set(email, { netValue: txValue, source: txSource });
+          // Manter o maior valor por email
+          if (txValue > existing) {
+            obVitalicioByEmail.set(email, txValue);
           }
         }
       });
       const vendasObVitalicio = obVitalicioByEmail.size;
-      const obVitalicioFaturado = Array.from(obVitalicioByEmail.values()).reduce((sum, v) => sum + v.netValue, 0);
+      const obVitalicioFaturado = Array.from(obVitalicioByEmail.values()).reduce((sum, v) => sum + v, 0);
       
-      console.log("🎁 OB Vitalício:", { vendas: vendasObVitalicio, faturado: obVitalicioFaturado });
+      console.log("🎁 OB Vitalício (Make):", { vendas: vendasObVitalicio, faturado: obVitalicioFaturado });
 
-      // ===== OB CONSTRUIR PARA ALUGAR =====
-      // CORREÇÃO: Deduplicar por EMAIL ÚNICO, EXCLUIR "Viver de Aluguel", priorizar Make
-      const obConstruirByEmail = new Map<string, { netValue: number; source: string }>();
+      // ===== OB CONSTRUIR PARA ALUGAR (MAKE COMO FONTE PRINCIPAL) =====
+      // SIMPLIFICADO: Usar apenas source='make' com count_in_dashboard=true
+      // Deduplicar por EMAIL ÚNICO, EXCLUIR "Viver de Aluguel"
+      const obConstruirByEmail = new Map<string, number>();
       (hublaData || []).forEach((tx) => {
+        // Filtrar apenas Make
+        if (tx.source !== "make") return;
+        
         const productName = (tx.product_name || "").toUpperCase();
         // Incluir "CONSTRUIR" mas EXCLUIR "Viver de Aluguel"
-        const isOB = (productName.includes("CONSTRUIR") || tx.product_category === "ob_construir") 
-          && !productName.includes("VIVER");
+        const isOB = productName.includes("CONSTRUIR") && !productName.includes("VIVER");
         
         if (isOB) {
           const email = (tx.customer_email || "").toLowerCase().trim();
           if (!email) return;
           
-          const existing = obConstruirByEmail.get(email);
+          const existing = obConstruirByEmail.get(email) || 0;
           const txValue = tx.net_value || 0;
-          const txSource = tx.source || "hubla";
           
-          // Priorizar Make, depois maior valor
-          if (!existing) {
-            obConstruirByEmail.set(email, { netValue: txValue, source: txSource });
-          } else if (txSource === "make" && existing.source !== "make") {
-            obConstruirByEmail.set(email, { netValue: txValue, source: txSource });
-          } else if (txSource === existing.source && txValue > existing.netValue) {
-            obConstruirByEmail.set(email, { netValue: txValue, source: txSource });
+          // Manter o maior valor por email
+          if (txValue > existing) {
+            obConstruirByEmail.set(email, txValue);
           }
         }
       });
       const vendasObConstruir = obConstruirByEmail.size;
-      const obConstruirFaturado = Array.from(obConstruirByEmail.values()).reduce((sum, v) => sum + v.netValue, 0);
+      const obConstruirFaturado = Array.from(obConstruirByEmail.values()).reduce((sum, v) => sum + v, 0);
       
-      console.log("🏠 OB Construir:", { vendas: vendasObConstruir, faturado: obConstruirFaturado });
-
-      // ===== CONTAGEM A010 para fórmula fixa =====
-      // Faturado A010 será calculado após vendas A010 (vendas × R$ 47 × 81.56%)
-
-      // ===== HELPER: Verificar se é PARENT (container com childInvoiceIds) =====
-      const isParentTransaction = (tx: { raw_data: unknown }): boolean => {
-        const rawData = tx.raw_data as Record<string, unknown> | null;
-        const eventData = rawData?.event as Record<string, unknown> | undefined;
-        const invoiceData = eventData?.invoice as Record<string, unknown> | undefined;
-        const childIds = invoiceData?.childInvoiceIds as string[] | undefined;
-        return Boolean(childIds && childIds.length > 0);
-      };
-
-      // ===== FATURAMENTO TOTAL =====
-      // Fórmula FIXA: Incorporador (net_value) + OB Vitalício (bruto × 83.56%) + OB Construir (bruto × 89.80%) + A010 (vendas × R$ 47 × 81.56%)
-      // NOTA: faturamentoTotal será calculado APÓS vendasA010 ser determinado
-
-      // ===== VENDAS A010 =====
-      // CORREÇÃO: Contagem linha por linha, deduplicando por email+data (não por hubla_id)
-      // Cada transação com email diferente no mesmo dia conta como venda separada
-
-      // ===== FATURAMENTO TOTAL =====
-      // CORREÇÃO: Deduplicar por hubla_id (identificador único)
-      // Excluir newsale-xxx (net_value = 0) e -offer- (Order Bumps)
-      // Deduplicação Hubla vs Make: usar timestamp+email+price como match key
-      const seenFaturamentoIds = new Set<string>();
-      const hublaVsMakeMatch = new Map<string, { netValue: number; source: string; hublaId: string }>();
+      console.log("🏠 OB Construir (Make):", { vendas: vendasObConstruir, faturado: obConstruirFaturado });
       
-      ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
+      // ===== OB EVENTO / IMERSÃO PRESENCIAL (MAKE COMO FONTE PRINCIPAL) =====
+      // SIMPLIFICADO: Usar apenas source='make'
+      const obEventoByEmail = new Map<string, number>();
+      (hublaData || []).forEach((tx) => {
+        if (tx.source !== "make") return;
+        
         const productName = (tx.product_name || "").toUpperCase();
-        const category = tx.product_category || "";
-        const hublaId = tx.hubla_id || "";
-
-        // Excluir newsale-xxx (transações com net_value = 0)
-        if (hublaId.startsWith("newsale-")) return;
-
-        // Excluir -offer- transactions (Order Bumps)
-        if (hublaId.includes("-offer-")) return;
-
-        // Excluir categorias específicas
-        if (EXCLUDED_CATEGORIES_FATURAMENTO.includes(category)) return;
-
-        // Excluir produtos específicos
-        if (EXCLUDED_PRODUCTS_FATURAMENTO.some((p) => productName.includes(p))) return;
-
-        // Deduplicar por hubla_id primeiro
-        if (seenFaturamentoIds.has(hublaId)) return;
-        seenFaturamentoIds.add(hublaId);
-
-        const source = tx.source || "hubla";
-        const netValue = tx.net_value || 0;
-
-        // Para deduplicação Hubla vs Make: usar timestamp (até segundo) + email + price
-        const email = (tx.customer_email || "").toLowerCase().trim();
-        const timestamp = tx.sale_date?.substring(0, 19) || ""; // até segundo (YYYY-MM-DDTHH:mm:ss)
-        const price = (tx.product_price || 0).toFixed(2);
-        const matchKey = `${email}|${timestamp}|${price}`;
-
-        // Se já existe match com mesmo timestamp+email+price, priorizar Make
-        if (hublaVsMakeMatch.has(matchKey)) {
-          const existing = hublaVsMakeMatch.get(matchKey)!;
-          // Make tem prioridade sobre Hubla (valores mais precisos)
-          if (source === "make" && existing.source === "hubla") {
-            hublaVsMakeMatch.set(matchKey, { netValue, source, hublaId });
+        const isOB = productName.includes("IMERSÃO") || productName.includes("IMERSAO") || productName.includes("PRESENCIAL");
+        
+        if (isOB) {
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          if (!email) return;
+          
+          const existing = obEventoByEmail.get(email) || 0;
+          const txValue = tx.net_value || 0;
+          
+          if (txValue > existing) {
+            obEventoByEmail.set(email, txValue);
           }
-          // Se mesmo source ou Make já existe, manter o existente
-        } else {
-          hublaVsMakeMatch.set(matchKey, { netValue, source, hublaId });
         }
       });
+      const vendasObEvento = obEventoByEmail.size;
+      const obEventoFaturado = Array.from(obEventoByEmail.values()).reduce((sum, v) => sum + v, 0);
       
-      const faturamentoTotalCalc = Array.from(hublaVsMakeMatch.values())
-        .reduce((sum, entry) => sum + entry.netValue, 0);
+      console.log("🎪 OB Evento (Make):", { vendas: vendasObEvento, faturado: obEventoFaturado });
 
-      // ===== VENDAS A010: Contagem por EMAILS ÚNICOS =====
-      // CORREÇÃO: Deduplicar por EMAIL ÚNICO (não email+data)
-      // Exclui source='make' (duplicatas já contabilizadas no Hubla)
-      // Exclui hubla_id com 'newsale-' e '-offer-'
-      // Requer customer_email válido
+      // ===== CÓDIGO LEGADO REMOVIDO =====
+      // A lógica de deduplicação complexa Hubla vs Make foi simplificada
+      // Agora usa fonte única por tipo de produto:
+      // - OBs (Vitalício, Construir, Evento) e A010: Make (count_in_dashboard=true)
+      // - Incorporador 50k: Hubla
+
+      // ===== VENDAS A010 (MAKE COMO FONTE PRINCIPAL) =====
+      // SIMPLIFICADO: Usar apenas source='make' com count_in_dashboard=true
+      // Deduplicar por EMAIL ÚNICO
       const vendasA010Calc = (() => {
         const seenA010Emails = new Set<string>();
-        const a010Debug: { name: string; email: string; product: string; source: string }[] = [];
         
         (hublaData || []).forEach((tx) => {
-          const productName = (tx.product_name || "").toUpperCase();
-          const isA010 = tx.product_category === "a010" || productName.includes("A010");
+          // Filtrar apenas Make
+          if (tx.source !== "make") return;
           
-          // CORREÇÃO: INCLUIR Make e -offer- no A010 (são vendas legítimas como Order Bump)
-          // Excluir apenas newsale- (duplicatas sem dados completos)
-          if (tx.hubla_id?.startsWith("newsale-")) return;
-          // REMOVIDO: if (tx.hubla_id?.includes("-offer-")) return; // -offer- são vendas A010 válidas
+          const productName = (tx.product_name || "").toUpperCase();
+          const isA010 = productName.includes("A010");
           
           if (isA010) {
             const email = (tx.customer_email || "").toLowerCase().trim();
-            if (!email) return; // Requer email válido
+            if (!email) return;
             
-            // Deduplicar por EMAIL ÚNICO (não email+data)
-            if (!seenA010Emails.has(email)) {
-              seenA010Emails.add(email);
-              const source = tx.source || "hubla";
-              a010Debug.push({ 
-                name: tx.customer_name || "", 
-                email: email,
-                product: tx.product_name || "",
-                source: source
-              });
-            }
+            seenA010Emails.add(email);
           }
         });
 
-        console.log("🔍 Vendas A010 (emails únicos, INCL. Make):", seenA010Emails.size, a010Debug.slice(0, 5));
+        console.log("🔍 Vendas A010 (Make, emails únicos):", seenA010Emails.size);
         return seenA010Emails.size;
       })();
 
       const vendasA010 = vendasA010Calc;
 
-      // ===== FATURAMENTO A010 (soma real dos net_value A010) =====
-      const seenA010FatIds = new Set<string>();
+      // ===== FATURAMENTO A010 (MAKE COMO FONTE PRINCIPAL) =====
+      // SIMPLIFICADO: Soma de net_value das transações A010 do Make
       const a010Faturado = (hublaData || [])
         .filter((tx) => {
+          // Filtrar apenas Make
+          if (tx.source !== "make") return false;
+          
           const productName = (tx.product_name || "").toUpperCase();
-          const isA010 = tx.product_category === "a010" || productName.includes("A010");
-          // Excluir Order Bumps
-          const isOfferTransaction = tx.hubla_id?.includes('-offer-');
-          if (isOfferTransaction) return false;
-          if (seenA010FatIds.has(tx.hubla_id)) return false;
-          if (isA010) {
-            seenA010FatIds.add(tx.hubla_id);
-            return true;
-          }
-          return false;
+          return productName.includes("A010");
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+      
+      console.log("💸 A010 (Make):", { vendas: vendasA010, faturado: a010Faturado });
 
       // ===== FATURAMENTO TOTAL (FÓRMULA FIXA DA PLANILHA) =====
-      // Faturamento Total = Incorporador50k + A010 Faturado + OB Construir + OB Vitalício + OB Evento
+      // Faturamento Total = Incorporador50k (Hubla) + A010 (Make) + OB Construir (Make) + OB Vitalício (Make)
+      // NOTA: OB Evento NÃO entra na fórmula conforme planilha
       const faturamentoTotalFinal = faturamentoIncorporador + a010Faturado + obConstruirFaturado + obVitalicioFaturado;
 
       console.log("💰 Faturamento Total Debug:", {
-        totalTransacoes: hublaData?.length,
-        faturamentoTotal: faturamentoTotalCalc,
         incorporador: faturamentoIncorporador,
-        obVitalicio: { vendas: vendasObVitalicio, faturado: obVitalicioFaturado },
-        obConstruir: { vendas: vendasObConstruir, faturado: obConstruirFaturado },
-        a010: { vendas: vendasA010, faturado: a010Faturado },
+        a010: a010Faturado,
+        obVitalicio: obVitalicioFaturado,
+        obConstruir: obConstruirFaturado,
+        obEvento: obEventoFaturado,
+        total: faturamentoTotalFinal,
       });
 
       // ===== GASTOS ADS =====
