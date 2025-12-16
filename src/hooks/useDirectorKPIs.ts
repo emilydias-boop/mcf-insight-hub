@@ -608,50 +608,81 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       console.log("🔍 Parents com offers:", parentIdsWithOffers.size);
       
-      // 2. Deduplicar transações por timestamp+email+valor
-      const seenClintKeys = new Map<string, { source: string; hubla_id: string }>();
+      // 2. DEDUPLICAÇÃO INTELIGENTE: Hubla prioritário + Make apenas se não houver Hubla
+      // Chave: email + data (permite múltiplas compras do mesmo cliente em dias diferentes)
+      const seenHublaByEmailDate = new Map<string, HublaTransaction>();
+      const seenMakeByEmailDate = new Map<string, HublaTransaction>();
       const deduplicatedClintTransactions: HublaTransaction[] = [];
       
-      (hublaData || []).forEach((tx) => {
-        // Excluir newsale- (sem dados completos)
-        if (tx.hubla_id?.startsWith("newsale-")) return;
-        
-        // Excluir -offer- (são split transactions)
-        if (tx.hubla_id?.includes('-offer-')) return;
-        
-        // Excluir sem email válido ou net_value <= 0
-        if (!tx.customer_email) return;
-        if (!tx.net_value || tx.net_value <= 0) return;
-        
-        // Excluir parents que são containers
-        const isParentWithOffers = parentIdsWithOffers.has(tx.hubla_id);
-        if (isParentWithOffers) return;
+      // Função de filtro comum
+      const isValidClintTransaction = (tx: HublaTransaction): boolean => {
+        if (tx.hubla_id?.startsWith("newsale-")) return false;
+        if (tx.hubla_id?.includes('-offer-')) return false;
+        if (!tx.customer_email) return false;
+        if (!tx.net_value || tx.net_value <= 0) return false;
+        if (parentIdsWithOffers.has(tx.hubla_id)) return false;
         
         const productName = tx.product_name || "";
-        if (!isProductInFaturamentoClint(productName)) return;
+        if (!isProductInFaturamentoClint(productName)) return false;
         
         const productNameUpper = productName.toUpperCase();
-        // Excluir TODAS as renovações (A006, A009 Renovação, R009, etc)
-        if (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO")) return;
+        if (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO")) return false;
         
-        // NOVA CHAVE: timestamp preciso + email + valor
-        const timestamp = tx.sale_date.substring(0, 19); // YYYY-MM-DDTHH:MM:SS
-        const email = (tx.customer_email || "").toLowerCase().trim();
-        const price = tx.product_price || 0;
-        const key = `${timestamp}|${email}|${price}`;
+        return true;
+      };
+      
+      // PASSO 1: Processar TODAS as transações Hubla primeiro (prioridade)
+      (hublaData || []).forEach((tx) => {
         const source = tx.source || "hubla";
+        if (source !== "hubla" && source !== null) return; // Só Hubla neste passo
         
-        const existing = seenClintKeys.get(key);
-        if (!existing) {
-          seenClintKeys.set(key, { source, hubla_id: tx.hubla_id });
-          deduplicatedClintTransactions.push(tx);
-        } else if (source === "hubla" && existing.source === "make") {
-          // Hubla substitui Make (prioridade)
-          const idx = deduplicatedClintTransactions.findIndex(t => t.hubla_id === existing.hubla_id);
-          if (idx >= 0) deduplicatedClintTransactions[idx] = tx;
-          seenClintKeys.set(key, { source, hubla_id: tx.hubla_id });
+        if (!isValidClintTransaction(tx)) return;
+        
+        const email = (tx.customer_email || "").toLowerCase().trim();
+        const date = tx.sale_date.split('T')[0]; // YYYY-MM-DD
+        const key = `${email}|${date}`;
+        
+        // Para mesmo email+data, mantém a de maior valor (pode ser compras diferentes)
+        const existing = seenHublaByEmailDate.get(key);
+        if (!existing || (tx.net_value || 0) > (existing.net_value || 0)) {
+          seenHublaByEmailDate.set(key, tx);
         }
       });
+      
+      // Adicionar todas as transações Hubla ao resultado
+      seenHublaByEmailDate.forEach((tx) => {
+        deduplicatedClintTransactions.push(tx);
+      });
+      
+      console.log("🔵 Hubla Clint (prioritário):", seenHublaByEmailDate.size, "transações");
+      
+      // PASSO 2: Processar Make - adicionar APENAS se não existe Hubla para email+data
+      (hublaData || []).forEach((tx) => {
+        const source = tx.source || "hubla";
+        if (source !== "make") return; // Só Make neste passo
+        
+        if (!isValidClintTransaction(tx)) return;
+        
+        const email = (tx.customer_email || "").toLowerCase().trim();
+        const date = tx.sale_date.split('T')[0];
+        const key = `${email}|${date}`;
+        
+        // Só adiciona Make se NÃO existe Hubla para esse email+data
+        if (!seenHublaByEmailDate.has(key)) {
+          const existingMake = seenMakeByEmailDate.get(key);
+          if (!existingMake || (tx.net_value || 0) > (existingMake.net_value || 0)) {
+            seenMakeByEmailDate.set(key, tx);
+          }
+        }
+      });
+      
+      // Adicionar transações Make exclusivas
+      seenMakeByEmailDate.forEach((tx) => {
+        deduplicatedClintTransactions.push(tx);
+      });
+      
+      console.log("🟢 Make Clint (complementar):", seenMakeByEmailDate.size, "transações exclusivas");
+      console.log("📊 Total Clint deduplicado:", deduplicatedClintTransactions.length);
       
       console.log("📊 Transações Clint deduplicadas:", deduplicatedClintTransactions.length);
       
