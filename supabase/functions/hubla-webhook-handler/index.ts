@@ -443,9 +443,10 @@ serve(async (req) => {
           product_code: eventData.productCode || null,
           product_price: productPrice,
           product_category: productCategory,
-          customer_name: eventData.customer?.name || eventData.customerName || null,
-          customer_email: eventData.customer?.email || eventData.customerEmail || null,
-          customer_phone: eventData.customer?.phone || eventData.customerPhone || null,
+          // CORREÇÃO: userName/userEmail/userPhone são os campos corretos no NewSale
+          customer_name: eventData.userName || eventData.customer?.name || eventData.customerName || null,
+          customer_email: eventData.userEmail || eventData.customer?.email || eventData.customerEmail || null,
+          customer_phone: eventData.userPhone || eventData.customer?.phone || eventData.customerPhone || null,
           utm_source: eventData.utm_source || eventData.utmSource || null,
           utm_medium: eventData.utm_medium || eventData.utmMedium || null,
           utm_campaign: eventData.utm_campaign || eventData.utmCampaign || null,
@@ -512,7 +513,9 @@ serve(async (req) => {
           const productCategory = mapProductCategory(productName);
           const saleDate = new Date(invoice?.saleDate || invoice?.createdAt || Date.now()).toISOString();
           
-          const user = body.event?.user || invoice?.payer || {};
+          // CORREÇÃO: payer tem firstName/lastName, user só tem email
+          const payer = invoice?.payer || {};
+          const user = body.event?.user || {};
           
           const transactionData = {
             hubla_id: invoice?.id || `invoice-${Date.now()}`,
@@ -522,9 +525,9 @@ serve(async (req) => {
             product_price: grossValue,
             product_category: productCategory,
             product_type: null,
-            customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || null,
-            customer_email: user.email || null,
-            customer_phone: user.phone || null,
+            customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || user.name || null,
+            customer_email: payer.email || user.email || null,
+            customer_phone: payer.phone || user.phone || null,
             utm_source: null,
             utm_medium: null,
             utm_campaign: null,
@@ -596,7 +599,9 @@ serve(async (req) => {
           const productCategory = mapProductCategory(productName, productCode);
           const saleDate = new Date(invoice.saleDate || invoice.created_at || invoice.createdAt || Date.now()).toISOString();
           
-          const user = body.event?.user || invoice?.payer || {};
+          // CORREÇÃO: payer tem firstName/lastName, user só tem email
+          const payer = invoice?.payer || {};
+          const user = body.event?.user || {};
           
           // Para offers, calcular net_value proporcional
           // Para item principal, usar o net_value calculado
@@ -612,9 +617,9 @@ serve(async (req) => {
             product_price: isOffer ? itemPrice : grossValue,
             product_category: productCategory,
             product_type: item.type || null,
-            customer_name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || invoice.customer?.name || invoice.customer_name || null,
-            customer_email: user.email || invoice.customer?.email || invoice.customer_email || null,
-            customer_phone: user.phone || invoice.customer?.phone || invoice.customer_phone || null,
+            customer_name: `${payer.firstName || ''} ${payer.lastName || ''}`.trim() || invoice.customer?.name || invoice.customer_name || null,
+            customer_email: payer.email || user.email || invoice.customer?.email || invoice.customer_email || null,
+            customer_phone: payer.phone || user.phone || invoice.customer?.phone || invoice.customer_phone || null,
             utm_source: invoice.utm_source || null,
             utm_medium: invoice.utm_medium || null,
             utm_campaign: invoice.utm_campaign || null,
