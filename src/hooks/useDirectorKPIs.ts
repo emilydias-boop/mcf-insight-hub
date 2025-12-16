@@ -196,24 +196,27 @@ const getNormalizedProductType = (tx: HublaTransaction): string => {
   
   if (category === "a010" || productName.includes("A010")) {
     return "a010";
-  } else if (
-    category === "incorporador" || 
-    category === "contrato" || 
-    productName.includes("CONTRATO") ||
-    productName.startsWith("A00") ||
-    productName.startsWith("A001") ||
-    productName.startsWith("A002") ||
-    productName.startsWith("A003") ||
-    productName.startsWith("A004") ||
-    productName.startsWith("A005") ||
-    productName.startsWith("A009")
-  ) {
-    return "contrato";
-  } else if (productName.includes("VITALIC")) {
-    return "ob_vitalicio";
-  } else if (productName.includes("CONSTRUIR")) {
-    return "ob_construir";
   }
+  
+  // CORREÇÃO: Cada produto Incorporador tem tipo único para evitar falsa deduplicação
+  // quando mesmo cliente compra produtos diferentes no mesmo dia
+  if (productName.includes("A009")) return "a009_incorporador_club";
+  if (productName.includes("A005")) return "a005_p2";
+  if (productName.includes("A004")) return "a004_basico";
+  if (productName.includes("A003")) return "a003_anticrise";
+  if (productName.includes("A002")) return "a002_basico";
+  if (productName.includes("A001")) return "a001_incorporador";
+  if (productName.includes("A000") || productName.includes("CONTRATO")) return "a000_contrato";
+  if (productName.includes("R00")) return "r00_renovacao";
+  
+  // OBs mantém mesmo comportamento
+  if (productName.includes("VITALIC")) return "ob_vitalicio";
+  if (productName.includes("CONSTRUIR")) return "ob_construir";
+  
+  if (category === "incorporador" || category === "contrato") {
+    return category;
+  }
+  
   return category;
 };
 
