@@ -196,13 +196,11 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       });
       
       // Bruto: apenas primeira parcela, usar product_price real
-      // CORREÇÃO: Excluir produtos P2 do Bruto (mas manter no Líquido)
-      const isP2Product = (name: string) => name.toUpperCase().includes('P2');
+      // CORREÇÃO: Incluir TODOS os produtos Faturamento Clint (incluindo P2)
       const faturamentoClintBruto = deduplicatedClintTransactions
         .filter(tx => {
           const installmentNum = tx.installment_number || 1;
-          const productName = tx.product_name || '';
-          return installmentNum === 1 && !isP2Product(productName);
+          return installmentNum === 1;
         })
         .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
 
