@@ -12,6 +12,8 @@ import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { PipelineSelector } from './PipelineSelector';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface OriginsSidebarProps {
   pipelineId?: string | null;
@@ -94,6 +96,18 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   
   const { data: originData, isLoading } = useCRMOriginsByPipeline(pipelineId);
+  
+  // Query separada para buscar grupos (para o modo collapsed)
+  const { data: allGroups } = useQuery({
+    queryKey: ['crm-groups-for-collapsed-sidebar'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('crm_groups')
+        .select('id, name, display_name')
+        .order('name');
+      return data || [];
+    },
+  });
   
   // Verificar se é uma lista flat (pipeline específico) ou árvore (todos os funis)
   const isGroupedTree = originData && Array.isArray(originData) && originData.length > 0 && 'children' in originData[0];
@@ -381,54 +395,24 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
               </>
             )}
             
-            {/* Ícones de cada grupo/origem */}
-            {!isLoading && originData && (
-              isGroupedTree ? (
-                // Grupos
-                (originData as Group[]).map((group) => {
-                  const Icon = getGroupIcon(group.name);
-                  const displayName = group.display_name || group.name;
-                  const hasSelectedChild = group.children.some(c => c.id === selectedOriginId);
-                  
-                  return (
-                    <Button
-                      key={group.id}
-                      variant={hasSelectedChild ? "secondary" : "ghost"}
-                      size="icon"
-                      onClick={() => {
-                        // Selecionar primeira origem do grupo
-                        if (group.children.length > 0) {
-                          onSelectOrigin(group.children[0].id);
-                        }
-                      }}
-                      title={displayName}
-                      className="h-8 w-8"
-                    >
-                      <Icon className="h-4 w-4" />
-                    </Button>
-                  );
-                })
-              ) : (
-                // Origens flat
-                (originData as Origin[]).slice(0, 10).map((origin) => {
-                  const Icon = getGroupIcon(origin.name);
-                  const displayName = origin.display_name || origin.name;
-                  
-                  return (
-                    <Button
-                      key={origin.id}
-                      variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
-                      size="icon"
-                      onClick={() => onSelectOrigin(origin.id)}
-                      title={displayName}
-                      className="h-8 w-8"
-                    >
-                      <Icon className="h-4 w-4" />
-                    </Button>
-                  );
-                })
-              )
-            )}
+            {/* Sempre mostrar ícones dos grupos principais */}
+            {allGroups?.map((group) => {
+              const Icon = getGroupIcon(group.name);
+              const displayName = group.display_name || group.name;
+              
+              return (
+                <Button
+                  key={group.id}
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsCollapsed(false)}
+                  title={displayName}
+                  className="h-8 w-8"
+                >
+                  <Icon className="h-4 w-4" />
+                </Button>
+              );
+            })}
           </div>
         </ScrollArea>
       )}
