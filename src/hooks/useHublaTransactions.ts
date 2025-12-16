@@ -98,6 +98,27 @@ export const useUpdateTransactionDashboardFlag = () => {
   });
 };
 
+// Nova mutation para atualizar múltiplas transações em lote
+export const useUpdateMultipleTransactionsDashboardFlag = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ ids, countInDashboard }: { ids: string[]; countInDashboard: boolean }) => {
+      const { error } = await supabase
+        .from('hubla_transactions')
+        .update({ count_in_dashboard: countInDashboard })
+        .in('id', ids);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hubla-transactions-filtered'] });
+      queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    },
+  });
+};
+
 export const useUpdateTransactionSaleDate = () => {
   const queryClient = useQueryClient();
   
