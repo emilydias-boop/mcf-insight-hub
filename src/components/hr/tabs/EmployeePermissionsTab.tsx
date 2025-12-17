@@ -250,7 +250,7 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
     setSearchingClint(true);
     try {
       const { data, error } = await supabase.functions.invoke('clint-api', {
-        body: { action: 'getUsers' }
+        body: { resource: 'users' }
       });
       
       if (error) throw error;
