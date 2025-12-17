@@ -3,14 +3,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Employee, EMPLOYEE_STATUS_LABELS } from '@/types/hr';
 import { useEmployees } from '@/hooks/useEmployees';
-import { User, DollarSign, FileText, History, StickyNote, Calendar, Users } from 'lucide-react';
+import { User, DollarSign, FileText, History, StickyNote, Calendar, Users, Shield } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeGeneralTab from './tabs/EmployeeGeneralTab';
 import EmployeeRemunerationTab from './tabs/EmployeeRemunerationTab';
+import EmployeeNfseTab from './tabs/EmployeeNfseTab';
 import EmployeeDocumentsTab from './tabs/EmployeeDocumentsTab';
 import EmployeeHistoryTab from './tabs/EmployeeHistoryTab';
 import EmployeeNotesTab from './tabs/EmployeeNotesTab';
+import EmployeePermissionsTab from './tabs/EmployeePermissionsTab';
 
 interface EmployeeDrawerProps {
   employee: Employee | null;
@@ -27,6 +29,11 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
   const gestor = employee.gestor_id 
     ? employees?.find(e => e.id === employee.gestor_id)
     : null;
+
+  const isPJ = employee.tipo_contrato === 'PJ';
+
+  // Calculate number of tabs for grid
+  const tabCount = isPJ ? 7 : 6;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -82,26 +89,36 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
         </SheetHeader>
 
         <Tabs defaultValue="geral" className="mt-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className={`grid w-full grid-cols-${tabCount}`}>
             <TabsTrigger value="geral" className="flex items-center gap-1">
               <User className="h-3 w-3" />
               <span className="hidden sm:inline">Geral</span>
             </TabsTrigger>
             <TabsTrigger value="remuneracao" className="flex items-center gap-1">
               <DollarSign className="h-3 w-3" />
-              <span className="hidden sm:inline">Remuneração</span>
+              <span className="hidden sm:inline">Rem.</span>
             </TabsTrigger>
+            {isPJ && (
+              <TabsTrigger value="nfse" className="flex items-center gap-1">
+                <FileText className="h-3 w-3" />
+                <span className="hidden sm:inline">NFSe</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="documentos" className="flex items-center gap-1">
               <FileText className="h-3 w-3" />
-              <span className="hidden sm:inline">Documentos</span>
+              <span className="hidden sm:inline">Docs</span>
             </TabsTrigger>
             <TabsTrigger value="historico" className="flex items-center gap-1">
               <History className="h-3 w-3" />
-              <span className="hidden sm:inline">Histórico</span>
+              <span className="hidden sm:inline">Hist.</span>
             </TabsTrigger>
             <TabsTrigger value="notas" className="flex items-center gap-1">
               <StickyNote className="h-3 w-3" />
               <span className="hidden sm:inline">Notas</span>
+            </TabsTrigger>
+            <TabsTrigger value="permissoes" className="flex items-center gap-1">
+              <Shield className="h-3 w-3" />
+              <span className="hidden sm:inline">Perm.</span>
             </TabsTrigger>
           </TabsList>
 
@@ -113,6 +130,12 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
             <EmployeeRemunerationTab employee={employee} />
           </TabsContent>
 
+          {isPJ && (
+            <TabsContent value="nfse" className="mt-4">
+              <EmployeeNfseTab employee={employee} />
+            </TabsContent>
+          )}
+
           <TabsContent value="documentos" className="mt-4">
             <EmployeeDocumentsTab employee={employee} />
           </TabsContent>
@@ -123,6 +146,10 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
 
           <TabsContent value="notas" className="mt-4">
             <EmployeeNotesTab employee={employee} />
+          </TabsContent>
+
+          <TabsContent value="permissoes" className="mt-4">
+            <EmployeePermissionsTab employee={employee} />
           </TabsContent>
         </Tabs>
       </SheetContent>
