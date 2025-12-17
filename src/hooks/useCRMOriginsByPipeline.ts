@@ -51,26 +51,14 @@ export const useCRMOriginsByPipeline = (pipelineId: string | null) => {
         return buildOriginTree(originsWithCounts || [], groupsRes.data || []);
       }
       
-      // Buscar o grupo do pipeline selecionado
-      const { data: pipeline, error: pipelineError } = await supabase
+      // pipelineId é na verdade um group_id (vindo do PipelineSelector que lista crm_groups)
+      // Buscar todas as origens desse grupo diretamente
+      const { data: origins, error: originsError } = await supabase
         .from('crm_origins')
-        .select('group_id')
-        .eq('id', pipelineId)
-        .single();
+        .select('*')
+        .eq('group_id', pipelineId)
+        .order('name');
       
-      if (pipelineError) throw pipelineError;
-      
-      // Buscar todas as origens do mesmo grupo (sub-origens)
-      let originsQuery = supabase.from('crm_origins').select('*');
-      
-      if (pipeline?.group_id) {
-        originsQuery = originsQuery.eq('group_id', pipeline.group_id);
-      } else {
-        // Se não tem grupo, mostrar apenas o próprio pipeline
-        originsQuery = originsQuery.eq('id', pipelineId);
-      }
-      
-      const { data: origins, error: originsError } = await originsQuery.order('name');
       if (originsError) throw originsError;
       
       // Contar deals por origem (do pipeline)
