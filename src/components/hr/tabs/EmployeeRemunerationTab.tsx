@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Employee, RhNfse, TIPO_VARIAVEL_OPTIONS, NFSE_STATUS_LABELS, NFSE_PAGAMENTO_LABELS } from '@/types/hr';
 import { useEmployeeSdrPayouts, useEmployeeMutations, useEmployeeNfse } from '@/hooks/useEmployees';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,6 +55,23 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
     tipo_conta: employee.tipo_conta || '',
     pix: employee.pix || '',
   });
+
+  // Sync formData when employee changes
+  useEffect(() => {
+    setFormData({
+      salario_base: employee.salario_base || 0,
+      nivel: employee.nivel || 1,
+      ote_mensal: employee.ote_mensal || 0,
+      tipo_variavel: employee.tipo_variavel || '',
+      descricao_comissao: employee.descricao_comissao || '',
+      modelo_fechamento: employee.modelo_fechamento || '',
+      banco: employee.banco || '',
+      agencia: employee.agencia || '',
+      conta: employee.conta || '',
+      tipo_conta: employee.tipo_conta || '',
+      pix: employee.pix || '',
+    });
+  }, [employee]);
 
   // NFSe form state
   const [nfseDialogOpen, setNfseDialogOpen] = useState(false);
@@ -271,9 +288,10 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
               </div>
               <div className="space-y-2">
                 <Label>Tipo de Variável</Label>
-                <Select value={formData.tipo_variavel} onValueChange={(v) => setFormData({ ...formData, tipo_variavel: v })}>
+                <Select value={formData.tipo_variavel || '_none'} onValueChange={(v) => setFormData({ ...formData, tipo_variavel: v === '_none' ? '' : v })}>
                   <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="_none">Selecione...</SelectItem>
                     {TIPO_VARIAVEL_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
@@ -313,9 +331,10 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de Conta</Label>
-                    <Select value={formData.tipo_conta} onValueChange={(v) => setFormData({ ...formData, tipo_conta: v })}>
+                    <Select value={formData.tipo_conta || '_none'} onValueChange={(v) => setFormData({ ...formData, tipo_conta: v === '_none' ? '' : v })}>
                       <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="_none">Selecione...</SelectItem>
                         <SelectItem value="corrente">Corrente</SelectItem>
                         <SelectItem value="poupanca">Poupança</SelectItem>
                       </SelectContent>
