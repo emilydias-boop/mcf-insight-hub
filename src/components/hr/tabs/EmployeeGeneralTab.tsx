@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Employee, EMPLOYEE_STATUS_LABELS } from '@/types/hr';
-import { useEmployeeMutations } from '@/hooks/useEmployees';
+import { Employee, EMPLOYEE_STATUS_LABELS, CARGO_OPTIONS, SQUAD_OPTIONS, TIPO_VINCULO_OPTIONS } from '@/types/hr';
+import { useEmployeeMutations, useEmployees } from '@/hooks/useEmployees';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Pencil, Save, X } from 'lucide-react';
+import { Pencil, Save, X, ChevronDown, Briefcase, User, MapPin } from 'lucide-react';
 
 interface EmployeeGeneralTabProps {
   employee: Employee;
@@ -18,7 +19,12 @@ interface EmployeeGeneralTabProps {
 export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps) {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState(employee);
+  const [addressOpen, setAddressOpen] = useState(false);
   const { updateEmployee } = useEmployeeMutations();
+  const { data: employees } = useEmployees();
+
+  // Lista de possíveis gestores (excluindo o próprio colaborador)
+  const gestorOptions = employees?.filter(e => e.id !== employee.id) || [];
 
   const handleSave = () => {
     updateEmployee.mutate(
@@ -51,161 +57,90 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
           </Button>
         </div>
 
+        {/* Bloco 1: Dados de Emprego (PRIMEIRO) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Dados Pessoais</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Briefcase className="h-4 w-4" />
+              Dados de Emprego
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label>Nome Completo</Label>
-              <Input
-                value={formData.nome_completo}
-                onChange={(e) => setFormData({ ...formData, nome_completo: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>CPF</Label>
-              <Input
-                value={formData.cpf || ''}
-                onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>RG</Label>
-              <Input
-                value={formData.rg || ''}
-                onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Data de Nascimento</Label>
-              <Input
-                type="date"
-                value={formData.data_nascimento || ''}
-                onChange={(e) => setFormData({ ...formData, data_nascimento: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Estado Civil</Label>
+            <div className="space-y-2">
+              <Label>Cargo / Função</Label>
               <Select
-                value={formData.estado_civil || ''}
-                onValueChange={(v) => setFormData({ ...formData, estado_civil: v })}
+                value={formData.cargo || ''}
+                onValueChange={(v) => setFormData({ ...formData, cargo: v })}
               >
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="solteiro">Solteiro(a)</SelectItem>
-                  <SelectItem value="casado">Casado(a)</SelectItem>
-                  <SelectItem value="divorciado">Divorciado(a)</SelectItem>
-                  <SelectItem value="viuvo">Viúvo(a)</SelectItem>
-                  <SelectItem value="uniao_estavel">União Estável</SelectItem>
+                  {CARGO_OPTIONS.map((cargo) => (
+                    <SelectItem key={cargo} value={cargo}>{cargo}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Telefone</Label>
-              <Input
-                value={formData.telefone || ''}
-                onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-              />
+            <div className="space-y-2">
+              <Label>Squad / Equipe</Label>
+              <Select
+                value={formData.squad || ''}
+                onValueChange={(v) => setFormData({ ...formData, squad: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {SQUAD_OPTIONS.map((squad) => (
+                    <SelectItem key={squad} value={squad}>{squad}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <Label>Email Pessoal</Label>
-              <Input
-                type="email"
-                value={formData.email_pessoal || ''}
-                onChange={(e) => setFormData({ ...formData, email_pessoal: e.target.value })}
-              />
+            <div className="space-y-2">
+              <Label>Gestor Direto</Label>
+              <Select
+                value={formData.gestor_id || ''}
+                onValueChange={(v) => setFormData({ ...formData, gestor_id: v || null })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Nenhum</SelectItem>
+                  {gestorOptions.map((gestor) => (
+                    <SelectItem key={gestor.id} value={gestor.id}>{gestor.nome_completo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Endereço</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label>Endereço</Label>
-              <Input
-                value={formData.endereco || ''}
-                onChange={(e) => setFormData({ ...formData, endereco: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Cidade</Label>
-              <Input
-                value={formData.cidade || ''}
-                onChange={(e) => setFormData({ ...formData, cidade: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Input
-                value={formData.estado || ''}
-                onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>CEP</Label>
-              <Input
-                value={formData.cep || ''}
-                onChange={(e) => setFormData({ ...formData, cep: e.target.value })}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Dados Profissionais</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Cargo</Label>
-              <Input
-                value={formData.cargo || ''}
-                onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Departamento</Label>
-              <Input
-                value={formData.departamento || ''}
-                onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Tipo de Contrato</Label>
+            <div className="space-y-2">
+              <Label>Tipo de Vínculo</Label>
               <Select
                 value={formData.tipo_contrato || 'CLT'}
                 onValueChange={(v) => setFormData({ ...formData, tipo_contrato: v })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CLT">CLT</SelectItem>
-                  <SelectItem value="PJ">PJ</SelectItem>
-                  <SelectItem value="Estagio">Estágio</SelectItem>
-                  <SelectItem value="Temporario">Temporário</SelectItem>
+                  {TIPO_VINCULO_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Jornada de Trabalho</Label>
-              <Input
-                value={formData.jornada_trabalho || ''}
-                onChange={(e) => setFormData({ ...formData, jornada_trabalho: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Data de Admissão</Label>
+            <div className="space-y-2">
+              <Label>Data de Entrada</Label>
               <Input
                 type="date"
                 value={formData.data_admissao || ''}
                 onChange={(e) => setFormData({ ...formData, data_admissao: e.target.value })}
               />
             </div>
-            <div>
-              <Label>Status</Label>
+            <div className="space-y-2">
+              <Label>Data de Desligamento</Label>
+              <Input
+                type="date"
+                value={formData.data_demissao || ''}
+                onChange={(e) => setFormData({ ...formData, data_demissao: e.target.value || null })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Status RH</Label>
               <Select
                 value={formData.status}
                 onValueChange={(v) => setFormData({ ...formData, status: v as Employee['status'] })}
@@ -218,11 +153,118 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
                 </SelectContent>
               </Select>
             </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Observação Geral</Label>
+              <Textarea
+                value={formData.observacao_geral || ''}
+                onChange={(e) => setFormData({ ...formData, observacao_geral: e.target.value })}
+                rows={2}
+                placeholder="Observações sobre o colaborador..."
+              />
+            </div>
           </CardContent>
         </Card>
+
+        {/* Bloco 2: Dados Pessoais (simplificado) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Dados Pessoais
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 space-y-2">
+              <Label>Nome Completo</Label>
+              <Input
+                value={formData.nome_completo}
+                onChange={(e) => setFormData({ ...formData, nome_completo: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>CPF</Label>
+              <Input
+                value={formData.cpf || ''}
+                onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Data de Nascimento</Label>
+              <Input
+                type="date"
+                value={formData.data_nascimento || ''}
+                onChange={(e) => setFormData({ ...formData, data_nascimento: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input
+                value={formData.telefone || ''}
+                onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email Pessoal</Label>
+              <Input
+                type="email"
+                value={formData.email_pessoal || ''}
+                onChange={(e) => setFormData({ ...formData, email_pessoal: e.target.value })}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bloco 3: Endereço (colapsável) */}
+        <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Endereço
+                  </div>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${addressOpen ? 'rotate-180' : ''}`} />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="grid grid-cols-2 gap-4 pt-0">
+                <div className="space-y-2">
+                  <Label>Cidade</Label>
+                  <Input
+                    value={formData.cidade || ''}
+                    onChange={(e) => setFormData({ ...formData, cidade: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <Input
+                    value={formData.estado || ''}
+                    onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label>Endereço Completo</Label>
+                  <Textarea
+                    value={formData.endereco || ''}
+                    onChange={(e) => setFormData({ ...formData, endereco: e.target.value })}
+                    rows={2}
+                    placeholder="Rua, número, complemento, bairro, CEP..."
+                  />
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       </div>
     );
   }
+
+  // View Mode
+  const gestor = employee.gestor_id 
+    ? gestorOptions.find(e => e.id === employee.gestor_id)
+    : null;
 
   return (
     <div className="space-y-4">
@@ -232,56 +274,80 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
         </Button>
       </div>
 
+      {/* Bloco 1: Dados de Emprego */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Dados Pessoais</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Briefcase className="h-4 w-4" />
+            Dados de Emprego
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="divide-y">
+          <InfoRow label="Cargo / Função" value={employee.cargo} />
+          <InfoRow label="Squad / Equipe" value={employee.squad} />
+          <InfoRow label="Gestor Direto" value={gestor?.nome_completo || null} />
+          <InfoRow label="Tipo de Vínculo" value={employee.tipo_contrato} />
+          <InfoRow
+            label="Data de Entrada"
+            value={employee.data_admissao ? format(new Date(employee.data_admissao), 'dd/MM/yyyy', { locale: ptBR }) : null}
+          />
+          <InfoRow
+            label="Data de Desligamento"
+            value={employee.data_demissao ? format(new Date(employee.data_demissao), 'dd/MM/yyyy', { locale: ptBR }) : null}
+          />
+          <InfoRow label="Status RH" value={EMPLOYEE_STATUS_LABELS[employee.status].label} />
+          {employee.observacao_geral && (
+            <div className="py-2">
+              <span className="text-muted-foreground text-sm block mb-1">Observação</span>
+              <p className="text-sm">{employee.observacao_geral}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Bloco 2: Dados Pessoais */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Dados Pessoais
+          </CardTitle>
         </CardHeader>
         <CardContent className="divide-y">
           <InfoRow label="Nome Completo" value={employee.nome_completo} />
           <InfoRow label="CPF" value={employee.cpf} />
-          <InfoRow label="RG" value={employee.rg} />
           <InfoRow
             label="Data de Nascimento"
             value={employee.data_nascimento ? format(new Date(employee.data_nascimento), 'dd/MM/yyyy', { locale: ptBR }) : null}
           />
-          <InfoRow label="Estado Civil" value={employee.estado_civil} />
-          <InfoRow label="Nacionalidade" value={employee.nacionalidade} />
           <InfoRow label="Telefone" value={employee.telefone} />
           <InfoRow label="Email Pessoal" value={employee.email_pessoal} />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Endereço</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y">
-          <InfoRow label="Endereço" value={employee.endereco} />
-          <InfoRow label="Cidade" value={employee.cidade} />
-          <InfoRow label="Estado" value={employee.estado} />
-          <InfoRow label="CEP" value={employee.cep} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Dados Profissionais</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y">
-          <InfoRow label="Cargo" value={employee.cargo} />
-          <InfoRow label="Departamento" value={employee.departamento} />
-          <InfoRow label="Tipo de Contrato" value={employee.tipo_contrato} />
-          <InfoRow label="Jornada de Trabalho" value={employee.jornada_trabalho} />
-          <InfoRow
-            label="Data de Admissão"
-            value={employee.data_admissao ? format(new Date(employee.data_admissao), 'dd/MM/yyyy', { locale: ptBR }) : null}
-          />
-          <InfoRow
-            label="Data de Demissão"
-            value={employee.data_demissao ? format(new Date(employee.data_demissao), 'dd/MM/yyyy', { locale: ptBR }) : null}
-          />
-        </CardContent>
-      </Card>
+      {/* Bloco 3: Endereço (colapsável) */}
+      <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <CardTitle className="text-base flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Endereço
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform ${addressOpen ? 'rotate-180' : ''}`} />
+              </CardTitle>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="divide-y pt-0">
+              <InfoRow label="Cidade" value={employee.cidade} />
+              <InfoRow label="Estado" value={employee.estado} />
+              <InfoRow label="Endereço" value={employee.endereco} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     </div>
   );
 }

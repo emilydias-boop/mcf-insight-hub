@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Employee, EmployeeEvent } from '@/types/hr';
 import { useEmployeeEvents, useEmployeeMutations } from '@/hooks/useEmployees';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,13 @@ import {
   ArrowRight,
   Briefcase,
   Pencil,
-  Trash2
+  Trash2,
+  UserPlus,
+  Users,
+  UserMinus,
+  RefreshCcw,
+  DollarSign,
+  LogOut
 } from 'lucide-react';
 
 interface EmployeeHistoryTabProps {
@@ -30,22 +36,32 @@ interface EmployeeHistoryTabProps {
 }
 
 const EVENT_TYPES = [
+  { value: 'admissao', label: 'Admissão' },
+  { value: 'mudanca_cargo', label: 'Mudança de cargo' },
+  { value: 'troca_squad', label: 'Troca de squad' },
+  { value: 'mudanca_gestor', label: 'Mudança de gestor' },
+  { value: 'reajuste', label: 'Reajuste / Alteração de remuneração' },
+  { value: 'afastamento', label: 'Afastamento' },
+  { value: 'retorno', label: 'Retorno' },
+  { value: 'desligamento', label: 'Desligamento' },
   { value: 'promocao', label: 'Promoção' },
-  { value: 'aumento', label: 'Aumento Salarial' },
   { value: 'advertencia', label: 'Advertência' },
   { value: 'ferias', label: 'Férias' },
-  { value: 'transferencia', label: 'Transferência' },
-  { value: 'mudanca_cargo', label: 'Mudança de Cargo' },
   { value: 'outro', label: 'Outro' },
 ];
 
 const EVENT_ICONS: Record<string, React.ReactNode> = {
+  admissao: <UserPlus className="h-4 w-4 text-green-500" />,
+  mudanca_cargo: <Briefcase className="h-4 w-4 text-orange-500" />,
+  troca_squad: <Users className="h-4 w-4 text-purple-500" />,
+  mudanca_gestor: <UserMinus className="h-4 w-4 text-blue-500" />,
+  reajuste: <DollarSign className="h-4 w-4 text-emerald-500" />,
+  afastamento: <AlertTriangle className="h-4 w-4 text-yellow-500" />,
+  retorno: <RefreshCcw className="h-4 w-4 text-cyan-500" />,
+  desligamento: <LogOut className="h-4 w-4 text-red-500" />,
   promocao: <TrendingUp className="h-4 w-4 text-green-500" />,
-  aumento: <Award className="h-4 w-4 text-blue-500" />,
   advertencia: <AlertTriangle className="h-4 w-4 text-red-500" />,
   ferias: <Calendar className="h-4 w-4 text-cyan-500" />,
-  transferencia: <ArrowRight className="h-4 w-4 text-purple-500" />,
-  mudanca_cargo: <Briefcase className="h-4 w-4 text-orange-500" />,
 };
 
 export default function EmployeeHistoryTab({ employee }: EmployeeHistoryTabProps) {
@@ -138,7 +154,7 @@ export default function EmployeeHistoryTab({ employee }: EmployeeHistoryTabProps
       <div className="flex justify-end">
         <Button variant="outline" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
-          Registrar Evento
+          Adicionar Evento
         </Button>
       </div>
 
@@ -166,7 +182,7 @@ export default function EmployeeHistoryTab({ employee }: EmployeeHistoryTabProps
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs bg-muted px-2 py-1 rounded capitalize">
-                          {event.tipo_evento.replace('_', ' ')}
+                          {EVENT_TYPES.find(t => t.value === event.tipo_evento)?.label || event.tipo_evento.replace('_', ' ')}
                         </span>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(event)}>
                           <Pencil className="h-3 w-3" />
@@ -216,7 +232,7 @@ export default function EmployeeHistoryTab({ employee }: EmployeeHistoryTabProps
           <CardContent className="py-8 text-center text-muted-foreground">
             <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Nenhum evento registrado</p>
-            <p className="text-xs mt-1">Registre promoções, mudanças de cargo, etc.</p>
+            <p className="text-xs mt-1">Registre admissões, promoções, mudanças de cargo, etc.</p>
           </CardContent>
         </Card>
       )}

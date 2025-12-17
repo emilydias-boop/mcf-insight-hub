@@ -1294,24 +1294,31 @@ export type Database = {
           data_demissao: string | null
           data_nascimento: string | null
           departamento: string | null
+          descricao_comissao: string | null
           email_pessoal: string | null
           endereco: string | null
           estado: string | null
           estado_civil: string | null
+          gestor_id: string | null
           id: string
           jornada_trabalho: string | null
+          modelo_fechamento: string | null
           nacionalidade: string | null
           nivel: number | null
           nome_completo: string
+          observacao_geral: string | null
+          ote_mensal: number | null
           pix: string | null
           profile_id: string | null
           rg: string | null
           salario_base: number | null
           sdr_id: string | null
+          squad: string | null
           status: string | null
           telefone: string | null
           tipo_conta: string | null
           tipo_contrato: string | null
+          tipo_variavel: string | null
           updated_at: string | null
           updated_by: string | null
           user_id: string | null
@@ -1330,24 +1337,31 @@ export type Database = {
           data_demissao?: string | null
           data_nascimento?: string | null
           departamento?: string | null
+          descricao_comissao?: string | null
           email_pessoal?: string | null
           endereco?: string | null
           estado?: string | null
           estado_civil?: string | null
+          gestor_id?: string | null
           id?: string
           jornada_trabalho?: string | null
+          modelo_fechamento?: string | null
           nacionalidade?: string | null
           nivel?: number | null
           nome_completo: string
+          observacao_geral?: string | null
+          ote_mensal?: number | null
           pix?: string | null
           profile_id?: string | null
           rg?: string | null
           salario_base?: number | null
           sdr_id?: string | null
+          squad?: string | null
           status?: string | null
           telefone?: string | null
           tipo_conta?: string | null
           tipo_contrato?: string | null
+          tipo_variavel?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
@@ -1366,29 +1380,43 @@ export type Database = {
           data_demissao?: string | null
           data_nascimento?: string | null
           departamento?: string | null
+          descricao_comissao?: string | null
           email_pessoal?: string | null
           endereco?: string | null
           estado?: string | null
           estado_civil?: string | null
+          gestor_id?: string | null
           id?: string
           jornada_trabalho?: string | null
+          modelo_fechamento?: string | null
           nacionalidade?: string | null
           nivel?: number | null
           nome_completo?: string
+          observacao_geral?: string | null
+          ote_mensal?: number | null
           pix?: string | null
           profile_id?: string | null
           rg?: string | null
           salario_base?: number | null
           sdr_id?: string | null
+          squad?: string | null
           status?: string | null
           telefone?: string | null
           tipo_conta?: string | null
           tipo_contrato?: string | null
+          tipo_variavel?: string | null
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "employees_gestor_id_fkey"
+            columns: ["gestor_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "employees_profile_id_fkey"
             columns: ["profile_id"]
@@ -2112,6 +2140,74 @@ export type Database = {
           type?: string
         }
         Relationships: []
+      }
+      rh_nfse: {
+        Row: {
+          ano: number
+          arquivo_url: string | null
+          created_at: string | null
+          created_by: string | null
+          data_envio_nfse: string | null
+          data_pagamento: string | null
+          employee_id: string
+          id: string
+          mes: number
+          numero_nfse: string | null
+          observacoes: string | null
+          status_nfse: string | null
+          status_pagamento: string | null
+          storage_path: string | null
+          updated_at: string | null
+          updated_by: string | null
+          valor_nfse: number
+        }
+        Insert: {
+          ano: number
+          arquivo_url?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          data_envio_nfse?: string | null
+          data_pagamento?: string | null
+          employee_id: string
+          id?: string
+          mes: number
+          numero_nfse?: string | null
+          observacoes?: string | null
+          status_nfse?: string | null
+          status_pagamento?: string | null
+          storage_path?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          valor_nfse?: number
+        }
+        Update: {
+          ano?: number
+          arquivo_url?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          data_envio_nfse?: string | null
+          data_pagamento?: string | null
+          employee_id?: string
+          id?: string
+          mes?: number
+          numero_nfse?: string | null
+          observacoes?: string | null
+          status_nfse?: string | null
+          status_pagamento?: string | null
+          storage_path?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          valor_nfse?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_nfse_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_required_documents: {
         Row: {
