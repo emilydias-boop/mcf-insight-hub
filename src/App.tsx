@@ -51,6 +51,7 @@ import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
 import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import RHColaboradores from "./pages/rh/Colaboradores";
 import Financeiro from "./pages/Financeiro";
+import MeuRH from "./pages/MeuRH";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -107,6 +108,7 @@ const App = () => (
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
+              <Route path="meu-rh" element={<MeuRH />} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />

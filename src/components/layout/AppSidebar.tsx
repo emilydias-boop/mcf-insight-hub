@@ -130,6 +130,7 @@ const menuItems: MenuItem[] = [
   },
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, resource: "fechamento_sdr", requiredRoles: ['sdr'] },
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
+  { title: "Meu RH", url: "/meu-rh", icon: UserCircle },
   { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
   { title: "Financeiro", url: "/financeiro", icon: Receipt, resource: "financeiro" as any, requiredRoles: ['admin', 'financeiro'] },
   { title: "Usuários", url: "/usuarios", icon: Users, resource: "usuarios", requiredRoles: ['admin'] },
