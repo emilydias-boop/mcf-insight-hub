@@ -3260,6 +3260,7 @@ export type Database = {
         | "sdr"
         | "closer"
         | "coordenador"
+        | "rh"
       auction_status: "ativo" | "encerrado" | "cancelado"
       flag_category:
         | "desempenho"
@@ -3445,7 +3446,15 @@ export const Constants = {
       activity_task_status: ["pending", "done", "canceled"],
       activity_task_type: ["call", "whatsapp", "email", "meeting", "other"],
       alert_level: ["info", "warning", "critical"],
-      app_role: ["admin", "manager", "viewer", "sdr", "closer", "coordenador"],
+      app_role: [
+        "admin",
+        "manager",
+        "viewer",
+        "sdr",
+        "closer",
+        "coordenador",
+        "rh",
+      ],
       auction_status: ["ativo", "encerrado", "cancelado"],
       flag_category: [
         "desempenho",
