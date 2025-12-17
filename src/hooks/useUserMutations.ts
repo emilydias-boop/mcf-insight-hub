@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { AppRole, PermissionLevel, ResourceType } from "@/types/user-management";
+import { AppRole, PermissionLevel, ResourceType, AccessStatus } from "@/types/user-management";
 
 export const useUpdateUserRole = () => {
   const queryClient = useQueryClient();
@@ -56,6 +56,96 @@ export const useUpdateUserEmployment = () => {
     },
     onError: () => {
       toast({ title: "Erro ao atualizar dados", variant: "destructive" });
+    },
+  });
+};
+
+// ===== NOVA MUTATION: Atualizar dados de acesso do usuário =====
+export const useUpdateUserAccess = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      userId, 
+      data 
+    }: { 
+      userId: string; 
+      data: {
+        full_name?: string;
+        email?: string;
+        access_status?: AccessStatus;
+        blocked_until?: string | null;
+        squad?: string | null;
+      }
+    }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update(data)
+        .eq("id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["user-details", variables.userId] });
+      toast({ title: "Dados do usuário atualizados" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar dados", variant: "destructive" });
+    },
+  });
+};
+
+// ===== NOVA MUTATION: Enviar link de reset de senha =====
+export const useSendPasswordReset = () => {
+  return useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?mode=reset`,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Link de reset enviado", description: "O usuário receberá um email para redefinir a senha." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao enviar link", description: error.message, variant: "destructive" });
+    },
+  });
+};
+
+// ===== NOVA MUTATION: Atualizar integrações do usuário =====
+export const useUpdateUserIntegrations = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      userId, 
+      data 
+    }: { 
+      userId: string; 
+      data: {
+        clint_user_id?: string | null;
+        twilio_agent_id?: string | null;
+        other_integrations?: Record<string, any>;
+      }
+    }) => {
+      const { error } = await supabase
+        .from("user_integrations")
+        .upsert(
+          { user_id: userId, ...data },
+          { onConflict: "user_id" }
+        );
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["user-integrations", variables.userId] });
+      toast({ title: "Integrações atualizadas" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar integrações", variant: "destructive" });
     },
   });
 };

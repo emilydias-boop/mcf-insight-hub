@@ -11,8 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, Eye, Loader2, FileText } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
-import { format } from "date-fns";
+import { ROLE_LABELS } from "@/types/user-management";
+import { cn } from "@/lib/utils";
 
 export default function GerenciamentoUsuarios() {
   const { data: users = [], isLoading } = useUsers();
@@ -38,20 +38,13 @@ export default function GerenciamentoUsuarios() {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  const getRoleBadgeVariant = (role: string | null) => {
-    if (role === "admin") return "default";
-    if (role === "manager") return "secondary";
-    if (role === "sdr" || role === "closer" || role === "coordenador") return "secondary";
-    return "outline";
-  };
-
   return (
     <RoleGuard allowedRoles={["admin"]}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Gerenciamento de Usuários</h1>
           <p className="text-muted-foreground">
-            Gerencie usuários, roles, metas, flags e permissões
+            Gerencie contas de acesso, roles e permissões do sistema
           </p>
         </div>
 
@@ -106,80 +99,67 @@ export default function GerenciamentoUsuarios() {
                     <TableRow>
                       <TableHead>Usuário</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Cargo</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Entrada</TableHead>
-                      <TableHead>Salário</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((user) => (
-                      <TableRow key={user.user_id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar>
-                              <AvatarFallback className="bg-primary/10 text-primary">
-                                {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{user.full_name || "Sem nome"}</p>
-                              <p className="text-sm text-muted-foreground">{user.email}</p>
+                    {filteredUsers.map((user) => {
+                      const roleInfo = ROLE_LABELS[user.role || 'viewer'] || ROLE_LABELS.viewer;
+                      return (
+                        <TableRow key={user.user_id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                <AvatarFallback className="bg-primary/10 text-primary">
+                                  {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">{user.full_name || "Sem nome"}</p>
+                                <p className="text-sm text-muted-foreground">{user.email}</p>
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getRoleBadgeVariant(user.role)}>
-                            {user.role || "viewer"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{user.position || "-"}</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={user.is_active ? "default" : "secondary"}>
-                            {user.is_active ? "Ativo" : "Inativo"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">
-                            {user.hire_date ? format(new Date(user.hire_date), "dd/MM/yyyy") : "-"}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm font-medium">
-                            {user.fixed_salary ? formatCurrency(user.fixed_salary) : "-"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setFilesDrawerUser({
-                                  id: user.user_id,
-                                  name: user.full_name || user.email || 'Usuário',
-                                  position: user.position || "",
-                                })
-                              }
-                              title="Arquivos pessoais"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSelectedUserId(user.user_id)}
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              Ver Detalhes
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn("text-xs", roleInfo.color)}>
+                              {roleInfo.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={user.is_active ? "default" : "secondary"}>
+                              {user.is_active ? "Ativo" : "Inativo"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  setFilesDrawerUser({
+                                    id: user.user_id,
+                                    name: user.full_name || user.email || 'Usuário',
+                                    position: user.position || "",
+                                  })
+                                }
+                                title="Arquivos pessoais"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedUserId(user.user_id)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Gerenciar
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

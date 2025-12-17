@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { UserSummary, UserDetails, UserTarget, UserFlag, UserObservation, UserPermission } from "@/types/user-management";
+import { UserSummary, UserDetails, UserTarget, UserFlag, UserObservation, UserPermission, UserIntegration, AccessStatus } from "@/types/user-management";
 
 export const useUsers = () => {
   return useQuery({
@@ -24,7 +24,7 @@ export const useUserDetails = (userId: string | null) => {
     queryFn: async () => {
       if (!userId) return null;
 
-      // Get profile data
+      // Get profile data (including new access fields)
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("*")
@@ -54,6 +54,10 @@ export const useUserDetails = (userId: string | null) => {
       return {
         ...profile,
         role: roleData?.role || null,
+        access_status: (profile as any).access_status as AccessStatus || 'ativo',
+        blocked_until: (profile as any).blocked_until || null,
+        last_login_at: (profile as any).last_login_at || null,
+        squad: (profile as any).squad || null,
         employment: employment || null,
       } as UserDetails;
     },
@@ -131,6 +135,26 @@ export const useUserPermissions = (userId: string | null) => {
 
       if (error) throw error;
       return data as UserPermission[];
+    },
+  });
+};
+
+// ===== NOVA QUERY: Integrações do usuário =====
+export const useUserIntegrations = (userId: string | null) => {
+  return useQuery({
+    queryKey: ["user-integrations", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      if (!userId) return null;
+
+      const { data, error } = await supabase
+        .from("user_integrations")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as UserIntegration | null;
     },
   });
 };
