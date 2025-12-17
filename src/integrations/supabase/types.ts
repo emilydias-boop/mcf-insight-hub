@@ -1120,6 +1120,298 @@ export type Database = {
           },
         ]
       }
+      employee_documents: {
+        Row: {
+          created_at: string | null
+          data_emissao: string | null
+          data_validade: string | null
+          descricao: string | null
+          employee_id: string
+          id: string
+          obrigatorio: boolean | null
+          observacao_status: string | null
+          status: string | null
+          storage_path: string | null
+          storage_url: string | null
+          tipo_documento: string
+          titulo: string
+          updated_at: string | null
+          uploaded_by: string | null
+          visivel_colaborador: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          data_emissao?: string | null
+          data_validade?: string | null
+          descricao?: string | null
+          employee_id: string
+          id?: string
+          obrigatorio?: boolean | null
+          observacao_status?: string | null
+          status?: string | null
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo_documento: string
+          titulo: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+          visivel_colaborador?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          data_emissao?: string | null
+          data_validade?: string | null
+          descricao?: string | null
+          employee_id?: string
+          id?: string
+          obrigatorio?: boolean | null
+          observacao_status?: string | null
+          status?: string | null
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo_documento?: string
+          titulo?: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+          visivel_colaborador?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_documents_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_events: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          data_evento: string
+          descricao: string | null
+          employee_id: string
+          id: string
+          metadata: Json | null
+          tipo_evento: string
+          titulo: string
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          data_evento?: string
+          descricao?: string | null
+          employee_id: string
+          id?: string
+          metadata?: Json | null
+          tipo_evento: string
+          titulo: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          data_evento?: string
+          descricao?: string | null
+          employee_id?: string
+          id?: string
+          metadata?: Json | null
+          tipo_evento?: string
+          titulo?: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_events_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_notes: {
+        Row: {
+          conteudo: string
+          created_at: string | null
+          created_by: string | null
+          employee_id: string
+          id: string
+          privada: boolean | null
+          tipo: string | null
+          titulo: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          conteudo: string
+          created_at?: string | null
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          privada?: boolean | null
+          tipo?: string | null
+          titulo?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          conteudo?: string
+          created_at?: string | null
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          privada?: boolean | null
+          tipo?: string | null
+          titulo?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_notes_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employees: {
+        Row: {
+          agencia: string | null
+          banco: string | null
+          cargo: string | null
+          cep: string | null
+          cidade: string | null
+          conta: string | null
+          cpf: string | null
+          created_at: string | null
+          created_by: string | null
+          data_admissao: string | null
+          data_demissao: string | null
+          data_nascimento: string | null
+          departamento: string | null
+          email_pessoal: string | null
+          endereco: string | null
+          estado: string | null
+          estado_civil: string | null
+          id: string
+          jornada_trabalho: string | null
+          nacionalidade: string | null
+          nivel: number | null
+          nome_completo: string
+          pix: string | null
+          profile_id: string | null
+          rg: string | null
+          salario_base: number | null
+          sdr_id: string | null
+          status: string | null
+          telefone: string | null
+          tipo_conta: string | null
+          tipo_contrato: string | null
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string | null
+        }
+        Insert: {
+          agencia?: string | null
+          banco?: string | null
+          cargo?: string | null
+          cep?: string | null
+          cidade?: string | null
+          conta?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          data_nascimento?: string | null
+          departamento?: string | null
+          email_pessoal?: string | null
+          endereco?: string | null
+          estado?: string | null
+          estado_civil?: string | null
+          id?: string
+          jornada_trabalho?: string | null
+          nacionalidade?: string | null
+          nivel?: number | null
+          nome_completo: string
+          pix?: string | null
+          profile_id?: string | null
+          rg?: string | null
+          salario_base?: number | null
+          sdr_id?: string | null
+          status?: string | null
+          telefone?: string | null
+          tipo_conta?: string | null
+          tipo_contrato?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          agencia?: string | null
+          banco?: string | null
+          cargo?: string | null
+          cep?: string | null
+          cidade?: string | null
+          conta?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          data_nascimento?: string | null
+          departamento?: string | null
+          email_pessoal?: string | null
+          endereco?: string | null
+          estado?: string | null
+          estado_civil?: string | null
+          id?: string
+          jornada_trabalho?: string | null
+          nacionalidade?: string | null
+          nivel?: number | null
+          nome_completo?: string
+          pix?: string | null
+          profile_id?: string | null
+          rg?: string | null
+          salario_base?: number | null
+          sdr_id?: string | null
+          status?: string | null
+          telefone?: string | null
+          tipo_conta?: string | null
+          tipo_contrato?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "employees_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_data: {
         Row: {
           conversion_rate: number | null
@@ -1818,6 +2110,36 @@ export type Database = {
           name?: string
           start_date?: string | null
           type?: string
+        }
+        Relationships: []
+      }
+      role_required_documents: {
+        Row: {
+          ativo: boolean | null
+          cargo: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          prazo_dias: number | null
+          tipo_documento: string
+        }
+        Insert: {
+          ativo?: boolean | null
+          cargo: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          prazo_dias?: number | null
+          tipo_documento: string
+        }
+        Update: {
+          ativo?: boolean | null
+          cargo?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          prazo_dias?: number | null
+          tipo_documento?: string
         }
         Relationships: []
       }
