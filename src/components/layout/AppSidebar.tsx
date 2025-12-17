@@ -190,33 +190,35 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="px-2 py-4 flex items-center justify-center">
-            {isCollapsed ? (
+        {/* Toggle button always visible - outside SidebarGroupLabel */}
+        <div className="flex items-center justify-center px-2 py-3 border-b border-sidebar-border">
+          {isCollapsed ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="h-9 w-9 hover:bg-sidebar-accent"
+              title="Expandir sidebar"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          ) : (
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xl font-bold text-primary">MCF</span>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={toggleSidebar}
-                className="h-9 w-9 hover:bg-sidebar-accent"
-                title="Expandir sidebar"
+                className="h-7 w-7 flex-shrink-0 hover:bg-sidebar-accent"
+                title="Colapsar sidebar"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronLeft className="h-4 w-4" />
               </Button>
-            ) : (
-              <div className="flex items-center justify-between w-full">
-                <span className="text-xl font-bold text-primary">MCF</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleSidebar}
-                  className="h-7 w-7 flex-shrink-0 hover:bg-sidebar-accent"
-                  title="Colapsar sidebar"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </SidebarGroupLabel>
+            </div>
+          )}
+        </div>
+        
+        <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredMenuItems.map((item) => {
