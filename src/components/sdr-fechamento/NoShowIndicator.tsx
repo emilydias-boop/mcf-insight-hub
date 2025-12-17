@@ -27,10 +27,10 @@ export const NoShowIndicator = ({
   const isCritical = taxaNoShow > 50;
 
   const getStatusIcon = () => {
-    if (taxaNoShow <= 20) return <CheckCircle className="h-5 w-5 text-green-500" />;
-    if (taxaNoShow <= 30) return <CheckCircle className="h-5 w-5 text-yellow-500" />;
-    if (taxaNoShow <= 50) return <AlertTriangle className="h-5 w-5 text-orange-500" />;
-    return <XCircle className="h-5 w-5 text-red-500" />;
+    if (taxaNoShow <= 20) return <CheckCircle className="h-4 w-4 text-green-500" />;
+    if (taxaNoShow <= 30) return <CheckCircle className="h-4 w-4 text-yellow-500" />;
+    if (taxaNoShow <= 50) return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+    return <XCircle className="h-4 w-4 text-red-500" />;
   };
 
   const getPerformanceColor = () => {
@@ -51,22 +51,22 @@ export const NoShowIndicator = ({
       'border-2',
       isGood ? 'border-green-500/20' : isCritical ? 'border-red-500/20' : 'border-orange-500/20'
     )}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center justify-between">
-          <span>Taxa de No-Show</span>
+      <CardHeader className="pb-1 pt-3">
+        <CardTitle className="text-xs font-medium flex items-center justify-between">
+          <span className="text-muted-foreground">Taxa de No-Show</span>
           {getStatusIcon()}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 pt-0 pb-3">
         {/* Taxa atual */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Taxa Atual</span>
-            <span className={cn('font-bold text-lg', getPerformanceColor())}>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground/70">Taxa Atual</span>
+            <span className={cn('font-semibold text-base', getPerformanceColor())}>
               {taxaNoShow.toFixed(1)}%
             </span>
           </div>
-          <div className="relative h-3 rounded-full bg-muted overflow-hidden">
+          <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
             <div 
               className={cn('h-full transition-all', getProgressColor())}
               style={{ width: `${Math.min(taxaNoShow, 100)}%` }}
@@ -77,7 +77,7 @@ export const NoShowIndicator = ({
               style={{ left: '30%' }}
             />
           </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between text-[9px] text-muted-foreground/60">
             <span>0%</span>
             <span>Meta: ≤30%</span>
             <span>100%</span>
@@ -85,14 +85,14 @@ export const NoShowIndicator = ({
         </div>
 
         {/* Detalhes */}
-        <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+        <div className="grid grid-cols-2 gap-3 pt-1.5 border-t">
           <div>
-            <div className="text-xs text-muted-foreground">No-Shows / Agendadas</div>
-            <div className="font-medium">{noShows} / {agendadas}</div>
+            <div className="text-[10px] text-muted-foreground/70">No-Shows / Agendadas</div>
+            <div className="text-xs font-medium">{noShows} / {agendadas}</div>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Performance (inverso)</div>
-            <div className={cn('font-medium', getPerformanceColor())}>
+            <div className="text-[10px] text-muted-foreground/70">Performance (inverso)</div>
+            <div className={cn('text-xs font-medium', getPerformanceColor())}>
               {performance.toFixed(0)}%
             </div>
           </div>
@@ -100,14 +100,14 @@ export const NoShowIndicator = ({
 
         {/* Multiplicador e valor */}
         {valorBase > 0 && (
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+          <div className="grid grid-cols-2 gap-3 pt-1.5 border-t">
             <div>
-              <div className="text-xs text-muted-foreground">Multiplicador</div>
-              <div className="font-bold text-lg">{multiplicador}x</div>
+              <div className="text-[10px] text-muted-foreground/70">Multiplicador</div>
+              <div className="font-bold text-base">{multiplicador}x</div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">Valor Final</div>
-              <div className="font-bold text-lg text-primary">
+              <div className="text-[10px] text-muted-foreground/70">Valor Final</div>
+              <div className="font-bold text-base text-primary">
                 {formatCurrency(valorFinal)}
               </div>
             </div>
@@ -115,7 +115,7 @@ export const NoShowIndicator = ({
         )}
 
         {/* Explicação */}
-        <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+        <div className="text-[10px] text-muted-foreground/70 bg-muted/50 p-1.5 rounded">
           <strong>Cálculo inverso:</strong> Quanto menor a taxa de no-show, maior a performance.
           Taxa ≤30% = 100-150%, acima de 30% a performance decresce.
         </div>

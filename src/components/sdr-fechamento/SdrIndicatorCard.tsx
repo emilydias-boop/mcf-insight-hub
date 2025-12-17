@@ -54,43 +54,43 @@ export const SdrIndicatorCard = ({
       "bg-card border-border",
       needsInput && "border-yellow-500/50 bg-yellow-500/5"
     )}>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-1 pt-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardTitle className="text-xs font-medium text-muted-foreground">
             {title}
           </CardTitle>
           <div className="flex items-center gap-1">
             {isManual ? (
-              <Badge variant="outline" className="text-xs border-yellow-500/50 text-yellow-500">
+              <Badge variant="outline" className="text-[10px] h-5 border-yellow-500/50 text-yellow-500">
                 Manual
               </Badge>
             ) : (
-              <Badge variant="secondary" className="text-xs">
-                <Zap className="h-3 w-3 mr-1" />
+              <Badge variant="secondary" className="text-[10px] h-5">
+                <Zap className="h-2.5 w-2.5 mr-0.5" />
                 Auto
               </Badge>
             )}
           </div>
         </div>
         {needsInput && (
-          <div className="flex items-center gap-1.5 mt-1 text-yellow-500 text-xs">
-            <AlertCircle className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-1 mt-1 text-yellow-500 text-[10px]">
+            <AlertCircle className="h-3 w-3" />
             <span>Pendente de preenchimento</span>
           </div>
         )}
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-2 text-sm">
+      <CardContent className="space-y-2 pt-0 pb-3">
+        <div className="grid grid-cols-2 gap-1.5 text-xs">
           <div>
-            <span className="text-muted-foreground">Meta:</span>
-            <span className="ml-2 font-medium">
+            <span className="text-muted-foreground/70">Meta:</span>
+            <span className="ml-1.5 font-medium">
               {isPercentage ? `${meta}%` : meta.toLocaleString('pt-BR')}
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground">Realizado:</span>
+            <span className="text-muted-foreground/70">Realizado:</span>
             <span className={cn(
-              "ml-2 font-medium",
+              "ml-1.5 font-medium",
               needsInput && "text-yellow-500"
             )}>
               {isPercentage ? `${realizado.toFixed(1)}%` : realizado.toLocaleString('pt-BR')}
@@ -99,8 +99,8 @@ export const SdrIndicatorCard = ({
         </div>
 
         {/* Progress Bar */}
-        <div className="space-y-1">
-          <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary">
+        <div className="space-y-0.5">
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-secondary">
             <div 
               className={cn(
                 "h-full transition-all duration-500",
@@ -114,7 +114,7 @@ export const SdrIndicatorCard = ({
               style={{ left: `${(100 / 150) * 100}%` }}
             />
           </div>
-          <div className="flex justify-between text-[10px] text-muted-foreground">
+          <div className="flex justify-between text-[9px] text-muted-foreground/60">
             <span>0%</span>
             <span>70%</span>
             <span>100%</span>
@@ -124,27 +124,27 @@ export const SdrIndicatorCard = ({
         
         <div className="flex items-center justify-between">
           <div className={cn(
-            "text-2xl font-bold",
+            "text-xl font-bold",
             needsInput ? "text-yellow-500" : getColorByPct(pct)
           )}>
             {pct.toFixed(1)}%
           </div>
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">Faixa</div>
-            <div className="text-sm font-medium">{faixa}</div>
+            <div className="text-[10px] text-muted-foreground/70">Faixa</div>
+            <div className="text-xs font-medium">{faixa}</div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-border pt-3">
+        <div className="flex items-center justify-between border-t border-border pt-2">
           <div>
-            <div className="text-xs text-muted-foreground">Multiplicador</div>
-            <div className="text-lg font-bold">{multiplicador}x</div>
+            <div className="text-[10px] text-muted-foreground/70">Multiplicador</div>
+            <div className="text-base font-bold">{multiplicador}x</div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">
+            <div className="text-[10px] text-muted-foreground/70">
               {formatCurrency(valorBase)} × {multiplicador}
             </div>
-            <div className="text-lg font-bold text-primary">
+            <div className="text-base font-bold text-primary">
               {formatCurrency(valorFinal)}
             </div>
           </div>
