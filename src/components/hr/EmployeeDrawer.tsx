@@ -2,7 +2,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Employee, EMPLOYEE_STATUS_LABELS } from '@/types/hr';
-import { User, DollarSign, FileText, History, StickyNote } from 'lucide-react';
+import { useEmployees } from '@/hooks/useEmployees';
+import { User, DollarSign, FileText, History, StickyNote, Calendar, Users } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import EmployeeGeneralTab from './tabs/EmployeeGeneralTab';
 import EmployeeRemunerationTab from './tabs/EmployeeRemunerationTab';
 import EmployeeDocumentsTab from './tabs/EmployeeDocumentsTab';
@@ -16,23 +19,63 @@ interface EmployeeDrawerProps {
 }
 
 export default function EmployeeDrawer({ employee, open, onOpenChange }: EmployeeDrawerProps) {
+  const { data: employees } = useEmployees();
+  
   if (!employee) return null;
+
+  // Find gestor name
+  const gestor = employee.gestor_id 
+    ? employees?.find(e => e.id === employee.gestor_id)
+    : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
         <SheetHeader className="pb-4 border-b">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <div className="flex items-start gap-3">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
               <User className="h-6 w-6 text-primary" />
             </div>
-            <div className="flex-1">
-              <SheetTitle className="text-xl">{employee.nome_completo}</SheetTitle>
-              <div className="flex items-center gap-2 mt-1">
+            <div className="flex-1 min-w-0">
+              <SheetTitle className="text-xl truncate">{employee.nome_completo}</SheetTitle>
+              
+              {/* Cargo + Status */}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-sm text-muted-foreground">{employee.cargo || 'Sem cargo'}</span>
                 <Badge className={EMPLOYEE_STATUS_LABELS[employee.status].color}>
                   {EMPLOYEE_STATUS_LABELS[employee.status].label}
                 </Badge>
+              </div>
+
+              {/* Datas e informações adicionais */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
+                {employee.data_admissao && (
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    <span>Admissão: {format(new Date(employee.data_admissao), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                  </div>
+                )}
+                {employee.data_demissao && (
+                  <div className="flex items-center gap-1 text-red-400">
+                    <Calendar className="h-3 w-3" />
+                    <span>Desligamento: {format(new Date(employee.data_demissao), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Squad e Gestor */}
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {employee.squad && (
+                  <Badge variant="outline" className="text-xs">
+                    <Users className="h-3 w-3 mr-1" />
+                    {employee.squad}
+                  </Badge>
+                )}
+                {gestor && (
+                  <Badge variant="secondary" className="text-xs">
+                    Gestor: {gestor.nome_completo}
+                  </Badge>
+                )}
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Employee, EmployeeDocument, EmployeeEvent, EmployeeNote } from '@/types/hr';
+import { Employee, EmployeeDocument, EmployeeEvent, EmployeeNote, RhNfse } from '@/types/hr';
 import { toast } from 'sonner';
 
 export function useEmployees() {
@@ -85,6 +85,31 @@ export function useEmployeeNotes(employeeId: string | null) {
       
       if (error) throw error;
       return data as EmployeeNote[];
+    },
+    enabled: !!employeeId,
+  });
+}
+
+// Hook para buscar NFSe do colaborador
+export function useEmployeeNfse(employeeId: string | null, ano?: number) {
+  return useQuery({
+    queryKey: ['employee-nfse', employeeId, ano],
+    queryFn: async () => {
+      if (!employeeId) return [];
+      let query = supabase
+        .from('rh_nfse')
+        .select('*')
+        .eq('employee_id', employeeId)
+        .order('ano', { ascending: false })
+        .order('mes', { ascending: false });
+      
+      if (ano) {
+        query = query.eq('ano', ano);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as RhNfse[];
     },
     enabled: !!employeeId,
   });
@@ -185,7 +210,7 @@ export function useEmployeeMutations() {
       if (error) throw error;
       return result;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employee-notes'] });
       toast.success('Nota atualizada');
     },
@@ -316,7 +341,6 @@ export function useEmployeeMutations() {
 
   const deleteDocument = useMutation({
     mutationFn: async ({ id, storagePath }: { id: string; storagePath?: string }) => {
-      // Delete file from storage if exists
       if (storagePath) {
         await supabase.storage.from('user-files').remove([storagePath]);
       }
@@ -337,6 +361,70 @@ export function useEmployeeMutations() {
     },
   });
 
+  // NFSe mutations
+  const createNfse = useMutation({
+    mutationFn: async (data: Partial<RhNfse>) => {
+      const { data: result, error } = await supabase
+        .from('rh_nfse')
+        .insert(data as any)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee-nfse', variables.employee_id] });
+      toast.success('NFSe adicionada');
+    },
+    onError: (error) => {
+      toast.error('Erro ao adicionar NFSe: ' + error.message);
+    },
+  });
+
+  const updateNfse = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<RhNfse> }) => {
+      const { data: result, error } = await supabase
+        .from('rh_nfse')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-nfse'] });
+      toast.success('NFSe atualizada');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar NFSe: ' + error.message);
+    },
+  });
+
+  const deleteNfse = useMutation({
+    mutationFn: async ({ id, storagePath }: { id: string; storagePath?: string }) => {
+      if (storagePath) {
+        await supabase.storage.from('user-files').remove([storagePath]);
+      }
+      
+      const { error } = await supabase
+        .from('rh_nfse')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-nfse'] });
+      toast.success('NFSe removida');
+    },
+    onError: (error) => {
+      toast.error('Erro ao remover NFSe: ' + error.message);
+    },
+  });
+
   return {
     createEmployee,
     updateEmployee,
@@ -350,6 +438,9 @@ export function useEmployeeMutations() {
     createDocument,
     updateDocument,
     deleteDocument,
+    createNfse,
+    updateNfse,
+    deleteNfse,
   };
 }
 

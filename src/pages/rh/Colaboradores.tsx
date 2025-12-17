@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useEmployees, useEmployeeMutations } from '@/hooks/useEmployees';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Employee, EMPLOYEE_STATUS_LABELS } from '@/types/hr';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Search, Users, UserCheck, UserX, Briefcase } from 'lucide-react';
+import { Plus, Search, Users, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeDrawer from '@/components/hr/EmployeeDrawer';
@@ -23,14 +23,13 @@ export default function Colaboradores() {
   const filteredEmployees = employees?.filter(emp =>
     emp.nome_completo.toLowerCase().includes(search.toLowerCase()) ||
     emp.cargo?.toLowerCase().includes(search.toLowerCase()) ||
+    emp.squad?.toLowerCase().includes(search.toLowerCase()) ||
     emp.departamento?.toLowerCase().includes(search.toLowerCase())
   ) || [];
 
   const stats = {
     total: employees?.length || 0,
     ativos: employees?.filter(e => e.status === 'ativo').length || 0,
-    ferias: employees?.filter(e => e.status === 'ferias').length || 0,
-    desligados: employees?.filter(e => e.status === 'desligado').length || 0,
   };
 
   const handleRowClick = (employee: Employee) => {
@@ -52,7 +51,7 @@ export default function Colaboradores() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 max-w-md">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total</CardTitle>
@@ -71,31 +70,13 @@ export default function Colaboradores() {
             <div className="text-2xl font-bold text-green-600">{stats.ativos}</div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Férias</CardTitle>
-            <Briefcase className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.ferias}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Desligados</CardTitle>
-            <UserX className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.desligados}</div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Search */}
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nome, cargo ou departamento..."
+          placeholder="Buscar por nome, cargo ou squad..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
@@ -110,7 +91,7 @@ export default function Colaboradores() {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Cargo</TableHead>
-                <TableHead>Departamento</TableHead>
+                <TableHead>Squad</TableHead>
                 <TableHead>Admissão</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
@@ -141,7 +122,7 @@ export default function Colaboradores() {
                   >
                     <TableCell className="font-medium">{employee.nome_completo}</TableCell>
                     <TableCell>{employee.cargo || '-'}</TableCell>
-                    <TableCell>{employee.departamento || '-'}</TableCell>
+                    <TableCell>{employee.squad || employee.departamento || '-'}</TableCell>
                     <TableCell>
                       {employee.data_admissao
                         ? format(new Date(employee.data_admissao), 'dd/MM/yyyy', { locale: ptBR })

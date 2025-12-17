@@ -20,14 +20,21 @@ export interface Employee {
   // Dados profissionais
   cargo: string | null;
   departamento: string | null;
+  squad: string | null;
+  gestor_id: string | null;
   data_admissao: string | null;
   data_demissao: string | null;
   tipo_contrato: string | null;
   jornada_trabalho: string | null;
+  observacao_geral: string | null;
   
   // Remuneração
   salario_base: number;
   nivel: number;
+  ote_mensal: number | null;
+  tipo_variavel: string | null;
+  descricao_comissao: string | null;
+  modelo_fechamento: string | null;
   
   // Dados bancários
   banco: string | null;
@@ -93,6 +100,26 @@ export interface EmployeeNote {
   created_by: string | null;
 }
 
+export interface RhNfse {
+  id: string;
+  employee_id: string;
+  mes: number;
+  ano: number;
+  numero_nfse: string | null;
+  valor_nfse: number;
+  arquivo_url: string | null;
+  storage_path: string | null;
+  data_envio_nfse: string | null;
+  status_nfse: 'pendente_envio' | 'nota_enviada';
+  status_pagamento: 'pendente' | 'pago' | 'em_atraso';
+  data_pagamento: string | null;
+  observacoes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
 export const EMPLOYEE_STATUS_LABELS: Record<Employee['status'], { label: string; color: string }> = {
   ativo: { label: 'Ativo', color: 'bg-green-500' },
   ferias: { label: 'Férias', color: 'bg-blue-500' },
@@ -114,3 +141,52 @@ export const DOCUMENT_STATUS_LABELS: Record<EmployeeDocument['status'], { label:
   rejeitado: { label: 'Rejeitado', color: 'bg-red-500' },
   vencido: { label: 'Vencido', color: 'bg-gray-500' },
 };
+
+export const NFSE_STATUS_LABELS: Record<RhNfse['status_nfse'], { label: string; color: string }> = {
+  pendente_envio: { label: 'Pendente envio', color: 'bg-yellow-500' },
+  nota_enviada: { label: 'Nota enviada', color: 'bg-green-500' },
+};
+
+export const NFSE_PAGAMENTO_LABELS: Record<RhNfse['status_pagamento'], { label: string; color: string }> = {
+  pendente: { label: 'Pendente', color: 'bg-yellow-500' },
+  pago: { label: 'Pago', color: 'bg-green-500' },
+  em_atraso: { label: 'Em atraso', color: 'bg-red-500' },
+};
+
+export const CARGO_OPTIONS = [
+  'SDR',
+  'Closer',
+  'Coordenador',
+  'Gestor',
+  'Analista',
+  'Assistente',
+  'Estagiário',
+  'Diretor',
+  'Outro',
+];
+
+export const SQUAD_OPTIONS = [
+  'Inside Sales Crédito',
+  'Inside Sales Produto',
+  'Pós-venda MCF',
+  'Marketing',
+  'Financeiro',
+  'Operações',
+  'RH',
+  'Outro',
+];
+
+export const TIPO_VINCULO_OPTIONS = [
+  { value: 'PJ', label: 'PJ' },
+  { value: 'CLT', label: 'CLT' },
+  { value: 'Estagio', label: 'Estágio' },
+  { value: 'Freelancer', label: 'Freelancer' },
+  { value: 'Outro', label: 'Outro' },
+];
+
+export const TIPO_VARIAVEL_OPTIONS = [
+  { value: 'pct_faturamento', label: '% sobre faturamento' },
+  { value: 'comissao_contrato', label: 'Comissão por contrato' },
+  { value: 'modelo_sdr', label: 'Modelo SDR (fechamento)' },
+  { value: 'outro', label: 'Outro' },
+];

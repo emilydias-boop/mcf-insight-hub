@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Upload, Download, Eye, AlertCircle, Calendar, Pencil, Trash2, X, Loader2 } from 'lucide-react';
+import { FileText, Upload, Download, Eye, AlertCircle, Calendar, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface EmployeeDocumentsTabProps {
@@ -22,9 +22,18 @@ interface EmployeeDocumentsTabProps {
 }
 
 const DOCUMENT_TYPES = [
-  'RG', 'CPF', 'CNH', 'Comprovante de Residência', 'Certidão de Nascimento',
-  'Certidão de Casamento', 'Título de Eleitor', 'Carteira de Trabalho',
-  'Certificado', 'Contrato', 'Atestado Médico', 'Outro'
+  'Contrato de Trabalho',
+  'NDA / Confidencialidade',
+  'Termo de Comissão',
+  'Política LGPD',
+  'RG',
+  'CPF',
+  'CNH',
+  'Comprovante de Residência',
+  'Certidão de Nascimento',
+  'Atestado Médico',
+  'Certificado',
+  'Outro'
 ];
 
 export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabProps) {
@@ -95,12 +104,11 @@ export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabP
       let storagePath = selectedDoc?.storage_path || null;
       let storageUrl = selectedDoc?.storage_url || null;
 
-      // Upload new file if selected
       if (selectedFile) {
         const fileExt = selectedFile.name.split('.').pop();
         const fileName = `${employee.id}/${Date.now()}.${fileExt}`;
         
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('user-files')
           .upload(fileName, selectedFile);
 
@@ -113,7 +121,6 @@ export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabP
         storagePath = fileName;
         storageUrl = urlData.publicUrl;
 
-        // Delete old file if replacing
         if (selectedDoc?.storage_path && selectedDoc.storage_path !== fileName) {
           await supabase.storage.from('user-files').remove([selectedDoc.storage_path]);
         }
@@ -254,7 +261,7 @@ export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabP
       <div className="flex justify-end">
         <Button onClick={openCreateDialog}>
           <Upload className="h-4 w-4 mr-2" />
-          Upload Documento
+          Adicionar Documento
         </Button>
       </div>
 
@@ -305,7 +312,7 @@ export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabP
           <CardContent className="py-8 text-center text-muted-foreground">
             <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p>Nenhum documento cadastrado</p>
-            <p className="text-xs mt-1">Faça upload do primeiro documento</p>
+            <p className="text-xs mt-1">Adicione o primeiro documento</p>
           </CardContent>
         </Card>
       )}
@@ -335,7 +342,7 @@ export default function EmployeeDocumentsTab({ employee }: EmployeeDocumentsTabP
               <Input
                 value={formData.titulo}
                 onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                placeholder="Ex: RG - Frente e Verso"
+                placeholder="Ex: Contrato de Trabalho - Assinado"
               />
             </div>
             <div className="space-y-2">
