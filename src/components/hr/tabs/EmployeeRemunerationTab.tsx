@@ -1,11 +1,16 @@
+import { useState } from 'react';
 import { Employee } from '@/types/hr';
-import { useEmployeeSdrPayouts } from '@/hooks/useEmployees';
+import { useEmployeeSdrPayouts, useEmployeeMutations } from '@/hooks/useEmployees';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DollarSign, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, AlertCircle, Pencil, X, Save } from 'lucide-react';
 
 interface EmployeeRemunerationTabProps {
   employee: Employee;
@@ -25,6 +30,26 @@ const formatMonth = (anoMes: string) => {
 
 export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerationTabProps) {
   const { data: payouts, isLoading: payoutsLoading } = useEmployeeSdrPayouts(employee.sdr_id);
+  const { updateEmployee } = useEmployeeMutations();
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    salario_base: employee.salario_base || 0,
+    nivel: employee.nivel || 1,
+    banco: employee.banco || '',
+    agencia: employee.agencia || '',
+    conta: employee.conta || '',
+    tipo_conta: employee.tipo_conta || '',
+    pix: employee.pix || '',
+  });
+
+  const handleSave = () => {
+    updateEmployee.mutate(
+      { id: employee.id, data: formData },
+      {
+        onSuccess: () => setIsEditing(false),
+      }
+    );
+  };
 
   const InfoRow = ({ label, value }: { label: string; value: string | null }) => (
     <div className="flex justify-between py-2">
@@ -37,15 +62,62 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
     <div className="space-y-4">
       {/* Dados de Remuneração Base */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <DollarSign className="h-4 w-4" />
             Remuneração Base
           </CardTitle>
+          {!isEditing ? (
+            <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Editar
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={updateEmployee.isPending}>
+                <Save className="h-4 w-4 mr-1" />
+                Salvar
+              </Button>
+            </div>
+          )}
         </CardHeader>
-        <CardContent className="divide-y">
-          <InfoRow label="Salário Base" value={formatCurrency(employee.salario_base)} />
-          <InfoRow label="Nível" value={`Nível ${employee.nivel}`} />
+        <CardContent>
+          {isEditing ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Salário Base (R$)</Label>
+                <Input
+                  type="number"
+                  value={formData.salario_base}
+                  onChange={(e) => setFormData({ ...formData, salario_base: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Nível</Label>
+                <Select
+                  value={String(formData.nivel)}
+                  onValueChange={(v) => setFormData({ ...formData, nivel: Number(v) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                      <SelectItem key={n} value={String(n)}>Nível {n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y">
+              <InfoRow label="Salário Base" value={formatCurrency(employee.salario_base)} />
+              <InfoRow label="Nível" value={`Nível ${employee.nivel}`} />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -54,12 +126,64 @@ export default function EmployeeRemunerationTab({ employee }: EmployeeRemunerati
         <CardHeader>
           <CardTitle className="text-base">Dados Bancários</CardTitle>
         </CardHeader>
-        <CardContent className="divide-y">
-          <InfoRow label="Banco" value={employee.banco} />
-          <InfoRow label="Agência" value={employee.agencia} />
-          <InfoRow label="Conta" value={employee.conta} />
-          <InfoRow label="Tipo de Conta" value={employee.tipo_conta} />
-          <InfoRow label="PIX" value={employee.pix} />
+        <CardContent>
+          {isEditing ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Banco</Label>
+                <Input
+                  value={formData.banco}
+                  onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
+                  placeholder="Ex: Nubank, Itaú..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Agência</Label>
+                <Input
+                  value={formData.agencia}
+                  onChange={(e) => setFormData({ ...formData, agencia: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Conta</Label>
+                <Input
+                  value={formData.conta}
+                  onChange={(e) => setFormData({ ...formData, conta: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo de Conta</Label>
+                <Select
+                  value={formData.tipo_conta}
+                  onValueChange={(v) => setFormData({ ...formData, tipo_conta: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="corrente">Corrente</SelectItem>
+                    <SelectItem value="poupanca">Poupança</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label>Chave PIX</Label>
+                <Input
+                  value={formData.pix}
+                  onChange={(e) => setFormData({ ...formData, pix: e.target.value })}
+                  placeholder="CPF, email, telefone ou chave aleatória"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y">
+              <InfoRow label="Banco" value={employee.banco} />
+              <InfoRow label="Agência" value={employee.agencia} />
+              <InfoRow label="Conta" value={employee.conta} />
+              <InfoRow label="Tipo de Conta" value={employee.tipo_conta} />
+              <InfoRow label="PIX" value={employee.pix} />
+            </div>
+          )}
         </CardContent>
       </Card>
 
