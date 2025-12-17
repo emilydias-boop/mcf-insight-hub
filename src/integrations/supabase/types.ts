@@ -3679,6 +3679,7 @@ export type Database = {
         | "closer"
         | "coordenador"
         | "rh"
+        | "financeiro"
       auction_status: "ativo" | "encerrado" | "cancelado"
       flag_category:
         | "desempenho"
@@ -3724,6 +3725,7 @@ export type Database = {
         | "fechamento_sdr"
         | "tv_sdr"
         | "usuarios"
+        | "financeiro"
       target_period: "mensal" | "trimestral" | "anual"
       target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
@@ -3872,6 +3874,7 @@ export const Constants = {
         "closer",
         "coordenador",
         "rh",
+        "financeiro",
       ],
       auction_status: ["ativo", "encerrado", "cancelado"],
       flag_category: [
@@ -3921,6 +3924,7 @@ export const Constants = {
         "fechamento_sdr",
         "tv_sdr",
         "usuarios",
+        "financeiro",
       ],
       target_period: ["mensal", "trimestral", "anual"],
       target_type: ["receita", "vendas", "leads", "conversao", "custom"],
