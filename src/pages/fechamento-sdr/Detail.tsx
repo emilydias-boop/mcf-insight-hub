@@ -193,27 +193,27 @@ const FechamentoSDRDetail = () => {
   const metUltrameta = avgPerformance >= 100;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate(-1)}>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-3">
+            <h1 className="text-lg font-semibold flex items-center gap-2">
               {payout.sdr?.name || 'SDR'}
               <SdrStatusBadge status={payout.status} />
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Fechamento de {payout.ano_mes}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleExportIndividual}>
-            <Download className="h-4 w-4 mr-2" />
+          <Button variant="outline" size="sm" onClick={handleExportIndividual}>
+            <Download className="h-3.5 w-3.5 mr-1.5" />
             Exportar
           </Button>
 
@@ -222,15 +222,15 @@ const FechamentoSDRDetail = () => {
               {canEdit && (
                 <>
                   {payout.status === 'DRAFT' && (
-                    <Button onClick={handleApprove} disabled={updateStatus.isPending}>
-                      <Check className="h-4 w-4 mr-2" />
+                    <Button size="sm" onClick={handleApprove} disabled={updateStatus.isPending}>
+                      <Check className="h-3.5 w-3.5 mr-1.5" />
                       Aprovar
                     </Button>
                   )}
 
                   {payout.status === 'APPROVED' && (
-                    <Button onClick={handleLock} disabled={updateStatus.isPending}>
-                      <Lock className="h-4 w-4 mr-2" />
+                    <Button size="sm" onClick={handleLock} disabled={updateStatus.isPending}>
+                      <Lock className="h-3.5 w-3.5 mr-1.5" />
                       Travar Mês
                     </Button>
                   )}
@@ -238,8 +238,8 @@ const FechamentoSDRDetail = () => {
               )}
 
               {canReopen && (
-                <Button variant="outline" onClick={handleReopen} disabled={updateStatus.isPending}>
-                  <Unlock className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" onClick={handleReopen} disabled={updateStatus.isPending}>
+                  <Unlock className="h-3.5 w-3.5 mr-1.5" />
                   Reabrir
                 </Button>
               )}
@@ -249,83 +249,83 @@ const FechamentoSDRDetail = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Target className="h-4 w-4" />
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+              <Target className="h-3.5 w-3.5" />
               OTE Total
             </div>
-            <div className="text-2xl font-bold mt-1">
+            <div className="text-xl font-bold mt-1">
               {formatCurrency(compPlan?.ote_total || 4000)}
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Wallet className="h-4 w-4" />
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+              <Wallet className="h-3.5 w-3.5" />
               Fixo
             </div>
-            <div className="text-2xl font-bold mt-1">
+            <div className="text-xl font-bold mt-1">
               {formatCurrency(payout.valor_fixo || 0)}
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <DollarSign className="h-4 w-4" />
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+              <DollarSign className="h-3.5 w-3.5" />
               Variável
             </div>
-            <div className="text-2xl font-bold mt-1 text-primary">
+            <div className="text-xl font-bold mt-1 text-primary">
               {formatCurrency(payout.valor_variavel_total || 0)}
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-primary/10 border-primary/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-primary text-sm">
-              <CreditCard className="h-4 w-4" />
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-primary text-xs">
+              <CreditCard className="h-3.5 w-3.5" />
               Total Conta
             </div>
-            <div className="text-2xl font-bold mt-1 text-primary">
+            <div className="text-xl font-bold mt-1 text-primary">
               {formatCurrency(payout.total_conta || 0)}
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-muted-foreground text-sm">iFood Mensal</div>
-            <div className="text-2xl font-bold mt-1">
+          <CardContent className="pt-4 pb-3">
+            <div className="text-muted-foreground/70 text-xs">iFood Mensal</div>
+            <div className="text-xl font-bold mt-1">
               {formatCurrency(payout.ifood_mensal || 0)}
             </div>
           </CardContent>
         </Card>
 
         <Card className={payout.ifood_ultrameta_autorizado ? 'bg-green-500/10 border-green-500/20' : ''}>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-sm">
-              <Gift className="h-4 w-4" />
-              <span className={payout.ifood_ultrameta_autorizado ? 'text-green-500' : 'text-muted-foreground'}>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-1.5 text-xs">
+              <Gift className="h-3.5 w-3.5" />
+              <span className={payout.ifood_ultrameta_autorizado ? 'text-green-500' : 'text-muted-foreground/70'}>
                 iFood Ultrameta
               </span>
               {payout.ifood_ultrameta_autorizado && (
-                <CheckCircle className="h-4 w-4 text-green-500" />
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
               )}
             </div>
-            <div className={`text-2xl font-bold mt-1 ${payout.ifood_ultrameta_autorizado ? 'text-green-500' : ''}`}>
+            <div className={`text-xl font-bold mt-1 ${payout.ifood_ultrameta_autorizado ? 'text-green-500' : ''}`}>
               {formatCurrency(payout.ifood_ultrameta || 0)}
             </div>
             {metUltrameta && isAdmin && !payout.ifood_ultrameta_autorizado && payout.status !== 'LOCKED' && (
               <Button 
                 size="sm" 
                 variant="outline" 
-                className="mt-2 w-full text-xs"
+                className="mt-1.5 w-full text-[10px] h-6"
                 onClick={handleAuthorizeUltrameta}
                 disabled={authorizeUltrameta.isPending}
               >
@@ -336,7 +336,7 @@ const FechamentoSDRDetail = () => {
               <Button 
                 size="sm" 
                 variant="ghost" 
-                className="mt-2 w-full text-xs text-muted-foreground"
+                className="mt-1.5 w-full text-[10px] h-6 text-muted-foreground"
                 onClick={handleAuthorizeUltrameta}
                 disabled={authorizeUltrameta.isPending}
               >
@@ -363,8 +363,8 @@ const FechamentoSDRDetail = () => {
 
       {/* Indicators Grid */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Indicadores de Meta</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h2 className="text-sm font-semibold mb-3">Indicadores de Meta</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <SdrIndicatorCard
             title="Reuniões Agendadas"
             meta={compPlan?.meta_reunioes_agendadas || 0}
@@ -426,12 +426,12 @@ const FechamentoSDRDetail = () => {
 
       {/* Adjustments (only for admin/manager) */}
       {!isReadOnly && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Ajustes Manuais</CardTitle>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-semibold">Ajustes Manuais</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               <SdrAdjustmentForm
                 payoutId={payout.id}
                 disabled={!canEdit}
@@ -440,32 +440,32 @@ const FechamentoSDRDetail = () => {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Histórico de Ajustes</CardTitle>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-semibold">Histórico de Ajustes</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               {adjustments.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground/70 text-xs">
                   Nenhum ajuste registrado.
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {adjustments.map((adj: PayoutAdjustment, idx: number) => (
                     <div
                       key={idx}
-                      className="flex items-start justify-between p-3 rounded-lg bg-muted/50"
+                      className="flex items-start justify-between p-2.5 rounded-lg bg-muted/50"
                     >
                       <div>
-                        <div className="font-medium capitalize">{adj.tipo}</div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="text-sm font-medium capitalize">{adj.tipo}</div>
+                        <div className="text-xs text-muted-foreground/70">
                           {adj.motivo}
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="text-[10px] text-muted-foreground/60 mt-0.5">
                           {formatDateTime(adj.created_at)}
                         </div>
                       </div>
                       <div
-                        className={`font-bold ${
+                        className={`text-sm font-bold ${
                           adj.valor >= 0 ? 'text-green-400' : 'text-red-400'
                         }`}
                       >

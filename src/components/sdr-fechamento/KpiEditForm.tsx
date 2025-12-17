@@ -116,18 +116,18 @@ export const KpiEditForm = ({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between py-3">
         <div>
-          <CardTitle className="text-lg">Editar KPIs</CardTitle>
+          <CardTitle className="text-sm font-semibold">Editar KPIs</CardTitle>
           {hasPendingFields && !isManualOverrideMonth && (
-            <p className="text-sm text-yellow-500 mt-1 flex items-center gap-1">
-              <AlertCircle className="h-4 w-4" />
+            <p className="text-xs text-yellow-500 mt-1 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
               Campos manuais pendentes de preenchimento
             </p>
           )}
           {isManualOverrideMonth && (
-            <p className="text-sm text-orange-500 mt-1 flex items-center gap-1">
-              <FileWarning className="h-4 w-4" />
+            <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+              <FileWarning className="h-3 w-3" />
               Mês com entrada manual de KPIs
             </p>
           )}
@@ -139,59 +139,59 @@ export const KpiEditForm = ({
             size="sm"
             onClick={handleSyncFromClint}
             disabled={disabled || syncKpis.isPending}
+            className="text-xs h-8"
           >
             {syncKpis.isPending ? (
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
             ) : (
-              <Cloud className="h-4 w-4 mr-2" />
+              <Cloud className="h-3.5 w-3.5 mr-1.5" />
             )}
             Sincronizar do Clint
           </Button>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         {/* Alerta para mês de entrada manual */}
         {isManualOverrideMonth && (
-          <Alert className="mb-4 border-orange-500/50 bg-orange-500/10">
-            <FileWarning className="h-4 w-4 text-orange-500" />
-            <AlertDescription className="text-orange-500">
+          <Alert className="mb-3 border-orange-500/50 bg-orange-500/10 py-2">
+            <FileWarning className="h-3.5 w-3.5 text-orange-500" />
+            <AlertDescription className="text-xs text-orange-500">
               <strong>Novembro 2025 - Entrada Manual:</strong> Devido a dados incompletos no Clint 
               (período 15-23/nov sem registro), os valores de R1 Agendadas, R1 Realizadas e No-Shows 
-              devem ser inseridos manualmente. Os cálculos de percentual e variável continuam automáticos.
+              devem ser inseridos manualmente.
             </AlertDescription>
           </Alert>
         )}
         
         {hasPendingFields && !isManualOverrideMonth && (
-          <Alert className="mb-4 border-yellow-500/50 bg-yellow-500/10">
-            <Edit3 className="h-4 w-4 text-yellow-500" />
-            <AlertDescription className="text-yellow-500">
+          <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10 py-2">
+            <Edit3 className="h-3.5 w-3.5 text-yellow-500" />
+            <AlertDescription className="text-xs text-yellow-500">
               <strong>Preencha os campos manuais:</strong> Tentativas de Ligações e Score de Organização 
-              devem ser inseridos manualmente pelo coordenador para completar o cálculo.
+              devem ser inseridos manualmente pelo coordenador.
             </AlertDescription>
           </Alert>
         )}
         
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             {/* Campo: Reuniões Agendadas - Manual para override months */}
-            <div className="space-y-2">
-              <Label htmlFor="reunioes_agendadas" className="flex items-center gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="reunioes_agendadas" className="flex items-center gap-1.5 text-xs">
                 Reuniões Agendadas
                 {isManualOverrideMonth ? (
-                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
-                    <Edit3 className="h-3 w-3 mr-1" />
-                    Manual (Exceção)
+                  <Badge variant="outline" className="text-[10px] h-4 border-orange-500 text-orange-500">
+                    Manual
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-xs">
-                    <Zap className="h-3 w-3 mr-1" />
+                  <Badge variant="secondary" className="text-[10px] h-4">
+                    <Zap className="h-2.5 w-2.5 mr-0.5" />
                     Auto
                   </Badge>
                 )}
               </Label>
               {compPlan && (
-                <span className="text-xs text-muted-foreground block">
+                <span className="text-[10px] text-muted-foreground/70 block">
                   Meta: {compPlan.meta_reunioes_agendadas}
                 </span>
               )}
@@ -203,28 +203,27 @@ export const KpiEditForm = ({
                 readOnly={!isManualOverrideMonth}
                 onChange={isManualOverrideMonth ? (e) => handleChange('reunioes_agendadas', e.target.value) : undefined}
                 disabled={disabled}
-                className={isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50"}
+                className={cn("h-8 text-sm", isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50")}
               />
             </div>
 
             {/* Campo: Reuniões Realizadas - Manual para override months */}
-            <div className="space-y-2">
-              <Label htmlFor="reunioes_realizadas" className="flex items-center gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="reunioes_realizadas" className="flex items-center gap-1.5 text-xs">
                 Reuniões Realizadas
                 {isManualOverrideMonth ? (
-                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
-                    <Edit3 className="h-3 w-3 mr-1" />
-                    Manual (Exceção)
+                  <Badge variant="outline" className="text-[10px] h-4 border-orange-500 text-orange-500">
+                    Manual
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-xs">
-                    <Zap className="h-3 w-3 mr-1" />
+                  <Badge variant="secondary" className="text-[10px] h-4">
+                    <Zap className="h-2.5 w-2.5 mr-0.5" />
                     Auto
                   </Badge>
                 )}
               </Label>
               {compPlan && (
-                <span className="text-xs text-muted-foreground block">
+                <span className="text-[10px] text-muted-foreground/70 block">
                   Meta: {compPlan.meta_reunioes_realizadas}
                 </span>
               )}
@@ -236,27 +235,26 @@ export const KpiEditForm = ({
                 readOnly={!isManualOverrideMonth}
                 onChange={isManualOverrideMonth ? (e) => handleChange('reunioes_realizadas', e.target.value) : undefined}
                 disabled={disabled}
-                className={isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50"}
+                className={cn("h-8 text-sm", isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50")}
               />
             </div>
 
             {/* Campo: No-Shows - Manual para override months */}
-            <div className="space-y-2">
-              <Label htmlFor="no_shows" className="flex items-center gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="no_shows" className="flex items-center gap-1.5 text-xs">
                 No-Shows
                 {isManualOverrideMonth ? (
-                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-500">
-                    <Edit3 className="h-3 w-3 mr-1" />
-                    Manual (Exceção)
+                  <Badge variant="outline" className="text-[10px] h-4 border-orange-500 text-orange-500">
+                    Manual
                   </Badge>
                 ) : (
-                  <Badge variant="secondary" className="text-xs">
-                    <Zap className="h-3 w-3 mr-1" />
+                  <Badge variant="secondary" className="text-[10px] h-4">
+                    <Zap className="h-2.5 w-2.5 mr-0.5" />
                     Auto
                   </Badge>
                 )}
               </Label>
-              <span className="text-xs text-muted-foreground block">
+              <span className="text-[10px] text-muted-foreground/70 block">
                 Taxa: {taxaNoShow}% / Max: 30%
               </span>
               <Input
@@ -267,24 +265,23 @@ export const KpiEditForm = ({
                 readOnly={!isManualOverrideMonth}
                 onChange={isManualOverrideMonth ? (e) => handleChange('no_shows', e.target.value) : undefined}
                 disabled={disabled}
-                className={isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50"}
+                className={cn("h-8 text-sm", isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50")}
               />
             </div>
 
             {/* Campo Manual: Tentativas de Ligações */}
-            <div className="space-y-2">
-              <Label htmlFor="tentativas_ligacoes" className="flex items-center gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="tentativas_ligacoes" className="flex items-center gap-1.5 text-xs">
                 Tentativas de Ligações
                 <Badge variant="outline" className={cn(
-                  "text-xs",
+                  "text-[10px] h-4",
                   tentativasPending ? "border-yellow-500 text-yellow-500" : "border-blue-500 text-blue-500"
                 )}>
-                  <Edit3 className="h-3 w-3 mr-1" />
                   Manual
                 </Badge>
               </Label>
               {compPlan && compPlan.meta_tentativas > 0 && (
-                <span className="text-xs text-muted-foreground block">
+                <span className="text-[10px] text-muted-foreground/70 block">
                   Meta: {compPlan.meta_tentativas}
                 </span>
               )}
@@ -296,26 +293,26 @@ export const KpiEditForm = ({
                 onChange={(e) => handleChange('tentativas_ligacoes', e.target.value)}
                 disabled={disabled}
                 className={cn(
+                  "h-8 text-sm",
                   tentativasPending && "border-yellow-500 focus-visible:ring-yellow-500"
                 )}
-                placeholder={tentativasPending ? "Preencha este campo" : undefined}
+                placeholder={tentativasPending ? "Preencha" : undefined}
               />
             </div>
 
             {/* Campo Manual: Score de Organização */}
-            <div className="space-y-2">
-              <Label htmlFor="score_organizacao" className="flex items-center gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="score_organizacao" className="flex items-center gap-1.5 text-xs">
                 Score de Organização (%)
                 <Badge variant="outline" className={cn(
-                  "text-xs",
+                  "text-[10px] h-4",
                   organizacaoPending ? "border-yellow-500 text-yellow-500" : "border-blue-500 text-blue-500"
                 )}>
-                  <Edit3 className="h-3 w-3 mr-1" />
                   Manual
                 </Badge>
               </Label>
               {compPlan && (
-                <span className="text-xs text-muted-foreground block">
+                <span className="text-[10px] text-muted-foreground/70 block">
                   Meta: {compPlan.meta_organizacao}%
                 </span>
               )}
@@ -328,37 +325,38 @@ export const KpiEditForm = ({
                 onChange={(e) => handleChange('score_organizacao', e.target.value)}
                 disabled={disabled}
                 className={cn(
+                  "h-8 text-sm",
                   organizacaoPending && "border-yellow-500 focus-visible:ring-yellow-500"
                 )}
-                placeholder={organizacaoPending ? "Preencha este campo" : undefined}
+                placeholder={organizacaoPending ? "Preencha" : undefined}
               />
             </div>
 
             {/* Campo Automático: Intermediações de Contrato */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5 text-xs">
                 Intermediações de Contrato
-                <Badge variant="secondary" className="text-xs">
-                  <Zap className="h-3 w-3 mr-1" />
+                <Badge variant="secondary" className="text-[10px] h-4">
+                  <Zap className="h-2.5 w-2.5 mr-0.5" />
                   Auto
                 </Badge>
               </Label>
-              <div className="h-10 px-3 py-2 rounded-md border bg-muted/50 flex items-center">
+              <div className="h-8 px-3 py-1.5 rounded-md border bg-muted/50 flex items-center text-sm">
                 <span className="font-medium">{intermediacoes}</span>
-                <span className="text-muted-foreground text-xs ml-2">(calculado da Hubla)</span>
+                <span className="text-muted-foreground/70 text-[10px] ml-1.5">(calculado da Hubla)</span>
               </div>
             </div>
           </div>
 
-          <Button type="submit" disabled={disabled || isSaving} className="w-full">
+          <Button type="submit" disabled={disabled || isSaving} className="w-full h-8 text-sm">
             {isSaving ? (
               <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                 Salvando...
               </>
             ) : (
               <>
-                <Save className="h-4 w-4 mr-2" />
+                <Save className="h-3.5 w-3.5 mr-1.5" />
                 Salvar e Recalcular
               </>
             )}
