@@ -446,17 +446,10 @@ async function handleDealCreated(supabase: any, data: any) {
     }
   }
 
-  // 4. Buscar owner (usuário responsável) - assumindo que temos profiles
-  let ownerId = null;
-  if (ownerName) {
-    const { data: owner } = await supabase
-      .from('profiles')
-      .select('id')
-      .ilike('full_name', ownerName)
-      .maybeSingle();
-    ownerId = owner?.id;
-    console.log('[DEAL.CREATED] Owner found:', ownerId);
-  }
+  // 4. Owner (usuário responsável) - salvar EMAIL diretamente para consistência com Clint
+  // O deal_user vem como email no formato: "julia.caroline@minhacasafinanciada.com"
+  const ownerId = ownerName || null;
+  console.log('[DEAL.CREATED] Owner (email):', ownerId);
 
   // 5. Detectar product_name baseado em tags, nome do deal ou origem
   const productName = extractProductFromDeal(data, originName);
@@ -722,6 +715,7 @@ async function handleDealStageChanged(supabase: any, data: any) {
         contact_id: contactId,
         stage_id: newStage.id,
         origin_id: originId,
+        owner_id: data.deal_user || data.deal?.user || null, // Salvar email como owner_id
         value: dealValue,
         custom_fields: {
           deal_user: data.deal_user,

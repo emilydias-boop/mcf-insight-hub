@@ -231,6 +231,9 @@ Deno.serve(async (req) => {
           const stageId = stageData?.id || null;
           const originId = stageData?.origin_id || null;
 
+          // Extrair owner_id: priorizar deal.user?.email (formato correto do Clint)
+          const ownerId = deal.user?.email || deal.owner_id || null;
+          
           await supabase.from('crm_deals').upsert(
             {
               clint_id: deal.id,
@@ -239,7 +242,7 @@ Deno.serve(async (req) => {
               stage_id: stageId,
               contact_id: contactId,
               origin_id: originId,
-              owner_id: deal.owner_id || null,
+              owner_id: ownerId,
               probability: deal.probability || null,
               expected_close_date: deal.expected_close_date || null,
               tags: deal.tags || [],
