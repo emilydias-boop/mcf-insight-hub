@@ -1,4 +1,4 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -6,23 +6,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, CheckCircle, Target as TargetIcon, Flag, FileText, Shield, Loader2, BookOpen } from "lucide-react";
-import { PlaybookUserProgress } from "@/components/playbook/PlaybookUserProgress";
-import { useUserDetails, useUserTargets, useUserFlags, useUserObservations, useUserPermissions } from "@/hooks/useUsers";
-import { useUpdateUserRole, useUpdateUserEmployment, useCreateUserTarget, useUpdateUserTarget, useCreateUserFlag, useResolveUserFlag, useCreateUserObservation, useUpdateUserPermissions } from "@/hooks/useUserMutations";
-import { UserTargetsForm } from "./UserTargetsForm";
-import { UserFlagForm } from "./UserFlagForm";
-import { UserObservationForm } from "./UserObservationForm";
+import { 
+  Loader2, Shield, Settings, Link2, KeyRound, 
+  Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw 
+} from "lucide-react";
+import { useUserDetails, useUserPermissions, useUserIntegrations } from "@/hooks/useUsers";
+import { 
+  useUpdateUserRole, 
+  useUpdateUserAccess, 
+  useUpdateUserPermissions, 
+  useUpdateUserIntegrations,
+  useSendPasswordReset 
+} from "@/hooks/useUserMutations";
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency } from "@/lib/formatters";
 import { format } from "date-fns";
-import { AppRole, ResourceType, PermissionLevel, UserStatus } from "@/types/user-management";
+import { ptBR } from "date-fns/locale";
+import { 
+  AppRole, 
+  ResourceType, 
+  PermissionLevel, 
+  AccessStatus,
+  ACCESS_STATUS_LABELS,
+  ROLE_LABELS,
+  RESOURCE_LABELS
+} from "@/types/user-management";
+import { cn } from "@/lib/utils";
 
 interface UserDetailsDrawerProps {
   userId: string | null;
@@ -32,81 +42,37 @@ interface UserDetailsDrawerProps {
 
 export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDrawerProps) {
   const { data: userDetails, isLoading: loadingDetails } = useUserDetails(userId);
-  const { data: targets = [], isLoading: loadingTargets } = useUserTargets(userId);
-  const { data: flags = [], isLoading: loadingFlags } = useUserFlags(userId);
-  const { data: observations = [], isLoading: loadingObservations } = useUserObservations(userId);
-  const { data: permissions = [], isLoading: loadingPermissions } = useUserPermissions(userId);
+  const { data: permissions = [] } = useUserPermissions(userId);
+  const { data: integrations } = useUserIntegrations(userId);
 
   const updateRole = useUpdateUserRole();
-  const updateEmployment = useUpdateUserEmployment();
-  const createTarget = useCreateUserTarget();
-  const updateTarget = useUpdateUserTarget();
-  const createFlag = useCreateUserFlag();
-  const resolveFlag = useResolveUserFlag();
-  const createObservation = useCreateUserObservation();
+  const updateAccess = useUpdateUserAccess();
   const updatePermissions = useUpdateUserPermissions();
+  const updateIntegrations = useUpdateUserIntegrations();
+  const sendPasswordReset = useSendPasswordReset();
 
-  const [showTargetForm, setShowTargetForm] = useState(false);
-  const [showFlagForm, setShowFlagForm] = useState(false);
-  const [showObservationForm, setShowObservationForm] = useState(false);
-  const [resolveDialog, setResolveDialog] = useState<{ open: boolean; flagId: string; notes: string }>({
-    open: false,
-    flagId: "",
-    notes: "",
-  });
-  const [editingTarget, setEditingTarget] = useState<any>(null);
-
-  // Employment form state
-  const [employmentData, setEmploymentData] = useState({
-    position: "",
-    department: "",
-    hire_date: "",
-    fixed_salary: 0,
-    ote: 0,
-    commission_rate: 0,
-    status: "ativo" as UserStatus,
+  // Form state for General tab
+  const [generalData, setGeneralData] = useState({
+    full_name: "",
+    email: "",
+    access_status: "ativo" as AccessStatus,
+    squad: "",
   });
 
-  // Update employment data when user details load
-  useEffect(() => {
-    if (userDetails) {
-      setEmploymentData({
-        position: userDetails.employment?.position || "",
-        department: userDetails.employment?.department || "",
-        hire_date: userDetails.employment?.hire_date || "",
-        fixed_salary: userDetails.employment?.fixed_salary || 0,
-        ote: userDetails.employment?.ote || 0,
-        commission_rate: userDetails.employment?.commission_rate || 0,
-        status: userDetails.employment?.status || "ativo",
-      });
-    }
-  }, [userDetails]);
+  // Form state for Security tab
+  const [blockedUntil, setBlockedUntil] = useState<string>("");
 
-  const handleRoleChange = (role: AppRole) => {
-    if (!userId) return;
-    updateRole.mutate({ userId, role });
-  };
+  // Form state for Permissions tab
+  const [permissionLevels, setPermissionLevels] = useState<Record<ResourceType, PermissionLevel>>(
+    {} as Record<ResourceType, PermissionLevel>
+  );
+  const [viewingScope, setViewingScope] = useState<'own' | 'team' | 'company'>('own');
 
-  const handleEmploymentUpdate = () => {
-    if (!userId) return;
-    updateEmployment.mutate({ userId, data: employmentData });
-  };
-
-  const handleResolveFlag = () => {
-    if (!userId || !resolveDialog.flagId) return;
-    resolveFlag.mutate(
-      {
-        id: resolveDialog.flagId,
-        userId,
-        notes: resolveDialog.notes,
-      },
-      {
-        onSuccess: () => {
-          setResolveDialog({ open: false, flagId: "", notes: "" });
-        },
-      }
-    );
-  };
+  // Form state for Integrations tab
+  const [integrationsData, setIntegrationsData] = useState({
+    clint_user_id: "",
+    twilio_agent_id: "",
+  });
 
   const allResources: ResourceType[] = [
     'dashboard', 'receita', 'custos', 'relatorios', 'alertas',
@@ -114,7 +80,29 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     'crm', 'fechamento_sdr', 'tv_sdr', 'usuarios'
   ];
 
-  const [permissionLevels, setPermissionLevels] = useState<Record<ResourceType, PermissionLevel>>({} as Record<ResourceType, PermissionLevel>);
+  // Grouped resources for better organization
+  const resourceGroups = {
+    'Dashboards': ['dashboard', 'tv_sdr'] as ResourceType[],
+    'CRM': ['crm'] as ResourceType[],
+    'Financeiro': ['receita', 'custos'] as ResourceType[],
+    'Relatórios & Alertas': ['relatorios', 'alertas'] as ResourceType[],
+    'SDR': ['fechamento_sdr'] as ResourceType[],
+    'Sistema': ['configuracoes', 'usuarios'] as ResourceType[],
+    'Outros': ['efeito_alavanca', 'projetos', 'credito', 'leilao'] as ResourceType[],
+  };
+
+  // Update form data when user details load
+  useEffect(() => {
+    if (userDetails) {
+      setGeneralData({
+        full_name: userDetails.full_name || "",
+        email: userDetails.email || "",
+        access_status: userDetails.access_status || "ativo",
+        squad: userDetails.squad || "",
+      });
+      setBlockedUntil(userDetails.blocked_until || "");
+    }
+  }, [userDetails]);
 
   // Update permission levels when permissions data loads
   useEffect(() => {
@@ -125,8 +113,47 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         initial[resource] = perm?.permission_level || 'none';
       });
       setPermissionLevels(initial as Record<ResourceType, PermissionLevel>);
+      
+      // Extract viewing scope from restrictions if exists
+      const anyPerm = permissions.find(p => p.restrictions?.viewing_scope);
+      if (anyPerm?.restrictions?.viewing_scope) {
+        setViewingScope(anyPerm.restrictions.viewing_scope);
+      }
     }
   }, [permissions, userId]);
+
+  // Update integrations data when loaded
+  useEffect(() => {
+    if (integrations) {
+      setIntegrationsData({
+        clint_user_id: integrations.clint_user_id || "",
+        twilio_agent_id: integrations.twilio_agent_id || "",
+      });
+    }
+  }, [integrations]);
+
+  const handleRoleChange = (role: AppRole) => {
+    if (!userId) return;
+    updateRole.mutate({ userId, role });
+  };
+
+  const handleSaveGeneral = () => {
+    if (!userId) return;
+    updateAccess.mutate({ userId, data: generalData });
+  };
+
+  const handleSaveBlockedUntil = () => {
+    if (!userId) return;
+    updateAccess.mutate({ 
+      userId, 
+      data: { blocked_until: blockedUntil || null } 
+    });
+  };
+
+  const handleSendPasswordReset = () => {
+    if (!userDetails?.email) return;
+    sendPasswordReset.mutate({ email: userDetails.email });
+  };
 
   const handlePermissionsUpdate = () => {
     if (!userId) return;
@@ -135,6 +162,11 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
       permission_level: level,
     }));
     updatePermissions.mutate({ userId, permissions: permsArray });
+  };
+
+  const handleSaveIntegrations = () => {
+    if (!userId) return;
+    updateIntegrations.mutate({ userId, data: integrationsData });
   };
 
   if (loadingDetails) {
@@ -151,53 +183,107 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
 
   if (!userDetails) return null;
 
-  const redFlags = flags.filter(f => f.flag_type === 'red' && !f.is_resolved);
-  const yellowFlags = flags.filter(f => f.flag_type === 'yellow' && !f.is_resolved);
+  const roleInfo = ROLE_LABELS[userDetails.role || 'viewer'] || ROLE_LABELS.viewer;
+  const statusInfo = ACCESS_STATUS_LABELS[userDetails.access_status || 'ativo'];
 
   return (
-    <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16">
-                <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                  {userDetails.full_name?.[0]?.toUpperCase() || userDetails.email[0].toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <SheetTitle className="text-2xl">{userDetails.full_name || "Sem nome"}</SheetTitle>
-                <p className="text-sm text-muted-foreground">{userDetails.email}</p>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+        {/* ===== HEADER FIXO ===== */}
+        <SheetHeader className="pb-4">
+          <div className="flex items-start gap-4">
+            <Avatar className="h-16 w-16 border-2 border-border">
+              <AvatarFallback className="bg-primary/10 text-primary text-xl font-semibold">
+                {userDetails.full_name?.[0]?.toUpperCase() || userDetails.email[0].toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-bold text-foreground truncate">
+                {userDetails.full_name || "Sem nome"}
+              </h2>
+              <p className="text-sm text-muted-foreground truncate">{userDetails.email}</p>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <Badge variant="outline" className={cn("text-xs", statusInfo.color)}>
+                  {statusInfo.label}
+                </Badge>
+                <Badge variant="outline" className={cn("text-xs", roleInfo.color)}>
+                  {roleInfo.label}
+                </Badge>
               </div>
             </div>
-          </SheetHeader>
+          </div>
+          
+          {/* Info dates */}
+          <div className="flex items-center gap-4 text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              <span>Criado: {userDetails.created_at 
+                ? format(new Date(userDetails.created_at), "dd/MM/yyyy", { locale: ptBR }) 
+                : "N/A"}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              <span>Último login: {userDetails.last_login_at 
+                ? format(new Date(userDetails.last_login_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) 
+                : "Nunca"}</span>
+            </div>
+          </div>
+        </SheetHeader>
 
-          <Tabs defaultValue="general" className="mt-6">
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="general">Geral</TabsTrigger>
-              <TabsTrigger value="employment">Emprego</TabsTrigger>
-              <TabsTrigger value="targets">Metas</TabsTrigger>
-              <TabsTrigger value="flags">Flags</TabsTrigger>
-              <TabsTrigger value="observations">Obs</TabsTrigger>
-              <TabsTrigger value="permissions">Permissões</TabsTrigger>
-            </TabsList>
+        {/* ===== TABS ===== */}
+        <Tabs defaultValue="general" className="mt-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="general" className="text-xs">
+              <Settings className="h-3 w-3 mr-1" />
+              Geral
+            </TabsTrigger>
+            <TabsTrigger value="security" className="text-xs">
+              <KeyRound className="h-3 w-3 mr-1" />
+              Segurança
+            </TabsTrigger>
+            <TabsTrigger value="permissions" className="text-xs">
+              <Shield className="h-3 w-3 mr-1" />
+              Permissões
+            </TabsTrigger>
+            <TabsTrigger value="integrations" className="text-xs">
+              <Link2 className="h-3 w-3 mr-1" />
+              Integrações
+            </TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="general" className="space-y-4">
-              {/* Bloco Playbook Progress */}
-              {userId && userDetails.role && (
-                <PlaybookUserProgress 
-                  userId={userId} 
-                  userRole={userDetails.role} 
-                />
-              )}
+          {/* ===== ABA GERAL ===== */}
+          <TabsContent value="general" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Informações de Acesso</CardTitle>
+                <CardDescription>Dados básicos da conta do usuário</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nome completo</Label>
+                    <Input
+                      value={generalData.full_name}
+                      onChange={(e) => setGeneralData({ ...generalData, full_name: e.target.value })}
+                      placeholder="Nome do usuário"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email de login</Label>
+                    <Input
+                      type="email"
+                      value={generalData.email}
+                      onChange={(e) => setGeneralData({ ...generalData, email: e.target.value })}
+                      placeholder="email@exemplo.com"
+                      disabled
+                    />
+                    <p className="text-xs text-muted-foreground">Email não pode ser alterado</p>
+                  </div>
+                </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informações Gerais</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label>Role</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Role de sistema</Label>
                     <Select value={userDetails.role || 'viewer'} onValueChange={handleRoleChange}>
                       <SelectTrigger>
                         <SelectValue />
@@ -205,377 +291,166 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                       <SelectContent>
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="viewer">Viewer</SelectItem>
+                        <SelectItem value="coordenador">Coordenador</SelectItem>
                         <SelectItem value="sdr">SDR</SelectItem>
                         <SelectItem value="closer">Closer</SelectItem>
-                        <SelectItem value="coordenador">Coordenador</SelectItem>
+                        <SelectItem value="viewer">Viewer</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div>
-                    <Label>Status</Label>
+                  <div className="space-y-2">
+                    <Label>Status de acesso</Label>
                     <Select 
-                      value={employmentData.status} 
-                      onValueChange={(value: UserStatus) => setEmploymentData({ ...employmentData, status: value })}
+                      value={generalData.access_status} 
+                      onValueChange={(value: AccessStatus) => setGeneralData({ ...generalData, access_status: value })}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ativo">✅ Ativo</SelectItem>
-                        <SelectItem value="ferias">🏖️ Férias</SelectItem>
-                        <SelectItem value="inativo">❌ Inativo</SelectItem>
-                        <SelectItem value="pendente_aprovacao">⏳ Pendente de Aprovação</SelectItem>
+                        <SelectItem value="bloqueado">🚫 Bloqueado</SelectItem>
+                        <SelectItem value="desativado">⏸️ Desativado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button 
-                    onClick={handleEmploymentUpdate} 
-                    size="sm" 
-                    className="w-full mt-2"
-                  >
-                    Salvar Status
-                  </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
 
-            <TabsContent value="employment" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Dados de Emprego</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label>Cargo</Label>
-                    <Input
-                      value={employmentData.position}
-                      onChange={(e) => setEmploymentData({ ...employmentData, position: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Departamento</Label>
-                    <Input
-                      value={employmentData.department}
-                      onChange={(e) => setEmploymentData({ ...employmentData, department: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Data de Contratação</Label>
-                    <Input
-                      type="date"
-                      value={employmentData.hire_date}
-                      onChange={(e) => setEmploymentData({ ...employmentData, hire_date: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Salário Fixo</Label>
-                    <Input
-                      type="number"
-                      value={employmentData.fixed_salary}
-                      onChange={(e) => setEmploymentData({ ...employmentData, fixed_salary: parseFloat(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>OTE (On-Target Earnings)</Label>
-                    <Input
-                      type="number"
-                      value={employmentData.ote}
-                      onChange={(e) => setEmploymentData({ ...employmentData, ote: parseFloat(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Taxa de Comissão (%)</Label>
-                    <Input
-                      type="number"
-                      value={employmentData.commission_rate}
-                      onChange={(e) => setEmploymentData({ ...employmentData, commission_rate: parseFloat(e.target.value) })}
-                    />
-                  </div>
-                  <Button onClick={handleEmploymentUpdate} className="w-full">
-                    Salvar Alterações
-                  </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                <div className="space-y-2">
+                  <Label>Squad / Equipe (opcional)</Label>
+                  <Input
+                    value={generalData.squad}
+                    onChange={(e) => setGeneralData({ ...generalData, squad: e.target.value })}
+                    placeholder="Ex: Inside Sales - Crédito"
+                  />
+                </div>
 
-            <TabsContent value="targets" className="space-y-4">
-              {!showTargetForm && !editingTarget && (
-                <Button onClick={() => setShowTargetForm(true)} className="w-full">
-                  <TargetIcon className="h-4 w-4 mr-2" />
-                  Adicionar Meta
+                <Button 
+                  onClick={handleSaveGeneral} 
+                  className="w-full"
+                  disabled={updateAccess.isPending}
+                >
+                  {updateAccess.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Salvar dados do usuário
                 </Button>
-              )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {(showTargetForm || editingTarget) && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{editingTarget ? "Editar Meta" : "Nova Meta"}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <UserTargetsForm
-                      userId={userId!}
-                      initialData={editingTarget}
-                      onSubmit={(data) => {
-                        if (editingTarget) {
-                          updateTarget.mutate(
-                            { id: editingTarget.id, userId: userId!, data },
-                            { onSuccess: () => setEditingTarget(null) }
-                          );
-                        } else {
-                          createTarget.mutate(data, { onSuccess: () => setShowTargetForm(false) });
-                        }
-                      }}
-                      onCancel={() => {
-                        setShowTargetForm(false);
-                        setEditingTarget(null);
-                      }}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-
-              {loadingTargets ? (
-                <div className="flex justify-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {targets.map((target) => {
-                    const progress = ((target.current_value || 0) / target.target_value) * 100;
-                    return (
-                      <Card key={target.id}>
-                        <CardContent className="pt-6">
-                          <div className="space-y-2">
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <h4 className="font-semibold">{target.name}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {target.type} • {target.period}
-                                </p>
-                              </div>
-                              <Badge variant={target.is_achieved ? "default" : "secondary"}>
-                                {target.is_achieved ? <CheckCircle className="h-3 w-3 mr-1" /> : null}
-                                {target.is_achieved ? "Atingida" : "Pendente"}
-                              </Badge>
-                            </div>
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-sm">
-                                <span>{formatCurrency(target.current_value || 0)}</span>
-                                <span>{formatCurrency(target.target_value)}</span>
-                              </div>
-                              <Progress value={Math.min(progress, 100)} />
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(target.start_date), "dd/MM/yyyy")} - {format(new Date(target.end_date), "dd/MM/yyyy")}
-                            </p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEditingTarget(target)}
-                              className="w-full mt-2"
-                            >
-                              Editar
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="flags" className="space-y-4">
-              {!showFlagForm && (
-                <Button onClick={() => setShowFlagForm(true)} className="w-full">
-                  <Flag className="h-4 w-4 mr-2" />
-                  Adicionar Flag
-                </Button>
-              )}
-
-              {showFlagForm && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Nova Flag</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <UserFlagForm
-                      userId={userId!}
-                      onSubmit={(data) => {
-                        createFlag.mutate(data, { onSuccess: () => setShowFlagForm(false) });
-                      }}
-                      onCancel={() => setShowFlagForm(false)}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-
-              {loadingFlags ? (
-                <div className="flex justify-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {redFlags.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4" />
-                        Red Flags ({redFlags.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {redFlags.map((flag) => (
-                          <Card key={flag.id} className="border-destructive/50">
-                            <CardContent className="pt-4">
-                              <div className="space-y-2">
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <h4 className="font-semibold">{flag.title}</h4>
-                                    <p className="text-sm text-muted-foreground">{flag.description}</p>
-                                  </div>
-                                  <Badge variant="destructive">Severidade: {flag.severity}</Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {format(new Date(flag.created_at), "dd/MM/yyyy HH:mm")}
-                                </p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setResolveDialog({ open: true, flagId: flag.id, notes: "" })}
-                                  className="w-full"
-                                >
-                                  Resolver
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {yellowFlags.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold text-warning mb-2 flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4" />
-                        Yellow Flags ({yellowFlags.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {yellowFlags.map((flag) => (
-                          <Card key={flag.id} className="border-warning/50">
-                            <CardContent className="pt-4">
-                              <div className="space-y-2">
-                                <div className="flex items-start justify-between">
-                                  <div>
-                                    <h4 className="font-semibold">{flag.title}</h4>
-                                    <p className="text-sm text-muted-foreground">{flag.description}</p>
-                                  </div>
-                                  <Badge className="bg-warning text-warning-foreground">Severidade: {flag.severity}</Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {format(new Date(flag.created_at), "dd/MM/yyyy HH:mm")}
-                                </p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setResolveDialog({ open: true, flagId: flag.id, notes: "" })}
-                                  className="w-full"
-                                >
-                                  Resolver
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="observations" className="space-y-4">
-              {!showObservationForm && (
-                <Button onClick={() => setShowObservationForm(true)} className="w-full">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Adicionar Observação
-                </Button>
-              )}
-
-              {showObservationForm && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Nova Observação</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <UserObservationForm
-                      userId={userId!}
-                      onSubmit={(data) => {
-                        createObservation.mutate(data, { onSuccess: () => setShowObservationForm(false) });
-                      }}
-                      onCancel={() => setShowObservationForm(false)}
-                    />
-                  </CardContent>
-                </Card>
-              )}
-
-              {loadingObservations ? (
-                <div className="flex justify-center p-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {observations.map((obs) => (
-                    <Card key={obs.id} className={obs.is_important ? "border-primary" : ""}>
-                      <CardContent className="pt-4">
-                        <div className="space-y-2">
-                          <div className="flex items-start justify-between">
-                            <h4 className="font-semibold">{obs.title}</h4>
-                            {obs.is_important && (
-                              <Badge variant="default">Importante</Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{obs.content}</p>
-                          {obs.category && (
-                            <Badge variant="outline">{obs.category}</Badge>
-                          )}
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(obs.created_at), "dd/MM/yyyy HH:mm")}
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="permissions" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Gerenciar Permissões
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {loadingPermissions ? (
-                    <div className="flex justify-center p-8">
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                    </div>
+          {/* ===== ABA SEGURANÇA ===== */}
+          <TabsContent value="security" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Ações de Segurança</CardTitle>
+                <CardDescription>Gerenciar credenciais e sessões</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={handleSendPasswordReset}
+                  disabled={sendPasswordReset.isPending}
+                >
+                  {sendPasswordReset.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
-                    <>
-                      {allResources.map((resource) => (
-                        <div key={resource} className="flex items-center justify-between">
-                          <Label className="capitalize">{resource.replace('_', ' ')}</Label>
+                    <Mail className="h-4 w-4 mr-2" />
+                  )}
+                  Enviar link de reset de senha
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  disabled
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Forçar logout em todos os dispositivos
+                  <Badge variant="secondary" className="ml-auto text-xs">Em breve</Badge>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Bloqueio Temporário</CardTitle>
+                <CardDescription>
+                  Se preenchido, o usuário não poderá fazer login até a data/hora especificada
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-2">
+                    <Label>Bloquear login até</Label>
+                    <Input
+                      type="datetime-local"
+                      value={blockedUntil ? blockedUntil.slice(0, 16) : ""}
+                      onChange={(e) => setBlockedUntil(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                    />
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setBlockedUntil("")}
+                    className="mt-6"
+                  >
+                    Limpar
+                  </Button>
+                </div>
+                {blockedUntil && (
+                  <div className="flex items-center gap-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded-md">
+                    <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                    <span className="text-xs text-yellow-500">
+                      Usuário bloqueado até {format(new Date(blockedUntil), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                  </div>
+                )}
+                <Button 
+                  onClick={handleSaveBlockedUntil} 
+                  variant="secondary"
+                  size="sm"
+                  disabled={updateAccess.isPending}
+                >
+                  Salvar bloqueio
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Histórico de Login</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-6 text-muted-foreground">
+                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Nenhum registro de login disponível.</p>
+                  <p className="text-xs mt-1">Os logs de autenticação não estão sendo capturados no momento.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ===== ABA PERMISSÕES ===== */}
+          <TabsContent value="permissions" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Permissões por Módulo</CardTitle>
+                <CardDescription>Defina o nível de acesso para cada área do sistema</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {Object.entries(resourceGroups).map(([groupName, resources]) => (
+                  <div key={groupName} className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">{groupName}</h4>
+                    <div className="space-y-2 pl-2">
+                      {resources.map((resource) => (
+                        <div key={resource} className="flex items-center justify-between py-1">
+                          <Label className="text-sm font-normal">{RESOURCE_LABELS[resource]}</Label>
                           <Select
-                            value={permissionLevels[resource]}
+                            value={permissionLevels[resource] || 'none'}
                             onValueChange={(value: PermissionLevel) =>
                               setPermissionLevels({ ...permissionLevels, [resource]: value })
                             }
                           >
-                            <SelectTrigger className="w-[180px]">
+                            <SelectTrigger className="w-[130px] h-8 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -587,41 +462,109 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                           </Select>
                         </div>
                       ))}
-                      <Separator />
-                      <Button onClick={handlePermissionsUpdate} className="w-full">
-                        Salvar Permissões
-                      </Button>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </SheetContent>
-      </Sheet>
+                    </div>
+                    <Separator className="my-2" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
 
-      <Dialog open={resolveDialog.open} onOpenChange={(open) => setResolveDialog({ ...resolveDialog, open })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Resolver Flag</DialogTitle>
-            <DialogDescription>
-              Adicione notas sobre a resolução desta flag.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={resolveDialog.notes}
-            onChange={(e) => setResolveDialog({ ...resolveDialog, notes: e.target.value })}
-            placeholder="Descreva como a flag foi resolvida..."
-            rows={4}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setResolveDialog({ open: false, flagId: "", notes: "" })}>
-              Cancelar
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Escopo de Visualização</CardTitle>
+                <CardDescription>Define quais dados o usuário pode ver</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="space-y-2">
+                  {[
+                    { value: 'own', label: 'Apenas os próprios dados' },
+                    { value: 'team', label: 'Equipe (se gestor)' },
+                    { value: 'company', label: 'Empresa inteira (se diretor/admin)' },
+                  ].map((option) => (
+                    <label 
+                      key={option.value}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="viewingScope"
+                        value={option.value}
+                        checked={viewingScope === option.value}
+                        onChange={(e) => setViewingScope(e.target.value as any)}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button 
+              onClick={handlePermissionsUpdate} 
+              className="w-full"
+              disabled={updatePermissions.isPending}
+            >
+              {updatePermissions.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Salvar Permissões
             </Button>
-            <Button onClick={handleResolveFlag}>Resolver</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          </TabsContent>
+
+          {/* ===== ABA INTEGRAÇÕES ===== */}
+          <TabsContent value="integrations" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">IDs de Integrações Externas</CardTitle>
+                <CardDescription>Vincule o usuário a sistemas externos</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Clint User ID</Label>
+                  <Input
+                    value={integrationsData.clint_user_id}
+                    onChange={(e) => setIntegrationsData({ ...integrationsData, clint_user_id: e.target.value })}
+                    placeholder="ID do usuário no Clint CRM"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Twilio Agent / Ramal</Label>
+                  <Input
+                    value={integrationsData.twilio_agent_id}
+                    onChange={(e) => setIntegrationsData({ ...integrationsData, twilio_agent_id: e.target.value })}
+                    placeholder="ID do agente ou número do ramal"
+                  />
+                </div>
+
+                <Button 
+                  onClick={handleSaveIntegrations} 
+                  className="w-full"
+                  disabled={updateIntegrations.isPending}
+                >
+                  {updateIntegrations.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Salvar Integrações
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Sincronização</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  disabled
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Re-sincronizar com Clint
+                  <Badge variant="secondary" className="ml-auto text-xs">Em breve</Badge>
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </SheetContent>
+    </Sheet>
   );
 }

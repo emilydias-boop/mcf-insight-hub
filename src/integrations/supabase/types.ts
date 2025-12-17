@@ -1677,27 +1677,39 @@ export type Database = {
       }
       profiles: {
         Row: {
+          access_status: string | null
           avatar_url: string | null
+          blocked_until: string | null
           created_at: string | null
           email: string | null
           full_name: string | null
           id: string
+          last_login_at: string | null
+          squad: string | null
           updated_at: string | null
         }
         Insert: {
+          access_status?: string | null
           avatar_url?: string | null
+          blocked_until?: string | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
           id: string
+          last_login_at?: string | null
+          squad?: string | null
           updated_at?: string | null
         }
         Update: {
+          access_status?: string | null
           avatar_url?: string | null
+          blocked_until?: string | null
           created_at?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
+          last_login_at?: string | null
+          squad?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -2590,6 +2602,36 @@ export type Database = {
           resolved_by?: string | null
           severity?: number | null
           title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_integrations: {
+        Row: {
+          clint_user_id: string | null
+          created_at: string | null
+          id: string
+          other_integrations: Json | null
+          twilio_agent_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          clint_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          other_integrations?: Json | null
+          twilio_agent_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          clint_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          other_integrations?: Json | null
+          twilio_agent_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
