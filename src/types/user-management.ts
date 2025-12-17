@@ -164,6 +164,8 @@ export const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   sdr: { label: 'SDR', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
   closer: { label: 'Closer', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
   viewer: { label: 'Viewer', color: 'bg-muted text-muted-foreground border-border' },
+  financeiro: { label: 'Financeiro', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  rh: { label: 'RH', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
 };
 
 export const RESOURCE_LABELS: Record<ResourceType, string> = {
@@ -181,4 +183,5 @@ export const RESOURCE_LABELS: Record<ResourceType, string> = {
   fechamento_sdr: 'Fechamento SDR',
   tv_sdr: 'TV SDR',
   usuarios: 'Gestão de Usuários',
+  financeiro: 'Módulo Financeiro',
 };

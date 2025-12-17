@@ -53,7 +53,7 @@ import {
 import { useLocation } from "react-router-dom";
 import { ResourceType } from "@/types/user-management";
 
-type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'rh';
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'rh' | 'financeiro';
 
 interface MenuItem {
   title: string;
@@ -131,6 +131,7 @@ const menuItems: MenuItem[] = [
   { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, resource: "fechamento_sdr", requiredRoles: ['sdr'] },
   { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
   { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
+  { title: "Financeiro", url: "/financeiro", icon: Receipt, resource: "financeiro" as any, requiredRoles: ['admin', 'financeiro'] },
   { title: "Usuários", url: "/usuarios", icon: Users, resource: "usuarios", requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, resource: "configuracoes", requiredRoles: ['admin'] },
 ];

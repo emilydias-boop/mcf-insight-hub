@@ -50,6 +50,7 @@ import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
 import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
 import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import RHColaboradores from "./pages/rh/Colaboradores";
+import Financeiro from "./pages/Financeiro";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -105,6 +106,7 @@ const App = () => (
               <Route path="meu-fechamento" element={<ResourceGuard resource="fechamento_sdr"><MeuFechamento /></ResourceGuard>} />
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
+              <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
