@@ -110,7 +110,7 @@ export interface RhNfse {
   arquivo_url: string | null;
   storage_path: string | null;
   data_envio_nfse: string | null;
-  status_nfse: 'pendente_envio' | 'nota_enviada';
+  status_nfse: 'pendente_envio' | 'nota_enviada' | 'em_analise' | 'aprovada' | 'devolvida';
   status_pagamento: 'pendente' | 'pago' | 'em_atraso';
   data_pagamento: string | null;
   observacoes: string | null;
@@ -144,7 +144,10 @@ export const DOCUMENT_STATUS_LABELS: Record<EmployeeDocument['status'], { label:
 
 export const NFSE_STATUS_LABELS: Record<RhNfse['status_nfse'], { label: string; color: string }> = {
   pendente_envio: { label: 'Pendente envio', color: 'bg-yellow-500' },
-  nota_enviada: { label: 'Nota enviada', color: 'bg-green-500' },
+  nota_enviada: { label: 'Nota enviada', color: 'bg-blue-500' },
+  em_analise: { label: 'Em análise', color: 'bg-purple-500' },
+  aprovada: { label: 'Aprovada', color: 'bg-green-500' },
+  devolvida: { label: 'Devolvida', color: 'bg-red-500' },
 };
 
 export const NFSE_PAGAMENTO_LABELS: Record<RhNfse['status_pagamento'], { label: string; color: string }> = {
