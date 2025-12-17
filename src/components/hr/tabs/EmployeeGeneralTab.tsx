@@ -97,12 +97,12 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
             <div className="space-y-2">
               <Label>Gestor Direto</Label>
               <Select
-                value={formData.gestor_id || ''}
-                onValueChange={(v) => setFormData({ ...formData, gestor_id: v || null })}
+                value={formData.gestor_id || '_none'}
+                onValueChange={(v) => setFormData({ ...formData, gestor_id: v === '_none' ? null : v })}
               >
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="_none">Nenhum</SelectItem>
                   {gestorOptions.map((gestor) => (
                     <SelectItem key={gestor.id} value={gestor.id}>{gestor.nome_completo}</SelectItem>
                   ))}
