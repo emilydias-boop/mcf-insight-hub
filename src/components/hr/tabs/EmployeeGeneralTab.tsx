@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Employee, EMPLOYEE_STATUS_LABELS, CARGO_OPTIONS, SQUAD_OPTIONS, TIPO_VINCULO_OPTIONS } from '@/types/hr';
 import { useEmployeeMutations, useEmployees } from '@/hooks/useEmployees';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,11 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
   const [addressOpen, setAddressOpen] = useState(false);
   const { updateEmployee } = useEmployeeMutations();
   const { data: employees } = useEmployees();
+
+  // Sync formData when employee changes
+  useEffect(() => {
+    setFormData(employee);
+  }, [employee]);
 
   // Lista de possíveis gestores (excluindo o próprio colaborador)
   const gestorOptions = employees?.filter(e => e.id !== employee.id) || [];
@@ -69,11 +74,12 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
             <div className="space-y-2">
               <Label>Cargo / Função</Label>
               <Select
-                value={formData.cargo || ''}
-                onValueChange={(v) => setFormData({ ...formData, cargo: v })}
+                value={formData.cargo || '_none'}
+                onValueChange={(v) => setFormData({ ...formData, cargo: v === '_none' ? null : v })}
               >
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="_none">Selecione...</SelectItem>
                   {CARGO_OPTIONS.map((cargo) => (
                     <SelectItem key={cargo} value={cargo}>{cargo}</SelectItem>
                   ))}
@@ -83,11 +89,12 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
             <div className="space-y-2">
               <Label>Squad / Equipe</Label>
               <Select
-                value={formData.squad || ''}
-                onValueChange={(v) => setFormData({ ...formData, squad: v })}
+                value={formData.squad || '_none'}
+                onValueChange={(v) => setFormData({ ...formData, squad: v === '_none' ? null : v })}
               >
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="_none">Selecione...</SelectItem>
                   {SQUAD_OPTIONS.map((squad) => (
                     <SelectItem key={squad} value={squad}>{squad}</SelectItem>
                   ))}
