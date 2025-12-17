@@ -1,17 +1,14 @@
-import { Building2, AlertCircle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMyEmployee, useMyEmployeeGestor } from "@/hooks/useMyEmployee";
-import { EMPLOYEE_STATUS_LABELS } from "@/types/hr";
-import { MeuRHGeralTab } from "@/components/meu-rh/MeuRHGeralTab";
-import { MeuRHContratoTab } from "@/components/meu-rh/MeuRHContratoTab";
-import { MeuRHRemuneracaoTab } from "@/components/meu-rh/MeuRHRemuneracaoTab";
-import { MeuRHNfseTab } from "@/components/meu-rh/MeuRHNfseTab";
-import { MeuRHDocumentosTab } from "@/components/meu-rh/MeuRHDocumentosTab";
-import { MeuRHHistoricoTab } from "@/components/meu-rh/MeuRHHistoricoTab";
+import { MeuRHHeader } from "@/components/meu-rh/MeuRHHeader";
+import { MeuRHVinculoSection } from "@/components/meu-rh/MeuRHVinculoSection";
+import { MeuRHDadosPessoaisSection } from "@/components/meu-rh/MeuRHDadosPessoaisSection";
+import { MeuRHRemuneracaoSection } from "@/components/meu-rh/MeuRHRemuneracaoSection";
+import { MeuRHNfseSection } from "@/components/meu-rh/MeuRHNfseSection";
+import { MeuRHDocumentosSection } from "@/components/meu-rh/MeuRHDocumentosSection";
+import { MeuRHHistoricoSection } from "@/components/meu-rh/MeuRHHistoricoSection";
 
 export default function MeuRH() {
   const { data: employee, isLoading, error } = useMyEmployee();
@@ -19,9 +16,20 @@ export default function MeuRH() {
 
   if (isLoading) {
     return (
-      <div className="p-5 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-64" />
+      <div className="max-w-[1200px] mx-auto p-5 space-y-6">
+        <div className="flex items-start gap-4">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-64" />
+          </div>
+        </div>
+        <Skeleton className="h-24 w-full" />
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-40" />
+          <Skeleton className="h-40" />
+        </div>
         <Skeleton className="h-32 w-full" />
       </div>
     );
@@ -29,7 +37,7 @@ export default function MeuRH() {
 
   if (error) {
     return (
-      <div className="p-5">
+      <div className="max-w-[1200px] mx-auto p-5">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -42,7 +50,7 @@ export default function MeuRH() {
 
   if (!employee) {
     return (
-      <div className="p-5">
+      <div className="max-w-[1200px] mx-auto p-5">
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -53,79 +61,30 @@ export default function MeuRH() {
     );
   }
 
-  const statusConfig = EMPLOYEE_STATUS_LABELS[employee.status] || { label: employee.status, color: 'bg-gray-500' };
-
   return (
-    <div className="p-5 space-y-4">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            Meu RH
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Veja seus dados cadastrais, contrato e status de pagamentos
-          </p>
-        </div>
+    <div className="max-w-[1200px] mx-auto p-5 space-y-6">
+      {/* 1. Header */}
+      <MeuRHHeader employee={employee} gestorName={gestorName} />
 
-        {/* Summary Card */}
-        <Card className="min-w-[280px]">
-          <CardContent className="pt-4 pb-3 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-sm">{employee.nome_completo}</span>
-              <Badge className={`${statusConfig.color} text-white text-[10px]`}>
-                {statusConfig.label}
-              </Badge>
-            </div>
-            <div className="text-xs text-muted-foreground space-y-0.5">
-              <p><span className="text-muted-foreground/70">Cargo:</span> {employee.cargo || '-'}</p>
-              <p><span className="text-muted-foreground/70">Equipe:</span> {employee.squad || '-'}</p>
-              <p><span className="text-muted-foreground/70">Coordenador:</span> {gestorName || '-'}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* 2. Resumo do vínculo */}
+      <MeuRHVinculoSection employee={employee} />
 
-      {/* Tabs */}
-      <Tabs defaultValue="geral" className="w-full">
-        <TabsList className="h-9">
-          <TabsTrigger value="geral" className="text-xs">Geral</TabsTrigger>
-          <TabsTrigger value="contrato" className="text-xs">Contrato</TabsTrigger>
-          <TabsTrigger value="remuneracao" className="text-xs">Remuneração</TabsTrigger>
-          {employee.tipo_contrato === 'PJ' && (
-            <TabsTrigger value="nfse" className="text-xs">NFSe</TabsTrigger>
-          )}
-          <TabsTrigger value="documentos" className="text-xs">Documentos</TabsTrigger>
-          <TabsTrigger value="historico" className="text-xs">Histórico</TabsTrigger>
-        </TabsList>
+      {/* 3. Dados pessoais */}
+      <MeuRHDadosPessoaisSection employee={employee} />
 
-        <TabsContent value="geral" className="mt-4">
-          <MeuRHGeralTab employee={employee} />
-        </TabsContent>
+      {/* 4. Remuneração */}
+      <MeuRHRemuneracaoSection employee={employee} />
 
-        <TabsContent value="contrato" className="mt-4">
-          <MeuRHContratoTab employee={employee} />
-        </TabsContent>
+      {/* 5. NFSe / Pagamentos (PJ only) */}
+      {employee.tipo_contrato === 'PJ' && (
+        <MeuRHNfseSection employee={employee} />
+      )}
 
-        <TabsContent value="remuneracao" className="mt-4">
-          <MeuRHRemuneracaoTab employee={employee} />
-        </TabsContent>
+      {/* 6. Documentos */}
+      <MeuRHDocumentosSection employee={employee} />
 
-        {employee.tipo_contrato === 'PJ' && (
-          <TabsContent value="nfse" className="mt-4">
-            <MeuRHNfseTab employee={employee} />
-          </TabsContent>
-        )}
-
-        <TabsContent value="documentos" className="mt-4">
-          <MeuRHDocumentosTab employee={employee} />
-        </TabsContent>
-
-        <TabsContent value="historico" className="mt-4">
-          <MeuRHHistoricoTab employee={employee} />
-        </TabsContent>
-      </Tabs>
+      {/* 7. Histórico */}
+      <MeuRHHistoricoSection employee={employee} />
     </div>
   );
 }
