@@ -227,6 +227,11 @@ export function AppSidebar() {
                           <SidebarMenuButton
                             tooltip={item.title}
                             className={isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}
+                            onClick={() => {
+                              if (isCollapsed) {
+                                toggleSidebar();
+                              }
+                            }}
                           >
                             <item.icon className="h-5 w-5" />
                             {!isCollapsed && (
@@ -267,6 +272,11 @@ export function AppSidebar() {
                         end={item.url === "/"}
                         className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        onClick={() => {
+                          if (isCollapsed) {
+                            toggleSidebar();
+                          }
+                        }}
                       >
                         <item.icon className="h-5 w-5" />
                         {!isCollapsed && <span>{item.title}</span>}
