@@ -189,25 +189,31 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="px-2 py-4 flex items-center justify-between">
+          <SidebarGroupLabel className="px-2 py-4 flex items-center justify-center">
             {isCollapsed ? (
-              <span className="text-xl font-bold text-primary">M</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="h-9 w-9 hover:bg-sidebar-accent"
+                title="Expandir sidebar"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
             ) : (
-              <span className="text-xl font-bold text-primary">MCF</span>
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xl font-bold text-primary">MCF</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleSidebar}
+                  className="h-7 w-7 flex-shrink-0 hover:bg-sidebar-accent"
+                  title="Colapsar sidebar"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="h-7 w-7 flex-shrink-0 hover:bg-sidebar-accent"
-              title={isCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </Button>
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -272,11 +278,6 @@ export function AppSidebar() {
                         end={item.url === "/"}
                         className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                        onClick={() => {
-                          if (isCollapsed) {
-                            toggleSidebar();
-                          }
-                        }}
                       >
                         <item.icon className="h-5 w-5" />
                         {!isCollapsed && <span>{item.title}</span>}

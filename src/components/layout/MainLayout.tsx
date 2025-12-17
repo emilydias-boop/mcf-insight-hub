@@ -13,7 +13,7 @@ export function MainLayout() {
           <header className="flex h-14 items-center justify-end gap-4 border-b border-border bg-background px-6">
             <RealTimeAlerts />
           </header>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden p-5">
             <Outlet />
           </div>
         </SidebarInset>
