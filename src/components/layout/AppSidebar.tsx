@@ -13,6 +13,8 @@ import {
   Users,
   LogOut,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   UserCircle,
   Tv,
   Calculator,
@@ -134,7 +136,7 @@ const menuItems: MenuItem[] = [
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const location = useLocation();
   const isCollapsed = state === "collapsed";
   const [myFilesOpen, setMyFilesOpen] = useState(false);
@@ -187,8 +189,25 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="px-2 py-4">
-            <span className="text-xl font-bold text-primary">MCF</span>
+          <SidebarGroupLabel className="px-2 py-4 flex items-center justify-between">
+            {isCollapsed ? (
+              <span className="text-xl font-bold text-primary">M</span>
+            ) : (
+              <span className="text-xl font-bold text-primary">MCF</span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="h-7 w-7 flex-shrink-0 hover:bg-sidebar-accent"
+              title={isCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+            >
+              {isCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </Button>
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
