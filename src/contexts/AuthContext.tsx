@@ -52,8 +52,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Defer role fetching with setTimeout to avoid deadlock
-          setTimeout(() => {
+          // Defer role fetching and access validation with setTimeout to avoid deadlock
+          setTimeout(async () => {
+            // Verificar status de acesso para sessões existentes
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('access_status, blocked_until')
+              .eq('id', session.user.id)
+              .single();
+
+            if (profile) {
+              const isBlocked = profile.access_status === 'bloqueado' || 
+                                profile.access_status === 'desativado' ||
+                                (profile.blocked_until && new Date(profile.blocked_until) > new Date());
+              
+              if (isBlocked) {
+                await supabase.auth.signOut();
+                setUser(null);
+                setSession(null);
+                setRole(null);
+                setLoading(false);
+                toast.error('Sua conta foi bloqueada ou desativada.');
+                return;
+              }
+            }
+
             fetchUserRole(session.user.id).then(role => {
               setRole(role);
               setLoading(false);
@@ -87,12 +110,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = async (email: string, password: string) => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
+      
+      // Verificar access_status e blocked_until antes de permitir acesso
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('access_status, blocked_until')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (!profileError && profile) {
+        // Verificar se conta está bloqueada
+        if (profile.access_status === 'bloqueado') {
+          await supabase.auth.signOut();
+          throw new Error('Sua conta está bloqueada. Entre em contato com o administrador.');
+        }
+        
+        // Verificar se conta está desativada
+        if (profile.access_status === 'desativado') {
+          await supabase.auth.signOut();
+          throw new Error('Sua conta foi desativada.');
+        }
+        
+        // Verificar bloqueio temporário
+        if (profile.blocked_until && new Date(profile.blocked_until) > new Date()) {
+          await supabase.auth.signOut();
+          const blockedDate = new Date(profile.blocked_until).toLocaleString('pt-BR');
+          throw new Error(`Sua conta está temporariamente bloqueada até ${blockedDate}.`);
+        }
+      }
+
+      // Atualizar last_login_at
+      await supabase
+        .from('profiles')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', authData.user.id);
       
       toast.success('Login realizado com sucesso!');
       navigate('/');

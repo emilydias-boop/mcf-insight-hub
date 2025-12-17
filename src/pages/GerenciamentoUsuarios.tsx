@@ -3,14 +3,13 @@ import { RoleGuard } from "@/components/auth/RoleGuard";
 import { useUsers } from "@/hooks/useUsers";
 import { UserStatsCards } from "@/components/user-management/UserStatsCards";
 import { UserDetailsDrawer } from "@/components/user-management/UserDetailsDrawer";
-import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Eye, Loader2, FileText } from "lucide-react";
+import { Search, Eye, Loader2 } from "lucide-react";
 import { ROLE_LABELS } from "@/types/user-management";
 import { cn } from "@/lib/utils";
 
@@ -20,11 +19,6 @@ export default function GerenciamentoUsuarios() {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [filesDrawerUser, setFilesDrawerUser] = useState<{
-    id: string;
-    name: string;
-    position: string;
-  } | null>(null);
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
@@ -132,30 +126,14 @@ export default function GerenciamentoUsuarios() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() =>
-                                  setFilesDrawerUser({
-                                    id: user.user_id,
-                                    name: user.full_name || user.email || 'Usuário',
-                                    position: user.position || "",
-                                  })
-                                }
-                                title="Arquivos pessoais"
-                              >
-                                <FileText className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedUserId(user.user_id)}
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Gerenciar
-                              </Button>
-                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedUserId(user.user_id)}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              Gerenciar
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );
@@ -178,15 +156,6 @@ export default function GerenciamentoUsuarios() {
         userId={selectedUserId}
         open={!!selectedUserId}
         onOpenChange={(open) => !open && setSelectedUserId(null)}
-      />
-
-      <DrawerArquivosUsuario
-        open={!!filesDrawerUser}
-        onOpenChange={(open) => !open && setFilesDrawerUser(null)}
-        mode="gestor"
-        userId={filesDrawerUser?.id}
-        userName={filesDrawerUser?.name}
-        userPosition={filesDrawerUser?.position}
       />
     </RoleGuard>
   );
