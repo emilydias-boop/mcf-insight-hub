@@ -173,11 +173,51 @@ export function useEmployeeMutations() {
     },
   });
 
+  const updateNote = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<EmployeeNote> }) => {
+      const { data: result, error } = await supabase
+        .from('employee_notes')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee-notes'] });
+      toast.success('Nota atualizada');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar nota: ' + error.message);
+    },
+  });
+
+  const deleteNote = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('employee_notes')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-notes'] });
+      toast.success('Nota removida');
+    },
+    onError: (error) => {
+      toast.error('Erro ao remover nota: ' + error.message);
+    },
+  });
+
   const createEvent = useMutation({
     mutationFn: async (data: Partial<EmployeeEvent>) => {
+      const { metadata, ...rest } = data;
       const { data: result, error } = await supabase
         .from('employee_events')
-        .insert(data as any)
+        .insert(rest as any)
         .select()
         .single();
       
@@ -193,12 +233,123 @@ export function useEmployeeMutations() {
     },
   });
 
+  const updateEvent = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<EmployeeEvent> }) => {
+      const { metadata, ...rest } = data;
+      const { data: result, error } = await supabase
+        .from('employee_events')
+        .update(rest as any)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-events'] });
+      toast.success('Evento atualizado');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar evento: ' + error.message);
+    },
+  });
+
+  const deleteEvent = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('employee_events')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-events'] });
+      toast.success('Evento removido');
+    },
+    onError: (error) => {
+      toast.error('Erro ao remover evento: ' + error.message);
+    },
+  });
+
+  const createDocument = useMutation({
+    mutationFn: async (data: Partial<EmployeeDocument>) => {
+      const { data: result, error } = await supabase
+        .from('employee_documents')
+        .insert(data as any)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['employee-documents', variables.employee_id] });
+      toast.success('Documento adicionado');
+    },
+    onError: (error) => {
+      toast.error('Erro ao adicionar documento: ' + error.message);
+    },
+  });
+
+  const updateDocument = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<EmployeeDocument> }) => {
+      const { data: result, error } = await supabase
+        .from('employee_documents')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-documents'] });
+      toast.success('Documento atualizado');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar documento: ' + error.message);
+    },
+  });
+
+  const deleteDocument = useMutation({
+    mutationFn: async ({ id, storagePath }: { id: string; storagePath?: string }) => {
+      // Delete file from storage if exists
+      if (storagePath) {
+        await supabase.storage.from('user-files').remove([storagePath]);
+      }
+      
+      const { error } = await supabase
+        .from('employee_documents')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-documents'] });
+      toast.success('Documento removido');
+    },
+    onError: (error) => {
+      toast.error('Erro ao remover documento: ' + error.message);
+    },
+  });
+
   return {
     createEmployee,
     updateEmployee,
     deleteEmployee,
     createNote,
+    updateNote,
+    deleteNote,
     createEvent,
+    updateEvent,
+    deleteEvent,
+    createDocument,
+    updateDocument,
+    deleteDocument,
   };
 }
 
