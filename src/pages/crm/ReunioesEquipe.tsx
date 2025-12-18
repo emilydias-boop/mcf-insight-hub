@@ -14,7 +14,6 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
-import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { SDR_LIST } from "@/constants/team";
 
@@ -53,7 +52,6 @@ export default function ReunioesEquipe() {
   const {
     teamKPIs,
     bySDR,
-    getMeetingsForSDR,
     isLoading,
     refetch,
   } = useTeamMeetingsData({
@@ -67,25 +65,6 @@ export default function ReunioesEquipe() {
     if (sdrFilter === "all") return bySDR;
     return bySDR.filter(s => s.sdrEmail === sdrFilter);
   }, [bySDR, sdrFilter]);
-
-  // Get selected SDR meetings
-  const selectedSdrMeetings = useMemo(() => {
-    if (!selectedSdr) return [];
-    return getMeetingsForSDR(selectedSdr.sdrEmail);
-  }, [selectedSdr, getMeetingsForSDR]);
-
-  // Handle SDR selection from table
-  const handleSelectSdr = (sdrEmail: string) => {
-    const sdr = bySDR.find(s => s.sdrEmail === sdrEmail);
-    if (sdr) {
-      // Toggle selection
-      if (selectedSdr?.sdrEmail === sdrEmail) {
-        setSelectedSdr(null);
-      } else {
-        setSelectedSdr(sdr);
-      }
-    }
-  };
 
   // Month navigation
   const handleMonthChange = (increment: number) => {
@@ -232,21 +211,9 @@ export default function ReunioesEquipe() {
           <SdrSummaryTable
             data={filteredBySDR}
             isLoading={isLoading}
-            selectedSdrEmail={selectedSdr?.sdrEmail}
-            onSelectSdr={handleSelectSdr}
           />
         </CardContent>
       </Card>
-
-      {/* Selected SDR Leads Panel */}
-      {selectedSdr && (
-        <SelectedSdrLeadsPanel
-          sdrName={selectedSdr.sdrName}
-          sdrEmail={selectedSdr.sdrEmail}
-          meetings={selectedSdrMeetings}
-          onClose={() => setSelectedSdr(null)}
-        />
-      )}
     </div>
   );
 }
