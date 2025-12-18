@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -9,15 +9,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
-import { ChevronRight } from "lucide-react";
+import { GhostCountBySdr } from "@/hooks/useGhostCountBySdr";
+import { ChevronRight, Ghost } from "lucide-react";
 
 interface SdrSummaryTableProps {
   data: SdrSummaryRow[];
   isLoading?: boolean;
+  ghostCountBySdr?: Record<string, GhostCountBySdr>;
 }
 
-export function SdrSummaryTable({ data, isLoading }: SdrSummaryTableProps) {
+export function SdrSummaryTable({ data, isLoading, ghostCountBySdr }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -59,11 +62,19 @@ export function SdrSummaryTable({ data, isLoading }: SdrSummaryTableProps) {
               <TableHead className="text-muted-foreground text-center font-medium">Contratos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">
+                <Ghost className="h-4 w-4 inline" />
+              </TableHead>
               <TableHead className="text-muted-foreground w-10"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.map((row) => {
+              const ghostData = ghostCountBySdr?.[row.sdrEmail];
+              const hasGhostCases = ghostData && ghostData.pending_count > 0;
+              const hasCritical = ghostData?.critical_count && ghostData.critical_count > 0;
+              const hasHigh = ghostData?.high_count && ghostData.high_count > 0;
+
               return (
                 <TableRow
                   key={row.sdrEmail}
@@ -116,6 +127,41 @@ export function SdrSummaryTable({ data, isLoading }: SdrSummaryTableProps) {
                     <span className={row.taxaNoShow > 30 ? 'text-red-400' : 'text-muted-foreground'}>
                       {row.taxaNoShow.toFixed(1)}%
                     </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {hasGhostCases ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link
+                              to={`/crm/auditoria-agendamentos?sdr=${encodeURIComponent(row.sdrEmail)}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex"
+                            >
+                              <Badge
+                                variant="outline"
+                                className={
+                                  hasCritical
+                                    ? 'bg-red-500/20 text-red-400 border-red-500/40 animate-pulse'
+                                    : hasHigh
+                                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                                    : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40'
+                                }
+                              >
+                                <Ghost className="h-3 w-3 mr-1" />
+                                {ghostData.pending_count}
+                              </Badge>
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{ghostData.pending_count} caso{ghostData.pending_count !== 1 ? 's' : ''} suspeito{ghostData.pending_count !== 1 ? 's' : ''}</p>
+                            {hasCritical && <p className="text-red-400">{ghostData.critical_count} crítico{ghostData.critical_count !== 1 ? 's' : ''}</p>}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <span className="text-muted-foreground/50">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
