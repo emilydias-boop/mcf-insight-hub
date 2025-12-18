@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, Users, Download, RefreshCw } from "lucide-react";
+import { Calendar, Users, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,7 +14,9 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
+import { GhostAppointmentsAlert } from "@/components/sdr/GhostAppointmentsAlert";
 import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
+import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { SDR_LIST } from "@/constants/team";
 
 type DatePreset = "today" | "week" | "month" | "custom";
@@ -60,6 +62,9 @@ export default function ReunioesEquipe() {
     sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
   });
 
+  // Ghost appointments data
+  const { data: ghostCountBySdr } = useGhostCountBySdr();
+
   // Filter bySDR based on sdrFilter (if we need local filtering)
   const filteredBySDR = useMemo(() => {
     if (sdrFilter === "all") return bySDR;
@@ -75,6 +80,9 @@ export default function ReunioesEquipe() {
 
   return (
     <div className="space-y-6 p-6">
+      {/* Ghost Appointments Alert */}
+      <GhostAppointmentsAlert />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -211,6 +219,7 @@ export default function ReunioesEquipe() {
           <SdrSummaryTable
             data={filteredBySDR}
             isLoading={isLoading}
+            ghostCountBySdr={ghostCountBySdr}
           />
         </CardContent>
       </Card>
