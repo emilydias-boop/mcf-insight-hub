@@ -1542,6 +1542,87 @@ export type Database = {
           },
         ]
       }
+      ghost_appointments_audit: {
+        Row: {
+          contact_email: string | null
+          contact_id: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string | null
+          deal_id: string
+          detection_date: string
+          detection_reason: string
+          distinct_days: number
+          first_r1_date: string | null
+          ghost_type: string
+          id: string
+          last_r1_date: string | null
+          movement_history: Json
+          no_show_count: number
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sdr_email: string
+          sdr_name: string | null
+          severity: string
+          status: string | null
+          total_r1_agendada: number
+          updated_at: string | null
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          deal_id: string
+          detection_date?: string
+          detection_reason: string
+          distinct_days?: number
+          first_r1_date?: string | null
+          ghost_type: string
+          id?: string
+          last_r1_date?: string | null
+          movement_history?: Json
+          no_show_count?: number
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sdr_email: string
+          sdr_name?: string | null
+          severity: string
+          status?: string | null
+          total_r1_agendada?: number
+          updated_at?: string | null
+        }
+        Update: {
+          contact_email?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          deal_id?: string
+          detection_date?: string
+          detection_reason?: string
+          distinct_days?: number
+          first_r1_date?: string | null
+          ghost_type?: string
+          id?: string
+          last_r1_date?: string | null
+          movement_history?: Json
+          no_show_count?: number
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sdr_email?: string
+          sdr_name?: string | null
+          severity?: string
+          status?: string | null
+          total_r1_agendada?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       hubla_transactions: {
         Row: {
           count_in_dashboard: boolean | null
@@ -3675,6 +3756,7 @@ export type Database = {
       }
     }
     Functions: {
+      detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
       get_sdr_all_movements_v2: {
         Args: {
           end_date: string
