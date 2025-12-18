@@ -37,79 +37,91 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
   const metricsQuery = useSdrMetricsV2(startDate, endDate, sdrEmailFilter);
   const meetingsQuery = useSdrMeetingsV2(startDate, endDate, sdrEmailFilter);
 
-  // Calculate team KPIs from aggregated metrics
-  const teamKPIs = useMemo((): TeamKPIs => {
-    const metrics = metricsQuery.data?.metrics || [];
-    const summary = metricsQuery.data?.summary;
+  // Create Set of valid SDR emails from SDR_LIST
+  const validSdrEmails = useMemo(() => {
+    return new Set(SDR_LIST.map(sdr => sdr.email.toLowerCase()));
+  }, []);
 
-    if (summary) {
-      const taxaConversao = summary.total_agendamentos > 0
-        ? (summary.total_realizadas / summary.total_agendamentos) * 100
-        : 0;
-      const taxaNoShow = summary.total_agendamentos > 0
-        ? (summary.total_no_shows / summary.total_agendamentos) * 100
-        : 0;
+  // Create lookup for SDR names
+  const sdrNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    SDR_LIST.forEach(sdr => {
+      map.set(sdr.email.toLowerCase(), sdr.nome);
+    });
+    return map;
+  }, []);
 
-      return {
-        sdrCount: metrics.length,
-        totalAgendamentos: summary.total_agendamentos,
-        totalRealizadas: summary.total_realizadas,
-        totalNoShows: summary.total_no_shows,
-        totalContratos: summary.total_contratos,
-        taxaConversao,
-        taxaNoShow,
-      };
-    }
-
-    return {
-      sdrCount: 0,
-      totalAgendamentos: 0,
-      totalRealizadas: 0,
-      totalNoShows: 0,
-      totalContratos: 0,
-      taxaConversao: 0,
-      taxaNoShow: 0,
-    };
-  }, [metricsQuery.data]);
-
-  // Build summary rows per SDR
+  // Build summary rows per SDR - FILTERED to only include the 13 SDRs from SDR_LIST
   const bySDR = useMemo((): SdrSummaryRow[] => {
     const metrics = metricsQuery.data?.metrics || [];
-    
-    // Create lookup for SDR names
-    const sdrNameMap = new Map<string, string>();
-    SDR_LIST.forEach(sdr => {
-      sdrNameMap.set(sdr.email.toLowerCase(), sdr.nome);
-    });
 
-    return metrics.map((m: SdrMetricsV2) => {
-      const sdrName = sdrNameMap.get(m.sdr_email?.toLowerCase() || '') || m.sdr_name || m.sdr_email?.split('@')[0] || 'Desconhecido';
-      
-      return {
-        sdrEmail: m.sdr_email,
-        sdrName,
-        primeiroAgendamento: m.primeiro_agendamento,
-        reagendamento: m.reagendamento,
-        totalAgendamentos: m.total_agendamentos,
-        realizadas: m.realizadas,
-        noShows: m.no_shows,
-        contratos: m.contratos,
-        taxaConversao: m.taxa_conversao,
-        taxaNoShow: m.taxa_no_show,
-      };
-    }).sort((a, b) => b.totalAgendamentos - a.totalAgendamentos);
-  }, [metricsQuery.data]);
+    return metrics
+      .filter((m: SdrMetricsV2) => 
+        validSdrEmails.has(m.sdr_email?.toLowerCase() || '')
+      )
+      .map((m: SdrMetricsV2) => {
+        const sdrName = sdrNameMap.get(m.sdr_email?.toLowerCase() || '') || m.sdr_name || m.sdr_email?.split('@')[0] || 'Desconhecido';
+        
+        return {
+          sdrEmail: m.sdr_email,
+          sdrName,
+          primeiroAgendamento: m.primeiro_agendamento,
+          reagendamento: m.reagendamento,
+          totalAgendamentos: m.total_agendamentos,
+          realizadas: m.realizadas,
+          noShows: m.no_shows,
+          contratos: m.contratos,
+          taxaConversao: m.taxa_conversao,
+          taxaNoShow: m.taxa_no_show,
+        };
+      })
+      .sort((a, b) => b.totalAgendamentos - a.totalAgendamentos);
+  }, [metricsQuery.data, validSdrEmails, sdrNameMap]);
 
-  // Get meetings for a specific SDR
+  // Calculate team KPIs from FILTERED SDRs only
+  const teamKPIs = useMemo((): TeamKPIs => {
+    // Sum up from filtered bySDR data
+    const totalAgendamentos = bySDR.reduce((sum, s) => sum + s.totalAgendamentos, 0);
+    const totalRealizadas = bySDR.reduce((sum, s) => sum + s.realizadas, 0);
+    const totalNoShows = bySDR.reduce((sum, s) => sum + s.noShows, 0);
+    const totalContratos = bySDR.reduce((sum, s) => sum + s.contratos, 0);
+
+    const taxaConversao = totalAgendamentos > 0
+      ? (totalRealizadas / totalAgendamentos) * 100
+      : 0;
+    const taxaNoShow = totalAgendamentos > 0
+      ? (totalNoShows / totalAgendamentos) * 100
+      : 0;
+
+    return {
+      sdrCount: bySDR.length,
+      totalAgendamentos,
+      totalRealizadas,
+      totalNoShows,
+      totalContratos,
+      taxaConversao,
+      taxaNoShow,
+    };
+  }, [bySDR]);
+
+  // Get meetings for a specific SDR (only if they're in the valid SDR list)
   const getMeetingsForSDR = (sdrEmail: string): MeetingV2[] => {
-    const allMeetings = meetingsQuery.data || [];
-    return allMeetings.filter(
+    if (!validSdrEmails.has(sdrEmail.toLowerCase())) {
+      return [];
+    }
+    const meetings = meetingsQuery.data || [];
+    return meetings.filter(
       m => m.intermediador?.toLowerCase() === sdrEmail.toLowerCase()
     );
   };
 
-  // All meetings (useful for listing when filtering by specific SDR)
-  const allMeetings = meetingsQuery.data || [];
+  // All meetings filtered to only the 13 SDRs
+  const allMeetings = useMemo(() => {
+    const meetings = meetingsQuery.data || [];
+    return meetings.filter(
+      m => validSdrEmails.has(m.intermediador?.toLowerCase() || '')
+    );
+  }, [meetingsQuery.data, validSdrEmails]);
 
   return {
     teamKPIs,
