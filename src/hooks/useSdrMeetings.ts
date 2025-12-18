@@ -30,7 +30,7 @@ const classifyStage = (stageName: string): 'agendada' | 'realizada' | 'noShow' |
 export interface MeetingFilters {
   startDate?: Date;
   endDate?: Date;
-  resultado?: 'pendente' | 'realizada' | 'no_show' | 'reagendada' | 'all';
+  stageFilter?: string;
   originId?: string;
 }
 
@@ -135,11 +135,8 @@ export const useSdrMeetings = (filters: MeetingFilters = {}) => {
         activitiesByDeal[activity.deal_id].push(activity);
       });
       
-      // Process deals into meetings
-      const meetings: Meeting[] = [];
-      let agendadasCount = 0;
-      let realizadasCount = 0;
-      let noShowsCount = 0;
+      // Process deals into meetings - FIRST pass to build all meetings
+      const allMeetings: Meeting[] = [];
       
       for (const deal of deals) {
         const dealActivities = activitiesByDeal[deal.id] || [];
@@ -175,35 +172,13 @@ export const useSdrMeetings = (filters: MeetingFilters = {}) => {
           timeToContract = Math.round((contratoDate.getTime() - agendadaDate.getTime()) / (1000 * 60 * 60));
         }
         
-        // Count metrics based on activities
-        const hasAgendada = dealActivities.some(a => a.to_stage && classifyStage(a.to_stage) === 'agendada');
-        const hasRealizada = dealActivities.some(a => a.to_stage && classifyStage(a.to_stage) === 'realizada');
-        const hasNoShow = dealActivities.some(a => a.to_stage && classifyStage(a.to_stage) === 'noShow');
-        
-        if (hasAgendada) agendadasCount++;
-        if (hasRealizada) realizadasCount++;
-        if (hasNoShow) noShowsCount++;
-        
-        // Filter by date if specified
-        const scheduledDate = firstAgendada?.created_at || null;
-        if (filters.startDate && scheduledDate) {
-          if (new Date(scheduledDate) < filters.startDate) continue;
-        }
-        if (filters.endDate && scheduledDate) {
-          if (new Date(scheduledDate) > filters.endDate) continue;
-        }
-        
-        // Filter by resultado
-        if (filters.resultado && filters.resultado !== 'all') {
-          if (filters.resultado === 'realizada' && currentClassification !== 'realizada') continue;
-          if (filters.resultado === 'no_show' && currentClassification !== 'noShow') continue;
-          if (filters.resultado === 'pendente' && currentClassification !== 'agendada') continue;
-        }
-        
         // Only include deals that have been through "agendada" stage
+        const hasAgendada = dealActivities.some(a => a.to_stage && classifyStage(a.to_stage) === 'agendada');
         if (!hasAgendada) continue;
         
-        meetings.push({
+        const scheduledDate = firstAgendada?.created_at || null;
+        
+        allMeetings.push({
           id: deal.id,
           dealId: deal.id,
           dealName: deal.name,
@@ -222,8 +197,36 @@ export const useSdrMeetings = (filters: MeetingFilters = {}) => {
         });
       }
       
+      // SECOND pass - apply filters and count KPIs from FILTERED results
+      const filteredMeetings: Meeting[] = [];
+      let agendadasCount = 0;
+      let realizadasCount = 0;
+      let noShowsCount = 0;
+      
+      for (const meeting of allMeetings) {
+        // Filter by date if specified
+        if (filters.startDate && meeting.scheduledDate) {
+          if (new Date(meeting.scheduledDate) < filters.startDate) continue;
+        }
+        if (filters.endDate && meeting.scheduledDate) {
+          if (new Date(meeting.scheduledDate) > filters.endDate) continue;
+        }
+        
+        // Filter by stage if specified
+        if (filters.stageFilter && filters.stageFilter !== 'all') {
+          if (meeting.currentStage !== filters.stageFilter) continue;
+        }
+        
+        // Count KPIs AFTER date/stage filters
+        agendadasCount++;
+        if (meeting.currentStageClassification === 'realizada') realizadasCount++;
+        if (meeting.currentStageClassification === 'noShow') noShowsCount++;
+        
+        filteredMeetings.push(meeting);
+      }
+      
       // Sort by scheduled date descending
-      meetings.sort((a, b) => {
+      filteredMeetings.sort((a, b) => {
         if (!a.scheduledDate) return 1;
         if (!b.scheduledDate) return -1;
         return new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime();
@@ -232,7 +235,7 @@ export const useSdrMeetings = (filters: MeetingFilters = {}) => {
       const taxaConversao = agendadasCount > 0 ? (realizadasCount / agendadasCount) * 100 : 0;
       
       return {
-        meetings,
+        meetings: filteredMeetings,
         summary: {
           reunioesAgendadas: agendadasCount,
           reunioesRealizadas: realizadasCount,

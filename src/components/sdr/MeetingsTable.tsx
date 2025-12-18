@@ -1,4 +1,4 @@
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -17,21 +17,6 @@ interface MeetingsTableProps {
   isLoading?: boolean;
   onSelectMeeting: (meeting: Meeting) => void;
 }
-
-const getStageBadgeVariant = (classification: string) => {
-  switch (classification) {
-    case 'agendada':
-      return 'default';
-    case 'realizada':
-      return 'secondary';
-    case 'noShow':
-      return 'destructive';
-    case 'contratoPago':
-      return 'outline';
-    default:
-      return 'secondary';
-  }
-};
 
 const getStageBadgeClass = (classification: string) => {
   switch (classification) {
@@ -58,80 +43,84 @@ const formatTimeToHuman = (hours: number | null): string => {
 export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: MeetingsTableProps) {
   if (isLoading) {
     return (
-      <div className="space-y-2">
-        {[...Array(5)].map((_, i) => (
-          <Skeleton key={i} className="h-14 w-full" />
-        ))}
+      <div className="h-full flex flex-col">
+        <div className="space-y-2 p-4">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full" />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (meetings.length === 0) {
     return (
-      <div className="text-center py-10 text-muted-foreground">
+      <div className="h-full flex items-center justify-center text-muted-foreground">
         <p>Nenhuma reunião encontrada para o período selecionado.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border border-border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="text-muted-foreground">Data/Horário</TableHead>
-            <TableHead className="text-muted-foreground">Lead</TableHead>
-            <TableHead className="text-muted-foreground">Origem</TableHead>
-            <TableHead className="text-muted-foreground">Estágio</TableHead>
-            <TableHead className="text-muted-foreground">Tempo p/ Agendar</TableHead>
-            <TableHead className="text-muted-foreground">Tempo p/ Contrato</TableHead>
-            <TableHead className="text-muted-foreground">Prob.</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {meetings.map((meeting) => (
-            <TableRow
-              key={meeting.id}
-              className="cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={() => onSelectMeeting(meeting)}
-            >
-              <TableCell className="font-medium">
-                {meeting.scheduledDate
-                  ? format(new Date(meeting.scheduledDate), "dd/MM HH:mm", { locale: ptBR })
-                  : 'N/A'}
-              </TableCell>
-              <TableCell>
-                <div>
-                  <p className="font-medium text-foreground">{meeting.contactName}</p>
-                  {meeting.contactEmail && (
-                    <p className="text-xs text-muted-foreground">{meeting.contactEmail}</p>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>
-                <span className="text-muted-foreground">{meeting.originName}</span>
-              </TableCell>
-              <TableCell>
-                <Badge 
-                  variant="outline"
-                  className={getStageBadgeClass(meeting.currentStageClassification)}
-                >
-                  {meeting.currentStage}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatTimeToHuman(meeting.timeToSchedule)}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatTimeToHuman(meeting.timeToContract)}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {meeting.probability ? `${meeting.probability}%` : 'N/A'}
-              </TableCell>
+    <div className="h-full flex flex-col rounded-md border border-border overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <Table>
+          <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
+            <TableRow className="hover:bg-muted/80">
+              <TableHead className="text-muted-foreground">Data/Horário</TableHead>
+              <TableHead className="text-muted-foreground">Lead</TableHead>
+              <TableHead className="text-muted-foreground">Origem</TableHead>
+              <TableHead className="text-muted-foreground">Estágio</TableHead>
+              <TableHead className="text-muted-foreground">Tempo p/ Agendar</TableHead>
+              <TableHead className="text-muted-foreground">Tempo p/ Contrato</TableHead>
+              <TableHead className="text-muted-foreground">Prob.</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {meetings.map((meeting) => (
+              <TableRow
+                key={meeting.id}
+                className="cursor-pointer hover:bg-muted/30 transition-colors"
+                onClick={() => onSelectMeeting(meeting)}
+              >
+                <TableCell className="font-medium">
+                  {meeting.scheduledDate
+                    ? format(new Date(meeting.scheduledDate), "dd/MM HH:mm", { locale: ptBR })
+                    : 'N/A'}
+                </TableCell>
+                <TableCell>
+                  <div>
+                    <p className="font-medium text-foreground">{meeting.contactName}</p>
+                    {meeting.contactEmail && (
+                      <p className="text-xs text-muted-foreground">{meeting.contactEmail}</p>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span className="text-muted-foreground">{meeting.originName}</span>
+                </TableCell>
+                <TableCell>
+                  <Badge 
+                    variant="outline"
+                    className={getStageBadgeClass(meeting.currentStageClassification)}
+                  >
+                    {meeting.currentStage}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatTimeToHuman(meeting.timeToSchedule)}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatTimeToHuman(meeting.timeToContract)}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {meeting.probability ? `${meeting.probability}%` : 'N/A'}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
