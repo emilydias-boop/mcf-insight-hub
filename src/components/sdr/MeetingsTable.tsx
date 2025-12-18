@@ -160,10 +160,24 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
                     )}
                     
                     <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{contactName}</p>
-                        {contactEmail && (
-                          <p className="text-xs text-muted-foreground">{contactEmail}</p>
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <p className="font-medium text-foreground">{contactName}</p>
+                          {contactEmail && (
+                            <p className="text-xs text-muted-foreground">{contactEmail}</p>
+                          )}
+                        </div>
+                        {isV2Meeting && meeting.total_movimentacoes > 1 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
+                                {meeting.total_movimentacoes}x
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p>Este lead foi movido para R1 Agendada {meeting.total_movimentacoes} vezes no período</p>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
                     </TableCell>
