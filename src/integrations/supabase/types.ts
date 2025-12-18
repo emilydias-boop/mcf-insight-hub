@@ -3757,6 +3757,7 @@ export type Database = {
     }
     Functions: {
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
+      get_novo_lead_count: { Args: { target_date: string }; Returns: Json }
       get_sdr_all_movements_v2: {
         Args: {
           end_date: string
