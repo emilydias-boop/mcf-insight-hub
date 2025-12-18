@@ -251,8 +251,10 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       }
 
       // 4. Buscar Novos Leads via RPC dedicada (conta leads genuinamente novos)
+      // Filtrar apenas emails da SDR_LIST para consistência com a tabela
+      const sdrEmails = SDR_LIST.map(sdr => sdr.email.toLowerCase());
       const { data: novoLeadRpc, error: novoLeadError } = await supabase
-        .rpc('get_novo_lead_count', { target_date: today });
+        .rpc('get_novo_lead_count', { target_date: today, valid_emails: sdrEmails });
 
       if (novoLeadError) {
         console.error('[TV-SDR] Novo Lead RPC error:', novoLeadError);
