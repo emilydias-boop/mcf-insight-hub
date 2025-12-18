@@ -12,6 +12,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { Meeting } from "@/hooks/useSdrMeetings";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 // Suporta ambos os tipos de meeting
 type MeetingType = Meeting | MeetingV2;
@@ -44,11 +46,15 @@ const getStatusBadgeClass = (status: string) => {
   return 'bg-muted text-muted-foreground';
 };
 
-const getTipoBadgeClass = (tipo: string) => {
+const getTipoBadgeClass = (tipo: string, conta: boolean) => {
   if (tipo === '1º Agendamento') {
     return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
   }
-  return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+  if (tipo === 'Reagendamento Válido') {
+    return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+  }
+  // Reagendamento Inválido - não conta
+  return 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30';
 };
 
 export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: MeetingsTableProps) {
@@ -83,6 +89,7 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
             <TableRow className="hover:bg-muted/80">
               <TableHead className="text-muted-foreground">Data/Horário</TableHead>
               {isV2 && <TableHead className="text-muted-foreground">Tipo</TableHead>}
+              {isV2 && <TableHead className="text-muted-foreground text-center">Conta?</TableHead>}
               <TableHead className="text-muted-foreground">Lead</TableHead>
               <TableHead className="text-muted-foreground">Origem</TableHead>
               <TableHead className="text-muted-foreground">Status</TableHead>
@@ -90,81 +97,110 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
               <TableHead className="text-muted-foreground">Prob.</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {meetings.map((meeting) => {
-              const isV2Meeting = isMeetingV2(meeting);
-              const id = isV2Meeting ? meeting.deal_id : meeting.id;
-              const date = isV2Meeting ? meeting.data_agendamento : meeting.scheduledDate;
-              const contactName = isV2Meeting ? meeting.contact_name : meeting.contactName;
-              const contactEmail = isV2Meeting ? meeting.contact_email : meeting.contactEmail;
-              const originName = isV2Meeting ? meeting.origin_name : meeting.originName;
-              const status = isV2Meeting ? meeting.status_atual : meeting.currentStage;
-              const probability = meeting.probability;
+          <TooltipProvider>
+            <TableBody>
+              {meetings.map((meeting) => {
+                const isV2Meeting = isMeetingV2(meeting);
+                const id = isV2Meeting ? meeting.deal_id : meeting.id;
+                const date = isV2Meeting ? meeting.data_agendamento : meeting.scheduledDate;
+                const contactName = isV2Meeting ? meeting.contact_name : meeting.contactName;
+                const contactEmail = isV2Meeting ? meeting.contact_email : meeting.contactEmail;
+                const originName = isV2Meeting ? meeting.origin_name : meeting.originName;
+                const status = isV2Meeting ? meeting.status_atual : meeting.currentStage;
+                const probability = meeting.probability;
+                const conta = isV2Meeting ? meeting.conta : true;
 
-              return (
-                <TableRow
-                  key={id}
-                  className="cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => onSelectMeeting(meeting)}
-                >
-                  <TableCell className="font-medium">
-                    {date
-                      ? format(new Date(date), "dd/MM HH:mm", { locale: ptBR })
-                      : 'N/A'}
-                  </TableCell>
-                  
-                  {isV2Meeting && (
+                return (
+                  <TableRow
+                    key={`${id}-${date}`}
+                    className={`cursor-pointer hover:bg-muted/30 transition-colors ${!conta ? 'opacity-50' : ''}`}
+                    onClick={() => onSelectMeeting(meeting)}
+                  >
+                    <TableCell className="font-medium">
+                      {date
+                        ? format(new Date(date), "dd/MM HH:mm", { locale: ptBR })
+                        : 'N/A'}
+                    </TableCell>
+                    
+                    {isV2Meeting && (
+                      <TableCell>
+                        <Badge 
+                          variant="outline"
+                          className={getTipoBadgeClass(meeting.tipo, conta)}
+                        >
+                          {meeting.tipo === 'Reagendamento Válido' ? 'Reagendamento' : 
+                           meeting.tipo === 'Reagendamento Inválido' ? 'Reagendamento' : 
+                           meeting.tipo}
+                        </Badge>
+                      </TableCell>
+                    )}
+
+                    {isV2Meeting && (
+                      <TableCell className="text-center">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            {conta ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-400 mx-auto" />
+                            ) : (
+                              <AlertCircle className="w-5 h-5 text-amber-400 mx-auto" />
+                            )}
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            {conta ? (
+                              <p>Este agendamento conta para as métricas</p>
+                            ) : (
+                              <p>
+                                <strong>Não conta:</strong> Lead não passou por No-Show antes do reagendamento. 
+                                Movimentação direta de outra etapa não é contabilizada.
+                              </p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                    )}
+                    
+                    <TableCell>
+                      <div>
+                        <p className="font-medium text-foreground">{contactName}</p>
+                        {contactEmail && (
+                          <p className="text-xs text-muted-foreground">{contactEmail}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <span className="text-muted-foreground">{originName || 'N/A'}</span>
+                    </TableCell>
+                    
                     <TableCell>
                       <Badge 
                         variant="outline"
-                        className={getTipoBadgeClass(meeting.tipo)}
+                        className={getStatusBadgeClass(status)}
                       >
-                        {meeting.tipo}
+                        {status}
                       </Badge>
                     </TableCell>
-                  )}
-                  
-                  <TableCell>
-                    <div>
-                      <p className="font-medium text-foreground">{contactName}</p>
-                      {contactEmail && (
-                        <p className="text-xs text-muted-foreground">{contactEmail}</p>
-                      )}
-                    </div>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <span className="text-muted-foreground">{originName || 'N/A'}</span>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Badge 
-                      variant="outline"
-                      className={getStatusBadgeClass(status)}
-                    >
-                      {status}
-                    </Badge>
-                  </TableCell>
-                  
-                  {isV2Meeting && (
-                    <TableCell>
-                      {meeting.closer ? (
-                        <span className="text-amber-400 font-medium">
-                          {meeting.closer.split('@')[0]}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
+                    
+                    {isV2Meeting && (
+                      <TableCell>
+                        {meeting.closer ? (
+                          <span className="text-amber-400 font-medium">
+                            {meeting.closer.split('@')[0]}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                    )}
+                    
+                    <TableCell className="text-muted-foreground">
+                      {probability ? `${probability}%` : 'N/A'}
                     </TableCell>
-                  )}
-                  
-                  <TableCell className="text-muted-foreground">
-                    {probability ? `${probability}%` : 'N/A'}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </TooltipProvider>
         </Table>
       </div>
     </div>

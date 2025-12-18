@@ -238,25 +238,40 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       console.log('[TV-SDR] Intermediações por SDR:', Array.from(sdrIntermediacao.entries()));
 
-      // 3. USAR RPC PARA CONTORNAR LIMITE DE 1000 REGISTROS DO SUPABASE
-      // A função get_tv_sdr_metrics agrega dados diretamente no banco
+      // 3. USAR RPC get_sdr_metrics_v2 (mesma que Relatórios usam)
+      // Isso garante números consistentes entre TV e Relatórios
       const { data: sdrMetricsRpc, error: rpcError } = await supabase
-        .rpc('get_tv_sdr_metrics', { target_date: today });
+        .rpc('get_sdr_metrics_v2', { 
+          start_date: today,
+          end_date: today,
+          sdr_email_filter: null
+        });
 
       if (rpcError) {
         console.error('[TV-SDR] RPC error:', rpcError);
       }
 
       // Converter resultado da RPC em Map para acesso rápido
-      const rpcMetricsMap = new Map<string, { r1_agendada: number; r1_realizada: number; no_show: number; novo_lead: number }>();
-      if (Array.isArray(sdrMetricsRpc)) {
-        sdrMetricsRpc.forEach((m: any) => {
+      const rpcMetricsMap = new Map<string, { 
+        r1_agendada: number; 
+        r1_realizada: number; 
+        no_show: number; 
+        novo_lead: number;
+        primeiro_agendamento: number;
+        reagendamento: number;
+      }>();
+      
+      const metricsResult = sdrMetricsRpc as unknown as { metrics: any[] };
+      if (metricsResult?.metrics && Array.isArray(metricsResult.metrics)) {
+        metricsResult.metrics.forEach((m: any) => {
           if (m.sdr_email) {
             rpcMetricsMap.set(m.sdr_email, {
-              r1_agendada: m.r1_agendada || 0,
-              r1_realizada: m.r1_realizada || 0,
-              no_show: m.no_show || 0,
-              novo_lead: m.novo_lead || 0,
+              r1_agendada: m.total_agendamentos || 0,
+              r1_realizada: m.realizadas || 0,
+              no_show: m.no_shows || 0,
+              novo_lead: 0, // Novo Lead agora é calculado separadamente via Hubla
+              primeiro_agendamento: m.primeiro_agendamento || 0,
+              reagendamento: m.reagendamento || 0,
             });
           }
         });
@@ -267,10 +282,9 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       let totalNovoLeadCount = 0;
       rpcMetricsMap.forEach((metrics) => {
         totalR1Agendada += metrics.r1_agendada;
-        totalNovoLeadCount += metrics.novo_lead;
       });
 
-      console.log('[TV-SDR] RPC metrics - Total R1 Agendada:', totalR1Agendada, 'Total Novo Lead:', totalNovoLeadCount);
+      console.log('[TV-SDR] RPC metrics (v2) - Total R1 Agendada:', totalR1Agendada);
       console.log('[TV-SDR] RPC metrics por SDR:', Array.from(rpcMetricsMap.entries()));
 
       // 4. Buscar metas da tabela team_targets
