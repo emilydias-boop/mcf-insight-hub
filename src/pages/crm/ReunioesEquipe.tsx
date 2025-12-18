@@ -14,8 +14,8 @@ import {
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
-import { SelectedSdrLeadsPanel } from "@/components/sdr/SelectedSdrLeadsPanel";
-import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
+import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
+import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { SDR_LIST } from "@/constants/team";
 
 type DatePreset = "today" | "week" | "month" | "custom";
@@ -26,7 +26,6 @@ export default function ReunioesEquipe() {
   const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
-  const [selectedSdr, setSelectedSdr] = useState<SdrSummaryRow | null>(null);
 
   // Calculate date range based on preset
   const getDateRange = () => {

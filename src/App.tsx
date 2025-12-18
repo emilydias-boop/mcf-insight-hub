@@ -56,6 +56,7 @@ import Financeiro from "./pages/Financeiro";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
 import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
+import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -115,6 +116,7 @@ const App = () => (
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="sdr/minhas-reunioes" element={<ResourceGuard resource="crm"><MinhasReunioes /></ResourceGuard>} />
               <Route path="crm/reunioes-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ReunioesEquipe /></RoleGuard>} />
+              <Route path="crm/reunioes-equipe/:sdrEmail" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SdrMeetingsDetailPage /></RoleGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
