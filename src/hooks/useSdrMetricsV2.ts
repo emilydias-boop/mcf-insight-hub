@@ -23,7 +23,7 @@ export interface MeetingV2 {
   contact_name: string;
   contact_email: string | null;
   contact_phone: string | null;
-  tipo: '1º Agendamento' | 'Reagendamento';
+  tipo: '1º Agendamento' | 'Reagendamento Válido' | 'Reagendamento Inválido';
   data_agendamento: string;
   status_atual: 'Agendada' | 'Realizada' | 'No-Show' | 'Contrato' | string;
   intermediador: string;
@@ -31,6 +31,8 @@ export interface MeetingV2 {
   closer: string | null;
   origin_name: string | null;
   probability: number | null;
+  conta: boolean; // Indica se este agendamento conta para as métricas
+  from_stage?: string;
 }
 
 export interface MetricsSummary {
@@ -100,7 +102,7 @@ export const useSdrMetricsV2 = (startDate: Date | null, endDate: Date | null, sd
   });
 };
 
-// Hook para buscar lista de reuniões com detalhes
+// Hook para buscar lista de reuniões com detalhes (TODOS os movimentos)
 export const useSdrMeetingsV2 = (startDate: Date | null, endDate: Date | null, sdrEmailFilter?: string) => {
   return useQuery({
     queryKey: ['sdr-meetings-v2', startDate?.toISOString(), endDate?.toISOString(), sdrEmailFilter],
@@ -110,7 +112,8 @@ export const useSdrMeetingsV2 = (startDate: Date | null, endDate: Date | null, s
       const start = format(startOfDay(startDate), 'yyyy-MM-dd');
       const end = format(endOfDay(endDate), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase.rpc('get_sdr_meetings_v2', {
+      // Usar nova RPC que retorna TODOS os movimentos com indicação se conta ou não
+      const { data, error } = await supabase.rpc('get_sdr_all_movements_v2', {
         start_date: start,
         end_date: end,
         sdr_email_filter: sdrEmailFilter || null

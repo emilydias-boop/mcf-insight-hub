@@ -82,6 +82,7 @@ export function useSdrReportData(startDate: Date | null, endDate: Date | null) {
       return metrics;
     },
     enabled: !!startDate && !!endDate,
-    staleTime: 30000
+    staleTime: 30000,
+    refetchInterval: 60000
   });
 }
