@@ -239,7 +239,6 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       console.log('[TV-SDR] Intermediações por SDR:', Array.from(sdrIntermediacao.entries()));
 
       // 3. USAR RPC get_sdr_metrics_v2 (mesma que Relatórios usam)
-      // Isso garante números consistentes entre TV e Relatórios
       const { data: sdrMetricsRpc, error: rpcError } = await supabase
         .rpc('get_sdr_metrics_v2', { 
           start_date: today,
@@ -251,12 +250,35 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         console.error('[TV-SDR] RPC error:', rpcError);
       }
 
+      // 4. Buscar Novos Leads via RPC dedicada (conta leads genuinamente novos)
+      const { data: novoLeadRpc, error: novoLeadError } = await supabase
+        .rpc('get_novo_lead_count', { target_date: today });
+
+      if (novoLeadError) {
+        console.error('[TV-SDR] Novo Lead RPC error:', novoLeadError);
+      }
+
+      // Processar resultado de Novos Leads
+      const novoLeadResult = novoLeadRpc as { total: number; por_sdr: { sdr_email: string; count: number }[] } | null;
+      const totalNovoLeadCount = novoLeadResult?.total || 0;
+      
+      // Map de Novo Lead por SDR
+      const novoLeadPorSdr = new Map<string, number>();
+      if (novoLeadResult?.por_sdr && Array.isArray(novoLeadResult.por_sdr)) {
+        novoLeadResult.por_sdr.forEach((item) => {
+          if (item.sdr_email) {
+            novoLeadPorSdr.set(item.sdr_email.toLowerCase(), item.count);
+          }
+        });
+      }
+
+      console.log('[TV-SDR] Novos Leads - Total:', totalNovoLeadCount, 'Por SDR:', Array.from(novoLeadPorSdr.entries()));
+
       // Converter resultado da RPC em Map para acesso rápido
       const rpcMetricsMap = new Map<string, { 
         r1_agendada: number; 
         r1_realizada: number; 
         no_show: number; 
-        novo_lead: number;
         primeiro_agendamento: number;
         reagendamento: number;
       }>();
@@ -269,7 +291,6 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
               r1_agendada: m.total_agendamentos || 0,
               r1_realizada: m.realizadas || 0,
               no_show: m.no_shows || 0,
-              novo_lead: 0, // Novo Lead agora é calculado separadamente via Hubla
               primeiro_agendamento: m.primeiro_agendamento || 0,
               reagendamento: m.reagendamento || 0,
             });
@@ -279,7 +300,6 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       // Calcular totais da RPC
       let totalR1Agendada = 0;
-      let totalNovoLeadCount = 0;
       rpcMetricsMap.forEach((metrics) => {
         totalR1Agendada += metrics.r1_agendada;
       });
@@ -306,7 +326,8 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       const sdrsData: SdrData[] = SDR_LIST.map((sdr) => {
         const rpcMetrics = rpcMetricsMap.get(sdr.email);
         
-        const novoLead = rpcMetrics?.novo_lead || 0;
+        // Novo Lead: buscar da RPC get_novo_lead_count
+        const novoLead = novoLeadPorSdr.get(sdr.email.toLowerCase()) || 0;
         const r1Agendada = rpcMetrics?.r1_agendada || 0;
         const noShow = rpcMetrics?.no_show || 0;
         const r1Realizada = rpcMetrics?.r1_realizada || 0;
