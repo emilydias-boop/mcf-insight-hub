@@ -2652,6 +2652,39 @@ export type Database = {
           },
         ]
       }
+      sdr_review_requests: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          id: string
+          periodo: string
+          status: string
+          tipo_problema: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          periodo: string
+          status?: string
+          tipo_problema: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          periodo?: string
+          status?: string
+          tipo_problema?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           id: string

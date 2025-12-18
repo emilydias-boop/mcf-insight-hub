@@ -21,7 +21,8 @@ import {
   Receipt,
   FolderOpen,
   BookOpen,
-  Building2
+  Building2,
+  Calendar
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -102,21 +103,12 @@ const menuItems: MenuItem[] = [
   { title: "Crédito", url: "/credito", icon: CreditCard, resource: "credito", requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
   { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  { title: "Minhas Reuniões", url: "/sdr/minhas-reunioes", icon: Calendar, resource: "crm", requiredRoles: ['sdr'] },
   { 
     title: "CRM", 
     icon: UserCircle, 
     resource: "crm",
     requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'],
-    items: [
-      { title: "Visão Geral", url: "/crm" },
-      { title: "Contatos", url: "/crm/contatos" },
-      { title: "Negócios", url: "/crm/negocios" },
-      { title: "Origens", url: "/crm/origens" },
-      { title: "Grupos", url: "/crm/grupos" },
-      { title: "Tags", url: "/crm/tags" },
-      { title: "Importar Histórico", url: "/crm/importar-historico" },
-      { title: "Configurações", url: "/crm/configuracoes" },
-    ]
   },
   { 
     title: "Fechamento SDR", 
@@ -136,6 +128,27 @@ const menuItems: MenuItem[] = [
   { title: "Usuários", url: "/usuarios", icon: Users, resource: "usuarios", requiredRoles: ['admin'] },
   { title: "Configurações", url: "/configuracoes", icon: Settings, resource: "configuracoes", requiredRoles: ['admin'] },
 ];
+
+// Helper to get CRM items based on role
+const getCRMItems = (userRole: AppRole | null) => {
+  if (userRole === 'sdr') {
+    return [
+      { title: "Negócios", url: "/crm/negocios" },
+      { title: "Contatos", url: "/crm/contatos" },
+    ];
+  }
+  // Full items for admin, manager, coordenador, closer
+  return [
+    { title: "Visão Geral", url: "/crm" },
+    { title: "Contatos", url: "/crm/contatos" },
+    { title: "Negócios", url: "/crm/negocios" },
+    { title: "Origens", url: "/crm/origens" },
+    { title: "Grupos", url: "/crm/grupos" },
+    { title: "Tags", url: "/crm/tags" },
+    { title: "Importar Histórico", url: "/crm/importar-historico" },
+    { title: "Configurações", url: "/crm/configuracoes" },
+  ];
+};
 
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
@@ -160,8 +173,18 @@ export function AppSidebar() {
     return 'Viewer';
   };
 
+  // Build menu items dynamically with CRM items based on role
+  const buildMenuItems = (): MenuItem[] => {
+    return menuItems.map(item => {
+      if (item.title === 'CRM') {
+        return { ...item, items: getCRMItems(role) };
+      }
+      return item;
+    });
+  };
+
   // Filtragem combinada: requiredRoles (role-based) + resource permissions
-  const filteredMenuItems = menuItems.filter((item) => {
+  const filteredMenuItems = buildMenuItems().filter((item) => {
     // Se tem requiredRoles, verifica primeiro a role
     if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
       return false;
