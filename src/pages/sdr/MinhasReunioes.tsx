@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, AlertCircle, Filter, Download } from "lucide-react";
+import { Calendar, AlertCircle, Filter, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -10,12 +10,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSdrMeetings, MeetingFilters, Meeting } from "@/hooks/useSdrMeetings";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { useSdrMeetings, useSdrOriginsAndStages, MeetingFilters, Meeting } from "@/hooks/useSdrMeetings";
 import { MeetingSummaryCards } from "@/components/sdr/MeetingSummaryCards";
 import { MeetingsTable } from "@/components/sdr/MeetingsTable";
 import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
 import { ReviewRequestModal } from "@/components/sdr/ReviewRequestModal";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 type DatePreset = 'today' | 'week' | 'month' | 'custom';
 
@@ -29,12 +36,17 @@ const formatTimeToHuman = (hours: number | null): string => {
 export default function MinhasReunioes() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
   const [stageFilter, setStageFilter] = useState<string>('all');
   const [originFilter, setOriginFilter] = useState<string>('all');
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
 
-  // Calculate date range based on preset
+  // Fetch origins/stages separately (not affected by date filter)
+  const { data: originsStagesData } = useSdrOriginsAndStages();
+
+  // Calculate date range based on preset or custom
   const getDateRange = (): { startDate?: Date; endDate?: Date } => {
     const now = new Date();
     switch (datePreset) {
@@ -46,6 +58,11 @@ export default function MinhasReunioes() {
         const [year, month] = selectedMonth.split('-').map(Number);
         const monthDate = new Date(year, month - 1);
         return { startDate: startOfMonth(monthDate), endDate: endOfMonth(monthDate) };
+      case 'custom':
+        return { 
+          startDate: customStartDate ? startOfDay(customStartDate) : undefined, 
+          endDate: customEndDate ? endOfDay(customEndDate) : undefined 
+        };
       default:
         return {};
     }
@@ -59,25 +76,9 @@ export default function MinhasReunioes() {
 
   const { data, isLoading } = useSdrMeetings(filters);
 
-  // Extract unique origins from user's meetings (not all origins)
-  const userOrigins = useMemo(() => {
-    if (!data?.meetings) return [];
-    const originsMap = new Map<string, { id: string; name: string }>();
-    data.meetings.forEach(m => {
-      if (m.originId && !originsMap.has(m.originId)) {
-        originsMap.set(m.originId, { id: m.originId, name: m.originName });
-      }
-    });
-    return Array.from(originsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [data?.meetings]);
-
-  // Extract unique stages from user's meetings
-  const uniqueStages = useMemo(() => {
-    if (!data?.meetings) return [];
-    const stages = new Set<string>();
-    data.meetings.forEach(m => stages.add(m.currentStage));
-    return Array.from(stages).sort();
-  }, [data?.meetings]);
+  // Use origins/stages from separate hook (not affected by date filter)
+  const userOrigins = originsStagesData?.origins || [];
+  const uniqueStages = originsStagesData?.stages || [];
 
   // Generate month options for selector
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
@@ -88,6 +89,32 @@ export default function MinhasReunioes() {
       label: format(date, 'MMMM yyyy', { locale: ptBR })
     };
   });
+
+  // Handle preset shortcuts
+  const handlePresetClick = (preset: DatePreset) => {
+    setDatePreset(preset);
+    if (preset !== 'custom') {
+      setCustomStartDate(undefined);
+      setCustomEndDate(undefined);
+    }
+  };
+
+  // Handle custom date selection
+  const handleCustomStartDate = (date: Date | undefined) => {
+    setCustomStartDate(date);
+    setDatePreset('custom');
+  };
+
+  const handleCustomEndDate = (date: Date | undefined) => {
+    setCustomEndDate(date);
+    setDatePreset('custom');
+  };
+
+  const clearCustomDates = () => {
+    setCustomStartDate(undefined);
+    setCustomEndDate(undefined);
+    setDatePreset('month');
+  };
 
   // Export to CSV
   const handleExportCSV = () => {
@@ -135,8 +162,8 @@ export default function MinhasReunioes() {
         </div>
         
         <div className="flex items-center gap-3">
-          {/* Month Selector */}
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+          {/* Month Selector (for month preset) */}
+          <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setDatePreset('month'); }}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
@@ -176,17 +203,89 @@ export default function MinhasReunioes() {
           Filtros:
         </div>
         
-        {/* Date Preset */}
-        <Select value={datePreset} onValueChange={(v: DatePreset) => setDatePreset(v)}>
-          <SelectTrigger className="w-[130px] h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">Hoje</SelectItem>
-            <SelectItem value="week">Esta Semana</SelectItem>
-            <SelectItem value="month">Mês Inteiro</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Date Preset Shortcuts */}
+        <div className="flex items-center gap-1">
+          <Button 
+            variant={datePreset === 'today' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => handlePresetClick('today')}
+          >
+            Hoje
+          </Button>
+          <Button 
+            variant={datePreset === 'week' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => handlePresetClick('week')}
+          >
+            Semana
+          </Button>
+          <Button 
+            variant={datePreset === 'month' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => handlePresetClick('month')}
+          >
+            Mês
+          </Button>
+        </div>
+
+        {/* Custom Date Pickers */}
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "w-[130px] justify-start text-left font-normal",
+                  !customStartDate && "text-muted-foreground"
+                )}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {customStartDate ? format(customStartDate, "dd/MM/yyyy") : "Início"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={customStartDate}
+                onSelect={handleCustomStartDate}
+                initialFocus
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "w-[130px] justify-start text-left font-normal",
+                  !customEndDate && "text-muted-foreground"
+                )}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {customEndDate ? format(customEndDate, "dd/MM/yyyy") : "Fim"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={customEndDate}
+                onSelect={handleCustomEndDate}
+                initialFocus
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+
+          {(customStartDate || customEndDate) && (
+            <Button variant="ghost" size="sm" onClick={clearCustomDates} className="h-8 w-8 p-0">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         
         {/* Stage Filter with real stage names */}
         <Select value={stageFilter} onValueChange={setStageFilter}>
