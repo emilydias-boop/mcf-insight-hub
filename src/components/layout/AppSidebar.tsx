@@ -104,6 +104,7 @@ const menuItems: MenuItem[] = [
   { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
   { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { title: "Minhas Reuniões", url: "/sdr/minhas-reunioes", icon: Calendar, resource: "crm", requiredRoles: ['sdr'] },
+  { title: "Reuniões da Equipe", url: "/crm/reunioes-equipe", icon: Users, resource: "crm", requiredRoles: ['admin', 'manager', 'coordenador'] },
   { 
     title: "CRM", 
     icon: UserCircle, 
