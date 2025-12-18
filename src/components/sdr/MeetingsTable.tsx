@@ -9,35 +9,46 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Meeting } from "@/hooks/useSdrMeetings";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
+import { Meeting } from "@/hooks/useSdrMeetings";
+
+// Suporta ambos os tipos de meeting
+type MeetingType = Meeting | MeetingV2;
 
 interface MeetingsTableProps {
-  meetings: Meeting[];
+  meetings: MeetingType[];
   isLoading?: boolean;
-  onSelectMeeting: (meeting: Meeting) => void;
+  onSelectMeeting: (meeting: MeetingType) => void;
 }
 
-const getStageBadgeClass = (classification: string) => {
-  switch (classification) {
-    case 'agendada':
-      return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-    case 'realizada':
-      return 'bg-green-500/20 text-green-400 border-green-500/30';
-    case 'noShow':
-      return 'bg-red-500/20 text-red-400 border-red-500/30';
-    case 'contratoPago':
-      return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-    default:
-      return 'bg-muted text-muted-foreground';
+// Type guard para verificar se é MeetingV2
+function isMeetingV2(meeting: MeetingType): meeting is MeetingV2 {
+  return 'tipo' in meeting && 'status_atual' in meeting;
+}
+
+const getStatusBadgeClass = (status: string) => {
+  const statusLower = status.toLowerCase();
+  if (statusLower.includes('contrato')) {
+    return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
   }
+  if (statusLower.includes('realizada')) {
+    return 'bg-green-500/20 text-green-400 border-green-500/30';
+  }
+  if (statusLower.includes('no-show') || statusLower.includes('noshow')) {
+    return 'bg-red-500/20 text-red-400 border-red-500/30';
+  }
+  if (statusLower.includes('agendada')) {
+    return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+  }
+  return 'bg-muted text-muted-foreground';
 };
 
-const formatTimeToHuman = (hours: number | null): string => {
-  if (hours === null) return 'N/A';
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
+const getTipoBadgeClass = (tipo: string) => {
+  if (tipo === '1º Agendamento') {
+    return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+  }
+  return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
 };
 
 export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: MeetingsTableProps) {
@@ -61,6 +72,9 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
     );
   }
 
+  // Detectar se está usando V2 baseado no primeiro item
+  const isV2 = meetings.length > 0 && isMeetingV2(meetings[0]);
+
   return (
     <div className="h-full flex flex-col rounded-md border border-border overflow-hidden">
       <div className="flex-1 overflow-y-auto">
@@ -68,56 +82,88 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
           <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
             <TableRow className="hover:bg-muted/80">
               <TableHead className="text-muted-foreground">Data/Horário</TableHead>
+              {isV2 && <TableHead className="text-muted-foreground">Tipo</TableHead>}
               <TableHead className="text-muted-foreground">Lead</TableHead>
               <TableHead className="text-muted-foreground">Origem</TableHead>
-              <TableHead className="text-muted-foreground">Estágio</TableHead>
-              <TableHead className="text-muted-foreground">Tempo p/ Agendar</TableHead>
-              <TableHead className="text-muted-foreground">Tempo p/ Contrato</TableHead>
+              <TableHead className="text-muted-foreground">Status</TableHead>
+              {isV2 && <TableHead className="text-muted-foreground">Closer</TableHead>}
               <TableHead className="text-muted-foreground">Prob.</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {meetings.map((meeting) => (
-              <TableRow
-                key={meeting.id}
-                className="cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => onSelectMeeting(meeting)}
-              >
-                <TableCell className="font-medium">
-                  {meeting.scheduledDate
-                    ? format(new Date(meeting.scheduledDate), "dd/MM HH:mm", { locale: ptBR })
-                    : 'N/A'}
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-medium text-foreground">{meeting.contactName}</p>
-                    {meeting.contactEmail && (
-                      <p className="text-xs text-muted-foreground">{meeting.contactEmail}</p>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="text-muted-foreground">{meeting.originName}</span>
-                </TableCell>
-                <TableCell>
-                  <Badge 
-                    variant="outline"
-                    className={getStageBadgeClass(meeting.currentStageClassification)}
-                  >
-                    {meeting.currentStage}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatTimeToHuman(meeting.timeToSchedule)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatTimeToHuman(meeting.timeToContract)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {meeting.probability ? `${meeting.probability}%` : 'N/A'}
-                </TableCell>
-              </TableRow>
-            ))}
+            {meetings.map((meeting) => {
+              const isV2Meeting = isMeetingV2(meeting);
+              const id = isV2Meeting ? meeting.deal_id : meeting.id;
+              const date = isV2Meeting ? meeting.data_agendamento : meeting.scheduledDate;
+              const contactName = isV2Meeting ? meeting.contact_name : meeting.contactName;
+              const contactEmail = isV2Meeting ? meeting.contact_email : meeting.contactEmail;
+              const originName = isV2Meeting ? meeting.origin_name : meeting.originName;
+              const status = isV2Meeting ? meeting.status_atual : meeting.currentStage;
+              const probability = meeting.probability;
+
+              return (
+                <TableRow
+                  key={id}
+                  className="cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => onSelectMeeting(meeting)}
+                >
+                  <TableCell className="font-medium">
+                    {date
+                      ? format(new Date(date), "dd/MM HH:mm", { locale: ptBR })
+                      : 'N/A'}
+                  </TableCell>
+                  
+                  {isV2Meeting && (
+                    <TableCell>
+                      <Badge 
+                        variant="outline"
+                        className={getTipoBadgeClass(meeting.tipo)}
+                      >
+                        {meeting.tipo}
+                      </Badge>
+                    </TableCell>
+                  )}
+                  
+                  <TableCell>
+                    <div>
+                      <p className="font-medium text-foreground">{contactName}</p>
+                      {contactEmail && (
+                        <p className="text-xs text-muted-foreground">{contactEmail}</p>
+                      )}
+                    </div>
+                  </TableCell>
+                  
+                  <TableCell>
+                    <span className="text-muted-foreground">{originName || 'N/A'}</span>
+                  </TableCell>
+                  
+                  <TableCell>
+                    <Badge 
+                      variant="outline"
+                      className={getStatusBadgeClass(status)}
+                    >
+                      {status}
+                    </Badge>
+                  </TableCell>
+                  
+                  {isV2Meeting && (
+                    <TableCell>
+                      {meeting.closer ? (
+                        <span className="text-amber-400 font-medium">
+                          {meeting.closer.split('@')[0]}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                  )}
+                  
+                  <TableCell className="text-muted-foreground">
+                    {probability ? `${probability}%` : 'N/A'}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

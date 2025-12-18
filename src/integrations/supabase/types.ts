@@ -3675,6 +3675,22 @@ export type Database = {
       }
     }
     Functions: {
+      get_sdr_meetings_v2: {
+        Args: {
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: Json
+      }
+      get_sdr_metrics_v2: {
+        Args: {
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: Json
+      }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_sdr_metrics: { Args: { target_date: string }; Returns: Json }
       get_user_role: {

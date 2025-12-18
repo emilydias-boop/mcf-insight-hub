@@ -16,7 +16,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { useSdrMeetings, useSdrOriginsAndStages, MeetingFilters, Meeting } from "@/hooks/useSdrMeetings";
+import { useSdrOriginsAndStages } from "@/hooks/useSdrMeetings";
+import { useMinhasReunioesV2, MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { MeetingSummaryCards } from "@/components/sdr/MeetingSummaryCards";
 import { MeetingsTable } from "@/components/sdr/MeetingsTable";
 import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
@@ -26,28 +27,21 @@ import { cn } from "@/lib/utils";
 
 type DatePreset = 'today' | 'week' | 'month' | 'custom';
 
-const formatTimeToHuman = (hours: number | null): string => {
-  if (hours === null) return 'N/A';
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-};
-
 export default function MinhasReunioes() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [datePreset, setDatePreset] = useState<DatePreset>('month');
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
-  const [stageFilter, setStageFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [originFilter, setOriginFilter] = useState<string>('all');
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
 
   // Fetch origins/stages separately (not affected by date filter)
   const { data: originsStagesData } = useSdrOriginsAndStages();
 
   // Calculate date range based on preset or custom
-  const getDateRange = (): { startDate?: Date; endDate?: Date } => {
+  const getDateRange = (): { startDate: Date | null; endDate: Date | null } => {
     const now = new Date();
     switch (datePreset) {
       case 'today':
@@ -60,25 +54,31 @@ export default function MinhasReunioes() {
         return { startDate: startOfMonth(monthDate), endDate: endOfMonth(monthDate) };
       case 'custom':
         return { 
-          startDate: customStartDate ? startOfDay(customStartDate) : undefined, 
-          endDate: customEndDate ? endOfDay(customEndDate) : undefined 
+          startDate: customStartDate ? startOfDay(customStartDate) : null, 
+          endDate: customEndDate ? endOfDay(customEndDate) : null 
         };
       default:
-        return {};
+        return { startDate: null, endDate: null };
     }
   };
 
-  const filters: MeetingFilters = {
-    ...getDateRange(),
-    stageFilter: stageFilter === 'all' ? undefined : stageFilter,
-    originId: originFilter === 'all' ? undefined : originFilter
-  };
+  const { startDate, endDate } = getDateRange();
+  
+  // Usar nova hook V2 com lógica corrigida
+  const { meetings, summary, isLoading } = useMinhasReunioesV2(startDate, endDate);
 
-  const { data, isLoading } = useSdrMeetings(filters);
+  // Filtrar reuniões localmente
+  const filteredMeetings = meetings.filter(m => {
+    if (statusFilter !== 'all' && m.status_atual !== statusFilter) return false;
+    // Origin filter seria implementado se necessário
+    return true;
+  });
 
   // Use origins/stages from separate hook (not affected by date filter)
   const userOrigins = originsStagesData?.origins || [];
-  const uniqueStages = originsStagesData?.stages || [];
+  
+  // Status únicos das reuniões
+  const uniqueStatuses = [...new Set(meetings.map(m => m.status_atual))];
 
   // Generate month options for selector
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
@@ -118,21 +118,21 @@ export default function MinhasReunioes() {
 
   // Export to CSV
   const handleExportCSV = () => {
-    if (!data?.meetings.length) {
+    if (!filteredMeetings.length) {
       toast.error('Nenhum dado para exportar');
       return;
     }
 
-    const headers = ['Data', 'Lead', 'Email', 'Telefone', 'Origem', 'Estágio', 'Tempo p/ Agendar', 'Tempo p/ Contrato', 'Probabilidade'];
-    const rows = data.meetings.map(m => [
-      m.scheduledDate ? format(new Date(m.scheduledDate), 'dd/MM/yyyy HH:mm') : '',
-      m.contactName,
-      m.contactEmail || '',
-      m.contactPhone || '',
-      m.originName,
-      m.currentStage,
-      formatTimeToHuman(m.timeToSchedule),
-      formatTimeToHuman(m.timeToContract),
+    const headers = ['Data', 'Tipo', 'Lead', 'Email', 'Telefone', 'Origem', 'Status', 'Closer', 'Probabilidade'];
+    const rows = filteredMeetings.map(m => [
+      m.data_agendamento ? format(new Date(m.data_agendamento), 'dd/MM/yyyy HH:mm') : '',
+      m.tipo,
+      m.contact_name,
+      m.contact_email || '',
+      m.contact_phone || '',
+      m.origin_name || '',
+      m.status_atual,
+      m.closer || '',
       m.probability ? `${m.probability}%` : ''
     ]);
 
@@ -157,7 +157,7 @@ export default function MinhasReunioes() {
             Minhas Reuniões
           </h1>
           <p className="text-muted-foreground mt-1">
-            Resumo dos seus agendamentos e resultados
+            Resumo dos seus agendamentos e resultados (nova lógica de contagem)
           </p>
         </div>
         
@@ -191,7 +191,7 @@ export default function MinhasReunioes() {
       {/* Summary Cards */}
       <div className="flex-shrink-0 mt-6">
         <MeetingSummaryCards 
-          summary={data?.summary || { reunioesAgendadas: 0, reunioesRealizadas: 0, noShows: 0, taxaConversao: 0 }} 
+          summary={summary} 
           isLoading={isLoading} 
         />
       </div>
@@ -287,16 +287,16 @@ export default function MinhasReunioes() {
           )}
         </div>
         
-        {/* Stage Filter with real stage names */}
-        <Select value={stageFilter} onValueChange={setStageFilter}>
+        {/* Status Filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px] h-9">
-            <SelectValue placeholder="Estágio" />
+            <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os Estágios</SelectItem>
-            {uniqueStages.map((stage) => (
-              <SelectItem key={stage} value={stage}>
-                {stage}
+            <SelectItem value="all">Todos os Status</SelectItem>
+            {uniqueStatuses.map((status) => (
+              <SelectItem key={status} value={status}>
+                {status}
               </SelectItem>
             ))}
           </SelectContent>
@@ -332,16 +332,32 @@ export default function MinhasReunioes() {
       {/* Meetings Table with internal scroll */}
       <div className="flex-1 min-h-0 mt-6 overflow-hidden">
         <MeetingsTable 
-          meetings={data?.meetings || []} 
+          meetings={filteredMeetings} 
           isLoading={isLoading}
-          onSelectMeeting={setSelectedMeeting}
+          onSelectMeeting={(m) => setSelectedMeeting(m as MeetingV2)}
         />
       </div>
       
-      {/* Details Drawer */}
+      {/* Details Drawer - adaptar para MeetingV2 */}
       {selectedMeeting && (
         <MeetingDetailsDrawer 
-          meeting={selectedMeeting} 
+          meeting={{
+            id: selectedMeeting.deal_id,
+            dealId: selectedMeeting.deal_id,
+            dealName: selectedMeeting.deal_name,
+            contactName: selectedMeeting.contact_name,
+            contactEmail: selectedMeeting.contact_email,
+            contactPhone: selectedMeeting.contact_phone,
+            originId: null,
+            originName: selectedMeeting.origin_name || 'Desconhecida',
+            currentStage: selectedMeeting.status_atual,
+            currentStageClassification: 'other',
+            scheduledDate: selectedMeeting.data_agendamento,
+            probability: selectedMeeting.probability,
+            timeToSchedule: null,
+            timeToContract: null,
+            createdAt: ''
+          }} 
           onClose={() => setSelectedMeeting(null)} 
         />
       )}
