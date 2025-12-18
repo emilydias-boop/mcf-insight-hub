@@ -32,6 +32,7 @@ export interface MeetingV2 {
   origin_name: string | null;
   probability: number | null;
   conta: boolean; // Indica se este agendamento conta para as métricas
+  total_movimentacoes: number; // Quantas vezes foi para R1 Agendada no período
   from_stage?: string;
 }
 
