@@ -1,3 +1,4 @@
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -14,16 +15,17 @@ import { ChevronRight } from "lucide-react";
 interface SdrSummaryTableProps {
   data: SdrSummaryRow[];
   isLoading?: boolean;
-  selectedSdrEmail?: string | null;
-  onSelectSdr: (sdrEmail: string) => void;
 }
 
-export function SdrSummaryTable({ 
-  data, 
-  isLoading, 
-  selectedSdrEmail, 
-  onSelectSdr 
-}: SdrSummaryTableProps) {
+export function SdrSummaryTable({ data, isLoading }: SdrSummaryTableProps) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const handleRowClick = (sdrEmail: string) => {
+    // Build query params to preserve filters
+    const params = new URLSearchParams(searchParams);
+    navigate(`/crm/reunioes-equipe/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
+  };
   if (isLoading) {
     return (
       <div className="space-y-2 p-4">
@@ -62,16 +64,11 @@ export function SdrSummaryTable({
           </TableHeader>
           <TableBody>
             {data.map((row) => {
-              const isSelected = selectedSdrEmail === row.sdrEmail;
               return (
                 <TableRow
                   key={row.sdrEmail}
-                  className={`cursor-pointer transition-colors ${
-                    isSelected 
-                      ? 'bg-primary/10 border-l-2 border-l-primary' 
-                      : 'hover:bg-muted/30'
-                  }`}
-                  onClick={() => onSelectSdr(row.sdrEmail)}
+                  className="cursor-pointer transition-colors hover:bg-muted/30"
+                  onClick={() => handleRowClick(row.sdrEmail)}
                 >
                   <TableCell className="font-medium">
                     <div className="flex flex-col">
@@ -121,7 +118,7 @@ export function SdrSummaryTable({
                     </span>
                   </TableCell>
                   <TableCell>
-                    <ChevronRight className={`h-4 w-4 transition-transform ${isSelected ? 'rotate-90 text-primary' : 'text-muted-foreground'}`} />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               );
