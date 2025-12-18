@@ -23,11 +23,13 @@ export function SdrReportSection() {
   );
   
   const totals = (sdrData || []).reduce((acc, sdr) => ({
+    primeiro_agendamento: acc.primeiro_agendamento + (sdr.primeiro_agendamento || 0),
+    reagendamento: acc.reagendamento + (sdr.reagendamento || 0),
     r1_agendada: acc.r1_agendada + sdr.r1_agendada,
     r1_realizada: acc.r1_realizada + sdr.r1_realizada,
     no_shows: acc.no_shows + sdr.no_shows,
     contratos: acc.contratos + sdr.contratos,
-  }), { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0 });
+  }), { primeiro_agendamento: 0, reagendamento: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0 });
   
   const handleExportExcel = () => {
     try {
@@ -36,12 +38,14 @@ export function SdrReportSection() {
         return;
       }
       
-      // Prepare data for Excel
+      // Prepare data for Excel with new columns
       const excelData = sdrData.map(sdr => ({
         'SDR': sdr.sdr_name,
         'Email': sdr.sdr_email,
-        'R1 Agendadas': sdr.r1_agendada,
-        'R1 Realizadas': sdr.r1_realizada,
+        '1º Agend': sdr.primeiro_agendamento || 0,
+        'Reagend': sdr.reagendamento || 0,
+        'Total Agend': sdr.r1_agendada,
+        'Realizadas': sdr.r1_realizada,
         'No-Shows': sdr.no_shows,
         'Contratos': sdr.contratos,
         'Taxa Conversão (%)': sdr.taxa_conversao.toFixed(1),
@@ -52,8 +56,10 @@ export function SdrReportSection() {
       excelData.push({
         'SDR': 'TOTAL',
         'Email': '',
-        'R1 Agendadas': totals.r1_agendada,
-        'R1 Realizadas': totals.r1_realizada,
+        '1º Agend': totals.primeiro_agendamento,
+        'Reagend': totals.reagendamento,
+        'Total Agend': totals.r1_agendada,
+        'Realizadas': totals.r1_realizada,
         'No-Shows': totals.no_shows,
         'Contratos': totals.contratos,
         'Taxa Conversão (%)': totals.r1_agendada > 0 
@@ -74,9 +80,11 @@ export function SdrReportSection() {
       ws['!cols'] = [
         { wch: 25 }, // SDR
         { wch: 35 }, // Email
-        { wch: 15 }, // Agendadas
-        { wch: 15 }, // Realizadas
-        { wch: 12 }, // No-Shows
+        { wch: 10 }, // 1º Agend
+        { wch: 10 }, // Reagend
+        { wch: 12 }, // Total Agend
+        { wch: 12 }, // Realizadas
+        { wch: 10 }, // No-Shows
         { wch: 12 }, // Contratos
         { wch: 18 }, // Taxa Conversão
         { wch: 18 }, // Taxa No-Show
@@ -84,20 +92,22 @@ export function SdrReportSection() {
       
       XLSX.utils.book_append_sheet(wb, ws, 'Relatório SDR');
       
-      // Create summary sheet
+      // Create summary sheet with updated metrics
       const summaryData = [
         { 'Métrica': 'Período', 'Valor': `${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}` },
         { 'Métrica': 'Total SDRs', 'Valor': sdrData.length },
-        { 'Métrica': 'Total R1 Agendadas', 'Valor': totals.r1_agendada },
-        { 'Métrica': 'Total R1 Realizadas', 'Valor': totals.r1_realizada },
-        { 'Métrica': 'Total No-Shows', 'Valor': totals.no_shows },
-        { 'Métrica': 'Total Contratos', 'Valor': totals.contratos },
+        { 'Métrica': '1º Agendamentos', 'Valor': totals.primeiro_agendamento },
+        { 'Métrica': 'Reagendamentos', 'Valor': totals.reagendamento },
+        { 'Métrica': 'Total Agendamentos', 'Valor': totals.r1_agendada },
+        { 'Métrica': 'Realizadas (Intermediação)', 'Valor': totals.r1_realizada },
+        { 'Métrica': 'No-Shows', 'Valor': totals.no_shows },
+        { 'Métrica': 'Contratos (Intermediação)', 'Valor': totals.contratos },
         { 'Métrica': 'Taxa Conversão Média', 'Valor': `${totals.r1_agendada > 0 ? ((totals.r1_realizada / totals.r1_agendada) * 100).toFixed(1) : 0}%` },
         { 'Métrica': 'Taxa No-Show Média', 'Valor': `${totals.r1_agendada > 0 ? ((totals.no_shows / totals.r1_agendada) * 100).toFixed(1) : 0}%` },
       ];
       
       const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-      wsSummary['!cols'] = [{ wch: 25 }, { wch: 30 }];
+      wsSummary['!cols'] = [{ wch: 30 }, { wch: 30 }];
       XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
       
       // Generate filename
@@ -119,7 +129,7 @@ export function SdrReportSection() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Relatório de Performance SDR
+            Relatório de Performance SDR (Nova Lógica)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -180,18 +190,30 @@ export function SdrReportSection() {
         </Card>
       )}
 
-      {/* Summary Cards - only show when not loading and no error */}
+      {/* Summary Cards - updated */}
       {!isLoading && !isError && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <Card className="bg-card border-border">
             <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">R1 Agendadas</p>
-              <p className="text-2xl font-bold text-primary">{totals.r1_agendada}</p>
+              <p className="text-sm text-muted-foreground">1º Agend</p>
+              <p className="text-2xl font-bold text-primary">{totals.primeiro_agendamento}</p>
             </CardContent>
           </Card>
           <Card className="bg-card border-border">
             <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">R1 Realizadas</p>
+              <p className="text-sm text-muted-foreground">Reagend</p>
+              <p className="text-2xl font-bold text-amber-500">{totals.reagendamento}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Total Agend</p>
+              <p className="text-2xl font-bold text-blue-500">{totals.r1_agendada}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-card border-border">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Realizadas</p>
               <p className="text-2xl font-bold text-success">{totals.r1_realizada}</p>
             </CardContent>
           </Card>
@@ -210,7 +232,7 @@ export function SdrReportSection() {
         </div>
       )}
       
-      {/* Data Table - only show when not loading and no error */}
+      {/* Data Table - updated columns */}
       {!isLoading && !isError && (
         <Card className="bg-card border-border">
           <CardHeader>
@@ -226,12 +248,14 @@ export function SdrReportSection() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>SDR</TableHead>
-                    <TableHead className="text-center">R1 Agendadas</TableHead>
-                    <TableHead className="text-center">R1 Realizadas</TableHead>
+                    <TableHead className="text-center">1º Agend</TableHead>
+                    <TableHead className="text-center">Reagend</TableHead>
+                    <TableHead className="text-center">Total</TableHead>
+                    <TableHead className="text-center">Realizadas</TableHead>
                     <TableHead className="text-center">No-Shows</TableHead>
                     <TableHead className="text-center">Contratos</TableHead>
-                    <TableHead className="text-center">Taxa Conversão</TableHead>
-                    <TableHead className="text-center">Taxa No-Show</TableHead>
+                    <TableHead className="text-center">Conv %</TableHead>
+                    <TableHead className="text-center">NS %</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -243,7 +267,9 @@ export function SdrReportSection() {
                           <p className="text-xs text-muted-foreground">{sdr.sdr_email}</p>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center font-medium">{sdr.r1_agendada}</TableCell>
+                      <TableCell className="text-center font-medium">{sdr.primeiro_agendamento || 0}</TableCell>
+                      <TableCell className="text-center font-medium text-amber-500">{sdr.reagendamento || 0}</TableCell>
+                      <TableCell className="text-center font-medium text-blue-500">{sdr.r1_agendada}</TableCell>
                       <TableCell className="text-center font-medium text-success">{sdr.r1_realizada}</TableCell>
                       <TableCell className="text-center font-medium text-destructive">{sdr.no_shows}</TableCell>
                       <TableCell className="text-center font-medium">{sdr.contratos}</TableCell>
@@ -262,7 +288,9 @@ export function SdrReportSection() {
                   {/* Totals row */}
                   <TableRow className="bg-muted/50 font-bold">
                     <TableCell>TOTAL</TableCell>
-                    <TableCell className="text-center">{totals.r1_agendada}</TableCell>
+                    <TableCell className="text-center">{totals.primeiro_agendamento}</TableCell>
+                    <TableCell className="text-center text-amber-500">{totals.reagendamento}</TableCell>
+                    <TableCell className="text-center text-blue-500">{totals.r1_agendada}</TableCell>
                     <TableCell className="text-center text-success">{totals.r1_realizada}</TableCell>
                     <TableCell className="text-center text-destructive">{totals.no_shows}</TableCell>
                     <TableCell className="text-center">{totals.contratos}</TableCell>
