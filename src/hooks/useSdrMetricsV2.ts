@@ -95,7 +95,8 @@ export const useSdrMetricsV2 = (startDate: Date | null, endDate: Date | null, sd
       };
     },
     enabled: !!startDate && !!endDate,
-    staleTime: 30000
+    staleTime: 30000,
+    refetchInterval: 60000
   });
 };
 
@@ -123,7 +124,8 @@ export const useSdrMeetingsV2 = (startDate: Date | null, endDate: Date | null, s
       return (data as unknown as MeetingV2[]) || [];
     },
     enabled: !!startDate && !!endDate,
-    staleTime: 30000
+    staleTime: 30000,
+    refetchInterval: 60000
   });
 };
 
