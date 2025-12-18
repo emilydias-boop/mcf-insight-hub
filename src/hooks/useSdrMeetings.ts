@@ -67,6 +67,53 @@ export interface DealTimelineEvent {
   completed: boolean;
 }
 
+// Separate hook to get user's origins/stages without date filter (for dropdowns)
+export const useSdrOriginsAndStages = () => {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ['sdr-origins-stages', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return { origins: [], stages: [] };
+      
+      // Get all deals owned by current SDR
+      const { data: deals, error } = await supabase
+        .from('crm_deals')
+        .select(`
+          origin_id,
+          crm_origins (name),
+          crm_stages (stage_name)
+        `)
+        .eq('owner_id', user.email);
+      
+      if (error) throw error;
+      
+      // Extract unique origins
+      const originsMap = new Map<string, { id: string; name: string }>();
+      const stagesSet = new Set<string>();
+      
+      (deals || []).forEach(deal => {
+        if (deal.origin_id && (deal.crm_origins as any)?.name) {
+          originsMap.set(deal.origin_id, {
+            id: deal.origin_id,
+            name: (deal.crm_origins as any).name
+          });
+        }
+        if ((deal.crm_stages as any)?.stage_name) {
+          stagesSet.add((deal.crm_stages as any).stage_name);
+        }
+      });
+      
+      return {
+        origins: Array.from(originsMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+        stages: Array.from(stagesSet).sort()
+      };
+    },
+    enabled: !!user?.email,
+    staleTime: 60000
+  });
+};
+
 export const useSdrMeetings = (filters: MeetingFilters = {}) => {
   const { user } = useAuth();
   

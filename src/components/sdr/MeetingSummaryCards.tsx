@@ -10,28 +10,28 @@ interface MeetingSummaryCardsProps {
 export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsProps) {
   const cards = [
     {
-      title: "Reuniões Agendadas",
+      title: "Agendamentos",
       value: summary.reunioesAgendadas,
       icon: Calendar,
       color: "text-blue-500",
       bgColor: "bg-blue-500/10"
     },
     {
-      title: "Reuniões Realizadas",
+      title: "Realizadas",
       value: summary.reunioesRealizadas,
       icon: CheckCircle,
       color: "text-green-500",
       bgColor: "bg-green-500/10"
     },
     {
-      title: "No-show",
+      title: "No-Shows",
       value: summary.noShows,
       icon: XCircle,
       color: "text-red-500",
       bgColor: "bg-red-500/10"
     },
     {
-      title: "Taxa de Conversão",
+      title: "Taxa Conversão",
       value: `${summary.taxaConversao}%`,
       icon: TrendingUp,
       color: "text-purple-500",
