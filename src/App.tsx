@@ -7,6 +7,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { TwilioProvider } from "./contexts/TwilioContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ResourceGuard } from "./components/auth/ResourceGuard";
+import { RoleGuard } from "./components/auth/RoleGuard";
 import { MainLayout } from "./components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
@@ -52,6 +53,7 @@ import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import RHColaboradores from "./pages/rh/Colaboradores";
 import Financeiro from "./pages/Financeiro";
 import MeuRH from "./pages/MeuRH";
+import MinhasReunioes from "./pages/sdr/MinhasReunioes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -109,6 +111,7 @@ const App = () => (
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="meu-rh" element={<MeuRH />} />
+              <Route path="sdr/minhas-reunioes" element={<ResourceGuard resource="crm"><MinhasReunioes /></ResourceGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />

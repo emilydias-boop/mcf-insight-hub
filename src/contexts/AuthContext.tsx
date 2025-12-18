@@ -151,8 +151,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .update({ last_login_at: new Date().toISOString() })
         .eq('id', authData.user.id);
       
+      // Buscar role do usuário para redirect condicional
+      const userRole = await fetchUserRole(authData.user.id);
+      
       toast.success('Login realizado com sucesso!');
-      navigate('/');
+      
+      // SDR redireciona para Minhas Reuniões
+      if (userRole === 'sdr') {
+        navigate('/sdr/minhas-reunioes');
+      } else {
+        navigate('/');
+      }
     } catch (error: any) {
       toast.error(error.message || 'Erro ao fazer login');
       throw error;
