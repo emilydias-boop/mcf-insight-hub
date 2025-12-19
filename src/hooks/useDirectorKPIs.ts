@@ -436,7 +436,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
-          const isA010 = productName.includes("A010") || tx.product_category === 'a010';
+          // Excluir MCF FUNDAMENTOS (produto de automação Make, não é venda A010)
+          const isA010 = (productName.includes("A010") || tx.product_category === 'a010')
+            && !productName.includes("MCF FUNDAMENTOS");
           
           if (isA010) {
             const email = (tx.customer_email || "").toLowerCase().trim();
