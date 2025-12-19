@@ -346,8 +346,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       console.log("📊 A010 Order Bumps com net_value=0:", a010OfferData?.length || 0);
 
-      // Combinar dados: principal + A010 Order Bumps sem valor
-      const allHublaData = [...(hublaDataRaw || []), ...(a010OfferData || [])];
+      // CORREÇÃO: Excluir MCF FUNDAMENTOS ANTES da deduplicação
+      // MCF Fundamentos é automação Make com product_category='a010', não é venda real
+      const filteredHublaData = (hublaDataRaw || []).filter(tx => {
+        const productName = (tx.product_name || "").toUpperCase();
+        return !productName.includes("MCF FUNDAMENTOS");
+      });
+
+      // Combinar dados: principal (sem MCF Fundamentos) + A010 Order Bumps sem valor
+      const allHublaData = [...filteredHublaData, ...(a010OfferData || [])];
 
       // Aplicar deduplicação inteligente: Make > Hubla/Kiwify (Make tem taxa real)
       const hublaData = deduplicateTransactions(allHublaData as HublaTransaction[]);
@@ -436,9 +443,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         
         (hublaData || []).forEach((tx) => {
           const productName = (tx.product_name || "").toUpperCase();
-          // Excluir MCF FUNDAMENTOS (produto de automação Make, não é venda A010)
-          const isA010 = (productName.includes("A010") || tx.product_category === 'a010')
-            && !productName.includes("MCF FUNDAMENTOS");
+          // MCF Fundamentos já foi excluído antes da deduplicação
+          const isA010 = productName.includes("A010") || tx.product_category === 'a010';
           
           if (isA010) {
             const email = (tx.customer_email || "").toLowerCase().trim();
