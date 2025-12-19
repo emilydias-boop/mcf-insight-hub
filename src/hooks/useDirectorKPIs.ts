@@ -435,18 +435,18 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // - OBs (Vitalício, Construir, Evento) e A010: Make (count_in_dashboard=true)
       // - Incorporador 50k: Hubla
 
-      // ===== VENDAS A010 (APENAS MAKE) =====
-      // CORREÇÃO: Usar APENAS transações do Make para contagem de A010
-      // A planilha usa dados do Make, então devemos espelhar essa lógica
+      // ===== VENDAS A010 (TODAS AS FONTES) =====
+      // Usar todas as fontes (Hubla, Make, Kiwify) com count_in_dashboard=true
+      // Deduplicar por EMAIL ÚNICO
       const vendasA010Calc = (() => {
         const seenA010Emails = new Set<string>();
         
-        // Usar allHublaData para pegar TODAS as transações Make
-        (allHublaData || []).forEach((tx) => {
-          // APENAS transações do Make com categoria a010
-          const isA010FromMake = tx.product_category === 'a010' && tx.source === 'make';
+        (hublaData || []).forEach((tx) => {
+          const productName = (tx.product_name || "").toUpperCase();
+          // MCF Fundamentos já foi excluído antes da deduplicação
+          const isA010 = productName.includes("A010") || tx.product_category === 'a010';
           
-          if (isA010FromMake) {
+          if (isA010) {
             const email = (tx.customer_email || "").toLowerCase().trim();
             if (!email) return;
             
@@ -454,7 +454,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           }
         });
 
-        console.log("🔍 Vendas A010 (Make apenas, emails únicos):", seenA010Emails.size);
+        console.log("🔍 Vendas A010 (todas fontes, emails únicos):", seenA010Emails.size);
         return seenA010Emails.size;
       })();
 
