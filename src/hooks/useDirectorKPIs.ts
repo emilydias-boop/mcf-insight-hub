@@ -446,9 +446,11 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           // APENAS transações do Make
           if (tx.source !== 'make') return;
           
-          const productName = (tx.product_name || "").toUpperCase();
-          // MCF Fundamentos não é venda real
-          if (productName.includes("MCF FUNDAMENTOS")) return;
+          const productName = (tx.product_name || "").toUpperCase().trim();
+          
+          // Excluir APENAS "MCF FUNDAMENTOS" puro (automação fake)
+          // MANTER "A010 - MCF FUNDAMENTOS" pois é venda real do Make
+          if (productName === "MCF FUNDAMENTOS") return;
           
           const isA010 = productName.includes("A010") || tx.product_category === 'a010';
           
