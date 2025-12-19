@@ -68,12 +68,31 @@ const PRODUTOS_FATURAMENTO_CLINT = [
   "Sócio Jantar",
 ];
 
-// Função helper para verificar se produto está na lista exata (case-insensitive)
-const isProductInFaturamentoClint = (productName: string): boolean => {
-  const normalizedName = productName.trim().toUpperCase();
-  return PRODUTOS_FATURAMENTO_CLINT.some(
-    (p) => p.toUpperCase() === normalizedName
-  );
+// Função helper para verificar se produto está na lista de Faturamento Clint
+// Verifica por nome, prefixo de código OU por categoria (para produtos Make)
+const isProductInFaturamentoClint = (productName: string, productCategory?: string | null): boolean => {
+  const normalized = productName.trim().toUpperCase();
+  
+  // 1. Verificar por categoria (produtos Make e Hubla)
+  const validCategories = ['incorporador', 'parceria', 'contrato', 'contrato-anticrise', 'imersao_socios'];
+  if (productCategory && validCategories.includes(productCategory)) {
+    return true;
+  }
+  
+  // 2. Verificar por prefixo de código (A000, A001, A002, A003, A004, A005, A009)
+  const validPrefixes = ['A000', 'A001', 'A002', 'A003', 'A004', 'A005', 'A009'];
+  if (validPrefixes.some(prefix => normalized.startsWith(prefix))) {
+    return true;
+  }
+  
+  // 3. Verificar por nome parcial da lista original (includes bidirecional)
+  if (PRODUTOS_FATURAMENTO_CLINT.some(p => 
+    normalized.includes(p.toUpperCase()) || p.toUpperCase().includes(normalized)
+  )) {
+    return true;
+  }
+  
+  return false;
 };
 
 // Produtos do Incorporador 50k (para cálculos antigos - mantido para compatibilidade)
@@ -571,7 +590,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         if (parentIdsWithOffers.has(tx.hubla_id)) return false;
         
         const productName = tx.product_name || "";
-        if (!isProductInFaturamentoClint(productName)) return false;
+        if (!isProductInFaturamentoClint(productName, tx.product_category)) return false;
         
         const productNameUpper = productName.toUpperCase();
         if (productNameUpper.includes("RENOVAÇÃO") || productNameUpper.includes("RENOVACAO")) return false;
