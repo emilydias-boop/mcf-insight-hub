@@ -118,7 +118,9 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       const a010Emails = new Set<string>();
       transactions.forEach(tx => {
         const productName = (tx.product_name || '').toUpperCase();
-        const isA010 = tx.product_category === 'a010' || productName.includes('A010');
+        // Excluir MCF FUNDAMENTOS (produto de automação Make, não é venda A010)
+        const isA010 = (tx.product_category === 'a010' || productName.includes('A010'))
+          && !productName.includes('MCF FUNDAMENTOS');
         const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
         const hublaId = tx.hubla_id || '';
         
