@@ -168,7 +168,7 @@ export default function AuditoriaAgendamentos() {
           <div className="flex flex-wrap gap-4">
             <div className="flex-1 min-w-[200px]">
               <Input
-                placeholder="Buscar por SDR..."
+                placeholder="Buscar por SDR ou Lead..."
                 value={filters.sdr_email || ''}
                 onChange={(e) => setFilters({ ...filters, sdr_email: e.target.value })}
                 className="w-full"
