@@ -348,9 +348,12 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
 
       // CORREÇÃO: Excluir MCF FUNDAMENTOS ANTES da deduplicação
       // MCF Fundamentos é automação Make com product_category='a010', não é venda real
-      const filteredHublaData = (hublaDataRaw || []).filter(tx => {
-        const productName = (tx.product_name || "").toUpperCase();
-        return !productName.includes("MCF FUNDAMENTOS");
+      const filteredHublaData = (hublaDataRaw || []).filter((tx) => {
+        const productName = (tx.product_name || "").toUpperCase().trim();
+        // Excluir APENAS "MCF FUNDAMENTOS" puro (automação fake)
+        // MANTER "A010 - MCF FUNDAMENTOS" pois é venda real do Make
+        if (productName === "MCF FUNDAMENTOS") return false;
+        return true;
       });
 
       // Combinar dados: principal (sem MCF Fundamentos) + A010 Order Bumps sem valor
