@@ -435,15 +435,21 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // - OBs (Vitalício, Construir, Evento) e A010: Make (count_in_dashboard=true)
       // - Incorporador 50k: Hubla
 
-      // ===== VENDAS A010 (TODAS AS FONTES) =====
-      // Usar todas as fontes (Hubla, Make, Kiwify) com count_in_dashboard=true
+      // ===== VENDAS A010 (APENAS MAKE) =====
+      // Make é a fonte de verdade para contagem de A010
       // Deduplicar por EMAIL ÚNICO
       const vendasA010Calc = (() => {
         const seenA010Emails = new Set<string>();
         
-        (hublaData || []).forEach((tx) => {
+        // CORREÇÃO: Usar allHublaData e filtrar apenas source='make'
+        ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
+          // APENAS transações do Make
+          if (tx.source !== 'make') return;
+          
           const productName = (tx.product_name || "").toUpperCase();
-          // MCF Fundamentos já foi excluído antes da deduplicação
+          // MCF Fundamentos não é venda real
+          if (productName.includes("MCF FUNDAMENTOS")) return;
+          
           const isA010 = productName.includes("A010") || tx.product_category === 'a010';
           
           if (isA010) {
@@ -454,7 +460,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           }
         });
 
-        console.log("🔍 Vendas A010 (todas fontes, emails únicos):", seenA010Emails.size);
+        console.log("🔍 Vendas A010 (Make apenas, emails únicos):", seenA010Emails.size);
         return seenA010Emails.size;
       })();
 
