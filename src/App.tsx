@@ -43,6 +43,7 @@ import ImportarContatos from "./pages/crm/ImportarContatos";
 import ImportarNegocios from "./pages/crm/ImportarNegocios";
 import ImportarHistorico from "./pages/crm/ImportarHistorico";
 import AuditoriaAgendamentos from "./pages/crm/AuditoriaAgendamentos";
+import Atendimentos from "./pages/crm/Atendimentos";
 import TVSdrPerformance from "./pages/TVSdrPerformance";
 import TVSdrFullscreen from "./pages/TVSdrFullscreen";
 import TVSdrCelebrationDemo from "./pages/TVSdrCelebrationDemo";
@@ -121,6 +122,7 @@ const App = () => (
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
                 <Route path="negocios" element={<Negocios />} />
+                <Route path="atendimentos" element={<Atendimentos />} />
                 <Route path="origens" element={<Origens />} />
                 <Route path="grupos" element={<Grupos />} />
                 <Route path="tags" element={<Tags />} />
