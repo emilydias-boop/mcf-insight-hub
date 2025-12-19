@@ -50,6 +50,9 @@ const FATURAMENTO_CLINT_PRODUCTS = [
   'R21- MCF INCORPORADOR P2 (ASSINATURA)',
   'R21 - MCF INCORPORADOR P2 (ASSINATURA)',
   'SÓCIO JANTAR',
+  // NOVO: Produtos Make sem prefixo de código
+  'PARCERIA',
+  'CONTRATO',
 ];
 
 // Categorias excluídas do Faturamento Total (sincronizado com useDirectorKPIs)
@@ -63,9 +66,22 @@ const EXCLUDED_PRODUCTS_FATURAMENTO = [
 ];
 
 // Helper para verificar se produto está na lista de Faturamento Clint
-const isProductInFaturamentoClint = (productName: string): boolean => {
+// Verifica por nome OU por categoria (para produtos Make)
+const isProductInFaturamentoClint = (productName: string, productCategory?: string | null): boolean => {
   const normalized = productName.toUpperCase().trim();
-  return FATURAMENTO_CLINT_PRODUCTS.some(p => normalized.includes(p) || p.includes(normalized));
+  
+  // Verificar por nome
+  if (FATURAMENTO_CLINT_PRODUCTS.some(p => normalized.includes(p.toUpperCase()) || p.toUpperCase().includes(normalized))) {
+    return true;
+  }
+  
+  // Verificar por categoria (produtos Make)
+  const validCategories = ['incorporador', 'parceria', 'contrato', 'imersao_socios'];
+  if (productCategory && validCategories.includes(productCategory)) {
+    return true;
+  }
+  
+  return false;
 };
 
 // Helper para formatar data no fuso horário de Brasília (UTC-3)
@@ -166,8 +182,8 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         // Excluir A006 - Renovação Parceiro MCF e A009 - Renovação
         if (productName.includes('RENOVAÇÃO') || productName.includes('RENOVACAO')) return;
         
-        // Verificar se é produto válido do Faturamento Clint
-        const isValidProduct = isProductInFaturamentoClint(tx.product_name || '');
+        // Verificar se é produto válido do Faturamento Clint (por nome OU categoria)
+        const isValidProduct = isProductInFaturamentoClint(tx.product_name || '', tx.product_category);
         if (!isValidProduct) return;
         
         // Excluir parents que são containers (têm offers filhos)
