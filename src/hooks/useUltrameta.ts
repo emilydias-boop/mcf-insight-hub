@@ -190,10 +190,14 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         const isParentWithOffers = parentIdsWithOffers.has(hublaId);
         if (isParentWithOffers) return;
         
-        // Exigir customer_email válido e net_value > 0
+        // Exigir customer_email válido e algum valor positivo (net_value OU product_price)
         const email = (tx.customer_email || '').toLowerCase().trim();
         if (!email) return;
-        if (!tx.net_value || tx.net_value <= 0) return;
+        
+        // CORREÇÃO: Aceitar se tiver net_value > 0 OU product_price > 0
+        // Alguns produtos Make têm net_value=0 mas product_price válido
+        const hasValue = (tx.net_value && tx.net_value > 0) || (tx.product_price && tx.product_price > 0);
+        if (!hasValue) return;
         
         // NOVA CHAVE: timestamp preciso (até segundo) + email + valor
         // Isso agrupa mesma transação de fontes diferentes mas mantém compras distintas
