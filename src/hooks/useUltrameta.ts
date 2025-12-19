@@ -130,21 +130,15 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       }
 
       // ===== VENDAS A010 (EMAILS ÚNICOS) =====
-      // CORREÇÃO: Conta emails únicos para A010, INCLUINDO source='make'
+      // CORREÇÃO: Usar APENAS transações do Make para contagem de A010
+      // A planilha usa dados do Make, então devemos espelhar essa lógica
       const a010Emails = new Set<string>();
       transactions.forEach(tx => {
-        const productName = (tx.product_name || '').toUpperCase();
-        // Excluir MCF FUNDAMENTOS (produto de automação Make, não é venda A010)
-        const isA010 = (tx.product_category === 'a010' || productName.includes('A010'))
-          && !productName.includes('MCF FUNDAMENTOS');
+        // APENAS transações do Make com categoria a010
+        const isA010FromMake = tx.product_category === 'a010' && tx.source === 'make';
         const hasValidEmail = tx.customer_email && tx.customer_email.trim() !== '';
-        const hublaId = tx.hubla_id || '';
         
-        // Excluir apenas newsale- (sem dados completos)
-        // CORREÇÃO: -offer- são vendas A010 legítimas (Order Bump), manter
-        if (hublaId.startsWith('newsale-')) return;
-        
-        if (isA010 && hasValidEmail) {
+        if (isA010FromMake && hasValidEmail) {
           a010Emails.add(tx.customer_email!.toLowerCase().trim());
         }
       });
