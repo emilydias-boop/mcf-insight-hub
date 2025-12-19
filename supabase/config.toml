@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.sync-newsale-orphans]
 verify_jwt = false
+
+[functions.sync-newsale-orphans-cron]
+verify_jwt = false

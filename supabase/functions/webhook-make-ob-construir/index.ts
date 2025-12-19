@@ -99,6 +99,7 @@ Deno.serve(async (req) => {
       sale_date: saleDate,
       sale_status: 'completed',
       source: 'make',
+      count_in_dashboard: true,
       raw_data: body,
     };
 

@@ -106,6 +106,7 @@ Deno.serve(async (req) => {
       event_type: 'invoice.payment_succeeded',
       sale_status: 'completed',
       source: 'make',
+      count_in_dashboard: true,
       raw_data: body,
     };
 
