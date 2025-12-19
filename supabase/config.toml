@@ -146,3 +146,6 @@ verify_jwt = false
 
 [functions.detect-ghost-appointments]
 verify_jwt = false
+
+[functions.sync-newsale-orphans]
+verify_jwt = false
