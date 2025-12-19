@@ -75,7 +75,13 @@ export function useGhostAuditList(filters?: GhostAuditFilters) {
         query = query.eq('ghost_type', filters.ghost_type);
       }
       if (filters?.sdr_email) {
-        query = query.ilike('sdr_email', `%${filters.sdr_email}%`);
+        // Busca rápida (SDR ou Lead)
+        const term = filters.sdr_email.trim();
+        if (term) {
+          query = query.or(
+            `sdr_email.ilike.%${term}%,sdr_name.ilike.%${term}%,contact_name.ilike.%${term}%,contact_email.ilike.%${term}%`
+          );
+        }
       }
       if (filters?.startDate) {
         query = query.gte('detection_date', filters.startDate);
