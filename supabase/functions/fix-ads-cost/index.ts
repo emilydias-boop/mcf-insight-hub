@@ -57,13 +57,50 @@ serve(async (req) => {
 
     console.log(`✅ Corrigido: R$ ${current?.amount} → R$ ${correct_amount}`);
 
+    // Recalcular métricas da semana automaticamente
+    const dateObj = new Date(date + 'T12:00:00Z');
+    const dayOfWeek = dateObj.getUTCDay();
+    // Encontrar sábado anterior (início da semana)
+    const daysToSaturday = (dayOfWeek + 1) % 7;
+    const weekStart = new Date(dateObj);
+    weekStart.setUTCDate(dateObj.getUTCDate() - daysToSaturday);
+    // Encontrar sexta seguinte (fim da semana)
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+    console.log(`🔄 Recalculando métricas da semana ${weekStartStr} a ${weekEndStr}...`);
+
+    // Chamar calculate-weekly-metrics
+    const calcResponse = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/calculate-weekly-metrics`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ week_start: weekStartStr, week_end: weekEndStr }),
+      }
+    );
+
+    const calcResult = await calcResponse.json();
+    console.log(`✅ Métricas recalculadas:`, calcResult);
+
     return new Response(
       JSON.stringify({
         success: true,
         message: `Custo Ads de ${date} corrigido de R$ ${current?.amount} para R$ ${correct_amount}`,
         old_value: current?.amount,
         new_value: correct_amount,
-        data
+        data,
+        metrics_recalculated: {
+          week_start: weekStartStr,
+          week_end: weekEndStr,
+          result: calcResult
+        }
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
