@@ -425,9 +425,6 @@ Deno.serve(async (req) => {
       // Excluir -offer- (são Order Bumps)
       if (hublaId.includes('-offer-')) return false;
       
-      // Excluir newsale- sem customer_email ou customer_name
-      if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) return false;
-      
       // Verificar se é produto Incorporador usando a lista completa
       return isIncorporadorProduct(productName);
     });
@@ -445,9 +442,6 @@ Deno.serve(async (req) => {
       
       // Excluir -offer- (são Order Bumps)
       if (hublaId.includes('-offer-')) return false;
-      
-      // Excluir newsale- sem customer_email ou customer_name
-      if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) return false;
       
       // Apenas primeira parcela (usando apenas installment_number, sem filtro de valor)
       const { installment } = getSmartInstallment(t);
