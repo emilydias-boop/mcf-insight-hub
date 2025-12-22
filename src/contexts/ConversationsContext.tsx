@@ -30,6 +30,7 @@ function transformConversation(waConv: WhatsAppConversation): Conversation {
     ownerId: waConv.owner_id,
     ownerName: null,
     dealId: waConv.deal_id,
+    isGroup: waConv.is_group || false,
   };
 }
 

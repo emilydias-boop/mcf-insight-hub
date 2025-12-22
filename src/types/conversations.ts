@@ -30,6 +30,7 @@ export interface Conversation {
   ownerId: string | null;
   ownerName: string | null;
   dealId: string | null;
+  isGroup?: boolean;
 }
 
 export interface ConversationsState {
