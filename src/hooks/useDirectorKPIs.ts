@@ -457,16 +457,16 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       // - OBs (Vitalício, Construir, Evento) e A010: Make (count_in_dashboard=true)
       // - Incorporador 50k: Hubla
 
-      // ===== VENDAS A010 (APENAS MAKE) =====
-      // Make é a fonte de verdade para contagem de A010
+      // ===== VENDAS A010 (MAKE + HUBLA_MAKE_SYNC) =====
+      // Make e hubla_make_sync são fontes válidas para contagem de A010
       // Deduplicar por EMAIL ÚNICO
       const vendasA010Calc = (() => {
         const seenA010Emails = new Set<string>();
         
-        // CORREÇÃO: Usar allHublaData e filtrar apenas source='make'
+        // CORREÇÃO: Incluir source='make' E source='hubla_make_sync'
         ((allHublaData as HublaTransaction[]) || []).forEach((tx) => {
-          // APENAS transações do Make
-          if (tx.source !== 'make') return;
+          // Apenas transações do Make OU hubla_make_sync
+          if (tx.source !== 'make' && tx.source !== 'hubla_make_sync') return;
           
           const productName = (tx.product_name || "").toUpperCase().trim();
           
@@ -484,23 +484,23 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           }
         });
 
-        console.log("🔍 Vendas A010 (Make apenas, emails únicos):", seenA010Emails.size);
+        console.log("🔍 Vendas A010 (Make + hubla_make_sync, emails únicos):", seenA010Emails.size);
         return seenA010Emails.size;
       })();
 
       const vendasA010 = vendasA010Calc;
 
-      // ===== FATURAMENTO A010 (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
-      // CORREÇÃO: Usar allHublaData para somar TODAS as transações
+      // ===== FATURAMENTO A010 (MAKE + HUBLA_MAKE_SYNC - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
+      // CORREÇÃO: Usar allHublaData para somar TODAS as transações de ambas fontes
       const a010Faturado = (allHublaData || [])
         .filter((tx) => {
-          if (tx.source !== 'make') return false;
+          if (tx.source !== 'make' && tx.source !== 'hubla_make_sync') return false;
           const productName = (tx.product_name || "").toUpperCase();
           return productName.includes("A010") || tx.product_category === 'a010';
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("💸 A010 (Make apenas):", { vendas: vendasA010, faturado: a010Faturado });
+      console.log("💸 A010 (Make + hubla_make_sync):", { vendas: vendasA010, faturado: a010Faturado });
 
       // ===== FATURAMENTO TOTAL (FÓRMULA FIXA DA PLANILHA) =====
       // Faturamento Total = Incorporador50k (Hubla) + A010 (Make) + OB Construir (Make) + OB Vitalício (Make)
