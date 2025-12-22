@@ -131,14 +131,22 @@ serve(async (req) => {
       console.error('Error saving message:', msgError);
     }
 
-    // Atualizar conversa
+    // Atualizar conversa e atribuir owner se não tiver
+    const updateData: Record<string, unknown> = {
+      last_message: content,
+      last_message_at: new Date().toISOString(),
+      unread_count: 0,
+    };
+    
+    // Se a conversa não tem owner e temos senderId, atribuir o SDR como dono
+    if (!conversation.owner_id && senderId) {
+      updateData.owner_id = senderId;
+      console.log('Assigning owner_id to conversation:', { conversationId, ownerId: senderId });
+    }
+    
     await supabase
       .from('whatsapp_conversations')
-      .update({
-        last_message: content,
-        last_message_at: new Date().toISOString(),
-        unread_count: 0,
-      })
+      .update(updateData)
       .eq('id', conversationId);
 
     return new Response(JSON.stringify({ 
