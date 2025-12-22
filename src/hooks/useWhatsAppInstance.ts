@@ -53,14 +53,18 @@ export function useWhatsAppInstance() {
 
       if (error) throw error;
 
-      if (data?.error) {
-        toast.error(`Erro Z-API: ${data.error}`);
-        return null;
-      }
-
+      // IMPORTANTE: Priorizar connected: true sobre qualquer error
+      // Z-API retorna error: "You are already connected" mesmo quando conectado!
       if (data?.connected) {
         toast.success('WhatsApp conectado!');
         fetchInstance();
+        return data;
+      }
+
+      // Só mostrar erro se realmente não conectado
+      if (data?.error) {
+        toast.error(`Erro Z-API: ${data.error}`);
+        return null;
       }
 
       return data;
@@ -89,7 +93,16 @@ export function useWhatsAppInstance() {
 
       if (error) throw error;
 
-      if (data?.error) {
+      // IMPORTANTE: Se já conectado, tratar como sucesso
+      if (data?.connected || data?.alreadyConnected) {
+        toast.success('WhatsApp já está conectado!');
+        setQrCode(null);
+        fetchInstance();
+        return data;
+      }
+
+      // Só mostrar erro se não tiver QR Code disponível
+      if (data?.error && !data?.imageUrl && !data?.value) {
         toast.error(`Erro Z-API: ${data.error}`);
         return null;
       }
@@ -114,7 +127,7 @@ export function useWhatsAppInstance() {
     } finally {
       setIsConnecting(false);
     }
-  }, []);
+  }, [fetchInstance]);
 
   // Disconnect
   const disconnect = useCallback(async () => {
