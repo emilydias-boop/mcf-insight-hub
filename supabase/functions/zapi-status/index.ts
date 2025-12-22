@@ -18,10 +18,30 @@ serve(async (req) => {
     const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
     const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
     
+    console.log('[zapi-status] Instance ID:', zapiInstanceId);
+    console.log('[zapi-status] Token length:', zapiToken?.length || 0);
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const url = new URL(req.url);
-    const action = url.searchParams.get('action') || 'status';
+    // Read action from body first, then query params as fallback
+    let action = 'status';
+    
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json();
+        action = body.action || 'status';
+        console.log('[zapi-status] Action from body:', action);
+      } catch {
+        console.log('[zapi-status] No body, using query params');
+        const url = new URL(req.url);
+        action = url.searchParams.get('action') || 'status';
+      }
+    } else {
+      const url = new URL(req.url);
+      action = url.searchParams.get('action') || 'status';
+    }
+
+    console.log('[zapi-status] Final action:', action);
 
     let result: Record<string, unknown> = {};
 
@@ -29,10 +49,22 @@ serve(async (req) => {
       case 'status': {
         // Verificar status da conexão
         const statusUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/status`;
+        console.log('[zapi-status] Calling:', statusUrl);
+        
         const statusResponse = await fetch(statusUrl);
         const statusData = await statusResponse.json();
         
-        console.log('Z-API status:', statusData);
+        console.log('[zapi-status] Status response:', JSON.stringify(statusData));
+
+        if (statusData.error) {
+          return new Response(JSON.stringify({ 
+            error: statusData.error, 
+            message: statusData.message,
+            details: 'Verifique se ZAPI_INSTANCE_ID e ZAPI_TOKEN estão corretos'
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
         // Atualizar status no banco
         const status = statusData.connected ? 'connected' : 'disconnected';
@@ -63,14 +95,27 @@ serve(async (req) => {
       case 'qrcode': {
         // Obter QR Code para conexão
         const qrUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/qr-code`;
+        console.log('[zapi-status] Calling QR:', qrUrl);
+        
         const qrResponse = await fetch(qrUrl);
         const qrData = await qrResponse.json();
         
-        console.log('Z-API QR Code response:', qrData);
+        console.log('[zapi-status] QR response:', JSON.stringify(qrData));
+
+        if (qrData.error) {
+          return new Response(JSON.stringify({ 
+            error: qrData.error, 
+            message: qrData.message,
+            details: 'Verifique se a instância está desconectada para obter QR Code'
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
         result = {
           qrcode: qrData.value || qrData.qrcode,
           base64: qrData.value,
+          value: qrData.value,
           imageUrl: qrData.value ? `data:image/png;base64,${qrData.value}` : null,
         };
         break;
@@ -79,10 +124,12 @@ serve(async (req) => {
       case 'disconnect': {
         // Desconectar instância
         const disconnectUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/disconnect`;
+        console.log('[zapi-status] Calling disconnect:', disconnectUrl);
+        
         const disconnectResponse = await fetch(disconnectUrl);
         const disconnectData = await disconnectResponse.json();
         
-        console.log('Z-API disconnect response:', disconnectData);
+        console.log('[zapi-status] Disconnect response:', JSON.stringify(disconnectData));
 
         await supabase
           .from('whatsapp_instances')
@@ -99,10 +146,12 @@ serve(async (req) => {
       case 'restart': {
         // Reiniciar instância
         const restartUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/restart`;
+        console.log('[zapi-status] Calling restart:', restartUrl);
+        
         const restartResponse = await fetch(restartUrl);
         const restartData = await restartResponse.json();
         
-        console.log('Z-API restart response:', restartData);
+        console.log('[zapi-status] Restart response:', JSON.stringify(restartData));
 
         result = {
           success: true,
@@ -123,7 +172,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
-    console.error('Z-API status error:', error);
+    console.error('[zapi-status] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,

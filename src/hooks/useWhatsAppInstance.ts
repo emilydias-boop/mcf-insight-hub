@@ -43,11 +43,20 @@ export function useWhatsAppInstance() {
   const checkStatus = useCallback(async () => {
     try {
       setIsConnecting(true);
+      console.log('[WhatsApp] Checking status...');
+      
       const { data, error } = await supabase.functions.invoke('zapi-status', {
-        body: {},
+        body: { action: 'status' },
       });
 
+      console.log('[WhatsApp] Status response:', data, error);
+
       if (error) throw error;
+
+      if (data?.error) {
+        toast.error(`Erro Z-API: ${data.error}`);
+        return null;
+      }
 
       if (data?.connected) {
         toast.success('WhatsApp conectado!');
@@ -56,7 +65,7 @@ export function useWhatsAppInstance() {
 
       return data;
     } catch (error) {
-      console.error('Error checking status:', error);
+      console.error('[WhatsApp] Error checking status:', error);
       toast.error('Erro ao verificar status');
       return null;
     } finally {
@@ -68,21 +77,38 @@ export function useWhatsAppInstance() {
   const getQrCode = useCallback(async () => {
     try {
       setIsConnecting(true);
-      const { data, error } = await supabase.functions.invoke('zapi-status?action=qrcode', {
-        body: {},
+      toast.loading('Obtendo QR Code...', { id: 'qrcode-loading' });
+      console.log('[WhatsApp] Getting QR Code...');
+      
+      const { data, error } = await supabase.functions.invoke('zapi-status', {
+        body: { action: 'qrcode' },
       });
+
+      console.log('[WhatsApp] QR Code response:', data, error);
+      toast.dismiss('qrcode-loading');
 
       if (error) throw error;
 
+      if (data?.error) {
+        toast.error(`Erro Z-API: ${data.error}`);
+        return null;
+      }
+
       if (data?.imageUrl) {
         setQrCode(data.imageUrl);
-      } else if (data?.base64) {
-        setQrCode(`data:image/png;base64,${data.base64}`);
+        toast.success('QR Code obtido!');
+      } else if (data?.base64 || data?.qrcode || data?.value) {
+        const base64Value = data.value || data.base64 || data.qrcode;
+        setQrCode(`data:image/png;base64,${base64Value}`);
+        toast.success('QR Code obtido!');
+      } else {
+        toast.error('QR Code não disponível. Verifique se a instância está desconectada.');
       }
 
       return data;
     } catch (error) {
-      console.error('Error getting QR code:', error);
+      console.error('[WhatsApp] Error getting QR code:', error);
+      toast.dismiss('qrcode-loading');
       toast.error('Erro ao obter QR Code');
       return null;
     } finally {
@@ -94,9 +120,15 @@ export function useWhatsAppInstance() {
   const disconnect = useCallback(async () => {
     try {
       setIsConnecting(true);
-      const { error } = await supabase.functions.invoke('zapi-status?action=disconnect', {
-        body: {},
+      toast.loading('Desconectando...', { id: 'disconnect-loading' });
+      console.log('[WhatsApp] Disconnecting...');
+      
+      const { data, error } = await supabase.functions.invoke('zapi-status', {
+        body: { action: 'disconnect' },
       });
+
+      console.log('[WhatsApp] Disconnect response:', data, error);
+      toast.dismiss('disconnect-loading');
 
       if (error) throw error;
 
@@ -104,7 +136,8 @@ export function useWhatsAppInstance() {
       setInstance(prev => prev ? { ...prev, status: 'disconnected', connected_at: null } : null);
       setQrCode(null);
     } catch (error) {
-      console.error('Error disconnecting:', error);
+      console.error('[WhatsApp] Error disconnecting:', error);
+      toast.dismiss('disconnect-loading');
       toast.error('Erro ao desconectar');
     } finally {
       setIsConnecting(false);
@@ -115,16 +148,23 @@ export function useWhatsAppInstance() {
   const restart = useCallback(async () => {
     try {
       setIsConnecting(true);
-      const { error } = await supabase.functions.invoke('zapi-status?action=restart', {
-        body: {},
+      toast.loading('Reiniciando instância...', { id: 'restart-loading' });
+      console.log('[WhatsApp] Restarting...');
+      
+      const { data, error } = await supabase.functions.invoke('zapi-status', {
+        body: { action: 'restart' },
       });
+
+      console.log('[WhatsApp] Restart response:', data, error);
+      toast.dismiss('restart-loading');
 
       if (error) throw error;
 
       toast.success('Instância reiniciada');
       setTimeout(checkStatus, 3000);
     } catch (error) {
-      console.error('Error restarting:', error);
+      console.error('[WhatsApp] Error restarting:', error);
+      toast.dismiss('restart-loading');
       toast.error('Erro ao reiniciar');
     } finally {
       setIsConnecting(false);
