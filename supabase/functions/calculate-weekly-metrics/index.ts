@@ -337,15 +337,16 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} completed | ${refundedTransactions?.length || 0} refunds`);
 
-    // 3. CONTAR VENDAS A010 - METODOLOGIA: Make = quantidade, Hubla = valor
-    // - Contar APENAS transações com source = 'make'
+    // 3. CONTAR VENDAS A010 - METODOLOGIA CORRIGIDA:
+    // - Contar transações com source IN ('make', 'hubla_make_sync')
+    // - Deduplicar por LOWER(customer_email) - 1 venda por email único
     // - Para valor: buscar na Hubla se existir para mesmo email+data
     
-    // 3.1 Buscar A010 diretamente do banco para garantir filtro correto
+    // 3.1 Buscar A010 do MAKE + HUBLA_MAKE_SYNC (ambas fontes contam)
     const { data: a010MakeFromDB } = await supabase
       .from('hubla_transactions')
       .select('*')
-      .eq('source', 'make')
+      .in('source', ['make', 'hubla_make_sync'])
       .eq('product_category', 'a010')
       .gte('sale_date', startDateUTC.toISOString())
       .lte('sale_date', endDateUTC.toISOString());
@@ -381,21 +382,25 @@ Deno.serve(async (req) => {
       }
     });
     
-    console.log(`🔍 A010 Make direto DB: ${a010MakeTransactions.length} | Hubla values map: ${hublaValuesByEmailDate.size}`);
+    console.log(`🔍 A010 Make+HublaMakeSync: ${a010MakeTransactions.length} | Hubla values map: ${hublaValuesByEmailDate.size}`);
     
-    // 3.3 DEDUPLICAR A010 Make por email+data
-    const a010ByEmailDate = new Map<string, typeof a010MakeTransactions[0]>();
+    // 3.3 DEDUPLICAR A010 por LOWER(email) - apenas 1 venda por email único
+    const a010ByEmail = new Map<string, typeof a010MakeTransactions[0]>();
     for (const tx of a010MakeTransactions) {
-      const saleDateBR = toSaoPauloDateString(tx.sale_date);
       const email = (tx.customer_email || '').toLowerCase().trim();
-      const key = `${email}_${saleDateBR}`;
-      const existing = a010ByEmailDate.get(key);
-      if (!existing || (tx.sale_status === 'completed' && existing.sale_status !== 'completed')) {
-        a010ByEmailDate.set(key, tx);
+      if (!email) continue;
+      
+      const existing = a010ByEmail.get(email);
+      // Priorizar: completed > outros status, depois mais recente
+      if (!existing || 
+          (tx.sale_status === 'completed' && existing.sale_status !== 'completed') ||
+          (tx.sale_status === existing.sale_status && new Date(tx.sale_date) > new Date(existing.sale_date))) {
+        a010ByEmail.set(email, tx);
       }
     }
-    const a010Transactions = Array.from(a010ByEmailDate.values());
+    const a010Transactions = Array.from(a010ByEmail.values());
     
+    // Contagem: emails únicos = vendas A010
     const vendas_a010 = a010Transactions.length;
     
     // 3.4 Calcular Faturado A010: usar valor Hubla quando disponível
@@ -413,7 +418,7 @@ Deno.serve(async (req) => {
       faturado_a010 += hublaValue && hublaValue > 0 ? hublaValue : makeValue;
     }
     
-    console.log(`📈 Vendas A010: ${vendas_a010} (source=make, deduplicado)`);
+    console.log(`📈 Vendas A010: ${vendas_a010} (source IN [make, hubla_make_sync], deduplicado por email)`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (valor priorizado Hubla)`);
 
     // 4. FATURAMENTO CLINT - NOVA LÓGICA: Make como BASE, Hubla como fallback
