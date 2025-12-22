@@ -1,12 +1,19 @@
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Settings, Users, Zap, Database, Shield } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Settings, Users, Zap, Database, Shield, Upload, FileText, History } from 'lucide-react';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
 import { WhatsAppConfigCard } from '@/components/whatsapp/WhatsAppConfigCard';
 import { useAuth } from '@/contexts/AuthContext';
 
-const Configuracoes = () => {
+// Import sub-page components
+import ImportarContatos from './ImportarContatos';
+import ImportarNegocios from './ImportarNegocios';
+import ImportarHistorico from './ImportarHistorico';
+
+const ConfiguracoesContent = () => {
   const { role } = useAuth();
   const canManageTemplates = role === 'admin' || role === 'coordenador' || role === 'manager';
 
@@ -39,11 +46,6 @@ const Configuracoes = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Configurações do CRM</h2>
-        <p className="text-muted-foreground">Personalize e configure seu sistema de CRM</p>
-      </div>
-
       <WebhookMonitor />
 
       {/* WhatsApp Z-API Configuration */}
@@ -122,6 +124,56 @@ const Configuracoes = () => {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+};
+
+const Configuracoes = () => {
+  const [activeTab, setActiveTab] = useState('configuracoes');
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-foreground mb-2">Configurações do CRM</h2>
+        <p className="text-muted-foreground">Personalize, configure e importe dados para seu CRM</p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="bg-muted">
+          <TabsTrigger value="configuracoes" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Configurações
+          </TabsTrigger>
+          <TabsTrigger value="importar-contatos" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Importar Contatos
+          </TabsTrigger>
+          <TabsTrigger value="importar-negocios" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Importar Negócios
+          </TabsTrigger>
+          <TabsTrigger value="importar-historico" className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Importar Histórico
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="configuracoes">
+          <ConfiguracoesContent />
+        </TabsContent>
+
+        <TabsContent value="importar-contatos">
+          <ImportarContatos />
+        </TabsContent>
+
+        <TabsContent value="importar-negocios">
+          <ImportarNegocios />
+        </TabsContent>
+
+        <TabsContent value="importar-historico">
+          <ImportarHistorico />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
