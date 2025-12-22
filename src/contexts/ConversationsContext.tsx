@@ -5,36 +5,80 @@ import {
   ConversationsContextType, 
   ConversationChannel 
 } from '@/types/conversations';
-import { mockConversations, mockMessages } from '@/data/mockConversations';
+import { useWhatsAppConversations, WhatsAppConversation, WhatsAppMessage } from '@/hooks/useWhatsAppConversations';
 
 const ConversationsContext = createContext<ConversationsContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'conversations_state';
 
+// Transform WhatsApp conversation to generic Conversation type
+function transformConversation(waConv: WhatsAppConversation): Conversation {
+  return {
+    id: waConv.id,
+    contactId: waConv.contact_id || waConv.id,
+    contactName: waConv.contact_name || 'Desconhecido',
+    contactEmail: null,
+    contactPhone: waConv.contact_phone,
+    contactAvatar: waConv.contact_avatar,
+    channel: 'whatsapp' as ConversationChannel,
+    origin: 'WhatsApp',
+    stage: 'Atendimento',
+    lastMessage: waConv.last_message || '',
+    lastMessageAt: waConv.last_message_at || waConv.created_at,
+    isUnread: (waConv.unread_count || 0) > 0,
+    unreadCount: waConv.unread_count || 0,
+    ownerId: waConv.owner_id,
+    ownerName: null,
+    dealId: waConv.deal_id,
+  };
+}
+
+// Transform WhatsApp message to generic Message type
+function transformMessage(waMsg: WhatsAppMessage): Message {
+  return {
+    id: waMsg.id,
+    conversationId: waMsg.conversation_id,
+    content: waMsg.content,
+    sentAt: waMsg.sent_at,
+    direction: waMsg.direction === 'inbound' ? 'inbound' : 'outbound',
+    status: waMsg.status as Message['status'],
+  };
+}
+
 export function ConversationsProvider({ children }: { children: React.ReactNode }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [channelFilter, setChannelFilter] = useState<ConversationChannel | 'all'>('all');
   const [ownerFilter, setOwnerFilter] = useState<string | 'all'>('all');
-  const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
-  const [isLoading] = useState(false);
 
-  // Restore state from localStorage
+  const {
+    conversations: waConversations,
+    messages: waMessages,
+    selectedConversationId,
+    isLoading,
+    unreadCount,
+    searchQuery,
+    setSearchQuery,
+    selectConversation: waSelectConversation,
+    sendMessage: waSendMessage,
+    markAsRead: waMarkAsRead,
+    getMessagesForConversation: waGetMessagesForConversation,
+    getSelectedConversation: waGetSelectedConversation,
+  } = useWhatsAppConversations();
+
+  // Restore drawer state from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.selectedConversationId) {
-          setSelectedConversationId(parsed.selectedConversationId);
+          waSelectConversation(parsed.selectedConversationId);
         }
       }
     } catch (e) {
       // Ignore errors
     }
-  }, []);
+  }, [waSelectConversation]);
 
   // Save selected conversation to localStorage
   useEffect(() => {
@@ -45,74 +89,42 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
     }
   }, [selectedConversationId]);
 
-  const unreadCount = useMemo(() => {
-    return conversations.filter(c => c.isUnread).length;
-  }, [conversations]);
+  // Transform conversations
+  const conversations = useMemo(() => {
+    return waConversations.map(transformConversation);
+  }, [waConversations]);
+
+  // Transform messages
+  const messages = useMemo(() => {
+    return waMessages.map(transformMessage);
+  }, [waMessages]);
 
   const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
   const toggleDrawer = useCallback(() => setIsDrawerOpen(prev => !prev), []);
 
   const selectConversation = useCallback((id: string | null) => {
-    setSelectedConversationId(id);
-    if (id) {
-      // Mark as read when selecting
-      setConversations(prev => prev.map(c => 
-        c.id === id ? { ...c, isUnread: false, unreadCount: 0 } : c
-      ));
-    }
-  }, []);
+    waSelectConversation(id);
+  }, [waSelectConversation]);
 
   const markAsRead = useCallback((conversationId: string) => {
-    setConversations(prev => prev.map(c => 
-      c.id === conversationId ? { ...c, isUnread: false, unreadCount: 0 } : c
-    ));
-  }, []);
+    waMarkAsRead(conversationId);
+  }, [waMarkAsRead]);
 
   const sendMessage = useCallback((conversationId: string, content: string) => {
-    const newMessage: Message = {
-      id: `msg-${Date.now()}`,
-      conversationId,
-      content,
-      sentAt: new Date().toISOString(),
-      direction: 'outbound',
-      status: 'sending',
-    };
-
-    setMessages(prev => [...prev, newMessage]);
-
-    // Update conversation last message
-    setConversations(prev => prev.map(c => 
-      c.id === conversationId 
-        ? { ...c, lastMessage: content, lastMessageAt: newMessage.sentAt }
-        : c
-    ));
-
-    // Simulate message being sent
-    setTimeout(() => {
-      setMessages(prev => prev.map(m => 
-        m.id === newMessage.id ? { ...m, status: 'sent' } : m
-      ));
-    }, 500);
-
-    // Simulate message being delivered
-    setTimeout(() => {
-      setMessages(prev => prev.map(m => 
-        m.id === newMessage.id ? { ...m, status: 'delivered' } : m
-      ));
-    }, 1500);
-  }, []);
+    waSendMessage(conversationId, content);
+  }, [waSendMessage]);
 
   const getMessagesForConversation = useCallback((conversationId: string) => {
-    return messages
-      .filter(m => m.conversationId === conversationId)
-      .sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
-  }, [messages]);
+    const waMessages = waGetMessagesForConversation(conversationId);
+    return waMessages.map(transformMessage);
+  }, [waGetMessagesForConversation]);
 
   const getSelectedConversation = useCallback(() => {
-    if (!selectedConversationId) return null;
-    return conversations.find(c => c.id === selectedConversationId) || null;
-  }, [selectedConversationId, conversations]);
+    const waConv = waGetSelectedConversation();
+    if (!waConv) return null;
+    return transformConversation(waConv);
+  }, [waGetSelectedConversation]);
 
   const value: ConversationsContextType = {
     isDrawerOpen,
