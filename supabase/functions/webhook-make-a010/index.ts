@@ -203,6 +203,7 @@ Deno.serve(async (req) => {
           product_price: grossValue,
           sale_date: saleDate,
           source: "hubla_make_sync",
+          count_in_dashboard: true, // CRITICAL: incluir no dashboard
           raw_data: { 
             ...body, 
             valor_corrigido: valorCorrigido, 
