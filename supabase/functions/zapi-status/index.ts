@@ -17,9 +17,19 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
     const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
+    const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
     
     console.log('[zapi-status] Instance ID:', zapiInstanceId);
     console.log('[zapi-status] Token length:', zapiToken?.length || 0);
+    console.log('[zapi-status] Client-Token configured:', !!zapiClientToken);
+    
+    // Headers para todas as requisições Z-API
+    const zapiHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (zapiClientToken) {
+      zapiHeaders['Client-Token'] = zapiClientToken;
+    }
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -51,7 +61,7 @@ serve(async (req) => {
         const statusUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/status`;
         console.log('[zapi-status] Calling:', statusUrl);
         
-        const statusResponse = await fetch(statusUrl);
+        const statusResponse = await fetch(statusUrl, { headers: zapiHeaders });
         const statusData = await statusResponse.json();
         
         console.log('[zapi-status] Status response:', JSON.stringify(statusData));
@@ -93,19 +103,20 @@ serve(async (req) => {
       }
 
       case 'qrcode': {
-        // Obter QR Code para conexão
-        const qrUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/qr-code`;
+        // Obter QR Code para conexão - usar /qr-code/image para base64
+        const qrUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/qr-code/image`;
         console.log('[zapi-status] Calling QR:', qrUrl);
         
-        const qrResponse = await fetch(qrUrl);
+        const qrResponse = await fetch(qrUrl, { headers: zapiHeaders });
         const qrData = await qrResponse.json();
         
+        console.log('[zapi-status] QR response status:', qrResponse.status);
         console.log('[zapi-status] QR response:', JSON.stringify(qrData));
 
-        if (qrData.error) {
+        if (qrData.error || !qrResponse.ok) {
           return new Response(JSON.stringify({ 
-            error: qrData.error, 
-            message: qrData.message,
+            error: qrData.error || 'Erro ao obter QR Code', 
+            message: qrData.message || 'Falha na requisição',
             details: 'Verifique se a instância está desconectada para obter QR Code'
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -126,7 +137,7 @@ serve(async (req) => {
         const disconnectUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/disconnect`;
         console.log('[zapi-status] Calling disconnect:', disconnectUrl);
         
-        const disconnectResponse = await fetch(disconnectUrl);
+        const disconnectResponse = await fetch(disconnectUrl, { headers: zapiHeaders });
         const disconnectData = await disconnectResponse.json();
         
         console.log('[zapi-status] Disconnect response:', JSON.stringify(disconnectData));
@@ -148,7 +159,7 @@ serve(async (req) => {
         const restartUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/restart`;
         console.log('[zapi-status] Calling restart:', restartUrl);
         
-        const restartResponse = await fetch(restartUrl);
+        const restartResponse = await fetch(restartUrl, { headers: zapiHeaders });
         const restartData = await restartResponse.json();
         
         console.log('[zapi-status] Restart response:', JSON.stringify(restartData));
