@@ -106,11 +106,14 @@ serve(async (req) => {
             instance_id: instanceUuid,
             remote_jid: remoteJid,
             contact_id: contact?.id || null,
-            contact_name: isGroup ? (chatName || 'Grupo') : (message.senderName || contact?.name || phone),
+            // Usar chatName quando fromMe é true (pois senderName seria o nome do agente, não do destinatário)
+            contact_name: isGroup 
+              ? (chatName || 'Grupo') 
+              : (fromMe ? (chatName || contact?.name || phone) : (message.senderName || contact?.name || phone)),
             contact_phone: cleanPhone,
             last_message: message.text?.message || message.text || '[Mídia]',
             last_message_at: new Date().toISOString(),
-            unread_count: 1,
+            unread_count: fromMe ? 0 : 1,
             is_group: isGroup,
           })
           .select()
