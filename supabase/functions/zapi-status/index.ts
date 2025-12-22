@@ -86,7 +86,8 @@ serve(async (req) => {
         const status = isConnected ? 'connected' : 'disconnected';
         const phoneNumber = statusData.phone || statusData.wid?.split('@')[0];
 
-        await supabase
+        console.log('[zapi-status] Updating database - status:', status, 'phone:', phoneNumber);
+        const { data: upsertData, error: upsertError } = await supabase
           .from('whatsapp_instances')
           .upsert({
             instance_id: zapiInstanceId,
@@ -97,7 +98,10 @@ serve(async (req) => {
             connected_at: isConnected ? new Date().toISOString() : null,
           }, {
             onConflict: 'instance_id',
-          });
+          })
+          .select();
+        
+        console.log('[zapi-status] Upsert result:', JSON.stringify(upsertData), 'error:', upsertError);
 
         result = {
           connected: isConnected,
@@ -122,8 +126,8 @@ serve(async (req) => {
         if (statusData.connected === true) {
           const phoneNumber = statusData.phone || statusData.wid?.split('@')[0];
           
-          // Atualizar banco para garantir consistência
-          await supabase
+          console.log('[zapi-status] Already connected, updating database');
+          const { data: upsertData, error: upsertError } = await supabase
             .from('whatsapp_instances')
             .upsert({
               instance_id: zapiInstanceId,
@@ -134,7 +138,10 @@ serve(async (req) => {
               connected_at: new Date().toISOString(),
             }, {
               onConflict: 'instance_id',
-            });
+            })
+            .select();
+          
+          console.log('[zapi-status] QR upsert result:', JSON.stringify(upsertData), 'error:', upsertError);
 
           return new Response(JSON.stringify({ 
             connected: true,
