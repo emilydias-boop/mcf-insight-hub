@@ -105,10 +105,13 @@ const COLUMN_NAME_MAP: Record<string, string> = {
 // Converter data UTC para data no fuso BR (America/Sao_Paulo)
 function toSaoPauloDateString(utcDateStr: string): string {
   const date = new Date(utcDateStr);
-  // São Paulo é UTC-3 (sem horário de verão atualmente)
-  const offset = -3 * 60; // offset em minutos
-  const localDate = new Date(date.getTime() + offset * 60 * 1000);
-  return localDate.toISOString().split('T')[0];
+  // São Paulo é UTC-3, então subtraímos 3 horas do UTC
+  // Para pegar a data local: se UTC é 02:00, SP é 23:00 do dia anterior
+  const spTime = new Date(date.getTime() - (3 * 60 * 60 * 1000));
+  const year = spTime.getUTCFullYear();
+  const month = String(spTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(spTime.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // Extrair smartInstallment do raw_data
@@ -280,11 +283,27 @@ Deno.serve(async (req) => {
     const endDateUTC = new Date(`${week_end}T23:59:59Z`);
     endDateUTC.setHours(endDateUTC.getHours() + 6); // Margem de segurança
     
-    const { data: allTransactions } = await supabase
+    console.log(`🔍 Buscando transações de ${startDateUTC.toISOString()} até ${endDateUTC.toISOString()}`);
+    
+    const { data: allTransactions, error: txError } = await supabase
       .from('hubla_transactions')
       .select('*')
       .gte('sale_date', startDateUTC.toISOString())
       .lte('sale_date', endDateUTC.toISOString());
+
+    if (txError) {
+      console.error('❌ Erro ao buscar transações:', txError);
+    }
+
+    console.log(`📦 Total transações brutas: ${allTransactions?.length || 0}`);
+
+    // Debug: contar por source ANTES do filtro de data BR
+    const rawBySource = new Map<string, number>();
+    allTransactions?.forEach(t => {
+      const src = t.source || 'unknown';
+      rawBySource.set(src, (rawBySource.get(src) || 0) + 1);
+    });
+    console.log(`📦 Por source (antes filtro BR): ${JSON.stringify(Object.fromEntries(rawBySource))}`);
 
     // METODOLOGIA CORRIGIDA: Incluir TODAS transações (completed + refunded) no faturamento
     // Conforme planilha do usuário que conta reembolsos também
@@ -293,6 +312,16 @@ Deno.serve(async (req) => {
       return saleDateBR >= week_start && saleDateBR <= week_end;
     });
 
+    console.log(`📦 Após filtro data BR: ${allWeekTransactions.length} transações`);
+    
+    // Debug: contar por source DEPOIS do filtro
+    const filteredBySource = new Map<string, number>();
+    allWeekTransactions.forEach(t => {
+      const src = t.source || 'unknown';
+      filteredBySource.set(src, (filteredBySource.get(src) || 0) + 1);
+    });
+    console.log(`📦 Por source (após filtro BR): ${JSON.stringify(Object.fromEntries(filteredBySource))}`);
+
     const completedTransactions = allWeekTransactions.filter(t => t.sale_status === 'completed');
     const refundedTransactions = allWeekTransactions.filter(t => 
       t.sale_status === 'refunded' || t.event_type === 'invoice.refunded'
@@ -300,43 +329,60 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} completed | ${refundedTransactions?.length || 0} refunds`);
 
-    // 3. CONTAR VENDAS A010 - METODOLOGIA CORRIGIDA:
-    // - DEDUPLICAR por email+data (cada cliente compra 1x por dia)
-    // - Excluir newsale- sem dados válidos
-    // - Incluir completed E refunded
-    const a010RawTransactions = allWeekTransactions.filter(t => {
-      const hublaId = t.hubla_id || '';
-      const productName = (t.product_name || '').toUpperCase();
-      
-      // Verificar se é A010
-      const isA010 = t.product_category === 'a010' || productName.includes('A010');
-      if (!isA010) return false;
-      
-      // Excluir newsale- sem customer válido
-      if (hublaId.startsWith('newsale-') && (!t.customer_email || !t.customer_name)) {
-        return false;
-      }
-      
-      // Requer customer_email para deduplicação
-      const hasEmail = (t.customer_email || '').trim();
-      if (!hasEmail) return false;
-      
-      // Excluir -offer- (Order Bumps vendidos junto com A010)
-      if (hublaId.includes('-offer-')) return false;
-      
-      return true;
+    // 3. CONTAR VENDAS A010 - METODOLOGIA: Make = quantidade, Hubla = valor
+    // - Contar APENAS transações com source = 'make'
+    // - Para valor: buscar na Hubla se existir para mesmo email+data
+    
+    // 3.1 Buscar A010 diretamente do banco para garantir filtro correto
+    const { data: a010MakeFromDB } = await supabase
+      .from('hubla_transactions')
+      .select('*')
+      .eq('source', 'make')
+      .eq('product_category', 'a010')
+      .gte('sale_date', startDateUTC.toISOString())
+      .lte('sale_date', endDateUTC.toISOString());
+    
+    // Filtrar por data BR
+    const a010MakeTransactions = (a010MakeFromDB || []).filter(t => {
+      const saleDateBR = toSaoPauloDateString(t.sale_date);
+      return saleDateBR >= week_start && saleDateBR <= week_end && t.customer_email;
     });
     
-    // DEDUPLICAR A010 por email+data: cada cliente conta 1x por dia
-    const a010ByEmailDate = new Map<string, typeof a010RawTransactions[0]>();
-    for (const tx of a010RawTransactions) {
+    // 3.2 Buscar valores Hubla
+    const { data: a010HublaFromDB } = await supabase
+      .from('hubla_transactions')
+      .select('*')
+      .eq('source', 'hubla')
+      .eq('product_category', 'a010')
+      .eq('sale_status', 'completed')
+      .gte('sale_date', startDateUTC.toISOString())
+      .lte('sale_date', endDateUTC.toISOString());
+    
+    const hublaValuesByEmailDate = new Map<string, number>();
+    (a010HublaFromDB || []).forEach(t => {
+      const saleDateBR = toSaoPauloDateString(t.sale_date);
+      if (saleDateBR < week_start || saleDateBR > week_end) return;
+      const email = (t.customer_email || '').toLowerCase().trim();
+      if (!email) return;
+      
+      const key = `${email}_${saleDateBR}`;
+      const currentValue = hublaValuesByEmailDate.get(key) || 0;
+      const newValue = parseValorLiquido(t);
+      if (newValue > currentValue) {
+        hublaValuesByEmailDate.set(key, newValue);
+      }
+    });
+    
+    console.log(`🔍 A010 Make direto DB: ${a010MakeTransactions.length} | Hubla values map: ${hublaValuesByEmailDate.size}`);
+    
+    // 3.3 DEDUPLICAR A010 Make por email+data
+    const a010ByEmailDate = new Map<string, typeof a010MakeTransactions[0]>();
+    for (const tx of a010MakeTransactions) {
       const saleDateBR = toSaoPauloDateString(tx.sale_date);
-      const key = `${(tx.customer_email || '').toLowerCase().trim()}_${saleDateBR}`;
+      const email = (tx.customer_email || '').toLowerCase().trim();
+      const key = `${email}_${saleDateBR}`;
       const existing = a010ByEmailDate.get(key);
-      // Priorizar: completed > refunded, maior net_value
-      if (!existing || 
-          (tx.sale_status === 'completed' && existing.sale_status !== 'completed') ||
-          (tx.sale_status === existing.sale_status && parseValorLiquido(tx) > parseValorLiquido(existing))) {
+      if (!existing || (tx.sale_status === 'completed' && existing.sale_status !== 'completed')) {
         a010ByEmailDate.set(key, tx);
       }
     }
@@ -344,13 +390,23 @@ Deno.serve(async (req) => {
     
     const vendas_a010 = a010Transactions.length;
     
-    // Faturado A010: soma do valor líquido de TODAS transações A010 (completed)
+    // 3.4 Calcular Faturado A010: usar valor Hubla quando disponível
     const a010CompletedTransactions = a010Transactions.filter(t => t.sale_status === 'completed');
-    const faturado_a010 = a010CompletedTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    let faturado_a010 = 0;
     
-    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas (deduplicado por email+data)`);
-    console.log(`📈 A010 antes deduplicação: ${a010RawTransactions.length} | após: ${a010Transactions.length}`);
-    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (${a010CompletedTransactions.length} completed)`);
+    for (const tx of a010CompletedTransactions) {
+      const saleDateBR = toSaoPauloDateString(tx.sale_date);
+      const email = (tx.customer_email || '').toLowerCase().trim();
+      const key = `${email}_${saleDateBR}`;
+      
+      const hublaValue = hublaValuesByEmailDate.get(key);
+      const makeValue = parseValorLiquido(tx);
+      
+      faturado_a010 += hublaValue && hublaValue > 0 ? hublaValue : makeValue;
+    }
+    
+    console.log(`📈 Vendas A010: ${vendas_a010} (source=make, deduplicado)`);
+    console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (valor priorizado Hubla)`);
 
     // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K / FATURAMENTO CLINT
     // Usar lista completa de produtos da planilha do usuário
