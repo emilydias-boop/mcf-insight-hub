@@ -334,7 +334,7 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
           "hubla_id, product_name, product_category, net_value, sale_date, installment_number, total_installments, customer_name, customer_email, raw_data, product_price, event_type, source, count_in_dashboard",
         )
         .eq("sale_status", "completed")
-        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make")
+        .or("event_type.eq.invoice.payment_succeeded,source.eq.kiwify,source.eq.make,source.eq.hubla_make_sync")
         .not("customer_email", "is", null)
         .neq("customer_email", "")
         .not("customer_name", "is", null)
