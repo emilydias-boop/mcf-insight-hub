@@ -17,6 +17,15 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
     const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
+    const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    
+    // Headers para Z-API
+    const zapiHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (zapiClientToken) {
+      zapiHeaders['Client-Token'] = zapiClientToken;
+    }
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -73,9 +82,7 @@ serve(async (req) => {
 
     const zapiResponse = await fetch(zapiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: zapiHeaders,
       body: JSON.stringify({
         phone: phone,
         message: messageWithSignature,
