@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Settings, Users, Zap, Database, Shield } from 'lucide-react';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
+import { WhatsAppConfigCard } from '@/components/whatsapp/WhatsAppConfigCard';
 import { useAuth } from '@/contexts/AuthContext';
 
 const Configuracoes = () => {
@@ -44,6 +45,9 @@ const Configuracoes = () => {
       </div>
 
       <WebhookMonitor />
+
+      {/* WhatsApp Z-API Configuration */}
+      <WhatsAppConfigCard />
 
       {/* Activity Templates - Only for admin/coordenador */}
       {canManageTemplates && (
