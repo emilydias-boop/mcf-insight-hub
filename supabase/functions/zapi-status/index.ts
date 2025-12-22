@@ -84,7 +84,24 @@ serve(async (req) => {
 
         // Atualizar status no banco
         const status = isConnected ? 'connected' : 'disconnected';
-        const phoneNumber = statusData.phone || statusData.wid?.split('@')[0];
+        
+        let phoneNumber = null;
+        
+        // Se conectado, buscar dados do dispositivo para obter o número
+        if (isConnected) {
+          const deviceUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/device`;
+          console.log('[zapi-status] Fetching device info:', deviceUrl);
+          
+          try {
+            const deviceResponse = await fetch(deviceUrl, { headers: zapiHeaders });
+            const deviceData = await deviceResponse.json();
+            console.log('[zapi-status] Device response:', JSON.stringify(deviceData));
+            
+            phoneNumber = deviceData.phone || deviceData.wid?.split('@')[0];
+          } catch (deviceError) {
+            console.error('[zapi-status] Error fetching device:', deviceError);
+          }
+        }
 
         console.log('[zapi-status] Updating database - status:', status, 'phone:', phoneNumber);
         const { data: upsertData, error: upsertError } = await supabase
@@ -122,11 +139,23 @@ serve(async (req) => {
         
         console.log('[zapi-status] Status before QR:', JSON.stringify(statusData));
 
-        // Se já conectado, retornar sucesso em vez de tentar QR Code
+        // Se já conectado, buscar número do dispositivo e retornar
         if (statusData.connected === true) {
-          const phoneNumber = statusData.phone || statusData.wid?.split('@')[0];
+          let phoneNumber = null;
+          const deviceUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/device`;
+          console.log('[zapi-status] QR - Fetching device info:', deviceUrl);
           
-          console.log('[zapi-status] Already connected, updating database');
+          try {
+            const deviceResponse = await fetch(deviceUrl, { headers: zapiHeaders });
+            const deviceData = await deviceResponse.json();
+            console.log('[zapi-status] QR - Device response:', JSON.stringify(deviceData));
+            
+            phoneNumber = deviceData.phone || deviceData.wid?.split('@')[0];
+          } catch (deviceError) {
+            console.error('[zapi-status] QR - Error fetching device:', deviceError);
+          }
+          
+          console.log('[zapi-status] Already connected, updating database with phone:', phoneNumber);
           const { data: upsertData, error: upsertError } = await supabase
             .from('whatsapp_instances')
             .upsert({
