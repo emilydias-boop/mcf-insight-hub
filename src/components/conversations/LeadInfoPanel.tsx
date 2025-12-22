@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, Mail, MessageCircle, Calendar, ExternalLink, ChevronDown, User, FileText, History, ShoppingBag } from 'lucide-react';
+import { Phone, Mail, MessageCircle, Calendar, ExternalLink, ChevronDown, User, FileText, History, ShoppingBag, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -14,6 +14,8 @@ import { formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { QualificationChecklist, DEFAULT_QUALIFICATION_FIELDS } from './QualificationChecklist';
+import { useQualification } from '@/hooks/useQualification';
 
 interface LeadInfoPanelProps {
   dealId: string | null;
@@ -26,7 +28,14 @@ export function LeadInfoPanel({ dealId, contactId }: LeadInfoPanelProps) {
   const { data: a010Journey } = useA010Journey(contact?.email, contact?.phone);
   const { makeCall, deviceStatus } = useTwilio();
   
-  const [openSections, setOpenSections] = useState<string[]>(['contact', 'deal']);
+  const [openSections, setOpenSections] = useState<string[]>(['contact', 'qualification']);
+
+  // Hook de qualificação
+  const { updateField, moveToQualified, isUpdating } = useQualification({
+    dealId: dealId || '',
+    originId: deal?.origin_id || undefined,
+    currentStageId: deal?.stage_id || undefined,
+  });
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => 
@@ -284,6 +293,33 @@ export function LeadInfoPanel({ dealId, contactId }: LeadInfoPanelProps) {
                     ))}
                   </div>
                 )}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Qualification Section */}
+          {deal && (
+            <Collapsible 
+              open={openSections.includes('qualification')} 
+              onOpenChange={() => toggleSection('qualification')}
+            >
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-muted/50 transition-colors border-b">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">Qualificação</span>
+                </div>
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                  openSections.includes('qualification') && "rotate-180"
+                )} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-4 py-3 border-b bg-muted/20">
+                <QualificationChecklist
+                  customFields={(deal.custom_fields as Record<string, unknown>) || {}}
+                  onFieldChange={updateField}
+                  isUpdating={isUpdating}
+                  onComplete={moveToQualified}
+                />
               </CollapsibleContent>
             </Collapsible>
           )}
