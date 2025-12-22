@@ -66,14 +66,43 @@ const INCORPORADOR_PRODUCT_PATTERNS = [
 ];
 
 // Mapeamento de preços fixos (BRUTO) para produtos específicos
+// ATUALIZADO: Incluir A010 e todos produtos Clint
 const INCORPORADOR_PRODUCT_PRICES: Record<string, number> = {
+  // A010 - preço bruto fixo
+  'A010': 47,
+  // Produtos Incorporador
   'A001': 14500,  // MCF INCORPORADOR COMPLETO
+  'A001 - MCF': 14500,
+  'A002': 12000,  // MCF 
+  'A002 - MCF': 12000,
   'A003': 7503,   // MCF Plano Anticrise Completo
+  'A003 - MCF': 7503,
+  'A004': 9500,   // MCF
+  'A004 - MCF': 9500,
+  'A005': 5000,   // Anticrise
+  'A005 - ANTICRISE': 5000,
+  'A005 - MCF': 5000,
+  'A006': 5000,   // Anticrise
+  'A006 - ANTICRISE': 5000,
+  'A007': 1500,   // Imersão
+  'A007 - IMERSÃO': 1500,
+  'A008': 3000,   // The Club
+  'A008 - THE CLUB': 3000,
   'A009': 19500,  // MCF INCORPORADOR COMPLETO + THE CLUB
-  'SÓCIO JANTAR': 297,
-  'SOCIO JANTAR': 297,
+  'A009 - MCF': 19500,
+  'A009 - RENOVAÇÃO': 19500,
+  // Contratos
+  'A000 - CONTRATO': 249,
+  'A000 - PRÉ-RESERVA': 249,
+  '000 - CONTRATO': 249,
+  '000 - PRÉ RESERVA': 249,
   'CONTRATO - ANTICRISE': 249,
   'CONTRATO-ANTICRISE': 249,
+  'CONTRATO ANTICRISE': 249,
+  // Outros
+  'SÓCIO JANTAR': 297,
+  'SOCIO JANTAR': 297,
+  'JANTAR NETWORKING': 297,
 };
 
 // Produtos EXPLICITAMENTE EXCLUÍDOS (não entram em Incorporador 50k)
@@ -204,22 +233,38 @@ function parseValorLiquido(transaction: any): number {
   return (transaction.product_price || 0) * HUBLA_NET_MULTIPLIER;
 }
 
-// Extrair valor bruto do produto
+// Extrair valor bruto do produto - prioriza preço fixo mapeado
 function parseValorBruto(transaction: any): number {
+  const productName = (transaction.product_name || '').trim();
+  
+  // 1. PRIORIDADE: Verificar preço fixo mapeado
+  const upperProductName = productName.toUpperCase();
+  for (const [pattern, price] of Object.entries(INCORPORADOR_PRODUCT_PRICES)) {
+    if (upperProductName.includes(pattern.toUpperCase()) || 
+        upperProductName.startsWith(pattern.toUpperCase().split(' ')[0])) {
+      return price;
+    }
+  }
+  
+  // 2. Tentar product_price do banco (se > 0 e parece valor bruto)
+  if (transaction.product_price && transaction.product_price > 100) {
+    return transaction.product_price;
+  }
+  
   const rawData = transaction.raw_data;
   
-  // Tentar "Valor do produto" do CSV
+  // 3. Tentar "Valor do produto" do CSV
   if (rawData?.['Valor do produto']) {
     const valorStr = String(rawData['Valor do produto']);
     return parseFloat(valorStr.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
   }
   
-  // Tentar subtotalCents do webhook
+  // 4. Tentar subtotalCents do webhook
   if (rawData?.event?.invoice?.amount?.subtotalCents) {
     return rawData.event.invoice.amount.subtotalCents / 100;
   }
   
-  // Fallback: usar product_price
+  // 5. Fallback: usar product_price
   return transaction.product_price || 0;
 }
 
@@ -424,13 +469,19 @@ Deno.serve(async (req) => {
       return isIncorporadorProduct(productName);
     });
 
-    // FATURAMENTO CLINT (BRUTO) - primeira parcela apenas, usar Valor do produto
+    // FATURAMENTO CLINT (BRUTO) - primeira parcela apenas, usar preço fixo × quantidade
     const incorporadorBrutoTransactions = incorporadorTransactions.filter(t => isFirstInstallment(t));
-    const faturamento_clint = incorporadorBrutoTransactions.reduce((sum, t) => {
+    const faturamento_clint_incorporador = incorporadorBrutoTransactions.reduce((sum, t) => {
       return sum + parseValorBruto(t);
     }, 0);
+    
+    // FATURAMENTO CLINT BRUTO TOTAL = Incorporador Bruto + A010 Bruto (vendas × R$47)
+    const a010_bruto = vendas_a010 * 47;
+    const faturamento_clint = faturamento_clint_incorporador + a010_bruto;
 
-    console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)} (${incorporadorBrutoTransactions.length} vendas)`);
+    console.log(`💼 Faturamento Clint Incorporador (bruto): R$ ${faturamento_clint_incorporador.toFixed(2)} (${incorporadorBrutoTransactions.length} vendas)`);
+    console.log(`💼 Faturamento Clint A010 (bruto): R$ ${a010_bruto.toFixed(2)} (${vendas_a010} vendas × R$47)`);
+    console.log(`💼 Faturamento Clint TOTAL (bruto): R$ ${faturamento_clint.toFixed(2)}`);
 
     // INCORPORADOR 50K (LÍQUIDO) - TODAS parcelas pagas
     const incorporador_50k = incorporadorTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
