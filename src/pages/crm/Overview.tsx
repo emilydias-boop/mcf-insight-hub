@@ -1,11 +1,18 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Briefcase, MapPin, TrendingUp, DollarSign, CheckCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Users, Briefcase, MapPin, TrendingUp, DollarSign, CheckCircle, Layers, Tag } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
 
-const Overview = () => {
+// Import sub-page components
+import Origens from './Origens';
+import Grupos from './Grupos';
+import Tags from './Tags';
+
+const DashboardContent = () => {
   // Estatísticas agregadas com COUNT (eficiente)
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: ['crm-overview-stats'],
@@ -131,11 +138,6 @@ const Overview = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Dashboard do CRM</h2>
-        <p className="text-muted-foreground">Visão geral das suas métricas e atividades</p>
-      </div>
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {statsCards.map((stat) => {
           const Icon = stat.icon;
@@ -232,6 +234,56 @@ const Overview = () => {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+};
+
+const Overview = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-foreground mb-2">Visão Geral do CRM</h2>
+        <p className="text-muted-foreground">Dashboard, origens, grupos e tags do seu CRM</p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="bg-muted">
+          <TabsTrigger value="dashboard" className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Dashboard
+          </TabsTrigger>
+          <TabsTrigger value="origens" className="flex items-center gap-2">
+            <MapPin className="h-4 w-4" />
+            Origens
+          </TabsTrigger>
+          <TabsTrigger value="grupos" className="flex items-center gap-2">
+            <Layers className="h-4 w-4" />
+            Grupos
+          </TabsTrigger>
+          <TabsTrigger value="tags" className="flex items-center gap-2">
+            <Tag className="h-4 w-4" />
+            Tags
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard">
+          <DashboardContent />
+        </TabsContent>
+
+        <TabsContent value="origens">
+          <Origens />
+        </TabsContent>
+
+        <TabsContent value="grupos">
+          <Grupos />
+        </TabsContent>
+
+        <TabsContent value="tags">
+          <Tags />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

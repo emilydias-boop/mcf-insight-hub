@@ -105,12 +105,7 @@ const menuItems: MenuItem[] = [
   { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { title: "Minhas Reuniões", url: "/sdr/minhas-reunioes", icon: Calendar, resource: "crm", requiredRoles: ['sdr'] },
   { title: "Reuniões da Equipe", url: "/crm/reunioes-equipe", icon: Users, resource: "crm", requiredRoles: ['admin', 'manager', 'coordenador'] },
-  { 
-    title: "CRM", 
-    icon: UserCircle, 
-    resource: "crm",
-    requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'],
-  },
+  { title: "CRM", url: "/crm", icon: UserCircle, resource: "crm", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { 
     title: "Fechamento SDR", 
     icon: Calculator, 
@@ -130,26 +125,7 @@ const menuItems: MenuItem[] = [
   { title: "Configurações", url: "/configuracoes", icon: Settings, resource: "configuracoes", requiredRoles: ['admin'] },
 ];
 
-// Helper to get CRM items based on role
-const getCRMItems = (userRole: AppRole | null) => {
-  if (userRole === 'sdr') {
-    return [
-      { title: "Negócios", url: "/crm/negocios" },
-      { title: "Contatos", url: "/crm/contatos" },
-    ];
-  }
-  // Full items for admin, manager, coordenador, closer
-  return [
-    { title: "Visão Geral", url: "/crm" },
-    { title: "Contatos", url: "/crm/contatos" },
-    { title: "Negócios", url: "/crm/negocios" },
-    { title: "Origens", url: "/crm/origens" },
-    { title: "Grupos", url: "/crm/grupos" },
-    { title: "Tags", url: "/crm/tags" },
-    { title: "Importar Histórico", url: "/crm/importar-historico" },
-    { title: "Configurações", url: "/crm/configuracoes" },
-  ];
-};
+// CRM now goes directly to /crm without sub-items in sidebar
 
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
@@ -174,18 +150,8 @@ export function AppSidebar() {
     return 'Viewer';
   };
 
-  // Build menu items dynamically with CRM items based on role
-  const buildMenuItems = (): MenuItem[] => {
-    return menuItems.map(item => {
-      if (item.title === 'CRM') {
-        return { ...item, items: getCRMItems(role) };
-      }
-      return item;
-    });
-  };
-
   // Filtragem combinada: requiredRoles (role-based) + resource permissions
-  const filteredMenuItems = buildMenuItems().filter((item) => {
+  const filteredMenuItems = menuItems.filter((item) => {
     // Se tem requiredRoles, verifica primeiro a role
     if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
       return false;
