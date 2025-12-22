@@ -73,6 +73,11 @@ const PRODUTOS_FATURAMENTO_CLINT = [
 const isProductInFaturamentoClint = (productName: string, productCategory?: string | null): boolean => {
   const normalized = productName.trim().toUpperCase();
   
+  // EXCLUSÃO: Clube do Arremate NÃO faz parte do Faturamento Clint
+  if (normalized.includes("CLUBE DO ARREMATE") || normalized.includes("CLUBE ARREMATE")) {
+    return false;
+  }
+  
   // 1. Verificar por categoria (produtos Make e Hubla)
   const validCategories = ['incorporador', 'parceria', 'contrato', 'contrato-anticrise', 'imersao_socios'];
   if (productCategory && validCategories.includes(productCategory)) {
@@ -631,12 +636,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         // Evitar duplicatas Make
         if (seenMakeKeys.has(makeKey)) return;
         
-        // Verificar se existe Hubla com mesmo email+date+price similar
+        // Verificar se existe Hubla com mesmo email+date+price similar E MESMA CATEGORIA
+        // CORREÇÃO: Comparar categoria de produto para evitar excluir Parcerias/Contratos Make
+        // quando existe Incorporador Hubla com mesmo email/data/preço
+        const txCategory = (tx.product_category || "").toLowerCase();
         const hasHublaMatch = deduplicatedClintTransactions.some(htx => {
           const hEmail = (htx.customer_email || "").toLowerCase().trim();
           const hDate = htx.sale_date.split('T')[0];
           const hPrice = Math.round(htx.product_price || 0);
-          return hEmail === email && hDate === date && Math.abs(hPrice - price) < 100;
+          const hCategory = (htx.product_category || "").toLowerCase();
+          
+          // Só considera duplicata se: mesmo email + data + preço similar + MESMA categoria
+          const sameCategory = hCategory === txCategory;
+          return hEmail === email && hDate === date && Math.abs(hPrice - price) < 100 && sameCategory;
         });
         
         if (!hasHublaMatch) {
