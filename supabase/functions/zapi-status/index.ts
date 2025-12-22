@@ -66,10 +66,16 @@ serve(async (req) => {
         
         console.log('[zapi-status] Status response:', JSON.stringify(statusData));
 
-        if (statusData.error) {
+        // IMPORTANTE: Z-API retorna error: "You are already connected" mesmo quando conectado!
+        // Priorizar connected: true sobre qualquer error
+        const isConnected = statusData.connected === true;
+        
+        // Só tratar como erro real se NÃO estiver conectado E tiver error
+        if (!isConnected && statusData.error) {
           return new Response(JSON.stringify({ 
             error: statusData.error, 
             message: statusData.message,
+            connected: false,
             details: 'Verifique se ZAPI_INSTANCE_ID e ZAPI_TOKEN estão corretos'
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -77,7 +83,7 @@ serve(async (req) => {
         }
 
         // Atualizar status no banco
-        const status = statusData.connected ? 'connected' : 'disconnected';
+        const status = isConnected ? 'connected' : 'disconnected';
         const phoneNumber = statusData.phone || statusData.wid?.split('@')[0];
 
         await supabase
@@ -88,13 +94,13 @@ serve(async (req) => {
             name: 'Principal',
             status: status,
             phone_number: phoneNumber,
-            connected_at: statusData.connected ? new Date().toISOString() : null,
+            connected_at: isConnected ? new Date().toISOString() : null,
           }, {
             onConflict: 'instance_id',
           });
 
         result = {
-          connected: statusData.connected,
+          connected: isConnected,
           status: status,
           phone: phoneNumber,
           details: statusData,
@@ -103,6 +109,44 @@ serve(async (req) => {
       }
 
       case 'qrcode': {
+        // Primeiro verificar se já está conectado
+        const statusUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/status`;
+        console.log('[zapi-status] Checking status before QR:', statusUrl);
+        
+        const statusResponse = await fetch(statusUrl, { headers: zapiHeaders });
+        const statusData = await statusResponse.json();
+        
+        console.log('[zapi-status] Status before QR:', JSON.stringify(statusData));
+
+        // Se já conectado, retornar sucesso em vez de tentar QR Code
+        if (statusData.connected === true) {
+          const phoneNumber = statusData.phone || statusData.wid?.split('@')[0];
+          
+          // Atualizar banco para garantir consistência
+          await supabase
+            .from('whatsapp_instances')
+            .upsert({
+              instance_id: zapiInstanceId,
+              token: zapiToken,
+              name: 'Principal',
+              status: 'connected',
+              phone_number: phoneNumber,
+              connected_at: new Date().toISOString(),
+            }, {
+              onConflict: 'instance_id',
+            });
+
+          return new Response(JSON.stringify({ 
+            connected: true,
+            alreadyConnected: true,
+            message: 'Instância já está conectada',
+            phone: phoneNumber,
+            status: 'connected'
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         // Obter QR Code para conexão - usar /qr-code/image para base64
         const qrUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/qr-code/image`;
         console.log('[zapi-status] Calling QR:', qrUrl);
@@ -117,6 +161,7 @@ serve(async (req) => {
           return new Response(JSON.stringify({ 
             error: qrData.error || 'Erro ao obter QR Code', 
             message: qrData.message || 'Falha na requisição',
+            connected: false,
             details: 'Verifique se a instância está desconectada para obter QR Code'
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -128,6 +173,7 @@ serve(async (req) => {
           base64: qrData.value,
           value: qrData.value,
           imageUrl: qrData.value ? `data:image/png;base64,${qrData.value}` : null,
+          connected: false,
         };
         break;
       }
