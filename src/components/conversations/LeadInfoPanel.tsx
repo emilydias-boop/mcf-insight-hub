@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, Mail, MessageCircle, Calendar, ExternalLink, ChevronDown, User, FileText, History, ShoppingBag, ClipboardCheck } from 'lucide-react';
+import { Phone, Mail, MessageCircle, Calendar, ExternalLink, ChevronDown, User, FileText, History, ShoppingBag, ClipboardCheck, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -16,7 +16,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { QualificationChecklist, DEFAULT_QUALIFICATION_FIELDS } from './QualificationChecklist';
 import { useQualification } from '@/hooks/useQualification';
-
+import { CloserScheduler } from './CloserScheduler';
 interface LeadInfoPanelProps {
   dealId: string | null;
   contactId: string | null;
@@ -319,6 +319,31 @@ export function LeadInfoPanel({ dealId, contactId }: LeadInfoPanelProps) {
                   onFieldChange={updateField}
                   isUpdating={isUpdating}
                   onComplete={moveToQualified}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Scheduling Section */}
+          {deal && (
+            <Collapsible 
+              open={openSections.includes('scheduling')} 
+              onOpenChange={() => toggleSection('scheduling')}
+            >
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-muted/50 transition-colors border-b">
+                <div className="flex items-center gap-2">
+                  <CalendarPlus className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">Agendar Reunião</span>
+                </div>
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform",
+                  openSections.includes('scheduling') && "rotate-180"
+                )} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-4 py-3 border-b bg-muted/20">
+                <CloserScheduler 
+                  dealId={dealId!} 
+                  contactId={contactId || undefined}
                 />
               </CollapsibleContent>
             </Collapsible>
