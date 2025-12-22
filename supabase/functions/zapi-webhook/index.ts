@@ -23,9 +23,23 @@ serve(async (req) => {
     // Z-API envia diferentes tipos de eventos
     const eventType = payload.type || payload.event;
     
-    // Processar apenas mensagens recebidas
+    // Processar mensagens recebidas E enviadas por mim (fromMe)
     if (eventType === 'ReceivedCallback' || payload.isStatusReply === false) {
       const message = payload;
+      const fromMe = message.fromMe === true;
+      const fromApi = message.fromApi === true;
+      
+      // Se foi enviada pela API (CRM), já foi salva pelo zapi-send-message
+      // Pular para evitar duplicação
+      if (fromMe && fromApi) {
+        console.log('Message sent from API (CRM), skipping - already saved');
+        return new Response(JSON.stringify({ success: true, skipped: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.log('Processing message - fromMe:', fromMe, 'fromApi:', fromApi);
+      
       const phone = message.phone || message.from?.replace('@c.us', '');
       const instanceId = message.instanceId;
       
@@ -119,13 +133,15 @@ serve(async (req) => {
             conversation_id: conversation.id,
             message_id_whatsapp: message.messageId || message.id?.id,
             content: messageContent,
-            direction: 'inbound',
-            status: 'received',
-            sender_name: message.senderName || conversation.contact_name,
+            direction: fromMe ? 'outbound' : 'inbound',
+            status: fromMe ? 'sent' : 'received',
+            sender_name: fromMe ? null : (message.senderName || conversation.contact_name),
             sent_at: new Date(message.momment || Date.now()).toISOString(),
             metadata: {
               raw: payload,
               phone: phone,
+              fromMe: fromMe,
+              fromApi: fromApi,
             },
           });
 
@@ -133,17 +149,19 @@ serve(async (req) => {
           console.error('Error saving message:', msgError);
         }
 
-        // Atualizar conversa
+        // Atualizar conversa - não incrementar unread_count se a mensagem foi enviada por nós
         await supabase
           .from('whatsapp_conversations')
           .update({
             last_message: messageContent,
             last_message_at: new Date().toISOString(),
-            unread_count: (conversation.unread_count || 0) + 1,
+            unread_count: fromMe 
+              ? (conversation.unread_count || 0)
+              : (conversation.unread_count || 0) + 1,
           })
           .eq('id', conversation.id);
 
-        console.log('Message saved successfully for conversation:', conversation.id);
+        console.log('Message saved successfully for conversation:', conversation.id, '- fromMe:', fromMe);
       }
     }
 
