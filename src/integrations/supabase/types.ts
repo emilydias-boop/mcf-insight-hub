@@ -476,6 +476,50 @@ export type Database = {
         }
         Relationships: []
       }
+      closer_availability: {
+        Row: {
+          closer_id: string
+          created_at: string | null
+          day_of_week: number
+          end_time: string
+          id: string
+          is_active: boolean | null
+          slot_duration_minutes: number | null
+          start_time: string
+          updated_at: string | null
+        }
+        Insert: {
+          closer_id: string
+          created_at?: string | null
+          day_of_week: number
+          end_time: string
+          id?: string
+          is_active?: boolean | null
+          slot_duration_minutes?: number | null
+          start_time: string
+          updated_at?: string | null
+        }
+        Update: {
+          closer_id?: string
+          created_at?: string | null
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          is_active?: boolean | null
+          slot_duration_minutes?: number | null
+          start_time?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closer_availability_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       closer_commissions: {
         Row: {
           closer_name: string
@@ -511,6 +555,44 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      closers: {
+        Row: {
+          created_at: string | null
+          email: string
+          employee_id: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          employee_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closers_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       consortium_payments: {
         Row: {
@@ -1929,6 +2011,73 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      meeting_slots: {
+        Row: {
+          booked_by: string | null
+          closer_id: string
+          contact_id: string | null
+          created_at: string | null
+          deal_id: string | null
+          duration_minutes: number | null
+          id: string
+          meeting_link: string | null
+          notes: string | null
+          scheduled_at: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          booked_by?: string | null
+          closer_id: string
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          duration_minutes?: number | null
+          id?: string
+          meeting_link?: string | null
+          notes?: string | null
+          scheduled_at: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          booked_by?: string | null
+          closer_id?: string
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          duration_minutes?: number | null
+          id?: string
+          meeting_link?: string | null
+          notes?: string | null
+          scheduled_at?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_slots_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slots_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slots_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       operational_costs: {
         Row: {
