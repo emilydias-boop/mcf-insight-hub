@@ -52,25 +52,31 @@ serve(async (req) => {
       });
     }
 
-    // Buscar assinatura do usuário se tiver senderId
-    let signature = '';
+    // Buscar nome do usuário para prefixo
+    let prefix = '';
     if (senderId) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name, whatsapp_signature')
+        .select('full_name')
         .eq('id', senderId)
         .single();
 
       if (profile) {
         const name = senderName || profile.full_name || 'Atendente';
-        signature = profile.whatsapp_signature || `\n\n— *${name}* | MCF`;
+        const formattedName = name.split(' ').map((word: string) => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+        prefix = `*${formattedName}:*\n`;
       }
     } else if (senderName) {
-      signature = `\n\n— *${senderName}* | MCF`;
+      const formattedName = senderName.split(' ').map((word: string) => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+      prefix = `*${formattedName}:*\n`;
     }
 
-    // Adicionar assinatura à mensagem
-    const messageWithSignature = content + signature;
+    // Adicionar prefixo à mensagem
+    const messageWithPrefix = prefix + content;
 
     // Extrair número do telefone do remote_jid
     const phone = conversation.remote_jid.replace('@c.us', '').replace('@s.whatsapp.net', '');
@@ -78,14 +84,14 @@ serve(async (req) => {
     // Enviar via Z-API
     const zapiUrl = `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`;
     
-    console.log('Sending message to Z-API:', { phone, contentLength: messageWithSignature.length });
+    console.log('Sending message to Z-API:', { phone, contentLength: messageWithPrefix.length });
 
     const zapiResponse = await fetch(zapiUrl, {
       method: 'POST',
       headers: zapiHeaders,
       body: JSON.stringify({
         phone: phone,
-        message: messageWithSignature,
+        message: messageWithPrefix,
       }),
     });
 
@@ -113,8 +119,8 @@ serve(async (req) => {
         sender_name: senderName,
         sent_at: new Date().toISOString(),
         metadata: {
-          signature: signature,
-          full_message: messageWithSignature,
+          prefix: prefix,
+          full_message: messageWithPrefix,
           zapi_response: zapiResult,
         },
       })
