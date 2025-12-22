@@ -85,6 +85,15 @@ export function useWhatsAppConversations() {
     }
 
     try {
+      // Buscar full_name do profile do usuário
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+
+      const senderName = profile?.full_name || 'Atendente';
+
       // Optimistically add message
       const tempMessage: WhatsAppMessage = {
         id: `temp-${Date.now()}`,
@@ -94,7 +103,7 @@ export function useWhatsAppConversations() {
         direction: 'outbound',
         status: 'sending',
         sender_id: user.id,
-        sender_name: user.email?.split('@')[0] || 'Atendente',
+        sender_name: senderName,
         sent_at: new Date().toISOString(),
         delivered_at: null,
         read_at: null,
@@ -110,7 +119,7 @@ export function useWhatsAppConversations() {
           conversationId,
           content,
           senderId: user.id,
-          senderName: user.email?.split('@')[0] || 'Atendente',
+          senderName,
         },
       });
 

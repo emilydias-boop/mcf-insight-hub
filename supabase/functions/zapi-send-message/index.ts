@@ -66,13 +66,13 @@ serve(async (req) => {
         const formattedName = name.split(' ').map((word: string) => 
           word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
         ).join(' ');
-        prefix = `*${formattedName}:*\n`;
+        prefix = `*${formattedName}:*\n\n`;
       }
     } else if (senderName) {
       const formattedName = senderName.split(' ').map((word: string) => 
         word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
       ).join(' ');
-      prefix = `*${formattedName}:*\n`;
+      prefix = `*${formattedName}:*\n\n`;
     }
 
     // Adicionar prefixo à mensagem
