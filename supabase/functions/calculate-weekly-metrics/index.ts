@@ -416,7 +416,80 @@ Deno.serve(async (req) => {
     console.log(`📈 Vendas A010: ${vendas_a010} (source=make, deduplicado)`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (valor priorizado Hubla)`);
 
-    // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K / FATURAMENTO CLINT
+    // 4. FATURAMENTO CLINT - NOVA LÓGICA: Make como BASE, Hubla como fallback
+    // Make (source='make', category IN ['contrato', 'parceria']) = Base para contagem e valores
+    // Hubla (source='hubla', category='incorporador') = Fallback para períodos antigos sem Make
+    
+    // 4.1 Buscar transações MAKE (contrato + parceria) - PRIORIDADE
+    const { data: makeClintFromDB } = await supabase
+      .from('hubla_transactions')
+      .select('*')
+      .eq('source', 'make')
+      .in('product_category', ['contrato', 'parceria'])
+      .eq('sale_status', 'completed')
+      .gte('sale_date', startDateUTC.toISOString())
+      .lte('sale_date', endDateUTC.toISOString());
+    
+    // Filtrar por data BR
+    const makeClintTransactions = (makeClintFromDB || []).filter(t => {
+      const saleDateBR = toSaoPauloDateString(t.sale_date);
+      return saleDateBR >= week_start && saleDateBR <= week_end;
+    });
+    
+    console.log(`📦 Make Clint (contrato+parceria): ${makeClintTransactions.length} transações`);
+    
+    // 4.2 Buscar transações HUBLA (incorporador) - FALLBACK para períodos antigos
+    const { data: hublaIncFromDB } = await supabase
+      .from('hubla_transactions')
+      .select('*')
+      .eq('source', 'hubla')
+      .eq('product_category', 'incorporador')
+      .eq('sale_status', 'completed')
+      .gte('sale_date', startDateUTC.toISOString())
+      .lte('sale_date', endDateUTC.toISOString());
+    
+    const hublaIncTransactions = (hublaIncFromDB || []).filter(t => {
+      const saleDateBR = toSaoPauloDateString(t.sale_date);
+      return saleDateBR >= week_start && saleDateBR <= week_end;
+    });
+    
+    console.log(`📦 Hubla Incorporador (fallback): ${hublaIncTransactions.length} transações`);
+    
+    // 4.3 Deduplicar: Make tem prioridade sobre Hubla
+    // Criar set de emails do Make para evitar duplicatas
+    const makeEmailsSet = new Set<string>();
+    makeClintTransactions.forEach(t => {
+      const email = (t.customer_email || '').toLowerCase().trim();
+      if (email) makeEmailsSet.add(email);
+    });
+    
+    // Hubla transactions que NÃO existem no Make (fallback)
+    const hublaFallbackTransactions = hublaIncTransactions.filter(t => {
+      const email = (t.customer_email || '').toLowerCase().trim();
+      return !makeEmailsSet.has(email);
+    });
+    
+    console.log(`📦 Hubla Fallback (não duplicados): ${hublaFallbackTransactions.length} transações`);
+    
+    // 4.4 Calcular FATURAMENTO CLINT BRUTO (product_price)
+    const makeClintBruto = makeClintTransactions.reduce((sum, t) => sum + (t.product_price || 0), 0);
+    const hublaFallbackBruto = hublaFallbackTransactions.reduce((sum, t) => sum + parseValorBruto(t), 0);
+    const faturamento_clint = makeClintBruto + hublaFallbackBruto;
+    
+    console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)} (Make: R$ ${makeClintBruto.toFixed(2)} + Hubla Fallback: R$ ${hublaFallbackBruto.toFixed(2)})`);
+    
+    // 4.5 Calcular FATURAMENTO CLINT LÍQUIDO (net_value)
+    const makeClintLiquido = makeClintTransactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
+    const hublaFallbackLiquido = hublaFallbackTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    const faturamento_clint_liquido = makeClintLiquido + hublaFallbackLiquido;
+    
+    console.log(`💼 Faturamento Clint (líquido): R$ ${faturamento_clint_liquido.toFixed(2)} (Make: R$ ${makeClintLiquido.toFixed(2)} + Hubla Fallback: R$ ${hublaFallbackLiquido.toFixed(2)})`);
+    
+    // 4.6 Contar vendas Clint
+    const vendas_clint = makeClintTransactions.length + hublaFallbackTransactions.length;
+    console.log(`💼 Vendas Clint: ${vendas_clint} (Make: ${makeClintTransactions.length} + Hubla Fallback: ${hublaFallbackTransactions.length})`);
+    
+    // 4.7 INCORPORADOR 50K (manter para compatibilidade) - usar mesma lógica
     // Usar lista completa de produtos da planilha do usuário
     const incorporadorTransactions = completedTransactions.filter(t => {
       const hublaId = t.hubla_id || '';
@@ -428,35 +501,7 @@ Deno.serve(async (req) => {
       // Verificar se é produto Incorporador usando a lista completa
       return isIncorporadorProduct(productName);
     });
-
-    // FATURAMENTO CLINT (BRUTO) - produtos Clint (A000-A009, Contrato), primeira parcela, SEM A010
-    // Usa product_price real do banco (coluna "Valor Bruto" do CSV)
-    // IMPORTANTE: Para Faturamento Clint, usamos apenas installment_number (NÃO o filtro de valor mínimo)
-    const clintBrutoTransactions = completedTransactions.filter(t => {
-      const productName = t.product_name || '';
-      const hublaId = t.hubla_id || '';
-      const category = (t.product_category || '').toLowerCase();
-      
-      // Excluir A010 (categoria separada)
-      if (category === 'a010' || productName.toUpperCase().includes('A010')) return false;
-      
-      // Excluir -offer- (são Order Bumps)
-      if (hublaId.includes('-offer-')) return false;
-      
-      // Apenas primeira parcela (usando apenas installment_number, sem filtro de valor)
-      const { installment } = getSmartInstallment(t);
-      if (installment !== null && installment > 1) return false;
-      
-      // Deve ser produto Clint
-      return isClintProduct(productName);
-    });
     
-    const faturamento_clint = clintBrutoTransactions.reduce((sum, t) => {
-      return sum + parseValorBruto(t);
-    }, 0);
-
-    console.log(`💼 Faturamento Clint (bruto): R$ ${faturamento_clint.toFixed(2)} (${clintBrutoTransactions.length} vendas, sem A010)`);
-
     // INCORPORADOR 50K (LÍQUIDO) - TODAS parcelas pagas
     const incorporador_50k = incorporadorTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
 
@@ -597,6 +642,8 @@ Deno.serve(async (req) => {
       real_cost: custo_real,
       
       faturamento_clint,
+      faturamento_clint_liquido,
+      vendas_clint,
       incorporador_50k,
       faturamento_total,
       a010_sales: vendas_a010,
@@ -618,6 +665,7 @@ Deno.serve(async (req) => {
       contract_sales,
       
       clint_revenue: faturamento_clint,
+      clint_revenue_liquido: faturamento_clint_liquido,
       total_revenue: faturamento_total,
       operating_profit: lucro_operacional,
       roi,
