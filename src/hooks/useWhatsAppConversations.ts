@@ -18,6 +18,7 @@ export interface WhatsAppConversation {
   owner_id: string | null;
   created_at: string;
   updated_at: string;
+  is_group?: boolean;
 }
 
 export interface WhatsAppMessage {

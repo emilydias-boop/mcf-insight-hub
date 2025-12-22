@@ -1,4 +1,4 @@
-import { MessageCircle, Phone, Mail } from 'lucide-react';
+import { MessageCircle, Phone, Mail, Users } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Conversation } from '@/types/conversations';
 import { cn } from '@/lib/utils';
@@ -58,8 +58,15 @@ export function ConversationItem({ conversation, isSelected, onClick }: Conversa
       {/* Avatar */}
       <div className="relative flex-shrink-0">
         <Avatar className="h-10 w-10">
-          <AvatarFallback className="bg-primary/10 text-primary text-sm">
-            {getInitials(conversation.contactName)}
+          <AvatarFallback className={cn(
+            "text-sm",
+            conversation.isGroup ? "bg-emerald-500/20 text-emerald-600" : "bg-primary/10 text-primary"
+          )}>
+            {conversation.isGroup ? (
+              <Users className="h-5 w-5" />
+            ) : (
+              getInitials(conversation.contactName)
+            )}
           </AvatarFallback>
         </Avatar>
         {conversation.isUnread && (

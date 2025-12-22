@@ -3683,6 +3683,7 @@ export type Database = {
           deal_id: string | null
           id: string
           instance_id: string | null
+          is_group: boolean | null
           last_message: string | null
           last_message_at: string | null
           owner_id: string | null
@@ -3699,6 +3700,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           instance_id?: string | null
+          is_group?: boolean | null
           last_message?: string | null
           last_message_at?: string | null
           owner_id?: string | null
@@ -3715,6 +3717,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           instance_id?: string | null
+          is_group?: boolean | null
           last_message?: string | null
           last_message_at?: string | null
           owner_id?: string | null

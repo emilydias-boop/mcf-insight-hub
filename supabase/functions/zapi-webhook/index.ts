@@ -39,6 +39,10 @@ serve(async (req) => {
       // Buscar ou criar conversa
       const remoteJid = phone.includes('@') ? phone : `${phone}@c.us`;
       
+      // Identificar se é grupo
+      const isGroup = message.isGroup === true || remoteJid.includes('@g.us') || remoteJid.includes('-group@');
+      const chatName = message.chatName;
+      
       // Buscar instância ativa
       const { data: instance } = await supabase
         .from('whatsapp_instances')
@@ -88,11 +92,12 @@ serve(async (req) => {
             instance_id: instanceUuid,
             remote_jid: remoteJid,
             contact_id: contact?.id || null,
-            contact_name: message.senderName || contact?.name || phone,
+            contact_name: isGroup ? (chatName || 'Grupo') : (message.senderName || contact?.name || phone),
             contact_phone: cleanPhone,
             last_message: message.text?.message || message.text || '[Mídia]',
             last_message_at: new Date().toISOString(),
             unread_count: 1,
+            is_group: isGroup,
           })
           .select()
           .single();
