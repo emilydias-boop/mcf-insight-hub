@@ -43,6 +43,11 @@ Deno.serve(async (req) => {
         ) || 0;
       }
 
+      // Validação: valores diários acima de R$ 50k são suspeitos
+      if (parsedAmount > 50000) {
+        console.warn(`⚠️ VALOR ALTO DETECTADO para ${parsedDate}: R$ ${parsedAmount.toFixed(2)} - Verificar se está correto!`);
+      }
+
       return {
         date: parsedDate,
         cost_type: 'ads',
