@@ -36,6 +36,14 @@ function transformConversation(waConv: WhatsAppConversation): Conversation {
 
 // Transform WhatsApp message to generic Message type
 function transformMessage(waMsg: WhatsAppMessage): Message {
+  // Extrair senderName do campo sender_name ou do metadata
+  let senderName = waMsg.sender_name;
+  if (!senderName && waMsg.metadata) {
+    const metadata = waMsg.metadata as Record<string, unknown>;
+    const raw = metadata?.raw as Record<string, unknown>;
+    senderName = raw?.senderName as string || null;
+  }
+
   return {
     id: waMsg.id,
     conversationId: waMsg.conversation_id,
@@ -43,6 +51,7 @@ function transformMessage(waMsg: WhatsAppMessage): Message {
     sentAt: waMsg.sent_at,
     direction: waMsg.direction === 'inbound' ? 'inbound' : 'outbound',
     status: waMsg.status as Message['status'],
+    senderName: senderName || undefined,
   };
 }
 

@@ -11,6 +11,7 @@ export interface Message {
   sentAt: string;
   direction: MessageDirection;
   status: MessageStatus;
+  senderName?: string;
 }
 
 export interface Conversation {

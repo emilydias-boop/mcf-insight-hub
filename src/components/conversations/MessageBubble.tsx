@@ -38,6 +38,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           ? "bg-primary text-primary-foreground rounded-br-md" 
           : "bg-muted text-foreground rounded-bl-md"
       )}>
+        {!isOutbound && message.senderName && (
+          <p className="text-xs font-semibold text-emerald-600 mb-1">
+            {message.senderName}
+          </p>
+        )}
         <p className="text-sm whitespace-pre-wrap break-words">
           {message.content}
         </p>
