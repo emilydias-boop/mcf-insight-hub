@@ -300,11 +300,11 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Vendas Hubla: ${completedTransactions?.length || 0} completed | ${refundedTransactions?.length || 0} refunds`);
 
-    // 3. CONTAR VENDAS A010 - METODOLOGIA PLANILHA:
-    // - Contar CADA linha/transação (não deduplicar por email)
-    // - Excluir apenas newsale- sem dados válidos
+    // 3. CONTAR VENDAS A010 - METODOLOGIA CORRIGIDA:
+    // - DEDUPLICAR por email+data (cada cliente compra 1x por dia)
+    // - Excluir newsale- sem dados válidos
     // - Incluir completed E refunded
-    const a010Transactions = allWeekTransactions.filter(t => {
+    const a010RawTransactions = allWeekTransactions.filter(t => {
       const hublaId = t.hubla_id || '';
       const productName = (t.product_name || '').toUpperCase();
       
@@ -317,9 +317,9 @@ Deno.serve(async (req) => {
         return false;
       }
       
-      // Requer customer_name ou customer_email
-      const hasCustomer = (t.customer_name || '').trim() || (t.customer_email || '').trim();
-      if (!hasCustomer) return false;
+      // Requer customer_email para deduplicação
+      const hasEmail = (t.customer_email || '').trim();
+      if (!hasEmail) return false;
       
       // Excluir -offer- (Order Bumps vendidos junto com A010)
       if (hublaId.includes('-offer-')) return false;
@@ -327,13 +327,29 @@ Deno.serve(async (req) => {
       return true;
     });
     
+    // DEDUPLICAR A010 por email+data: cada cliente conta 1x por dia
+    const a010ByEmailDate = new Map<string, typeof a010RawTransactions[0]>();
+    for (const tx of a010RawTransactions) {
+      const saleDateBR = toSaoPauloDateString(tx.sale_date);
+      const key = `${(tx.customer_email || '').toLowerCase().trim()}_${saleDateBR}`;
+      const existing = a010ByEmailDate.get(key);
+      // Priorizar: completed > refunded, maior net_value
+      if (!existing || 
+          (tx.sale_status === 'completed' && existing.sale_status !== 'completed') ||
+          (tx.sale_status === existing.sale_status && parseValorLiquido(tx) > parseValorLiquido(existing))) {
+        a010ByEmailDate.set(key, tx);
+      }
+    }
+    const a010Transactions = Array.from(a010ByEmailDate.values());
+    
     const vendas_a010 = a010Transactions.length;
     
     // Faturado A010: soma do valor líquido de TODAS transações A010 (completed)
     const a010CompletedTransactions = a010Transactions.filter(t => t.sale_status === 'completed');
     const faturado_a010 = a010CompletedTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
     
-    console.log(`📈 Vendas A010: ${vendas_a010} transações (metodologia planilha)`);
+    console.log(`📈 Vendas A010: ${vendas_a010} vendas únicas (deduplicado por email+data)`);
+    console.log(`📈 A010 antes deduplicação: ${a010RawTransactions.length} | após: ${a010Transactions.length}`);
     console.log(`📈 Faturado A010: R$ ${faturado_a010.toFixed(2)} (${a010CompletedTransactions.length} completed)`);
 
     // 4. FILTRAR TRANSAÇÕES DO INCORPORADOR 50K / FATURAMENTO CLINT
