@@ -2059,6 +2059,8 @@ export type Database = {
       meeting_slots: {
         Row: {
           booked_by: string | null
+          calendly_event_uri: string | null
+          calendly_invitee_uri: string | null
           closer_id: string
           contact_id: string | null
           created_at: string | null
@@ -2074,6 +2076,8 @@ export type Database = {
         }
         Insert: {
           booked_by?: string | null
+          calendly_event_uri?: string | null
+          calendly_invitee_uri?: string | null
           closer_id: string
           contact_id?: string | null
           created_at?: string | null
@@ -2089,6 +2093,8 @@ export type Database = {
         }
         Update: {
           booked_by?: string | null
+          calendly_event_uri?: string | null
+          calendly_invitee_uri?: string | null
           closer_id?: string
           contact_id?: string | null
           created_at?: string | null
