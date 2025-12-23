@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
-  ExternalLink, Clock, User, MapPin, Mail, X, Save 
+  ExternalLink, Clock, User, Mail, X, Save 
 } from 'lucide-react';
 import {
   Drawer,
@@ -20,6 +20,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { MeetingSlot, useUpdateMeetingStatus, useCancelMeeting, useUpdateMeetingNotes } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { useConversationsContext } from '@/contexts/ConversationsContext';
+import { toast } from 'sonner';
 
 interface AgendaMeetingDrawerProps {
   meeting: MeetingSlot | null;
@@ -39,9 +41,11 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
   const [notes, setNotes] = useState(meeting?.notes || '');
+  const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
   const updateNotes = useUpdateMeetingNotes();
+  const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
 
   if (!meeting) return null;
 
@@ -55,10 +59,26 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
     }
   };
 
-  const handleWhatsApp = () => {
-    if (contact?.phone) {
+  const handleWhatsApp = async () => {
+    if (!contact?.phone) return;
+    
+    setIsLoadingWhatsApp(true);
+    try {
+      const conversationId = await findOrCreateConversationByPhone(
+        contact.phone, 
+        contact.name
+      );
+      selectConversation(conversationId);
+      onOpenChange(false);
+      navigate('/crm/atendimentos');
+    } catch (error) {
+      console.error('Erro ao iniciar conversa:', error);
+      toast.error('Erro ao abrir conversa. Abrindo WhatsApp externo...');
+      // Fallback para WhatsApp externo
       const phone = contact.phone.replace(/\D/g, '');
       window.open(`https://wa.me/55${phone}`, '_blank');
+    } finally {
+      setIsLoadingWhatsApp(false);
     }
   };
 
@@ -169,10 +189,10 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
                       size="sm"
                       className="flex-col h-16 gap-1"
                       onClick={handleWhatsApp}
-                      disabled={!contact?.phone}
+                      disabled={!contact?.phone || isLoadingWhatsApp}
                     >
                       <MessageCircle className="h-4 w-4" />
-                      <span className="text-xs">WhatsApp</span>
+                      <span className="text-xs">{isLoadingWhatsApp ? '...' : 'WhatsApp'}</span>
                     </Button>
                     <Button
                       variant="outline"
