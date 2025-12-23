@@ -6,6 +6,7 @@ import {
   ConversationChannel 
 } from '@/types/conversations';
 import { useWhatsAppConversations, WhatsAppConversation, WhatsAppMessage } from '@/hooks/useWhatsAppConversations';
+import { supabase } from '@/integrations/supabase/client';
 
 const ConversationsContext = createContext<ConversationsContextType | undefined>(undefined);
 
@@ -136,6 +137,40 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
     return transformConversation(waConv);
   }, [waGetSelectedConversation]);
 
+  const findOrCreateConversationByPhone = useCallback(async (phone: string, contactName?: string): Promise<string> => {
+    const normalizedPhone = phone.replace(/\D/g, '');
+    
+    // 1. Tentar encontrar conversa existente
+    const { data: existing } = await supabase
+      .from('whatsapp_conversations')
+      .select('id')
+      .ilike('contact_phone', `%${normalizedPhone.slice(-9)}%`)
+      .maybeSingle();
+    
+    if (existing) {
+      return existing.id;
+    }
+    
+    // 2. Se não existir, criar nova conversa
+    const remoteJid = normalizedPhone.startsWith('55') 
+      ? `${normalizedPhone}@s.whatsapp.net`
+      : `55${normalizedPhone}@s.whatsapp.net`;
+    
+    const { data: newConv, error } = await supabase
+      .from('whatsapp_conversations')
+      .insert({
+        remote_jid: remoteJid,
+        contact_phone: normalizedPhone,
+        contact_name: contactName || 'Novo Contato',
+        unread_count: 0,
+      })
+      .select('id')
+      .single();
+    
+    if (error) throw error;
+    return newConv.id;
+  }, []);
+
   const value: ConversationsContextType = {
     isDrawerOpen,
     selectedConversationId,
@@ -157,6 +192,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
     sendMessage,
     getMessagesForConversation,
     getSelectedConversation,
+    findOrCreateConversationByPhone,
   };
 
   return (

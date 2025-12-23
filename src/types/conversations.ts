@@ -58,4 +58,5 @@ export interface ConversationsContextType extends ConversationsState {
   sendMessage: (conversationId: string, content: string) => void;
   getMessagesForConversation: (conversationId: string) => Message[];
   getSelectedConversation: () => Conversation | null;
+  findOrCreateConversationByPhone: (phone: string, contactName?: string) => Promise<string>;
 }
