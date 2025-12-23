@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfWeek, endOfWeek, format, addDays } from 'date-fns';
+import { startOfWeek, endOfWeek, format, addDays, isSameDay, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
 export interface MeetingSlot {
@@ -19,6 +19,7 @@ export interface MeetingSlot {
     id: string;
     name: string;
     email: string;
+    color?: string;
   };
   deal?: {
     id: string;
@@ -36,6 +37,7 @@ export interface CloserWithAvailability {
   id: string;
   name: string;
   email: string;
+  color: string;
   is_active: boolean;
   availability: {
     id: string;
@@ -47,6 +49,14 @@ export interface CloserWithAvailability {
   }[];
 }
 
+export interface BlockedDate {
+  id: string;
+  closer_id: string;
+  blocked_date: string;
+  reason: string | null;
+  created_at: string;
+}
+
 export interface AgendaStats {
   totalMeetingsToday: number;
   totalMeetingsWeek: number;
@@ -54,6 +64,20 @@ export interface AgendaStats {
   noShowMeetings: number;
   canceledMeetings: number;
 }
+
+export interface CloserMetrics {
+  closerId: string;
+  closerName: string;
+  color: string;
+  totalSlots: number;
+  bookedSlots: number;
+  occupancyRate: number;
+  completedMeetings: number;
+  noShowMeetings: number;
+  conversionRate: number;
+}
+
+// ============ Meetings Hooks ============
 
 export function useAgendaMeetings(startDate: Date, endDate: Date) {
   return useQuery({
@@ -63,7 +87,7 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
         .from('meeting_slots')
         .select(`
           *,
-          closer:closers(id, name, email),
+          closer:closers(id, name, email, color),
           deal:crm_deals(
             id, 
             name,
@@ -91,14 +115,12 @@ export function useAgendaStats(date: Date) {
   return useQuery({
     queryKey: ['agenda-stats', format(date, 'yyyy-MM-dd')],
     queryFn: async () => {
-      // Meetings today
       const { data: todayData } = await supabase
         .from('meeting_slots')
         .select('id, status')
         .gte('scheduled_at', todayStart.toISOString())
         .lte('scheduled_at', todayEnd.toISOString());
 
-      // Meetings this week
       const { data: weekData } = await supabase
         .from('meeting_slots')
         .select('id, status')
@@ -117,6 +139,39 @@ export function useAgendaStats(date: Date) {
     },
   });
 }
+
+export function useUpcomingMeetings(date: Date) {
+  const todayStart = new Date(date);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(date);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  return useQuery({
+    queryKey: ['upcoming-meetings', format(date, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meeting_slots')
+        .select(`
+          *,
+          closer:closers(id, name, email, color),
+          deal:crm_deals(
+            id, 
+            name,
+            contact:crm_contacts(id, name, phone, email)
+          )
+        `)
+        .gte('scheduled_at', todayStart.toISOString())
+        .lte('scheduled_at', todayEnd.toISOString())
+        .in('status', ['scheduled', 'rescheduled'])
+        .order('scheduled_at', { ascending: true });
+
+      if (error) throw error;
+      return data as MeetingSlot[];
+    },
+  });
+}
+
+// ============ Closers Hooks ============
 
 export function useClosersWithAvailability() {
   return useQuery({
@@ -139,6 +194,7 @@ export function useClosersWithAvailability() {
 
       const closersWithAvailability: CloserWithAvailability[] = closers.map(closer => ({
         ...closer,
+        color: closer.color || '#3B82F6',
         availability: availability?.filter(a => a.closer_id === closer.id) || [],
       }));
 
@@ -146,6 +202,172 @@ export function useClosersWithAvailability() {
     },
   });
 }
+
+export function useCloserMetrics(date: Date) {
+  const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+  const todayStart = new Date(date);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(date);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  return useQuery({
+    queryKey: ['closer-metrics', format(date, 'yyyy-MM-dd')],
+    queryFn: async () => {
+      const { data: closers } = await supabase
+        .from('closers')
+        .select('id, name, color')
+        .eq('is_active', true);
+
+      const { data: availability } = await supabase
+        .from('closer_availability')
+        .select('*')
+        .eq('is_active', true);
+
+      const { data: todayMeetings } = await supabase
+        .from('meeting_slots')
+        .select('closer_id, status')
+        .gte('scheduled_at', todayStart.toISOString())
+        .lte('scheduled_at', todayEnd.toISOString());
+
+      const { data: weekMeetings } = await supabase
+        .from('meeting_slots')
+        .select('closer_id, status')
+        .gte('scheduled_at', weekStart.toISOString())
+        .lte('scheduled_at', weekEnd.toISOString());
+
+      const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
+
+      const metrics: CloserMetrics[] = (closers || []).map(closer => {
+        const closerAvailability = availability?.filter(a => a.closer_id === closer.id && a.day_of_week === dayOfWeek) || [];
+        
+        let totalSlots = 0;
+        closerAvailability.forEach(a => {
+          const startHour = parseInt(a.start_time.split(':')[0]);
+          const endHour = parseInt(a.end_time.split(':')[0]);
+          const slotDuration = a.slot_duration_minutes || 60;
+          totalSlots += Math.floor((endHour - startHour) * 60 / slotDuration);
+        });
+
+        const closerTodayMeetings = todayMeetings?.filter(m => m.closer_id === closer.id) || [];
+        const closerWeekMeetings = weekMeetings?.filter(m => m.closer_id === closer.id) || [];
+        const bookedSlots = closerTodayMeetings.length;
+        const completed = closerWeekMeetings.filter(m => m.status === 'completed').length;
+        const noShow = closerWeekMeetings.filter(m => m.status === 'no_show').length;
+        const total = closerWeekMeetings.length;
+
+        return {
+          closerId: closer.id,
+          closerName: closer.name,
+          color: closer.color || '#3B82F6',
+          totalSlots,
+          bookedSlots,
+          occupancyRate: totalSlots > 0 ? Math.round((bookedSlots / totalSlots) * 100) : 0,
+          completedMeetings: completed,
+          noShowMeetings: noShow,
+          conversionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+        };
+      });
+
+      return metrics;
+    },
+  });
+}
+
+export function useUpdateCloserColor() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ closerId, color }: { closerId: string; color: string }) => {
+      const { error } = await supabase
+        .from('closers')
+        .update({ color })
+        .eq('id', closerId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['closers-with-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      toast.success('Cor atualizada');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar cor');
+    },
+  });
+}
+
+// ============ Blocked Dates Hooks ============
+
+export function useBlockedDates(closerId?: string) {
+  return useQuery({
+    queryKey: ['blocked-dates', closerId],
+    queryFn: async () => {
+      let query = supabase
+        .from('closer_blocked_dates')
+        .select('*')
+        .order('blocked_date', { ascending: true });
+
+      if (closerId) {
+        query = query.eq('closer_id', closerId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as BlockedDate[];
+    },
+  });
+}
+
+export function useAddBlockedDate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ closerId, date, reason }: { closerId: string; date: Date; reason?: string }) => {
+      const { error } = await supabase
+        .from('closer_blocked_dates')
+        .insert({
+          closer_id: closerId,
+          blocked_date: format(date, 'yyyy-MM-dd'),
+          reason,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['blocked-dates'] });
+      toast.success('Data bloqueada');
+    },
+    onError: () => {
+      toast.error('Erro ao bloquear data');
+    },
+  });
+}
+
+export function useRemoveBlockedDate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (blockedDateId: string) => {
+      const { error } = await supabase
+        .from('closer_blocked_dates')
+        .delete()
+        .eq('id', blockedDateId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['blocked-dates'] });
+      toast.success('Bloqueio removido');
+    },
+    onError: () => {
+      toast.error('Erro ao remover bloqueio');
+    },
+  });
+}
+
+// ============ Meeting Status Hooks ============
 
 export function useUpdateMeetingStatus() {
   const queryClient = useQueryClient();
@@ -162,6 +384,8 @@ export function useUpdateMeetingStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
       toast.success('Status atualizado');
     },
     onError: () => {
@@ -187,13 +411,11 @@ export function useUpdateAvailability() {
         is_active: boolean;
       }[];
     }) => {
-      // Delete existing availability for this closer
       await supabase
         .from('closer_availability')
         .delete()
         .eq('closer_id', closerId);
 
-      // Insert new availability
       if (availability.length > 0) {
         const { error } = await supabase
           .from('closer_availability')
@@ -232,10 +454,137 @@ export function useCancelMeeting() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       toast.success('Reunião cancelada');
     },
     onError: () => {
       toast.error('Erro ao cancelar reunião');
+    },
+  });
+}
+
+export function useUpdateMeetingNotes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ meetingId, notes }: { meetingId: string; notes: string }) => {
+      const { error } = await supabase
+        .from('meeting_slots')
+        .update({ notes })
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      toast.success('Notas salvas');
+    },
+    onError: () => {
+      toast.error('Erro ao salvar notas');
+    },
+  });
+}
+
+// ============ Quick Schedule Hooks ============
+
+export function useSearchDealsForSchedule(query: string) {
+  return useQuery({
+    queryKey: ['schedule-search', query],
+    queryFn: async () => {
+      if (!query || query.length < 2) return [];
+
+      const { data, error } = await supabase
+        .from('crm_deals')
+        .select(`
+          id,
+          name,
+          contact:crm_contacts(id, name, phone, email)
+        `)
+        .or(`name.ilike.%${query}%,contact.name.ilike.%${query}%`)
+        .limit(10);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: query.length >= 2,
+  });
+}
+
+export function useCreateMeeting() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      closerId,
+      dealId,
+      contactId,
+      scheduledAt,
+      durationMinutes = 60,
+      notes,
+    }: {
+      closerId: string;
+      dealId: string;
+      contactId?: string;
+      scheduledAt: Date;
+      durationMinutes?: number;
+      notes?: string;
+    }) => {
+      const { error } = await supabase
+        .from('meeting_slots')
+        .insert({
+          closer_id: closerId,
+          deal_id: dealId,
+          contact_id: contactId,
+          scheduled_at: scheduledAt.toISOString(),
+          duration_minutes: durationMinutes,
+          status: 'scheduled',
+          notes,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      toast.success('Reunião agendada');
+    },
+    onError: () => {
+      toast.error('Erro ao agendar reunião');
+    },
+  });
+}
+
+export function useRescheduleMeeting() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ meetingId, newDate, closerId }: { meetingId: string; newDate: Date; closerId?: string }) => {
+      const updateData: Record<string, unknown> = {
+        scheduled_at: newDate.toISOString(),
+        status: 'rescheduled',
+      };
+      
+      if (closerId) {
+        updateData.closer_id = closerId;
+      }
+
+      const { error } = await supabase
+        .from('meeting_slots')
+        .update(updateData)
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      toast.success('Reunião reagendada');
+    },
+    onError: () => {
+      toast.error('Erro ao reagendar reunião');
     },
   });
 }

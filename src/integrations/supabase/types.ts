@@ -520,6 +520,41 @@ export type Database = {
           },
         ]
       }
+      closer_blocked_dates: {
+        Row: {
+          blocked_date: string
+          closer_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          blocked_date: string
+          closer_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          blocked_date?: string
+          closer_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closer_blocked_dates_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       closer_commissions: {
         Row: {
           closer_name: string
@@ -558,6 +593,7 @@ export type Database = {
       }
       closers: {
         Row: {
+          color: string | null
           created_at: string | null
           email: string
           employee_id: string | null
@@ -567,6 +603,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          color?: string | null
           created_at?: string | null
           email: string
           employee_id?: string | null
@@ -576,6 +613,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          color?: string | null
           created_at?: string | null
           email?: string
           employee_id?: string | null
