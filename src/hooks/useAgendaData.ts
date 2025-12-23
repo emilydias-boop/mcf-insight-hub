@@ -33,6 +33,8 @@ export interface MeetingSlot {
   };
 }
 
+export type LeadType = 'A' | 'B';
+
 export interface CloserWithAvailability {
   id: string;
   name: string;
@@ -46,6 +48,8 @@ export interface CloserWithAvailability {
     end_time: string;
     slot_duration_minutes: number;
     is_active: boolean;
+    lead_type?: LeadType;
+    max_slots_per_hour?: number;
   }[];
 }
 
@@ -195,7 +199,16 @@ export function useClosersWithAvailability() {
       const closersWithAvailability: CloserWithAvailability[] = closers.map(closer => ({
         ...closer,
         color: closer.color || '#3B82F6',
-        availability: availability?.filter(a => a.closer_id === closer.id) || [],
+        availability: (availability?.filter(a => a.closer_id === closer.id) || []).map(a => ({
+          id: a.id,
+          day_of_week: a.day_of_week,
+          start_time: a.start_time,
+          end_time: a.end_time,
+          slot_duration_minutes: a.slot_duration_minutes,
+          is_active: a.is_active,
+          lead_type: (a.lead_type || 'A') as LeadType,
+          max_slots_per_hour: a.max_slots_per_hour || 3,
+        })),
       }));
 
       return closersWithAvailability;
@@ -400,21 +413,27 @@ export function useUpdateAvailability() {
   return useMutation({
     mutationFn: async ({
       closerId,
+      leadType,
       availability,
     }: {
       closerId: string;
+      leadType: LeadType;
       availability: {
         day_of_week: number;
         start_time: string;
         end_time: string;
         slot_duration_minutes: number;
         is_active: boolean;
+        lead_type: LeadType;
+        max_slots_per_hour: number;
       }[];
     }) => {
+      // Delete only entries for this closer and lead type
       await supabase
         .from('closer_availability')
         .delete()
-        .eq('closer_id', closerId);
+        .eq('closer_id', closerId)
+        .eq('lead_type', leadType);
 
       if (availability.length > 0) {
         const { error } = await supabase
@@ -422,7 +441,13 @@ export function useUpdateAvailability() {
           .insert(
             availability.map(a => ({
               closer_id: closerId,
-              ...a,
+              day_of_week: a.day_of_week,
+              start_time: a.start_time,
+              end_time: a.end_time,
+              slot_duration_minutes: a.slot_duration_minutes,
+              is_active: a.is_active,
+              lead_type: a.lead_type,
+              max_slots_per_hour: a.max_slots_per_hour,
             }))
           );
 
@@ -496,7 +521,7 @@ export function useSearchDealsForSchedule(query: string) {
       // 1. Buscar deals pelo nome do deal (case-insensitive)
       const { data: dealsByName } = await supabase
         .from('crm_deals')
-        .select(`id, name, contact:crm_contacts(id, name, phone, email)`)
+        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
         .ilike('name', `%${query}%`)
         .limit(10);
 
@@ -516,7 +541,7 @@ export function useSearchDealsForSchedule(query: string) {
         const contactIds = contacts.map(c => c.id);
         const { data } = await supabase
           .from('crm_deals')
-          .select(`id, name, contact:crm_contacts(id, name, phone, email)`)
+          .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
           .in('contact_id', contactIds)
           .limit(10);
         dealsByContact = data || [];
@@ -545,6 +570,7 @@ export function useCreateMeeting() {
       scheduledAt,
       durationMinutes = 60,
       notes,
+      leadType,
     }: {
       closerId: string;
       dealId: string;
@@ -552,6 +578,7 @@ export function useCreateMeeting() {
       scheduledAt: Date;
       durationMinutes?: number;
       notes?: string;
+      leadType?: LeadType;
     }) => {
       const { error } = await supabase
         .from('meeting_slots')
@@ -563,6 +590,7 @@ export function useCreateMeeting() {
           duration_minutes: durationMinutes,
           status: 'scheduled',
           notes,
+          lead_type: leadType,
         });
 
       if (error) throw error;
@@ -572,11 +600,66 @@ export function useCreateMeeting() {
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
       toast.success('Reunião agendada');
     },
     onError: () => {
       toast.error('Erro ao agendar reunião');
     },
+  });
+}
+
+// Check slot availability for a specific time and lead type
+export function useCheckSlotAvailability(
+  closerId: string | undefined,
+  scheduledAt: Date | undefined,
+  leadType: LeadType
+) {
+  return useQuery({
+    queryKey: ['slot-availability', closerId, scheduledAt?.toISOString(), leadType],
+    queryFn: async () => {
+      if (!closerId || !scheduledAt) return null;
+
+      const dayOfWeek = scheduledAt.getDay() === 0 ? 7 : scheduledAt.getDay();
+      const hour = scheduledAt.getHours();
+
+      // Get the max slots config for this closer/day/lead_type
+      const { data: availability } = await supabase
+        .from('closer_availability')
+        .select('max_slots_per_hour')
+        .eq('closer_id', closerId)
+        .eq('day_of_week', dayOfWeek)
+        .eq('lead_type', leadType)
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+
+      const maxSlots = availability?.max_slots_per_hour || 3;
+
+      // Count existing meetings in this hour for this lead type
+      const hourStart = new Date(scheduledAt);
+      hourStart.setMinutes(0, 0, 0);
+      const hourEnd = new Date(scheduledAt);
+      hourEnd.setMinutes(59, 59, 999);
+
+      const { data: meetings, count } = await supabase
+        .from('meeting_slots')
+        .select('id', { count: 'exact' })
+        .eq('closer_id', closerId)
+        .eq('lead_type', leadType)
+        .gte('scheduled_at', hourStart.toISOString())
+        .lte('scheduled_at', hourEnd.toISOString())
+        .neq('status', 'canceled');
+
+      const currentCount = count || 0;
+
+      return {
+        available: currentCount < maxSlots,
+        currentCount,
+        maxSlots,
+      };
+    },
+    enabled: !!closerId && !!scheduledAt,
   });
 }
 
