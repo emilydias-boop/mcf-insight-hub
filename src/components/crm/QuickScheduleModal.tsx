@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -25,9 +26,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { 
   CloserWithAvailability, 
   useSearchDealsForSchedule, 
-  useCreateMeeting 
+  useCreateMeeting,
+  useCheckSlotAvailability,
 } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -40,12 +43,25 @@ interface QuickScheduleModalProps {
 interface DealOption {
   id: string;
   name: string;
+  tags?: string[];
   contact?: {
     id: string;
     name: string;
     phone: string | null;
     email: string | null;
   } | null;
+}
+
+type LeadType = 'A' | 'B';
+
+// Helper to detect lead type from tags
+function detectLeadType(tags?: string[]): LeadType {
+  if (!tags || tags.length === 0) return 'A';
+  const tagsLower = tags.map(t => t.toLowerCase());
+  if (tagsLower.some(t => t.includes('lead b') || t.includes('tipo b') || t === 'b')) {
+    return 'B';
+  }
+  return 'A';
 }
 
 export function QuickScheduleModal({ 
@@ -65,6 +81,26 @@ export function QuickScheduleModal({
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery);
   const createMeeting = useCreateMeeting();
 
+  // Detect lead type from selected deal
+  const detectedLeadType = useMemo(() => {
+    return detectLeadType(selectedDeal?.tags);
+  }, [selectedDeal?.tags]);
+
+  // Check slot availability
+  const scheduledAtForCheck = useMemo(() => {
+    if (!selectedDate) return undefined;
+    const [hours, minutes] = selectedTime.split(':').map(Number);
+    const date = new Date(selectedDate);
+    date.setHours(hours, minutes, 0, 0);
+    return date;
+  }, [selectedDate, selectedTime]);
+
+  const { data: slotAvailability } = useCheckSlotAvailability(
+    selectedCloser,
+    scheduledAtForCheck,
+    detectedLeadType
+  );
+
   const handleSelectDeal = (deal: DealOption) => {
     setSelectedDeal(deal);
     setSearchQuery(deal.contact?.name || deal.name);
@@ -72,6 +108,12 @@ export function QuickScheduleModal({
 
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
+
+    // Check if slot is available
+    if (slotAvailability && !slotAvailability.available) {
+      toast.error(`Horário cheio: ${slotAvailability.currentCount}/${slotAvailability.maxSlots} Lead ${detectedLeadType}`);
+      return;
+    }
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -83,6 +125,7 @@ export function QuickScheduleModal({
       contactId: selectedDeal.contact?.id,
       scheduledAt,
       notes,
+      leadType: detectedLeadType,
     }, {
       onSuccess: () => {
         onOpenChange(false);
@@ -100,11 +143,13 @@ export function QuickScheduleModal({
     setNotes('');
   };
 
-  const timeSlots = Array.from({ length: 20 }, (_, i) => {
+  const timeSlots = Array.from({ length: 22 }, (_, i) => {
     const hour = Math.floor(i / 2) + 8;
     const minute = (i % 2) * 30;
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
   });
+
+  const isSlotFull = slotAvailability && !slotAvailability.available;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -164,10 +209,24 @@ export function QuickScheduleModal({
 
             {selectedDeal && (
               <div className="bg-muted/50 rounded-md p-3">
-                <div className="font-medium text-sm">{selectedDeal.contact?.name || selectedDeal.name}</div>
-                {selectedDeal.contact?.phone && (
-                  <div className="text-xs text-muted-foreground">{selectedDeal.contact.phone}</div>
-                )}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-sm">{selectedDeal.contact?.name || selectedDeal.name}</div>
+                    {selectedDeal.contact?.phone && (
+                      <div className="text-xs text-muted-foreground">{selectedDeal.contact.phone}</div>
+                    )}
+                  </div>
+                  <Badge 
+                    variant="outline" 
+                    className={cn(
+                      "font-semibold",
+                      detectedLeadType === 'A' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
+                    )}
+                  >
+                    <Tag className="h-3 w-3 mr-1" />
+                    Lead {detectedLeadType}
+                  </Badge>
+                </div>
               </div>
             )}
           </div>
@@ -221,7 +280,7 @@ export function QuickScheduleModal({
             <div className="space-y-2">
               <Label>Horário</Label>
               <Select value={selectedTime} onValueChange={setSelectedTime}>
-                <SelectTrigger>
+                <SelectTrigger className={cn(isSlotFull && 'border-destructive')}>
                   <Clock className="h-4 w-4 mr-2" />
                   <SelectValue />
                 </SelectTrigger>
@@ -235,6 +294,21 @@ export function QuickScheduleModal({
               </Select>
             </div>
           </div>
+
+          {/* Slot availability indicator */}
+          {selectedCloser && selectedDate && slotAvailability && (
+            <div className={cn(
+              "flex items-center justify-between p-2 rounded-md text-sm",
+              slotAvailability.available ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+            )}>
+              <span>
+                Lead {detectedLeadType} às {selectedTime}
+              </span>
+              <span className="font-medium">
+                {slotAvailability.currentCount}/{slotAvailability.maxSlots} slots
+              </span>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-2">
@@ -251,9 +325,9 @@ export function QuickScheduleModal({
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending || isSlotFull}
           >
-            {createMeeting.isPending ? 'Agendando...' : 'Agendar Reunião'}
+            {createMeeting.isPending ? 'Agendando...' : isSlotFull ? 'Horário Cheio' : 'Agendar Reunião'}
           </Button>
         </div>
       </DialogContent>

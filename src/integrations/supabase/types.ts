@@ -484,6 +484,8 @@ export type Database = {
           end_time: string
           id: string
           is_active: boolean | null
+          lead_type: string | null
+          max_slots_per_hour: number | null
           slot_duration_minutes: number | null
           start_time: string
           updated_at: string | null
@@ -495,6 +497,8 @@ export type Database = {
           end_time: string
           id?: string
           is_active?: boolean | null
+          lead_type?: string | null
+          max_slots_per_hour?: number | null
           slot_duration_minutes?: number | null
           start_time: string
           updated_at?: string | null
@@ -506,6 +510,8 @@ export type Database = {
           end_time?: string
           id?: string
           is_active?: boolean | null
+          lead_type?: string | null
+          max_slots_per_hour?: number | null
           slot_duration_minutes?: number | null
           start_time?: string
           updated_at?: string | null
@@ -2059,6 +2065,7 @@ export type Database = {
           deal_id: string | null
           duration_minutes: number | null
           id: string
+          lead_type: string | null
           meeting_link: string | null
           notes: string | null
           scheduled_at: string
@@ -2073,6 +2080,7 @@ export type Database = {
           deal_id?: string | null
           duration_minutes?: number | null
           id?: string
+          lead_type?: string | null
           meeting_link?: string | null
           notes?: string | null
           scheduled_at: string
@@ -2087,6 +2095,7 @@ export type Database = {
           deal_id?: string | null
           duration_minutes?: number | null
           id?: string
+          lead_type?: string | null
           meeting_link?: string | null
           notes?: string | null
           scheduled_at?: string
