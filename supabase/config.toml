@@ -164,3 +164,6 @@ verify_jwt = false
 
 [functions.zapi-status]
 verify_jwt = false
+
+[functions.calendly-webhook-handler]
+verify_jwt = false
