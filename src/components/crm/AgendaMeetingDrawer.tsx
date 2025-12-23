@@ -197,28 +197,13 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
               </>
             )}
 
-            {/* Activity History */}
+            {/* Activity History - Placeholder */}
             <Separator />
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-muted-foreground">Histórico</h4>
-              {activities.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma atividade registrada</p>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {activities.slice(0, 10).map(activity => (
-                    <div key={activity.id} className="flex items-start gap-2 text-sm">
-                      <div className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                      <div>
-                        <span className="text-muted-foreground">
-                          {format(parseISO(activity.created_at), "dd/MM HH:mm")}
-                        </span>
-                        <span className="mx-1">-</span>
-                        <span>{activity.description || activity.activity_type}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <p className="text-sm text-muted-foreground">
+                Acesse o negócio completo para ver o histórico de atividades
+              </p>
             </div>
 
             {/* Notes */}
