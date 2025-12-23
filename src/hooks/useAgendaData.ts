@@ -493,18 +493,42 @@ export function useSearchDealsForSchedule(query: string) {
     queryFn: async () => {
       if (!query || query.length < 2) return [];
 
-      const { data, error } = await supabase
+      // 1. Buscar deals pelo nome do deal (case-insensitive)
+      const { data: dealsByName } = await supabase
         .from('crm_deals')
-        .select(`
-          id,
-          name,
-          contact:crm_contacts(id, name, phone, email)
-        `)
-        .or(`name.ilike.%${query}%,contact.name.ilike.%${query}%`)
+        .select(`id, name, contact:crm_contacts(id, name, phone, email)`)
+        .ilike('name', `%${query}%`)
         .limit(10);
 
-      if (error) throw error;
-      return data;
+      // 2. Buscar contatos pelo nome ou telefone (case-insensitive)
+      const normalizedQuery = query.replace(/\D/g, ''); // Remove non-digits for phone search
+      const phoneFilter = normalizedQuery.length >= 4 ? `,phone.ilike.%${normalizedQuery}%` : '';
+      
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .or(`name.ilike.%${query}%${phoneFilter}`)
+        .limit(10);
+
+      // 3. Se achou contatos, buscar os deals relacionados
+      let dealsByContact: typeof dealsByName = [];
+      if (contacts && contacts.length > 0) {
+        const contactIds = contacts.map(c => c.id);
+        const { data } = await supabase
+          .from('crm_deals')
+          .select(`id, name, contact:crm_contacts(id, name, phone, email)`)
+          .in('contact_id', contactIds)
+          .limit(10);
+        dealsByContact = data || [];
+      }
+
+      // 4. Combinar resultados sem duplicatas
+      const allDeals = [...(dealsByName || []), ...dealsByContact];
+      const uniqueDeals = allDeals.filter((deal, index, self) => 
+        index === self.findIndex(d => d.id === deal.id)
+      );
+
+      return uniqueDeals.slice(0, 10);
     },
     enabled: query.length >= 2,
   });
