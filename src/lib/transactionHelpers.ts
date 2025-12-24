@@ -79,6 +79,8 @@ const getNormalizedProductType = (tx: HublaTransactionBase): string => {
   }
   
   if (productName.includes("A009")) return "a009_incorporador_club";
+  if (productName.includes("A008")) return "a008_club";
+  if (productName.includes("A007")) return "a007_imersao";
   if (productName.includes("A005")) return "a005_p2";
   if (productName.includes("A004")) return "a004_basico";
   if (productName.includes("A003")) return "a003_anticrise";
@@ -97,16 +99,28 @@ const getNormalizedProductType = (tx: HublaTransactionBase): string => {
   return category;
 };
 
-// Chave de deduplicação: email + data + tipo normalizado
+// NOVA CHAVE: email + produto normalizado (sem data)
+// Isso agrupa transações do mesmo cliente para o mesmo produto
 const getSaleKey = (tx: HublaTransactionBase): string => {
   const email = (tx.customer_email || "").toLowerCase().trim();
-  const date = tx.sale_date.split("T")[0];
   const tipoNormalizado = getNormalizedProductType(tx);
-  return `${email}|${date}|${tipoNormalizado}`;
+  return `${email}|${tipoNormalizado}`;
 };
 
-// Deduplicação por email+data+tipo, priorizando maior valor válido
-export const deduplicateTransactions = <T extends HublaTransactionBase>(transactions: T[]): T[] => {
+// Interface para resultado de deduplicação com bruto e líquido separados
+export interface DeduplicatedResult<T> {
+  // Transações para cálculo de BRUTO (maior product_price por grupo)
+  forBruto: T[];
+  // Todas as transações para cálculo de LÍQUIDO (soma de net_value)
+  forLiquido: T[];
+}
+
+// NOVA FUNÇÃO: Deduplicação inteligente para bruto vs líquido
+// Bruto: manter apenas a transação com maior product_price por email+produto
+// Líquido: manter TODAS as transações (cada pagamento conta)
+export const deduplicateTransactionsV2 = <T extends HublaTransactionBase>(
+  transactions: T[]
+): DeduplicatedResult<T> => {
   const groups = new Map<string, T[]>();
   
   transactions.forEach((tx) => {
@@ -116,35 +130,29 @@ export const deduplicateTransactions = <T extends HublaTransactionBase>(transact
     groups.set(key, existing);
   });
   
-  return Array.from(groups.entries()).map(([key, txs]) => {
+  // Para BRUTO: pegar transação com maior product_price de cada grupo
+  const forBruto = Array.from(groups.values()).map((txs) => {
     if (txs.length === 1) return txs[0];
     
-    const tipoNormalizado = key.split('|')[2];
-    const minValue = VALOR_MINIMO_POR_CATEGORIA[tipoNormalizado] || 30;
-    
-    const makeTx = txs.find(t => t.source === 'make');
-    const hublaTx = txs.find(t => t.source === 'hubla' || !t.source);
-    const kiwifyTx = txs.find(t => t.source === 'kiwify');
-    
-    if (makeTx && hublaTx) {
-      const makeValue = makeTx.net_value || 0;
-      const hublaValue = hublaTx.net_value || 0;
-      
-      if (makeValue < minValue && hublaValue >= minValue) {
-        return hublaTx;
-      }
-      
-      return makeValue >= hublaValue ? makeTx : hublaTx;
-    }
-    
-    if (makeTx) return makeTx;
-    if (hublaTx) return hublaTx;
-    if (kiwifyTx) return kiwifyTx;
-    
-    return txs.reduce((best, tx) => 
-      (tx.net_value || 0) > (best.net_value || 0) ? tx : best
-    , txs[0]);
+    // Ordenar por product_price decrescente, pegar o maior
+    return txs.reduce((best, tx) => {
+      const bestPrice = best.product_price || 0;
+      const currentPrice = tx.product_price || 0;
+      return currentPrice > bestPrice ? tx : best;
+    }, txs[0]);
   });
+  
+  // Para LÍQUIDO: todas as transações (cada net_value conta)
+  return {
+    forBruto,
+    forLiquido: transactions,
+  };
+};
+
+// Função legada mantida para compatibilidade (usa lógica antiga)
+export const deduplicateTransactions = <T extends HublaTransactionBase>(transactions: T[]): T[] => {
+  const result = deduplicateTransactionsV2(transactions);
+  return result.forBruto;
 };
 
 // Helper para verificar se produto está na lista de Incorporador 50k

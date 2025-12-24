@@ -155,17 +155,36 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         }
       });
 
-      // ===== FATURAMENTO CLINT (BRUTO) =====
-      // CORREÇÃO: Deduplicar por timestamp_preciso + email + product_price
-      // Isso permite múltiplas compras do mesmo cliente no mesmo dia (timestamps diferentes)
-      // mas agrupa Hubla+Make da mesma transação real (mesmo timestamp e valor)
-      const seenClintKeys = new Map<string, { source: string; hubla_id: string }>();
-      const deduplicatedClintTransactions: typeof transactions = [];
+      // ===== NORMALIZAÇÃO DE PRODUTO =====
+      // Agrupa produtos equivalentes (ex: A009 de diferentes fontes)
+      const normalizeProductName = (productName: string): string => {
+        const name = (productName || '').toUpperCase();
+        
+        if (name.includes('A009')) return 'A009_INCORPORADOR_CLUB';
+        if (name.includes('A008')) return 'A008_CLUB';
+        if (name.includes('A007')) return 'A007_IMERSAO';
+        if (name.includes('A005')) return 'A005_P2';
+        if (name.includes('A004')) return 'A004_BASICO';
+        if (name.includes('A003')) return 'A003_ANTICRISE';
+        if (name.includes('A002')) return 'A002_BASICO';
+        if (name.includes('A001')) return 'A001_INCORPORADOR';
+        if (name.includes('A000') || name.includes('CONTRATO')) return 'A000_CONTRATO';
+        if (name.includes('R00')) return 'R00_RENOVACAO';
+        
+        return name.substring(0, 30); // fallback
+      };
+
+      // ===== FATURAMENTO CLINT (BRUTO + LÍQUIDO) =====
+      // NOVA LÓGICA: Deduplicar por email + produto normalizado
+      // Para BRUTO: usar apenas o maior product_price do grupo
+      // Para LÍQUIDO: somar todos os net_value (sem deduplicação)
+
+      // Primeiro: filtrar transações válidas
+      const validTransactions: typeof transactions = [];
       
       transactions.forEach(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const hublaId = tx.hubla_id || '';
-        const source = tx.source || 'hubla';
         
         // Excluir newsale- (sem dados completos)
         if (hublaId.startsWith('newsale-')) return;
@@ -184,46 +203,46 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
         const isParentWithOffers = parentIdsWithOffers.has(hublaId);
         if (isParentWithOffers) return;
         
-        // Exigir customer_email válido e algum valor positivo (net_value OU product_price)
+        // Exigir customer_email válido
         const email = (tx.customer_email || '').toLowerCase().trim();
         if (!email) return;
         
-        // CORREÇÃO: Aceitar se tiver net_value > 0 OU product_price > 0
-        // Alguns produtos Make têm net_value=0 mas product_price válido
+        // Aceitar se tiver net_value > 0 OU product_price > 0
         const hasValue = (tx.net_value && tx.net_value > 0) || (tx.product_price && tx.product_price > 0);
         if (!hasValue) return;
         
-        // NOVA CHAVE: timestamp preciso (até segundo) + email + valor
-        // Isso agrupa mesma transação de fontes diferentes mas mantém compras distintas
-        const timestamp = (tx.sale_date || '').substring(0, 19); // YYYY-MM-DDTHH:MM:SS
-        const price = tx.product_price || 0;
-        const key = `${timestamp}|${email}|${price}`;
+        validTransactions.push(tx);
+      });
+
+      // ===== FATURAMENTO BRUTO =====
+      // Agrupar por email + produto normalizado, manter apenas o maior product_price
+      const brutoPorClienteProduto = new Map<string, number>();
+      
+      validTransactions.forEach(tx => {
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        const normalizedProduct = normalizeProductName(tx.product_name || '');
+        const key = `${email}|${normalizedProduct}`;
         
-        const existing = seenClintKeys.get(key);
-        if (!existing) {
-          seenClintKeys.set(key, { source, hubla_id: hublaId });
-          deduplicatedClintTransactions.push(tx);
-        } else if (source === 'hubla' && existing.source === 'make') {
-          // Hubla substitui Make (prioridade)
-          const idx = deduplicatedClintTransactions.findIndex(t => t.hubla_id === existing.hubla_id);
-          if (idx >= 0) deduplicatedClintTransactions[idx] = tx;
-          seenClintKeys.set(key, { source, hubla_id: hublaId });
+        // Apenas primeira parcela conta para bruto
+        const installmentNum = tx.installment_number || 1;
+        if (installmentNum !== 1) return;
+        
+        const productPrice = tx.product_price || 0;
+        const existing = brutoPorClienteProduto.get(key) || 0;
+        
+        // Manter o maior valor bruto (ignora R$0 quando existe valor real)
+        if (productPrice > existing) {
+          brutoPorClienteProduto.set(key, productPrice);
         }
       });
       
-      // Bruto: apenas primeira parcela, usar product_price real
-      // CORREÇÃO: Incluir TODOS os produtos Faturamento Clint (incluindo P2)
-      const faturamentoClintBruto = deduplicatedClintTransactions
-        .filter(tx => {
-          const installmentNum = tx.installment_number || 1;
-          return installmentNum === 1;
-        })
-        .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+      const faturamentoClintBruto = Array.from(brutoPorClienteProduto.values())
+        .reduce((sum, val) => sum + val, 0);
 
       // ===== FATURAMENTO LÍQUIDO =====
-      // CORREÇÃO: Usar net_value REAL do banco, todas as parcelas contam
-      // Usa mesma deduplicação do Faturamento Clint (email+data+produto, Hubla prioridade)
-      const faturamentoLiquido = deduplicatedClintTransactions
+      // Somar TODOS os net_value (todas as parcelas, todos os pagamentos)
+      // Não deduplica - cada valor líquido recebido conta
+      const faturamentoLiquido = validTransactions
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
 
       // ===== INCORPORADOR 50K (LÍQUIDO) - mantém lógica anterior para compatibilidade =====
