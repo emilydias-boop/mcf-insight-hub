@@ -2,7 +2,6 @@ import { useState } from "react";
 import { 
   LayoutDashboard, 
   DollarSign, 
-  TrendingDown, 
   FileText, 
   Bell, 
   Zap, 
@@ -17,12 +16,12 @@ import {
   ChevronRight,
   UserCircle,
   Tv,
-  Calculator,
-  Receipt,
   FolderOpen,
   BookOpen,
   Building2,
-  Calendar
+  Calendar,
+  Receipt,
+  ChevronUp
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -37,7 +36,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -51,7 +49,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { useLocation } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType } from "@/types/user-management";
 
 type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'rh' | 'financeiro';
@@ -61,33 +66,30 @@ interface MenuItem {
   url?: string;
   icon: any;
   requiredRoles?: AppRole[];
-  resource?: ResourceType; // Mapeamento para permissão de recurso
-  items?: { title: string; url: string; }[];
+  resource?: ResourceType;
+  items?: { title: string; url: string; requiredRoles?: AppRole[]; }[];
 }
 
-// Mapeamento de menu item para resource type
+// Menu reorganizado e consolidado
 const menuItems: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, resource: "dashboard" },
+  
+  // Financeiro consolidado (Receita + Custos + Fechamento SDR + Financeiro operacional)
   { 
-    title: "Receita", 
+    title: "Financeiro", 
     icon: DollarSign,
-    resource: "receita",
+    resource: "financeiro",
     items: [
-      { title: "Overview", url: "/receita" },
+      { title: "Receita", url: "/receita" },
       { title: "Transações", url: "/receita/transacoes" },
-      { title: "Por Canal", url: "/receita/por-canal" },
-    ]
-  },
-  { 
-    title: "Custos", 
-    icon: TrendingDown,
-    resource: "custos",
-    items: [
-      { title: "Overview", url: "/custos" },
+      { title: "Custos", url: "/custos" },
       { title: "Despesas", url: "/custos/despesas" },
-      { title: "Por Categoria", url: "/custos/por-categoria" },
+      { title: "Fechamento SDR", url: "/fechamento-sdr", requiredRoles: ['admin', 'coordenador'] },
+      { title: "Pagamentos", url: "/financeiro", requiredRoles: ['admin', 'financeiro'] },
     ]
   },
+  
+  // Relatórios
   { 
     title: "Relatórios", 
     icon: FileText,
@@ -97,41 +99,58 @@ const menuItems: MenuItem[] = [
       { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
     ]
   },
-  { title: "Alertas", url: "/alertas", icon: Bell, resource: "alertas" },
+  
+  // CRM e reuniões
+  { title: "CRM", url: "/crm", icon: UserCircle, resource: "crm", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  { title: "Minhas Reuniões", url: "/sdr/minhas-reunioes", icon: Calendar, resource: "crm", requiredRoles: ['sdr'] },
+  { title: "Reuniões da Equipe", url: "/crm/reunioes-equipe", icon: Users, resource: "crm", requiredRoles: ['admin', 'manager', 'coordenador'] },
+  
+  // TV SDR
+  { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  
+  // RH (para admin/rh)
+  { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
+  
+  // Produtos separados
   { title: "Efeito Alavanca", url: "/efeito-alavanca", icon: Zap, resource: "efeito_alavanca" },
   { title: "Projetos", url: "/projetos", icon: FolderKanban, resource: "projetos" },
   { title: "Crédito", url: "/credito", icon: CreditCard, resource: "credito", requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
-  { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
-  { title: "Minhas Reuniões", url: "/sdr/minhas-reunioes", icon: Calendar, resource: "crm", requiredRoles: ['sdr'] },
-  { title: "Reuniões da Equipe", url: "/crm/reunioes-equipe", icon: Users, resource: "crm", requiredRoles: ['admin', 'manager', 'coordenador'] },
-  { title: "CRM", url: "/crm", icon: UserCircle, resource: "crm", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  
+  // Configurações consolidadas (inclui Usuários)
   { 
-    title: "Fechamento SDR", 
-    icon: Calculator, 
-    resource: "fechamento_sdr",
-    requiredRoles: ['admin', 'coordenador'],
+    title: "Configurações", 
+    icon: Settings, 
+    resource: "configuracoes", 
+    requiredRoles: ['admin'],
     items: [
-      { title: "Lista de Fechamentos", url: "/fechamento-sdr" },
-      { title: "Configurações", url: "/fechamento-sdr/configuracoes" },
+      { title: "Geral", url: "/configuracoes" },
+      { title: "Usuários", url: "/usuarios" },
     ]
   },
-  { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, resource: "fechamento_sdr", requiredRoles: ['sdr'] },
-  { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
-  { title: "Meu RH", url: "/meu-rh", icon: UserCircle },
-  { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
-  { title: "Financeiro", url: "/financeiro", icon: Receipt, resource: "financeiro" as any, requiredRoles: ['admin', 'financeiro'] },
-  { title: "Usuários", url: "/usuarios", icon: Users, resource: "usuarios", requiredRoles: ['admin'] },
-  { title: "Configurações", url: "/configuracoes", icon: Settings, resource: "configuracoes", requiredRoles: ['admin'] },
 ];
 
-// CRM now goes directly to /crm without sub-items in sidebar
+// Itens pessoais do usuário (movidos para o menu do footer)
+interface PersonalMenuItem {
+  title: string;
+  url: string;
+  icon: any;
+  requiredRoles?: AppRole[];
+}
+
+const personalMenuItems: PersonalMenuItem[] = [
+  { title: "Meu RH", url: "/meu-rh", icon: UserCircle },
+  { title: "Meu Playbook", url: "/playbook", icon: BookOpen },
+  { title: "Meu Fechamento", url: "/meu-fechamento", icon: Receipt, requiredRoles: ['sdr'] },
+  { title: "Alertas", url: "/alertas", icon: Bell },
+];
 
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { state, toggleSidebar } = useSidebar();
   const location = useLocation();
+  const navigate = useNavigate();
   const isCollapsed = state === "collapsed";
   const [myFilesOpen, setMyFilesOpen] = useState(false);
 
@@ -147,25 +166,37 @@ export function AppSidebar() {
     if (userRole === 'coordenador') return 'Coordenador';
     if (userRole === 'sdr') return 'SDR';
     if (userRole === 'closer') return 'Closer';
+    if (userRole === 'rh') return 'RH';
+    if (userRole === 'financeiro') return 'Financeiro';
     return 'Viewer';
   };
 
-  // Filtragem combinada: requiredRoles (role-based) + resource permissions
+  // Filtragem de menu items
   const filteredMenuItems = menuItems.filter((item) => {
-    // Se tem requiredRoles, verifica primeiro a role
     if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
       return false;
     }
-    
-    // Admin sempre vê tudo
     if (isAdmin) return true;
-    
-    // Se tem resource mapeado, verifica permissão
     if (item.resource && !canAccessResource(item.resource)) {
       return false;
     }
-    
     return true;
+  });
+
+  // Filtragem de sub-items baseado em roles
+  const getFilteredSubItems = (items: { title: string; url: string; requiredRoles?: AppRole[]; }[]) => {
+    return items.filter(subItem => {
+      if (!subItem.requiredRoles) return true;
+      if (isAdmin) return true;
+      return role && subItem.requiredRoles.includes(role);
+    });
+  };
+
+  // Filtragem de itens pessoais
+  const filteredPersonalItems = personalMenuItems.filter((item) => {
+    if (!item.requiredRoles) return true;
+    if (isAdmin) return true;
+    return role && item.requiredRoles.includes(role);
   });
 
   const isRouteActive = (item: MenuItem) => {
@@ -179,10 +210,14 @@ export function AppSidebar() {
     return false;
   };
 
+  const isPersonalRouteActive = () => {
+    return personalMenuItems.some(item => location.pathname === item.url);
+  };
+
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent>
-        {/* Toggle button always visible - outside SidebarGroupLabel */}
+        {/* Toggle button always visible */}
         <div className="flex items-center justify-center px-2 py-3 border-b border-sidebar-border">
           {isCollapsed ? (
             <Button
@@ -217,6 +252,11 @@ export function AppSidebar() {
                 const isActive = isRouteActive(item);
                 
                 if (item.items) {
+                  const filteredSubItems = getFilteredSubItems(item.items);
+                  
+                  // Se não há sub-items após filtro, não mostra o grupo
+                  if (filteredSubItems.length === 0) return null;
+                  
                   return (
                     <Collapsible
                       key={item.title}
@@ -246,7 +286,7 @@ export function AppSidebar() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
-                            {item.items.map((subItem) => (
+                            {filteredSubItems.map((subItem) => (
                               <SidebarMenuSubItem key={subItem.url}>
                                 <SidebarMenuSubButton asChild>
                                   <NavLink
@@ -287,46 +327,66 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-4">
-        <div className="space-y-2">
-          {!isCollapsed && (
-            <div className="flex items-center gap-3">
-              <Avatar className="h-8 w-8">
+      <SidebarFooter className="border-t border-sidebar-border p-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className={`w-full justify-start gap-2 h-auto py-2 px-2 hover:bg-sidebar-accent ${isPersonalRouteActive() ? 'bg-sidebar-accent' : ''}`}
+            >
+              <Avatar className="h-8 w-8 shrink-0">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs">
                   {user?.email?.[0]?.toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-sidebar-foreground truncate">
-                  {user?.email || 'Usuário'}
-                </p>
-                <Badge variant={getRoleBadgeVariant(role)} className="text-[10px] px-1.5 py-0 h-4 mt-1">
-                  {getRoleLabel(role)}
-                </Badge>
-              </div>
-            </div>
-          )}
-          <Button 
-            variant="ghost" 
-            size={isCollapsed ? "icon" : "sm"}
-            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent"
-            onClick={() => setMyFilesOpen(true)}
-            title="Meus arquivos"
+              {!isCollapsed && (
+                <>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-xs font-medium text-sidebar-foreground truncate">
+                      {user?.email || 'Usuário'}
+                    </p>
+                    <Badge variant={getRoleBadgeVariant(role)} className="text-[10px] px-1.5 py-0 h-4 mt-0.5">
+                      {getRoleLabel(role)}
+                    </Badge>
+                  </div>
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                </>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent 
+            side="top" 
+            align="start"
+            className="w-56 bg-popover border border-border shadow-lg"
           >
-            <FolderOpen className="h-4 w-4" />
-            {!isCollapsed && <span className="ml-2">Meus arquivos</span>}
-          </Button>
-          <Button 
-            variant="ghost" 
-            size={isCollapsed ? "icon" : "sm"}
-            className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent"
-            onClick={signOut}
-            title="Sair"
-          >
-            <LogOut className="h-4 w-4" />
-            {!isCollapsed && <span className="ml-2">Sair</span>}
-          </Button>
-        </div>
+            {filteredPersonalItems.map((item) => (
+              <DropdownMenuItem 
+                key={item.url}
+                onClick={() => navigate(item.url)}
+                className={`cursor-pointer ${location.pathname === item.url ? 'bg-accent' : ''}`}
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                <span>{item.title}</span>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => setMyFilesOpen(true)}
+              className="cursor-pointer"
+            >
+              <FolderOpen className="mr-2 h-4 w-4" />
+              <span>Meus Arquivos</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={signOut}
+              className="cursor-pointer text-destructive focus:text-destructive"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Sair</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
 
       {/* Drawer de Meus Arquivos */}
