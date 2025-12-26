@@ -158,26 +158,29 @@ export default function Agenda() {
       {/* Navigation and Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handlePrev}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
           <Button variant="outline" onClick={handleToday}>
             Hoje
           </Button>
-          <Button variant="outline" size="icon" onClick={handleNext}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
           
           {/* View Mode Toggle */}
-          <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)} className="ml-2">
+          <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
             <ToggleGroupItem value="day" className="text-xs px-3">Dia</ToggleGroupItem>
             <ToggleGroupItem value="week" className="text-xs px-3">Semana</ToggleGroupItem>
             <ToggleGroupItem value="month" className="text-xs px-3">Mês</ToggleGroupItem>
           </ToggleGroup>
 
-          <span className="text-sm font-medium ml-2 capitalize">
-            {dateRangeLabel}
-          </span>
+          {/* Date navigation with integrated arrows */}
+          <div className="flex items-center gap-1 border rounded-md px-1 py-0.5 bg-muted/30">
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handlePrev}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium px-2 min-w-[140px] text-center capitalize">
+              {dateRangeLabel}
+            </span>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleNext}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
