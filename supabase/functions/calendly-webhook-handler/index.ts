@@ -315,51 +315,98 @@ serve(async (req) => {
           );
         }
         
-        // Check if meeting already exists (by calendly_event_uri)
-        const { data: existingMeeting } = await supabase
+        // Check if there's already an existing slot at this time (for multi-lead support)
+        const { data: existingSlot } = await supabase
           .from('meeting_slots')
-          .select('id')
-          .eq('calendly_invitee_uri', inviteeUri)
+          .select('id, max_attendees')
+          .eq('closer_id', closerId)
+          .eq('scheduled_at', startTime)
+          .in('status', ['scheduled', 'rescheduled'])
           .maybeSingle();
         
-        if (existingMeeting) {
-          console.log('Meeting already exists:', existingMeeting.id);
-          return new Response(
-            JSON.stringify({ success: true, message: 'Meeting already exists', meetingId: existingMeeting.id }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+        let slotId: string;
+        
+        if (existingSlot) {
+          // Check attendee count
+          const { count } = await supabase
+            .from('meeting_slot_attendees')
+            .select('id', { count: 'exact', head: true })
+            .eq('meeting_slot_id', existingSlot.id);
+          
+          const currentAttendees = count || 0;
+          const maxAttendees = existingSlot.max_attendees || 3;
+          
+          if (currentAttendees >= maxAttendees) {
+            console.log('Slot is full:', existingSlot.id);
+            return new Response(
+              JSON.stringify({ error: 'Slot is full', maxAttendees, currentAttendees }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          slotId = existingSlot.id;
+          console.log('Adding attendee to existing slot:', slotId);
+          
+          // Update meeting link if not set
+          if (meetingLink) {
+            await supabase
+              .from('meeting_slots')
+              .update({ meeting_link: meetingLink })
+              .eq('id', slotId)
+              .is('meeting_link', null);
+          }
+        } else {
+          // Create new meeting slot
+          const { data: newSlot, error: slotError } = await supabase
+            .from('meeting_slots')
+            .insert({
+              closer_id: closerId,
+              contact_id: contactId,
+              scheduled_at: startTime,
+              duration_minutes: durationMinutes,
+              lead_type: leadType,
+              status: 'scheduled',
+              meeting_link: meetingLink,
+              notes: `Agendamento via Calendly\nEvento: ${eventName}\nTimezone: ${payload.timezone}`,
+              calendly_event_uri: eventUri,
+              calendly_invitee_uri: inviteeUri,
+              max_attendees: 3,
+            })
+            .select('id')
+            .single();
+          
+          if (slotError) {
+            console.error('Error creating meeting slot:', slotError);
+            return new Response(
+              JSON.stringify({ error: 'Failed to create meeting slot', details: slotError }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          slotId = newSlot.id;
+          console.log('Created new meeting slot:', slotId);
         }
         
-        // Create meeting slot
-        const { data: meeting, error: meetingError } = await supabase
-          .from('meeting_slots')
+        // Add attendee record
+        const { data: attendee, error: attendeeError } = await supabase
+          .from('meeting_slot_attendees')
           .insert({
-            closer_id: closerId,
+            meeting_slot_id: slotId,
             contact_id: contactId,
-            scheduled_at: startTime,
-            duration_minutes: durationMinutes,
-            lead_type: leadType,
-            status: 'scheduled',
-            meeting_link: meetingLink,
-            notes: `Agendamento via Calendly\nEvento: ${eventName}\nTimezone: ${payload.timezone}`,
-            calendly_event_uri: eventUri,
             calendly_invitee_uri: inviteeUri,
+            status: 'confirmed',
           })
           .select('id')
           .single();
         
-        if (meetingError) {
-          console.error('Error creating meeting:', meetingError);
-          return new Response(
-            JSON.stringify({ error: 'Failed to create meeting', details: meetingError }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+        if (attendeeError) {
+          console.error('Error creating attendee:', attendeeError);
+        } else {
+          console.log('Created attendee:', attendee.id);
         }
         
-        console.log('Created meeting slot:', meeting.id);
-        
         return new Response(
-          JSON.stringify({ success: true, meetingId: meeting.id }),
+          JSON.stringify({ success: true, slotId, attendeeId: attendee?.id }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -369,42 +416,65 @@ serve(async (req) => {
         
         const inviteeUri = payload.uri;
         
-        // Find meeting by calendly_invitee_uri
-        const { data: meeting, error: findError } = await supabase
+        // First try to find attendee by calendly_invitee_uri
+        const { data: attendee } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, meeting_slot_id')
+          .eq('calendly_invitee_uri', inviteeUri)
+          .maybeSingle();
+        
+        if (attendee) {
+          // Update attendee status
+          await supabase
+            .from('meeting_slot_attendees')
+            .update({ status: 'canceled' })
+            .eq('id', attendee.id);
+          
+          console.log('Canceled attendee:', attendee.id);
+          
+          // Check if all attendees are canceled
+          const { count: activeCount } = await supabase
+            .from('meeting_slot_attendees')
+            .select('id', { count: 'exact', head: true })
+            .eq('meeting_slot_id', attendee.meeting_slot_id)
+            .neq('status', 'canceled');
+          
+          if (activeCount === 0) {
+            // Cancel the entire slot if no active attendees
+            await supabase
+              .from('meeting_slots')
+              .update({ status: 'canceled' })
+              .eq('id', attendee.meeting_slot_id);
+            
+            console.log('Canceled meeting slot (no active attendees):', attendee.meeting_slot_id);
+          }
+          
+          return new Response(
+            JSON.stringify({ success: true, attendeeId: attendee.id }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Fallback: try to find by meeting slot calendly_invitee_uri
+        const { data: meeting } = await supabase
           .from('meeting_slots')
           .select('id')
           .eq('calendly_invitee_uri', inviteeUri)
           .maybeSingle();
         
-        if (findError || !meeting) {
+        if (meeting) {
+          await supabase
+            .from('meeting_slots')
+            .update({ status: 'canceled' })
+            .eq('id', meeting.id);
+          
+          console.log('Canceled meeting slot:', meeting.id);
+        } else {
           console.log('Meeting not found for invitee URI:', inviteeUri);
-          return new Response(
-            JSON.stringify({ success: true, message: 'Meeting not found' }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
         }
-        
-        // Update meeting status to canceled
-        const cancellationReason = payload.cancellation?.reason || 'Cancelado via Calendly';
-        const { error: updateError } = await supabase
-          .from('meeting_slots')
-          .update({
-            status: 'canceled',
-          })
-          .eq('id', meeting.id);
-        
-        if (updateError) {
-          console.error('Error updating meeting:', updateError);
-          return new Response(
-            JSON.stringify({ error: 'Failed to update meeting', details: updateError }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        console.log('Canceled meeting:', meeting.id);
         
         return new Response(
-          JSON.stringify({ success: true, meetingId: meeting.id }),
+          JSON.stringify({ success: true }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -414,41 +484,65 @@ serve(async (req) => {
         
         const inviteeUri = payload.uri;
         
-        // Find meeting by calendly_invitee_uri
-        const { data: meeting, error: findError } = await supabase
+        // First try to find attendee by calendly_invitee_uri
+        const { data: attendee } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, meeting_slot_id')
+          .eq('calendly_invitee_uri', inviteeUri)
+          .maybeSingle();
+        
+        if (attendee) {
+          // Update attendee status
+          await supabase
+            .from('meeting_slot_attendees')
+            .update({ status: 'no_show' })
+            .eq('id', attendee.id);
+          
+          console.log('Marked attendee as no_show:', attendee.id);
+          
+          // Check if all attendees are no_show
+          const { count: showedUp } = await supabase
+            .from('meeting_slot_attendees')
+            .select('id', { count: 'exact', head: true })
+            .eq('meeting_slot_id', attendee.meeting_slot_id)
+            .in('status', ['confirmed', 'invited']);
+          
+          if (showedUp === 0) {
+            // Mark the entire slot as no_show if no one showed up
+            await supabase
+              .from('meeting_slots')
+              .update({ status: 'no_show' })
+              .eq('id', attendee.meeting_slot_id);
+            
+            console.log('Marked meeting slot as no_show:', attendee.meeting_slot_id);
+          }
+          
+          return new Response(
+            JSON.stringify({ success: true, attendeeId: attendee.id }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Fallback: try to find by meeting slot calendly_invitee_uri
+        const { data: meeting } = await supabase
           .from('meeting_slots')
           .select('id')
           .eq('calendly_invitee_uri', inviteeUri)
           .maybeSingle();
         
-        if (findError || !meeting) {
+        if (meeting) {
+          await supabase
+            .from('meeting_slots')
+            .update({ status: 'no_show' })
+            .eq('id', meeting.id);
+          
+          console.log('Marked meeting slot as no_show:', meeting.id);
+        } else {
           console.log('Meeting not found for invitee URI:', inviteeUri);
-          return new Response(
-            JSON.stringify({ success: true, message: 'Meeting not found' }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
         }
-        
-        // Update meeting status to no_show
-        const { error: updateError } = await supabase
-          .from('meeting_slots')
-          .update({
-            status: 'no_show',
-          })
-          .eq('id', meeting.id);
-        
-        if (updateError) {
-          console.error('Error updating meeting:', updateError);
-          return new Response(
-            JSON.stringify({ error: 'Failed to update meeting', details: updateError }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        console.log('Marked meeting as no_show:', meeting.id);
         
         return new Response(
-          JSON.stringify({ success: true, meetingId: meeting.id }),
+          JSON.stringify({ success: true }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

@@ -599,6 +599,7 @@ export type Database = {
       }
       closers: {
         Row: {
+          calendly_event_type_uri: string | null
           color: string | null
           created_at: string | null
           email: string
@@ -609,6 +610,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          calendly_event_type_uri?: string | null
           color?: string | null
           created_at?: string | null
           email: string
@@ -619,6 +621,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          calendly_event_type_uri?: string | null
           color?: string | null
           created_at?: string | null
           email?: string
@@ -2056,9 +2059,65 @@ export type Database = {
         }
         Relationships: []
       }
+      meeting_slot_attendees: {
+        Row: {
+          calendly_invitee_uri: string | null
+          contact_id: string | null
+          created_at: string | null
+          deal_id: string | null
+          id: string
+          meeting_slot_id: string
+          notified_at: string | null
+          status: string | null
+        }
+        Insert: {
+          calendly_invitee_uri?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          id?: string
+          meeting_slot_id: string
+          notified_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          calendly_invitee_uri?: string | null
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          id?: string
+          meeting_slot_id?: string
+          notified_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_slot_attendees_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slot_attendees_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slot_attendees_meeting_slot_id_fkey"
+            columns: ["meeting_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_slots: {
         Row: {
           booked_by: string | null
+          calendly_event_type_uri: string | null
           calendly_event_uri: string | null
           calendly_invitee_uri: string | null
           closer_id: string
@@ -2068,6 +2127,7 @@ export type Database = {
           duration_minutes: number | null
           id: string
           lead_type: string | null
+          max_attendees: number | null
           meeting_link: string | null
           notes: string | null
           scheduled_at: string
@@ -2076,6 +2136,7 @@ export type Database = {
         }
         Insert: {
           booked_by?: string | null
+          calendly_event_type_uri?: string | null
           calendly_event_uri?: string | null
           calendly_invitee_uri?: string | null
           closer_id: string
@@ -2085,6 +2146,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           lead_type?: string | null
+          max_attendees?: number | null
           meeting_link?: string | null
           notes?: string | null
           scheduled_at: string
@@ -2093,6 +2155,7 @@ export type Database = {
         }
         Update: {
           booked_by?: string | null
+          calendly_event_type_uri?: string | null
           calendly_event_uri?: string | null
           calendly_invitee_uri?: string | null
           closer_id?: string
@@ -2102,6 +2165,7 @@ export type Database = {
           duration_minutes?: number | null
           id?: string
           lead_type?: string | null
+          max_attendees?: number | null
           meeting_link?: string | null
           notes?: string | null
           scheduled_at?: string
