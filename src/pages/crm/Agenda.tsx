@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -32,6 +34,7 @@ export default function Agenda() {
   const [meetingToReschedule, setMeetingToReschedule] = useState<MeetingSlot | null>(null);
   const [preselectedCloserId, setPreselectedCloserId] = useState<string | undefined>();
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Calculate date range based on viewMode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -81,7 +84,40 @@ export default function Agenda() {
     }
   };
 
-  const handleToday = () => setSelectedDate(new Date());
+  const handleToday = useCallback(() => setSelectedDate(new Date()), []);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+      
+      // Ignore if modal/drawer is open
+      if (selectedMeeting || quickScheduleOpen || rescheduleModalOpen || configOpen || calendarOpen) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        handlePrev();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        handleNext();
+      } else if (event.key === 't' || event.key === 'T') {
+        event.preventDefault();
+        handleToday();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedDate, viewMode, selectedMeeting, quickScheduleOpen, rescheduleModalOpen, configOpen, calendarOpen, handleToday]);
 
   const handleViewDeal = (dealId: string) => {
     navigate(`/crm/negocios?deal=${dealId}`);
@@ -169,15 +205,37 @@ export default function Agenda() {
             <ToggleGroupItem value="month" className="text-xs px-3">Mês</ToggleGroupItem>
           </ToggleGroup>
 
-          {/* Date navigation with integrated arrows */}
+          {/* Date navigation with integrated arrows and mini-calendar */}
           <div className="flex items-center gap-1 border rounded-md px-1 py-0.5 bg-muted/30">
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handlePrev}>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handlePrev} title="Período anterior (←)">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-medium px-2 min-w-[140px] text-center capitalize">
-              {dateRangeLabel}
-            </span>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleNext}>
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="text-sm font-medium px-2 min-w-[140px] text-center capitalize h-7 hover:bg-muted"
+                  title="Clique para selecionar data"
+                >
+                  {dateRangeLabel}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="center">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => {
+                    if (date) {
+                      setSelectedDate(date);
+                      setCalendarOpen(false);
+                    }
+                  }}
+                  locale={ptBR}
+                  className="pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleNext} title="Próximo período (→)">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
