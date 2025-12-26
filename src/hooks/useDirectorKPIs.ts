@@ -143,39 +143,46 @@ const TAXA_OB_CONSTRUIR = 0.8980;    // 89.80% (taxa fixa Hubla: 10.20%)
 const PRECO_OB_VITALICIO = 57;       // R$ 57 preço padrão OB Vitalício
 const PRECO_OB_CONSTRUIR = 97;       // R$ 97 preço padrão OB Construir
 
-// ===== VALORES FIXOS POR PRODUTO (valor total do contrato, não da parcela) =====
-// Quando product_price no banco é menor que esperado (é parcela), usar valor fixo
-const VALORES_FIXOS_PRODUTOS: Record<string, number> = {
-  'A009': 19500,  // MCF INCORPORADOR + THE CLUB
+// ===== PREÇOS DE REFERÊNCIA (valores da planilha, não do cartão parcelado) =====
+// Usado para Faturamento Clint Bruto - ignora juros do cartão
+// A005/P2 NÃO tem valor fixo - usa product_price do banco
+const PRECO_REFERENCIA: Record<string, number> = {
+  'A009': 19500,  // MCF INCORPORADOR COMPLETO + THE CLUB
   'A001': 14500,  // MCF INCORPORADOR COMPLETO
-  'A003': 7503,   // MCF Plano Anticrise Completo (e variantes)
+  'A003': 7503,   // MCF Plano Anticrise Completo
   'A004': 5503,   // MCF Plano Anticrise Básico
-  'A005': 7500,   // MCF P2
   'A002': 7500,   // MCF INCORPORADOR BÁSICO
   'A008': 5000,   // The CLUB
-  'R001': 14500,  // Incorporador Completo 50K (renovação)
-  'R004': 7500,   // Incorporador 50k Básico (renovação)
-  'R005': 7500,   // Anticrise Completo (renovação)
-  'R009': 14500,  // Renovação Parceiro MCF
-  // Contratos A000 têm valores variáveis (397/497), usar o que está no banco
+  'A000': 497,    // Contrato padrão
+  'CONTRATO_ANTICRISE': 397,
+  // A005/P2 não entra - usa valor do banco (valor variável)
 };
 
-// Função para obter valor fixo do produto quando product_price é muito baixo (parcela)
-const getValorFixoProduto = (productName: string, productPriceFromDB: number): number => {
-  const upperName = productName.toUpperCase();
-  
-  // Procurar código do produto no nome
-  for (const [codigo, valorFixo] of Object.entries(VALORES_FIXOS_PRODUTOS)) {
-    if (upperName.includes(codigo)) {
-      // Se product_price do banco é muito menor que esperado (< 50%), usar valor fixo
-      if (productPriceFromDB < valorFixo * 0.5) {
-        return valorFixo;
-      }
-      return productPriceFromDB;
-    }
+// Normaliza nome do produto para chave de deduplicação (email+produto)
+const normalizeProductForDedup = (productName: string): string => {
+  const upper = productName.toUpperCase();
+  if (upper.includes('A009')) return 'A009';
+  if (upper.includes('A008')) return 'A008';
+  if (upper.includes('A005') || upper.includes('P2')) return 'A005';
+  if (upper.includes('A004')) return 'A004';
+  if (upper.includes('A003')) return 'A003';
+  if (upper.includes('A002')) return 'A002';
+  if (upper.includes('A001')) return 'A001';
+  if (upper.includes('A000') || upper.includes('CONTRATO')) {
+    if (upper.includes('ANTICRISE')) return 'CONTRATO_ANTICRISE';
+    return 'A000';
   }
-  
-  // Para produtos sem valor fixo, usar o do banco
+  return upper.substring(0, 20); // Fallback
+};
+
+// Obtém preço de referência ou usa valor do banco (para A005/P2 e outros sem valor fixo)
+const getPrecoReferencia = (productName: string, productPriceFromDB: number): number => {
+  const normalizado = normalizeProductForDedup(productName);
+  // Se tem preço de referência, usar ele
+  if (PRECO_REFERENCIA[normalizado]) {
+    return PRECO_REFERENCIA[normalizado];
+  }
+  // Caso contrário (A005/P2, etc), usar valor do banco
   return productPriceFromDB;
 };
 
@@ -660,31 +667,51 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       console.log("📊 Transações Clint deduplicadas:", deduplicatedClintTransactions.length);
       
       // 3. Calcular Faturamento Clint Bruto
-      // CORREÇÃO: Usar product_price REAL do banco (não valores fixos artificiais)
-      // CORREÇÃO: Incluir TODOS os produtos Faturamento Clint (incluindo P2)
-      const faturamentoClintDebug: { product: string; price: number; installment: number; source: string }[] = [];
-      const faturamentoClint = deduplicatedClintTransactions
+      // NOVA LÓGICA: Deduplicar por email+produto normalizado e usar PREÇOS DE REFERÊNCIA
+      // (ignora juros do cartão parcelado - A005/P2 usa valor do banco pois é variável)
+      
+      // Agrupar por email + produto normalizado, mantendo apenas 1 por grupo
+      const groupedByEmailProduct = new Map<string, HublaTransaction>();
+      
+      deduplicatedClintTransactions
         .filter((tx) => {
           const installmentNum = tx.installment_number || 1;
-          // Apenas primeira parcela (incluindo P2)
-          return installmentNum === 1;
+          return installmentNum === 1; // Apenas primeira parcela
         })
-        .reduce((sum, tx) => {
-          const productPriceDB = tx.product_price || 0;
+        .forEach((tx) => {
+          const email = (tx.customer_email || "").toLowerCase().trim();
+          const productNormalized = normalizeProductForDedup(tx.product_name || "");
+          const key = `${email}|${productNormalized}`;
           
-          faturamentoClintDebug.push({
-            product: tx.product_name || "",
-            price: productPriceDB,
-            installment: tx.installment_number || 1,
-            source: tx.source || "hubla"
-          });
-          
-          return sum + productPriceDB;
-        }, 0);
+          const existing = groupedByEmailProduct.get(key);
+          // Se já existe, manter o de maior product_price (caso haja duplicata)
+          if (!existing || (tx.product_price || 0) > (existing.product_price || 0)) {
+            groupedByEmailProduct.set(key, tx);
+          }
+        });
+      
+      console.log("🔑 Grupos email+produto únicos:", groupedByEmailProduct.size);
+      
+      // Calcular Faturamento Clint usando preços de referência
+      const faturamentoClintDebug: { email: string; product: string; priceDB: number; priceRef: number; source: string }[] = [];
+      const faturamentoClint = Array.from(groupedByEmailProduct.values()).reduce((sum, tx) => {
+        const productPriceDB = tx.product_price || 0;
+        const precoFinal = getPrecoReferencia(tx.product_name || "", productPriceDB);
+        
+        faturamentoClintDebug.push({
+          email: (tx.customer_email || "").substring(0, 20),
+          product: tx.product_name || "",
+          priceDB: productPriceDB,
+          priceRef: precoFinal,
+          source: tx.source || "hubla"
+        });
+        
+        return sum + precoFinal;
+      }, 0);
       
       // DEBUG: Log Faturamento Clint
-      console.log("💰 Faturamento Clint Bruto Debug:", {
-        total: faturamentoClintDebug.length,
+      console.log("💰 Faturamento Clint Bruto (com preços referência):", {
+        totalGrupos: groupedByEmailProduct.size,
         brutoTotal: faturamentoClint,
         samples: faturamentoClintDebug.slice(0, 10)
       });
