@@ -40,6 +40,7 @@ import Origens from "./pages/crm/Origens";
 import Grupos from "./pages/crm/Grupos";
 import Tags from "./pages/crm/Tags";
 import ConfiguracoesCRM from "./pages/crm/Configuracoes";
+import ConfigurarClosers from "./pages/crm/ConfigurarClosers";
 import ImportarContatos from "./pages/crm/ImportarContatos";
 import ImportarNegocios from "./pages/crm/ImportarNegocios";
 import ImportarHistorico from "./pages/crm/ImportarHistorico";
@@ -122,6 +123,7 @@ const App = () => (
               <Route path="sdr/minhas-reunioes" element={<ResourceGuard resource="crm"><MinhasReunioes /></ResourceGuard>} />
               <Route path="crm/reunioes-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ReunioesEquipe /></RoleGuard>} />
               <Route path="crm/reunioes-equipe/:sdrEmail" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SdrMeetingsDetailPage /></RoleGuard>} />
+              <Route path="crm/configurar-closers" element={<ResourceGuard resource="configuracoes"><ConfigurarClosers /></ResourceGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />

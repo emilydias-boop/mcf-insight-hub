@@ -126,6 +126,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Geral", url: "/configuracoes" },
       { title: "Usuários", url: "/usuarios" },
+      { title: "Closers", url: "/crm/configurar-closers" },
     ]
   },
 ];
