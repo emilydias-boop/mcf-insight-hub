@@ -636,19 +636,15 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
         // Evitar duplicatas Make
         if (seenMakeKeys.has(makeKey)) return;
         
-        // Verificar se existe Hubla com mesmo email+date+price similar E MESMA CATEGORIA
-        // CORREÇÃO: Comparar categoria de produto para evitar excluir Parcerias/Contratos Make
-        // quando existe Incorporador Hubla com mesmo email/data/preço
-        const txCategory = (tx.product_category || "").toLowerCase();
+        // CORREÇÃO FINAL: Se Make tem mesmo email + data + preço similar de um Hubla,
+        // é duplicata INDEPENDENTE da categoria (Parceria = A009 do mesmo cliente)
         const hasHublaMatch = deduplicatedClintTransactions.some(htx => {
           const hEmail = (htx.customer_email || "").toLowerCase().trim();
           const hDate = htx.sale_date.split('T')[0];
           const hPrice = Math.round(htx.product_price || 0);
-          const hCategory = (htx.product_category || "").toLowerCase();
           
-          // Só considera duplicata se: mesmo email + data + preço similar + MESMA categoria
-          const sameCategory = hCategory === txCategory;
-          return hEmail === email && hDate === date && Math.abs(hPrice - price) < 100 && sameCategory;
+          // Duplicata: mesmo email + data + preço similar (independente de categoria)
+          return hEmail === email && hDate === date && Math.abs(hPrice - price) < 100;
         });
         
         if (!hasHublaMatch) {
