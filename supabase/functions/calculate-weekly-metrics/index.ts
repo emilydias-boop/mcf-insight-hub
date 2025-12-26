@@ -71,6 +71,47 @@ function normalizeProductName(productName: string): string {
   return name.substring(0, 30);
 }
 
+// ============================================================================
+// PREÇOS DE REFERÊNCIA (mesmos valores do frontend)
+// A005/P2 NÃO tem valor fixo - usa product_price do banco
+// ============================================================================
+const PRECO_REFERENCIA: Record<string, number> = {
+  'A009_INCORPORADOR_CLUB': 19500,
+  'A008_CLUB': 5000,
+  'A001_INCORPORADOR': 14500,
+  'A002_BASICO': 7500,
+  'A003': 7503,
+  'A004_BASICO': 5503,
+  'A000_CONTRATO': 497,
+  // A005/P2 não entra - usa valor do banco
+};
+
+// Normaliza nome do produto para chave de deduplicação (email+produto)
+function normalizeProductForDedup(productName: string): string {
+  const upper = productName.toUpperCase();
+  if (upper.includes('A009')) return 'A009_INCORPORADOR_CLUB';
+  if (upper.includes('A008')) return 'A008_CLUB';
+  if (upper.includes('A005') || upper.includes('P2')) return 'A005';
+  if (upper.includes('A004')) return 'A004_BASICO';
+  if (upper.includes('A003')) return 'A003';
+  if (upper.includes('A002')) return 'A002_BASICO';
+  if (upper.includes('A001')) return 'A001_INCORPORADOR';
+  if (upper.includes('A000') || upper.includes('CONTRATO')) {
+    if (upper.includes('ANTICRISE')) return 'CONTRATO_ANTICRISE';
+    return 'A000_CONTRATO';
+  }
+  return upper.substring(0, 20);
+}
+
+// Obtém preço de referência ou usa valor do banco
+function getPrecoReferencia(productName: string, productPriceFromDB: number): number {
+  const normalizado = normalizeProductForDedup(productName);
+  if (PRECO_REFERENCIA[normalizado]) {
+    return PRECO_REFERENCIA[normalizado];
+  }
+  return productPriceFromDB;
+}
+
 // Converter data UTC para data no fuso BR (America/Sao_Paulo)
 function toSaoPauloDateString(utcDateStr: string): string {
   const date = new Date(utcDateStr);
@@ -440,8 +481,13 @@ Deno.serve(async (req) => {
     const allClintTransactions = [...makeClintTransactions, ...hublaFallbackTransactions];
     const { forBruto: clintForBruto, forLiquido: clintForLiquido } = deduplicateTransactions(allClintTransactions);
     
-    // FATURAMENTO CLINT BRUTO: soma dos maiores product_price por grupo (email+produto)
-    const faturamento_clint = clintForBruto.reduce((sum, t) => sum + (t.product_price || 0), 0);
+    // FATURAMENTO CLINT BRUTO: usar preços de referência (mesma lógica do frontend)
+    const faturamento_clint = clintForBruto.reduce((sum, t) => {
+      const productName = t.product_name || '';
+      const productPrice = t.product_price || 0;
+      const precoFinal = getPrecoReferencia(productName, productPrice);
+      return sum + precoFinal;
+    }, 0);
     
     // FATURAMENTO CLINT LÍQUIDO: soma de TODOS os net_value (sem deduplicação)
     const faturamento_clint_liquido = clintForLiquido.reduce((sum, t) => sum + parseValorLiquido(t), 0);
