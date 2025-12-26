@@ -311,39 +311,39 @@ export function AgendaCalendar({
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="border rounded-lg overflow-hidden bg-card">
-        {/* Header with days - aligned with grid */}
-        <div className={cn('grid border-b bg-muted/50', gridCols)}>
-          <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30">
-            Hora
-          </div>
-          {viewDays.map(day => (
-            <div
-              key={day.toISOString()}
-              className={cn(
-                'h-[52px] flex flex-col items-center justify-center border-l',
-                isSameDay(day, new Date()) && 'bg-primary/10'
-              )}
-            >
-              <div className="text-xs text-muted-foreground uppercase">
-                {format(day, 'EEE', { locale: ptBR })}
-              </div>
-              <div className={cn(
-                'text-sm font-semibold',
-                isSameDay(day, new Date()) && 'text-primary'
-              )}>
-                {format(day, 'd')}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Time slots grid - 30min intervals */}
+        {/* Time slots grid - 30min intervals with sticky header */}
         <div className="max-h-[600px] overflow-y-auto relative">
-          {/* Linha vermelha do horário atual */}
+          {/* Header with days - sticky inside scroll container */}
+          <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20', gridCols)}>
+            <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30">
+              Hora
+            </div>
+            {viewDays.map(day => (
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  'h-[52px] flex flex-col items-center justify-center border-l bg-muted/50',
+                  isSameDay(day, new Date()) && 'bg-primary/10'
+                )}
+              >
+                <div className="text-xs text-muted-foreground uppercase">
+                  {format(day, 'EEE', { locale: ptBR })}
+                </div>
+                <div className={cn(
+                  'text-sm font-semibold',
+                  isSameDay(day, new Date()) && 'text-primary'
+                )}>
+                  {format(day, 'd')}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Linha vermelha do horário atual - offset by header height (52px) */}
           {currentTimePos !== null && viewDays.some(d => isSameDay(d, currentTime)) && (
             <div 
               className="absolute left-[60px] right-0 z-30 pointer-events-none flex items-center"
-              style={{ top: `${currentTimePos}px` }}
+              style={{ top: `${currentTimePos + 52}px` }}
             >
               <div className="w-3 h-3 rounded-full bg-destructive -ml-1.5 shadow-md border-2 border-background" />
               <div className="flex-1 h-[2px] bg-destructive shadow-sm" />
