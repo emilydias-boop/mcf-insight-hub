@@ -170,11 +170,16 @@ export const isProductInIncorporador50k = (productName: string): boolean => {
 
 // ===== CÁLCULO INCORPORADOR 50K (LÍQUIDO) =====
 // Soma de net_value dos produtos da lista, deduplicando por hubla_id
+// FONTE: Apenas 'hubla' (ou null) - Make envia OBs e A010 separadamente
 export const calcularIncorporador50k = (transactions: HublaTransactionBase[]): number => {
   const seenIds = new Set<string>();
   
   return transactions
     .filter((tx) => {
+      // FILTRO DE FONTE: Apenas hubla (Make não envia Incorporador 50k)
+      const source = tx.source || 'hubla';
+      if (source !== 'hubla') return false;
+      
       if (tx.hubla_id?.startsWith("newsale-")) return false;
       if (tx.hubla_id?.includes("-offer-")) return false;
       if (seenIds.has(tx.hubla_id)) return false;
@@ -194,11 +199,15 @@ export const calcularIncorporador50k = (transactions: HublaTransactionBase[]): n
 
 // ===== CÁLCULO A010 FATURADO (LÍQUIDO) =====
 // Soma de net_value de produtos A010, excluindo Order Bumps
+// FONTE: Apenas 'make' ou 'hubla_make_sync' - dados validados do Make
 export const calcularA010Faturado = (transactions: HublaTransactionBase[]): number => {
   const seenIds = new Set<string>();
   
   return transactions
     .filter((tx) => {
+      // FILTRO DE FONTE: Apenas Make (dados validados)
+      if (tx.source !== 'make' && tx.source !== 'hubla_make_sync') return false;
+      
       const productName = (tx.product_name || "").toUpperCase();
       const isA010 = tx.product_category === "a010" || productName.includes("A010");
       if (!isA010) return false;
@@ -214,6 +223,7 @@ export const calcularA010Faturado = (transactions: HublaTransactionBase[]): numb
 };
 
 // ===== CÁLCULO OBs (LÍQUIDO) =====
+// FONTE: Apenas 'make' - OBs validados do Make
 export const calcularOBs = (transactions: HublaTransactionBase[]): {
   obConstruir: number;
   obVitalicio: number;
@@ -224,6 +234,9 @@ export const calcularOBs = (transactions: HublaTransactionBase[]): {
   const obEventoByEmail = new Map<string, number>();
   
   transactions.forEach((tx) => {
+    // FILTRO DE FONTE: Apenas Make (dados validados)
+    if (tx.source !== 'make') return;
+    
     const productName = (tx.product_name || "").toUpperCase();
     const email = (tx.customer_email || "").toLowerCase().trim();
     if (!email) return;
@@ -255,10 +268,14 @@ export const calcularOBs = (transactions: HublaTransactionBase[]): {
 };
 
 // ===== CONTA VENDAS A010 (EMAILS ÚNICOS) =====
+// FONTE: Apenas 'make' ou 'hubla_make_sync' - dados validados do Make
 export const contarVendasA010 = (transactions: HublaTransactionBase[]): number => {
   const seenEmails = new Set<string>();
   
   transactions.forEach((tx) => {
+    // FILTRO DE FONTE: Apenas Make (dados validados)
+    if (tx.source !== 'make' && tx.source !== 'hubla_make_sync') return;
+    
     const productName = (tx.product_name || "").toUpperCase();
     const isA010 = tx.product_category === "a010" || productName.includes("A010");
     
