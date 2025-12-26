@@ -1,8 +1,13 @@
 // ===== FUNÇÕES COMPARTILHADAS DE CÁLCULO DE MÉTRICAS =====
 // Usado por useDirectorKPIs.ts e useEvolutionData.ts para consistência
 
+// Importar preços de referência e funções compartilhadas
+import { PRECO_REFERENCIA, normalizeProductForDedup, getPrecoReferencia } from './precosReferencia';
+
+// Re-exportar para uso externo
+export { PRECO_REFERENCIA, normalizeProductForDedup, getPrecoReferencia };
+
 // ===== LISTA COMPLETA DE PRODUTOS INCORPORADOR 50K (38 produtos) =====
-// Conforme planilha fornecida pelo usuário
 export const PRODUTOS_INCORPORADOR_50K = [
   "000 - Pré Reserva Minha Casa Financiada",
   "000 - Contrato",
@@ -281,6 +286,10 @@ export interface MetricasSemana {
   obEvento: number;
   vendasA010: number;
   
+  // Faturamento Clint com preços de referência
+  faturamentoClintBruto: number;  // NOVO: usando preços de referência
+  faturamentoClintLiquido: number; // NOVO: soma de net_value
+  
   // Calculados
   faturamentoTotal: number;
   custoTotal: number;
@@ -294,6 +303,57 @@ export interface MetricasSemana {
   ultrametaLiquido: number;
 }
 
+// ===== CALCULAR FATURAMENTO CLINT COM PREÇOS DE REFERÊNCIA =====
+// Deduplicar por email+produto normalizado, usar preços de referência
+export const calcularFaturamentoClint = (transactions: HublaTransactionBase[]): {
+  bruto: number;
+  liquido: number;
+} => {
+  // Agrupar por email+produto normalizado
+  const gruposPorEmailProduto = new Map<string, HublaTransactionBase[]>();
+  
+  transactions.forEach((tx) => {
+    const productName = tx.product_name || '';
+    const email = (tx.customer_email || '').toLowerCase().trim();
+    if (!email) return;
+    
+    // Verificar se é produto Clint (mesma lógica do Incorporador 50k)
+    if (!isProductInIncorporador50k(productName)) return;
+    
+    // Apenas primeira parcela conta para bruto
+    if (tx.installment_number && tx.installment_number > 1) return;
+    
+    const chave = `${email}|${normalizeProductForDedup(productName)}`;
+    const grupo = gruposPorEmailProduto.get(chave) || [];
+    grupo.push(tx);
+    gruposPorEmailProduto.set(chave, grupo);
+  });
+  
+  // Calcular bruto: usar preço de referência para cada grupo único
+  let bruto = 0;
+  gruposPorEmailProduto.forEach((txs) => {
+    // Pegar a transação com maior product_price do grupo
+    const melhorTx = txs.reduce((best, tx) => 
+      (tx.product_price || 0) > (best.product_price || 0) ? tx : best
+    , txs[0]);
+    
+    const productName = melhorTx.product_name || '';
+    const productPrice = melhorTx.product_price || 0;
+    const precoFinal = getPrecoReferencia(productName, productPrice);
+    bruto += precoFinal;
+  });
+  
+  // Calcular líquido: soma de todos os net_value (todas parcelas contam)
+  const liquido = transactions
+    .filter((tx) => {
+      const productName = tx.product_name || '';
+      return isProductInIncorporador50k(productName);
+    })
+    .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+  
+  return { bruto, liquido };
+};
+
 export const calcularMetricasSemana = (
   transactions: HublaTransactionBase[],
   gastosAds: number,
@@ -305,6 +365,9 @@ export const calcularMetricasSemana = (
   const a010Faturado = calcularA010Faturado(transactions);
   const obs = calcularOBs(transactions);
   const vendasA010 = contarVendasA010(transactions);
+  
+  // 1.5 NOVO: Calcular Faturamento Clint com preços de referência
+  const faturamentoClint = calcularFaturamentoClint(transactions);
   
   // 2. Custo Operacional Semanal = (Equipe + Escritório) / 4
   const custoOperacionalSemanal = (custoEquipeMensal + custoEscritorioMensal) / 4;
@@ -339,6 +402,8 @@ export const calcularMetricasSemana = (
     obVitalicio: obs.obVitalicio,
     obEvento: obs.obEvento,
     vendasA010,
+    faturamentoClintBruto: faturamentoClint.bruto,
+    faturamentoClintLiquido: faturamentoClint.liquido,
     faturamentoTotal,
     custoTotal,
     lucro,
