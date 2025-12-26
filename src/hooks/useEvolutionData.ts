@@ -126,10 +126,11 @@ export const useEvolutionData = (canal?: string, limit: number = 52) => {
         
         if (importedData) {
           // ✅ USAR DADOS DA PLANILHA (histórico correto)
+          // PRIORIZA total_revenue (valor aprovado pela Emily) sobre faturamento_total (cálculo antigo)
           return {
             periodo: semana.weekLabel,
             semanaLabel: semana.weekLabel,
-            faturamento: importedData.faturamento_total || importedData.total_revenue || 0,
+            faturamento: importedData.total_revenue || importedData.faturamento_total || 0,
             custos: importedData.total_cost || importedData.operating_cost || 0,
             lucro: importedData.operating_profit || 0,
             roi: importedData.roi || 0,
