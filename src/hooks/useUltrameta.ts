@@ -51,7 +51,7 @@ const FATURAMENTO_CLINT_PRODUCTS = [
   'R21 - MCF INCORPORADOR P2 (ASSINATURA)',
   'SÓCIO JANTAR',
   // NOVO: Produtos Make sem prefixo de código
-  'PARCERIA',
+  // REMOVIDO: 'PARCERIA' - São duplicatas das vendas que já existem como A00X no Hubla
   'CONTRATO',
 ];
 
@@ -76,7 +76,8 @@ const isProductInFaturamentoClint = (productName: string, productCategory?: stri
   }
   
   // Verificar por categoria (produtos Make)
-  const validCategories = ['incorporador', 'parceria', 'contrato', 'imersao_socios'];
+  // REMOVIDO: 'parceria' - São duplicatas das vendas Hubla
+  const validCategories = ['incorporador', 'contrato', 'imersao_socios'];
   if (productCategory && validCategories.includes(productCategory)) {
     return true;
   }
@@ -185,6 +186,10 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       transactions.forEach(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const hublaId = tx.hubla_id || '';
+        
+        // CORREÇÃO: Excluir transações "Parceria" - são duplicatas de vendas que já existem como A00X no Hubla
+        // A planilha usa apenas dados Hubla para o bruto, então devemos excluir Parceria
+        if (productName === 'PARCERIA' || tx.product_category === 'parceria') return;
         
         // Excluir newsale- (sem dados completos)
         if (hublaId.startsWith('newsale-')) return;
