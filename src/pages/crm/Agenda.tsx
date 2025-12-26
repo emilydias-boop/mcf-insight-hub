@@ -194,12 +194,17 @@ export default function Agenda() {
       {/* Navigation and Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleToday}>
-            Hoje
-          </Button>
-          
-          {/* View Mode Toggle */}
-          <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
+          {/* View Mode Toggle - also resets to current date */}
+          <ToggleGroup 
+            type="single" 
+            value={viewMode} 
+            onValueChange={(v) => {
+              if (v) {
+                setViewMode(v as ViewMode);
+                setSelectedDate(new Date());
+              }
+            }}
+          >
             <ToggleGroupItem value="day" className="text-xs px-3">Dia</ToggleGroupItem>
             <ToggleGroupItem value="week" className="text-xs px-3">Semana</ToggleGroupItem>
             <ToggleGroupItem value="month" className="text-xs px-3">Mês</ToggleGroupItem>
