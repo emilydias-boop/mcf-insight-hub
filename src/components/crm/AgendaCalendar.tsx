@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
-import { format, isSameDay, parseISO, addDays, startOfWeek, isWithinInterval, setHours, setMinutes } from 'date-fns';
+import { format, isSameDay, parseISO, addDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MeetingSlot, CloserWithAvailability } from '@/hooks/useAgendaData';
+
+export type ViewMode = 'day' | 'week' | 'month';
 
 interface AgendaCalendarProps {
   meetings: MeetingSlot[];
@@ -12,6 +14,7 @@ interface AgendaCalendarProps {
   onSelectMeeting: (meeting: MeetingSlot) => void;
   closerFilter: string | null;
   closers?: CloserWithAvailability[];
+  viewMode?: ViewMode;
 }
 
 // 30min slots from 8:00 to 18:00
@@ -29,16 +32,34 @@ const DEFAULT_COLORS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  scheduled: 'border-l-4 border-l-primary',
-  rescheduled: 'border-l-4 border-l-yellow-500',
-  completed: 'border-l-4 border-l-green-500 opacity-75',
-  no_show: 'border-l-4 border-l-red-500 opacity-75',
-  canceled: 'border-l-4 border-l-muted opacity-50 line-through',
+  scheduled: 'border-l-2 border-l-primary',
+  rescheduled: 'border-l-2 border-l-yellow-500',
+  completed: 'border-l-2 border-l-green-500 opacity-75',
+  no_show: 'border-l-2 border-l-red-500 opacity-75',
+  canceled: 'border-l-2 border-l-muted opacity-50 line-through',
 };
 
-export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closerFilter, closers = [] }: AgendaCalendarProps) {
+export function AgendaCalendar({ 
+  meetings, 
+  selectedDate, 
+  onSelectMeeting, 
+  closerFilter, 
+  closers = [],
+  viewMode = 'week'
+}: AgendaCalendarProps) {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+  
+  const viewDays = useMemo(() => {
+    if (viewMode === 'day') {
+      return [selectedDate];
+    } else if (viewMode === 'month') {
+      const monthStart = startOfMonth(selectedDate);
+      const monthEnd = endOfMonth(selectedDate);
+      return eachDayOfInterval({ start: monthStart, end: monthEnd });
+    }
+    // week view
+    return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+  }, [selectedDate, viewMode, weekStart]);
 
   const filteredMeetings = useMemo(() => {
     if (!closerFilter) return meetings;
@@ -57,11 +78,16 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
     });
   };
 
+  const getMeetingsForDay = (day: Date) => {
+    return filteredMeetings.filter(meeting => {
+      const meetingDate = parseISO(meeting.scheduled_at);
+      return isSameDay(meetingDate, day);
+    });
+  };
+
   const getCloserColor = (closerId: string | undefined, closerName: string | undefined) => {
-    // Try to get color from closers array (from DB)
     const closer = closers.find(c => c.id === closerId);
     if (closer?.color) return closer.color;
-    // Fallback to default colors
     if (closerName && DEFAULT_COLORS[closerName]) return DEFAULT_COLORS[closerName];
     return '#6B7280';
   };
@@ -74,7 +100,6 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
     return isWithinInterval(now, { start: slotStart, end: slotEnd });
   };
 
-  // Build legend from closers with colors
   const legendItems = useMemo(() => {
     const items = closers.length > 0
       ? closers.filter(c => c.is_active).map(c => ({ name: c.name, color: c.color || DEFAULT_COLORS[c.name] || '#6B7280' }))
@@ -82,12 +107,109 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
     return items;
   }, [closers]);
 
+  // Month view rendering
+  if (viewMode === 'month') {
+    const monthStart = startOfMonth(selectedDate);
+    const monthEnd = endOfMonth(selectedDate);
+    const startDay = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const weeks: Date[][] = [];
+    let currentWeek: Date[] = [];
+    let day = startDay;
+
+    while (day <= monthEnd || currentWeek.length > 0) {
+      currentWeek.push(day);
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+        if (day > monthEnd) break;
+      }
+      day = addDays(day, 1);
+    }
+
+    return (
+      <div className="border rounded-lg overflow-hidden bg-card">
+        {/* Header */}
+        <div className="grid grid-cols-7 border-b bg-muted/50">
+          {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => (
+            <div key={d} className="p-2 text-center text-xs font-medium text-muted-foreground">
+              {d}
+            </div>
+          ))}
+        </div>
+
+        {/* Weeks */}
+        <div className="divide-y">
+          {weeks.map((week, weekIdx) => (
+            <div key={weekIdx} className="grid grid-cols-7 min-h-[80px]">
+              {week.map(day => {
+                const dayMeetings = getMeetingsForDay(day);
+                const isCurrentMonth = day.getMonth() === selectedDate.getMonth();
+                const isToday = isSameDay(day, new Date());
+
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={cn(
+                      'p-1 border-l first:border-l-0 min-h-[80px]',
+                      !isCurrentMonth && 'bg-muted/30 text-muted-foreground',
+                      isToday && 'bg-primary/10'
+                    )}
+                  >
+                    <div className={cn(
+                      'text-xs font-medium mb-1',
+                      isToday && 'text-primary'
+                    )}>
+                      {format(day, 'd')}
+                    </div>
+                    <div className="space-y-0.5">
+                      {dayMeetings.slice(0, 3).map(meeting => {
+                        const closerColor = getCloserColor(meeting.closer_id, meeting.closer?.name);
+                        return (
+                          <button
+                            key={meeting.id}
+                            onClick={() => onSelectMeeting(meeting)}
+                            className="w-full text-left text-[9px] px-1 py-0.5 rounded bg-card shadow-sm truncate hover:bg-accent"
+                            style={{ borderLeft: `2px solid ${closerColor}` }}
+                          >
+                            {format(parseISO(meeting.scheduled_at), 'HH:mm')}
+                          </button>
+                        );
+                      })}
+                      {dayMeetings.length > 3 && (
+                        <div className="text-[9px] text-muted-foreground pl-1">
+                          +{dayMeetings.length - 3} mais
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* Legend */}
+        <div className="p-3 border-t bg-muted/30 flex flex-wrap gap-3">
+          {legendItems.map(({ name, color }) => (
+            <div key={name} className="flex items-center gap-1.5 text-xs">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+              <span>{name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Day or Week view rendering
+  const gridCols = viewMode === 'day' ? 'grid-cols-[70px_1fr]' : 'grid-cols-[70px_repeat(5,1fr)]';
+
   return (
     <div className="border rounded-lg overflow-hidden bg-card">
       {/* Header with days */}
-      <div className="grid grid-cols-[70px_repeat(5,1fr)] border-b bg-muted/50">
+      <div className={cn('grid border-b bg-muted/50', gridCols)}>
         <div className="p-2 text-center text-xs font-medium text-muted-foreground">Hora</div>
-        {weekDays.map(day => (
+        {viewDays.map(day => (
           <div
             key={day.toISOString()}
             className={cn(
@@ -109,12 +231,13 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
       </div>
 
       {/* Time slots grid - 30min intervals */}
-      <div className="max-h-[500px] overflow-y-auto">
+      <div className="max-h-[600px] overflow-y-auto">
         {TIME_SLOTS.map(({ hour, minute }) => (
           <div
             key={`${hour}-${minute}`}
             className={cn(
-              'grid grid-cols-[70px_repeat(5,1fr)] border-b last:border-b-0',
+              'grid border-b last:border-b-0',
+              gridCols,
               minute === 0 && 'border-t border-t-border/50'
             )}
           >
@@ -124,7 +247,7 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
             )}>
               {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
             </div>
-            {weekDays.map(day => {
+            {viewDays.map(day => {
               const slotMeetings = getMeetingsForSlot(day, hour, minute);
               const isCurrent = isCurrentTimeSlot(day, hour, minute);
 
@@ -132,7 +255,7 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
                 <div
                   key={`${day.toISOString()}-${hour}-${minute}`}
                   className={cn(
-                    'min-h-[40px] p-0.5 border-l relative',
+                    'h-[40px] border-l relative',
                     isSameDay(day, new Date()) && 'bg-primary/5',
                     isCurrent && 'bg-primary/15 ring-1 ring-primary/30'
                   )}
@@ -146,23 +269,21 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
                             <button
                               onClick={() => onSelectMeeting(meeting)}
                               className={cn(
-                                'w-full text-left p-1 rounded text-xs bg-card shadow-sm hover:shadow-md transition-all hover:scale-[1.02]',
+                                'absolute inset-0.5 text-left p-1 rounded text-xs bg-card shadow-sm hover:shadow-md transition-all overflow-hidden',
                                 STATUS_STYLES[meeting.status] || ''
                               )}
-                              style={{
-                                borderLeftColor: closerColor,
-                              }}
+                              style={{ borderLeftColor: closerColor }}
                             >
                               <div className="flex items-center gap-1">
                                 <div
-                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                                   style={{ backgroundColor: closerColor }}
                                 />
                                 <span className="font-medium truncate text-[10px]">
                                   {format(parseISO(meeting.scheduled_at), 'HH:mm')}
                                 </span>
                               </div>
-                              <div className="truncate text-muted-foreground text-[10px]">
+                              <div className="truncate text-muted-foreground text-[9px]">
                                 {meeting.deal?.contact?.name || meeting.deal?.name || 'Sem lead'}
                               </div>
                             </button>
@@ -209,10 +330,7 @@ export function AgendaCalendar({ meetings, selectedDate, onSelectMeeting, closer
       <div className="p-3 border-t bg-muted/30 flex flex-wrap gap-3">
         {legendItems.map(({ name, color }) => (
           <div key={name} className="flex items-center gap-1.5 text-xs">
-            <div
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: color }}
-            />
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
             <span>{name}</span>
           </div>
         ))}
