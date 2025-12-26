@@ -180,16 +180,46 @@ export const useUltrameta = (startDate?: Date, endDate?: Date, sdrIa: number = 0
       // Para BRUTO: usar apenas o maior product_price do grupo
       // Para LÍQUIDO: somar todos os net_value (sem deduplicação)
 
+      // ===== DEDUPLICAÇÃO INTELIGENTE HUBLA + MAKE =====
+      // Criar mapa de transações Hubla por email + data para detectar duplicatas
+      const hublaByEmailDate = new Map<string, typeof transactions[0]>();
+      
+      transactions.forEach(tx => {
+        if (tx.source !== 'hubla') return;
+        const email = (tx.customer_email || '').toLowerCase().trim();
+        if (!email) return;
+        
+        const txDate = new Date(tx.sale_date).toISOString().split('T')[0];
+        const key = `${email}|${txDate}`;
+        
+        // Guardar a transação Hubla (prioriza maior product_price)
+        const existing = hublaByEmailDate.get(key);
+        if (!existing || (tx.product_price || 0) > (existing.product_price || 0)) {
+          hublaByEmailDate.set(key, tx);
+        }
+      });
+
       // Primeiro: filtrar transações válidas
       const validTransactions: typeof transactions = [];
       
       transactions.forEach(tx => {
         const productName = (tx.product_name || '').toUpperCase();
         const hublaId = tx.hubla_id || '';
+        const source = tx.source || 'hubla';
         
-        // CORREÇÃO: Excluir transações "Parceria" - são duplicatas de vendas que já existem como A00X no Hubla
-        // A planilha usa apenas dados Hubla para o bruto, então devemos excluir Parceria
-        if (productName === 'PARCERIA' || tx.product_category === 'parceria') return;
+        // ===== DEDUPLICAÇÃO: Excluir transações Make que têm equivalente Hubla =====
+        // Se é transação Make (Parceria ou Contrato), verificar se existe duplicata Hubla
+        if (source === 'make') {
+          const email = (tx.customer_email || '').toLowerCase().trim();
+          const txDate = new Date(tx.sale_date).toISOString().split('T')[0];
+          const dedupeKey = `${email}|${txDate}`;
+          
+          const hublaDuplicate = hublaByEmailDate.get(dedupeKey);
+          if (hublaDuplicate) {
+            console.log(`[useUltrameta] Excluindo duplicata Make: ${email} - ${productName} (data: ${txDate}) - já existe Hubla: ${hublaDuplicate.product_name}`);
+            return; // Pula transação Make duplicada - Hubla é a fonte preferencial
+          }
+        }
         
         // Excluir newsale- (sem dados completos)
         if (hublaId.startsWith('newsale-')) return;
