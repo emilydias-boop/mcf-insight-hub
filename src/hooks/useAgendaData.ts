@@ -695,3 +695,30 @@ export function useRescheduleMeeting() {
     },
   });
 }
+
+// ============ Meeting Schedule Update (for drag-and-drop) ============
+
+export function useUpdateMeetingSchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ meetingId, scheduledAt }: { meetingId: string; scheduledAt: string }) => {
+      const { error } = await supabase
+        .from('meeting_slots')
+        .update({ scheduled_at: scheduledAt })
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      toast.success('Reunião reagendada');
+    },
+    onError: () => {
+      toast.error('Erro ao reagendar reunião');
+    },
+  });
+}
