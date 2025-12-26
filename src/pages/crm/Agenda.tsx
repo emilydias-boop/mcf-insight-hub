@@ -15,10 +15,12 @@ import { AgendaMeetingDrawer } from '@/components/crm/AgendaMeetingDrawer';
 import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 import { RescheduleModal } from '@/components/crm/RescheduleModal';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
+import { useMeetingReminders } from '@/hooks/useMeetingReminders';
 import { useNavigate } from 'react-router-dom';
 
 export default function Agenda() {
   const navigate = useNavigate();
+  useMeetingReminders(); // Automatic 15-min reminders
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [closerFilter, setCloserFilter] = useState<string | null>(null);
