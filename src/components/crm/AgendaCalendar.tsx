@@ -1,9 +1,10 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@/hooks/useAgendaData';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
@@ -53,6 +54,27 @@ export function AgendaCalendar({
 }: AgendaCalendarProps) {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const updateSchedule = useUpdateMeetingSchedule();
+  
+  // Estado para horário atual (linha vermelha)
+  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Atualizar a cada minuto
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+  
+  // Calcular posição da linha vermelha em pixels
+  const getCurrentTimePosition = useCallback(() => {
+    const hour = currentTime.getHours();
+    const minute = currentTime.getMinutes();
+    
+    if (hour < 8 || hour >= 18) return null; // Fora do horário visível
+    
+    // Cada slot = 40px, calcular offset
+    const slotsFromStart = (hour - 8) * 2 + (minute / 30);
+    return slotsFromStart * SLOT_HEIGHT;
+  }, [currentTime]);
   
   const viewDays = useMemo(() => {
     if (viewMode === 'day') {
@@ -175,7 +197,7 @@ export function AgendaCalendar({
         {/* Header */}
         <div className="grid grid-cols-7 border-b bg-muted/50">
           {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => (
-            <div key={d} className="p-2 text-center text-xs font-medium text-muted-foreground">
+            <div key={d} className="p-2.5 text-center text-xs font-medium text-muted-foreground">
               {d}
             </div>
           ))}
@@ -184,7 +206,7 @@ export function AgendaCalendar({
         {/* Weeks */}
         <div className="divide-y">
           {weeks.map((week, weekIdx) => (
-            <div key={weekIdx} className="grid grid-cols-7 min-h-[80px]">
+            <div key={weekIdx} className="grid grid-cols-7 min-h-[100px]">
               {week.map(day => {
                 const dayMeetings = getMeetingsForDay(day);
                 const isCurrentMonth = day.getMonth() === selectedDate.getMonth();
@@ -194,33 +216,70 @@ export function AgendaCalendar({
                   <div
                     key={day.toISOString()}
                     className={cn(
-                      'p-1 border-l first:border-l-0 min-h-[80px]',
-                      !isCurrentMonth && 'bg-muted/30 text-muted-foreground',
-                      isToday && 'bg-primary/10'
+                      'p-1.5 border-l first:border-l-0 min-h-[100px]',
+                      !isCurrentMonth && 'bg-muted/40 opacity-60',
+                      isToday && 'bg-primary/15 ring-1 ring-inset ring-primary/30'
                     )}
                   >
                     <div className={cn(
-                      'text-xs font-medium mb-1',
-                      isToday && 'text-primary'
+                      'text-sm font-semibold mb-1.5 w-7 h-7 flex items-center justify-center rounded-full',
+                      isToday && 'bg-primary text-primary-foreground'
                     )}>
                       {format(day, 'd')}
                     </div>
-                    <div className="space-y-0.5">
+                    <div className="space-y-1">
                       {dayMeetings.slice(0, 3).map(meeting => {
                         const closerColor = getCloserColor(meeting.closer_id, meeting.closer?.name);
                         return (
-                          <button
-                            key={meeting.id}
-                            onClick={() => onSelectMeeting(meeting)}
-                            className="w-full text-left text-[9px] px-1 py-0.5 rounded bg-card shadow-sm truncate hover:bg-accent"
-                            style={{ borderLeft: `2px solid ${closerColor}` }}
-                          >
-                            {format(parseISO(meeting.scheduled_at), 'HH:mm')}
-                          </button>
+                          <HoverCard key={meeting.id} openDelay={200} closeDelay={100}>
+                            <HoverCardTrigger asChild>
+                              <button
+                                onClick={() => onSelectMeeting(meeting)}
+                                className="w-full text-left text-[10px] px-1.5 py-1 rounded-sm hover:scale-[1.02] transition-transform truncate"
+                                style={{ 
+                                  backgroundColor: `${closerColor}20`,
+                                  borderLeft: `3px solid ${closerColor}`,
+                                  color: closerColor
+                                }}
+                              >
+                                <span className="font-semibold">{format(parseISO(meeting.scheduled_at), 'HH:mm')}</span>
+                                <span className="ml-1 opacity-80">{meeting.deal?.contact?.name?.split(' ')[0] || 'Lead'}</span>
+                              </button>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="right" className="w-72 p-3">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
+                                  <span className="font-semibold truncate">{meeting.deal?.contact?.name || 'Lead'}</span>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  📅 {format(parseISO(meeting.scheduled_at), "EEEE, dd/MM 'às' HH:mm", { locale: ptBR })}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  👤 Closer: {meeting.closer?.name}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  ⏱️ Duração: {meeting.duration_minutes || 30} minutos
+                                </div>
+                                {meeting.deal?.contact?.phone && (
+                                  <div className="text-sm text-muted-foreground">
+                                    📱 {meeting.deal.contact.phone}
+                                  </div>
+                                )}
+                                <Badge variant="outline" className="mt-1">
+                                  {meeting.status === 'scheduled' && '🟢 Agendada'}
+                                  {meeting.status === 'rescheduled' && '🟡 Reagendada'}
+                                  {meeting.status === 'completed' && '✅ Realizada'}
+                                  {meeting.status === 'no_show' && '❌ No-show'}
+                                  {meeting.status === 'canceled' && '🚫 Cancelada'}
+                                </Badge>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
                         );
                       })}
                       {dayMeetings.length > 3 && (
-                        <div className="text-[9px] text-muted-foreground pl-1">
+                        <div className="text-[10px] text-muted-foreground pl-1 font-medium">
                           +{dayMeetings.length - 3} mais
                         </div>
                       )}
@@ -233,11 +292,11 @@ export function AgendaCalendar({
         </div>
 
         {/* Legend */}
-        <div className="p-3 border-t bg-muted/30 flex flex-wrap gap-3">
+        <div className="p-3 border-t bg-muted/30 flex flex-wrap gap-4">
           {legendItems.map(({ name, color }) => (
-            <div key={name} className="flex items-center gap-1.5 text-xs">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-              <span>{name}</span>
+            <div key={name} className="flex items-center gap-2 text-xs">
+              <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: color }} />
+              <span className="font-medium">{name}</span>
             </div>
           ))}
         </div>
@@ -247,13 +306,14 @@ export function AgendaCalendar({
 
   // Day or Week view rendering with drag-and-drop
   const gridCols = viewMode === 'day' ? 'grid-cols-[60px_1fr]' : 'grid-cols-[60px_repeat(5,1fr)]';
+  const currentTimePos = getCurrentTimePosition();
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="border rounded-lg overflow-hidden bg-card">
         {/* Header with days - aligned with grid */}
         <div className={cn('grid border-b bg-muted/50', gridCols)}>
-          <div className="h-[52px] flex items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30">
+          <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30">
             Hora
           </div>
           {viewDays.map(day => (
@@ -278,7 +338,18 @@ export function AgendaCalendar({
         </div>
 
         {/* Time slots grid - 30min intervals */}
-        <div className="max-h-[600px] overflow-y-auto">
+        <div className="max-h-[600px] overflow-y-auto relative">
+          {/* Linha vermelha do horário atual */}
+          {currentTimePos !== null && viewDays.some(d => isSameDay(d, currentTime)) && (
+            <div 
+              className="absolute left-[60px] right-0 z-30 pointer-events-none flex items-center"
+              style={{ top: `${currentTimePos}px` }}
+            >
+              <div className="w-3 h-3 rounded-full bg-destructive -ml-1.5 shadow-md border-2 border-background" />
+              <div className="flex-1 h-[2px] bg-destructive shadow-sm" />
+            </div>
+          )}
+          
           {TIME_SLOTS.map(({ hour, minute }) => (
             <div
               key={`${hour}-${minute}`}
@@ -289,7 +360,7 @@ export function AgendaCalendar({
               )}
             >
               <div className={cn(
-                'h-[40px] flex items-center justify-center text-xs text-muted-foreground border-r bg-muted/30',
+                'min-w-[60px] w-[60px] flex-shrink-0 h-[40px] flex items-center justify-center text-xs text-muted-foreground border-r bg-muted/30',
                 minute === 30 && 'text-muted-foreground/60'
               )}>
                 {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
