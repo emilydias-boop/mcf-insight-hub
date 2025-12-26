@@ -45,6 +45,7 @@ import ImportarHistorico from "./pages/crm/ImportarHistorico";
 import AuditoriaAgendamentos from "./pages/crm/AuditoriaAgendamentos";
 import Atendimentos from "./pages/crm/Atendimentos";
 import Agenda from "./pages/crm/Agenda";
+import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import TVSdrPerformance from "./pages/TVSdrPerformance";
 import TVSdrFullscreen from "./pages/TVSdrFullscreen";
 import TVSdrCelebrationDemo from "./pages/TVSdrCelebrationDemo";
@@ -125,6 +126,7 @@ const App = () => (
                 <Route path="negocios" element={<Negocios />} />
                 <Route path="atendimentos" element={<Atendimentos />} />
                 <Route path="agenda" element={<Agenda />} />
+                <Route path="agenda/metricas" element={<AgendaMetricas />} />
                 <Route path="origens" element={<Origens />} />
                 <Route path="grupos" element={<Grupos />} />
                 <Route path="tags" element={<Tags />} />
