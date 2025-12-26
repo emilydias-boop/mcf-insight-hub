@@ -18,6 +18,7 @@ import ReceitaTransacoes from "./pages/receita/Transacoes";
 import ReceitaPorCanal from "./pages/receita/PorCanal";
 import ImportarA010 from "./pages/receita/ImportarA010";
 import ImportarHubla from "./pages/receita/ImportarHubla";
+import ReceitaAuditoria from "./pages/receita/Auditoria";
 import Custos from "./pages/custos/Index";
 import CustosOverview from "./pages/custos/Overview";
 import CustosDespesas from "./pages/custos/Despesas";
@@ -92,6 +93,7 @@ const App = () => (
                 <Route path="transacoes" element={<ReceitaTransacoes />} />
                 <Route path="por-canal" element={<ReceitaPorCanal />} />
                 <Route path="importar-hubla" element={<ImportarHubla />} />
+                <Route path="auditoria" element={<ReceitaAuditoria />} />
               </Route>
               <Route path="importar-a010" element={<ImportarA010 />} />
               <Route path="custos" element={<ResourceGuard resource="custos"><Custos /></ResourceGuard>}>

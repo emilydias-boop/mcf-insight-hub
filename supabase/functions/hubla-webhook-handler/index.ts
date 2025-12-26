@@ -123,13 +123,52 @@ function mapProductCategory(productName: string, productCode?: string): string {
 // Extrair informações de smartInstallment do invoice
 function extractSmartInstallment(invoice: any): { installment: number; installments: number } {
   const smartInstallment = invoice?.smartInstallment;
-  if (!smartInstallment) {
-    return { installment: 1, installments: 1 };
+  
+  // CORREÇÃO: Priorizar smartInstallment, fallback para installments do invoice
+  if (smartInstallment) {
+    return {
+      installment: smartInstallment.installment || 1,
+      installments: smartInstallment.installments || invoice?.installments || 1,
+    };
   }
-  return {
-    installment: smartInstallment.installment || 1,
-    installments: smartInstallment.installments || 1,
-  };
+  
+  // Fallback: Se não tem smartInstallment mas tem installments
+  const installments = invoice?.installments || 1;
+  return { installment: 1, installments };
+}
+
+// NOVA FUNÇÃO: Extrair preço TOTAL do produto (não apenas da parcela)
+// Para produtos parcelados, precisamos calcular o valor total
+function extractProductTotalPrice(event: any): number {
+  // Prioridade 1: subscription.totalAmount (valor total do parcelamento)
+  const subscription = event.subscriptions?.[0];
+  if (subscription?.totalAmount) {
+    console.log(`💰 [PREÇO] Usando subscription.totalAmount: R$ ${subscription.totalAmount / 100}`);
+    return subscription.totalAmount / 100;
+  }
+  
+  // Prioridade 2: offers[].price (geralmente contém o valor cheio)
+  const offer = event.products?.[0]?.offers?.[0];
+  if (offer?.price) {
+    console.log(`💰 [PREÇO] Usando offer.price: R$ ${offer.price / 100}`);
+    return offer.price / 100;
+  }
+  
+  // Prioridade 3: Calcular com installments
+  const invoice = event.invoice;
+  const installments = invoice?.installments || invoice?.smartInstallment?.installments || 1;
+  const subtotalCents = invoice?.amount?.subtotalCents || 0;
+  
+  // Se tem mais de 1 parcela, multiplicar para obter valor total
+  if (installments > 1) {
+    const totalPrice = (subtotalCents / 100) * installments;
+    console.log(`💰 [PREÇO] Calculado (${subtotalCents/100} x ${installments}): R$ ${totalPrice}`);
+    return totalPrice;
+  }
+  
+  // Fallback: usar subtotalCents como está
+  console.log(`💰 [PREÇO] Fallback subtotalCents: R$ ${subtotalCents / 100}`);
+  return subtotalCents / 100;
 }
 
 // CORREÇÃO: Extrair valores corretos do invoice

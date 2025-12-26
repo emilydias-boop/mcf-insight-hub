@@ -12,6 +12,7 @@ export default function Receita() {
     { name: "Transações", path: "/receita/transacoes" },
     { name: "Por Canal", path: "/receita/por-canal" },
     { name: "Importar Hubla", path: "/receita/importar-hubla" },
+    { name: "Auditoria", path: "/receita/auditoria" },
   ];
 
   return (
