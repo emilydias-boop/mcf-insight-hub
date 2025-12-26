@@ -168,6 +168,9 @@ verify_jwt = false
 [functions.calendly-webhook-handler]
 verify_jwt = false
 
+[functions.calendly-create-event]
+verify_jwt = false
+
 [functions.apply-audit-corrections]
 verify_jwt = false
 

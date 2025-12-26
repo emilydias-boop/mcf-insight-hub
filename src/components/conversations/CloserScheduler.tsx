@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { Calendar, Clock, User, Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAvailableSlots, useBookMeeting, useDealMeetings, AvailableSlot } from '@/hooks/useCloserScheduling';
+import { useAvailableSlots, useDealMeetings, AvailableSlot } from '@/hooks/useCloserScheduling';
+import { useBookMeetingWithCalendly } from '@/hooks/useCalendlyIntegration';
+import { MeetingLinkShare } from '@/components/crm/MeetingLinkShare';
 import { format, addDays, startOfDay, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -12,18 +13,33 @@ import { toast } from 'sonner';
 interface CloserSchedulerProps {
   dealId: string;
   contactId?: string;
+  contactPhone?: string;
+  contactName?: string;
+  leadType?: string;
   onScheduled?: () => void;
 }
 
-export function CloserScheduler({ dealId, contactId, onScheduled }: CloserSchedulerProps) {
+export function CloserScheduler({ 
+  dealId, 
+  contactId, 
+  contactPhone,
+  contactName,
+  leadType = 'A',
+  onScheduled 
+}: CloserSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [scheduledMeeting, setScheduledMeeting] = useState<{
+    meetingLink: string;
+    closerName: string;
+    scheduledAt: string;
+  } | null>(null);
   
   const startDate = addDays(startOfDay(new Date()), weekOffset * 7);
   const { slots, isLoading } = useAvailableSlots(startDate, 7);
   const { data: existingMeetings } = useDealMeetings(dealId);
-  const bookMeeting = useBookMeeting();
+  const bookMeeting = useBookMeetingWithCalendly();
   
   // Check if there's already a scheduled meeting
   const hasScheduledMeeting = existingMeetings?.some(m => m.status === 'scheduled');
@@ -64,44 +80,68 @@ export function CloserScheduler({ dealId, contactId, onScheduled }: CloserSchedu
     if (!selectedSlot) return;
     
     try {
-      await bookMeeting.mutateAsync({
+      const result = await bookMeeting.mutateAsync({
         closerId: selectedSlot.closerId,
         dealId,
         contactId,
         scheduledAt: selectedSlot.datetime,
         durationMinutes: selectedSlot.duration,
+        leadType,
       });
       
       toast.success('Reunião agendada com sucesso!', {
         description: `${format(selectedSlot.datetime, "dd/MM 'às' HH:mm", { locale: ptBR })} com ${selectedSlot.closerName}`,
       });
       
+      // Show meeting link share
+      setScheduledMeeting({
+        meetingLink: result.meetingLink,
+        closerName: selectedSlot.closerName,
+        scheduledAt: selectedSlot.datetime.toISOString(),
+      });
+      
       setSelectedSlot(null);
       onScheduled?.();
-    } catch (error) {
-      toast.error('Erro ao agendar reunião');
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao agendar reunião');
       console.error(error);
     }
   };
+  
+  // Show link share after scheduling
+  if (scheduledMeeting) {
+    return (
+      <div className="space-y-3">
+        <MeetingLinkShare
+          meetingLink={scheduledMeeting.meetingLink}
+          closerName={scheduledMeeting.closerName}
+          scheduledAt={scheduledMeeting.scheduledAt}
+          contactPhone={contactPhone}
+          contactName={contactName}
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setScheduledMeeting(null)}
+          className="w-full"
+        >
+          Agendar Outra Reunião
+        </Button>
+      </div>
+    );
+  }
   
   if (hasScheduledMeeting) {
     const scheduled = existingMeetings?.find(m => m.status === 'scheduled');
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
-          <Check className="h-5 w-5 text-green-600" />
-          <div>
-            <p className="text-sm font-medium text-green-800 dark:text-green-200">
-              Reunião Agendada
-            </p>
-            {scheduled && (
-              <p className="text-xs text-green-600 dark:text-green-400">
-                {format(new Date(scheduled.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                {scheduled.closers && ` com ${scheduled.closers.name}`}
-              </p>
-            )}
-          </div>
-        </div>
+        <MeetingLinkShare
+          meetingLink={scheduled?.meeting_link || ''}
+          closerName={scheduled?.closers?.name || 'Closer'}
+          scheduledAt={scheduled?.scheduled_at || new Date().toISOString()}
+          contactPhone={contactPhone}
+          contactName={contactName}
+        />
       </div>
     );
   }
