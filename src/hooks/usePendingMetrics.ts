@@ -3,8 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Emily's user ID
-const EMILY_USER_ID = '3e91331b-dc4c-4126-83e8-4435e3cc9b76';
+// Emails autorizados (além de roles admin/manager/coordenador)
+const AUTHORIZED_EMAILS = [
+  'emily.dias@minhacasafinanciada.com',
+  'emily@minhacasafinanciada.com',
+];
 
 export interface PendingMetric {
   id: string;
@@ -30,27 +33,48 @@ export interface PendingMetric {
 }
 
 export function usePendingMetrics() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Only Emily can see pending metrics
-  const isEmily = user?.id === EMILY_USER_ID;
+  // Verificar se o usuário pode ver métricas pendentes
+  const canManageMetrics = (() => {
+    // Verificar por role
+    if (role && ['admin', 'manager', 'coordenador'].includes(role)) {
+      return true;
+    }
+    // Verificar por email
+    if (user?.email && AUTHORIZED_EMAILS.some(e => e.toLowerCase() === user.email?.toLowerCase())) {
+      return true;
+    }
+    return false;
+  })();
 
-  const { data: pendingMetrics, isLoading, refetch } = useQuery({
+  const { data: pendingMetrics, isLoading, refetch, error } = useQuery({
     queryKey: ['pending-metrics'],
     queryFn: async () => {
+      console.log('🔍 Buscando métricas pendentes...');
       const { data, error } = await supabase
         .from('weekly_metrics')
         .select('*')
         .eq('approval_status', 'pending')
-        .order('week_start', { ascending: false });
+        .order('start_date', { ascending: false }); // CORRIGIDO: era week_start
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erro ao buscar métricas pendentes:', error);
+        throw error;
+      }
+      
+      console.log(`✅ Encontradas ${data?.length || 0} métricas pendentes`);
       return data as PendingMetric[];
     },
-    enabled: isEmily,
+    enabled: canManageMetrics,
   });
+
+  // Log de erro
+  if (error) {
+    console.error('usePendingMetrics error:', error);
+  }
 
   const approveMutation = useMutation({
     mutationFn: async ({ metricId, notes }: { metricId: string; notes?: string }) => {
@@ -70,6 +94,7 @@ export function usePendingMetrics() {
       queryClient.invalidateQueries({ queryKey: ['pending-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['weekly-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-metrics-list'] });
       toast({
         title: '✅ Métricas aprovadas',
         description: 'As métricas da semana foram aprovadas com sucesso.',
@@ -100,6 +125,7 @@ export function usePendingMetrics() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pending-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-metrics-list'] });
       toast({
         title: '❌ Métricas rejeitadas',
         description: 'As métricas foram marcadas como rejeitadas.',
@@ -141,6 +167,7 @@ export function usePendingMetrics() {
       queryClient.invalidateQueries({ queryKey: ['pending-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['weekly-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-metrics-list'] });
       toast({
         title: '✅ Métricas corrigidas e aprovadas',
         description: 'As métricas foram editadas e aprovadas com sucesso.',
@@ -155,17 +182,80 @@ export function usePendingMetrics() {
     },
   });
 
+  // NOVO: Mutation para recalcular uma semana
+  const recalculateMutation = useMutation({
+    mutationFn: async ({ 
+      metricId, 
+      startDate, 
+      endDate 
+    }: { 
+      metricId: string; 
+      startDate: string; 
+      endDate: string;
+    }) => {
+      console.log(`🔄 Recalculando semana ${startDate} a ${endDate}...`);
+      
+      // 1. Deletar o registro atual
+      const { error: deleteError } = await supabase
+        .from('weekly_metrics')
+        .delete()
+        .eq('id', metricId);
+
+      if (deleteError) throw deleteError;
+
+      // 2. Recalcular via edge function
+      const { data, error: calcError } = await supabase.functions.invoke('calculate-weekly-metrics', {
+        body: { week_start: startDate, week_end: endDate }
+      });
+
+      if (calcError) throw calcError;
+
+      // 3. Marcar como pending para revisão
+      const { error: updateError } = await supabase
+        .from('weekly_metrics')
+        .update({ approval_status: 'pending' })
+        .eq('start_date', startDate)
+        .eq('end_date', endDate);
+
+      if (updateError) throw updateError;
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-metrics-list'] });
+      queryClient.invalidateQueries({ queryKey: ['existing-weeks'] });
+      toast({
+        title: '🔄 Semana recalculada',
+        description: 'As métricas foram recalculadas com sucesso. Revise os novos valores.',
+      });
+    },
+    onError: (error) => {
+      console.error('❌ Erro ao recalcular:', error);
+      toast({
+        title: 'Erro ao recalcular',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   return {
     pendingMetrics: pendingMetrics || [],
     isLoading,
-    isEmily,
+    canManageMetrics, // Renomeado de isEmily
+    isEmily: canManageMetrics, // Mantém retrocompatibilidade
     hasPendingMetrics: (pendingMetrics?.length || 0) > 0,
     refetch,
     approveMetrics: approveMutation.mutate,
     rejectMetrics: rejectMutation.mutate,
     editAndApproveMetrics: editAndApproveMutation.mutate,
+    recalculateWeek: recalculateMutation.mutate,
     isApproving: approveMutation.isPending,
     isRejecting: rejectMutation.isPending,
     isEditing: editAndApproveMutation.isPending,
+    isRecalculating: recalculateMutation.isPending,
   };
 }
