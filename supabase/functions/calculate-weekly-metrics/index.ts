@@ -604,17 +604,42 @@ Deno.serve(async (req) => {
     console.log(`💵 Faturamento Total: R$ ${faturamento_total.toFixed(2)} (Inc50k: ${incorporador_50k.toFixed(2)} + OBs: ${(ob_vitalicio + ob_construir_alugar + ob_evento).toFixed(2)} + A010: ${faturado_a010.toFixed(2)})`);
 
     // 9. CALCULAR FATURADO CONTRATO
-    const contractTransactions = completedTransactions.filter(t => {
-      const productName = (t.product_name || '').toUpperCase();
-      const isA000Contrato = productName.includes('A000') && productName.includes('CONTRATO');
-      const isAnticrise = productName.includes('ANTICRISE');
-      return isA000Contrato || isAnticrise;
+    // REGRA: Apenas produtos 'Contrato' ou 'A000 - Contrato' com preço 397/497, net_value > 0
+    const contractTransactionsRaw = completedTransactions.filter(t => {
+      const productName = (t.product_name || '').toUpperCase().trim();
+      const netValue = t.net_value || 0;
+      const productPrice = t.product_price || 0;
+      
+      // Apenas 'CONTRATO' ou 'A000 - CONTRATO' (não Anticrise, não Sócio MCF)
+      const isContrato = productName === 'CONTRATO' || productName === 'A000 - CONTRATO';
+      
+      // Filtrar apenas transações com net_value real e preço de contrato (397 ou 497)
+      const hasRealValue = netValue > 0;
+      const hasValidPrice = productPrice >= 350 && productPrice <= 550;
+      
+      return isContrato && hasRealValue && hasValidPrice;
     });
     
-    const contract_revenue = contractTransactions.reduce((sum, t) => sum + parseValorLiquido(t), 0);
-    const contract_sales = contractTransactions.length;
+    // Deduplicar por email - cada pessoa conta apenas 1x (maior net_value)
+    const contractByEmail = new Map<string, any>();
+    for (const tx of contractTransactionsRaw) {
+      const email = (tx.customer_email || '').toLowerCase().trim();
+      if (!email) continue;
+      
+      const existing = contractByEmail.get(email);
+      const currentNetValue = tx.net_value || 0;
+      const existingNetValue = existing?.net_value || 0;
+      
+      if (!existing || currentNetValue > existingNetValue) {
+        contractByEmail.set(email, tx);
+      }
+    }
+    const dedupedContract = Array.from(contractByEmail.values());
     
-    console.log(`📋 Faturado Contrato: ${contract_sales} vendas, R$ ${contract_revenue.toFixed(2)}`);
+    const contract_revenue = dedupedContract.reduce((sum, t) => sum + (t.net_value || 0), 0);
+    const contract_sales = dedupedContract.length;
+    
+    console.log(`📋 Faturado Contrato: ${contract_sales} vendas únicas, R$ ${contract_revenue.toFixed(2)} (de ${contractTransactionsRaw.length} transações)`);
 
     // 10. CALCULAR CUSTO REAL
     const custo_real = ads_cost - (faturado_a010 + ob_construir_alugar + ob_vitalicio + ob_evento + ob_construir_vender);
