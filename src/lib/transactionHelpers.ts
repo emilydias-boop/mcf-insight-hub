@@ -346,7 +346,7 @@ export const calcularFaturamentoClint = (transactions: HublaTransactionBase[]): 
     gruposPorEmailProduto.set(chave, grupo);
   });
   
-  // Calcular bruto: usar preço de referência para cada grupo único
+  // Calcular bruto: usar product_price REAL (não preços de referência)
   let bruto = 0;
   gruposPorEmailProduto.forEach((txs) => {
     // Pegar a transação com maior product_price do grupo
@@ -354,10 +354,8 @@ export const calcularFaturamentoClint = (transactions: HublaTransactionBase[]): 
       (tx.product_price || 0) > (best.product_price || 0) ? tx : best
     , txs[0]);
     
-    const productName = melhorTx.product_name || '';
     const productPrice = melhorTx.product_price || 0;
-    const precoFinal = getPrecoReferencia(productName, productPrice);
-    bruto += precoFinal;
+    bruto += productPrice;
   });
   
   // Calcular líquido: soma de todos os net_value (todas parcelas contam)
