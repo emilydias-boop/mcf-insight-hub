@@ -652,25 +652,23 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       console.log("🔑 Grupos email+produto únicos:", groupedByEmailProduct.size);
       
-      // Calcular Faturamento Clint usando preços de referência
-      const faturamentoClintDebug: { email: string; product: string; priceDB: number; priceRef: number; source: string }[] = [];
+      // Calcular Faturamento Clint usando product_price REAL (não preços de referência)
+      const faturamentoClintDebug: { email: string; product: string; productPrice: number; source: string }[] = [];
       const faturamentoClint = Array.from(groupedByEmailProduct.values()).reduce((sum, tx) => {
-        const productPriceDB = tx.product_price || 0;
-        const precoFinal = getPrecoReferencia(tx.product_name || "", productPriceDB);
+        const productPrice = tx.product_price || 0;
         
         faturamentoClintDebug.push({
           email: (tx.customer_email || "").substring(0, 20),
           product: tx.product_name || "",
-          priceDB: productPriceDB,
-          priceRef: precoFinal,
+          productPrice: productPrice,
           source: tx.source || "hubla"
         });
         
-        return sum + precoFinal;
+        return sum + productPrice;
       }, 0);
       
       // DEBUG: Log Faturamento Clint
-      console.log("💰 Faturamento Clint Bruto (com preços referência):", {
+      console.log("💰 Faturamento Clint Bruto (product_price real):", {
         totalGrupos: groupedByEmailProduct.size,
         brutoTotal: faturamentoClint,
         samples: faturamentoClintDebug.slice(0, 10)
