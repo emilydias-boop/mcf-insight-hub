@@ -176,3 +176,6 @@ verify_jwt = false
 
 [functions.fix-hubla-discrepancies]
 verify_jwt = false
+
+[functions.reconcile-clint-ids]
+verify_jwt = false
