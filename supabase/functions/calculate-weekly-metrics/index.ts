@@ -641,7 +641,7 @@ Deno.serve(async (req) => {
       
       faturamento_clint,
       // faturamento_clint_liquido - coluna não existe no banco
-      vendas_clint,
+      // vendas_clint - coluna não existe no banco
       incorporador_50k,
       faturamento_total,
       a010_sales: vendas_a010,
