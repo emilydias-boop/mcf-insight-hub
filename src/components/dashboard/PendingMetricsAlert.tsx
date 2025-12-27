@@ -1,24 +1,54 @@
-import { AlertCircle, Calendar, Loader2 } from "lucide-react";
+import { AlertCircle, Calendar, Loader2, ChevronDown, History } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { usePendingMetrics } from "@/hooks/usePendingMetrics";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getCustomWeekStart, getCustomWeekEnd, formatDateForDB } from "@/lib/dateHelpers";
-import { useQueryClient } from "@tanstack/react-query";
+import { getCustomWeekStart, getCustomWeekEnd, formatDateForDB, addCustomWeeks } from "@/lib/dateHelpers";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface PendingMetricsAlertProps {
   onReviewClick: () => void;
 }
 
+interface WeekOption {
+  label: string;
+  startDate: Date;
+  endDate: Date;
+  startStr: string;
+  endStr: string;
+}
+
 export function PendingMetricsAlert({ onReviewClick }: PendingMetricsAlertProps) {
   const { pendingMetrics, isEmily, hasPendingMetrics, refetch } = usePendingMetrics();
   const [isClosingWeek, setIsClosingWeek] = useState(false);
+  const [closingWeekLabel, setClosingWeekLabel] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Buscar semanas já existentes no banco
+  const { data: existingWeeks } = useQuery({
+    queryKey: ['existing-weeks'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('weekly_metrics')
+        .select('start_date, end_date')
+        .order('start_date', { ascending: false });
+      
+      if (error) throw error;
+      return data?.map(w => w.start_date) || [];
+    },
+    enabled: isEmily,
+  });
 
   const formatWeekLabel = (metric: { start_date: string; end_date: string; week_label?: string }) => {
     if (metric.week_label) return metric.week_label;
@@ -33,20 +63,47 @@ export function PendingMetricsAlert({ onReviewClick }: PendingMetricsAlertProps)
   const fimSemana = getCustomWeekEnd(hoje);
   const weekLabel = `${format(inicioSemana, "dd/MM", { locale: ptBR })} - ${format(fimSemana, "dd/MM/yyyy", { locale: ptBR })}`;
 
+  // Gerar lista de semanas anteriores que não existem no banco (últimas 8 semanas)
+  const missingWeeks = useMemo<WeekOption[]>(() => {
+    if (!existingWeeks) return [];
+    
+    const weeks: WeekOption[] = [];
+    
+    // Gerar últimas 8 semanas (incluindo atual)
+    for (let i = 0; i < 8; i++) {
+      const refDate = subDays(hoje, i * 7);
+      const start = getCustomWeekStart(refDate);
+      const end = getCustomWeekEnd(start);
+      const startStr = formatDateForDB(start);
+      const endStr = formatDateForDB(end);
+      
+      // Verificar se já existe no banco
+      if (!existingWeeks.includes(startStr)) {
+        weeks.push({
+          label: `${format(start, "dd/MM", { locale: ptBR })} - ${format(end, "dd/MM/yyyy", { locale: ptBR })}`,
+          startDate: start,
+          endDate: end,
+          startStr,
+          endStr,
+        });
+      }
+    }
+    
+    return weeks;
+  }, [existingWeeks, hoje]);
+
   // Verificar se semana atual já existe em weekly_metrics
   const semanaAtualPendente = pendingMetrics.find(m => m.start_date === formatDateForDB(inicioSemana));
 
-  const handleFecharSemanaAtual = async () => {
+  const handleFecharSemana = async (week: WeekOption) => {
     setIsClosingWeek(true);
+    setClosingWeekLabel(week.label);
     try {
-      const weekStart = formatDateForDB(inicioSemana);
-      const weekEnd = formatDateForDB(fimSemana);
-
-      console.log(`🔄 Fechando semana atual: ${weekStart} a ${weekEnd}`);
+      console.log(`🔄 Fechando semana: ${week.startStr} a ${week.endStr}`);
 
       // Chamar edge function para calcular métricas
       const { data, error } = await supabase.functions.invoke('calculate-weekly-metrics', {
-        body: { week_start: weekStart, week_end: weekEnd }
+        body: { week_start: week.startStr, week_end: week.endStr }
       });
 
       if (error) throw error;
@@ -55,16 +112,17 @@ export function PendingMetricsAlert({ onReviewClick }: PendingMetricsAlertProps)
       await supabase
         .from('weekly_metrics')
         .update({ approval_status: 'pending' })
-        .eq('start_date', weekStart)
-        .eq('end_date', weekEnd);
+        .eq('start_date', week.startStr)
+        .eq('end_date', week.endStr);
 
       toast({
         title: '✅ Semana fechada com sucesso!',
-        description: `Métricas calculadas para ${weekLabel}. Revise agora.`,
+        description: `Métricas calculadas para ${week.label}. Revise agora.`,
       });
 
       // Invalidar queries e recarregar
       await queryClient.invalidateQueries({ queryKey: ['pending-metrics'] });
+      await queryClient.invalidateQueries({ queryKey: ['existing-weeks'] });
       await queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
       await refetch();
       
@@ -80,6 +138,7 @@ export function PendingMetricsAlert({ onReviewClick }: PendingMetricsAlertProps)
       });
     } finally {
       setIsClosingWeek(false);
+      setClosingWeekLabel(null);
     }
   };
 
@@ -89,31 +148,55 @@ export function PendingMetricsAlert({ onReviewClick }: PendingMetricsAlertProps)
 
   return (
     <div className="space-y-2 mb-4">
-      {/* Botão para fechar semana atual (sempre visível para Emily) */}
-      {!semanaAtualPendente && (
+      {/* Botão para fechar semanas (dropdown com opções) */}
+      {missingWeeks.length > 0 && (
         <Alert className="border-blue-500/50 bg-blue-500/10">
           <Calendar className="h-4 w-4 text-blue-500" />
-          <AlertTitle className="text-blue-500">Fechar Semana Atual</AlertTitle>
+          <AlertTitle className="text-blue-500">Fechar Semana</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
             <span className="text-muted-foreground">
-              Semana atual: <strong>{weekLabel}</strong>. Calcule e revise as métricas agora.
+              {missingWeeks.length === 1 
+                ? `1 semana disponível para fechar: ${missingWeeks[0].label}`
+                : `${missingWeeks.length} semanas disponíveis para fechar`
+              }
             </span>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleFecharSemanaAtual}
-              disabled={isClosingWeek}
-              className="ml-4 border-blue-500/50 text-blue-500 hover:bg-blue-500/20"
-            >
-              {isClosingWeek ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Calculando...
-                </>
-              ) : (
-                'Fechar Semana'
-              )}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={isClosingWeek}
+                  className="ml-4 border-blue-500/50 text-blue-500 hover:bg-blue-500/20"
+                >
+                  {isClosingWeek ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {closingWeekLabel ? `Fechando ${closingWeekLabel}...` : 'Calculando...'}
+                    </>
+                  ) : (
+                    <>
+                      Fechar Semana
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {missingWeeks.map((week, idx) => (
+                  <DropdownMenuItem
+                    key={week.startStr}
+                    onClick={() => handleFecharSemana(week)}
+                    className="cursor-pointer"
+                  >
+                    <History className="mr-2 h-4 w-4" />
+                    {idx === 0 && formatDateForDB(inicioSemana) === week.startStr 
+                      ? `${week.label} (atual)` 
+                      : week.label
+                    }
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </AlertDescription>
         </Alert>
       )}
