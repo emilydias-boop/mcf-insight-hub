@@ -669,7 +669,32 @@ async function handleDealStageChanged(supabase: any, data: any) {
       if (dealByContact) {
         dealId = dealByContact.id;
         currentStageId = dealByContact.stage_id;
-        console.log('[DEAL.STAGE_CHANGED] Found deal by contact_id:', dealId);
+        console.log('[DEAL.STAGE_CHANGED] Found deal by contact_id:', dealId, 'clint_id:', dealByContact.clint_id);
+        
+        // RECONCILIAÇÃO: Se o deal foi criado via Hubla (clint_id = hubla-deal-*) mas agora
+        // temos o ID real do Clint (data.deal_id é UUID), atualizar o clint_id
+        const existingClintId = dealByContact.clint_id || '';
+        const clintDealId = data.deal_id || '';
+        const isHublaDeal = existingClintId.startsWith('hubla-deal-');
+        const isValidClintUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clintDealId);
+        
+        if (isHublaDeal && isValidClintUUID && existingClintId !== clintDealId) {
+          console.log('[DEAL.STAGE_CHANGED] RECONCILING clint_id: Hubla->', existingClintId, 'Clint->', clintDealId);
+          
+          const { error: reconcileError } = await supabase
+            .from('crm_deals')
+            .update({ 
+              clint_id: clintDealId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', dealId);
+          
+          if (reconcileError) {
+            console.error('[DEAL.STAGE_CHANGED] Error reconciling clint_id:', reconcileError);
+          } else {
+            console.log('[DEAL.STAGE_CHANGED] Successfully reconciled clint_id for deal:', dealId);
+          }
+        }
       }
     }
   }
