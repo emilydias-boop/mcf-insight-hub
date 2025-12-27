@@ -72,7 +72,15 @@ interface MenuItem {
 
 // Menu reorganizado e consolidado
 const menuItems: MenuItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, resource: "dashboard" },
+  { 
+    title: "Dashboard", 
+    icon: LayoutDashboard, 
+    resource: "dashboard",
+    items: [
+      { title: "Visão Geral", url: "/" },
+      { title: "Semanas", url: "/dashboard/semanas", requiredRoles: ['admin', 'manager', 'coordenador'] },
+    ]
+  },
   
   // Financeiro consolidado (Receita + Custos + Fechamento SDR + Financeiro operacional)
   { 

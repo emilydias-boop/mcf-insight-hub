@@ -63,6 +63,7 @@ import MinhasReunioes from "./pages/sdr/MinhasReunioes";
 import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import NotFound from "./pages/NotFound";
+import DashboardSemanas from "./pages/dashboard/Semanas";
 
 const queryClient = new QueryClient();
 
@@ -88,6 +89,7 @@ const App = () => (
               }
             >
               <Route index element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
+              <Route path="dashboard/semanas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DashboardSemanas /></RoleGuard>} />
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
                 <Route index element={<ReceitaOverview />} />
                 <Route path="a010" element={<A010 />} />
