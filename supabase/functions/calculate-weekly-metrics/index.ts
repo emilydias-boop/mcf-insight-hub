@@ -640,7 +640,7 @@ Deno.serve(async (req) => {
       real_cost: custo_real,
       
       faturamento_clint,
-      faturamento_clint_liquido,
+      // faturamento_clint_liquido - coluna não existe no banco
       vendas_clint,
       incorporador_50k,
       faturamento_total,
@@ -663,7 +663,7 @@ Deno.serve(async (req) => {
       contract_sales,
       
       clint_revenue: faturamento_clint,
-      clint_revenue_liquido: faturamento_clint_liquido,
+      // clint_revenue_liquido - coluna não existe no banco
       total_revenue: faturamento_total,
       operating_profit: lucro_operacional,
       roi,
