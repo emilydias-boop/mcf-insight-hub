@@ -508,13 +508,27 @@ Deno.serve(async (req) => {
       return isIncorporadorProduct(productName);
     });
     
-    // Aplicar mesma deduplicação para Incorporador 50k
-    const { forBruto: incForBruto, forLiquido: incForLiquido } = deduplicateTransactions(incorporadorTransactions);
+    // IMPORTANTE: Deduplicar por email - cada pessoa conta apenas 1x
+    // Pegar a transação com MAIOR net_value para cada email
+    const incByEmail = new Map<string, any>();
+    for (const tx of incorporadorTransactions) {
+      const email = (tx.customer_email || '').toLowerCase().trim();
+      if (!email) continue;
+      
+      const existing = incByEmail.get(email);
+      const currentNetValue = parseValorLiquido(tx);
+      const existingNetValue = existing ? parseValorLiquido(existing) : 0;
+      
+      if (!existing || currentNetValue > existingNetValue) {
+        incByEmail.set(email, tx);
+      }
+    }
+    const dedupedIncorporador = Array.from(incByEmail.values());
     
-    // INCORPORADOR 50K (LÍQUIDO) - soma de todos os net_value
-    const incorporador_50k = incForLiquido.reduce((sum, t) => sum + parseValorLiquido(t), 0);
+    // INCORPORADOR 50K (LÍQUIDO) - soma dos net_value DEDUPLICADOS por email
+    const incorporador_50k = dedupedIncorporador.reduce((sum, t) => sum + parseValorLiquido(t), 0);
 
-    console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)} (${incForLiquido.length} transações)`);
+    console.log(`💰 Incorporador 50k (líquido): R$ ${incorporador_50k.toFixed(2)} (${dedupedIncorporador.length} pessoas únicas de ${incorporadorTransactions.length} transações)`);
 
     // 5. CALCULAR ORDER BUMPS
     const ob_construir_alugar_transactions = completedTransactions.filter(t => {
