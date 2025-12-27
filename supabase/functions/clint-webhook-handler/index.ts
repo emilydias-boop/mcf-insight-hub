@@ -803,21 +803,43 @@ async function handleDealStageChanged(supabase: any, data: any) {
     console.log('[DEAL.STAGE_CHANGED] Deal already in correct stage, skipping update');
   }
 
-  // 4. Criar atividade de mudança de estágio - só se houve mudança real
-  if (currentStageId && currentStageId !== newStage.id) {
-    const description = `Deal movido de ${currentStageName || 'desconhecido'} para ${newStage.stage_name}`;
+  // 4. Criar atividade de mudança de estágio
+  // CORREÇÃO: SEMPRE criar activity para R1 Agendada, mesmo para deals novos
+  const isR1Agendada = newStage.stage_name?.toUpperCase().includes('REUNI') && 
+                       newStage.stage_name?.toUpperCase().includes('01') && 
+                       newStage.stage_name?.toUpperCase().includes('AGENDADA');
+  const isR1AgendadaSimple = newStage.stage_name?.toUpperCase() === 'R1 AGENDADA' ||
+                             newStage.stage_name?.toUpperCase() === 'REUNIÃO 01 AGENDADA';
+  
+  // Usar deal_old_stage do webhook como from_stage (mais preciso que o stage local)
+  const webhookOldStage = data.deal_old_stage || currentStageName;
+  const wasNewDeal = !currentStageId || currentStageId === newStage.id;
+  
+  // Sempre criar activity se: houve mudança de stage OU é R1 Agendada (mesmo em deal novo)
+  const shouldCreateActivity = (currentStageId && currentStageId !== newStage.id) || 
+                               (isR1Agendada || isR1AgendadaSimple);
+  
+  if (shouldCreateActivity) {
+    const description = wasNewDeal 
+      ? `Deal criado em ${newStage.stage_name}` 
+      : `Deal movido de ${webhookOldStage || 'desconhecido'} para ${newStage.stage_name}`;
+    
     await createDealActivity(
       supabase,
       dealId,
       'stage_change',
       description,
-      currentStageName,
+      webhookOldStage || null,
       newStage.stage_name,
-      data
+      {
+        ...data,
+        is_new_deal: wasNewDeal,
+        owner_email: data.deal_user || data.deal?.user
+      }
     );
-    console.log('[DEAL.STAGE_CHANGED] Activity created');
+    console.log('[DEAL.STAGE_CHANGED] Activity created:', description, 'is_new_deal:', wasNewDeal);
   } else {
-    console.log('[DEAL.STAGE_CHANGED] No stage change activity needed (new deal or same stage)');
+    console.log('[DEAL.STAGE_CHANGED] No activity needed (same stage, not R1 Agendada)');
   }
 
   console.log('[DEAL.STAGE_CHANGED] Success');
