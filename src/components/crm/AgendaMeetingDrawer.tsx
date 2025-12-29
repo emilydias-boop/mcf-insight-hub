@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 
 interface AgendaMeetingDrawerProps {
   meeting: MeetingSlot | null;
+  relatedMeetings?: MeetingSlot[]; // Other meetings at the same time/closer
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReschedule: (meeting: MeetingSlot) => void;
@@ -48,13 +49,14 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   canceled: { label: 'Cancelada', color: 'bg-muted' },
 };
 
-export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
+export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
   const [notes, setNotes] = useState(meeting?.notes || '');
   const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
   const [showAddPartner, setShowAddPartner] = useState(false);
   const [partnerName, setPartnerName] = useState('');
   const [partnerPhone, setPartnerPhone] = useState('');
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
@@ -64,12 +66,16 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
   const markNotified = useMarkAttendeeNotified();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
 
-  if (!meeting) return null;
+  // All meetings at this slot (main + related)
+  const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
+  const activeMeeting = allMeetings.find(m => m.id === selectedMeetingId) || meeting;
 
-  const contact = meeting.deal?.contact;
-  const statusInfo = STATUS_LABELS[meeting.status] || STATUS_LABELS.scheduled;
-  const isPending = meeting.status === 'scheduled' || meeting.status === 'rescheduled';
-  const meetingLink = meeting.meeting_link || meeting.closer?.calendly_default_link;
+  if (!meeting || !activeMeeting) return null;
+
+  const contact = activeMeeting.deal?.contact;
+  const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
+  const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
+  const meetingLink = activeMeeting.meeting_link || activeMeeting.closer?.calendly_default_link;
 
   const handleCall = () => {
     if (contact?.phone) {
@@ -139,7 +145,7 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
     }
     
     addAttendee.mutate({
-      meetingSlotId: meeting.id,
+      meetingSlotId: activeMeeting.id,
       attendeeName: partnerName,
       attendeePhone: partnerPhone || undefined,
       isPartner: true,
@@ -165,7 +171,7 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
     });
   };
 
-  // Get all participants (main contact + attendees)
+  // Get all participants (main contact + attendees) for the active meeting
   const getParticipantsList = () => {
     const participants: { id?: string; name: string; phone: string | null; isPartner: boolean; isMain: boolean; notifiedAt?: string | null }[] = [];
     
@@ -180,9 +186,9 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
     }
 
     // Additional attendees
-    meeting.attendees?.forEach(att => {
+    activeMeeting.attendees?.forEach(att => {
       // Skip if it's the same as main contact
-      if (att.contact_id === meeting.contact_id) return;
+      if (att.contact_id === activeMeeting.contact_id) return;
       
       const name = att.attendee_name || att.contact?.name || 'Participante';
       const phone = att.attendee_phone || att.contact?.phone;
@@ -207,13 +213,35 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
       <DrawerContent className="max-h-[90vh]">
         <DrawerHeader className="border-b pb-4">
           <div className="flex items-center justify-between">
-            <DrawerTitle className="text-lg">Detalhes da Reunião</DrawerTitle>
+            <DrawerTitle className="text-lg">
+              {allMeetings.length > 1 
+                ? `Reuniões às ${format(parseISO(meeting.scheduled_at), 'HH:mm')} (${allMeetings.length})`
+                : 'Detalhes da Reunião'
+              }
+            </DrawerTitle>
             <DrawerClose asChild>
               <Button variant="ghost" size="icon">
                 <X className="h-4 w-4" />
               </Button>
             </DrawerClose>
           </div>
+          
+          {/* Tabs for multiple meetings */}
+          {allMeetings.length > 1 && (
+            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+              {allMeetings.map((m) => (
+                <Button
+                  key={m.id}
+                  variant={activeMeeting.id === m.id ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs flex-shrink-0"
+                  onClick={() => setSelectedMeetingId(m.id)}
+                >
+                  {m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead'}
+                </Button>
+              ))}
+            </div>
+          )}
         </DrawerHeader>
 
         <ScrollArea className="flex-1 p-6">
@@ -313,7 +341,7 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
                     <div className="flex items-center gap-3">
                       <div 
                         className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                        style={{ backgroundColor: meeting.closer?.color || '#3B82F6' }}
+                        style={{ backgroundColor: activeMeeting.closer?.color || '#3B82F6' }}
                       >
                         {p.name.charAt(0)}
                       </div>
@@ -366,21 +394,21 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary" />
                 <span className="font-medium">
-                  {format(parseISO(meeting.scheduled_at), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                  {format(parseISO(activeMeeting.scheduled_at), "EEEE, dd 'de' MMMM", { locale: ptBR })}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" />
                 <span>
-                  {format(parseISO(meeting.scheduled_at), 'HH:mm')} - {meeting.duration_minutes}min
+                  {format(parseISO(activeMeeting.scheduled_at), 'HH:mm')} - {activeMeeting.duration_minutes}min
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-primary" />
-                <span>Closer: {meeting.closer?.name}</span>
+                <span>Closer: {activeMeeting.closer?.name}</span>
                 <div 
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: meeting.closer?.color || '#3B82F6' }}
+                  style={{ backgroundColor: activeMeeting.closer?.color || '#3B82F6' }}
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -421,7 +449,7 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
                       variant="outline"
                       size="sm"
                       className="flex-col h-16 gap-1"
-                      onClick={() => onReschedule(meeting)}
+                      onClick={() => onReschedule(activeMeeting)}
                     >
                       <Calendar className="h-4 w-4" />
                       <span className="text-xs">Reagendar</span>
@@ -430,7 +458,7 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
                       variant="outline"
                       size="sm"
                       className="flex-col h-16 gap-1 text-green-600 hover:text-green-700"
-                      onClick={() => updateStatus.mutate({ meetingId: meeting.id, status: 'completed' })}
+                      onClick={() => updateStatus.mutate({ meetingId: activeMeeting.id, status: 'completed' })}
                     >
                       <CheckCircle className="h-4 w-4" />
                       <span className="text-xs">Realizada</span>
@@ -453,7 +481,7 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
               <Button 
                 size="sm" 
                 onClick={handleSaveNotes}
-                disabled={updateNotes.isPending || notes === meeting.notes}
+                disabled={updateNotes.isPending || notes === activeMeeting.notes}
               >
                 <Save className="h-4 w-4 mr-2" />
                 Salvar Notas

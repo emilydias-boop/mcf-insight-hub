@@ -348,6 +348,11 @@ export default function Agenda() {
       {/* Meeting Details Drawer */}
       <AgendaMeetingDrawer
         meeting={selectedMeeting}
+        relatedMeetings={selectedMeeting ? filteredMeetings.filter(m => 
+          m.id !== selectedMeeting.id && 
+          m.scheduled_at === selectedMeeting.scheduled_at &&
+          m.closer_id === selectedMeeting.closer_id
+        ) : []}
         open={!!selectedMeeting}
         onOpenChange={(open) => !open && setSelectedMeeting(null)}
         onReschedule={handleReschedule}
