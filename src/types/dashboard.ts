@@ -31,6 +31,8 @@ export type DashboardPreferences = {
   auto_refresh: boolean;
   refresh_interval: number;
   funnel_stages?: string[];
+  theme?: 'dark' | 'light';
+  font_size?: 'small' | 'medium' | 'large';
   created_at: string;
   updated_at: string;
 };
