@@ -599,6 +599,7 @@ export type Database = {
       }
       closers: {
         Row: {
+          calendly_default_link: string | null
           calendly_event_type_uri: string | null
           color: string | null
           created_at: string | null
@@ -610,6 +611,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          calendly_default_link?: string | null
           calendly_event_type_uri?: string | null
           color?: string | null
           created_at?: string | null
@@ -621,6 +623,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          calendly_default_link?: string | null
           calendly_event_type_uri?: string | null
           color?: string | null
           created_at?: string | null
@@ -2106,31 +2109,40 @@ export type Database = {
       }
       meeting_slot_attendees: {
         Row: {
+          attendee_name: string | null
+          attendee_phone: string | null
           calendly_invitee_uri: string | null
           contact_id: string | null
           created_at: string | null
           deal_id: string | null
           id: string
+          is_partner: boolean | null
           meeting_slot_id: string
           notified_at: string | null
           status: string | null
         }
         Insert: {
+          attendee_name?: string | null
+          attendee_phone?: string | null
           calendly_invitee_uri?: string | null
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
           id?: string
+          is_partner?: boolean | null
           meeting_slot_id: string
           notified_at?: string | null
           status?: string | null
         }
         Update: {
+          attendee_name?: string | null
+          attendee_phone?: string | null
           calendly_invitee_uri?: string | null
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
           id?: string
+          is_partner?: boolean | null
           meeting_slot_id?: string
           notified_at?: string | null
           status?: string | null
