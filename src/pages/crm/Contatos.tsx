@@ -81,30 +81,30 @@ const Contatos = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-scale-lg">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Contatos</h2>
           <p className="text-muted-foreground">Gerencie todos os seus contatos</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-scale-sm">
           <Button 
             variant="outline" 
             onClick={handleSync}
             disabled={syncMutation.isPending}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`icon-scale-sm mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
             Sincronizar
           </Button>
           <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="icon-scale-sm mr-2" />
             Novo Contato
           </Button>
         </div>
       </div>
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 icon-scale-sm text-muted-foreground" />
         <Input
           placeholder="Buscar contatos por nome ou email..."
           value={searchTerm}
@@ -115,14 +115,14 @@ const Contatos = () => {
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-scale-md"></div>
           <p className="text-lg font-semibold text-foreground">Carregando contatos...</p>
-          <p className="text-sm text-muted-foreground mt-2">
+          <p className="text-sm text-muted-foreground mt-scale-sm">
             Dados carregados do banco local
           </p>
         </div>
       ) : filteredContacts.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-scale-md md:grid-cols-2 lg:grid-cols-3">
           {filteredContacts.map((contact: any) => {
             const validTags = getValidTags(contact.tags);
             const latestDeal = getLatestDeal(contact.crm_deals);
@@ -133,11 +133,11 @@ const Contatos = () => {
                 className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer"
                 onClick={() => handleContactClick(contact.id)}
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
+                <CardContent className="p-scale-lg">
+                  <div className="flex items-start justify-between mb-scale-md">
+                    <div className="flex items-center gap-scale-sm">
+                      <div className="avatar-scale rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="icon-scale-md text-primary" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-foreground">{contact.name}</h3>
@@ -148,16 +148,16 @@ const Contatos = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2 mb-4">
+                  <div className="flex flex-col gap-scale-xs mb-scale-md">
                     {contact.email && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Mail className="h-4 w-4" />
+                      <div className="flex items-center gap-scale-xs text-sm text-muted-foreground">
+                        <Mail className="icon-scale-sm" />
                         <span className="truncate">{contact.email}</span>
                       </div>
                     )}
                     {contact.phone && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Phone className="h-4 w-4" />
+                      <div className="flex items-center gap-scale-xs text-sm text-muted-foreground">
+                        <Phone className="icon-scale-sm" />
                         <span>{contact.phone}</span>
                       </div>
                     )}
@@ -165,7 +165,7 @@ const Contatos = () => {
 
                   {/* Stage/Pipeline info */}
                   {latestDeal && (
-                    <div className="flex items-center gap-2 mb-3 text-xs">
+                    <div className="flex items-center gap-scale-xs mb-scale-sm text-xs">
                       <GitBranch className="h-3 w-3 text-muted-foreground" />
                       <span className="text-muted-foreground truncate">
                         {latestDeal.crm_origins?.name || 'Pipeline'}
@@ -187,7 +187,7 @@ const Contatos = () => {
 
                   {/* Tags */}
                   {validTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-scale-xs">
                       {validTags.slice(0, 3).map((tag, idx) => (
                         <Badge 
                           key={idx} 
@@ -212,19 +212,19 @@ const Contatos = () => {
         </div>
       ) : (
         <Card className="bg-card border-border">
-          <CardContent className="p-12 text-center">
-            <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
+          <CardContent className="p-scale-xl text-center">
+            <User className="icon-scale-lg text-muted-foreground mx-auto mb-scale-md" style={{ width: '3rem', height: '3rem' }} />
+            <h3 className="text-lg font-semibold text-foreground mb-scale-sm">
               {searchTerm ? 'Nenhum contato encontrado' : 'Nenhum contato cadastrado'}
             </h3>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground mb-scale-md">
               {searchTerm
                 ? 'Tente buscar com outros termos'
                 : 'Comece adicionando seus primeiros contatos'}
             </p>
             {!searchTerm && (
               <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="icon-scale-sm mr-2" />
                 Adicionar Contato
               </Button>
             )}
