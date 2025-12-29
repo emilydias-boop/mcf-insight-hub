@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Copy, Check, MessageSquare, ExternalLink } from 'lucide-react';
+import { Copy, Check, MessageSquare, ExternalLink, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { withCalendlyDateTimeParams, formatDateTimeForCalendly } from '@/lib/calendlyLink';
+import { withCalendlyDateTimeParams, withCalendlyDateOnly } from '@/lib/calendlyLink';
 
 interface MeetingLinkShareProps {
   meetingLink: string;
@@ -37,9 +37,17 @@ export function MeetingLinkShare({
     minute: '2-digit',
     timeZone: 'America/Sao_Paulo',
   });
+  
+  const shortDate = scheduledDate.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+  });
 
   // Add date/time params to Calendly link using São Paulo timezone
   const enhancedMeetingLink = withCalendlyDateTimeParams(meetingLink, scheduledAt);
+  // Fallback link without time (only date)
+  const fallbackLink = withCalendlyDateOnly(meetingLink, scheduledAt);
 
   const message = `Olá${contactName ? ` ${contactName.split(' ')[0]}` : ''}! 🙂
 
@@ -49,6 +57,9 @@ Sua reunião foi confirmada para:
 
 Acesse pelo link abaixo:
 ${enhancedMeetingLink}
+
+Se o horário não aparecer disponível, use este link alternativo:
+${fallbackLink}
 
 Até lá! 👋`;
 
@@ -107,6 +118,12 @@ Até lá! 👋`;
       window.open(enhancedMeetingLink, '_blank');
     }
   };
+  
+  const handleOpenFallbackLink = () => {
+    if (fallbackLink) {
+      window.open(fallbackLink, '_blank');
+    }
+  };
 
   return (
     <div className="space-y-3 p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
@@ -122,46 +139,61 @@ Até lá! 👋`;
       </p>
 
       {enhancedMeetingLink && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCopy}
-            className="flex-1 min-w-[100px]"
-          >
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5 mr-1.5" />
-                Copiado!
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5 mr-1.5" />
-                Copiar
-              </>
-            )}
-          </Button>
+        <>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCopy}
+              className="flex-1 min-w-[100px]"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  Copiar
+                </>
+              )}
+            </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleWhatsApp}
-            disabled={sendingWhatsapp}
-            className="flex-1 min-w-[100px] text-green-700 border-green-300 hover:bg-green-100 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/50"
-          >
-            <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-            {sendingWhatsapp ? 'Enviando...' : 'WhatsApp'}
-          </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleWhatsApp}
+              disabled={sendingWhatsapp}
+              className="flex-1 min-w-[100px] text-green-700 border-green-300 hover:bg-green-100 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900/50"
+            >
+              <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+              {sendingWhatsapp ? 'Enviando...' : 'WhatsApp'}
+            </Button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleOpenLink}
-            className="px-2"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </Button>
-        </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleOpenLink}
+              className="px-2"
+              title="Abrir link com horário"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className="pt-1 border-t border-green-200 dark:border-green-800">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleOpenFallbackLink}
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Calendar className="h-3 w-3 mr-1.5" />
+              Abrir sem horário (se não aparecer disponível)
+            </Button>
+          </div>
+        </>
       )}
 
       {!enhancedMeetingLink && (

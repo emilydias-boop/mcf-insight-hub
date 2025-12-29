@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { withCalendlyDateTimeParams } from '@/lib/calendlyLink';
+import { withCalendlyDateTimeParams, withCalendlyDateOnly, formatDateTimeForCalendly } from '@/lib/calendlyLink';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
-  ExternalLink, Clock, User, Mail, X, Save, Link, Copy, Users, Plus, Trash2, Send
+  ExternalLink, Clock, User, Mail, X, Save, Link, Copy, Users, Plus, Trash2, Send, CalendarDays
 } from 'lucide-react';
 import {
   Drawer,
@@ -80,6 +80,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   // Add date/time params to Calendly link using São Paulo timezone
   const enhancedMeetingLink = withCalendlyDateTimeParams(meetingLink, activeMeeting.scheduled_at);
+  // Fallback link without time (only date) for when exact time is not available
+  const fallbackLink = withCalendlyDateOnly(meetingLink, activeMeeting.scheduled_at);
+  
+  // Get formatted time for WhatsApp message
+  const { date: formattedDateParam, time: formattedTimeParam } = formatDateTimeForCalendly(activeMeeting.scheduled_at);
 
   const handleCall = () => {
     if (contact?.phone) {
@@ -137,9 +142,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     if (!enhancedMeetingLink || !phone) return;
     const formattedPhone = phone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Olá ${name}! 👋\n\nSegue o link para nossa reunião:\n${enhancedMeetingLink}\n\nAguardo você!`
+      `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n${enhancedMeetingLink}\n\nSe o horário não aparecer disponível, use este link:\n${fallbackLink}\n\nAguardo você!`
     );
     window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
+  };
+  
+  const handleOpenFallbackLink = () => {
+    if (fallbackLink) {
+      window.open(fallbackLink, '_blank');
+    }
   };
 
   const handleAddPartner = () => {
@@ -263,13 +274,27 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     readOnly 
                     className="text-xs bg-background"
                   />
-                  <Button variant="outline" size="icon" onClick={handleCopyLink}>
+                  <Button variant="outline" size="icon" onClick={handleCopyLink} title="Copiar link">
                     <Copy className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="icon" onClick={handleOpenLink}>
+                  <Button variant="outline" size="icon" onClick={handleOpenLink} title="Abrir com horário">
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </div>
+                
+                {/* Fallback link option */}
+                <div className="flex items-center gap-2 pt-1 border-t border-primary/20">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="flex-1 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={handleOpenFallbackLink}
+                  >
+                    <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
+                    Abrir sem horário (se não aparecer disponível)
+                  </Button>
+                </div>
+                
                 {participants.length > 0 && (
                   <Button 
                     variant="secondary" 
