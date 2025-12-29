@@ -1077,9 +1077,11 @@ export type Database = {
           created_at: string
           default_canal: string
           default_period: string
+          font_size: string | null
           funnel_stages: string[] | null
           id: string
           refresh_interval: number
+          theme: string | null
           updated_at: string
           user_id: string
           visible_widgets: string[]
@@ -1090,9 +1092,11 @@ export type Database = {
           created_at?: string
           default_canal?: string
           default_period?: string
+          font_size?: string | null
           funnel_stages?: string[] | null
           id?: string
           refresh_interval?: number
+          theme?: string | null
           updated_at?: string
           user_id: string
           visible_widgets?: string[]
@@ -1103,9 +1107,11 @@ export type Database = {
           created_at?: string
           default_canal?: string
           default_period?: string
+          font_size?: string | null
           funnel_stages?: string[] | null
           id?: string
           refresh_interval?: number
+          theme?: string | null
           updated_at?: string
           user_id?: string
           visible_widgets?: string[]
