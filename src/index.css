@@ -6,22 +6,88 @@
 All colors MUST be HSL.
 */
 
-/* Font size classes */
+/* Font size classes with scalable spacing */
 html {
   font-size: 50%; /* Default: small */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.25rem;
+  --icon-sm: 0.875rem;
+  --icon-md: 1rem;
+  --icon-lg: 1.25rem;
+  --avatar-size: 2rem;
 }
 
 html.font-small {
   font-size: 50%;
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.25rem;
+  --icon-sm: 0.875rem;
+  --icon-md: 1rem;
+  --icon-lg: 1.25rem;
+  --avatar-size: 2rem;
 }
 
 html.font-medium {
   font-size: 62.5%;
+  --spacing-xs: 0.375rem;
+  --spacing-sm: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --icon-sm: 1rem;
+  --icon-md: 1.25rem;
+  --icon-lg: 1.5rem;
+  --avatar-size: 2.5rem;
 }
 
 html.font-large {
   font-size: 75%;
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.25rem;
+  --spacing-lg: 1.75rem;
+  --spacing-xl: 2.5rem;
+  --icon-sm: 1.125rem;
+  --icon-md: 1.5rem;
+  --icon-lg: 1.75rem;
+  --avatar-size: 3rem;
 }
+
+/* Scalable utility classes */
+.p-scale-xs { padding: var(--spacing-xs); }
+.p-scale-sm { padding: var(--spacing-sm); }
+.p-scale-md { padding: var(--spacing-md); }
+.p-scale-lg { padding: var(--spacing-lg); }
+.p-scale-xl { padding: var(--spacing-xl); }
+
+.px-scale-sm { padding-left: var(--spacing-sm); padding-right: var(--spacing-sm); }
+.px-scale-md { padding-left: var(--spacing-md); padding-right: var(--spacing-md); }
+.py-scale-sm { padding-top: var(--spacing-sm); padding-bottom: var(--spacing-sm); }
+.py-scale-md { padding-top: var(--spacing-md); padding-bottom: var(--spacing-md); }
+
+.gap-scale-xs { gap: var(--spacing-xs); }
+.gap-scale-sm { gap: var(--spacing-sm); }
+.gap-scale-md { gap: var(--spacing-md); }
+.gap-scale-lg { gap: var(--spacing-lg); }
+
+.mb-scale-sm { margin-bottom: var(--spacing-sm); }
+.mb-scale-md { margin-bottom: var(--spacing-md); }
+.mb-scale-lg { margin-bottom: var(--spacing-lg); }
+
+.mt-scale-sm { margin-top: var(--spacing-sm); }
+.mt-scale-md { margin-top: var(--spacing-md); }
+
+.icon-scale-sm { width: var(--icon-sm); height: var(--icon-sm); }
+.icon-scale-md { width: var(--icon-md); height: var(--icon-md); }
+.icon-scale-lg { width: var(--icon-lg); height: var(--icon-lg); }
+
+.avatar-scale { width: var(--avatar-size); height: var(--avatar-size); }
 
 /* Scrollbar styling - WebKit (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
