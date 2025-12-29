@@ -122,7 +122,7 @@ const Contatos = () => {
           </p>
         </div>
       ) : filteredContacts.length > 0 ? (
-        <div className="grid gap-scale-md md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-scale-md grid-scale-cards">
           {filteredContacts.map((contact: any) => {
             const validTags = getValidTags(contact.tags);
             const latestDeal = getLatestDeal(contact.crm_deals);
