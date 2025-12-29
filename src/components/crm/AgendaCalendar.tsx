@@ -93,7 +93,7 @@ export function AgendaCalendar({
     return meetings.filter(m => m.closer_id === closerFilter);
   }, [meetings, closerFilter]);
 
-  // Get meetings that START in this slot
+  // Get meetings that START in this slot, grouped by closer
   const getMeetingsStartingInSlot = useCallback((day: Date, hour: number, minute: number) => {
     return filteredMeetings.filter(meeting => {
       const meetingDate = parseISO(meeting.scheduled_at);
@@ -105,6 +105,28 @@ export function AgendaCalendar({
       );
     });
   }, [filteredMeetings]);
+
+  // Group meetings by slot+closer for display
+  const getGroupedMeetingsInSlot = useCallback((day: Date, hour: number, minute: number) => {
+    const slotMeetings = getMeetingsStartingInSlot(day, hour, minute);
+    
+    // Group by closer_id
+    const groupedByCloser = slotMeetings.reduce((acc, meeting) => {
+      const closerId = meeting.closer_id || 'unknown';
+      if (!acc[closerId]) {
+        acc[closerId] = [];
+      }
+      acc[closerId].push(meeting);
+      return acc;
+    }, {} as Record<string, MeetingSlot[]>);
+    
+    return Object.entries(groupedByCloser).map(([closerId, meetings]) => ({
+      closerId,
+      meetings,
+      closer: meetings[0].closer,
+      duration: meetings[0].duration_minutes || 30,
+    }));
+  }, [getMeetingsStartingInSlot]);
 
   // Check if a slot is occupied by a meeting that started earlier
   const isSlotOccupiedByEarlierMeeting = useCallback((day: Date, hour: number, minute: number) => {
@@ -366,7 +388,7 @@ export function AgendaCalendar({
                 {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
               </div>
               {viewDays.map(day => {
-                const slotMeetings = getMeetingsStartingInSlot(day, hour, minute);
+                const groupedSlots = getGroupedMeetingsInSlot(day, hour, minute);
                 const isOccupied = isSlotOccupiedByEarlierMeeting(day, hour, minute);
                 const isCurrent = isCurrentTimeSlot(day, hour, minute);
                 const droppableId = `${day.toISOString()}|${hour}|${minute}`;
@@ -385,13 +407,27 @@ export function AgendaCalendar({
                           isOccupied && 'pointer-events-none'
                         )}
                       >
-                        {slotMeetings.map((meeting, index) => {
-                          const closerColor = getCloserColor(meeting.closer_id, meeting.closer?.name);
-                          const slotsNeeded = getSlotsNeeded(meeting.duration_minutes || 30);
+                        {groupedSlots.map((group, groupIndex) => {
+                          const closerColor = getCloserColor(group.closerId, group.closer?.name);
+                          const slotsNeeded = getSlotsNeeded(group.duration);
                           const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
+                          const totalGroups = groupedSlots.length;
+                          const widthPercent = totalGroups > 1 ? 100 / totalGroups : 100;
+                          const leftPercent = groupIndex * widthPercent;
+                          
+                          // All meetings in this group
+                          const meetings = group.meetings;
+                          const firstMeeting = meetings[0];
+                          const leadNames = meetings.map(m => 
+                            m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead'
+                          ).join(', ');
 
                           return (
-                            <Draggable key={meeting.id} draggableId={meeting.id} index={index}>
+                            <Draggable 
+                              key={firstMeeting.id} 
+                              draggableId={firstMeeting.id} 
+                              index={groupIndex}
+                            >
                               {(dragProvided, dragSnapshot) => (
                                 <TooltipProvider>
                                   <Tooltip>
@@ -400,15 +436,17 @@ export function AgendaCalendar({
                                         ref={dragProvided.innerRef}
                                         {...dragProvided.draggableProps}
                                         {...dragProvided.dragHandleProps}
-                                        onClick={() => onSelectMeeting(meeting)}
+                                        onClick={() => onSelectMeeting(firstMeeting)}
                                         className={cn(
-                                          'absolute left-0.5 right-0.5 top-0.5 text-left p-1 rounded text-xs bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10',
-                                          STATUS_STYLES[meeting.status] || '',
+                                          'absolute top-0.5 text-left p-1 rounded text-xs bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10',
+                                          STATUS_STYLES[firstMeeting.status] || '',
                                           dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                         )}
                                         style={{ 
                                           height: `${cardHeight}px`,
                                           borderLeftColor: closerColor,
+                                          left: totalGroups > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
+                                          right: totalGroups > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
                                           ...dragProvided.draggableProps.style,
                                         }}
                                       >
@@ -418,43 +456,52 @@ export function AgendaCalendar({
                                             style={{ backgroundColor: closerColor }}
                                           />
                                           <span className="font-medium truncate text-[10px]">
-                                            {format(parseISO(meeting.scheduled_at), 'HH:mm')}
+                                            {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
                                           </span>
+                                          {meetings.length > 1 && (
+                                            <Badge variant="secondary" className="h-3.5 px-1 text-[8px]">
+                                              {meetings.length}
+                                            </Badge>
+                                          )}
                                         </div>
                                         <div className="truncate text-muted-foreground text-[9px]">
-                                          {meeting.deal?.contact?.name || meeting.deal?.name || 'Sem lead'}
+                                          {leadNames}
                                         </div>
                                         {slotsNeeded > 1 && (
                                           <div className="text-[8px] text-muted-foreground mt-0.5">
-                                            {meeting.duration_minutes}min
+                                            {group.duration}min
                                           </div>
                                         )}
                                       </button>
                                     </TooltipTrigger>
                                     <TooltipContent side="right" className="max-w-[280px]">
                                       <div className="space-y-1.5">
-                                        <div className="font-medium">{meeting.deal?.contact?.name || meeting.deal?.name}</div>
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                          <div
-                                            className="w-2.5 h-2.5 rounded-full"
-                                            style={{ backgroundColor: closerColor }}
-                                          />
-                                          <span>Closer: {meeting.closer?.name}</span>
+                                        <div className="font-medium">
+                                          {meetings.length} reuniões às {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                        </div>
+                                        <div className="space-y-1 mt-2">
+                                          {meetings.map(m => (
+                                            <div key={m.id} className="text-xs flex items-center gap-1.5 p-1 bg-muted/50 rounded">
+                                              <div
+                                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                                style={{ backgroundColor: closerColor }}
+                                              />
+                                              <span>{m.deal?.contact?.name || m.deal?.name || 'Lead'}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                                          <span>Closer: {group.closer?.name}</span>
                                         </div>
                                         <div className="text-xs text-muted-foreground">
-                                          {format(parseISO(meeting.scheduled_at), "dd/MM 'às' HH:mm")} ({meeting.duration_minutes || 30}min)
+                                          {format(parseISO(firstMeeting.scheduled_at), "dd/MM 'às' HH:mm")} ({group.duration}min)
                                         </div>
-                                        {meeting.deal?.contact?.phone && (
-                                          <div className="text-xs text-muted-foreground">
-                                            📱 {meeting.deal.contact.phone}
-                                          </div>
-                                        )}
                                         <Badge variant="outline" className="text-xs">
-                                          {meeting.status === 'scheduled' && 'Agendada'}
-                                          {meeting.status === 'rescheduled' && 'Reagendada'}
-                                          {meeting.status === 'completed' && 'Realizada'}
-                                          {meeting.status === 'no_show' && 'No-show'}
-                                          {meeting.status === 'canceled' && 'Cancelada'}
+                                          {firstMeeting.status === 'scheduled' && 'Agendada'}
+                                          {firstMeeting.status === 'rescheduled' && 'Reagendada'}
+                                          {firstMeeting.status === 'completed' && 'Realizada'}
+                                          {firstMeeting.status === 'no_show' && 'No-show'}
+                                          {firstMeeting.status === 'canceled' && 'Cancelada'}
                                         </Badge>
                                       </div>
                                     </TooltipContent>
