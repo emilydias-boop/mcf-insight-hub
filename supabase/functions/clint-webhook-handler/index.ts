@@ -1129,18 +1129,12 @@ async function tryCreateMeetingSlotFromClint(
     return { skipped: true, reason: 'slot_already_exists', existing_slot_id: existingSlot.id };
   }
   
-  // 4. Detectar lead_type baseado nas tags
-  const tags = data.tags || [];
-  let leadType = 'A'; // Default
-  for (const tag of tags) {
-    const tagUpper = String(tag).toUpperCase();
-    if (tagUpper.includes('LEAD B') || tagUpper === 'B') {
-      leadType = 'B';
-      break;
-    }
-  }
+  // 4. Detectar lead_type baseado nas tags (buscar em múltiplos lugares)
+  const tags = data.tags || data.contact?.tags || [];
+  const leadType = detectLeadTypeFromTags(tags, data);
+  console.log('[MEETING_SLOT] Detected lead_type:', leadType);
   
-  // 5. Criar meeting_slot
+  // 5. Criar meeting_slot com source = clint_webhook
   const { data: newSlot, error: slotError } = await supabase
     .from('meeting_slots')
     .insert({
@@ -1152,7 +1146,8 @@ async function tryCreateMeetingSlotFromClint(
       status: 'scheduled',
       meeting_link: meetingLink || closer.calendly_default_link || null,
       notes: 'Criado via webhook Clint',
-      lead_type: leadType
+      lead_type: leadType,
+      source: 'clint_webhook'
     })
     .select('id')
     .single();
@@ -1175,7 +1170,67 @@ async function tryCreateMeetingSlotFromClint(
     })
     .eq('id', dealId);
   
-  return { created: true, slot_id: newSlot.id, closer: closer.name, scheduled_at: scheduledAt };
+  return { created: true, slot_id: newSlot.id, closer: closer.name, scheduled_at: scheduledAt, lead_type: leadType };
+}
+
+/**
+ * Detecta o tipo de lead (A ou B) baseado em tags e campos do payload
+ * Prioriza padrões explícitos, com fallback para default 'A'
+ */
+function detectLeadTypeFromTags(tags: any[], data: any): 'A' | 'B' {
+  // Combinar tags de múltiplas fontes
+  const allTags: string[] = [];
+  
+  if (Array.isArray(tags)) {
+    allTags.push(...tags.map(t => String(t)));
+  }
+  
+  // Também checar campos específicos que podem indicar tipo
+  if (data.contact_tag) allTags.push(String(data.contact_tag));
+  if (data.deal_tag) allTags.push(String(data.deal_tag));
+  if (data.lead_type) {
+    // Campo explícito de tipo de lead
+    const explicit = String(data.lead_type).toUpperCase().trim();
+    if (explicit === 'B' || explicit.includes('LEAD B')) return 'B';
+    if (explicit === 'A' || explicit.includes('LEAD A')) return 'A';
+  }
+  
+  // Analisar cada tag
+  for (const tag of allTags) {
+    const tagUpper = String(tag).toUpperCase().trim();
+    
+    // Patterns para Lead B (verificar primeiro - mais específico)
+    if (
+      tagUpper === 'LEAD B' ||
+      tagUpper === 'B' ||
+      tagUpper.includes('LEAD B') ||
+      tagUpper.includes('TIPO B') ||
+      tagUpper.includes('NAO CONSTROI') ||
+      tagUpper.includes('NÃO CONSTRÓI') ||
+      tagUpper.includes('NAO INVESTE') ||
+      tagUpper.includes('NÃO INVESTE') ||
+      (tagUpper.includes('LEAD') && /\bB\b/.test(tagUpper))
+    ) {
+      return 'B';
+    }
+    
+    // Patterns para Lead A
+    if (
+      tagUpper === 'LEAD A' ||
+      tagUpper === 'A' ||
+      tagUpper.includes('LEAD A') ||
+      tagUpper.includes('TIPO A') ||
+      tagUpper.includes('JÁ CONSTRÓI') ||
+      tagUpper.includes('JA CONSTROI') ||
+      tagUpper.includes('INVESTIDOR') ||
+      (tagUpper.includes('LEAD') && /\bA\b/.test(tagUpper))
+    ) {
+      return 'A';
+    }
+  }
+  
+  // Default: Lead A se não encontrar indicador explícito
+  return 'A';
 }
 
 /**

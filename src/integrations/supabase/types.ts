@@ -2194,6 +2194,7 @@ export type Database = {
           meeting_link: string | null
           notes: string | null
           scheduled_at: string
+          source: string | null
           status: string | null
           updated_at: string | null
         }
@@ -2213,6 +2214,7 @@ export type Database = {
           meeting_link?: string | null
           notes?: string | null
           scheduled_at: string
+          source?: string | null
           status?: string | null
           updated_at?: string | null
         }
@@ -2232,6 +2234,7 @@ export type Database = {
           meeting_link?: string | null
           notes?: string | null
           scheduled_at?: string
+          source?: string | null
           status?: string | null
           updated_at?: string | null
         }

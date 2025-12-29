@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, BarChart3, Users, CheckCircle, XCircle, AlertTriangle, Percent, TrendingUp } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, CheckCircle, XCircle, AlertTriangle, Percent, TrendingUp, MousePointer, Webhook, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { useAgendaMeetings, useAgendaStats, useClosersWithAvailability, useCloserMetrics } from '@/hooks/useAgendaData';
+import { useMeetingStats } from '@/hooks/useMeetingStats';
 import { UpcomingMeetingsSidebar } from '@/components/crm/UpcomingMeetingsSidebar';
 
 export default function AgendaMetricas() {
@@ -25,6 +26,7 @@ export default function AgendaMetricas() {
   const { data: stats, isLoading: statsLoading } = useAgendaStats(selectedDate);
   const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability();
   const { data: closerMetrics = [], isLoading: metricsLoading } = useCloserMetrics(selectedDate);
+  const { data: sourceStats } = useMeetingStats(monthStart, monthEnd);
 
   // Calculate occupancy per closer
   const closerOccupancy = useMemo(() => {
@@ -159,6 +161,71 @@ export default function AgendaMetricas() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Source Stats */}
+      {sourceStats && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Webhook className="h-5 w-5" />
+              Origem dos Agendamentos (Mês)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-lg bg-muted/50 text-center">
+                <Calendar className="h-6 w-6 mx-auto mb-2 text-primary" />
+                <div className="text-2xl font-bold">{sourceStats.total}</div>
+                <div className="text-sm text-muted-foreground">Total</div>
+              </div>
+              <div className="p-4 rounded-lg bg-primary/10 text-center">
+                <MousePointer className="h-6 w-6 mx-auto mb-2 text-primary" />
+                <div className="text-2xl font-bold">{sourceStats.bySource.manual}</div>
+                <div className="text-sm text-muted-foreground">Manual</div>
+                <div className="text-xs text-muted-foreground">
+                  {sourceStats.total > 0 ? Math.round((sourceStats.bySource.manual / sourceStats.total) * 100) : 0}%
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-green-500/10 text-center">
+                <Webhook className="h-6 w-6 mx-auto mb-2 text-green-600" />
+                <div className="text-2xl font-bold text-green-600">{sourceStats.bySource.clint}</div>
+                <div className="text-sm text-muted-foreground">Via Clint</div>
+                <div className="text-xs text-muted-foreground">
+                  {sourceStats.total > 0 ? Math.round((sourceStats.bySource.clint / sourceStats.total) * 100) : 0}%
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-blue-500/10 text-center">
+                <Calendar className="h-6 w-6 mx-auto mb-2 text-blue-600" />
+                <div className="text-2xl font-bold text-blue-600">{sourceStats.bySource.calendly}</div>
+                <div className="text-sm text-muted-foreground">Via Calendly</div>
+                <div className="text-xs text-muted-foreground">
+                  {sourceStats.total > 0 ? Math.round((sourceStats.bySource.calendly / sourceStats.total) * 100) : 0}%
+                </div>
+              </div>
+            </div>
+            {/* Lead Type Distribution */}
+            <div className="mt-4 pt-4 border-t">
+              <div className="text-sm font-medium mb-2">Por Tipo de Lead</div>
+              <div className="flex gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span className="text-sm">Lead A: {sourceStats.byLeadType.A}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <span className="text-sm">Lead B: {sourceStats.byLeadType.B}</span>
+                </div>
+                {sourceStats.byLeadType.unknown > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-gray-400" />
+                    <span className="text-sm">Não definido: {sourceStats.byLeadType.unknown}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Occupancy by Closer */}
