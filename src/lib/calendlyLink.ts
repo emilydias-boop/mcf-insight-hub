@@ -51,3 +51,45 @@ export function withCalendlyDateTimeParams(
   
   return `${baseUrl}${separator}date=${date}&time=${time}`;
 }
+
+/**
+ * Add only date parameter to a Calendly link (fallback when time slot is not available)
+ */
+export function withCalendlyDateOnly(
+  baseUrl: string | undefined | null,
+  scheduledAt: string | Date,
+  timeZone: string = TIMEZONE
+): string | undefined {
+  if (!baseUrl) return undefined;
+  if (!baseUrl.includes('calendly.com')) return baseUrl;
+  
+  // Remove existing date/time params if present
+  const cleanUrl = removeCalendlyDateTimeParams(baseUrl);
+  
+  const { date } = formatDateTimeForCalendly(scheduledAt, timeZone);
+  const separator = cleanUrl.includes('?') ? '&' : '?';
+  
+  return `${cleanUrl}${separator}date=${date}`;
+}
+
+/**
+ * Remove date/time parameters from a Calendly link
+ */
+export function removeCalendlyDateTimeParams(
+  baseUrl: string | undefined | null
+): string {
+  if (!baseUrl) return '';
+  
+  try {
+    const url = new URL(baseUrl);
+    url.searchParams.delete('date');
+    url.searchParams.delete('time');
+    return url.toString();
+  } catch {
+    // Fallback: simple string replacement
+    return baseUrl
+      .replace(/[&?]date=[^&]*/g, '')
+      .replace(/[&?]time=[^&]*/g, '')
+      .replace(/\?$/, '');
+  }
+}
