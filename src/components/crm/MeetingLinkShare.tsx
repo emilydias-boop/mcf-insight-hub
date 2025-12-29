@@ -22,15 +22,31 @@ export function MeetingLinkShare({
   const [copied, setCopied] = useState(false);
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
 
-  const formattedDate = new Date(scheduledAt).toLocaleDateString('pt-BR', {
+  const scheduledDate = new Date(scheduledAt);
+  
+  const formattedDate = scheduledDate.toLocaleDateString('pt-BR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
   });
-  const formattedTime = new Date(scheduledAt).toLocaleTimeString('pt-BR', {
+  const formattedTime = scheduledDate.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  // Add date/time params to Calendly link if not already present
+  const enhancedMeetingLink = (() => {
+    if (!meetingLink || !meetingLink.includes('calendly.com')) return meetingLink;
+    if (meetingLink.includes('date=') && meetingLink.includes('time=')) return meetingLink;
+    
+    const dateStr = scheduledDate.toISOString().split('T')[0];
+    const hours = scheduledDate.getUTCHours().toString().padStart(2, '0');
+    const minutes = scheduledDate.getUTCMinutes().toString().padStart(2, '0');
+    const timeStr = `${hours}:${minutes}`;
+    
+    const separator = meetingLink.includes('?') ? '&' : '?';
+    return `${meetingLink}${separator}date=${dateStr}&time=${timeStr}`;
+  })();
 
   const message = `Olá${contactName ? ` ${contactName.split(' ')[0]}` : ''}! 🙂
 
@@ -39,7 +55,7 @@ Sua reunião foi confirmada para:
 🕐 ${formattedTime}
 
 Acesse pelo link abaixo:
-${meetingLink}
+${enhancedMeetingLink}
 
 Até lá! 👋`;
 
@@ -94,8 +110,8 @@ Até lá! 👋`;
   };
 
   const handleOpenLink = () => {
-    if (meetingLink) {
-      window.open(meetingLink, '_blank');
+    if (enhancedMeetingLink) {
+      window.open(enhancedMeetingLink, '_blank');
     }
   };
 
@@ -112,7 +128,7 @@ Até lá! 👋`;
         {formattedDate} às {formattedTime}
       </p>
 
-      {meetingLink && (
+      {enhancedMeetingLink && (
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -155,7 +171,7 @@ Até lá! 👋`;
         </div>
       )}
 
-      {!meetingLink && (
+      {!enhancedMeetingLink && (
         <p className="text-xs text-muted-foreground">
           Link será disponibilizado após confirmação do Calendly
         </p>
