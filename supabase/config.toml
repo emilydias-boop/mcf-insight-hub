@@ -182,3 +182,6 @@ verify_jwt = false
 
 [functions.reprocess-missing-activities]
 verify_jwt = false
+
+[functions.detect-duplicate-activities]
+verify_jwt = false
