@@ -20,6 +20,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DuplicatesTab } from '@/components/audit/DuplicatesTab';
 import { 
   AlertTriangle, 
   Search, 
@@ -31,7 +33,8 @@ import {
   Clock,
   Users,
   TrendingUp,
-  Shield
+  Shield,
+  Copy
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -41,8 +44,24 @@ export default function AuditoriaAgendamentos() {
   const [selectedCase, setSelectedCase] = useState<GhostAuditCase | null>(null);
   const [reviewNotes, setReviewNotes] = useState('');
 
-  const { data: cases, isLoading } = useGhostAuditList(filters);
-  const { data: stats } = useGhostAuditStats();
+  // Filtrar para excluir webhook_duplicado da aba de fraude
+  const ghostFilters = {
+    ...filters,
+    ghost_type: filters.ghost_type === 'all' ? undefined : filters.ghost_type
+  };
+
+  const { data: allCases, isLoading } = useGhostAuditList(ghostFilters);
+  // Filtrar webhook_duplicado do lado do cliente
+  const cases = allCases?.filter(c => c.ghost_type !== 'webhook_duplicado');
+  
+  const { data: allStats } = useGhostAuditStats();
+  // Ajustar stats para excluir webhook_duplicado
+  const stats = allStats ? {
+    ...allStats,
+    total: (allCases?.filter(c => c.ghost_type !== 'webhook_duplicado').length) || 0,
+    pending: (allCases?.filter(c => c.ghost_type !== 'webhook_duplicado' && c.status === 'pending').length) || 0
+  } : undefined;
+
   const runDetection = useRunGhostDetection();
   const updateStatus = useUpdateAuditStatus();
 
@@ -70,13 +89,6 @@ export default function AuditoriaAgendamentos() {
     }
   };
 
-  const getGhostTypeColor = (ghostType: string) => {
-    if (ghostType === 'webhook_duplicado') {
-      return 'bg-sky-500/10 text-sky-500 border-sky-500/20';
-    }
-    return 'bg-muted text-muted-foreground';
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed_fraud': return 'bg-red-500/10 text-red-500 border-red-500/20';
@@ -84,6 +96,16 @@ export default function AuditoriaAgendamentos() {
       case 'reviewed': return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
       default: return 'bg-muted text-muted-foreground';
     }
+  };
+
+  // Filtrar movement_history para excluir duplicatas
+  const filterMovementHistory = (history: any[] | undefined) => {
+    if (!history) return [];
+    return history.filter(m => {
+      // Verificar se este movimento é duplicado (baseado em metadata se disponível)
+      // Por enquanto, manter todos já que não temos a flag is_duplicate no history
+      return true;
+    });
   };
 
   return (
@@ -96,222 +118,247 @@ export default function AuditoriaAgendamentos() {
             Auditoria de Agendamentos
           </h1>
           <p className="text-muted-foreground text-sm">
-            Detecte e revise agendamentos fantasmas automaticamente
+            Detecte e revise agendamentos fantasmas e duplicatas
           </p>
         </div>
-        <Button 
-          onClick={() => runDetection.mutate(14)}
-          disabled={runDetection.isPending}
-        >
-          {runDetection.isPending ? (
-            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Play className="h-4 w-4 mr-2" />
-          )}
-          Executar Detecção
-        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Total</span>
-            </div>
-            <p className="text-2xl font-bold">{stats?.total || 0}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-yellow-500" />
-              <span className="text-sm text-muted-foreground">Pendentes</span>
-            </div>
-            <p className="text-2xl font-bold text-yellow-500">{stats?.pending || 0}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-              <span className="text-sm text-muted-foreground">Críticos</span>
-            </div>
-            <p className="text-2xl font-bold text-red-500">{stats?.critical || 0}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-orange-500" />
-              <span className="text-sm text-muted-foreground">Alta Sev.</span>
-            </div>
-            <p className="text-2xl font-bold text-orange-500">{stats?.high || 0}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-400" />
-              <span className="text-sm text-muted-foreground">Fraudes</span>
-            </div>
-            <p className="text-2xl font-bold">{stats?.confirmed_fraud || 0}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-sm text-muted-foreground">F. Positivos</span>
-            </div>
-            <p className="text-2xl font-bold text-green-500">{stats?.false_positive || 0}</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Tabs */}
+      <Tabs defaultValue="fraude" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="fraude" className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Fraude / Ghost
+          </TabsTrigger>
+          <TabsTrigger value="duplicatas" className="flex items-center gap-2">
+            <Copy className="h-4 w-4" />
+            Duplicatas Webhook
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <Input
-                placeholder="Buscar por SDR ou Lead..."
-                value={filters.sdr_email || ''}
-                onChange={(e) => setFilters({ ...filters, sdr_email: e.target.value })}
-                className="w-full"
-              />
-            </div>
-            <Select
-              value={filters.status || 'all'}
-              onValueChange={(v) => setFilters({ ...filters, status: v })}
+        {/* Aba Fraude/Ghost */}
+        <TabsContent value="fraude" className="space-y-4">
+          {/* Header Actions */}
+          <div className="flex justify-end">
+            <Button 
+              onClick={() => runDetection.mutate(14)}
+              disabled={runDetection.isPending}
             >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
-                <SelectItem value="confirmed_fraud">Fraude</SelectItem>
-                <SelectItem value="false_positive">Falso Positivo</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.severity || 'all'}
-              onValueChange={(v) => setFilters({ ...filters, severity: v })}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Severidade" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="critical">Crítico</SelectItem>
-                <SelectItem value="high">Alto</SelectItem>
-                <SelectItem value="medium">Médio</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={filters.ghost_type || 'all'}
-              onValueChange={(v) => setFilters({ ...filters, ghost_type: v })}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="tipo_a">Tipo A</SelectItem>
-                <SelectItem value="tipo_b">Tipo B</SelectItem>
-                <SelectItem value="ciclo_infinito">Ciclo Infinito</SelectItem>
-                <SelectItem value="regressao">Regressão</SelectItem>
-                <SelectItem value="excesso_requalificacao">Excesso Requalificação</SelectItem>
-                <SelectItem value="webhook_duplicado">Webhook Duplicado</SelectItem>
-              </SelectContent>
-            </Select>
+              {runDetection.isPending ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4 mr-2" />
+              )}
+              Executar Detecção
+            </Button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 space-y-4">
-              {[1,2,3,4,5].map(i => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Lead</TableHead>
-                  <TableHead>SDR</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Severidade</TableHead>
-                  <TableHead>Dias</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Detectado</TableHead>
-                  <TableHead className="w-[80px]">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cases?.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{c.contact_name || 'Sem nome'}</p>
-                        <p className="text-xs text-muted-foreground">{c.contact_email}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{c.sdr_name || c.sdr_email}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`text-xs ${getGhostTypeColor(c.ghost_type)}`}>
-                        {GHOST_TYPE_LABELS[c.ghost_type] || c.ghost_type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getSeverityColor(c.severity)}>
-                        {SEVERITY_LABELS[c.severity]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-mono">{c.distinct_days}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(c.status)}>
-                        {STATUS_LABELS[c.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {format(new Date(c.detection_date), 'dd/MM', { locale: ptBR })}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setSelectedCase(c)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {cases?.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      Nenhum caso encontrado
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Total</span>
+                </div>
+                <p className="text-2xl font-bold">{stats?.total || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-yellow-500" />
+                  <span className="text-sm text-muted-foreground">Pendentes</span>
+                </div>
+                <p className="text-2xl font-bold text-yellow-500">{stats?.pending || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  <span className="text-sm text-muted-foreground">Críticos</span>
+                </div>
+                <p className="text-2xl font-bold text-red-500">{allStats?.critical || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm text-muted-foreground">Alta Sev.</span>
+                </div>
+                <p className="text-2xl font-bold text-orange-500">{allStats?.high || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-red-400" />
+                  <span className="text-sm text-muted-foreground">Fraudes</span>
+                </div>
+                <p className="text-2xl font-bold">{allStats?.confirmed_fraud || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-muted-foreground">F. Positivos</span>
+                </div>
+                <p className="text-2xl font-bold text-green-500">{allStats?.false_positive || 0}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filters */}
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <Input
+                    placeholder="Buscar por SDR ou Lead..."
+                    value={filters.sdr_email || ''}
+                    onChange={(e) => setFilters({ ...filters, sdr_email: e.target.value })}
+                    className="w-full"
+                  />
+                </div>
+                <Select
+                  value={filters.status || 'all'}
+                  onValueChange={(v) => setFilters({ ...filters, status: v })}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="confirmed_fraud">Fraude</SelectItem>
+                    <SelectItem value="false_positive">Falso Positivo</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={filters.severity || 'all'}
+                  onValueChange={(v) => setFilters({ ...filters, severity: v })}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Severidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="critical">Crítico</SelectItem>
+                    <SelectItem value="high">Alto</SelectItem>
+                    <SelectItem value="medium">Médio</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={filters.ghost_type || 'all'}
+                  onValueChange={(v) => setFilters({ ...filters, ghost_type: v })}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="tipo_a">Tipo A</SelectItem>
+                    <SelectItem value="tipo_b">Tipo B</SelectItem>
+                    <SelectItem value="ciclo_infinito">Ciclo Infinito</SelectItem>
+                    <SelectItem value="regressao">Regressão</SelectItem>
+                    <SelectItem value="excesso_requalificacao">Excesso Requalificação</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Table */}
+          <Card>
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="p-6 space-y-4">
+                  {[1,2,3,4,5].map(i => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lead</TableHead>
+                      <TableHead>SDR</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Severidade</TableHead>
+                      <TableHead>Dias</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Detectado</TableHead>
+                      <TableHead className="w-[80px]">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cases?.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{c.contact_name || 'Sem nome'}</p>
+                            <p className="text-xs text-muted-foreground">{c.contact_email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{c.sdr_name || c.sdr_email}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {GHOST_TYPE_LABELS[c.ghost_type] || c.ghost_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getSeverityColor(c.severity)}>
+                            {SEVERITY_LABELS[c.severity]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono">{c.distinct_days}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getStatusColor(c.status)}>
+                            {STATUS_LABELS[c.status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">
+                            {format(new Date(c.detection_date), 'dd/MM', { locale: ptBR })}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => setSelectedCase(c)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {cases?.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          Nenhum caso encontrado
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Aba Duplicatas */}
+        <TabsContent value="duplicatas">
+          <DuplicatesTab />
+        </TabsContent>
+      </Tabs>
 
       {/* Details Sheet */}
       <Sheet open={!!selectedCase} onOpenChange={() => setSelectedCase(null)}>
@@ -379,7 +426,7 @@ export default function AuditoriaAgendamentos() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {selectedCase.movement_history?.map((m, i) => (
+                      {filterMovementHistory(selectedCase.movement_history)?.map((m, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs border-l-2 border-primary/30 pl-3 py-1">
                           <span className="text-muted-foreground whitespace-nowrap">
                             {format(new Date(m.date), 'dd/MM HH:mm', { locale: ptBR })}
@@ -436,17 +483,17 @@ export default function AuditoriaAgendamentos() {
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm">Resultado da Revisão</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-2">
                       <Badge className={getStatusColor(selectedCase.status)}>
                         {STATUS_LABELS[selectedCase.status]}
                       </Badge>
                       {selectedCase.review_notes && (
-                        <p className="text-sm mt-2 text-muted-foreground">
+                        <p className="text-sm text-muted-foreground">
                           {selectedCase.review_notes}
                         </p>
                       )}
                       {selectedCase.reviewed_at && (
-                        <p className="text-xs text-muted-foreground mt-2">
+                        <p className="text-xs text-muted-foreground">
                           Revisado em {format(new Date(selectedCase.reviewed_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                         </p>
                       )}
