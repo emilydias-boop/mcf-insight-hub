@@ -42,10 +42,10 @@ serve(async (req) => {
 
     console.log('Creating Calendly event:', body);
 
-    // Get closer info with calendly_event_type_uri
+    // Get closer info with calendly_event_type_uri and default link
     const { data: closer, error: closerError } = await supabase
       .from('closers')
-      .select('id, name, email, calendly_event_type_uri')
+      .select('id, name, email, calendly_event_type_uri, calendly_default_link')
       .eq('id', closerId)
       .single();
 
@@ -133,9 +133,24 @@ serve(async (req) => {
         console.log('Calendly API call failed (will use fallback):', apiError);
         meetingLink = `https://calendly.com/scheduled/${Date.now()}`;
       }
+    } else if (closer.calendly_default_link) {
+      // No event type URI but has default link - use it with date/time params
+      console.log('Using calendly_default_link with pre-selected date/time');
+      
+      // Format date and time for Calendly URL params
+      const dateStr = scheduledDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const hours = scheduledDate.getUTCHours().toString().padStart(2, '0');
+      const minutes = scheduledDate.getUTCMinutes().toString().padStart(2, '0');
+      const timeStr = `${hours}:${minutes}`;
+      
+      const baseLink = closer.calendly_default_link;
+      const separator = baseLink.includes('?') ? '&' : '?';
+      meetingLink = `${baseLink}${separator}date=${dateStr}&time=${timeStr}`;
+      
+      console.log('Generated meeting link:', meetingLink);
     } else {
-      // No event type configured - use internal scheduling
-      console.log('No Calendly event type configured for closer, using internal scheduling');
+      // No event type or default link configured
+      console.log('No Calendly configuration for closer, using internal scheduling');
       meetingLink = '';
     }
 
