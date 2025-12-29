@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
-  ExternalLink, Clock, User, Mail, X, Save 
+  ExternalLink, Clock, User, Mail, X, Save, Link, Copy, Users, Plus, Trash2, Send
 } from 'lucide-react';
 import {
   Drawer,
@@ -17,7 +17,17 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MeetingSlot, useUpdateMeetingStatus, useCancelMeeting, useUpdateMeetingNotes } from '@/hooks/useAgendaData';
+import { Input } from '@/components/ui/input';
+import { 
+  MeetingSlot, 
+  MeetingAttendee,
+  useUpdateMeetingStatus, 
+  useCancelMeeting, 
+  useUpdateMeetingNotes,
+  useAddMeetingAttendee,
+  useRemoveMeetingAttendee,
+  useMarkAttendeeNotified,
+} from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useConversationsContext } from '@/contexts/ConversationsContext';
@@ -42,9 +52,16 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
   const navigate = useNavigate();
   const [notes, setNotes] = useState(meeting?.notes || '');
   const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
+  const [showAddPartner, setShowAddPartner] = useState(false);
+  const [partnerName, setPartnerName] = useState('');
+  const [partnerPhone, setPartnerPhone] = useState('');
+  
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
   const updateNotes = useUpdateMeetingNotes();
+  const addAttendee = useAddMeetingAttendee();
+  const removeAttendee = useRemoveMeetingAttendee();
+  const markNotified = useMarkAttendeeNotified();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
 
   if (!meeting) return null;
@@ -52,6 +69,7 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
   const contact = meeting.deal?.contact;
   const statusInfo = STATUS_LABELS[meeting.status] || STATUS_LABELS.scheduled;
   const isPending = meeting.status === 'scheduled' || meeting.status === 'rescheduled';
+  const meetingLink = meeting.meeting_link || meeting.closer?.calendly_default_link;
 
   const handleCall = () => {
     if (contact?.phone) {
@@ -74,7 +92,6 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
     } catch (error) {
       console.error('Erro ao iniciar conversa:', error);
       toast.error('Erro ao abrir conversa. Abrindo WhatsApp externo...');
-      // Fallback para WhatsApp externo
       const phone = contact.phone.replace(/\D/g, '');
       window.open(`https://wa.me/55${phone}`, '_blank');
     } finally {
@@ -93,6 +110,98 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
     updateNotes.mutate({ meetingId: meeting.id, notes });
   };
 
+  const handleCopyLink = () => {
+    if (meetingLink) {
+      navigator.clipboard.writeText(meetingLink);
+      toast.success('Link copiado!');
+    }
+  };
+
+  const handleOpenLink = () => {
+    if (meetingLink) {
+      window.open(meetingLink, '_blank');
+    }
+  };
+
+  const handleSendLinkViaWhatsApp = (phone: string, name: string) => {
+    if (!meetingLink || !phone) return;
+    const formattedPhone = phone.replace(/\D/g, '');
+    const message = encodeURIComponent(
+      `Olá ${name}! 👋\n\nSegue o link para nossa reunião:\n${meetingLink}\n\nAguardo você!`
+    );
+    window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
+  };
+
+  const handleAddPartner = () => {
+    if (!partnerName.trim()) {
+      toast.error('Informe o nome do sócio');
+      return;
+    }
+    
+    addAttendee.mutate({
+      meetingSlotId: meeting.id,
+      attendeeName: partnerName,
+      attendeePhone: partnerPhone || undefined,
+      isPartner: true,
+    }, {
+      onSuccess: () => {
+        setPartnerName('');
+        setPartnerPhone('');
+        setShowAddPartner(false);
+      }
+    });
+  };
+
+  const handleRemoveAttendee = (attendeeId: string) => {
+    removeAttendee.mutate(attendeeId);
+  };
+
+  const handleSendToAll = () => {
+    const allParticipants = getParticipantsList();
+    allParticipants.forEach(p => {
+      if (p.phone) {
+        handleSendLinkViaWhatsApp(p.phone, p.name);
+      }
+    });
+  };
+
+  // Get all participants (main contact + attendees)
+  const getParticipantsList = () => {
+    const participants: { id?: string; name: string; phone: string | null; isPartner: boolean; isMain: boolean; notifiedAt?: string | null }[] = [];
+    
+    // Main contact
+    if (contact) {
+      participants.push({
+        name: contact.name,
+        phone: contact.phone,
+        isPartner: false,
+        isMain: true,
+      });
+    }
+
+    // Additional attendees
+    meeting.attendees?.forEach(att => {
+      // Skip if it's the same as main contact
+      if (att.contact_id === meeting.contact_id) return;
+      
+      const name = att.attendee_name || att.contact?.name || 'Participante';
+      const phone = att.attendee_phone || att.contact?.phone;
+      
+      participants.push({
+        id: att.id,
+        name,
+        phone,
+        isPartner: att.is_partner || false,
+        isMain: false,
+        notifiedAt: att.notified_at,
+      });
+    });
+
+    return participants;
+  };
+
+  const participants = getParticipantsList();
+
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90vh]">
@@ -109,34 +218,148 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
 
         <ScrollArea className="flex-1 p-6">
           <div className="space-y-6">
-            {/* Lead Info */}
+            {/* Meeting Link Section */}
+            {meetingLink && (
+              <div className="bg-primary/10 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Link className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Link da Reunião</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={meetingLink} 
+                    readOnly 
+                    className="text-xs bg-background"
+                  />
+                  <Button variant="outline" size="icon" onClick={handleCopyLink}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={handleOpenLink}>
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </div>
+                {participants.length > 0 && (
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={handleSendToAll}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Enviar link para todos via WhatsApp
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Participants Section */}
             <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <div 
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
-                  style={{ backgroundColor: meeting.closer?.color || '#3B82F6' }}
-                >
-                  {contact?.name?.charAt(0) || 'L'}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Participantes ({participants.length})</span>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold">
-                    {contact?.name || meeting.deal?.name || 'Lead sem nome'}
-                  </h3>
-                  {contact?.email && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Mail className="h-3.5 w-3.5" />
-                      {contact.email}
-                    </div>
-                  )}
-                  {contact?.phone && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Phone className="h-3.5 w-3.5" />
-                      {contact.phone}
-                    </div>
-                  )}
+                {isPending && participants.length < 4 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowAddPartner(!showAddPartner)}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Sócio
+                  </Button>
+                )}
+              </div>
+
+              {/* Add Partner Form */}
+              {showAddPartner && (
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <Input
+                    placeholder="Nome do sócio"
+                    value={partnerName}
+                    onChange={(e) => setPartnerName(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Telefone (opcional)"
+                    value={partnerPhone}
+                    onChange={(e) => setPartnerPhone(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      onClick={handleAddPartner}
+                      disabled={addAttendee.isPending}
+                    >
+                      Adicionar
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => setShowAddPartner(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
                 </div>
+              )}
+
+              {/* Participants List */}
+              <div className="space-y-2">
+                {participants.map((p, idx) => (
+                  <div 
+                    key={p.id || idx} 
+                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                        style={{ backgroundColor: meeting.closer?.color || '#3B82F6' }}
+                      >
+                        {p.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{p.name}</span>
+                          {p.isMain && (
+                            <Badge variant="secondary" className="text-xs">Principal</Badge>
+                          )}
+                          {p.isPartner && (
+                            <Badge variant="outline" className="text-xs">Sócio</Badge>
+                          )}
+                        </div>
+                        {p.phone && (
+                          <span className="text-xs text-muted-foreground">{p.phone}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {p.phone && meetingLink && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => handleSendLinkViaWhatsApp(p.phone!, p.name)}
+                        >
+                          <MessageCircle className="h-4 w-4 text-green-600" />
+                        </Button>
+                      )}
+                      {!p.isMain && p.id && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => handleRemoveAttendee(p.id!)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+
+            <Separator />
 
             {/* Meeting Info Card */}
             <div className="bg-muted/50 rounded-lg p-4 space-y-3">
@@ -216,15 +439,6 @@ export function AgendaMeetingDrawer({ meeting, open, onOpenChange, onReschedule 
                 </div>
               </>
             )}
-
-            {/* Activity History - Placeholder */}
-            <Separator />
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground">Histórico</h4>
-              <p className="text-sm text-muted-foreground">
-                Acesse o negócio completo para ver o histórico de atividades
-              </p>
-            </div>
 
             {/* Notes */}
             <Separator />

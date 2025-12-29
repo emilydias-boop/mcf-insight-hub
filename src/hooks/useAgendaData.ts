@@ -3,6 +3,27 @@ import { supabase } from '@/integrations/supabase/client';
 import { startOfWeek, endOfWeek, format, addDays, isSameDay, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
+export interface MeetingAttendee {
+  id: string;
+  deal_id: string | null;
+  contact_id: string | null;
+  attendee_name: string | null;
+  attendee_phone: string | null;
+  is_partner: boolean;
+  status: string;
+  notified_at: string | null;
+  contact?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+  };
+  deal?: {
+    id: string;
+    name: string;
+  };
+}
+
 export interface MeetingSlot {
   id: string;
   closer_id: string;
@@ -20,6 +41,7 @@ export interface MeetingSlot {
     name: string;
     email: string;
     color?: string;
+    calendly_default_link?: string;
   };
   deal?: {
     id: string;
@@ -31,6 +53,7 @@ export interface MeetingSlot {
       email: string | null;
     };
   };
+  attendees?: MeetingAttendee[];
 }
 
 export type LeadType = 'A' | 'B';
@@ -91,11 +114,23 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
         .from('meeting_slots')
         .select(`
           *,
-          closer:closers(id, name, email, color),
+          closer:closers(id, name, email, color, calendly_default_link),
           deal:crm_deals(
             id, 
             name,
             contact:crm_contacts(id, name, phone, email)
+          ),
+          attendees:meeting_slot_attendees(
+            id,
+            deal_id,
+            contact_id,
+            attendee_name,
+            attendee_phone,
+            is_partner,
+            status,
+            notified_at,
+            contact:crm_contacts(id, name, phone, email),
+            deal:crm_deals(id, name)
           )
         `)
         .gte('scheduled_at', startDate.toISOString())
@@ -580,7 +615,14 @@ export function useCreateMeeting() {
       notes?: string;
       leadType?: LeadType;
     }) => {
-      const { error } = await supabase
+      // Get closer's calendly_default_link
+      const { data: closer } = await supabase
+        .from('closers')
+        .select('calendly_default_link')
+        .eq('id', closerId)
+        .single();
+
+      const { data: meetingSlot, error } = await supabase
         .from('meeting_slots')
         .insert({
           closer_id: closerId,
@@ -591,9 +633,25 @@ export function useCreateMeeting() {
           status: 'scheduled',
           notes,
           lead_type: leadType,
-        });
+          meeting_link: closer?.calendly_default_link || null,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Also create the first attendee record
+      if (meetingSlot && (dealId || contactId)) {
+        await supabase.from('meeting_slot_attendees').insert({
+          meeting_slot_id: meetingSlot.id,
+          deal_id: dealId || null,
+          contact_id: contactId || null,
+          status: 'invited',
+          is_partner: false,
+        });
+      }
+
+      return meetingSlot;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
@@ -605,6 +663,90 @@ export function useCreateMeeting() {
     },
     onError: () => {
       toast.error('Erro ao agendar reunião');
+    },
+  });
+}
+
+// Hook to add attendee to a meeting
+export function useAddMeetingAttendee() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      meetingSlotId,
+      dealId,
+      contactId,
+      attendeeName,
+      attendeePhone,
+      isPartner = false,
+    }: {
+      meetingSlotId: string;
+      dealId?: string;
+      contactId?: string;
+      attendeeName?: string;
+      attendeePhone?: string;
+      isPartner?: boolean;
+    }) => {
+      const { error } = await supabase.from('meeting_slot_attendees').insert({
+        meeting_slot_id: meetingSlotId,
+        deal_id: dealId || null,
+        contact_id: contactId || null,
+        attendee_name: attendeeName || null,
+        attendee_phone: attendeePhone || null,
+        is_partner: isPartner,
+        status: 'invited',
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      toast.success('Participante adicionado');
+    },
+    onError: () => {
+      toast.error('Erro ao adicionar participante');
+    },
+  });
+}
+
+// Hook to remove attendee from a meeting
+export function useRemoveMeetingAttendee() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (attendeeId: string) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .delete()
+        .eq('id', attendeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      toast.success('Participante removido');
+    },
+    onError: () => {
+      toast.error('Erro ao remover participante');
+    },
+  });
+}
+
+// Hook to mark attendee as notified
+export function useMarkAttendeeNotified() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (attendeeId: string) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ notified_at: new Date().toISOString() })
+        .eq('id', attendeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
     },
   });
 }

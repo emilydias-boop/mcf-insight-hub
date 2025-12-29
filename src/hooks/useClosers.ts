@@ -9,6 +9,7 @@ export interface Closer {
   color: string | null;
   is_active: boolean | null;
   calendly_event_type_uri: string | null;
+  calendly_default_link: string | null;
   employee_id: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -20,6 +21,7 @@ export interface CloserFormData {
   color?: string;
   is_active?: boolean;
   calendly_event_type_uri?: string;
+  calendly_default_link?: string;
   employee_id?: string;
 }
 

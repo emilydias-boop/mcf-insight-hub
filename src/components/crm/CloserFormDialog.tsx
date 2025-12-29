@@ -31,7 +31,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     email: '',
     color: '#3b82f6',
     is_active: true,
-    calendly_event_type_uri: ''
+    calendly_event_type_uri: '',
+    calendly_default_link: ''
   });
 
   const createCloser = useCreateCloser();
@@ -46,7 +47,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         email: closer.email,
         color: closer.color || '#3b82f6',
         is_active: closer.is_active ?? true,
-        calendly_event_type_uri: closer.calendly_event_type_uri || ''
+        calendly_event_type_uri: closer.calendly_event_type_uri || '',
+        calendly_default_link: closer.calendly_default_link || ''
       });
     } else {
       setFormData({
@@ -54,7 +56,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         email: '',
         color: '#3b82f6',
         is_active: true,
-        calendly_event_type_uri: ''
+        calendly_event_type_uri: '',
+        calendly_default_link: ''
       });
     }
   }, [closer, open]);
@@ -126,7 +129,20 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="calendly_uri">Calendly Event Type URI</Label>
+            <Label htmlFor="calendly_link">Link do Calendly (para enviar aos leads)</Label>
+            <Input
+              id="calendly_link"
+              value={formData.calendly_default_link}
+              onChange={(e) => setFormData({ ...formData, calendly_default_link: e.target.value })}
+              placeholder="https://calendly.com/julio-mcf/reuniao-r01"
+            />
+            <p className="text-xs text-muted-foreground">
+              Link público do Calendly que será enviado aos leads ao agendar reuniões
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="calendly_uri">Calendly Event Type URI (opcional)</Label>
             <Input
               id="calendly_uri"
               value={formData.calendly_event_type_uri}
@@ -134,22 +150,9 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               placeholder="https://api.calendly.com/event_types/..."
             />
             <p className="text-xs text-muted-foreground">
-              URI do tipo de evento no Calendly para agendamentos automáticos
+              URI da API para integrações avançadas (opcional)
             </p>
           </div>
-          
-          <Alert className="bg-muted/50">
-            <Info className="h-4 w-4" />
-            <AlertDescription className="text-sm">
-              <strong>Como obter o Event Type URI:</strong>
-              <ol className="list-decimal list-inside mt-2 space-y-1">
-                <li>Acesse o <a href="https://calendly.com/event_types/user/me" target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-1">Calendly <ExternalLink className="h-3 w-3" /></a></li>
-                <li>Clique no evento que o closer usará</li>
-                <li>Na URL do navegador, copie o identificador após /event_types/</li>
-                <li>O formato completo é: <code className="bg-muted px-1 rounded text-xs">https://api.calendly.com/event_types/XXXXXXXX</code></li>
-              </ol>
-            </AlertDescription>
-          </Alert>
           
           <div className="flex items-center justify-between">
             <Label htmlFor="is_active">Closer Ativo</Label>
