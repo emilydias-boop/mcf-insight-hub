@@ -842,13 +842,17 @@ async function handleDealStageChanged(supabase: any, data: any) {
     console.log('[DEAL.STAGE_CHANGED] No activity needed (same stage, not R1 Agendada)');
   }
 
+  // 5. CRIAR MEETING_SLOT se for estágio de reunião agendada e tiver dados de reunião
+  const meetingResult = await tryCreateMeetingSlotFromClint(supabase, dealId, contactId, newStage.stage_name, data);
+  
   console.log('[DEAL.STAGE_CHANGED] Success');
   return { 
     action: 'stage_changed', 
     deal_id: dealId,
     from_stage: currentStageName,
     to_stage: newStage.stage_name,
-    was_created: !currentStageId // true se foi criado agora
+    was_created: !currentStageId, // true se foi criado agora
+    meeting_slot: meetingResult
   };
 }
 
@@ -1044,4 +1048,186 @@ async function getInternalGroupId(supabase: any, clintId: string | null): Promis
     .eq('clint_id', clintId)
     .maybeSingle();
   return data?.id || null;
+}
+
+// ============= CRIAR MEETING_SLOT A PARTIR DO CLINT =============
+
+/**
+ * Tenta criar um meeting_slot quando o deal muda para estágio de reunião agendada
+ * Campos esperados do Clint:
+ * - deal_data_reuniao_01 ou deal_data_hora_agendament: Data/hora da reunião
+ * - deal_hora_agendamento: Hora separada (opcional)
+ * - deal_closer: Nome do closer responsável
+ * - deal_link_reuniao_01: Link da reunião (opcional)
+ */
+async function tryCreateMeetingSlotFromClint(
+  supabase: any,
+  dealId: string,
+  contactId: string | null,
+  stageName: string,
+  data: any
+): Promise<any> {
+  // Verificar se é estágio de reunião agendada
+  const stageUpper = (stageName || '').toUpperCase();
+  const isReuniao01 = (stageUpper.includes('REUNI') || stageUpper.includes('R1')) && 
+                      stageUpper.includes('AGENDADA');
+  
+  if (!isReuniao01) {
+    return { skipped: true, reason: 'not_reunion_stage' };
+  }
+
+  console.log('[MEETING_SLOT] Detected reunion stage, checking for meeting data...');
+  
+  // Extrair dados de reunião do payload
+  const meetingDate = data.deal_data_reuniao_01 || data.deal_data_hora_agendament || data.deal_data_reuniao_closer;
+  const meetingTime = data.deal_hora_agendamento;
+  const closerName = data.deal_closer;
+  const meetingLink = data.deal_link_reuniao_01;
+  
+  console.log('[MEETING_SLOT] Meeting data:', { meetingDate, meetingTime, closerName, meetingLink });
+  
+  // Precisa pelo menos de data e closer
+  if (!meetingDate || !closerName) {
+    console.log('[MEETING_SLOT] Missing required data (date or closer)');
+    return { skipped: true, reason: 'missing_data', missing: { date: !meetingDate, closer: !closerName } };
+  }
+  
+  // 1. Buscar closer pelo nome
+  const { data: closer } = await supabase
+    .from('closers')
+    .select('id, name, calendly_default_link')
+    .ilike('name', `%${closerName}%`)
+    .eq('is_active', true)
+    .maybeSingle();
+  
+  if (!closer) {
+    console.log('[MEETING_SLOT] Closer not found:', closerName);
+    return { skipped: true, reason: 'closer_not_found', closer_name: closerName };
+  }
+  
+  console.log('[MEETING_SLOT] Found closer:', closer.name, closer.id);
+  
+  // 2. Parsear data/hora
+  const scheduledAt = parseClintDateTime(meetingDate, meetingTime);
+  if (!scheduledAt) {
+    console.log('[MEETING_SLOT] Failed to parse datetime:', meetingDate, meetingTime);
+    return { skipped: true, reason: 'invalid_datetime', raw: { date: meetingDate, time: meetingTime } };
+  }
+  
+  console.log('[MEETING_SLOT] Parsed scheduled_at:', scheduledAt);
+  
+  // 3. Verificar se já existe slot para este deal
+  const { data: existingSlot } = await supabase
+    .from('meeting_slots')
+    .select('id, scheduled_at, status')
+    .eq('deal_id', dealId)
+    .in('status', ['scheduled', 'rescheduled'])
+    .maybeSingle();
+  
+  if (existingSlot) {
+    console.log('[MEETING_SLOT] Slot already exists for deal:', existingSlot.id);
+    return { skipped: true, reason: 'slot_already_exists', existing_slot_id: existingSlot.id };
+  }
+  
+  // 4. Detectar lead_type baseado nas tags
+  const tags = data.tags || [];
+  let leadType = 'A'; // Default
+  for (const tag of tags) {
+    const tagUpper = String(tag).toUpperCase();
+    if (tagUpper.includes('LEAD B') || tagUpper === 'B') {
+      leadType = 'B';
+      break;
+    }
+  }
+  
+  // 5. Criar meeting_slot
+  const { data: newSlot, error: slotError } = await supabase
+    .from('meeting_slots')
+    .insert({
+      closer_id: closer.id,
+      deal_id: dealId,
+      contact_id: contactId,
+      scheduled_at: scheduledAt,
+      duration_minutes: 60,
+      status: 'scheduled',
+      meeting_link: meetingLink || closer.calendly_default_link || null,
+      notes: 'Criado via webhook Clint',
+      lead_type: leadType
+    })
+    .select('id')
+    .single();
+  
+  if (slotError) {
+    console.error('[MEETING_SLOT] Error creating slot:', slotError);
+    return { error: true, message: slotError.message };
+  }
+  
+  console.log('[MEETING_SLOT] Successfully created slot:', newSlot.id);
+  
+  // 6. Atualizar deal com próxima ação = reunião
+  await supabase
+    .from('crm_deals')
+    .update({
+      next_action_type: 'meeting',
+      next_action_date: scheduledAt,
+      next_action_note: `Reunião com ${closer.name}`,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', dealId);
+  
+  return { created: true, slot_id: newSlot.id, closer: closer.name, scheduled_at: scheduledAt };
+}
+
+/**
+ * Parseia data/hora do Clint em diferentes formatos
+ * Exemplos de entrada:
+ * - "2025-01-15 14:30:00"
+ * - "15/01/2025 14:30"
+ * - "2025-01-15" + "14:30"
+ */
+function parseClintDateTime(dateStr: string, timeStr?: string): string | null {
+  try {
+    let dateObj: Date;
+    
+    // Normalizar string
+    const cleanDate = String(dateStr).trim();
+    const cleanTime = timeStr ? String(timeStr).trim() : null;
+    
+    // Formato ISO: 2025-01-15T14:30:00 ou 2025-01-15 14:30:00
+    if (/^\d{4}-\d{2}-\d{2}/.test(cleanDate)) {
+      if (cleanTime && /^\d{2}:\d{2}/.test(cleanTime)) {
+        // Data + hora separados
+        const datePart = cleanDate.split(/[T ]/)[0];
+        dateObj = new Date(`${datePart}T${cleanTime}:00`);
+      } else {
+        // Data já contém hora
+        dateObj = new Date(cleanDate.replace(' ', 'T'));
+      }
+    }
+    // Formato BR: 15/01/2025 ou 15/01/2025 14:30
+    else if (/^\d{2}\/\d{2}\/\d{4}/.test(cleanDate)) {
+      const parts = cleanDate.split(/[\s]+/);
+      const dateParts = parts[0].split('/');
+      const timePart = cleanTime || parts[1] || '12:00';
+      
+      // DD/MM/YYYY -> YYYY-MM-DD
+      const isoDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
+      dateObj = new Date(`${isoDate}T${timePart}:00`);
+    }
+    else {
+      // Tentar parse genérico
+      dateObj = new Date(cleanDate);
+    }
+    
+    // Validar resultado
+    if (isNaN(dateObj.getTime())) {
+      console.log('[PARSE_DATETIME] Invalid date result:', cleanDate, cleanTime);
+      return null;
+    }
+    
+    return dateObj.toISOString();
+  } catch (err) {
+    console.error('[PARSE_DATETIME] Error parsing:', dateStr, timeStr, err);
+    return null;
+  }
 }
