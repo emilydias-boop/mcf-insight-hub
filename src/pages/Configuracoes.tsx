@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,19 +7,89 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { User, Bell, Shield, Settings, DollarSign, Mail, Palette } from "lucide-react";
+import { User, Bell, Shield, Settings, DollarSign, Mail, Palette, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { OperationalCostsConfig } from "@/components/dashboard/OperationalCostsConfig";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMyProfile, useUpdateMyProfile, useUpdateMyEmail, useUpdateMyPassword } from "@/hooks/useMyProfile";
 
 export default function Configuracoes() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
 
-  const handleSave = () => {
-    toast({ title: "Sucesso", description: "Alterações salvas com sucesso!" });
+  // Profile hooks
+  const { data: profile, isLoading: profileLoading } = useMyProfile();
+  const updateProfile = useUpdateMyProfile();
+  const updateEmail = useUpdateMyEmail();
+  const updatePassword = useUpdateMyPassword();
+
+  // Profile form state
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+
+  // Password form state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Load profile data into form
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setEmail(profile.email || '');
+    }
+  }, [profile]);
+
+  const handleSaveProfile = async () => {
+    try {
+      // Update name
+      if (fullName !== profile?.full_name) {
+        await updateProfile.mutateAsync({ full_name: fullName });
+      }
+
+      // Update email if changed
+      if (email !== profile?.email) {
+        await updateEmail.mutateAsync({ email });
+      }
+
+      if (fullName === profile?.full_name && email === profile?.email) {
+        toast({ title: "Info", description: "Nenhuma alteração detectada" });
+      }
+    } catch (error) {
+      // Errors are handled in the mutation hooks
+    }
   };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast({ title: "Erro", description: "Preencha todos os campos de senha", variant: "destructive" });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Erro", description: "As senhas não coincidem", variant: "destructive" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({ title: "Erro", description: "A senha deve ter pelo menos 6 caracteres", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await updatePassword.mutateAsync({ password: newPassword });
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      // Error handled in mutation
+    }
+  };
+
+  const handleSaveNotifications = () => {
+    toast({ title: "Sucesso", description: "Preferências de notificação salvas!" });
+  };
+
+  const isSavingProfile = updateProfile.isPending || updateEmail.isPending;
 
   return (
     <div className="space-y-8">
@@ -67,28 +138,55 @@ export default function Configuracoes() {
               <CardTitle className="text-foreground">Informações Pessoais</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="nome" className="text-foreground">Nome Completo</Label>
-                <Input id="nome" defaultValue="João Silva" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground">Email</Label>
-                <Input id="email" type="email" defaultValue="joao.silva@mcf.com.br" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="telefone" className="text-foreground">Telefone</Label>
-                <Input id="telefone" defaultValue="(11) 98765-4321" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="foto" className="text-foreground">Foto de Perfil</Label>
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
-                    <User className="h-8 w-8 text-primary" />
-                  </div>
-                  <Button variant="outline" size="sm">Alterar Foto</Button>
+              {profileLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              </div>
-              <Button onClick={handleSave}>Salvar Alterações</Button>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="nome" className="text-foreground">Nome Completo</Label>
+                    <Input 
+                      id="nome" 
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Seu nome completo"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-foreground">Email</Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="seu@email.com"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Ao alterar o email, você receberá uma confirmação no novo endereço.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="foto" className="text-foreground">Foto de Perfil</Label>
+                    <div className="flex items-center gap-4">
+                      <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                        {profile?.avatar_url ? (
+                          <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
+                        ) : (
+                          <User className="h-8 w-8 text-primary" />
+                        )}
+                      </div>
+                      <Button variant="outline" size="sm" disabled>
+                        Alterar Foto (em breve)
+                      </Button>
+                    </div>
+                  </div>
+                  <Button onClick={handleSaveProfile} disabled={isSavingProfile}>
+                    {isSavingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Salvar Alterações
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -139,7 +237,7 @@ export default function Configuracoes() {
                 </div>
                 <Switch defaultChecked />
               </div>
-              <Button onClick={handleSave}>Salvar Preferências</Button>
+              <Button onClick={handleSaveNotifications}>Salvar Preferências</Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -147,22 +245,36 @@ export default function Configuracoes() {
         <TabsContent value="seguranca" className="space-y-4 mt-6">
           <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle className="text-foreground">Segurança da Conta</CardTitle>
+              <CardTitle className="text-foreground">Alterar Senha</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="senha-atual" className="text-foreground">Senha Atual</Label>
-                <Input id="senha-atual" type="password" />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="nova-senha" className="text-foreground">Nova Senha</Label>
-                <Input id="nova-senha" type="password" />
+                <Input 
+                  id="nova-senha" 
+                  type="password" 
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmar-senha" className="text-foreground">Confirmar Nova Senha</Label>
-                <Input id="confirmar-senha" type="password" />
+                <Input 
+                  id="confirmar-senha" 
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repita a nova senha"
+                />
               </div>
-              <Button onClick={handleSave}>Alterar Senha</Button>
+              <Button 
+                onClick={handleChangePassword} 
+                disabled={updatePassword.isPending}
+              >
+                {updatePassword.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Alterar Senha
+              </Button>
               
               <Separator className="my-6" />
               
@@ -171,8 +283,9 @@ export default function Configuracoes() {
                   <p className="font-medium text-foreground">Autenticação de Dois Fatores</p>
                   <p className="text-sm text-muted-foreground">Adicionar camada extra de segurança</p>
                 </div>
-                <Switch />
+                <Switch disabled />
               </div>
+              <p className="text-xs text-muted-foreground">Em breve</p>
             </CardContent>
           </Card>
         </TabsContent>
