@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Search, Calendar, Clock, User, Tag, Send } from 'lucide-react';
@@ -153,13 +153,27 @@ export function QuickScheduleModal({
     setAutoSendWhatsApp(true);
   };
 
-  const timeSlots = Array.from({ length: 22 }, (_, i) => {
-    const hour = Math.floor(i / 2) + 8;
-    const minute = (i % 2) * 30;
-    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  });
+  const timeSlots = useMemo(() => {
+    return Array.from({ length: 22 }, (_, i) => {
+      const hour = Math.floor(i / 2) + 8;
+      const minute = (i % 2) * 30;
+      return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    });
+  }, []);
 
-  const isSlotFull = slotAvailability && !slotAvailability.available;
+  // Check which time slots are full
+  const getTimeSlotStatus = useCallback((time: string) => {
+    if (!slotAvailability) return { isFull: false };
+    // Only check the selected time
+    if (time === selectedTime) {
+      return { 
+        isFull: !slotAvailability.available,
+        count: slotAvailability.currentCount,
+        max: slotAvailability.maxSlots,
+      };
+    }
+    return { isFull: false };
+  }, [slotAvailability, selectedTime]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -290,16 +304,28 @@ export function QuickScheduleModal({
             <div className="space-y-2">
               <Label>Horário</Label>
               <Select value={selectedTime} onValueChange={setSelectedTime}>
-                <SelectTrigger className={cn(isSlotFull && 'border-destructive')}>
+                <SelectTrigger className={cn(slotAvailability && !slotAvailability.available && 'border-destructive')}>
                   <Clock className="h-4 w-4 mr-2" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.map(time => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
+                  {timeSlots.map(time => {
+                    const status = getTimeSlotStatus(time);
+                    return (
+                      <SelectItem 
+                        key={time} 
+                        value={time}
+                        className={cn(status.isFull && 'opacity-50')}
+                      >
+                        <span className={cn(status.isFull && 'line-through')}>
+                          {time}
+                        </span>
+                        {status.isFull && (
+                          <span className="ml-2 text-destructive text-xs">(cheio)</span>
+                        )}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -309,7 +335,7 @@ export function QuickScheduleModal({
           {selectedCloser && selectedDate && slotAvailability && (
             <div className={cn(
               "flex items-center justify-between p-2 rounded-md text-sm",
-              slotAvailability.available ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+              slotAvailability.available ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
             )}>
               <span>
                 Lead {detectedLeadType} às {selectedTime}
@@ -347,9 +373,9 @@ export function QuickScheduleModal({
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending || isSlotFull}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending || (slotAvailability && !slotAvailability.available)}
           >
-            {createMeeting.isPending ? 'Agendando...' : isSlotFull ? 'Horário Cheio' : 'Agendar Reunião'}
+            {createMeeting.isPending ? 'Agendando...' : (slotAvailability && !slotAvailability.available) ? 'Horário Cheio' : 'Agendar Reunião'}
           </Button>
         </div>
       </DialogContent>
