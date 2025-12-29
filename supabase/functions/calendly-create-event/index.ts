@@ -137,11 +137,22 @@ serve(async (req) => {
       // No event type URI but has default link - use it with date/time params
       console.log('Using calendly_default_link with pre-selected date/time');
       
-      // Format date and time for Calendly URL params
-      const dateStr = scheduledDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      const hours = scheduledDate.getUTCHours().toString().padStart(2, '0');
-      const minutes = scheduledDate.getUTCMinutes().toString().padStart(2, '0');
-      const timeStr = `${hours}:${minutes}`;
+      // Format date and time for Calendly URL params in São Paulo timezone
+      const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      
+      const dateStr = dateFormatter.format(scheduledDate); // YYYY-MM-DD
+      const timeStr = timeFormatter.format(scheduledDate); // HH:mm
       
       const baseLink = closer.calendly_default_link;
       const separator = baseLink.includes('?') ? '&' : '?';

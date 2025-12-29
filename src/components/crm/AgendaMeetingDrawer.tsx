@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
+import { withCalendlyDateTimeParams } from '@/lib/calendlyLink';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
@@ -77,20 +78,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
   const meetingLink = activeMeeting.meeting_link || activeMeeting.closer?.calendly_default_link;
 
-  // Add date/time params to Calendly link if not already present
-  const enhancedMeetingLink = (() => {
-    if (!meetingLink || !meetingLink.includes('calendly.com')) return meetingLink;
-    if (meetingLink.includes('date=') && meetingLink.includes('time=')) return meetingLink;
-    
-    const scheduledDate = parseISO(activeMeeting.scheduled_at);
-    const dateStr = format(scheduledDate, 'yyyy-MM-dd');
-    const hours = scheduledDate.getUTCHours().toString().padStart(2, '0');
-    const minutes = scheduledDate.getUTCMinutes().toString().padStart(2, '0');
-    const timeStr = `${hours}:${minutes}`;
-    
-    const separator = meetingLink.includes('?') ? '&' : '?';
-    return `${meetingLink}${separator}date=${dateStr}&time=${timeStr}`;
-  })();
+  // Add date/time params to Calendly link using São Paulo timezone
+  const enhancedMeetingLink = withCalendlyDateTimeParams(meetingLink, activeMeeting.scheduled_at);
 
   const handleCall = () => {
     if (contact?.phone) {
