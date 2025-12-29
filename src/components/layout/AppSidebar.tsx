@@ -125,14 +125,19 @@ const menuItems: MenuItem[] = [
   { title: "Crédito", url: "/credito", icon: CreditCard, resource: "credito", requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
   
-  // Configurações consolidadas (inclui Usuários)
+  // Configurações pessoais (todos os usuários)
   { 
     title: "Configurações", 
+    url: "/configuracoes",
     icon: Settings, 
-    resource: "configuracoes", 
+  },
+  
+  // Administração (apenas admin)
+  { 
+    title: "Administração", 
+    icon: Users, 
     requiredRoles: ['admin'],
     items: [
-      { title: "Geral", url: "/configuracoes" },
       { title: "Usuários", url: "/usuarios" },
       { title: "Closers", url: "/crm/configurar-closers" },
     ]
