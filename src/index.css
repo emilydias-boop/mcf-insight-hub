@@ -6,6 +6,36 @@
 All colors MUST be HSL.
 */
 
+/* Global font size reduction */
+html {
+  font-size: 50%;
+}
+
+/* Scrollbar styling - WebKit (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 100% / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(0 0% 100% / 0.5);
+}
+
+/* Scrollbar styling - Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(0 0% 100% / 0.3) hsl(var(--background));
+}
+
 @layer base {
   :root {
     --background: 0 0% 4%;
