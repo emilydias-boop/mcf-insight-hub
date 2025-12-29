@@ -98,14 +98,41 @@ export default function AuditoriaAgendamentos() {
     }
   };
 
-  // Filtrar movement_history para excluir duplicatas
+  // Filtrar movement_history para excluir duplicatas baseado em proximidade temporal
   const filterMovementHistory = (history: any[] | undefined) => {
-    if (!history) return [];
-    return history.filter(m => {
-      // Verificar se este movimento é duplicado (baseado em metadata se disponível)
-      // Por enquanto, manter todos já que não temos a flag is_duplicate no history
-      return true;
-    });
+    if (!history || history.length === 0) return [];
+    
+    // Ordenar por data
+    const sorted = [...history].sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+    
+    const filtered: any[] = [];
+    
+    for (const movement of sorted) {
+      const lastAdded = filtered[filtered.length - 1];
+      
+      if (!lastAdded) {
+        filtered.push(movement);
+        continue;
+      }
+      
+      const timeDiff = Math.abs(
+        new Date(movement.date).getTime() - new Date(lastAdded.date).getTime()
+      );
+      const sameTransition = 
+        movement.from_stage === lastAdded.from_stage && 
+        movement.to_stage === lastAdded.to_stage;
+      
+      // Se diferença for menor que 60 segundos E mesma transição, é duplicata - pular
+      if (timeDiff < 60000 && sameTransition) {
+        continue;
+      }
+      
+      filtered.push(movement);
+    }
+    
+    return filtered;
   };
 
   return (
