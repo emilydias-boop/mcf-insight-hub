@@ -77,6 +77,21 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
   const meetingLink = activeMeeting.meeting_link || activeMeeting.closer?.calendly_default_link;
 
+  // Add date/time params to Calendly link if not already present
+  const enhancedMeetingLink = (() => {
+    if (!meetingLink || !meetingLink.includes('calendly.com')) return meetingLink;
+    if (meetingLink.includes('date=') && meetingLink.includes('time=')) return meetingLink;
+    
+    const scheduledDate = parseISO(activeMeeting.scheduled_at);
+    const dateStr = format(scheduledDate, 'yyyy-MM-dd');
+    const hours = scheduledDate.getUTCHours().toString().padStart(2, '0');
+    const minutes = scheduledDate.getUTCMinutes().toString().padStart(2, '0');
+    const timeStr = `${hours}:${minutes}`;
+    
+    const separator = meetingLink.includes('?') ? '&' : '?';
+    return `${meetingLink}${separator}date=${dateStr}&time=${timeStr}`;
+  })();
+
   const handleCall = () => {
     if (contact?.phone) {
       window.open(`tel:${contact.phone}`, '_blank');
@@ -117,23 +132,23 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const handleCopyLink = () => {
-    if (meetingLink) {
-      navigator.clipboard.writeText(meetingLink);
+    if (enhancedMeetingLink) {
+      navigator.clipboard.writeText(enhancedMeetingLink);
       toast.success('Link copiado!');
     }
   };
 
   const handleOpenLink = () => {
-    if (meetingLink) {
-      window.open(meetingLink, '_blank');
+    if (enhancedMeetingLink) {
+      window.open(enhancedMeetingLink, '_blank');
     }
   };
 
   const handleSendLinkViaWhatsApp = (phone: string, name: string) => {
-    if (!meetingLink || !phone) return;
+    if (!enhancedMeetingLink || !phone) return;
     const formattedPhone = phone.replace(/\D/g, '');
     const message = encodeURIComponent(
-      `Olá ${name}! 👋\n\nSegue o link para nossa reunião:\n${meetingLink}\n\nAguardo você!`
+      `Olá ${name}! 👋\n\nSegue o link para nossa reunião:\n${enhancedMeetingLink}\n\nAguardo você!`
     );
     window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
   };
@@ -247,7 +262,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         <ScrollArea className="flex-1 p-6">
           <div className="space-y-6">
             {/* Meeting Link Section */}
-            {meetingLink && (
+            {enhancedMeetingLink && (
               <div className="bg-primary/10 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <Link className="h-4 w-4 text-primary" />
@@ -255,7 +270,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 </div>
                 <div className="flex items-center gap-2">
                   <Input 
-                    value={meetingLink} 
+                    value={enhancedMeetingLink} 
                     readOnly 
                     className="text-xs bg-background"
                   />
@@ -361,7 +376,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      {p.phone && meetingLink && (
+                      {p.phone && enhancedMeetingLink && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
