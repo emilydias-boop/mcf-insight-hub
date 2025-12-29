@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, Tag } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag, Send } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -28,6 +29,7 @@ import {
   useSearchDealsForSchedule, 
   useCreateMeeting,
   useCheckSlotAvailability,
+  useSendMeetingNotification,
 } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -77,9 +79,11 @@ export function QuickScheduleModal({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
   const [notes, setNotes] = useState('');
+  const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery);
   const createMeeting = useCreateMeeting();
+  const sendNotification = useSendMeetingNotification();
 
   // Detect lead type from selected deal
   const detectedLeadType = useMemo(() => {
@@ -126,8 +130,13 @@ export function QuickScheduleModal({
       scheduledAt,
       notes,
       leadType: detectedLeadType,
+      sendNotification: autoSendWhatsApp,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        // Send WhatsApp notification if enabled
+        if (autoSendWhatsApp && data?.id) {
+          sendNotification.mutate({ meetingSlotId: data.id });
+        }
         onOpenChange(false);
         resetForm();
       },
@@ -141,6 +150,7 @@ export function QuickScheduleModal({
     setSelectedDate(undefined);
     setSelectedTime('09:00');
     setNotes('');
+    setAutoSendWhatsApp(true);
   };
 
   const timeSlots = Array.from({ length: 22 }, (_, i) => {
@@ -318,6 +328,18 @@ export function QuickScheduleModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Adicione observações..."
               rows={2}
+            />
+          </div>
+
+          {/* Auto-send WhatsApp Toggle */}
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-medium">Enviar link via WhatsApp</span>
+            </div>
+            <Switch 
+              checked={autoSendWhatsApp} 
+              onCheckedChange={setAutoSendWhatsApp} 
             />
           </div>
 
