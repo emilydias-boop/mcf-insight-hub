@@ -3,6 +3,7 @@ import { Copy, Check, MessageSquare, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { withCalendlyDateTimeParams, formatDateTimeForCalendly } from '@/lib/calendlyLink';
 
 interface MeetingLinkShareProps {
   meetingLink: string;
@@ -24,29 +25,21 @@ export function MeetingLinkShare({
 
   const scheduledDate = new Date(scheduledAt);
   
+  // Use São Paulo timezone for display consistency
   const formattedDate = scheduledDate.toLocaleDateString('pt-BR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
+    timeZone: 'America/Sao_Paulo',
   });
   const formattedTime = scheduledDate.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
   });
 
-  // Add date/time params to Calendly link if not already present
-  const enhancedMeetingLink = (() => {
-    if (!meetingLink || !meetingLink.includes('calendly.com')) return meetingLink;
-    if (meetingLink.includes('date=') && meetingLink.includes('time=')) return meetingLink;
-    
-    const dateStr = scheduledDate.toISOString().split('T')[0];
-    const hours = scheduledDate.getUTCHours().toString().padStart(2, '0');
-    const minutes = scheduledDate.getUTCMinutes().toString().padStart(2, '0');
-    const timeStr = `${hours}:${minutes}`;
-    
-    const separator = meetingLink.includes('?') ? '&' : '?';
-    return `${meetingLink}${separator}date=${dateStr}&time=${timeStr}`;
-  })();
+  // Add date/time params to Calendly link using São Paulo timezone
+  const enhancedMeetingLink = withCalendlyDateTimeParams(meetingLink, scheduledAt);
 
   const message = `Olá${contactName ? ` ${contactName.split(' ')[0]}` : ''}! 🙂
 
