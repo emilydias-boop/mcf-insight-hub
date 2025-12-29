@@ -969,6 +969,24 @@ async function createDealActivity(
   toStage: string | null,
   metadata: any
 ) {
+  // PREVENÇÃO DE DUPLICATAS: Verificar se existe activity idêntica nos últimos 60 segundos
+  const cutoffTime = new Date(Date.now() - 60 * 1000).toISOString();
+  
+  const { data: existingActivity } = await supabase
+    .from('deal_activities')
+    .select('id, created_at')
+    .eq('deal_id', dealId)
+    .eq('activity_type', activityType)
+    .eq('to_stage', toStage || '')
+    .gte('created_at', cutoffTime)
+    .limit(1);
+
+  if (existingActivity && existingActivity.length > 0) {
+    console.log('[ACTIVITY] DUPLICATE DETECTED - Skipping insert. Existing activity:', existingActivity[0].id);
+    console.log('[ACTIVITY] Deal:', dealId, 'Stage:', toStage, 'Within 60s of:', existingActivity[0].created_at);
+    return; // Não inserir duplicata
+  }
+
   const { error } = await supabase
     .from('deal_activities')
     .insert({
@@ -984,7 +1002,7 @@ async function createDealActivity(
   if (error) {
     console.error('[ACTIVITY] Error creating activity:', error);
   } else {
-    console.log('[ACTIVITY] Created:', activityType);
+    console.log('[ACTIVITY] Created:', activityType, 'for deal:', dealId);
   }
 }
 

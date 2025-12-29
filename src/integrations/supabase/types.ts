@@ -1146,6 +1146,51 @@ export type Database = {
         }
         Relationships: []
       }
+      deal_activities_duplicates: {
+        Row: {
+          created_at: string | null
+          deal_id: string
+          detected_at: string | null
+          duplicate_activity_id: string
+          from_stage: string | null
+          gap_seconds: number | null
+          id: string
+          original_activity_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          to_stage: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          deal_id: string
+          detected_at?: string | null
+          duplicate_activity_id: string
+          from_stage?: string | null
+          gap_seconds?: number | null
+          id?: string
+          original_activity_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          to_stage?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          deal_id?: string
+          detected_at?: string | null
+          duplicate_activity_id?: string
+          from_stage?: string | null
+          gap_seconds?: number | null
+          id?: string
+          original_activity_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          to_stage?: string | null
+        }
+        Relationships: []
+      }
       deal_stages: {
         Row: {
           color: string | null

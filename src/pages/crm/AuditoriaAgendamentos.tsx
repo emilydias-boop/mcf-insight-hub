@@ -65,8 +65,16 @@ export default function AuditoriaAgendamentos() {
       case 'critical': return 'bg-red-500/10 text-red-500 border-red-500/20';
       case 'high': return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
       case 'medium': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+      case 'low': return 'bg-sky-500/10 text-sky-500 border-sky-500/20';
       default: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
     }
+  };
+
+  const getGhostTypeColor = (ghostType: string) => {
+    if (ghostType === 'webhook_duplicado') {
+      return 'bg-sky-500/10 text-sky-500 border-sky-500/20';
+    }
+    return 'bg-muted text-muted-foreground';
   };
 
   const getStatusColor = (status: string) => {
@@ -215,6 +223,8 @@ export default function AuditoriaAgendamentos() {
                 <SelectItem value="tipo_b">Tipo B</SelectItem>
                 <SelectItem value="ciclo_infinito">Ciclo Infinito</SelectItem>
                 <SelectItem value="regressao">Regressão</SelectItem>
+                <SelectItem value="excesso_requalificacao">Excesso Requalificação</SelectItem>
+                <SelectItem value="webhook_duplicado">Webhook Duplicado</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -257,7 +267,7 @@ export default function AuditoriaAgendamentos() {
                       <span className="text-sm">{c.sdr_name || c.sdr_email}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className={`text-xs ${getGhostTypeColor(c.ghost_type)}`}>
                         {GHOST_TYPE_LABELS[c.ghost_type] || c.ghost_type}
                       </Badge>
                     </TableCell>

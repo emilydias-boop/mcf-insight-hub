@@ -11,7 +11,7 @@ export interface GhostAuditCase {
   contact_phone: string | null;
   sdr_email: string;
   sdr_name: string | null;
-  ghost_type: 'tipo_a' | 'tipo_b' | 'ciclo_infinito' | 'regressao' | 'excesso_requalificacao';
+  ghost_type: 'tipo_a' | 'tipo_b' | 'ciclo_infinito' | 'regressao' | 'excesso_requalificacao' | 'webhook_duplicado';
   severity: 'low' | 'medium' | 'high' | 'critical';
   total_r1_agendada: number;
   distinct_days: number;
@@ -226,7 +226,8 @@ export const GHOST_TYPE_LABELS: Record<string, string> = {
   tipo_b: 'Tipo B - No-Shows Consecutivos',
   ciclo_infinito: 'Ciclo Infinito',
   regressao: 'Regressão',
-  excesso_requalificacao: 'Excesso de Requalificação'
+  excesso_requalificacao: 'Excesso de Requalificação',
+  webhook_duplicado: 'Webhook Duplicado'
 };
 
 export const SEVERITY_LABELS: Record<string, string> = {
