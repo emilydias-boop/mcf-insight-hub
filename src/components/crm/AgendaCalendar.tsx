@@ -43,6 +43,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const SLOT_HEIGHT = 40; // px per 30-min slot
+const MAX_MEETINGS_PER_SLOT = 3; // Default max meetings per slot
 
 export function AgendaCalendar({ 
   meetings, 
@@ -145,6 +146,49 @@ export function AgendaCalendar({
                meetingStart.getMinutes() >= minute && 
                meetingStart.getMinutes() < minute + 30);
     });
+  }, [filteredMeetings]);
+
+  // Calculate slot occupancy - how many meetings per closer per time slot
+  const getSlotOccupancy = useCallback((day: Date, hour: number, minute: number, closerId?: string) => {
+    const slotMeetings = filteredMeetings.filter(meeting => {
+      const meetingDate = parseISO(meeting.scheduled_at);
+      const matchesTime = isSameDay(meetingDate, day) &&
+        meetingDate.getHours() === hour &&
+        meetingDate.getMinutes() >= minute &&
+        meetingDate.getMinutes() < minute + 30;
+      
+      if (closerId) {
+        return matchesTime && meeting.closer_id === closerId;
+      }
+      return matchesTime;
+    });
+    
+    return {
+      count: slotMeetings.length,
+      isFull: slotMeetings.length >= MAX_MEETINGS_PER_SLOT,
+    };
+  }, [filteredMeetings]);
+
+  // Check if slot is full for ANY closer (used for time column display)
+  const isSlotFullForAnyCloser = useCallback((day: Date, hour: number, minute: number) => {
+    // Group meetings by closer for this slot
+    const slotMeetings = filteredMeetings.filter(meeting => {
+      const meetingDate = parseISO(meeting.scheduled_at);
+      return isSameDay(meetingDate, day) &&
+        meetingDate.getHours() === hour &&
+        meetingDate.getMinutes() >= minute &&
+        meetingDate.getMinutes() < minute + 30;
+    });
+    
+    // Count per closer
+    const countByCloser: Record<string, number> = {};
+    slotMeetings.forEach(m => {
+      const cid = m.closer_id || 'unknown';
+      countByCloser[cid] = (countByCloser[cid] || 0) + 1;
+    });
+    
+    // Check if any closer has reached max
+    return Object.values(countByCloser).some(count => count >= MAX_MEETINGS_PER_SLOT);
   }, [filteredMeetings]);
 
   const getMeetingsForDay = (day: Date) => {
@@ -372,153 +416,174 @@ export function AgendaCalendar({
             </div>
           )}
           
-          {TIME_SLOTS.map(({ hour, minute }) => (
-            <div
-              key={`${hour}-${minute}`}
-              className={cn(
-                'grid border-b last:border-b-0',
-                gridCols,
-                minute === 0 && 'border-t border-t-border/50'
-              )}
-            >
-              <div className={cn(
-                'min-w-[60px] w-[60px] flex-shrink-0 h-[40px] flex items-center justify-center text-xs text-muted-foreground border-r bg-muted/30',
-                minute === 30 && 'text-muted-foreground/60'
-              )}>
-                {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
-              </div>
-              {viewDays.map(day => {
-                const groupedSlots = getGroupedMeetingsInSlot(day, hour, minute);
-                const isOccupied = isSlotOccupiedByEarlierMeeting(day, hour, minute);
-                const isCurrent = isCurrentTimeSlot(day, hour, minute);
-                const droppableId = `${day.toISOString()}|${hour}|${minute}`;
+          {TIME_SLOTS.map(({ hour, minute }) => {
+            // Check if this time slot is full for any closer across all days
+            const anyDayFull = viewDays.some(day => isSlotFullForAnyCloser(day, hour, minute));
+            
+            return (
+              <div
+                key={`${hour}-${minute}`}
+                className={cn(
+                  'grid border-b last:border-b-0',
+                  gridCols,
+                  minute === 0 && 'border-t border-t-border/50'
+                )}
+              >
+                <div className={cn(
+                  'min-w-[60px] w-[60px] flex-shrink-0 h-[40px] flex items-center justify-center text-xs border-r bg-muted/30',
+                  minute === 30 && 'text-muted-foreground/60',
+                  anyDayFull ? 'line-through text-muted-foreground/40' : 'text-muted-foreground'
+                )}>
+                  {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
+                </div>
+                {viewDays.map(day => {
+                  const groupedSlots = getGroupedMeetingsInSlot(day, hour, minute);
+                  const isOccupied = isSlotOccupiedByEarlierMeeting(day, hour, minute);
+                  const isCurrent = isCurrentTimeSlot(day, hour, minute);
+                  const droppableId = `${day.toISOString()}|${hour}|${minute}`;
+                  
+                  // Check if THIS specific slot is full
+                  const slotOccupancy = getSlotOccupancy(day, hour, minute);
+                  const isSlotFull = slotOccupancy.isFull;
 
-                return (
-                  <Droppable key={droppableId} droppableId={droppableId}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={cn(
-                          'h-[40px] border-l relative',
-                          isSameDay(day, new Date()) && 'bg-primary/5',
-                          isCurrent && 'bg-primary/15 ring-1 ring-primary/30',
-                          snapshot.isDraggingOver && 'bg-primary/20',
-                          isOccupied && 'pointer-events-none'
-                        )}
-                      >
-                        {groupedSlots.map((group, groupIndex) => {
-                          const closerColor = getCloserColor(group.closerId, group.closer?.name);
-                          const slotsNeeded = getSlotsNeeded(group.duration);
-                          const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
-                          const totalGroups = groupedSlots.length;
-                          const widthPercent = totalGroups > 1 ? 100 / totalGroups : 100;
-                          const leftPercent = groupIndex * widthPercent;
-                          
-                          // All meetings in this group
-                          const meetings = group.meetings;
-                          const firstMeeting = meetings[0];
-                          const leadNames = meetings.map(m => 
-                            m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead'
-                          ).join(', ');
+                  return (
+                    <Droppable 
+                      key={droppableId} 
+                      droppableId={droppableId}
+                      isDropDisabled={isSlotFull}
+                    >
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={cn(
+                            'h-[40px] border-l relative',
+                            isSameDay(day, new Date()) && 'bg-primary/5',
+                            isCurrent && 'bg-primary/15 ring-1 ring-primary/30',
+                            snapshot.isDraggingOver && !isSlotFull && 'bg-primary/20',
+                            isOccupied && 'pointer-events-none',
+                            isSlotFull && 'bg-muted/40'
+                          )}
+                        >
+                          {groupedSlots.map((group, groupIndex) => {
+                            const closerColor = getCloserColor(group.closerId, group.closer?.name);
+                            const slotsNeeded = getSlotsNeeded(group.duration);
+                            const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
+                            const totalGroups = groupedSlots.length;
+                            const widthPercent = totalGroups > 1 ? 100 / totalGroups : 100;
+                            const leftPercent = groupIndex * widthPercent;
+                            
+                            // All meetings in this group
+                            const meetings = group.meetings;
+                            const firstMeeting = meetings[0];
+                            const leadNames = meetings.map(m => 
+                              m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead'
+                            ).join(', ');
 
-                          return (
-                            <Draggable 
-                              key={firstMeeting.id} 
-                              draggableId={firstMeeting.id} 
-                              index={groupIndex}
-                            >
-                              {(dragProvided, dragSnapshot) => (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        ref={dragProvided.innerRef}
-                                        {...dragProvided.draggableProps}
-                                        {...dragProvided.dragHandleProps}
-                                        onClick={() => onSelectMeeting(firstMeeting)}
-                                        className={cn(
-                                          'absolute top-0.5 text-left p-1 rounded text-xs bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10',
-                                          STATUS_STYLES[firstMeeting.status] || '',
-                                          dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
-                                        )}
-                                        style={{ 
-                                          height: `${cardHeight}px`,
-                                          borderLeftColor: closerColor,
-                                          left: totalGroups > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
-                                          right: totalGroups > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
-                                          ...dragProvided.draggableProps.style,
-                                        }}
-                                      >
-                                        <div className="flex items-center gap-1">
-                                          <div
-                                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                            style={{ backgroundColor: closerColor }}
-                                          />
-                                          <span className="font-medium truncate text-[10px]">
-                                            {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
-                                          </span>
-                                          {meetings.length > 1 && (
-                                            <Badge variant="secondary" className="h-3.5 px-1 text-[8px]">
-                                              {meetings.length}
-                                            </Badge>
+                            return (
+                              <Draggable 
+                                key={firstMeeting.id} 
+                                draggableId={firstMeeting.id} 
+                                index={groupIndex}
+                              >
+                                {(dragProvided, dragSnapshot) => (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          ref={dragProvided.innerRef}
+                                          {...dragProvided.draggableProps}
+                                          {...dragProvided.dragHandleProps}
+                                          onClick={() => onSelectMeeting(firstMeeting)}
+                                          className={cn(
+                                            'absolute top-0.5 text-left p-1 rounded text-xs bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10',
+                                            STATUS_STYLES[firstMeeting.status] || '',
+                                            dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                           )}
-                                        </div>
-                                        <div className="truncate text-muted-foreground text-[9px]">
-                                          {leadNames}
-                                        </div>
-                                        {slotsNeeded > 1 && (
-                                          <div className="text-[8px] text-muted-foreground mt-0.5">
-                                            {group.duration}min
+                                          style={{ 
+                                            height: `${cardHeight}px`,
+                                            borderLeftColor: closerColor,
+                                            left: totalGroups > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
+                                            right: totalGroups > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
+                                            ...dragProvided.draggableProps.style,
+                                          }}
+                                        >
+                                          <div className="flex items-center gap-1">
+                                            <div
+                                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                              style={{ backgroundColor: closerColor }}
+                                            />
+                                            <span className="font-medium truncate text-[10px]">
+                                              {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                            </span>
+                                            {meetings.length > 1 && (
+                                              <Badge variant="secondary" className="h-3.5 px-1 text-[8px]">
+                                                {meetings.length}
+                                              </Badge>
+                                            )}
                                           </div>
-                                        )}
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-[280px]">
-                                      <div className="space-y-1.5">
-                                        <div className="font-medium">
-                                          {meetings.length} reuniões às {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
-                                        </div>
-                                        <div className="space-y-1 mt-2">
-                                          {meetings.map(m => (
-                                            <div key={m.id} className="text-xs flex items-center gap-1.5 p-1 bg-muted/50 rounded">
-                                              <div
-                                                className="w-2 h-2 rounded-full flex-shrink-0"
-                                                style={{ backgroundColor: closerColor }}
-                                              />
-                                              <span>{m.deal?.contact?.name || m.deal?.name || 'Lead'}</span>
+                                          <div className="truncate text-muted-foreground text-[9px]">
+                                            {leadNames}
+                                          </div>
+                                          {slotsNeeded > 1 && (
+                                            <div className="text-[8px] text-muted-foreground mt-0.5">
+                                              {group.duration}min
                                             </div>
-                                          ))}
+                                          )}
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-[280px]">
+                                        <div className="space-y-1.5">
+                                          <div className="font-medium">
+                                            {meetings.length} reuniões às {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                          </div>
+                                          <div className="space-y-1 mt-2">
+                                            {meetings.map(m => (
+                                              <div key={m.id} className="text-xs flex items-center gap-1.5 p-1 bg-muted/50 rounded">
+                                                <div
+                                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                                  style={{ backgroundColor: closerColor }}
+                                                />
+                                                <span>{m.deal?.contact?.name || m.deal?.name || 'Lead'}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                                            <span>Closer: {group.closer?.name}</span>
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {format(parseISO(firstMeeting.scheduled_at), "dd/MM 'às' HH:mm")} ({group.duration}min)
+                                          </div>
+                                          <Badge variant="outline" className="text-xs">
+                                            {firstMeeting.status === 'scheduled' && 'Agendada'}
+                                            {firstMeeting.status === 'rescheduled' && 'Reagendada'}
+                                            {firstMeeting.status === 'completed' && 'Realizada'}
+                                            {firstMeeting.status === 'no_show' && 'No-show'}
+                                            {firstMeeting.status === 'canceled' && 'Cancelada'}
+                                          </Badge>
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                                          <span>Closer: {group.closer?.name}</span>
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          {format(parseISO(firstMeeting.scheduled_at), "dd/MM 'às' HH:mm")} ({group.duration}min)
-                                        </div>
-                                        <Badge variant="outline" className="text-xs">
-                                          {firstMeeting.status === 'scheduled' && 'Agendada'}
-                                          {firstMeeting.status === 'rescheduled' && 'Reagendada'}
-                                          {firstMeeting.status === 'completed' && 'Realizada'}
-                                          {firstMeeting.status === 'no_show' && 'No-show'}
-                                          {firstMeeting.status === 'canceled' && 'Cancelada'}
-                                        </Badge>
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </Draggable>
-                          );
-                        })}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                );
-              })}
-            </div>
-          ))}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </Draggable>
+                            );
+                          })}
+                          {/* Full slot indicator */}
+                          {isSlotFull && groupedSlots.length > 0 && (
+                            <div className="absolute top-0.5 right-1 text-[8px] font-medium text-muted-foreground/60">
+                              {slotOccupancy.count}/{MAX_MEETINGS_PER_SLOT}
+                            </div>
+                          )}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
 
         {/* Legend */}
