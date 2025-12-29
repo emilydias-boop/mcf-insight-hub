@@ -6,9 +6,21 @@
 All colors MUST be HSL.
 */
 
-/* Global font size reduction */
+/* Font size classes */
 html {
+  font-size: 50%; /* Default: small */
+}
+
+html.font-small {
   font-size: 50%;
+}
+
+html.font-medium {
+  font-size: 62.5%;
+}
+
+html.font-large {
+  font-size: 75%;
 }
 
 /* Scrollbar styling - WebKit (Chrome, Safari, Edge) */
@@ -30,10 +42,72 @@ html {
   background: hsl(0 0% 100% / 0.5);
 }
 
+/* Light theme scrollbar */
+.light ::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 0% / 0.3);
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: hsl(0 0% 0% / 0.5);
+}
+
 /* Scrollbar styling - Firefox */
 * {
   scrollbar-width: thin;
   scrollbar-color: hsl(0 0% 100% / 0.3) hsl(var(--background));
+}
+
+.light * {
+  scrollbar-color: hsl(0 0% 0% / 0.3) hsl(var(--background));
+}
+
+/* Light theme colors */
+.light {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 4%;
+
+  --card: 0 0% 98%;
+  --card-foreground: 0 0% 4%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 4%;
+
+  --primary: 142 76% 36%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 10%;
+
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
+
+  --accent: 142 76% 36%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 100%;
+
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+
+  --chart-1: 221 83% 53%;
+  --chart-2: 262 83% 58%;
+
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 142 76% 36%;
+
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 0 0% 10%;
+  --sidebar-primary: 142 76% 36%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 96%;
+  --sidebar-accent-foreground: 0 0% 10%;
+  --sidebar-border: 0 0% 90%;
+  --sidebar-ring: 142 76% 36%;
 }
 
 @layer base {

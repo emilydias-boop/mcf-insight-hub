@@ -7,9 +7,10 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { User, Bell, Shield, Settings, DollarSign, Mail } from "lucide-react";
+import { User, Bell, Shield, Settings, DollarSign, Mail, Palette } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { OperationalCostsConfig } from "@/components/dashboard/OperationalCostsConfig";
+import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 
 export default function Configuracoes() {
   const handleSave = () => {
@@ -25,10 +26,14 @@ export default function Configuracoes() {
         </div>
 
         <Tabs defaultValue="perfil" className="w-full">
-          <TabsList className="grid w-full md:w-[600px] grid-cols-5">
+          <TabsList className="grid w-full md:w-[720px] grid-cols-6">
             <TabsTrigger value="perfil" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Perfil
+            </TabsTrigger>
+            <TabsTrigger value="aparencia" className="flex items-center gap-2">
+              <Palette className="h-4 w-4" />
+              Aparência
             </TabsTrigger>
             <TabsTrigger value="notificacoes" className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
@@ -78,6 +83,10 @@ export default function Configuracoes() {
                 <Button onClick={handleSave}>Salvar Alterações</Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="aparencia" className="space-y-4 mt-6">
+            <AppearanceSettings />
           </TabsContent>
 
           <TabsContent value="notificacoes" className="space-y-4 mt-6">

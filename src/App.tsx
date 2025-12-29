@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { TwilioProvider } from "./contexts/TwilioContext";
+import { AppearanceProvider } from "./contexts/AppearanceContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { RoleGuard } from "./components/auth/RoleGuard";
@@ -69,12 +70,13 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <TwilioProvider>
+    <AppearanceProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <TwilioProvider>
             <Routes>
             {/* Public auth route */}
             <Route path="/auth" element={<Auth />} />
@@ -150,10 +152,11 @@ const App = () => (
             
             <Route path="*" element={<NotFound />} />
             </Routes>
-          </TwilioProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+            </TwilioProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AppearanceProvider>
   </QueryClientProvider>
 );
 
