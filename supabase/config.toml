@@ -185,3 +185,6 @@ verify_jwt = false
 
 [functions.detect-duplicate-activities]
 verify_jwt = false
+
+[functions.send-meeting-notification]
+verify_jwt = false

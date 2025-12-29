@@ -606,6 +606,7 @@ export function useCreateMeeting() {
       durationMinutes = 60,
       notes,
       leadType,
+      sendNotification = true,
     }: {
       closerId: string;
       dealId: string;
@@ -614,6 +615,7 @@ export function useCreateMeeting() {
       durationMinutes?: number;
       notes?: string;
       leadType?: LeadType;
+      sendNotification?: boolean;
     }) => {
       // Get closer's calendly_default_link
       const { data: closer } = await supabase
@@ -621,6 +623,32 @@ export function useCreateMeeting() {
         .select('calendly_default_link')
         .eq('id', closerId)
         .single();
+
+      // Get contact details for personalized link
+      let contactName = '';
+      let contactEmail = '';
+      if (contactId) {
+        const { data: contactData } = await supabase
+          .from('crm_contacts')
+          .select('name, email')
+          .eq('id', contactId)
+          .single();
+        contactName = contactData?.name || '';
+        contactEmail = contactData?.email || '';
+      }
+
+      // Build unique meeting link with parameters
+      let meetingLink = closer?.calendly_default_link || null;
+      if (meetingLink) {
+        try {
+          const url = new URL(meetingLink);
+          if (contactName) url.searchParams.set('name', contactName);
+          if (contactEmail) url.searchParams.set('email', contactEmail);
+          meetingLink = url.toString();
+        } catch (e) {
+          console.error('Error building meeting link:', e);
+        }
+      }
 
       const { data: meetingSlot, error } = await supabase
         .from('meeting_slots')
@@ -633,14 +661,14 @@ export function useCreateMeeting() {
           status: 'scheduled',
           notes,
           lead_type: leadType,
-          meeting_link: closer?.calendly_default_link || null,
+          meeting_link: meetingLink,
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      // Also create the first attendee record
+      // Create the first attendee record with contact info
       if (meetingSlot && (dealId || contactId)) {
         await supabase.from('meeting_slot_attendees').insert({
           meeting_slot_id: meetingSlot.id,
@@ -648,12 +676,13 @@ export function useCreateMeeting() {
           contact_id: contactId || null,
           status: 'invited',
           is_partner: false,
+          attendee_name: contactName || null,
         });
       }
 
-      return meetingSlot;
+      return { ...meetingSlot, sendNotification };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
@@ -663,6 +692,37 @@ export function useCreateMeeting() {
     },
     onError: () => {
       toast.error('Erro ao agendar reunião');
+    },
+  });
+}
+
+// Hook to send meeting notifications
+export function useSendMeetingNotification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ meetingSlotId, resendAttendeeId }: { meetingSlotId: string; resendAttendeeId?: string }) => {
+      const { data, error } = await supabase.functions.invoke('send-meeting-notification', {
+        body: { meetingSlotId, resendAttendeeId },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      if (data?.summary) {
+        if (data.summary.sent > 0) {
+          toast.success(`${data.summary.sent} notificação(ões) enviada(s)`);
+        }
+        if (data.summary.failed > 0) {
+          toast.error(`${data.summary.failed} notificação(ões) falhou(aram)`);
+        }
+      }
+    },
+    onError: (error) => {
+      console.error('Error sending notification:', error);
+      toast.error('Erro ao enviar notificações');
     },
   });
 }
