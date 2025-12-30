@@ -122,39 +122,46 @@ async function createGoogleCalendarEvent(
 ): Promise<{ eventId: string; meetLink: string; htmlLink: string; usedFallback: boolean }> {
   
   // Helper to build event payload
-  const buildEventPayload = (includeAttendees: boolean) => ({
-    summary: eventData.summary,
-    description: eventData.description,
-    start: {
-      dateTime: eventData.start.toISOString(),
-      timeZone: 'America/Sao_Paulo',
-    },
-    end: {
-      dateTime: eventData.end.toISOString(),
-      timeZone: 'America/Sao_Paulo',
-    },
-    ...(includeAttendees && eventData.attendees.length > 0 && {
-      attendees: eventData.attendees.map(a => ({
+  const buildEventPayload = (includeAttendees: boolean, includeConference: boolean = true) => {
+    const payload: any = {
+      summary: eventData.summary,
+      description: eventData.description,
+      start: {
+        dateTime: eventData.start.toISOString(),
+        timeZone: 'America/Sao_Paulo',
+      },
+      end: {
+        dateTime: eventData.end.toISOString(),
+        timeZone: 'America/Sao_Paulo',
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 30 },
+        ],
+      },
+    };
+    
+    if (includeAttendees && eventData.attendees.length > 0) {
+      payload.attendees = eventData.attendees.map(a => ({
         email: a.email,
         displayName: a.displayName,
-      })),
-    }),
-    conferenceData: {
-      createRequest: {
-        requestId: crypto.randomUUID(),
-        conferenceSolutionKey: {
-          type: 'hangoutsMeet',
+      }));
+    }
+    
+    if (includeConference) {
+      payload.conferenceData = {
+        createRequest: {
+          requestId: crypto.randomUUID(),
+          conferenceSolutionKey: {
+            type: 'hangoutsMeet',
+          },
         },
-      },
-    },
-    reminders: {
-      useDefault: false,
-      overrides: [
-        { method: 'popup', minutes: 30 },
-        { method: 'email', minutes: 60 },
-      ],
-    },
-  });
+      };
+    }
+    
+    return payload;
+  };
 
   // Try with attendees first
   console.log('📤 Attempting to create event with attendees...');
@@ -190,12 +197,48 @@ async function createGoogleCalendarEvent(
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(buildEventPayload(false)),
+          body: JSON.stringify(buildEventPayload(false, true)),
         }
       );
       
       if (!response.ok) {
         const fallbackError = await response.text();
+        console.warn('⚠️ Google Calendar API error (fallback with conference):', fallbackError);
+        
+        // Check if it's a conference creation issue - try without conference
+        if (fallbackError.includes('Invalid conference type') || 
+            fallbackError.includes('conferenceData')) {
+          console.log('🔄 Retrying without conference (simple event)...');
+          
+          response = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(buildEventPayload(false, false)),
+            }
+          );
+          
+          if (!response.ok) {
+            const simpleError = await response.text();
+            console.error('❌ Google Calendar API error (simple event):', simpleError);
+            throw new Error(`Failed to create Google Calendar event: ${simpleError}`);
+          }
+          
+          const createdEvent = await response.json();
+          console.log('✅ Event created via fallback (simple event, no conference)');
+          
+          return {
+            eventId: createdEvent.id,
+            meetLink: '', // No meet link available
+            htmlLink: createdEvent.htmlLink,
+            usedFallback: true,
+          };
+        }
+        
         console.error('❌ Google Calendar API error (fallback):', fallbackError);
         throw new Error(`Failed to create Google Calendar event: ${fallbackError}`);
       }
@@ -210,6 +253,40 @@ async function createGoogleCalendarEvent(
       return {
         eventId: createdEvent.id,
         meetLink,
+        htmlLink: createdEvent.htmlLink,
+        usedFallback: true,
+      };
+    }
+    
+    // Check if it's a conference creation issue on first attempt
+    if (errorText.includes('Invalid conference type') || 
+        errorText.includes('conferenceData')) {
+      console.log('🔄 Retrying without conference (simple event)...');
+      
+      response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(buildEventPayload(false, false)),
+        }
+      );
+      
+      if (!response.ok) {
+        const simpleError = await response.text();
+        console.error('❌ Google Calendar API error (simple event):', simpleError);
+        throw new Error(`Failed to create Google Calendar event: ${simpleError}`);
+      }
+      
+      const createdEvent = await response.json();
+      console.log('✅ Event created via fallback (simple event, no conference)');
+      
+      return {
+        eventId: createdEvent.id,
+        meetLink: '',
         htmlLink: createdEvent.htmlLink,
         usedFallback: true,
       };
