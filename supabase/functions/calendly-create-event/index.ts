@@ -167,11 +167,9 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const calendlyToken = Deno.env.get('CALENDLY_PERSONAL_ACCESS_TOKEN');
     const googleServiceAccountEmail = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
     const googleServiceAccountPrivateKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY');
 
-    console.log('🔐 Calendly token configured:', !!calendlyToken);
     console.log('🔐 Google Calendar configured:', !!googleServiceAccountEmail && !!googleServiceAccountPrivateKey);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -181,10 +179,10 @@ serve(async (req) => {
 
     console.log('📅 Creating meeting:', { closerId, dealId, scheduledAt, leadType });
 
-    // Get closer info with Google Calendar fields
+    // Get closer info
     const { data: closer, error: closerError } = await supabase
       .from('closers')
-      .select('id, name, email, calendly_event_type_uri, calendly_default_link, google_calendar_id, google_calendar_enabled')
+      .select('id, name, email, google_calendar_id, google_calendar_enabled')
       .eq('id', closerId)
       .single();
 
@@ -242,7 +240,6 @@ serve(async (req) => {
     const endDate = new Date(scheduledDate.getTime() + durationMinutes * 60000);
 
     let meetingLink = '';
-    let calendlyEventUri = '';
     let videoConferenceLink = '';
     let googleEventId = '';
 
@@ -292,114 +289,23 @@ serve(async (req) => {
         });
       } catch (googleError) {
         console.error('❌ Google Calendar error:', googleError);
-        // Fall back to Calendly if Google fails
-        console.log('⚠️ Falling back to Calendly...');
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Erro ao criar evento no Google Calendar. Verifique a configuração do closer.' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-    }
-
-    // ============= CALENDLY FALLBACK =============
-    if (!videoConferenceLink) {
-      // Try to create Calendly event via API (pre-filled link approach)
-      if (calendlyToken && closer.calendly_event_type_uri) {
-        console.log('🔵 Attempting Calendly API integration...');
-        
-        try {
-          const userResponse = await fetch('https://api.calendly.com/users/me', {
-            headers: {
-              'Authorization': `Bearer ${calendlyToken}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          
-          if (userResponse.ok) {
-            const userData = await userResponse.json();
-            console.log('✅ Calendly API connected:', userData.resource?.name);
-            
-            const eventTypeResponse = await fetch(closer.calendly_event_type_uri, {
-              headers: {
-                'Authorization': `Bearer ${calendlyToken}`,
-                'Content-Type': 'application/json',
-              },
-            });
-            
-            if (eventTypeResponse.ok) {
-              const eventTypeData = await eventTypeResponse.json();
-              console.log('📋 Event type found:', eventTypeData.resource?.name);
-              
-              const schedulingUrl = eventTypeData.resource?.scheduling_url;
-              if (schedulingUrl) {
-                const dateFormatter = new Intl.DateTimeFormat('en-CA', {
-                  timeZone: 'America/Sao_Paulo',
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                });
-                const timeFormatter = new Intl.DateTimeFormat('en-GB', {
-                  timeZone: 'America/Sao_Paulo',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                });
-                
-                const dateStr = dateFormatter.format(scheduledDate);
-                const timeStr = timeFormatter.format(scheduledDate);
-                
-                const separator = schedulingUrl.includes('?') ? '&' : '?';
-                meetingLink = `${schedulingUrl}${separator}date=${dateStr}&time=${timeStr}`;
-                
-                if (contactInfo.name) {
-                  meetingLink += `&name=${encodeURIComponent(contactInfo.name)}`;
-                }
-                if (contactInfo.email) {
-                  meetingLink += `&email=${encodeURIComponent(contactInfo.email)}`;
-                }
-                
-                console.log('📎 Generated Calendly link with pre-fill:', meetingLink);
-              }
-            }
-          }
-        } catch (apiError) {
-          console.error('❌ Calendly API error:', apiError);
-        }
-      }
-
-      // Fallback: Use calendly_default_link with date/time params
-      if (!meetingLink && closer.calendly_default_link) {
-        console.log('📎 Using calendly_default_link with pre-selected date/time');
-        
-        const dateFormatter = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'America/Sao_Paulo',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        });
-        const timeFormatter = new Intl.DateTimeFormat('en-GB', {
-          timeZone: 'America/Sao_Paulo',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        });
-        
-        const dateStr = dateFormatter.format(scheduledDate);
-        const timeStr = timeFormatter.format(scheduledDate);
-        
-        const baseLink = closer.calendly_default_link;
-        const separator = baseLink.includes('?') ? '&' : '?';
-        meetingLink = `${baseLink}${separator}date=${dateStr}&time=${timeStr}`;
-        
-        if (contactInfo.name) {
-          meetingLink += `&name=${encodeURIComponent(contactInfo.name)}`;
-        }
-        if (contactInfo.email) {
-          meetingLink += `&email=${encodeURIComponent(contactInfo.email)}`;
-        }
-        
-        console.log('📎 Generated fallback meeting link:', meetingLink);
-      }
-    }
-
-    if (!meetingLink && !videoConferenceLink) {
-      console.log('⚠️ No calendar configuration for closer, using internal scheduling only');
+    } else {
+      console.error('❌ Google Calendar not configured for this closer');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Google Calendar não configurado para este closer. Configure o Google Calendar ID nas configurações do closer.' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Check if there's an existing slot at this time for this closer
@@ -442,7 +348,7 @@ serve(async (req) => {
         bookedBy = user?.id;
       }
 
-      // Create new slot with Google event ID if available
+      // Create new slot
       const { data: newSlot, error: slotError } = await supabase
         .from('meeting_slots')
         .insert({
@@ -453,10 +359,9 @@ serve(async (req) => {
           duration_minutes: durationMinutes,
           lead_type: leadType,
           status: 'scheduled',
-          meeting_link: meetingLink || closer.calendly_default_link,
-          video_conference_link: videoConferenceLink || null,
-          google_event_id: googleEventId || null,
-          calendly_event_uri: calendlyEventUri || null,
+          meeting_link: meetingLink,
+          video_conference_link: videoConferenceLink,
+          google_event_id: googleEventId,
           booked_by: bookedBy,
           notes: notes || `Agendado via CRM\nLead Type: ${leadType}`,
           max_attendees: 3,
@@ -501,80 +406,59 @@ serve(async (req) => {
       .ilike('stage_name', '%Reunião 01 Agendada%')
       .limit(1);
 
-    const stageId = stages?.[0]?.id;
-
-    if (stageId) {
-      await supabase
+    if (stages && stages.length > 0) {
+      const { error: dealUpdateError } = await supabase
         .from('crm_deals')
-        .update({
-          stage_id: stageId,
-          next_action_date: scheduledAt,
-          next_action_type: 'meeting',
-          next_action_note: `Reunião agendada com ${closer.name}`,
-        })
+        .update({ stage_id: stages[0].id })
         .eq('id', dealId);
 
-      console.log('✅ Updated deal stage');
-
-      // Log activity
-      let userId = null;
-      const authHeader = req.headers.get('Authorization');
-      if (authHeader) {
-        const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-        userId = user?.id;
+      if (dealUpdateError) {
+        console.error('⚠️ Error updating deal stage:', dealUpdateError);
+      } else {
+        console.log('✅ Updated deal stage to Reunião 01 Agendada');
       }
 
+      // Log the activity
       await supabase.from('deal_activities').insert({
         deal_id: dealId,
         activity_type: 'meeting_scheduled',
-        description: `Reunião agendada para ${new Date(scheduledAt).toLocaleString('pt-BR')} com ${closer.name}`,
-        user_id: userId,
-        metadata: {
-          closer_id: closerId,
-          closer_name: closer.name,
-          scheduled_at: scheduledAt,
-          slot_id: slotId,
-          meeting_link: meetingLink,
-          video_conference_link: videoConferenceLink,
-          google_event_id: googleEventId,
-        },
+        description: `Reunião agendada com ${closer.name} para ${scheduledDate.toLocaleString('pt-BR')}`,
+        to_stage: stages[0].id,
+        metadata: { closer_id: closerId, meeting_slot_id: slotId, google_event_id: googleEventId },
       });
     }
 
-    // Get full slot data to return
+    // Get the created slot with all relations
     const { data: slot } = await supabase
       .from('meeting_slots')
-      .select('*, closers(*)')
+      .select(`
+        *,
+        closer:closers(*),
+        contact:crm_contacts(*)
+      `)
       .eq('id', slotId)
       .single();
 
-    console.log('✅ Meeting created successfully:', {
-      slotId,
-      meetingLink: meetingLink?.substring(0, 60) + '...',
-      videoConferenceLink: videoConferenceLink || 'none',
-      googleEventId: googleEventId || 'none',
-    });
+    console.log('✅ Meeting created successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
         slotId,
-        meetingLink: slot?.meeting_link || meetingLink,
-        videoConferenceLink: slot?.video_conference_link || videoConferenceLink,
+        meetingLink: videoConferenceLink || meetingLink,
+        videoConferenceLink,
         googleEventId,
         attendeeId: attendee?.id,
         slot,
-        message: videoConferenceLink 
-          ? 'Reunião criada com link do Google Meet'
-          : 'Reunião agendada - link do Calendly disponível para confirmação',
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
-    console.error('❌ Create event error:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Internal error';
+    console.error('❌ Error in calendly-create-event:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: String(error) }),
+      JSON.stringify({ success: false, error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
