@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { withCalendlyDateTimeParams, withCalendlyDateOnly, formatDateTimeForCalendly } from '@/lib/calendlyLink';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
-  ExternalLink, Clock, User, Mail, X, Save, Link, Copy, Users, Plus, Trash2, Send, CalendarDays
+  ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send
 } from 'lucide-react';
 import {
   Drawer,
@@ -76,17 +75,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const contact = activeMeeting.deal?.contact;
   const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
-  const meetingLink = activeMeeting.meeting_link || activeMeeting.closer?.calendly_default_link;
-  // Video conference link (Google Meet/Zoom) - direct access to the meeting room
+  // Video conference link (Google Meet) - direct access to the meeting room
   const videoConferenceLink = (activeMeeting as any).video_conference_link;
 
-  // Add date/time params to Calendly link using São Paulo timezone
-  const enhancedMeetingLink = withCalendlyDateTimeParams(meetingLink, activeMeeting.scheduled_at);
-  // Fallback link without time (only date) for when exact time is not available
-  const fallbackLink = withCalendlyDateOnly(meetingLink, activeMeeting.scheduled_at);
-  
-  // Get formatted time for WhatsApp message
-  const { date: formattedDateParam, time: formattedTimeParam } = formatDateTimeForCalendly(activeMeeting.scheduled_at);
+  // Format date/time for WhatsApp message
+  const scheduledDate = parseISO(activeMeeting.scheduled_at);
+  const formattedDateParam = format(scheduledDate, 'dd/MM/yyyy');
+  const formattedTimeParam = format(scheduledDate, 'HH:mm');
 
   const handleCall = () => {
     if (contact?.phone) {
@@ -128,15 +123,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const handleCopyLink = () => {
-    if (enhancedMeetingLink) {
-      navigator.clipboard.writeText(enhancedMeetingLink);
+    if (videoConferenceLink) {
+      navigator.clipboard.writeText(videoConferenceLink);
       toast.success('Link copiado!');
-    }
-  };
-
-  const handleOpenLink = () => {
-    if (enhancedMeetingLink) {
-      window.open(enhancedMeetingLink, '_blank');
     }
   };
 
@@ -145,7 +134,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       console.log('Opening video conference:', videoConferenceLink);
       window.open(videoConferenceLink, '_blank');
     } else {
-      toast.error('Link de videoconferência não disponível. Use o link do Calendly.');
+      toast.error('Link de videoconferência não disponível.');
     }
   };
 
@@ -153,27 +142,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     if (!phone) return;
     const formattedPhone = phone.replace(/\D/g, '');
     
-    // Prioritize video conference link (Google Meet) over Calendly link
-    const linkToSend = videoConferenceLink || enhancedMeetingLink;
-    if (!linkToSend) {
+    if (!videoConferenceLink) {
       toast.error('Nenhum link de reunião disponível');
       return;
     }
     
-    const message = videoConferenceLink
-      ? encodeURIComponent(
-          `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n\n🔗 ${videoConferenceLink}\n\nÉ só clicar no link no horário agendado!\n\nAguardo você!`
-        )
-      : encodeURIComponent(
-          `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n${enhancedMeetingLink}\n\nSe o horário não aparecer disponível, use este link:\n${fallbackLink}\n\nAguardo você!`
-        );
+    const message = encodeURIComponent(
+      `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n\n🔗 ${videoConferenceLink}\n\nÉ só clicar no link no horário agendado!\n\nAguardo você!`
+    );
     window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
-  };
-  
-  const handleOpenFallbackLink = () => {
-    if (fallbackLink) {
-      window.open(fallbackLink, '_blank');
-    }
   };
 
   const handleAddPartner = () => {
@@ -304,54 +281,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </div>
             )}
 
-            {/* Meeting Link Section - Calendly scheduling link */}
-            {enhancedMeetingLink && (
-              <div className="bg-primary/10 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Link className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm">
-                    {videoConferenceLink ? 'Link do Calendly (agendamento)' : 'Link da Reunião'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input 
-                    value={enhancedMeetingLink} 
-                    readOnly 
-                    className="text-xs bg-background"
-                  />
-                  <Button variant="outline" size="icon" onClick={handleCopyLink} title="Copiar link">
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" size="icon" onClick={handleOpenLink} title="Abrir com horário">
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </div>
-                
-                {/* Fallback link option */}
-                <div className="flex items-center gap-2 pt-1 border-t border-primary/20">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="flex-1 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={handleOpenFallbackLink}
-                  >
-                    <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
-                    Abrir sem horário (se não aparecer disponível)
-                  </Button>
-                </div>
-                
-                {participants.length > 0 && (
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    className="w-full"
-                    onClick={handleSendToAll}
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    Enviar link para todos via WhatsApp
-                  </Button>
-                )}
-              </div>
+            {/* Send link to all participants */}
+            {videoConferenceLink && participants.length > 0 && (
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="w-full"
+                onClick={handleSendToAll}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Enviar link para todos via WhatsApp
+              </Button>
             )}
 
             {/* Participants Section */}
@@ -435,7 +375,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      {p.phone && enhancedMeetingLink && (
+                      {p.phone && videoConferenceLink && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
