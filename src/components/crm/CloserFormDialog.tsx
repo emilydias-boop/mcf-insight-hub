@@ -5,13 +5,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Info, ExternalLink } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Info, ExternalLink, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { Closer, CloserFormData, useCreateCloser, useUpdateCloser } from '@/hooks/useClosers';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface CloserFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   closer?: Closer | null;
+}
+
+interface CalendlyEventType {
+  uri: string;
+  name: string;
+  slug: string;
+  duration_minutes: number;
+  scheduling_url: string;
+  active: boolean;
 }
 
 const COLOR_OPTIONS = [
@@ -34,6 +46,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     calendly_event_type_uri: '',
     calendly_default_link: ''
   });
+  const [eventTypes, setEventTypes] = useState<CalendlyEventType[]>([]);
+  const [loadingEventTypes, setLoadingEventTypes] = useState(false);
 
   const createCloser = useCreateCloser();
   const updateCloser = useUpdateCloser();
@@ -62,6 +76,40 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     }
   }, [closer, open]);
 
+  const fetchEventTypes = async () => {
+    setLoadingEventTypes(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('calendly-get-event-types');
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao buscar Event Types');
+      }
+      
+      setEventTypes(data.eventTypes || []);
+      toast.success(`${data.eventTypes?.length || 0} Event Types encontrados`);
+    } catch (error: any) {
+      console.error('Error fetching event types:', error);
+      toast.error(error.message || 'Erro ao buscar Event Types do Calendly');
+    } finally {
+      setLoadingEventTypes(false);
+    }
+  };
+
+  const handleEventTypeSelect = (uri: string) => {
+    const selectedEvent = eventTypes.find(et => et.uri === uri);
+    if (selectedEvent) {
+      setFormData({
+        ...formData,
+        calendly_event_type_uri: uri,
+        calendly_default_link: selectedEvent.scheduling_url || formData.calendly_default_link
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -77,9 +125,11 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     }
   };
 
+  const hasValidEventTypeUri = formData.calendly_event_type_uri?.startsWith('https://api.calendly.com/event_types/');
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Closer' : 'Adicionar Closer'}</DialogTitle>
         </DialogHeader>
@@ -127,31 +177,95 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               ))}
             </div>
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="calendly_link">Link do Calendly (para enviar aos leads)</Label>
-            <Input
-              id="calendly_link"
-              value={formData.calendly_default_link}
-              onChange={(e) => setFormData({ ...formData, calendly_default_link: e.target.value })}
-              placeholder="https://calendly.com/julio-mcf/reuniao-r01"
-            />
-            <p className="text-xs text-muted-foreground">
-              Link público do Calendly que será enviado aos leads ao agendar reuniões
-            </p>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="calendly_uri">Calendly Event Type URI (opcional)</Label>
-            <Input
-              id="calendly_uri"
-              value={formData.calendly_event_type_uri}
-              onChange={(e) => setFormData({ ...formData, calendly_event_type_uri: e.target.value })}
-              placeholder="https://api.calendly.com/event_types/..."
-            />
-            <p className="text-xs text-muted-foreground">
-              URI da API para integrações avançadas (opcional)
-            </p>
+          {/* Calendly Event Type Section */}
+          <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Configuração Calendly</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={fetchEventTypes}
+                disabled={loadingEventTypes}
+              >
+                {loadingEventTypes ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                )}
+                Buscar Event Types
+              </Button>
+            </div>
+
+            {eventTypes.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="event_type_select" className="text-xs text-muted-foreground">
+                  Selecione o Event Type
+                </Label>
+                <Select
+                  value={formData.calendly_event_type_uri || ''}
+                  onValueChange={handleEventTypeSelect}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um Event Type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eventTypes.map((et) => (
+                      <SelectItem key={et.uri} value={et.uri}>
+                        {et.name} ({et.duration_minutes}min)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          
+            <div className="space-y-2">
+              <Label htmlFor="calendly_link" className="text-xs">Link público do Calendly</Label>
+              <Input
+                id="calendly_link"
+                value={formData.calendly_default_link}
+                onChange={(e) => setFormData({ ...formData, calendly_default_link: e.target.value })}
+                placeholder="https://calendly.com/usuario/reuniao"
+                className="text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="calendly_uri" className="text-xs">Event Type URI (API)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="calendly_uri"
+                  value={formData.calendly_event_type_uri}
+                  onChange={(e) => setFormData({ ...formData, calendly_event_type_uri: e.target.value })}
+                  placeholder="https://api.calendly.com/event_types/..."
+                  className="text-sm flex-1"
+                />
+                {hasValidEventTypeUri && (
+                  <CheckCircle2 className="h-5 w-5 text-green-500 self-center" />
+                )}
+              </div>
+            </div>
+
+            {!hasValidEventTypeUri && formData.calendly_default_link && (
+              <Alert className="bg-amber-500/10 border-amber-500/30">
+                <Info className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="text-xs">
+                  Configure o Event Type URI para criar reuniões com link de videoconferência automático.
+                  Clique em "Buscar Event Types" para selecionar.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {hasValidEventTypeUri && (
+              <Alert className="bg-green-500/10 border-green-500/30">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <AlertDescription className="text-xs">
+                  Calendly configurado! Reuniões criadas terão link de videoconferência automático.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
           
           <div className="flex items-center justify-between">

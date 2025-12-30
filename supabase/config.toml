@@ -188,3 +188,6 @@ verify_jwt = false
 
 [functions.send-meeting-notification]
 verify_jwt = false
+
+[functions.calendly-get-event-types]
+verify_jwt = false
