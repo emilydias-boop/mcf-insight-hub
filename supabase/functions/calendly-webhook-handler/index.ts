@@ -226,6 +226,8 @@ serve(async (req) => {
         const startTime = scheduledEvent.start_time;
         const endTime = scheduledEvent.end_time;
         const eventName = scheduledEvent.name;
+        // Video conference link (Google Meet/Zoom) from the scheduled event location
+        const videoConferenceLink = scheduledEvent.location?.join_url || null;
         const meetingLink = scheduledEvent.location?.join_url || null;
         const phone = extractPhone(payload.questions_and_answers);
         
@@ -347,13 +349,18 @@ serve(async (req) => {
           slotId = existingSlot.id;
           console.log('Adding attendee to existing slot:', slotId);
           
-          // Update meeting link if not set
-          if (meetingLink) {
+          // Update meeting link and video conference link if not set
+          if (meetingLink || videoConferenceLink) {
+            const updateData: Record<string, string> = {};
+            if (meetingLink) updateData.meeting_link = meetingLink;
+            if (videoConferenceLink) updateData.video_conference_link = videoConferenceLink;
+            
             await supabase
               .from('meeting_slots')
-              .update({ meeting_link: meetingLink })
-              .eq('id', slotId)
-              .is('meeting_link', null);
+              .update(updateData)
+              .eq('id', slotId);
+            
+            console.log('Updated slot with video conference link:', videoConferenceLink);
           }
         } else {
           // Create new meeting slot
@@ -367,6 +374,7 @@ serve(async (req) => {
               lead_type: leadType,
               status: 'scheduled',
               meeting_link: meetingLink,
+              video_conference_link: videoConferenceLink,
               notes: `Agendamento via Calendly\nEvento: ${eventName}\nTimezone: ${payload.timezone}`,
               calendly_event_uri: eventUri,
               calendly_invitee_uri: inviteeUri,

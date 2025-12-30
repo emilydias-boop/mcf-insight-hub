@@ -96,6 +96,7 @@ serve(async (req) => {
 
     let meetingLink = '';
     let calendlyEventUri = '';
+    let videoConferenceLink = '';
 
     // Try to create Calendly event via API
     if (closer.calendly_event_type_uri) {
@@ -120,9 +121,13 @@ serve(async (req) => {
 
         if (calendlyResponse.ok) {
           const calendlyData = await calendlyResponse.json();
-          meetingLink = calendlyData.resource?.location?.join_url || '';
           calendlyEventUri = calendlyData.resource?.uri || '';
+          // The join_url is the video conference link (Google Meet/Zoom)
+          videoConferenceLink = calendlyData.resource?.location?.join_url || '';
+          // Use the reschedule URL or invitee cancel URL as the meeting link
+          meetingLink = calendlyData.resource?.reschedule_url || calendlyData.resource?.cancel_url || '';
           console.log('Calendly event created:', calendlyEventUri);
+          console.log('Video conference link:', videoConferenceLink);
         } else {
           const errorText = await calendlyResponse.text();
           console.log('Calendly API error (will use fallback):', errorText);
@@ -216,7 +221,8 @@ serve(async (req) => {
           duration_minutes: durationMinutes,
           lead_type: leadType,
           status: 'scheduled',
-          meeting_link: meetingLink,
+          meeting_link: meetingLink || closer.calendly_default_link,
+          video_conference_link: videoConferenceLink || null,
           calendly_event_uri: calendlyEventUri,
           booked_by: bookedBy,
           notes: notes || `Agendado via CRM\nLead Type: ${leadType}`,

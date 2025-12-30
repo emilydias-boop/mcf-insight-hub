@@ -2197,6 +2197,7 @@ export type Database = {
           source: string | null
           status: string | null
           updated_at: string | null
+          video_conference_link: string | null
         }
         Insert: {
           booked_by?: string | null
@@ -2217,6 +2218,7 @@ export type Database = {
           source?: string | null
           status?: string | null
           updated_at?: string | null
+          video_conference_link?: string | null
         }
         Update: {
           booked_by?: string | null
@@ -2237,6 +2239,7 @@ export type Database = {
           source?: string | null
           status?: string | null
           updated_at?: string | null
+          video_conference_link?: string | null
         }
         Relationships: [
           {
