@@ -77,6 +77,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
   const meetingLink = activeMeeting.meeting_link || activeMeeting.closer?.calendly_default_link;
+  // Video conference link (Google Meet/Zoom) - direct access to the meeting room
+  const videoConferenceLink = (activeMeeting as any).video_conference_link;
 
   // Add date/time params to Calendly link using São Paulo timezone
   const enhancedMeetingLink = withCalendlyDateTimeParams(meetingLink, activeMeeting.scheduled_at);
@@ -135,6 +137,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const handleOpenLink = () => {
     if (enhancedMeetingLink) {
       window.open(enhancedMeetingLink, '_blank');
+    }
+  };
+
+  const handleOpenVideoConference = () => {
+    if (videoConferenceLink) {
+      console.log('Opening video conference:', videoConferenceLink);
+      window.open(videoConferenceLink, '_blank');
+    } else {
+      toast.error('Link de videoconferência não disponível. Use o link do Calendly.');
     }
   };
 
@@ -261,12 +272,34 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
         <ScrollArea className="flex-1 p-6">
           <div className="space-y-6">
-            {/* Meeting Link Section */}
+            {/* Video Conference Link Section - Primary action */}
+            {videoConferenceLink && (
+              <div className="bg-green-500/10 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4 text-green-600" />
+                  <span className="font-medium text-sm text-green-700 dark:text-green-400">Entrar na Reunião</span>
+                </div>
+                <Button 
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  onClick={handleOpenVideoConference}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Abrir Google Meet / Zoom
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  Clique para entrar diretamente na sala de videoconferência
+                </p>
+              </div>
+            )}
+
+            {/* Meeting Link Section - Calendly scheduling link */}
             {enhancedMeetingLink && (
               <div className="bg-primary/10 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <Link className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm">Link da Reunião</span>
+                  <span className="font-medium text-sm">
+                    {videoConferenceLink ? 'Link do Calendly (agendamento)' : 'Link da Reunião'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Input 
