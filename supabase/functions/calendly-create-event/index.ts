@@ -119,8 +119,10 @@ async function createGoogleCalendarEvent(
     end: Date;
     attendees: { email: string; displayName?: string }[];
   }
-): Promise<{ eventId: string; meetLink: string; htmlLink: string }> {
-  const event = {
+): Promise<{ eventId: string; meetLink: string; htmlLink: string; usedFallback: boolean }> {
+  
+  // Helper to build event payload
+  const buildEventPayload = (includeAttendees: boolean) => ({
     summary: eventData.summary,
     description: eventData.description,
     start: {
@@ -131,10 +133,12 @@ async function createGoogleCalendarEvent(
       dateTime: eventData.end.toISOString(),
       timeZone: 'America/Sao_Paulo',
     },
-    attendees: eventData.attendees.map(a => ({
-      email: a.email,
-      displayName: a.displayName,
-    })),
+    ...(includeAttendees && eventData.attendees.length > 0 && {
+      attendees: eventData.attendees.map(a => ({
+        email: a.email,
+        displayName: a.displayName,
+      })),
+    }),
     conferenceData: {
       createRequest: {
         requestId: crypto.randomUUID(),
@@ -150,24 +154,69 @@ async function createGoogleCalendarEvent(
         { method: 'email', minutes: 60 },
       ],
     },
-  };
+  });
 
-  const response = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=all`,
+  // Try with attendees first
+  console.log('📤 Attempting to create event with attendees...');
+  const sendUpdatesParam = eventData.attendees.length > 0 ? 'all' : 'none';
+  
+  let response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=${sendUpdatesParam}`,
     {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(event),
+      body: JSON.stringify(buildEventPayload(true)),
     }
   );
 
+  // Check for forbiddenForServiceAccounts error and retry without attendees
   if (!response.ok) {
-    const error = await response.text();
-    console.error('Google Calendar API error:', error);
-    throw new Error(`Failed to create Google Calendar event: ${error}`);
+    const errorText = await response.text();
+    console.warn('⚠️ Google Calendar API error (first attempt):', errorText);
+    
+    // Check if it's the service account attendees restriction
+    if (errorText.includes('forbiddenForServiceAccounts') || 
+        errorText.includes('Service accounts cannot invite attendees')) {
+      console.log('🔄 Retrying without attendees (fallback mode)...');
+      
+      response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=none`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(buildEventPayload(false)),
+        }
+      );
+      
+      if (!response.ok) {
+        const fallbackError = await response.text();
+        console.error('❌ Google Calendar API error (fallback):', fallbackError);
+        throw new Error(`Failed to create Google Calendar event: ${fallbackError}`);
+      }
+      
+      const createdEvent = await response.json();
+      const meetLink = createdEvent.conferenceData?.entryPoints?.find(
+        (e: any) => e.entryPointType === 'video'
+      )?.uri || '';
+
+      console.log('✅ Event created via fallback (without attendees/invites)');
+      
+      return {
+        eventId: createdEvent.id,
+        meetLink,
+        htmlLink: createdEvent.htmlLink,
+        usedFallback: true,
+      };
+    }
+    
+    // Other error - throw
+    throw new Error(`Failed to create Google Calendar event: ${errorText}`);
   }
 
   const createdEvent = await response.json();
@@ -181,6 +230,7 @@ async function createGoogleCalendarEvent(
     eventId: createdEvent.id,
     meetLink,
     htmlLink: createdEvent.htmlLink,
+    usedFallback: false,
   };
 }
 
@@ -312,7 +362,12 @@ serve(async (req) => {
           eventId: googleEventId,
           meetLink: videoConferenceLink,
           htmlLink: meetingLink,
+          usedFallback: googleEvent.usedFallback,
         });
+        
+        if (googleEvent.usedFallback) {
+          console.log('⚠️ Note: Invites were NOT sent via Google (Service Account limitation)');
+        }
       } catch (googleError) {
         console.error('❌ Google Calendar error:', googleError);
         return new Response(
