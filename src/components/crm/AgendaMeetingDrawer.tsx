@@ -76,7 +76,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
   // Video conference link (Google Meet) - direct access to the meeting room
-  const videoConferenceLink = (activeMeeting as any).video_conference_link;
+  const videoConferenceLink = activeMeeting.video_conference_link;
 
   // Format date/time for WhatsApp message
   const scheduledDate = parseISO(activeMeeting.scheduled_at);
