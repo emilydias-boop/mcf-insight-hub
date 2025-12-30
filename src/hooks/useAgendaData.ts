@@ -880,3 +880,35 @@ export function useUpdateMeetingSchedule() {
     },
   });
 }
+
+export function useDeleteMeeting() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (meetingId: string) => {
+      // Primeiro deletar os attendees relacionados
+      await supabase
+        .from('meeting_slot_attendees')
+        .delete()
+        .eq('meeting_slot_id', meetingId);
+
+      // Depois deletar a reunião
+      const { error } = await supabase
+        .from('meeting_slots')
+        .delete()
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      toast.success('Reunião excluída');
+    },
+    onError: () => {
+      toast.error('Erro ao excluir reunião');
+    },
+  });
+}
