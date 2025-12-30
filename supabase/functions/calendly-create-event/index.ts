@@ -27,22 +27,16 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const calendlyToken = Deno.env.get('CALENDLY_PERSONAL_ACCESS_TOKEN');
 
-    if (!calendlyToken) {
-      console.error('CALENDLY_PERSONAL_ACCESS_TOKEN not configured');
-      return new Response(
-        JSON.stringify({ error: 'Calendly API not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log('🔐 Calendly token configured:', !!calendlyToken);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     const body: CreateEventRequest = await req.json();
     const { closerId, dealId, contactId, scheduledAt, durationMinutes = 60, leadType = 'A', notes } = body;
 
-    console.log('Creating Calendly event:', body);
+    console.log('📅 Creating meeting:', { closerId, dealId, scheduledAt, leadType });
 
-    // Get closer info with calendly_event_type_uri and default link
+    // Get closer info
     const { data: closer, error: closerError } = await supabase
       .from('closers')
       .select('id, name, email, calendly_event_type_uri, calendly_default_link')
@@ -50,12 +44,18 @@ serve(async (req) => {
       .single();
 
     if (closerError || !closer) {
-      console.error('Closer not found:', closerError);
+      console.error('❌ Closer not found:', closerError);
       return new Response(
         JSON.stringify({ error: 'Closer not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log('👤 Closer:', { 
+      name: closer.name, 
+      calendly_event_type_uri: closer.calendly_event_type_uri?.substring(0, 50),
+      calendly_default_link: closer.calendly_default_link?.substring(0, 50)
+    });
 
     // Get contact info
     let contactInfo = { name: '', email: '', phone: '' };
@@ -91,6 +91,8 @@ serve(async (req) => {
       }
     }
 
+    console.log('📋 Contact info:', { name: contactInfo.name, email: contactInfo.email });
+
     const scheduledDate = new Date(scheduledAt);
     const endDate = new Date(scheduledDate.getTime() + durationMinutes * 60000);
 
@@ -99,50 +101,86 @@ serve(async (req) => {
     let videoConferenceLink = '';
 
     // Try to create Calendly event via API
-    if (closer.calendly_event_type_uri) {
+    // NOTE: Calendly's public API does NOT support creating scheduled events directly via POST
+    // The POST /scheduled_events endpoint does not exist - we need to use webhooks or pre-filled links
+    // For now, we'll use the pre-filled link approach and explain this limitation
+    
+    if (calendlyToken && closer.calendly_event_type_uri) {
+      console.log('🔵 Attempting Calendly API integration...');
+      
       try {
-        // Get current user to use as organizer
-        const calendlyResponse = await fetch('https://api.calendly.com/scheduled_events', {
-          method: 'POST',
+        // First, let's verify the token works by getting user info
+        const userResponse = await fetch('https://api.calendly.com/users/me', {
           headers: {
             'Authorization': `Bearer ${calendlyToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            event_type: closer.calendly_event_type_uri,
-            start_time: scheduledDate.toISOString(),
-            end_time: endDate.toISOString(),
-            invitee: {
-              email: contactInfo.email || `lead-${dealId.slice(0, 8)}@placeholder.com`,
-              name: contactInfo.name || `Lead ${dealId.slice(0, 8)}`,
-            },
-          }),
         });
-
-        if (calendlyResponse.ok) {
-          const calendlyData = await calendlyResponse.json();
-          calendlyEventUri = calendlyData.resource?.uri || '';
-          // The join_url is the video conference link (Google Meet/Zoom)
-          videoConferenceLink = calendlyData.resource?.location?.join_url || '';
-          // Use the reschedule URL or invitee cancel URL as the meeting link
-          meetingLink = calendlyData.resource?.reschedule_url || calendlyData.resource?.cancel_url || '';
-          console.log('Calendly event created:', calendlyEventUri);
-          console.log('Video conference link:', videoConferenceLink);
+        
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          console.log('✅ Calendly API connected:', userData.resource?.name);
+          
+          // Get event type details to verify it exists and get location settings
+          const eventTypeResponse = await fetch(closer.calendly_event_type_uri, {
+            headers: {
+              'Authorization': `Bearer ${calendlyToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (eventTypeResponse.ok) {
+            const eventTypeData = await eventTypeResponse.json();
+            console.log('📋 Event type found:', eventTypeData.resource?.name);
+            console.log('📋 Event type location:', JSON.stringify(eventTypeData.resource?.location));
+            
+            // Extract scheduling URL from event type
+            const schedulingUrl = eventTypeData.resource?.scheduling_url;
+            if (schedulingUrl) {
+              // Build pre-filled link with date/time
+              const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Sao_Paulo',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              });
+              const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'America/Sao_Paulo',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              });
+              
+              const dateStr = dateFormatter.format(scheduledDate);
+              const timeStr = timeFormatter.format(scheduledDate);
+              
+              const separator = schedulingUrl.includes('?') ? '&' : '?';
+              meetingLink = `${schedulingUrl}${separator}date=${dateStr}&time=${timeStr}`;
+              
+              if (contactInfo.name) {
+                meetingLink += `&name=${encodeURIComponent(contactInfo.name)}`;
+              }
+              if (contactInfo.email) {
+                meetingLink += `&email=${encodeURIComponent(contactInfo.email)}`;
+              }
+              
+              console.log('📎 Generated Calendly link with pre-fill:', meetingLink);
+            }
+          } else {
+            console.warn('⚠️ Could not fetch event type:', eventTypeResponse.status);
+          }
         } else {
-          const errorText = await calendlyResponse.text();
-          console.log('Calendly API error (will use fallback):', errorText);
-          // Generate fallback link - will be updated by webhook
-          meetingLink = `https://calendly.com/scheduled/${Date.now()}`;
+          console.warn('⚠️ Calendly API token invalid or expired:', userResponse.status);
         }
       } catch (apiError) {
-        console.log('Calendly API call failed (will use fallback):', apiError);
-        meetingLink = `https://calendly.com/scheduled/${Date.now()}`;
+        console.error('❌ Calendly API error:', apiError);
       }
-    } else if (closer.calendly_default_link) {
-      // No event type URI but has default link - use it with date/time params
-      console.log('Using calendly_default_link with pre-selected date/time');
+    }
+
+    // Fallback: Use calendly_default_link with date/time params
+    if (!meetingLink && closer.calendly_default_link) {
+      console.log('📎 Using calendly_default_link with pre-selected date/time');
       
-      // Format date and time for Calendly URL params in São Paulo timezone
       const dateFormatter = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'America/Sao_Paulo',
         year: 'numeric',
@@ -156,18 +194,25 @@ serve(async (req) => {
         hour12: false,
       });
       
-      const dateStr = dateFormatter.format(scheduledDate); // YYYY-MM-DD
-      const timeStr = timeFormatter.format(scheduledDate); // HH:mm
+      const dateStr = dateFormatter.format(scheduledDate);
+      const timeStr = timeFormatter.format(scheduledDate);
       
       const baseLink = closer.calendly_default_link;
       const separator = baseLink.includes('?') ? '&' : '?';
       meetingLink = `${baseLink}${separator}date=${dateStr}&time=${timeStr}`;
       
-      console.log('Generated meeting link:', meetingLink);
-    } else {
-      // No event type or default link configured
-      console.log('No Calendly configuration for closer, using internal scheduling');
-      meetingLink = '';
+      if (contactInfo.name) {
+        meetingLink += `&name=${encodeURIComponent(contactInfo.name)}`;
+      }
+      if (contactInfo.email) {
+        meetingLink += `&email=${encodeURIComponent(contactInfo.email)}`;
+      }
+      
+      console.log('📎 Generated fallback meeting link:', meetingLink);
+    }
+
+    if (!meetingLink) {
+      console.log('⚠️ No Calendly configuration for closer, using internal scheduling only');
     }
 
     // Check if there's an existing slot at this time for this closer
@@ -199,7 +244,7 @@ serve(async (req) => {
       }
 
       slotId = existingSlot.id;
-      console.log('Adding to existing slot:', slotId);
+      console.log('📍 Adding to existing slot:', slotId);
     } else {
       // Get current user
       const authHeader = req.headers.get('Authorization');
@@ -223,7 +268,7 @@ serve(async (req) => {
           status: 'scheduled',
           meeting_link: meetingLink || closer.calendly_default_link,
           video_conference_link: videoConferenceLink || null,
-          calendly_event_uri: calendlyEventUri,
+          calendly_event_uri: calendlyEventUri || null,
           booked_by: bookedBy,
           notes: notes || `Agendado via CRM\nLead Type: ${leadType}`,
           max_attendees: 3,
@@ -232,7 +277,7 @@ serve(async (req) => {
         .single();
 
       if (slotError) {
-        console.error('Error creating slot:', slotError);
+        console.error('❌ Error creating slot:', slotError);
         return new Response(
           JSON.stringify({ error: 'Failed to create slot', details: slotError }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -240,7 +285,7 @@ serve(async (req) => {
       }
 
       slotId = newSlot.id;
-      console.log('Created new slot:', slotId);
+      console.log('✅ Created new slot:', slotId);
     }
 
     // Add attendee record
@@ -256,8 +301,9 @@ serve(async (req) => {
       .single();
 
     if (attendeeError) {
-      console.error('Error creating attendee:', attendeeError);
-      // Don't fail - slot was created successfully
+      console.error('⚠️ Error creating attendee:', attendeeError);
+    } else {
+      console.log('✅ Added attendee to slot');
     }
 
     // Update deal stage to "Reunião 01 Agendada"
@@ -280,9 +326,11 @@ serve(async (req) => {
         })
         .eq('id', dealId);
 
+      console.log('✅ Updated deal stage');
+
       // Log activity
-      const authHeader = req.headers.get('Authorization');
       let userId = null;
+      const authHeader = req.headers.get('Authorization');
       if (authHeader) {
         const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
         userId = user?.id;
@@ -310,19 +358,29 @@ serve(async (req) => {
       .eq('id', slotId)
       .single();
 
+    console.log('✅ Meeting created successfully:', {
+      slotId,
+      meetingLink: meetingLink?.substring(0, 60) + '...',
+      videoConferenceLink: videoConferenceLink || 'none (will be set by Calendly webhook)',
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
         slotId,
         meetingLink: slot?.meeting_link || meetingLink,
+        videoConferenceLink: slot?.video_conference_link || videoConferenceLink,
         attendeeId: attendee?.id,
         slot,
+        message: videoConferenceLink 
+          ? 'Reunião criada com link direto de videoconferência'
+          : 'Reunião agendada - quando o cliente confirmar no Calendly, o link será atualizado automaticamente',
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Create event error:', error);
+    console.error('❌ Create event error:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
