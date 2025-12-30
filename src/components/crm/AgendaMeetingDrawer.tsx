@@ -12,6 +12,17 @@ import {
   DrawerTitle,
   DrawerClose,
 } from '@/components/ui/drawer';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,6 +38,7 @@ import {
   useAddMeetingAttendee,
   useRemoveMeetingAttendee,
   useMarkAttendeeNotified,
+  useDeleteMeeting,
 } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -64,7 +76,16 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const addAttendee = useAddMeetingAttendee();
   const removeAttendee = useRemoveMeetingAttendee();
   const markNotified = useMarkAttendeeNotified();
+  const deleteMeeting = useDeleteMeeting();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
+
+  const handleDeleteMeeting = () => {
+    deleteMeeting.mutate(activeMeeting.id, {
+      onSuccess: () => {
+        onOpenChange(false);
+      }
+    });
+  };
 
   // All meetings at this slot (main + related)
   const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
@@ -526,6 +547,37 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     Cancelar
                   </Button>
                 </div>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="w-full"
+                      disabled={deleteMeeting.isPending}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {deleteMeeting.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir reunião?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. A reunião será excluída permanentemente do sistema.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Voltar</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleDeleteMeeting}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </>
             )}
 
