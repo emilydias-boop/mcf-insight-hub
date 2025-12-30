@@ -148,6 +148,25 @@ export function AgendaCalendar({
     });
   }, [filteredMeetings]);
 
+  // Get the meeting that covers a specific slot (for clicks on occupied slots)
+  const getMeetingCoveringSlot = useCallback((day: Date, hour: number, minute: number): MeetingSlot | null => {
+    const slotTime = setMinutes(setHours(new Date(day), hour), minute);
+    
+    for (const meeting of filteredMeetings) {
+      const meetingStart = parseISO(meeting.scheduled_at);
+      if (!isSameDay(meetingStart, day)) continue;
+      
+      const duration = meeting.duration_minutes || 30;
+      const meetingEnd = new Date(meetingStart.getTime() + duration * 60 * 1000);
+      
+      // Check if this slot is within the meeting's duration
+      if (slotTime >= meetingStart && slotTime < meetingEnd) {
+        return meeting;
+      }
+    }
+    return null;
+  }, [filteredMeetings]);
+
   // Calculate slot occupancy - how many meetings per closer per time slot
   const getSlotOccupancy = useCallback((day: Date, hour: number, minute: number, closerId?: string) => {
     const slotMeetings = filteredMeetings.filter(meeting => {
@@ -456,12 +475,21 @@ export function AgendaCalendar({
                         <div
                           ref={provided.innerRef}
                           {...provided.droppableProps}
+                          onClick={() => {
+                            // If slot is occupied by an earlier meeting, open that meeting
+                            if (isOccupied) {
+                              const coveringMeeting = getMeetingCoveringSlot(day, hour, minute);
+                              if (coveringMeeting) {
+                                onSelectMeeting(coveringMeeting);
+                              }
+                            }
+                          }}
                           className={cn(
-                            'h-[40px] border-l relative',
+                            'h-[40px] border-l relative overflow-visible',
                             isSameDay(day, new Date()) && 'bg-primary/5',
                             isCurrent && 'bg-primary/15 ring-1 ring-primary/30',
                             snapshot.isDraggingOver && !isSlotFull && 'bg-primary/20',
-                            isOccupied && 'pointer-events-none',
+                            isOccupied && 'cursor-pointer',
                             isSlotFull && 'bg-muted/40'
                           )}
                         >
