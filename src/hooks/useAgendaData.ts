@@ -35,13 +35,15 @@ export interface MeetingSlot {
   booked_by: string | null;
   notes: string | null;
   meeting_link: string | null;
+  video_conference_link: string | null;
+  google_event_id: string | null;
   created_at: string;
   closer?: {
     id: string;
     name: string;
     email: string;
     color?: string;
-    calendly_default_link?: string;
+    google_calendar_id?: string;
   };
   deal?: {
     id: string;
@@ -114,7 +116,7 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
         .from('meeting_slots')
         .select(`
           *,
-          closer:closers(id, name, email, color, calendly_default_link),
+          closer:closers(id, name, email, color, google_calendar_id),
           deal:crm_deals(
             id, 
             name,
@@ -617,70 +619,23 @@ export function useCreateMeeting() {
       leadType?: LeadType;
       sendNotification?: boolean;
     }) => {
-      // Get closer's calendly_default_link
-      const { data: closer } = await supabase
-        .from('closers')
-        .select('calendly_default_link')
-        .eq('id', closerId)
-        .single();
-
-      // Get contact details for personalized link
-      let contactName = '';
-      let contactEmail = '';
-      if (contactId) {
-        const { data: contactData } = await supabase
-          .from('crm_contacts')
-          .select('name, email')
-          .eq('id', contactId)
-          .single();
-        contactName = contactData?.name || '';
-        contactEmail = contactData?.email || '';
-      }
-
-      // Build unique meeting link with parameters
-      let meetingLink = closer?.calendly_default_link || null;
-      if (meetingLink) {
-        try {
-          const url = new URL(meetingLink);
-          if (contactName) url.searchParams.set('name', contactName);
-          if (contactEmail) url.searchParams.set('email', contactEmail);
-          meetingLink = url.toString();
-        } catch (e) {
-          console.error('Error building meeting link:', e);
-        }
-      }
-
-      const { data: meetingSlot, error } = await supabase
-        .from('meeting_slots')
-        .insert({
-          closer_id: closerId,
-          deal_id: dealId,
-          contact_id: contactId,
-          scheduled_at: scheduledAt.toISOString(),
-          duration_minutes: durationMinutes,
-          status: 'scheduled',
+      // Chamar a edge function que cria o evento no Google Calendar com Meet
+      const { data, error } = await supabase.functions.invoke('calendly-create-event', {
+        body: {
+          closerId,
+          dealId,
+          contactId,
+          scheduledAt: scheduledAt.toISOString(),
+          durationMinutes,
           notes,
-          lead_type: leadType,
-          meeting_link: meetingLink,
-        })
-        .select()
-        .single();
+          leadType,
+        },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      // Create the first attendee record with contact info
-      if (meetingSlot && (dealId || contactId)) {
-        await supabase.from('meeting_slot_attendees').insert({
-          meeting_slot_id: meetingSlot.id,
-          deal_id: dealId || null,
-          contact_id: contactId || null,
-          status: 'invited',
-          is_partner: false,
-          attendee_name: contactName || null,
-        });
-      }
-
-      return { ...meetingSlot, sendNotification };
+      return { ...data, sendNotification };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
@@ -688,10 +643,11 @@ export function useCreateMeeting() {
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
-      toast.success('Reunião agendada');
+      toast.success('Reunião agendada com Google Meet');
     },
-    onError: () => {
-      toast.error('Erro ao agendar reunião');
+    onError: (error: any) => {
+      console.error('Error creating meeting:', error);
+      toast.error(error?.message || 'Erro ao agendar reunião');
     },
   });
 }
