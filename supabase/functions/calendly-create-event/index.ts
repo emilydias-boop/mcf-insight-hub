@@ -34,17 +34,43 @@ async function createGoogleJWT(email: string, privateKey: string, scopes: string
   const claimB64 = btoa(JSON.stringify(claim)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   const signatureInput = `${headerB64}.${claimB64}`;
 
+  // Fix the private key format - handle both escaped \n and actual newlines
+  let fixedPrivateKey = privateKey;
+  
+  // If the key has literal \n strings, replace them with actual newlines
+  if (privateKey.includes('\\n')) {
+    fixedPrivateKey = privateKey.replace(/\\n/g, '\n');
+  }
+  
+  console.log('🔑 Private key starts with:', fixedPrivateKey.substring(0, 50));
+  console.log('🔑 Private key contains BEGIN:', fixedPrivateKey.includes('BEGIN PRIVATE KEY'));
+
   // Import private key and sign
-  const pemContent = privateKey
+  const pemContent = fixedPrivateKey
     .replace(/-----BEGIN PRIVATE KEY-----/g, '')
     .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/\s/g, '');
+    .replace(/[\r\n\s]/g, '');
   
-  const binaryKey = Uint8Array.from(atob(pemContent), c => c.charCodeAt(0));
+  console.log('🔑 PEM content length:', pemContent.length);
+  
+  // Use a safer base64 decode
+  let binaryKey: Uint8Array;
+  try {
+    // Standard base64 decode
+    binaryKey = Uint8Array.from(atob(pemContent), c => c.charCodeAt(0));
+  } catch (e) {
+    console.error('❌ Failed to decode base64 key:', e);
+    
+    // Try URL-safe base64 decode
+    const base64 = pemContent.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = (4 - (base64.length % 4)) % 4;
+    const paddedBase64 = base64 + '='.repeat(padding);
+    binaryKey = Uint8Array.from(atob(paddedBase64), c => c.charCodeAt(0));
+  }
   
   const cryptoKey = await crypto.subtle.importKey(
     'pkcs8',
-    binaryKey,
+    binaryKey.buffer as ArrayBuffer,
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     false,
     ['sign']
