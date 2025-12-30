@@ -605,6 +605,8 @@ export type Database = {
           created_at: string | null
           email: string
           employee_id: string | null
+          google_calendar_enabled: boolean | null
+          google_calendar_id: string | null
           id: string
           is_active: boolean | null
           name: string
@@ -617,6 +619,8 @@ export type Database = {
           created_at?: string | null
           email: string
           employee_id?: string | null
+          google_calendar_enabled?: boolean | null
+          google_calendar_id?: string | null
           id?: string
           is_active?: boolean | null
           name: string
@@ -629,6 +633,8 @@ export type Database = {
           created_at?: string | null
           email?: string
           employee_id?: string | null
+          google_calendar_enabled?: boolean | null
+          google_calendar_id?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
@@ -2188,6 +2194,7 @@ export type Database = {
           created_at: string | null
           deal_id: string | null
           duration_minutes: number | null
+          google_event_id: string | null
           id: string
           lead_type: string | null
           max_attendees: number | null
@@ -2209,6 +2216,7 @@ export type Database = {
           created_at?: string | null
           deal_id?: string | null
           duration_minutes?: number | null
+          google_event_id?: string | null
           id?: string
           lead_type?: string | null
           max_attendees?: number | null
@@ -2230,6 +2238,7 @@ export type Database = {
           created_at?: string | null
           deal_id?: string | null
           duration_minutes?: number | null
+          google_event_id?: string | null
           id?: string
           lead_type?: string | null
           max_attendees?: number | null
