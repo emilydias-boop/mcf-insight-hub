@@ -150,11 +150,23 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const handleSendLinkViaWhatsApp = (phone: string, name: string) => {
-    if (!enhancedMeetingLink || !phone) return;
+    if (!phone) return;
     const formattedPhone = phone.replace(/\D/g, '');
-    const message = encodeURIComponent(
-      `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n${enhancedMeetingLink}\n\nSe o horário não aparecer disponível, use este link:\n${fallbackLink}\n\nAguardo você!`
-    );
+    
+    // Prioritize video conference link (Google Meet) over Calendly link
+    const linkToSend = videoConferenceLink || enhancedMeetingLink;
+    if (!linkToSend) {
+      toast.error('Nenhum link de reunião disponível');
+      return;
+    }
+    
+    const message = videoConferenceLink
+      ? encodeURIComponent(
+          `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n\n🔗 ${videoConferenceLink}\n\nÉ só clicar no link no horário agendado!\n\nAguardo você!`
+        )
+      : encodeURIComponent(
+          `Olá ${name}! 👋\n\nSegue o link para nossa reunião (${formattedDateParam} às ${formattedTimeParam}):\n${enhancedMeetingLink}\n\nSe o horário não aparecer disponível, use este link:\n${fallbackLink}\n\nAguardo você!`
+        );
     window.open(`https://wa.me/55${formattedPhone}?text=${message}`, '_blank');
   };
   

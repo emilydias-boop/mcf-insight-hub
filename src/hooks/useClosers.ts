@@ -23,6 +23,8 @@ export interface CloserFormData {
   calendly_event_type_uri?: string;
   calendly_default_link?: string;
   employee_id?: string;
+  google_calendar_id?: string;
+  google_calendar_enabled?: boolean;
 }
 
 export function useClosersList() {
@@ -70,7 +72,10 @@ export function useCreateCloser() {
           color: data.color || null,
           is_active: data.is_active ?? true,
           calendly_event_type_uri: data.calendly_event_type_uri || null,
-          employee_id: data.employee_id || null
+          calendly_default_link: data.calendly_default_link || null,
+          employee_id: data.employee_id || null,
+          google_calendar_id: data.google_calendar_id || null,
+          google_calendar_enabled: data.google_calendar_enabled ?? false,
         })
         .select()
         .single();
