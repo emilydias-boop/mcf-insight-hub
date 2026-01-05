@@ -391,8 +391,8 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
 
   // Create activity for stage change
   let activityCreated = false;
-  const fromStage = eventData.from_stage || eventData.stage_from;
-  const toStage = eventData.to_stage || eventData.stage_to;
+  const fromStage = eventData.from_stage || eventData.stage_from || eventData.deal_old_stage || deal?.old_stage;
+  const toStage = eventData.to_stage || eventData.stage_to || eventData.deal_stage || deal?.stage;
 
   if (toStage && dealId && !dryRun) {
     const { error: activityError } = await supabase
