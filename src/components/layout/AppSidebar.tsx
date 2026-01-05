@@ -4,7 +4,7 @@ import {
   DollarSign, 
   FileText, 
   Bell, 
-  Zap, 
+  Handshake, 
   FolderKanban, 
   CreditCard, 
   Gavel, 
@@ -124,7 +124,7 @@ const menuItems: MenuItem[] = [
   { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
   
   // Produtos separados
-  { title: "Efeito Alavanca", url: "/efeito-alavanca", icon: Zap, resource: "efeito_alavanca" },
+  { title: "Consórcio", url: "/consorcio", icon: Handshake, requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { title: "Projetos", url: "/projetos", icon: FolderKanban, resource: "projetos" },
   { title: "Crédito", url: "/credito", icon: CreditCard, resource: "credito", requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
