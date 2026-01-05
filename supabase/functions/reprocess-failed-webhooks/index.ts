@@ -305,6 +305,8 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
       // Find origin_id from event data
       let originId = null;
       const originClintId = deal.origin_id || deal.origin?.id || eventData.origin_id;
+      const originName = eventData.deal_origin || deal.origin || deal.origin_name;
+      
       if (originClintId) {
         const { data: origin } = await supabase
           .from('crm_origins')
@@ -312,11 +314,23 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
           .eq('clint_id', originClintId)
           .maybeSingle();
         originId = origin?.id;
+        console.log(`[reprocess] Origin by clint_id '${originClintId}': ${originId}`);
+      }
+      
+      // Fallback: buscar origin pelo nome
+      if (!originId && originName) {
+        const { data: origin } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .ilike('name', originName)
+          .maybeSingle();
+        originId = origin?.id;
+        console.log(`[reprocess] Origin by name '${originName}': ${originId}`);
       }
 
       // Find stage_id from event data
       let stageId = null;
-      const stageName = deal.stage || eventData.to_stage || eventData.stage_to;
+      const stageName = eventData.deal_stage || deal.stage || eventData.to_stage || eventData.stage_to;
       const stageClintId = deal.stage_id || eventData.to_stage_id;
       
       if (stageClintId) {
@@ -326,7 +340,11 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
           .eq('clint_id', stageClintId)
           .maybeSingle();
         stageId = stage?.id;
-      } else if (stageName && originId) {
+        console.log(`[reprocess] Stage by clint_id '${stageClintId}': ${stageId}`);
+      }
+      
+      // Fallback: buscar stage pelo nome dentro do origin
+      if (!stageId && stageName && originId) {
         const { data: stage } = await supabase
           .from('crm_stages')
           .select('id')
@@ -334,6 +352,7 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
           .ilike('stage_name', `%${stageName}%`)
           .maybeSingle();
         stageId = stage?.id;
+        console.log(`[reprocess] Stage by name '${stageName}' in origin ${originId}: ${stageId}`);
       }
 
       const newDealData = {
