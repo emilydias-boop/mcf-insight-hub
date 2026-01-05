@@ -31,11 +31,16 @@ serve(async (req) => {
   try {
     // GET - List failed webhooks
     if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const daysBack = parseInt(url.searchParams.get('days_back') || '7');
+      
+      console.log(`[reprocess] GET - Listing failed webhooks from last ${daysBack} days`);
+      
       const { data: failedWebhooks, error } = await supabase
         .from('webhook_events')
         .select('id, event_type, event_data, status, error_message, created_at')
         .eq('status', 'error')
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+        .gte('created_at', new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString())
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -43,6 +48,7 @@ serve(async (req) => {
 
       return new Response(JSON.stringify({
         success: true,
+        days_back: daysBack,
         count: failedWebhooks?.length || 0,
         webhooks: failedWebhooks
       }), {
@@ -55,12 +61,12 @@ serve(async (req) => {
       const url = new URL(req.url);
       const urlAll = url.searchParams.get('all') === 'true';
       const body = await req.json().catch(() => ({}));
-      const { webhook_id, webhook_ids, dry_run = false, all: bodyAll } = body;
+      const { webhook_id, webhook_ids, dry_run = false, all: bodyAll, days_back = 7 } = body;
       
       // Accept 'all' from querystring OR body
       const reprocessAll = urlAll || bodyAll === true;
 
-      console.log(`[reprocess] Request received - urlAll: ${urlAll}, bodyAll: ${bodyAll}, reprocessAll: ${reprocessAll}`);
+      console.log(`[reprocess] Request received - urlAll: ${urlAll}, bodyAll: ${bodyAll}, reprocessAll: ${reprocessAll}, days_back: ${days_back}`);
 
       let webhooksToProcess = [];
 
@@ -69,7 +75,7 @@ serve(async (req) => {
           .from('webhook_events')
           .select('*')
           .eq('status', 'error')
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+          .gte('created_at', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
           .limit(50);
         if (error) throw error;
         webhooksToProcess = data || [];
