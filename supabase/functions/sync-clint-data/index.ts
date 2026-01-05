@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     await new Promise(r => setTimeout(r, 1000));
 
     // 4. Vincular Contacts aos Origins via Deals
-    console.log('🔗 4/4 - Vinculando Contacts aos Origins...');
+    console.log('🔗 4/5 - Vinculando Contacts aos Origins...');
     const { data: linkResult, error: linkError } = await supabase.functions.invoke(
       'sync-link-contacts'
     );
@@ -83,6 +83,23 @@ Deno.serve(async (req) => {
     } else {
       console.log('✅ Contacts vinculados:', linkResult);
       results.link_contacts = linkResult;
+    }
+
+    await new Promise(r => setTimeout(r, 1000));
+
+    // 5. Reprocessar webhooks falhados
+    console.log('🔄 5/5 - Reprocessando webhooks falhados...');
+    const { data: reprocessResult, error: reprocessError } = await supabase.functions.invoke(
+      'reprocess-failed-webhooks',
+      { body: { all: true } }
+    );
+    
+    if (reprocessError) {
+      console.error('❌ Erro ao reprocessar webhooks:', reprocessError);
+      results.reprocess_webhooks = { error: reprocessError.message };
+    } else {
+      console.log('✅ Webhooks reprocessados:', reprocessResult);
+      results.reprocess_webhooks = reprocessResult;
     }
 
     const duration = Date.now() - startTime;
