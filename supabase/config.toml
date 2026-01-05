@@ -188,3 +188,6 @@ verify_jwt = false
 
 [functions.send-meeting-notification]
 verify_jwt = false
+
+[functions.reprocess-failed-webhooks]
+verify_jwt = false
