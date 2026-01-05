@@ -33,7 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cepUtils';
-import { useCreateConsorcioCard } from '@/hooks/useConsorcio';
+import { useCreateConsorcioCard, useUpdateConsorcioCard } from '@/hooks/useConsorcio';
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import {
@@ -43,6 +43,7 @@ import {
   TIPO_DOCUMENTO_OPTIONS,
   CreateConsorcioCardInput,
   TipoDocumento,
+  ConsorcioCardWithDetails,
 } from '@/types/consorcio';
 
 const formSchema = z.object({
@@ -116,22 +117,79 @@ type FormData = z.infer<typeof formSchema>;
 interface ConsorcioCardFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  card?: ConsorcioCardWithDetails | null;
 }
 
-export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps) {
+export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFormProps) {
   const [activeTab, setActiveTab] = useState('cota');
   const [loadingCep, setLoadingCep] = useState(false);
   const [loadingCepComercial, setLoadingCepComercial] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
   const [selectedDocType, setSelectedDocType] = useState<TipoDocumento>('cnh');
   
+  const isEditing = !!card;
   const { data: employees } = useEmployees();
   const createCard = useCreateConsorcioCard();
+  const updateCard = useUpdateConsorcioCard();
   const batchUpload = useBatchUploadDocuments();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
+    defaultValues: card ? {
+      tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
+      tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
+      tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado',
+      parcelas_pagas_empresa: card.parcelas_pagas_empresa,
+      dia_vencimento: card.dia_vencimento,
+      origem: card.origem as 'socio' | 'gr' | 'indicacao' | 'outros',
+      origem_detalhe: card.origem_detalhe || undefined,
+      grupo: card.grupo,
+      cota: card.cota,
+      valor_credito: Number(card.valor_credito),
+      prazo_meses: card.prazo_meses,
+      data_contratacao: new Date(card.data_contratacao),
+      vendedor_id: card.vendedor_id || undefined,
+      vendedor_name: card.vendedor_name || undefined,
+      // PF
+      nome_completo: card.nome_completo || undefined,
+      data_nascimento: card.data_nascimento ? new Date(card.data_nascimento) : undefined,
+      cpf: card.cpf || undefined,
+      rg: card.rg || undefined,
+      estado_civil: card.estado_civil as any || undefined,
+      cpf_conjuge: card.cpf_conjuge || undefined,
+      endereco_cep: card.endereco_cep || undefined,
+      endereco_rua: card.endereco_rua || undefined,
+      endereco_numero: card.endereco_numero || undefined,
+      endereco_complemento: card.endereco_complemento || undefined,
+      endereco_bairro: card.endereco_bairro || undefined,
+      endereco_cidade: card.endereco_cidade || undefined,
+      endereco_estado: card.endereco_estado || undefined,
+      telefone: card.telefone || undefined,
+      email: card.email || undefined,
+      profissao: card.profissao || undefined,
+      tipo_servidor: card.tipo_servidor as any || undefined,
+      renda: card.renda ? Number(card.renda) : undefined,
+      patrimonio: card.patrimonio ? Number(card.patrimonio) : undefined,
+      pix: card.pix || undefined,
+      // PJ
+      razao_social: card.razao_social || undefined,
+      cnpj: card.cnpj || undefined,
+      natureza_juridica: card.natureza_juridica || undefined,
+      inscricao_estadual: card.inscricao_estadual || undefined,
+      data_fundacao: card.data_fundacao ? new Date(card.data_fundacao) : undefined,
+      endereco_comercial_cep: card.endereco_comercial_cep || undefined,
+      endereco_comercial_rua: card.endereco_comercial_rua || undefined,
+      endereco_comercial_numero: card.endereco_comercial_numero || undefined,
+      endereco_comercial_complemento: card.endereco_comercial_complemento || undefined,
+      endereco_comercial_bairro: card.endereco_comercial_bairro || undefined,
+      endereco_comercial_cidade: card.endereco_comercial_cidade || undefined,
+      endereco_comercial_estado: card.endereco_comercial_estado || undefined,
+      telefone_comercial: card.telefone_comercial || undefined,
+      email_comercial: card.email_comercial || undefined,
+      faturamento_mensal: card.faturamento_mensal ? Number(card.faturamento_mensal) : undefined,
+      num_funcionarios: card.num_funcionarios ? Number(card.num_funcionarios) : undefined,
+      partners: card.partners?.map(p => ({ nome: p.nome, cpf: p.cpf, renda: p.renda ? Number(p.renda) : undefined })) || [],
+    } : {
       tipo_pessoa: 'pf',
       tipo_produto: 'select',
       tipo_contrato: 'normal',
@@ -250,14 +308,18 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
       partners: (data.partners || []).filter(p => p.nome && p.cpf) as Array<{ nome: string; cpf: string; renda?: number }>,
     };
 
-    const newCard = await createCard.mutateAsync(input);
-    
-    // Upload pending documents if any
-    if (pendingDocuments.length > 0 && newCard?.id) {
-      await batchUpload.mutateAsync({
-        cardId: newCard.id,
-        documents: pendingDocuments,
-      });
+    if (isEditing && card) {
+      await updateCard.mutateAsync({ id: card.id, ...input });
+    } else {
+      const newCard = await createCard.mutateAsync(input);
+      
+      // Upload pending documents if any
+      if (pendingDocuments.length > 0 && newCard?.id) {
+        await batchUpload.mutateAsync({
+          cardId: newCard.id,
+          documents: pendingDocuments,
+        });
+      }
     }
     
     onOpenChange(false);
@@ -269,7 +331,7 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nova Carta de Consórcio</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Carta de Consórcio' : 'Nova Carta de Consórcio'}</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -1351,9 +1413,9 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createCard.isPending || batchUpload.isPending}>
-                {(createCard.isPending || batchUpload.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Cadastrar Carta
+              <Button type="submit" disabled={createCard.isPending || updateCard.isPending || batchUpload.isPending}>
+                {(createCard.isPending || updateCard.isPending || batchUpload.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {isEditing ? 'Salvar Alterações' : 'Cadastrar Carta'}
               </Button>
             </div>
           </form>

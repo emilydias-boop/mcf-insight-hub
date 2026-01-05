@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { X, Phone, Mail, MapPin, User, Building2, CreditCard, Calendar, Check, Clock, AlertCircle, Trash2, Edit } from 'lucide-react';
@@ -36,6 +37,7 @@ import {
 import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { STATUS_OPTIONS, ConsorcioInstallment } from '@/types/consorcio';
 import { calcularResumoComissoes } from '@/lib/commissionCalculator';
+import { ConsorcioCardForm } from './ConsorcioCardForm';
 
 interface ConsorcioCardDrawerProps {
   cardId: string | null;
@@ -61,6 +63,7 @@ function getInitials(name?: string): string {
 }
 
 export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCardDrawerProps) {
+  const [editFormOpen, setEditFormOpen] = useState(false);
   const { data: card, isLoading } = useConsorcioCardDetails(cardId);
   const payInstallment = usePayInstallment();
   const deleteCard = useDeleteConsorcioCard();
@@ -502,7 +505,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                   </AlertDialogContent>
                 </AlertDialog>
 
-                <Button variant="outline">
+                <Button variant="outline" onClick={() => setEditFormOpen(true)}>
                   <Edit className="h-4 w-4 mr-2" />
                   Editar Carta
                 </Button>
@@ -511,6 +514,13 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
           ) : null}
         </ScrollArea>
       </DrawerContent>
+
+      {/* Edit Form */}
+      <ConsorcioCardForm 
+        open={editFormOpen} 
+        onOpenChange={setEditFormOpen}
+        card={card}
+      />
     </Drawer>
   );
 }
