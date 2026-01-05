@@ -65,6 +65,11 @@ import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import NotFound from "./pages/NotFound";
 import DashboardSemanas from "./pages/dashboard/Semanas";
+import ProdutosIndex from "./pages/produtos/Index";
+import ProdutosInside from "./pages/produtos/Inside";
+import ProdutosConsorcio from "./pages/produtos/Consorcio";
+import ImportarConsorcio from "./pages/produtos/ImportarConsorcio";
+import SetorGenerico from "./pages/produtos/SetorGenerico";
 
 const queryClient = new QueryClient();
 
@@ -128,6 +133,11 @@ const App = () => (
               <Route path="crm/reunioes-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ReunioesEquipe /></RoleGuard>} />
               <Route path="crm/reunioes-equipe/:sdrEmail" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SdrMeetingsDetailPage /></RoleGuard>} />
               <Route path="crm/configurar-closers" element={<ResourceGuard resource="configuracoes"><ConfigurarClosers /></ResourceGuard>} />
+              <Route path="produtos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosIndex /></RoleGuard>} />
+              <Route path="produtos/inside" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosInside /></RoleGuard>} />
+              <Route path="produtos/consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosConsorcio /></RoleGuard>} />
+              <Route path="produtos/consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarConsorcio /></RoleGuard>} />
+              <Route path="produtos/:setor" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SetorGenerico /></RoleGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<CRMOverview />} />
                 <Route path="contatos" element={<Contatos />} />
