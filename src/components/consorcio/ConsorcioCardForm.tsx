@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Plus, Trash2, Loader2 } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, Loader2, Upload, FileText, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -34,12 +34,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cepUtils';
 import { useCreateConsorcioCard } from '@/hooks/useConsorcio';
+import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import {
   ESTADO_CIVIL_OPTIONS,
   TIPO_SERVIDOR_OPTIONS,
   ORIGEM_OPTIONS,
+  TIPO_DOCUMENTO_OPTIONS,
   CreateConsorcioCardInput,
+  TipoDocumento,
 } from '@/types/consorcio';
 
 const formSchema = z.object({
@@ -119,9 +122,12 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
   const [activeTab, setActiveTab] = useState('cota');
   const [loadingCep, setLoadingCep] = useState(false);
   const [loadingCepComercial, setLoadingCepComercial] = useState(false);
+  const [pendingDocuments, setPendingDocuments] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
+  const [selectedDocType, setSelectedDocType] = useState<TipoDocumento>('cnh');
   
   const { data: employees } = useEmployees();
   const createCard = useCreateConsorcioCard();
+  const batchUpload = useBatchUploadDocuments();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -175,6 +181,18 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
       form.setValue('endereco_comercial_cidade', endereco.cidade);
       form.setValue('endereco_comercial_estado', endereco.estado);
     }
+  };
+
+  const handleAddDocument = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPendingDocuments(prev => [...prev, { file, tipo: selectedDocType }]);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  const handleRemoveDocument = (index: number) => {
+    setPendingDocuments(prev => prev.filter((_, i) => i !== index));
   };
 
   const onSubmit = async (data: FormData) => {
@@ -232,9 +250,19 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
       partners: (data.partners || []).filter(p => p.nome && p.cpf) as Array<{ nome: string; cpf: string; renda?: number }>,
     };
 
-    await createCard.mutateAsync(input);
+    const newCard = await createCard.mutateAsync(input);
+    
+    // Upload pending documents if any
+    if (pendingDocuments.length > 0 && newCard?.id) {
+      await batchUpload.mutateAsync({
+        cardId: newCard.id,
+        documents: pendingDocuments,
+      });
+    }
+    
     onOpenChange(false);
     form.reset();
+    setPendingDocuments([]);
   };
 
   return (
@@ -269,7 +297,7 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
             />
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className={cn("grid w-full", tipoPessoa === 'pj' ? "grid-cols-5" : "grid-cols-4")}>
                 <TabsTrigger value="cota">Dados da Cota</TabsTrigger>
                 <TabsTrigger value="dados">
                   {tipoPessoa === 'pf' ? 'Dados Pessoais' : 'Dados da Empresa'}
@@ -278,6 +306,7 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
                   <TabsTrigger value="socios">Sócios</TabsTrigger>
                 )}
                 <TabsTrigger value="endereco">Endereço</TabsTrigger>
+                <TabsTrigger value="documentos">Documentos</TabsTrigger>
               </TabsList>
 
               {/* Tab: Dados da Cota */}
@@ -1245,14 +1274,85 @@ export function ConsorcioCardForm({ open, onOpenChange }: ConsorcioCardFormProps
                   </>
                 )}
               </TabsContent>
+
+              {/* Tab: Documentos */}
+              <TabsContent value="documentos" className="space-y-4">
+                <div className="space-y-4">
+                  <div className="flex gap-4 items-end">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium mb-2 block">Tipo de Documento</label>
+                      <Select value={selectedDocType} onValueChange={(v) => setSelectedDocType(v as TipoDocumento)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIPO_DOCUMENTO_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label htmlFor="doc-upload" className="cursor-pointer">
+                        <Button type="button" variant="outline" asChild>
+                          <span>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Selecionar Arquivo
+                          </span>
+                        </Button>
+                      </label>
+                      <input
+                        id="doc-upload"
+                        type="file"
+                        className="hidden"
+                        onChange={handleAddDocument}
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Lista de documentos pendentes */}
+                  {pendingDocuments.length > 0 ? (
+                    <div className="border rounded-lg divide-y">
+                      {pendingDocuments.map((doc, index) => (
+                        <div key={index} className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-5 w-5 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm">{doc.file.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {TIPO_DOCUMENTO_OPTIONS.find(o => o.value === doc.tipo)?.label || doc.tipo}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveDocument(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                      <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                      <p>Nenhum documento adicionado</p>
+                      <p className="text-xs mt-1">Selecione o tipo e clique em "Selecionar Arquivo"</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
             </Tabs>
 
             <div className="flex justify-end gap-4 pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createCard.isPending}>
-                {createCard.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Button type="submit" disabled={createCard.isPending || batchUpload.isPending}>
+                {(createCard.isPending || batchUpload.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Cadastrar Carta
               </Button>
             </div>
