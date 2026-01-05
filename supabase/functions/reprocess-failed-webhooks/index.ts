@@ -53,9 +53,14 @@ serve(async (req) => {
     // POST - Reprocess webhooks
     if (req.method === 'POST') {
       const url = new URL(req.url);
-      const reprocessAll = url.searchParams.get('all') === 'true';
+      const urlAll = url.searchParams.get('all') === 'true';
       const body = await req.json().catch(() => ({}));
-      const { webhook_id, webhook_ids, dry_run = false } = body;
+      const { webhook_id, webhook_ids, dry_run = false, all: bodyAll } = body;
+      
+      // Accept 'all' from querystring OR body
+      const reprocessAll = urlAll || bodyAll === true;
+
+      console.log(`[reprocess] Request received - urlAll: ${urlAll}, bodyAll: ${bodyAll}, reprocessAll: ${reprocessAll}`);
 
       let webhooksToProcess = [];
 
