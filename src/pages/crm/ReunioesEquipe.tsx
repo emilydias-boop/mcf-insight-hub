@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, Users, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,11 +23,52 @@ import { SDR_LIST } from "@/constants/team";
 type DatePreset = "today" | "week" | "month" | "custom";
 
 export default function ReunioesEquipe() {
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [datePreset, setDatePreset] = useState<DatePreset>("month");
-  const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
-  const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize state from URL params
+  const initialPreset = (searchParams.get("preset") as DatePreset) || "month";
+  const initialMonth = searchParams.get("month")
+    ? parseISO(searchParams.get("month") + "-01")
+    : new Date();
+  const initialStart = searchParams.get("start")
+    ? parseISO(searchParams.get("start")!)
+    : null;
+  const initialEnd = searchParams.get("end")
+    ? parseISO(searchParams.get("end")!)
+    : null;
+
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth);
+  const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(initialStart);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
+
+  // Sync state changes to URL
+  const updateUrlParams = (
+    preset: DatePreset,
+    month?: Date,
+    startDate?: Date | null,
+    endDate?: Date | null
+  ) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("preset", preset);
+
+    if (preset === "month" && month) {
+      params.set("month", format(month, "yyyy-MM"));
+      params.delete("start");
+      params.delete("end");
+    } else if (preset === "custom") {
+      params.delete("month");
+      if (startDate) params.set("start", format(startDate, "yyyy-MM-dd"));
+      if (endDate) params.set("end", format(endDate, "yyyy-MM-dd"));
+    } else {
+      params.delete("month");
+      params.delete("start");
+      params.delete("end");
+    }
+
+    setSearchParams(params, { replace: true });
+  };
 
   // Calculate date range based on preset
   const getDateRange = () => {
@@ -71,11 +113,28 @@ export default function ReunioesEquipe() {
     return bySDR.filter(s => s.sdrEmail === sdrFilter);
   }, [bySDR, sdrFilter]);
 
+  // Handlers that sync with URL
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    updateUrlParams(preset, selectedMonth, customStartDate, customEndDate);
+  };
+
   // Month navigation
   const handleMonthChange = (increment: number) => {
     const newDate = new Date(selectedMonth);
     newDate.setMonth(newDate.getMonth() + increment);
     setSelectedMonth(newDate);
+    updateUrlParams("month", newDate, null, null);
+  };
+
+  const handleCustomStartChange = (date: Date | null) => {
+    setCustomStartDate(date);
+    updateUrlParams("custom", selectedMonth, date, customEndDate);
+  };
+
+  const handleCustomEndChange = (date: Date | null) => {
+    setCustomEndDate(date);
+    updateUrlParams("custom", selectedMonth, customStartDate, date);
   };
 
   return (
@@ -117,28 +176,28 @@ export default function ReunioesEquipe() {
               <Button
                 variant={datePreset === "today" ? "secondary" : "ghost"}
                 size="sm"
-                onClick={() => setDatePreset("today")}
+                onClick={() => handlePresetChange("today")}
               >
                 Hoje
               </Button>
               <Button
                 variant={datePreset === "week" ? "secondary" : "ghost"}
                 size="sm"
-                onClick={() => setDatePreset("week")}
+                onClick={() => handlePresetChange("week")}
               >
                 Semana
               </Button>
               <Button
                 variant={datePreset === "month" ? "secondary" : "ghost"}
                 size="sm"
-                onClick={() => setDatePreset("month")}
+                onClick={() => handlePresetChange("month")}
               >
                 Mês
               </Button>
               <Button
                 variant={datePreset === "custom" ? "secondary" : "ghost"}
                 size="sm"
-                onClick={() => setDatePreset("custom")}
+                onClick={() => handlePresetChange("custom")}
               >
                 Personalizado
               </Button>
@@ -164,13 +223,13 @@ export default function ReunioesEquipe() {
               <div className="flex items-center gap-2">
                 <DatePickerCustom
                   selected={customStartDate || undefined}
-                  onSelect={(date) => setCustomStartDate(date as Date | null)}
+                  onSelect={(date) => handleCustomStartChange(date as Date | null)}
                   placeholder="Data início"
                 />
                 <span className="text-muted-foreground">até</span>
                 <DatePickerCustom
                   selected={customEndDate || undefined}
-                  onSelect={(date) => setCustomEndDate(date as Date | null)}
+                  onSelect={(date) => handleCustomEndChange(date as Date | null)}
                   placeholder="Data fim"
                 />
               </div>
