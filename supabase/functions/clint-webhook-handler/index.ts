@@ -644,6 +644,7 @@ async function handleDealStageChanged(supabase: any, data: any) {
   let currentStageId = null;
   let currentStageName = null;
   let contactId = null;
+  let dealHasOwner = false;
 
   // 2.1. Primeiro, buscar o contato pelo email
   if (contactData.email) {
@@ -660,7 +661,7 @@ async function handleDealStageChanged(supabase: any, data: any) {
       // 2.2. Tentar buscar deal por contact_id
       const { data: dealByContact } = await supabase
         .from('crm_deals')
-        .select('id, stage_id, clint_id')
+        .select('id, stage_id, clint_id, owner_id')
         .eq('contact_id', contactId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -669,7 +670,8 @@ async function handleDealStageChanged(supabase: any, data: any) {
       if (dealByContact) {
         dealId = dealByContact.id;
         currentStageId = dealByContact.stage_id;
-        console.log('[DEAL.STAGE_CHANGED] Found deal by contact_id:', dealId, 'clint_id:', dealByContact.clint_id);
+        dealHasOwner = !!dealByContact.owner_id;
+        console.log('[DEAL.STAGE_CHANGED] Found deal by contact_id:', dealId, 'clint_id:', dealByContact.clint_id, 'owner_id:', dealByContact.owner_id);
         
         // RECONCILIAÇÃO: Se o deal foi criado via Hubla (clint_id = hubla-deal-*) mas agora
         // temos o ID real do Clint (data.deal_id é UUID), atualizar o clint_id
@@ -705,14 +707,15 @@ async function handleDealStageChanged(supabase: any, data: any) {
     
     const { data: dealByClintId } = await supabase
       .from('crm_deals')
-      .select('id, stage_id, contact_id')
+      .select('id, stage_id, contact_id, owner_id')
       .eq('clint_id', data.deal_id)
       .maybeSingle();
 
     if (dealByClintId) {
       dealId = dealByClintId.id;
       currentStageId = dealByClintId.stage_id;
-      console.log('[DEAL.STAGE_CHANGED] Found deal by clint_id:', dealId);
+      dealHasOwner = !!dealByClintId.owner_id;
+      console.log('[DEAL.STAGE_CHANGED] Found deal by clint_id:', dealId, 'owner_id:', dealByClintId.owner_id);
 
       // Se o deal existe mas não tem contact_id vinculado, vincular agora
       if (!dealByClintId.contact_id && contactId) {
@@ -789,6 +792,13 @@ async function handleDealStageChanged(supabase: any, data: any) {
     // Se temos origin_id do webhook, atualizar também
     if (originId) {
       updateData.origin_id = originId;
+    }
+
+    // CORREÇÃO: Se o deal não tem owner_id mas o webhook tem, atualizar
+    const ownerFromWebhook = data.deal_user || data.deal?.user;
+    if (ownerFromWebhook && !dealHasOwner) {
+      updateData.owner_id = ownerFromWebhook;
+      console.log('[DEAL.STAGE_CHANGED] Updating missing owner_id:', ownerFromWebhook);
     }
 
     const { error: updateError } = await supabase
