@@ -11,6 +11,10 @@ export const SDR_LIST = [
   { nome: "Caroline Correa", email: "carol.correa@minhacasafinanciada.com" },
   { nome: "Caroline Souza", email: "caroline.souza@minhacasafinanciada.com" },
   { nome: "Yanca Oliveira", email: "yanca.tavares@minhacasafinanciada.com" },
+  { nome: "Cleiton Lima", email: "cleiton.lima@minhacasafinanciada.com" },
+  { nome: "Vitor Costa", email: "vitor.ferreira@minhacasafinanciada.com" },
+  { nome: "Thobson Motta", email: "thobson.motta@minhacasafinanciada.com" },
+  { nome: "Julio Caetano", email: "julio.caetano@minhacasafinanciada.com" },
 ];
 
 // Lista de Closers (para validação)
