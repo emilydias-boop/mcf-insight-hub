@@ -194,3 +194,6 @@ verify_jwt = false
 
 [functions.reprocess-failed-webhooks-cron]
 verify_jwt = false
+
+[functions.backfill-deal-activities]
+verify_jwt = false
