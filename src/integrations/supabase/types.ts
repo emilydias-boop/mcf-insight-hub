@@ -650,6 +650,276 @@ export type Database = {
           },
         ]
       }
+      consortium_cards: {
+        Row: {
+          cnpj: string | null
+          cota: string
+          cpf: string | null
+          cpf_conjuge: string | null
+          created_at: string
+          data_contratacao: string
+          data_fundacao: string | null
+          data_nascimento: string | null
+          dia_vencimento: number
+          email: string | null
+          email_comercial: string | null
+          endereco_bairro: string | null
+          endereco_cep: string | null
+          endereco_cidade: string | null
+          endereco_comercial_bairro: string | null
+          endereco_comercial_cep: string | null
+          endereco_comercial_cidade: string | null
+          endereco_comercial_complemento: string | null
+          endereco_comercial_estado: string | null
+          endereco_comercial_numero: string | null
+          endereco_comercial_rua: string | null
+          endereco_complemento: string | null
+          endereco_estado: string | null
+          endereco_numero: string | null
+          endereco_rua: string | null
+          estado_civil: string | null
+          faturamento_mensal: number | null
+          grupo: string
+          id: string
+          inscricao_estadual: string | null
+          natureza_juridica: string | null
+          nome_completo: string | null
+          num_funcionarios: number | null
+          origem: string
+          origem_detalhe: string | null
+          parcelas_pagas_empresa: number
+          patrimonio: number | null
+          pix: string | null
+          prazo_meses: number
+          profissao: string | null
+          razao_social: string | null
+          renda: number | null
+          rg: string | null
+          status: string
+          telefone: string | null
+          telefone_comercial: string | null
+          tipo_contrato: string
+          tipo_pessoa: string
+          tipo_produto: string
+          tipo_servidor: string | null
+          updated_at: string
+          valor_credito: number
+          vendedor_id: string | null
+          vendedor_name: string | null
+        }
+        Insert: {
+          cnpj?: string | null
+          cota: string
+          cpf?: string | null
+          cpf_conjuge?: string | null
+          created_at?: string
+          data_contratacao: string
+          data_fundacao?: string | null
+          data_nascimento?: string | null
+          dia_vencimento: number
+          email?: string | null
+          email_comercial?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_comercial_bairro?: string | null
+          endereco_comercial_cep?: string | null
+          endereco_comercial_cidade?: string | null
+          endereco_comercial_complemento?: string | null
+          endereco_comercial_estado?: string | null
+          endereco_comercial_numero?: string | null
+          endereco_comercial_rua?: string | null
+          endereco_complemento?: string | null
+          endereco_estado?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          estado_civil?: string | null
+          faturamento_mensal?: number | null
+          grupo: string
+          id?: string
+          inscricao_estadual?: string | null
+          natureza_juridica?: string | null
+          nome_completo?: string | null
+          num_funcionarios?: number | null
+          origem: string
+          origem_detalhe?: string | null
+          parcelas_pagas_empresa?: number
+          patrimonio?: number | null
+          pix?: string | null
+          prazo_meses: number
+          profissao?: string | null
+          razao_social?: string | null
+          renda?: number | null
+          rg?: string | null
+          status?: string
+          telefone?: string | null
+          telefone_comercial?: string | null
+          tipo_contrato?: string
+          tipo_pessoa: string
+          tipo_produto: string
+          tipo_servidor?: string | null
+          updated_at?: string
+          valor_credito: number
+          vendedor_id?: string | null
+          vendedor_name?: string | null
+        }
+        Update: {
+          cnpj?: string | null
+          cota?: string
+          cpf?: string | null
+          cpf_conjuge?: string | null
+          created_at?: string
+          data_contratacao?: string
+          data_fundacao?: string | null
+          data_nascimento?: string | null
+          dia_vencimento?: number
+          email?: string | null
+          email_comercial?: string | null
+          endereco_bairro?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_comercial_bairro?: string | null
+          endereco_comercial_cep?: string | null
+          endereco_comercial_cidade?: string | null
+          endereco_comercial_complemento?: string | null
+          endereco_comercial_estado?: string | null
+          endereco_comercial_numero?: string | null
+          endereco_comercial_rua?: string | null
+          endereco_complemento?: string | null
+          endereco_estado?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
+          estado_civil?: string | null
+          faturamento_mensal?: number | null
+          grupo?: string
+          id?: string
+          inscricao_estadual?: string | null
+          natureza_juridica?: string | null
+          nome_completo?: string | null
+          num_funcionarios?: number | null
+          origem?: string
+          origem_detalhe?: string | null
+          parcelas_pagas_empresa?: number
+          patrimonio?: number | null
+          pix?: string | null
+          prazo_meses?: number
+          profissao?: string | null
+          razao_social?: string | null
+          renda?: number | null
+          rg?: string | null
+          status?: string
+          telefone?: string | null
+          telefone_comercial?: string | null
+          tipo_contrato?: string
+          tipo_pessoa?: string
+          tipo_produto?: string
+          tipo_servidor?: string | null
+          updated_at?: string
+          valor_credito?: number
+          vendedor_id?: string | null
+          vendedor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_cards_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consortium_documents: {
+        Row: {
+          card_id: string
+          id: string
+          nome_arquivo: string
+          storage_path: string | null
+          storage_url: string | null
+          tipo: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          card_id: string
+          id?: string
+          nome_arquivo: string
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          card_id?: string
+          id?: string
+          nome_arquivo?: string
+          storage_path?: string | null
+          storage_url?: string | null
+          tipo?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_documents_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consortium_installments: {
+        Row: {
+          card_id: string
+          created_at: string
+          data_pagamento: string | null
+          data_vencimento: string
+          id: string
+          numero_parcela: number
+          status: string
+          tipo: string
+          updated_at: string
+          valor_comissao: number
+          valor_parcela: number
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          id?: string
+          numero_parcela: number
+          status?: string
+          tipo: string
+          updated_at?: string
+          valor_comissao?: number
+          valor_parcela: number
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          id?: string
+          numero_parcela?: number
+          status?: string
+          tipo?: string
+          updated_at?: string
+          valor_comissao?: number
+          valor_parcela?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_installments_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consortium_payments: {
         Row: {
           consorciado: string
@@ -696,6 +966,41 @@ export type Database = {
             columns: ["vendedor_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consortium_pj_partners: {
+        Row: {
+          card_id: string
+          cpf: string
+          created_at: string
+          id: string
+          nome: string
+          renda: number | null
+        }
+        Insert: {
+          card_id: string
+          cpf: string
+          created_at?: string
+          id?: string
+          nome: string
+          renda?: number | null
+        }
+        Update: {
+          card_id?: string
+          cpf?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          renda?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consortium_pj_partners_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
             referencedColumns: ["id"]
           },
         ]

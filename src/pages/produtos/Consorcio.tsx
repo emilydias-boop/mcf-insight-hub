@@ -1,312 +1,420 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, TrendingUp, TrendingDown, Home, Users, Trophy, Upload, FileSpreadsheet } from 'lucide-react';
-import { usePerformanceByPerson, useConsorcioCards, getPeriodFilter, useSetoresSummary } from '@/hooks/useProductsMaster';
-import { SETORES_CONFIG } from '@/types/produtos';
-import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { 
+  Plus, 
+  Download, 
+  CreditCard, 
+  TrendingUp, 
+  FileText,
+  Filter,
+  Eye
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useConsorcioCards, useConsorcioSummary } from '@/hooks/useConsorcio';
+import { useEmployees } from '@/hooks/useEmployees';
+import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
+import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
+import { STATUS_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 
-const formatCurrency = (value: number) => {
+function formatCurrency(value: number): string {
   if (value >= 1000000) {
-    return `R$ ${(value / 1000000).toFixed(2)}MM`;
+    return `R$ ${(value / 1000000).toFixed(1)}MM`;
   }
   if (value >= 1000) {
-    return `R$ ${(value / 1000).toFixed(1)}K`;
+    return `R$ ${(value / 1000).toFixed(0)}K`;
   }
-  return `R$ ${value.toFixed(0)}`;
-};
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+}
+
+function formatCurrencyFull(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+}
+
+function getInitials(name?: string): string {
+  if (!name) return '??';
+  return name
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+type PeriodType = 'month' | 'lastMonth' | 'custom';
 
 export default function ConsorcioPage() {
-  const navigate = useNavigate();
-  const [periodType, setPeriodType] = useState<'month' | 'lastMonth' | 'custom'>('month');
-  const [customStart, setCustomStart] = useState<Date | undefined>();
-  const [customEnd, setCustomEnd] = useState<Date | undefined>();
-  
-  const period = getPeriodFilter(periodType, customStart, customEnd);
-  const { data: setores } = useSetoresSummary(period);
-  const { data: cards, isLoading: cardsLoading } = useConsorcioCards(period);
-  const { data: performance, isLoading: perfLoading } = usePerformanceByPerson('consorcio', period);
-  
-  const setorData = setores?.find(s => s.setor === 'consorcio');
-  const config = SETORES_CONFIG.consorcio;
-  
+  const [period, setPeriod] = useState<PeriodType>('month');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [tipoFilter, setTipoFilter] = useState<string>('todos');
+  const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
+  const [formOpen, setFormOpen] = useState(false);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const { data: employees } = useEmployees();
+
+  // Calculate date range based on period
+  const now = new Date();
+  let startDate: Date;
+  let endDate: Date;
+
+  if (period === 'month') {
+    startDate = startOfMonth(now);
+    endDate = endOfMonth(now);
+  } else if (period === 'lastMonth') {
+    const lastMonth = subMonths(now, 1);
+    startDate = startOfMonth(lastMonth);
+    endDate = endOfMonth(lastMonth);
+  } else {
+    startDate = startOfMonth(now);
+    endDate = endOfMonth(now);
+  }
+
+  const filters = {
+    startDate,
+    endDate,
+    status: statusFilter !== 'todos' ? statusFilter : undefined,
+    tipoProduto: tipoFilter !== 'todos' ? tipoFilter : undefined,
+    vendedorId: vendedorFilter !== 'todos' ? vendedorFilter : undefined,
+  };
+
+  const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
+  const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate });
+
+  const handleViewCard = (card: ConsorcioCard) => {
+    setSelectedCardId(card.id);
+    setDrawerOpen(true);
+  };
+
+  const handleExportCSV = () => {
+    if (!cards || cards.length === 0) return;
+
+    const headers = ['Nome', 'Grupo-Cota', 'Valor Crédito', 'Data Contratação', 'Tipo', 'Status', 'Vendedor'];
+    const rows = cards.map(card => [
+      card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social,
+      `${card.grupo}-${card.cota}`,
+      card.valor_credito,
+      format(new Date(card.data_contratacao), 'dd/MM/yyyy'),
+      card.tipo_produto,
+      card.status,
+      card.vendedor_name || '',
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `consorcio_${format(now, 'yyyy-MM-dd')}.csv`;
+    link.click();
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/produtos')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-              <span className="text-3xl">{config.icon}</span>
-              {config.name}
-            </h1>
-            <p className="text-muted-foreground mt-1">{config.description}</p>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">🏠 Consórcio</h1>
+          <p className="text-muted-foreground">
+            Gestão de cartas de consórcio
+          </p>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/produtos/consorcio/importar')}>
-            <Upload className="h-4 w-4 mr-2" />
-            Importar Dados
-          </Button>
-          
-          <Select value={periodType} onValueChange={(v) => setPeriodType(v as any)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Período" />
+        <div className="flex items-center gap-4">
+          <Select value={period} onValueChange={(v) => setPeriod(v as PeriodType)}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="month">Mês Atual</SelectItem>
-              <SelectItem value="lastMonth">Mês Passado</SelectItem>
-              <SelectItem value="custom">Personalizado</SelectItem>
+              <SelectItem value="month">
+                {format(now, 'MMMM yyyy', { locale: ptBR })}
+              </SelectItem>
+              <SelectItem value="lastMonth">
+                {format(subMonths(now, 1), 'MMMM yyyy', { locale: ptBR })}
+              </SelectItem>
             </SelectContent>
           </Select>
-          
-          {periodType === 'custom' && (
-            <div className="flex gap-2">
-              <DatePickerCustom
-                selected={customStart}
-                onSelect={(date) => setCustomStart(date as Date | undefined)}
-                placeholder="Data inicial"
-              />
-              <DatePickerCustom
-                selected={customEnd}
-                onSelect={(date) => setCustomEnd(date as Date | undefined)}
-                placeholder="Data final"
-              />
-            </div>
-          )}
+          <Button onClick={() => setFormOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar Cota
+          </Button>
         </div>
       </div>
-      
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+      {/* KPIs */}
+      <div className="grid grid-cols-6 gap-4">
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Comissão</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(setorData?.total || 0)}
-                </p>
-              </div>
-              <Home className="h-8 w-8 text-primary/50" />
-            </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              Total em Cartas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {summaryLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-2xl font-bold">{formatCurrency(summary?.totalCredito || 0)}</p>
+            )}
           </CardContent>
         </Card>
-        
+
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Variação</p>
-                <div className="flex items-center gap-2">
-                  {(setorData?.variacao || 0) >= 0 ? (
-                    <>
-                      <TrendingUp className="h-5 w-5 text-green-500" />
-                      <span className="text-2xl font-bold text-green-600">
-                        +{(setorData?.variacao || 0).toFixed(1)}%
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <TrendingDown className="h-5 w-5 text-red-500" />
-                      <span className="text-2xl font-bold text-red-600">
-                        {(setorData?.variacao || 0).toFixed(1)}%
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Comissão Total
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {summaryLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-2xl font-bold">{formatCurrency(summary?.comissaoTotal || 0)}</p>
+            )}
           </CardContent>
         </Card>
-        
+
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Cartas Vendidas</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {setorData?.quantidade || 0}
-                </p>
-              </div>
-              <FileSpreadsheet className="h-8 w-8 text-primary/50" />
-            </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Comissão Recebida
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {summaryLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-2xl font-bold text-green-600">
+                {formatCurrency(summary?.comissaoRecebida || 0)}
+              </p>
+            )}
           </CardContent>
         </Card>
-        
+
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Comissão Média</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {formatCurrency(setorData?.ticketMedio || 0)}
-                </p>
-              </div>
-              <Trophy className="h-8 w-8 text-primary/50" />
-            </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Comissão Pendente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {summaryLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-2xl font-bold text-orange-600">
+                {formatCurrency(summary?.comissaoPendente || 0)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Cartas Feitas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {summaryLoading ? (
+              <Skeleton className="h-8 w-12" />
+            ) : (
+              <p className="text-2xl font-bold">{summary?.totalCartas || 0}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Select / Parcelinha
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {summaryLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <p className="text-2xl font-bold">
+                {summary?.cartasSelect || 0} / {summary?.cartasParcelinha || 0}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
-      
-      {/* Tabs */}
-      <Tabs defaultValue="cartas" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="cartas">Cartas Vendidas</TabsTrigger>
-          <TabsTrigger value="vendedores">Por Vendedor</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="cartas">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cartas de Consórcio</CardTitle>
-            </CardHeader>
-            <CardContent>
+
+      {/* Filters */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Filtros:</span>
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            {STATUS_OPTIONS.map(opt => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={tipoFilter} onValueChange={setTipoFilter}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="select">Select</SelectItem>
+            <SelectItem value="parcelinha">Parcelinha</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Vendedor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            {employees?.map(emp => (
+              <SelectItem key={emp.id} value={emp.id}>{emp.nome_completo}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex-1" />
+
+        <Button variant="outline" onClick={handleExportCSV} disabled={!cards || cards.length === 0}>
+          <Download className="h-4 w-4 mr-2" />
+          Exportar CSV
+        </Button>
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12"></TableHead>
+                <TableHead>Nome</TableHead>
+                <TableHead>Grupo-Cota</TableHead>
+                <TableHead className="text-right">Valor Crédito</TableHead>
+                <TableHead>Data Contratação</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Vendedor</TableHead>
+                <TableHead className="w-20">Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {cardsLoading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : cards?.length === 0 ? (
-                <div className="text-center py-12">
-                  <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground mb-4">
-                    Nenhuma carta de consórcio encontrada para o período.
-                  </p>
-                  <Button onClick={() => navigate('/produtos/consorcio/importar')}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar Dados
-                  </Button>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Consorciado</TableHead>
-                      <TableHead>Contrato</TableHead>
-                      <TableHead>Parcela</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead className="text-right">Comissão</TableHead>
-                      <TableHead>Status</TableHead>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell colSpan={9}>
+                      <Skeleton className="h-12 w-full" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : cards && cards.length > 0 ? (
+                cards.map((card) => {
+                  const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
+                  const statusConfig = STATUS_OPTIONS.find(s => s.value === card.status);
+
+                  return (
+                    <TableRow 
+                      key={card.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleViewCard(card)}
+                    >
+                      <TableCell>
+                        <Avatar className="h-9 w-9">
+                          <AvatarFallback className="text-xs">
+                            {getInitials(displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                      </TableCell>
+                      <TableCell className="font-medium">{displayName || '-'}</TableCell>
+                      <TableCell>{card.grupo}-{card.cota}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrencyFull(Number(card.valor_credito))}
+                      </TableCell>
+                      <TableCell>
+                        {format(new Date(card.data_contratacao), 'dd/MM/yyyy')}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {card.tipo_produto}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {statusConfig && (
+                          <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{card.vendedor_name || '-'}</TableCell>
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewCard(card);
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cards?.map((card) => (
-                      <TableRow key={card.id}>
-                        <TableCell className="font-medium">
-                          {card.consorciado}
-                        </TableCell>
-                        <TableCell>{card.contrato || '-'}</TableCell>
-                        <TableCell>{card.parcela || '-'}</TableCell>
-                        <TableCell>{card.vendedor_name || '-'}</TableCell>
-                        <TableCell>
-                          {card.data_interface 
-                            ? format(new Date(card.data_interface), 'dd/MM/yyyy', { locale: ptBR })
-                            : '-'
-                          }
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {formatCurrency(card.valor_comissao || 0)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={card.status === 'pago' ? 'default' : 'secondary'}>
-                            {card.status || 'Pendente'}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="vendedores">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-yellow-500" />
-                Ranking de Vendedores
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {perfLoading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : performance?.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Nenhum dado de vendedores encontrado para o período.
-                </p>
+                  );
+                })
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">#</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Cartas</TableHead>
-                      <TableHead className="text-right">Comissão Média</TableHead>
-                      <TableHead className="text-right">Variação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {performance?.map((person, index) => (
-                      <TableRow key={person.id}>
-                        <TableCell>
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {person.name}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {formatCurrency(person.total)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {person.quantidade}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(person.ticketMedio)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {person.variacao >= 0 ? (
-                            <Badge variant="outline" className="text-green-600 border-green-300">
-                              <TrendingUp className="h-3 w-3 mr-1" />
-                              +{person.variacao.toFixed(1)}%
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-red-600 border-red-300">
-                              <TrendingDown className="h-3 w-3 mr-1" />
-                              {person.variacao.toFixed(1)}%
-                            </Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
+                    Nenhuma carta encontrada para o período selecionado
+                  </TableCell>
+                </TableRow>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Form Dialog */}
+      <ConsorcioCardForm open={formOpen} onOpenChange={setFormOpen} />
+
+      {/* Details Drawer */}
+      <ConsorcioCardDrawer 
+        cardId={selectedCardId} 
+        open={drawerOpen} 
+        onOpenChange={setDrawerOpen} 
+      />
     </div>
   );
 }
