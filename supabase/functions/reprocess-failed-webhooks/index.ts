@@ -355,31 +355,9 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
         console.log(`[reprocess] Stage by name '${stageName}' in origin ${originId}: ${stageId}`);
       }
 
-      // Find owner_id from event data
-      let ownerId = null;
-      const ownerEmail = eventData.deal_user || deal.user_email || deal.owner_email;
-      const ownerName = eventData.deal_user_name || deal.user_name || deal.owner_name;
-
-      if (ownerEmail) {
-        const { data: owner } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', ownerEmail)
-          .maybeSingle();
-        ownerId = owner?.id;
-        console.log(`[reprocess] Owner by email '${ownerEmail}': ${ownerId}`);
-      }
-
-      // Fallback: buscar por nome
-      if (!ownerId && ownerName) {
-        const { data: owner } = await supabase
-          .from('profiles')
-          .select('id')
-          .ilike('full_name', ownerName)
-          .maybeSingle();
-        ownerId = owner?.id;
-        console.log(`[reprocess] Owner by name '${ownerName}': ${ownerId}`);
-      }
+      // owner_id armazena o email diretamente (campo TEXT)
+      const ownerId = eventData.deal_user || deal.user_email || deal.owner_email || null;
+      console.log(`[reprocess] Owner email: ${ownerId}`);
 
       const newDealData = {
         clint_id: dealClintId,
