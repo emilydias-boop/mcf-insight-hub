@@ -21,7 +21,8 @@ import {
   Building2,
   Calendar,
   Receipt,
-  ChevronUp
+  ChevronUp,
+  Package
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -115,6 +116,9 @@ const menuItems: MenuItem[] = [
   
   // TV SDR
   { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  
+  // Produtos (Master view)
+  { title: "Produtos", url: "/produtos", icon: Package, requiredRoles: ['admin', 'manager', 'coordenador'] },
   
   // RH (para admin/rh)
   { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },

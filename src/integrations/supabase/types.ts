@@ -661,6 +661,8 @@ export type Database = {
           status: string | null
           updated_at: string | null
           valor_comissao: number | null
+          vendedor_id: string | null
+          vendedor_name: string | null
         }
         Insert: {
           consorciado: string
@@ -672,6 +674,8 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           valor_comissao?: number | null
+          vendedor_id?: string | null
+          vendedor_name?: string | null
         }
         Update: {
           consorciado?: string
@@ -683,8 +687,18 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           valor_comissao?: number | null
+          vendedor_id?: string | null
+          vendedor_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "consortium_payments_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       credit_clients: {
         Row: {
