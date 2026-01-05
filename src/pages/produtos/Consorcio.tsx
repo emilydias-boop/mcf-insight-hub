@@ -8,7 +8,9 @@ import {
   TrendingUp, 
   FileText,
   Filter,
-  Eye
+  Eye,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,11 +32,22 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useConsorcioCards, useConsorcioSummary } from '@/hooks/useConsorcio';
+import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { useEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
 import { STATUS_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 function formatCurrency(value: number): string {
   if (value >= 1000000) {
@@ -76,6 +89,7 @@ export default function ConsorcioPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<ConsorcioCard | null>(null);
 
   const { data: employees } = useEmployees();
 
@@ -106,10 +120,20 @@ export default function ConsorcioPage() {
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate });
+  const deleteCard = useDeleteConsorcioCard();
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
     setDrawerOpen(true);
+  };
+
+  const handleEditCard = (card: ConsorcioCard) => {
+    setEditingCard(card);
+    setFormOpen(true);
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    await deleteCard.mutateAsync(cardId);
   };
 
   const handleExportCSV = () => {
@@ -380,16 +404,54 @@ export default function ConsorcioPage() {
                       </TableCell>
                       <TableCell>{card.vendedor_name || '-'}</TableCell>
                       <TableCell>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewCard(card);
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewCard(card);
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditCard(card);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Excluir carta?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. A carta e todas as suas parcelas serão excluídas permanentemente.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteCard(card.id)}>
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -407,7 +469,14 @@ export default function ConsorcioPage() {
       </Card>
 
       {/* Form Dialog */}
-      <ConsorcioCardForm open={formOpen} onOpenChange={setFormOpen} />
+      <ConsorcioCardForm 
+        open={formOpen} 
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditingCard(null);
+        }}
+        card={editingCard}
+      />
 
       {/* Details Drawer */}
       <ConsorcioCardDrawer 
