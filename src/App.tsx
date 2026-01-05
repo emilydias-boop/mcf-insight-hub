@@ -114,7 +114,7 @@ const App = () => (
               <Route path="relatorios" element={<ResourceGuard resource="relatorios"><Relatorios /></ResourceGuard>} />
               <Route path="relatorios/leads-sem-tag" element={<ResourceGuard resource="relatorios"><LeadsSemTag /></ResourceGuard>} />
               <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
-              <Route path="efeito-alavanca" element={<ResourceGuard resource="efeito_alavanca"><EfeitoAlavanca /></ResourceGuard>} />
+              <Route path="consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'sdr', 'closer', 'coordenador']}><ProdutosConsorcio /></RoleGuard>} />
               <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
               <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
