@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import type { Employee } from "@/types/hr";
-import { format, parse } from "date-fns";
+import { format, parse, isValid } from "date-fns";
 import { useUpdateMyEmployee, UpdateMyEmployeeData } from "@/hooks/useMyEmployee";
 import { ESTADOS_BRASIL } from "@/lib/constants";
 
@@ -38,6 +37,36 @@ function cleanPhone(value: string): string {
   return value.replace(/\D/g, '');
 }
 
+function formatDateInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function parseDateInput(value: string): string | null {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const day = parseInt(digits.slice(0, 2), 10);
+  const month = parseInt(digits.slice(2, 4), 10);
+  const year = parseInt(digits.slice(4, 8), 10);
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) return null;
+  const date = new Date(year, month - 1, day);
+  if (!isValid(date)) return null;
+  return format(date, 'yyyy-MM-dd');
+}
+
+function isoToDisplay(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    const date = new Date(iso);
+    if (!isValid(date)) return '';
+    return format(date, 'dd/MM/yyyy');
+  } catch {
+    return '';
+  }
+}
+
 export function MeuRHDadosPessoaisSection({ employee }: MeuRHDadosPessoaisSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const updateMutation = useUpdateMyEmployee();
@@ -46,6 +75,7 @@ export function MeuRHDadosPessoaisSection({ employee }: MeuRHDadosPessoaisSectio
     nome_completo: employee.nome_completo || '',
     cpf: employee.cpf || '',
     data_nascimento: employee.data_nascimento || null,
+    data_nascimento_display: isoToDisplay(employee.data_nascimento),
     nacionalidade: employee.nacionalidade || 'Brasileira',
     telefone: employee.telefone || '',
     email_pessoal: employee.email_pessoal || '',
@@ -58,6 +88,7 @@ export function MeuRHDadosPessoaisSection({ employee }: MeuRHDadosPessoaisSectio
       nome_completo: employee.nome_completo || '',
       cpf: employee.cpf || '',
       data_nascimento: employee.data_nascimento || null,
+      data_nascimento_display: isoToDisplay(employee.data_nascimento),
       nacionalidade: employee.nacionalidade || 'Brasileira',
       telefone: employee.telefone || '',
       email_pessoal: employee.email_pessoal || '',
@@ -146,13 +177,19 @@ export function MeuRHDadosPessoaisSection({ employee }: MeuRHDadosPessoaisSectio
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Data de nascimento</Label>
-                <DatePickerCustom
-                  selected={formData.data_nascimento ? new Date(formData.data_nascimento) : undefined}
-                  onSelect={(date) => setFormData(prev => ({ 
-                    ...prev, 
-                    data_nascimento: date && date instanceof Date ? format(date, 'yyyy-MM-dd') : null 
-                  }))}
-                  placeholder="Selecione a data"
+                <Input
+                  value={formData.data_nascimento_display}
+                  onChange={(e) => {
+                    const formatted = formatDateInput(e.target.value);
+                    const parsed = parseDateInput(formatted);
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      data_nascimento_display: formatted,
+                      data_nascimento: parsed
+                    }));
+                  }}
+                  placeholder="dd/mm/aaaa"
+                  maxLength={10}
                 />
               </div>
               <div className="space-y-1">
