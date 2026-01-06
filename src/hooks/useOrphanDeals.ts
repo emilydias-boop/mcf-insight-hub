@@ -24,6 +24,7 @@ export interface OrphanDealsFilters {
   date_from?: string;
   date_to?: string;
   min_value?: number;
+  search?: string;
   page?: number;
   per_page?: number;
 }
@@ -87,6 +88,9 @@ export function useOrphanDeals(filters: OrphanDealsFilters = {}) {
       }
       if (filters.min_value !== undefined && filters.min_value > 0) {
         query = query.gte('value', filters.min_value);
+      }
+      if (filters.search) {
+        query = query.ilike('name', `%${filters.search}%`);
       }
 
       // Aplicar paginação
