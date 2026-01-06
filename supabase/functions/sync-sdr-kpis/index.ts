@@ -52,77 +52,54 @@ Deno.serve(async (req) => {
 
     // Calcular período (primeiro e último dia do mês)
     const [year, month] = ano_mes.split('-').map(Number)
-    const startDate = new Date(year, month - 1, 1).toISOString()
-    const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`
+    const lastDay = new Date(year, month, 0).getDate()
+    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-    console.log(`Período: ${startDate} até ${endDate}`)
+    console.log(`Período: ${monthStart} até ${monthEnd}`)
 
-    // UUIDs dos estágios do Bubble
-    const STAGE_R1_AGENDADA_UUID = 'a8365215-fd31-4bdc-bbe7-77100fa39e53'
-    const STAGE_R1_REALIZADA_UUID = '34995d75-933e-4d67-b7fc-19fcb8b81680'
+    // ===== USAR RPC get_sdr_metrics_v2 PARA CONSISTÊNCIA =====
+    let reunioesAgendadas = 0
+    let noShows = 0
+    let reunioesRealizadas = 0
+    let taxaNoShow = 0
 
-    // Buscar todas as atividades do período
-    const { data: activities, error: activitiesError } = await supabase
-      .from('deal_activities')
-      .select('*')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
+    const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
+      start_date: monthStart,
+      end_date: monthEnd,
+      sdr_email_filter: sdr.email
+    })
 
-    if (activitiesError) {
-      console.error('Erro ao buscar atividades:', activitiesError)
+    if (metricsError) {
+      console.error('Erro ao buscar métricas via RPC:', metricsError)
       return new Response(
-        JSON.stringify({ error: 'Erro ao buscar atividades' }),
+        JSON.stringify({ error: 'Erro ao buscar métricas via RPC' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log(`Total de atividades encontradas: ${activities?.length || 0}`)
-
-    // Filtrar atividades deste SDR
-    const sdrActivities = activities?.filter(a => {
-      const metadata = a.metadata as Record<string, any> || {}
-      const dealUser = metadata.deal_user || metadata.owner || ''
-      return dealUser.toLowerCase() === sdr.email.toLowerCase()
-    }) || []
-
-    console.log(`Atividades deste SDR: ${sdrActivities.length}`)
-
-    // Contar R1 Agendadas (nome ou UUID)
-    const reunioesAgendadas = sdrActivities.filter(a => 
-      a.to_stage === 'Reunião 01 Agendada' || 
-      a.to_stage === STAGE_R1_AGENDADA_UUID
-    ).length
-
-    // Contar No-Shows
-    const noShows = sdrActivities.filter(a => 
-      a.to_stage === 'No-Show'
-    ).length
-
-    // Contar R1 Realizadas (nome ou UUID)
-    const reunioesRealizadas = sdrActivities.filter(a => 
-      a.to_stage === 'Reunião 01 Realizada' || 
-      a.to_stage === STAGE_R1_REALIZADA_UUID
-    ).length
-
-    console.log(`KPIs calculados: R1 Agendada=${reunioesAgendadas}, No-Show=${noShows}, R1 Realizada=${reunioesRealizadas}`)
-
-    // Calcular taxa de no-show
-    const taxaNoShow = reunioesAgendadas > 0 
-      ? Math.round((noShows / reunioesAgendadas) * 10000) / 100 
-      : 0
+    if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
+      const metrics = metricsData.metrics[0]
+      reunioesAgendadas = metrics.total_agendamentos || 0
+      noShows = metrics.no_shows || 0
+      reunioesRealizadas = metrics.realizadas || 0
+      taxaNoShow = metrics.taxa_no_show || 0
+      
+      console.log(`📊 Métricas da RPC: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`)
+    } else {
+      console.log('⚠️ Nenhuma métrica encontrada na RPC')
+    }
 
     // ========== INTERMEDIAÇÕES AUTOMÁTICAS ==========
     console.log('Buscando intermediações automáticas...')
 
-    // Buscar vendas Hubla do mês (Contratos A000)
-    const monthStartDate = `${year}-${String(month).padStart(2, '0')}-01`
-    const monthEndDate = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
+    const STAGE_R1_AGENDADA_UUID = 'a8365215-fd31-4bdc-bbe7-77100fa39e53'
 
     const { data: hublaTransactions, error: hublaError } = await supabase
       .from('hubla_transactions')
       .select('id, hubla_id, customer_email, customer_name, product_name, product_price, sale_date')
-      .gte('sale_date', `${monthStartDate}T00:00:00`)
-      .lte('sale_date', `${monthEndDate}T23:59:59`)
+      .gte('sale_date', `${monthStart}T00:00:00`)
+      .lte('sale_date', `${monthEnd}T23:59:59`)
       .eq('sale_status', 'completed')
       .or('product_name.ilike.%contrato%,product_name.ilike.%A000%')
 
@@ -136,14 +113,12 @@ Deno.serve(async (req) => {
     const intermediacoesInserted: string[] = []
 
     if (hublaTransactions && hublaTransactions.length > 0) {
-      // Para cada transação, verificar se este SDR agendou a R1 do cliente
       for (const tx of hublaTransactions) {
         const customerEmail = tx.customer_email?.toLowerCase()
         const customerName = tx.customer_name?.toLowerCase()
 
         if (!customerEmail && !customerName) continue
 
-        // Buscar se este SDR agendou alguma R1 para este cliente (no histórico todo)
         const { data: matchActivities } = await supabase
           .from('deal_activities')
           .select('id, metadata, created_at')
@@ -151,7 +126,6 @@ Deno.serve(async (req) => {
           .order('created_at', { ascending: false })
           .limit(100)
 
-        // Filtrar atividades que têm o mesmo cliente e foram feitas por este SDR
         const sdrMatchedR1 = matchActivities?.find(a => {
           const metadata = a.metadata as Record<string, any> || {}
           const dealUser = metadata.deal_user || metadata.owner || ''
@@ -166,7 +140,6 @@ Deno.serve(async (req) => {
         })
 
         if (sdrMatchedR1) {
-          // Verificar se já existe intermediação para esta transação
           const { data: existingIntermed } = await supabase
             .from('sdr_intermediacoes')
             .select('id')
@@ -175,7 +148,6 @@ Deno.serve(async (req) => {
             .maybeSingle()
 
           if (!existingIntermed) {
-            // Inserir nova intermediação
             const { error: insertError } = await supabase
               .from('sdr_intermediacoes')
               .insert({
@@ -193,13 +165,12 @@ Deno.serve(async (req) => {
               console.log(`Intermediação inserida: ${tx.customer_name} - ${tx.product_name}`)
             }
           } else {
-            intermediacoes++ // Já existe, contar mesmo assim
+            intermediacoes++
           }
         }
       }
     }
 
-    // Contar total de intermediações do mês para este SDR
     const { count: totalIntermediacoes } = await supabase
       .from('sdr_intermediacoes')
       .select('*', { count: 'exact', head: true })
@@ -208,10 +179,10 @@ Deno.serve(async (req) => {
 
     console.log(`Total intermediações do mês: ${totalIntermediacoes || 0}`)
 
-    // Atualizar ou inserir KPIs
+    // Verificar se já existe KPI e preservar tentativas/organização
     const { data: existingKpi, error: kpiCheckError } = await supabase
       .from('sdr_month_kpi')
-      .select('id')
+      .select('id, tentativas_ligacoes, score_organizacao')
       .eq('sdr_id', sdr_id)
       .eq('ano_mes', ano_mes)
       .maybeSingle()
@@ -228,12 +199,14 @@ Deno.serve(async (req) => {
       reunioes_realizadas: reunioesRealizadas,
       taxa_no_show: taxaNoShow,
       intermediacoes_contrato: totalIntermediacoes || 0,
+      // Preservar tentativas e organização se já existirem
+      tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
+      score_organizacao: existingKpi?.score_organizacao || 0,
       updated_at: new Date().toISOString(),
     }
 
     let upsertResult
     if (existingKpi) {
-      // Update existing
       upsertResult = await supabase
         .from('sdr_month_kpi')
         .update(kpiData)
@@ -241,7 +214,6 @@ Deno.serve(async (req) => {
         .select()
         .single()
     } else {
-      // Insert new
       upsertResult = await supabase
         .from('sdr_month_kpi')
         .insert(kpiData)
@@ -268,7 +240,7 @@ Deno.serve(async (req) => {
           no_shows: noShows,
           reunioes_realizadas: reunioesRealizadas,
           taxa_no_show: taxaNoShow,
-          total_activities: sdrActivities.length,
+          total_activities: metricsData?.summary?.total_movimentacoes || 0,
           intermediacoes_contrato: totalIntermediacoes || 0,
           intermediacoes_inserted: intermediacoesInserted,
         }

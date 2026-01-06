@@ -16,18 +16,14 @@ const getMultiplier = (pct: number): number => {
 };
 
 // Cálculo inverso do No-Show
-// Se taxa_no_show <= 30% → performance = 100% + bônus proporcional até 150%
-// Se taxa_no_show > 30% → performance decresce
 const calculateNoShowPerformance = (noShows: number, agendadas: number): number => {
   if (agendadas <= 0) return 100;
   
   const taxaNoShow = (noShows / agendadas) * 100;
   
   if (taxaNoShow <= 30) {
-    // Quanto menor a taxa, melhor (bônus até 150%)
     return Math.min(150, 100 + ((30 - taxaNoShow) / 30) * 50);
   } else {
-    // Acima de 30%, penalidade
     return Math.max(0, 100 - ((taxaNoShow - 30) / 30) * 100);
   }
 };
@@ -55,7 +51,6 @@ interface Kpi {
 }
 
 const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, calendarIfoodMensal?: number) => {
-  // Calculate percentages for regular indicators
   const pct_reunioes_agendadas = compPlan.meta_reunioes_agendadas > 0 
     ? (kpi.reunioes_agendadas / compPlan.meta_reunioes_agendadas) * 100 
     : 0;
@@ -69,39 +64,31 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, calendarIfoodMensal
     ? (kpi.score_organizacao / compPlan.meta_organizacao) * 100
     : 0;
 
-  // Calculate No-Show performance (inverse calculation)
   const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0);
 
-  // Cap all percentages at 120% for payout calculation
   const cappedPctAgendadas = Math.min(pct_reunioes_agendadas, 120);
   const cappedPctRealizadas = Math.min(pct_reunioes_realizadas, 120);
   const cappedPctTentativas = Math.min(pct_tentativas, 120);
   const cappedPctOrganizacao = Math.min(pct_organizacao, 120);
   const cappedPctNoShow = Math.min(pct_no_show, 120);
 
-  // Get multipliers (using capped percentages)
   const mult_reunioes_agendadas = getMultiplier(cappedPctAgendadas);
   const mult_reunioes_realizadas = getMultiplier(cappedPctRealizadas);
   const mult_tentativas = getMultiplier(cappedPctTentativas);
   const mult_organizacao = getMultiplier(cappedPctOrganizacao);
   const mult_no_show = getMultiplier(cappedPctNoShow);
 
-  // Calculate values
   const valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
   const valor_reunioes_realizadas = compPlan.valor_docs_reuniao * mult_reunioes_realizadas;
   const valor_tentativas = compPlan.valor_tentativas * mult_tentativas;
   const valor_organizacao = compPlan.valor_organizacao * mult_organizacao;
 
-  // Totals (No-Show não tem valor base próprio, afeta indiretamente via realizadas)
   const valor_variavel_total = valor_reunioes_agendadas + valor_reunioes_realizadas + valor_tentativas + valor_organizacao;
   const valor_fixo = compPlan.fixo_valor;
   const total_conta = valor_fixo + valor_variavel_total;
 
-  // iFood logic - use calendar value if available, otherwise use comp_plan value
-  // Use the 4 main indicators for average calculation
   const pct_media_global = (cappedPctAgendadas + cappedPctRealizadas + cappedPctTentativas + cappedPctOrganizacao) / 4;
   const ifood_mensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
-  // Note: ifood_ultrameta is set here but won't be paid unless authorized
   const ifood_ultrameta = pct_media_global >= 100 ? compPlan.ifood_ultrameta : 0;
   const total_ifood = ifood_mensal + ifood_ultrameta;
 
@@ -165,8 +152,8 @@ serve(async (req) => {
     const calendarIfoodMensal = calendarData?.ifood_mensal_calculado ?? null;
     console.log(`📅 Calendário ${ano_mes}: iFood Mensal = ${calendarIfoodMensal ?? 'não definido'}`);
 
-    // Get SDRs to process
-    let sdrsQuery = supabase.from('sdr').select('id, name').eq('active', true);
+    // Get SDRs to process (with email for RPC call)
+    let sdrsQuery = supabase.from('sdr').select('id, name, email').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
@@ -181,8 +168,13 @@ serve(async (req) => {
       );
     }
 
+    // Calculate date range for the month
     const [year, month] = ano_mes.split('-').map(Number);
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    console.log(`📅 Período: ${monthStart} até ${monthEnd}`);
 
     const results = [];
     let processed = 0;
@@ -191,6 +183,36 @@ serve(async (req) => {
     for (const sdr of sdrs) {
       try {
         console.log(`   ⏳ Processando SDR: ${sdr.name} (${sdr.id})`);
+
+        // ===== USAR RPC get_sdr_metrics_v2 PARA CONSISTÊNCIA =====
+        let reunioesAgendadas = 0;
+        let noShows = 0;
+        let reunioesRealizadas = 0;
+        let taxaNoShow = 0;
+
+        if (sdr.email) {
+          const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
+            start_date: monthStart,
+            end_date: monthEnd,
+            sdr_email_filter: sdr.email
+          });
+
+          if (metricsError) {
+            console.log(`   ⚠️ Erro ao buscar métricas RPC para ${sdr.name}: ${metricsError.message}`);
+          } else if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
+            const metrics = metricsData.metrics[0];
+            reunioesAgendadas = metrics.total_agendamentos || 0;
+            noShows = metrics.no_shows || 0;
+            reunioesRealizadas = metrics.realizadas || 0;
+            taxaNoShow = metrics.taxa_no_show || 0;
+            
+            console.log(`   📊 Métricas da RPC para ${sdr.name}: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
+          } else {
+            console.log(`   ⚠️ Nenhuma métrica encontrada na RPC para ${sdr.name}`);
+          }
+        } else {
+          console.log(`   ⚠️ SDR ${sdr.name} não tem email configurado`);
+        }
 
         // Get comp plan
         const { data: compPlan, error: compError } = await supabase
@@ -208,26 +230,47 @@ serve(async (req) => {
           continue;
         }
 
-        // Get or create KPI
-        let { data: kpi, error: kpiError } = await supabase
+        // ===== ATUALIZAR sdr_month_kpi COM DADOS DA RPC =====
+        const { data: existingKpi } = await supabase
           .from('sdr_month_kpi')
-          .select('*')
+          .select('id, tentativas_ligacoes, score_organizacao')
           .eq('sdr_id', sdr.id)
           .eq('ano_mes', ano_mes)
-          .single();
+          .maybeSingle();
 
-        if (kpiError && kpiError.code === 'PGRST116') {
-          // Create empty KPI
+        const kpiData = {
+          sdr_id: sdr.id,
+          ano_mes: ano_mes,
+          reunioes_agendadas: reunioesAgendadas,
+          no_shows: noShows,
+          reunioes_realizadas: reunioesRealizadas,
+          taxa_no_show: taxaNoShow,
+          // Preservar tentativas e organização se já existirem
+          tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
+          score_organizacao: existingKpi?.score_organizacao || 0,
+          updated_at: new Date().toISOString(),
+        };
+
+        let kpi;
+        if (existingKpi) {
+          const { data: updatedKpi, error: updateError } = await supabase
+            .from('sdr_month_kpi')
+            .update(kpiData)
+            .eq('id', existingKpi.id)
+            .select()
+            .single();
+          
+          if (updateError) {
+            console.error(`   ❌ Erro ao atualizar KPI: ${updateError.message}`);
+            errors++;
+            continue;
+          }
+          kpi = updatedKpi;
+        } else {
           const { data: newKpi, error: createError } = await supabase
             .from('sdr_month_kpi')
-            .insert({ 
-              sdr_id: sdr.id, 
-              ano_mes: ano_mes,
-              reunioes_agendadas: 0,
-              reunioes_realizadas: 0,
-              tentativas_ligacoes: 0,
-              score_organizacao: 0,
-              no_shows: 0,
+            .insert({
+              ...kpiData,
               intermediacoes_contrato: 0,
             })
             .select()
@@ -239,18 +282,11 @@ serve(async (req) => {
             continue;
           }
           kpi = newKpi;
-        } else if (kpiError) {
-          console.error(`   ❌ Erro ao buscar KPI: ${kpiError.message}`);
-          errors++;
-          continue;
         }
 
-        // Log KPI values for debugging
-        console.log(`   📊 KPI carregado para ${sdr.name}:`, {
+        console.log(`   📊 KPI atualizado para ${sdr.name}:`, {
           reunioes_agendadas: kpi.reunioes_agendadas,
           reunioes_realizadas: kpi.reunioes_realizadas,
-          tentativas_ligacoes: kpi.tentativas_ligacoes,
-          score_organizacao: kpi.score_organizacao,
           no_shows: kpi.no_shows,
         });
 
@@ -261,7 +297,6 @@ serve(async (req) => {
           .eq('sdr_id', sdr.id)
           .eq('ano_mes', ano_mes);
 
-        // Update KPI with intermediações count
         if (interCount !== null && interCount !== kpi.intermediacoes_contrato) {
           await supabase
             .from('sdr_month_kpi')
@@ -270,16 +305,12 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = interCount;
         }
 
-        // Calculate values - pass calendar iFood value if available
+        // Calculate values
         const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, calendarIfoodMensal);
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
-          pct_tentativas: calculatedValues.pct_tentativas.toFixed(1),
-          pct_organizacao: calculatedValues.pct_organizacao.toFixed(1),
-          mult_tentativas: calculatedValues.mult_tentativas,
-          mult_organizacao: calculatedValues.mult_organizacao,
-          valor_tentativas: calculatedValues.valor_tentativas,
-          valor_organizacao: calculatedValues.valor_organizacao,
+          pct_agendadas: calculatedValues.pct_reunioes_agendadas.toFixed(1),
+          pct_realizadas: calculatedValues.pct_reunioes_realizadas.toFixed(1),
           ifood_mensal: calculatedValues.ifood_mensal,
         });
 
