@@ -101,7 +101,7 @@ const isProductInFaturamentoClint = (productName: string, productCategory?: stri
 };
 
 // Produtos do Incorporador 50k (para cálculos antigos - mantido para compatibilidade)
-const INCORPORADOR_PRODUCTS = ["A000", "A001", "A002", "A003", "A004", "A005", "A009"];
+const INCORPORADOR_PRODUCTS = ["A000", "A001", "A002", "A003", "A004", "A005", "A008", "A009"];
 const EXCLUDED_PRODUCT_NAMES = [
   "A006",
   "A010",
@@ -370,9 +370,9 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       const seenIncorporadorIds = new Set<string>();
       const faturamentoIncorporador = (allHublaData || [])
         .filter((tx) => {
-          // FILTRO DE FONTE: Apenas Hubla
+          // FILTRO DE FONTE: Hubla, Kiwify ou Manual (Asaas)
           const source = tx.source || 'hubla';
-          if (source !== 'hubla') return false;
+          if (source !== 'hubla' && source !== 'kiwify' && source !== 'manual') return false;
           
           const productName = (tx.product_name || "").toUpperCase();
           const isIncorporador = INCORPORADOR_PRODUCTS.some((code) => productName.startsWith(code));
@@ -398,18 +398,19 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       console.log("🎁 OB Vitalício (Make - soma total):", { faturado: obVitalicioFaturado });
 
-      // ===== OB CONSTRUIR PARA ALUGAR (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
-      // CORREÇÃO: Somar TODAS as transações, não deduplicar por email
+      // ===== OB CONSTRUIR PARA ALUGAR (HUBLA - product_category = ob_construir_alugar) =====
+      // CORREÇÃO: Usar dados da Hubla com categoria específica, não Make
       // EXCLUIR "Viver de Aluguel" (produto separado)
       const obConstruirFaturado = (allHublaData || [])
         .filter((tx) => {
-          if (tx.source !== "make") return false;
+          const source = tx.source || 'hubla';
+          if (source !== 'hubla') return false;
           const productName = (tx.product_name || "").toUpperCase();
-          return productName.includes("CONSTRUIR") && !productName.includes("VIVER");
+          return tx.product_category === 'ob_construir_alugar' && !productName.includes("VIVER");
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("🏠 OB Construir (Make - soma total):", { faturado: obConstruirFaturado });
+      console.log("🏠 OB Construir para Alugar (Hubla):", { faturado: obConstruirFaturado });
       
       // ===== OB EVENTO / IMERSÃO PRESENCIAL (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
       // CORREÇÃO: Somar TODAS as transações, não deduplicar por email
