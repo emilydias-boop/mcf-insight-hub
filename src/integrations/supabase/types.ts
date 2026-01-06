@@ -1787,6 +1787,38 @@ export type Database = {
           },
         ]
       }
+      employee_products: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          employee_id: string
+          id: string
+          product_code: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          product_code: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          product_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_products_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           agencia: string | null

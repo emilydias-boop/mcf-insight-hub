@@ -28,6 +28,7 @@ import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquiv
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyPermissions } from "@/hooks/useMyPermissions";
+import { useMyProducts } from "@/hooks/useMyProducts";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,7 @@ interface MenuItem {
   url?: string;
   icon: any;
   requiredRoles?: AppRole[];
+  requiredProducts?: string[];
   resource?: ResourceType;
   items?: { title: string; url: string; requiredRoles?: AppRole[]; }[];
 }
@@ -124,7 +126,7 @@ const menuItems: MenuItem[] = [
   { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
   
   // Produtos separados
-  { title: "Consórcio", url: "/consorcio", icon: Handshake, requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
+  { title: "Consórcio", url: "/consorcio", icon: Handshake, requiredRoles: ['admin', 'manager', 'coordenador'], requiredProducts: ['consorcio'] },
   { title: "Projetos", url: "/projetos", icon: FolderKanban, resource: "projetos" },
   { title: "Crédito", url: "/credito", icon: CreditCard, resource: "credito", requiredRoles: ['admin', 'manager'] },
   { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
@@ -166,6 +168,7 @@ const personalMenuItems: PersonalMenuItem[] = [
 export function AppSidebar() {
   const { user, role, signOut } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
+  const { data: myProducts = [] } = useMyProducts();
   const { state, toggleSidebar } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
@@ -191,7 +194,12 @@ export function AppSidebar() {
 
   // Filtragem de menu items
   const filteredMenuItems = menuItems.filter((item) => {
+    // Se tem requiredRoles e o usuário não tem a role
     if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
+      // Se o item tem requiredProducts, verifica se o usuário tem algum dos produtos
+      if (item.requiredProducts && ['sdr', 'closer'].includes(role)) {
+        return item.requiredProducts.some(p => myProducts.includes(p));
+      }
       return false;
     }
     if (isAdmin) return true;
