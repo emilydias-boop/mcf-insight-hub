@@ -12,8 +12,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
+import { EnviarNfseFechamentoModal } from '@/components/sdr-fechamento/EnviarNfseFechamentoModal';
 import { useOwnPayout, useOwnSdr } from '@/hooks/useSdrFechamento';
+import { useMyEmployee } from '@/hooks/useMyEmployee';
 import { formatCurrency } from '@/lib/formatters';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Eye,
   RefreshCw,
@@ -23,15 +28,22 @@ import {
   CreditCard,
   TrendingUp,
   UtensilsCrossed,
+  FileText,
+  CheckCircle,
+  AlertTriangle,
+  Download,
 } from 'lucide-react';
 
 const MeuFechamento = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currentMonth = format(new Date(), 'yyyy-MM');
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [showNfseModal, setShowNfseModal] = useState(false);
 
   const { data: sdr, isLoading: sdrLoading } = useOwnSdr();
   const { data: payout, isLoading: payoutLoading } = useOwnPayout(selectedMonth);
+  const { data: myEmployee } = useMyEmployee();
 
   const isLoading = sdrLoading || payoutLoading;
 
@@ -55,6 +67,40 @@ const MeuFechamento = () => {
 
     if (pcts.length === 0) return 0;
     return pcts.reduce((a, b) => a + b, 0) / pcts.length;
+  };
+
+  const handleDownloadNfse = async () => {
+    if (!payout?.nfse_id) return;
+
+    try {
+      // Fetch the NFSe record to get the storage path
+      const { data: nfseData, error } = await supabase
+        .from('rh_nfse')
+        .select('storage_path')
+        .eq('id', payout.nfse_id)
+        .single();
+
+      if (error || !nfseData?.storage_path) {
+        toast.error('NFSe não encontrada');
+        return;
+      }
+
+      const { data: urlData } = await supabase.storage
+        .from('user-files')
+        .createSignedUrl(nfseData.storage_path, 60);
+
+      if (urlData?.signedUrl) {
+        window.open(urlData.signedUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Erro ao baixar NFSe:', error);
+      toast.error('Erro ao baixar NFSe');
+    }
+  };
+
+  const handleNfseSuccess = () => {
+    setShowNfseModal(false);
+    queryClient.invalidateQueries({ queryKey: ['own-payout', selectedMonth] });
   };
 
   if (isLoading) {
@@ -136,6 +182,48 @@ const MeuFechamento = () => {
               </Button>
             </CardHeader>
           </Card>
+
+          {/* NFSe Card - Show when APPROVED */}
+          {payout.status === 'APPROVED' && !payout.nfse_id && myEmployee && (
+            <Card className="border-amber-500/50 bg-amber-500/10">
+              <CardContent className="flex items-center justify-between py-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  <div>
+                    <p className="font-medium">Fechamento Aprovado!</p>
+                    <p className="text-sm text-muted-foreground">
+                      Envie sua NFSe no valor de {formatCurrency(payout.total_conta || 0)}
+                    </p>
+                  </div>
+                </div>
+                <Button onClick={() => setShowNfseModal(true)}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Enviar NFSe
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* NFSe Sent Card */}
+          {payout.nfse_id && (
+            <Card className="border-green-500/50 bg-green-500/10">
+              <CardContent className="flex items-center justify-between py-4">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <div>
+                    <p className="font-medium text-green-600">NFSe Enviada</p>
+                    <p className="text-sm text-muted-foreground">
+                      Aguardando confirmação do financeiro
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleDownloadNfse}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Ver NFSe
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -278,6 +366,19 @@ const MeuFechamento = () => {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* NFSe Modal */}
+      {myEmployee && payout && (
+        <EnviarNfseFechamentoModal
+          open={showNfseModal}
+          onOpenChange={setShowNfseModal}
+          payoutId={payout.id}
+          employeeId={myEmployee.id}
+          anoMes={selectedMonth}
+          valorEsperado={payout.total_conta || 0}
+          onSuccess={handleNfseSuccess}
+        />
       )}
     </div>
   );

@@ -95,6 +95,7 @@ export interface SdrMonthPayout {
   ifood_ultrameta_autorizado_por: string | null;
   ifood_ultrameta_autorizado_em: string | null;
   total_ifood: number | null;
+  nfse_id: string | null;
   status: PayoutStatus;
   aprovado_por: string | null;
   aprovado_em: string | null;
