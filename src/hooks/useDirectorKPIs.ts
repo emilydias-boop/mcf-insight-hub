@@ -398,19 +398,20 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       
       console.log("🎁 OB Vitalício (Make - soma total):", { faturado: obVitalicioFaturado });
 
-      // ===== OB CONSTRUIR PARA ALUGAR (HUBLA - product_category = ob_construir_alugar) =====
-      // CORREÇÃO: Usar dados da Hubla com categoria específica, não Make
-      // EXCLUIR "Viver de Aluguel" (produto separado)
+      // ===== OB CONSTRUIR PARA ALUGAR (HUBLA - apenas offers reais) =====
+      // CORREÇÃO: Filtrar apenas offers (-offer- no hubla_id) com product_price = 97
+      // Isso exclui invoices principais e eventos NewSale que inflavam o valor
       const obConstruirFaturado = (allHublaData || [])
         .filter((tx) => {
           const source = tx.source || 'hubla';
           if (source !== 'hubla') return false;
-          const productName = (tx.product_name || "").toUpperCase();
-          return tx.product_category === 'ob_construir_alugar' && !productName.includes("VIVER");
+          // Apenas offers reais: hubla_id contém '-offer-' e preço = 97
+          const isRealOffer = tx.hubla_id?.includes('-offer-') && tx.product_price === 97;
+          return tx.product_category === 'ob_construir_alugar' && isRealOffer;
         })
         .reduce((sum, tx) => sum + (tx.net_value || 0), 0);
       
-      console.log("🏠 OB Construir para Alugar (Hubla):", { faturado: obConstruirFaturado });
+      console.log("🏠 OB Construir para Alugar (Hubla - apenas offers):", { faturado: obConstruirFaturado });
       
       // ===== OB EVENTO / IMERSÃO PRESENCIAL (MAKE - SOMA TOTAL SEM DEDUPLICAÇÃO) =====
       // CORREÇÃO: Somar TODAS as transações, não deduplicar por email
