@@ -3327,6 +3327,7 @@ export type Database = {
           mult_reunioes_agendadas: number | null
           mult_reunioes_realizadas: number | null
           mult_tentativas: number | null
+          nfse_id: string | null
           pct_organizacao: number | null
           pct_reunioes_agendadas: number | null
           pct_reunioes_realizadas: number | null
@@ -3359,6 +3360,7 @@ export type Database = {
           mult_reunioes_agendadas?: number | null
           mult_reunioes_realizadas?: number | null
           mult_tentativas?: number | null
+          nfse_id?: string | null
           pct_organizacao?: number | null
           pct_reunioes_agendadas?: number | null
           pct_reunioes_realizadas?: number | null
@@ -3391,6 +3393,7 @@ export type Database = {
           mult_reunioes_agendadas?: number | null
           mult_reunioes_realizadas?: number | null
           mult_tentativas?: number | null
+          nfse_id?: string | null
           pct_organizacao?: number | null
           pct_reunioes_agendadas?: number | null
           pct_reunioes_realizadas?: number | null
@@ -3408,6 +3411,13 @@ export type Database = {
           valor_variavel_total?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sdr_month_payout_nfse_id_fkey"
+            columns: ["nfse_id"]
+            isOneToOne: false
+            referencedRelation: "rh_nfse"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sdr_month_payout_sdr_id_fkey"
             columns: ["sdr_id"]
