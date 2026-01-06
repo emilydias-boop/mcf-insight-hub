@@ -477,9 +477,8 @@ export function useDirectorKPIs(startDate?: Date, endDate?: Date) {
       console.log("💸 A010 (Make + hubla_make_sync):", { vendas: vendasA010, faturado: a010Faturado });
 
       // ===== FATURAMENTO TOTAL (FÓRMULA FIXA DA PLANILHA) =====
-      // Faturamento Total = Incorporador50k (Hubla) + A010 (Make) + OB Construir (Make) + OB Vitalício (Make)
-      // NOTA: OB Evento NÃO entra na fórmula conforme planilha
-      const faturamentoTotalFinal = faturamentoIncorporador + a010Faturado + obConstruirFaturado + obVitalicioFaturado;
+      // Faturamento Total = Incorporador50k (Hubla) + A010 (Make) + OB Construir (Hubla) + OB Vitalício (Make) + OB Evento (Make)
+      const faturamentoTotalFinal = faturamentoIncorporador + a010Faturado + obConstruirFaturado + obVitalicioFaturado + obEventoFaturado;
 
       console.log("💰 Faturamento Total Debug:", {
         incorporador: faturamentoIncorporador,
