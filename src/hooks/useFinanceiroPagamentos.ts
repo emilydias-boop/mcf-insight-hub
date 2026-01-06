@@ -46,17 +46,18 @@ export const useFinanceiroPagamentos = (filters: PagamentoFilters) => {
       if (nfseError) throw nfseError;
 
       // Build pagamentos list
-      const pagamentos: PagamentoPJ[] = (employees || []).map((emp: Employee) => {
+      const pagamentos: PagamentoPJ[] = (employees || []).map((emp) => {
+        const employee = emp as unknown as Employee;
         // Find fechamento via sdr_id
-        const fechamento = fechamentos?.find((f: any) => f.sdr_id === emp.sdr_id) || null;
-        const nfse = (nfseList as RhNfse[] | null)?.find((n) => n.employee_id === emp.id) || null;
+        const fechamento = fechamentos?.find((f: any) => f.sdr_id === employee.sdr_id) || null;
+        const nfse = (nfseList as RhNfse[] | null)?.find((n) => n.employee_id === employee.id) || null;
         
         const valorFechamento = fechamento?.total_conta || 0;
         const valorNfse = nfse?.valor_nfse || 0;
         const diferenca = nfse ? valorNfse - valorFechamento : null;
 
         return {
-          employee: emp as Employee,
+          employee,
           fechamento: fechamento ? {
             id: fechamento.id,
             ano_mes: fechamento.ano_mes,
