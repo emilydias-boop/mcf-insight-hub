@@ -205,6 +205,23 @@ function extractCorrectValues(invoice: any): {
   };
 }
 
+// ============= HELPER: Normalizar telefone =============
+function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null;
+  
+  let clean = phone.replace(/\D/g, '');
+  
+  if (clean.startsWith('0')) {
+    clean = clean.substring(1);
+  }
+  
+  if (!clean.startsWith('55') && clean.length <= 11) {
+    clean = '55' + clean;
+  }
+  
+  return '+' + clean;
+}
+
 // ============= HELPER: Criar/Atualizar Contato e Deal no CRM =============
 interface CRMContactData {
   email: string | null;
@@ -220,6 +237,10 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     console.log('[CRM] Sem email ou telefone, pulando criação de contato');
     return;
   }
+  
+  // Normalizar telefone
+  const normalizedPhone = normalizePhone(data.phone);
+  console.log(`[CRM] Telefone normalizado: ${data.phone} -> ${normalizedPhone}`);
   
   try {
     // 1. Buscar ou criar origem
@@ -250,38 +271,72 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       }
     }
     
-    // 2. Buscar contato existente pelo email
+    // 2. Buscar contato existente pelo EMAIL primeiro (prioridade)
     let contactId: string | null = null;
+    let existingContact: any = null;
+    
     if (data.email) {
-      const { data: existingContact } = await supabase
+      const { data: byEmail } = await supabase
         .from('crm_contacts')
-        .select('id')
-        .eq('email', data.email)
+        .select('id, phone')
+        .ilike('email', data.email)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
       
-      if (existingContact) {
-        contactId = existingContact.id;
-        console.log(`[CRM] Contato existente encontrado: ${contactId}`);
-      } else {
-        // Criar novo contato
-        const { data: newContact, error: contactError } = await supabase
-          .from('crm_contacts')
-          .insert({
-            clint_id: `hubla-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            name: data.name || 'Cliente A010',
-            email: data.email,
-            phone: data.phone,
-            origin_id: originId,
-            tags: ['A010', 'Hubla'],
-            custom_fields: { source: 'hubla', product: data.productName }
-          })
-          .select('id')
-          .single();
-        
-        if (!contactError && newContact) {
-          contactId = newContact.id;
-          console.log(`[CRM] Contato criado: ${data.name} (${contactId})`);
-        }
+      if (byEmail) {
+        existingContact = byEmail;
+        contactId = byEmail.id;
+        console.log(`[CRM] Contato existente por email: ${contactId}`);
+      }
+    }
+    
+    // 3. Se não encontrou por email, buscar por telefone normalizado
+    if (!contactId && normalizedPhone) {
+      const phoneDigits = normalizedPhone.replace(/\D/g, '');
+      const { data: byPhone } = await supabase
+        .from('crm_contacts')
+        .select('id, email, phone')
+        .or(`phone.eq.${normalizedPhone},phone.eq.+${phoneDigits},phone.eq.${phoneDigits}`)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      
+      if (byPhone) {
+        existingContact = byPhone;
+        contactId = byPhone.id;
+        console.log(`[CRM] Contato existente por telefone: ${contactId}`);
+      }
+    }
+    
+    // 4. Se encontrou contato, atualizar telefone para formato normalizado
+    if (existingContact && normalizedPhone && existingContact.phone !== normalizedPhone) {
+      await supabase
+        .from('crm_contacts')
+        .update({ phone: normalizedPhone, updated_at: new Date().toISOString() })
+        .eq('id', existingContact.id);
+      console.log(`[CRM] Telefone atualizado para formato normalizado`);
+    }
+    
+    // 5. Se não encontrou, criar novo contato com telefone normalizado
+    if (!contactId) {
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: `hubla-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+          name: data.name || 'Cliente A010',
+          email: data.email,
+          phone: normalizedPhone, // TELEFONE NORMALIZADO
+          origin_id: originId,
+          tags: ['A010', 'Hubla'],
+          custom_fields: { source: 'hubla', product: data.productName }
+        })
+        .select('id')
+        .single();
+      
+      if (!contactError && newContact) {
+        contactId = newContact.id;
+        console.log(`[CRM] Contato criado: ${data.name} (${contactId})`);
       }
     }
     

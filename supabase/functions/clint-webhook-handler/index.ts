@@ -254,6 +254,23 @@ function normalizeClintPayload(rawPayload: any): WebhookEvent {
   };
 }
 
+// ============= HELPER: Normalizar telefone =============
+function normalizePhone(phone: string | null): string | null {
+  if (!phone) return null;
+  
+  let clean = phone.replace(/\D/g, '');
+  
+  if (clean.startsWith('0')) {
+    clean = clean.substring(1);
+  }
+  
+  if (!clean.startsWith('55') && clean.length <= 11) {
+    clean = '55' + clean;
+  }
+  
+  return '+' + clean;
+}
+
 // ============= HANDLERS DE CONTATOS =============
 
 async function handleContactCreated(supabase: any, data: any) {
@@ -261,13 +278,15 @@ async function handleContactCreated(supabase: any, data: any) {
 
   const contactData = data.contact || data;
   const email = contactData.email || data.email;
+  const phone = contactData.phone || data.phone;
+  const normalizedPhone = normalizePhone(phone);
 
   // Verificar se já existe pelo email
   if (email) {
     const { data: existing } = await supabase
       .from('crm_contacts')
       .select('id')
-      .eq('email', email)
+      .ilike('email', email)
       .maybeSingle();
 
     if (existing) {
@@ -282,20 +301,22 @@ async function handleContactCreated(supabase: any, data: any) {
       clint_id: data.id || `clint-${Date.now()}`,
       name: contactData.name || data.name,
       email: email,
-      phone: contactData.phone || data.phone,
+      phone: normalizedPhone, // TELEFONE NORMALIZADO
       organization_name: data.organization?.name,
       tags: data.tags || [],
       custom_fields: data.custom_fields || {}
     });
 
   if (error) throw error;
-  console.log('[CONTACT.CREATED] Success');
+  console.log('[CONTACT.CREATED] Success with normalized phone:', normalizedPhone);
   return { action: 'created', contact: contactData.name };
 }
 
 async function handleContactUpdated(supabase: any, data: any) {
   const contactData = data.contact || data;
   const email = contactData.email || data.email;
+  const phone = contactData.phone || data.phone;
+  const normalizedPhone = normalizePhone(phone);
   
   console.log('[CONTACT.UPDATED] Processing contact:', contactData.name, email);
 
@@ -308,7 +329,7 @@ async function handleContactUpdated(supabase: any, data: any) {
   const { data: existing } = await supabase
     .from('crm_contacts')
     .select('id, clint_id')
-    .eq('email', email)
+    .ilike('email', email)
     .maybeSingle();
 
   if (existing) {
@@ -317,14 +338,14 @@ async function handleContactUpdated(supabase: any, data: any) {
       .from('crm_contacts')
       .update({
         name: contactData.name || data.name,
-        phone: contactData.phone || data.phone,
+        phone: normalizedPhone, // TELEFONE NORMALIZADO
         organization_name: data.organization?.name,
         updated_at: new Date().toISOString()
       })
       .eq('id', existing.id);
 
     if (error) throw error;
-    console.log('[CONTACT.UPDATED] Success - updated existing');
+    console.log('[CONTACT.UPDATED] Success - updated existing with phone:', normalizedPhone);
     return { action: 'updated', contact_id: existing.id };
   } else {
     // Criar novo contato
@@ -334,13 +355,13 @@ async function handleContactUpdated(supabase: any, data: any) {
         clint_id: data.id || `clint-${Date.now()}`,
         name: contactData.name || data.name,
         email: email,
-        phone: contactData.phone || data.phone,
+        phone: normalizedPhone, // TELEFONE NORMALIZADO
         tags: [],
         custom_fields: {}
       });
 
     if (error) throw error;
-    console.log('[CONTACT.UPDATED] Success - created new');
+    console.log('[CONTACT.UPDATED] Success - created new with phone:', normalizedPhone);
     return { action: 'created', email };
   }
 }
