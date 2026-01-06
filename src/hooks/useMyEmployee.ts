@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 import type { Employee, EmployeeDocument, EmployeeEvent, EmployeeNote, RhNfse } from '@/types/hr';
 
 export function useMyEmployee() {
@@ -98,5 +99,44 @@ export function useMyEmployeeGestor(gestorId: string | null | undefined) {
       return data?.nome_completo || null;
     },
     enabled: !!gestorId,
+  });
+}
+
+export interface UpdateMyEmployeeData {
+  nome_completo?: string;
+  cpf?: string;
+  data_nascimento?: string | null;
+  nacionalidade?: string;
+  telefone?: string;
+  email_pessoal?: string;
+  cidade?: string;
+  estado?: string;
+}
+
+export function useUpdateMyEmployee() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (data: UpdateMyEmployeeData) => {
+      if (!user?.id) throw new Error('Usuário não autenticado');
+      
+      const { data: result, error } = await supabase
+        .from('employees')
+        .update(data)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-employee', user?.id] });
+      toast.success('Dados atualizados com sucesso');
+    },
+    onError: (error) => {
+      toast.error('Erro ao atualizar dados: ' + error.message);
+    },
   });
 }
