@@ -368,6 +368,7 @@ const FechamentoSDRDetail = () => {
           <SdrIndicatorCard
             title="Reuniões Agendadas"
             meta={compPlan?.meta_reunioes_agendadas || 0}
+            metaAjustada={payout.meta_agendadas_ajustada ?? undefined}
             realizado={kpi?.reunioes_agendadas || 0}
             pct={payout.pct_reunioes_agendadas || 0}
             multiplicador={payout.mult_reunioes_agendadas || 0}
@@ -379,6 +380,7 @@ const FechamentoSDRDetail = () => {
           <SdrIndicatorCard
             title="Reuniões Realizadas"
             meta={compPlan?.meta_reunioes_realizadas || 0}
+            metaAjustada={payout.meta_realizadas_ajustada ?? undefined}
             realizado={kpi?.reunioes_realizadas || 0}
             pct={payout.pct_reunioes_realizadas || 0}
             multiplicador={payout.mult_reunioes_realizadas || 0}
@@ -395,6 +397,7 @@ const FechamentoSDRDetail = () => {
           <SdrIndicatorCard
             title="Tentativas de Ligações"
             meta={compPlan?.meta_tentativas || 0}
+            metaAjustada={payout.meta_tentativas_ajustada ?? undefined}
             realizado={kpi?.tentativas_ligacoes || 0}
             pct={payout.pct_tentativas || 0}
             multiplicador={payout.mult_tentativas || 0}

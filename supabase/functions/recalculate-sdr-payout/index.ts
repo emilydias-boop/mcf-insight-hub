@@ -40,6 +40,7 @@ interface CompPlan {
   fixo_valor: number;
   ifood_mensal: number;
   ifood_ultrameta: number;
+  dias_uteis: number;
 }
 
 interface Kpi {
@@ -50,15 +51,26 @@ interface Kpi {
   no_shows: number;
 }
 
-const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, calendarIfoodMensal?: number) => {
-  const pct_reunioes_agendadas = compPlan.meta_reunioes_agendadas > 0 
-    ? (kpi.reunioes_agendadas / compPlan.meta_reunioes_agendadas) * 100 
+const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, calendarIfoodMensal?: number, diasUteisMes?: number) => {
+  // Calcular fator de ajuste proporcional aos dias úteis
+  const diasUteisPlano = compPlan.dias_uteis || 19;
+  const diasUteisReal = diasUteisMes || diasUteisPlano;
+  const fatorAjuste = diasUteisReal / diasUteisPlano;
+
+  // Metas ajustadas proporcionalmente aos dias úteis do mês
+  const metaAgendadasAjustada = Math.round(compPlan.meta_reunioes_agendadas * fatorAjuste);
+  const metaRealizadasAjustada = Math.round(compPlan.meta_reunioes_realizadas * fatorAjuste);
+  const metaTentativasAjustada = Math.round(compPlan.meta_tentativas * fatorAjuste);
+  // meta_organizacao é percentual, não precisa ajustar
+
+  const pct_reunioes_agendadas = metaAgendadasAjustada > 0 
+    ? (kpi.reunioes_agendadas / metaAgendadasAjustada) * 100 
     : 0;
-  const pct_reunioes_realizadas = compPlan.meta_reunioes_realizadas > 0
-    ? (kpi.reunioes_realizadas / compPlan.meta_reunioes_realizadas) * 100
+  const pct_reunioes_realizadas = metaRealizadasAjustada > 0
+    ? (kpi.reunioes_realizadas / metaRealizadasAjustada) * 100
     : 0;
-  const pct_tentativas = compPlan.meta_tentativas > 0
-    ? (kpi.tentativas_ligacoes / compPlan.meta_tentativas) * 100
+  const pct_tentativas = metaTentativasAjustada > 0
+    ? (kpi.tentativas_ligacoes / metaTentativasAjustada) * 100
     : 0;
   const pct_organizacao = compPlan.meta_organizacao > 0
     ? (kpi.score_organizacao / compPlan.meta_organizacao) * 100
@@ -113,6 +125,11 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, calendarIfoodMensal
     ifood_mensal,
     ifood_ultrameta,
     total_ifood,
+    // Metas ajustadas para salvar no payout
+    meta_agendadas_ajustada: metaAgendadasAjustada,
+    meta_realizadas_ajustada: metaRealizadasAjustada,
+    meta_tentativas_ajustada: metaTentativasAjustada,
+    dias_uteis_mes: diasUteisReal,
   };
 };
 
@@ -305,13 +322,16 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = interCount;
         }
 
-        // Calculate values
-        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, calendarIfoodMensal);
+        // Calculate values - passa dias_uteis_final do calendário para ajuste proporcional
+        const diasUteisMes = calendarData?.dias_uteis_final ?? null;
+        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, calendarIfoodMensal, diasUteisMes);
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
           pct_agendadas: calculatedValues.pct_reunioes_agendadas.toFixed(1),
           pct_realizadas: calculatedValues.pct_reunioes_realizadas.toFixed(1),
           ifood_mensal: calculatedValues.ifood_mensal,
+          dias_uteis_mes: calculatedValues.dias_uteis_mes,
+          meta_agendadas_ajustada: calculatedValues.meta_agendadas_ajustada,
         });
 
         // Get existing payout to preserve ifood_ultrameta_autorizado

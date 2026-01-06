@@ -8,6 +8,7 @@ import { AlertCircle, Zap } from 'lucide-react';
 interface SdrIndicatorCardProps {
   title: string;
   meta: number;
+  metaAjustada?: number;
   realizado: number;
   pct: number;
   multiplicador: number;
@@ -20,6 +21,7 @@ interface SdrIndicatorCardProps {
 export const SdrIndicatorCard = ({
   title,
   meta,
+  metaAjustada,
   realizado,
   pct,
   multiplicador,
@@ -84,7 +86,10 @@ export const SdrIndicatorCard = ({
           <div>
             <span className="text-muted-foreground/70">Meta:</span>
             <span className="ml-1.5 font-medium">
-              {isPercentage ? `${meta}%` : meta.toLocaleString('pt-BR')}
+              {isPercentage ? `${metaAjustada ?? meta}%` : (metaAjustada ?? meta).toLocaleString('pt-BR')}
+              {metaAjustada && metaAjustada !== meta && !isPercentage && (
+                <span className="text-[10px] text-muted-foreground/60 ml-1">(base: {meta.toLocaleString('pt-BR')})</span>
+              )}
             </span>
           </div>
           <div>
