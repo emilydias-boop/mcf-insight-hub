@@ -2988,6 +2988,33 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          created_at: string | null
+          id: string
+          permission_level: string
+          resource: string
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          permission_level?: string
+          resource: string
+          role: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          permission_level?: string
+          resource?: string
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       role_required_documents: {
         Row: {
           ativo: boolean | null
