@@ -104,23 +104,35 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
     };
   }, [bySDR]);
 
+  // Helper to deduplicate meetings by deal_id (keep first occurrence)
+  const deduplicateMeetings = (meetings: MeetingV2[]): MeetingV2[] => {
+    const seen = new Set<string>();
+    return meetings.filter(m => {
+      if (seen.has(m.deal_id)) return false;
+      seen.add(m.deal_id);
+      return true;
+    });
+  };
+
   // Get meetings for a specific SDR (only if they're in the valid SDR list)
   const getMeetingsForSDR = (sdrEmail: string): MeetingV2[] => {
     if (!validSdrEmails.has(sdrEmail.toLowerCase())) {
       return [];
     }
     const meetings = meetingsQuery.data || [];
-    return meetings.filter(
+    const filtered = meetings.filter(
       m => m.intermediador?.toLowerCase() === sdrEmail.toLowerCase()
     );
+    return deduplicateMeetings(filtered);
   };
 
   // All meetings filtered to only the 13 SDRs
   const allMeetings = useMemo(() => {
     const meetings = meetingsQuery.data || [];
-    return meetings.filter(
+    const filtered = meetings.filter(
       m => validSdrEmails.has(m.intermediador?.toLowerCase() || '')
     );
+    return deduplicateMeetings(filtered);
   }, [meetingsQuery.data, validSdrEmails]);
 
   return {
