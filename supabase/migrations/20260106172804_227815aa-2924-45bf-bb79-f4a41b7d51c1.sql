@@ -1,0 +1,31 @@
+INSERT INTO hubla_transactions (
+  hubla_id,
+  event_type,
+  product_name,
+  product_category,
+  product_price,
+  net_value,
+  customer_name,
+  customer_email,
+  customer_phone,
+  sale_status,
+  payment_method,
+  sale_date,
+  source,
+  count_in_dashboard
+) VALUES (
+  'asaas-mcf-p2-' || gen_random_uuid(),
+  'purchase_approved',
+  'A005 - MCF P2 - ASAAS',
+  'incorporador',
+  7500.00,
+  5785.86,
+  'ISAC MARTINS GONCALVES',
+  'isacmartinsarquiteto@gmail.com',
+  '11987222711',
+  'completed',
+  'asaas',
+  '2026-01-07T12:00:00-03:00',
+  'manual',
+  true
+);
