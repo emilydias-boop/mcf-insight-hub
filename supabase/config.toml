@@ -206,3 +206,6 @@ verify_jwt = false
 
 [functions.merge-duplicate-contacts]
 verify_jwt = false
+
+[functions.repair-activity-owners]
+verify_jwt = false
