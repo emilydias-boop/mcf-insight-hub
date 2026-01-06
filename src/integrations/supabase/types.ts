@@ -4609,7 +4609,24 @@ export type Database = {
           sdr_email_filter?: string
           start_date: string
         }
-        Returns: Json
+        Returns: {
+          closer: string
+          conta: boolean
+          contact_email: string
+          contact_name: string
+          contact_phone: string
+          current_owner: string
+          data_agendamento: string
+          deal_id: string
+          deal_name: string
+          from_stage: string
+          intermediador: string
+          origin_name: string
+          probability: number
+          status_atual: string
+          tipo: string
+          total_movimentacoes: number
+        }[]
       }
       get_sdr_meetings_v2: {
         Args: {
