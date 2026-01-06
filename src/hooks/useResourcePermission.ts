@@ -4,22 +4,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { ResourceType, PermissionLevel } from '@/types/user-management';
 
 export const useResourcePermission = (resource: ResourceType) => {
-  const { user, role } = useAuth();
+  const { role } = useAuth();
   
-  const { data: permissions = [] } = useQuery({
-    queryKey: ['my-permissions', user?.id],
+  const { data: permission } = useQuery({
+    queryKey: ['role-permission', role, resource],
     queryFn: async () => {
-      if (!user?.id) return [];
+      if (!role) return null;
       
       const { data, error } = await supabase
-        .from('user_permissions')
-        .select('*')
-        .eq('user_id', user.id);
+        .from('role_permissions')
+        .select('permission_level')
+        .eq('role', role)
+        .eq('resource', resource)
+        .maybeSingle();
       
       if (error) throw error;
-      return data || [];
+      return data;
     },
-    enabled: !!user?.id,
+    enabled: !!role,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
   
   // Admins sempre têm acesso total
@@ -32,12 +35,12 @@ export const useResourcePermission = (resource: ResourceType) => {
     };
   }
   
-  const permission = permissions.find(p => p.resource === resource);
+  const level = (permission?.permission_level as PermissionLevel) || 'none';
   
   return {
-    canView: permission?.permission_level !== 'none' && !!permission,
-    canEdit: permission?.permission_level === 'edit' || permission?.permission_level === 'full',
-    canFull: permission?.permission_level === 'full',
-    level: permission?.permission_level || 'none' as PermissionLevel,
+    canView: level !== 'none',
+    canEdit: level === 'edit' || level === 'full',
+    canFull: level === 'full',
+    level,
   };
 };

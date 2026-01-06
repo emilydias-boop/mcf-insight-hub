@@ -3,28 +3,29 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { ResourceType, PermissionLevel } from '@/types/user-management';
 
-interface Permission {
-  resource: ResourceType;
-  permission_level: PermissionLevel;
+interface RolePermission {
+  resource: string;
+  permission_level: string;
 }
 
 export const useMyPermissions = () => {
-  const { user, role } = useAuth();
+  const { role } = useAuth();
   
-  const { data: permissions = [], isLoading } = useQuery({
-    queryKey: ['my-permissions', user?.id],
+  // Fetch permissions from role_permissions table based on user's role
+  const { data: rolePermissions = [], isLoading } = useQuery({
+    queryKey: ['role-permissions', role],
     queryFn: async () => {
-      if (!user?.id) return [];
+      if (!role) return [];
       
       const { data, error } = await supabase
-        .from('user_permissions')
+        .from('role_permissions')
         .select('resource, permission_level')
-        .eq('user_id', user.id);
+        .eq('role', role);
       
       if (error) throw error;
-      return (data || []) as Permission[];
+      return (data || []) as RolePermission[];
     },
-    enabled: !!user?.id,
+    enabled: !!role,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
   
@@ -33,18 +34,18 @@ export const useMyPermissions = () => {
   
   const canAccessResource = (resource: ResourceType): boolean => {
     if (isAdmin) return true;
-    const perm = permissions.find(p => p.resource === resource);
+    const perm = rolePermissions.find(p => p.resource === resource);
     return !!perm && perm.permission_level !== 'none';
   };
   
   const getPermissionLevel = (resource: ResourceType): PermissionLevel => {
     if (isAdmin) return 'full';
-    const perm = permissions.find(p => p.resource === resource);
-    return perm?.permission_level || 'none';
+    const perm = rolePermissions.find(p => p.resource === resource);
+    return (perm?.permission_level as PermissionLevel) || 'none';
   };
   
   return { 
-    permissions, 
+    permissions: rolePermissions, 
     isLoading, 
     canAccessResource, 
     getPermissionLevel,

@@ -70,6 +70,7 @@ import ProdutosInside from "./pages/produtos/Inside";
 import ProdutosConsorcio from "./pages/produtos/Consorcio";
 import ImportarConsorcio from "./pages/produtos/ImportarConsorcio";
 import SetorGenerico from "./pages/produtos/SetorGenerico";
+import AdminPermissoes from "./pages/admin/Permissoes";
 
 const queryClient = new QueryClient();
 
@@ -120,6 +121,7 @@ const App = () => (
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
+              <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
               <Route path="tv-sdr" element={<ResourceGuard resource="tv_sdr"><TVSdrPerformance /></ResourceGuard>} />
               <Route path="fechamento-sdr" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard>} />
               <Route path="fechamento-sdr/configuracoes" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard>} />
