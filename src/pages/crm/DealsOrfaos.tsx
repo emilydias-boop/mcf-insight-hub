@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { useOrphanDeals, useAssignDealOwner, useApplySuggestedOwners } from '@/hooks/useOrphanDeals';
+import { 
+  useOrphanDeals, 
+  useAssignDealOwner, 
+  useApplySuggestedOwners, 
+  useDeleteZeroValueDeals,
+  useMergeDuplicateContacts,
+  type OrphanDealsFilters 
+} from '@/hooks/useOrphanDeals';
 import { useUsers } from '@/hooks/useUsers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,21 +15,36 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { UserX, Wand2, Users, RefreshCw, AlertTriangle } from 'lucide-react';
+import { 
+  Pagination, 
+  PaginationContent, 
+  PaginationItem, 
+  PaginationLink, 
+  PaginationNext, 
+  PaginationPrevious 
+} from '@/components/ui/pagination';
+import { OrphanDealsFiltersComponent } from '@/components/crm/OrphanDealsFilters';
+import { WebhookHistoryDrawer } from '@/components/crm/WebhookHistoryDrawer';
+import { UserX, Wand2, Users, RefreshCw, AlertTriangle, Trash2, GitMerge, Webhook } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const DealsOrfaos = () => {
-  const { data: deals, isLoading, refetch } = useOrphanDeals();
+  const [filters, setFilters] = useState<OrphanDealsFilters>({ page: 1, per_page: 50 });
+  const { data, isLoading, refetch } = useOrphanDeals(filters);
   const { data: users } = useUsers();
   const assignOwner = useAssignDealOwner();
   const applySuggestions = useApplySuggestedOwners();
+  const deleteZeroValue = useDeleteZeroValueDeals();
+  const mergeDuplicates = useMergeDuplicateContacts();
 
   const [selectedDeals, setSelectedDeals] = useState<string[]>([]);
   const [batchOwner, setBatchOwner] = useState<string>('');
+  const [webhookDrawerEmail, setWebhookDrawerEmail] = useState<string | null>(null);
 
-  const dealsWithSuggestion = deals?.filter(d => d.suggested_owner) || [];
-  const dealsWithoutSuggestion = deals?.filter(d => !d.suggested_owner) || [];
+  const deals = data?.deals || [];
+  const total = data?.total || 0;
+  const totalPages = Math.ceil(total / (filters.per_page || 50));
 
   const toggleDealSelection = (dealId: string) => {
     setSelectedDeals(prev =>
@@ -31,10 +53,10 @@ const DealsOrfaos = () => {
   };
 
   const toggleAll = () => {
-    if (selectedDeals.length === deals?.length) {
+    if (selectedDeals.length === deals.length) {
       setSelectedDeals([]);
     } else {
-      setSelectedDeals(deals?.map(d => d.id) || []);
+      setSelectedDeals(deals.map(d => d.id));
     }
   };
 
@@ -53,16 +75,38 @@ const DealsOrfaos = () => {
     assignOwner.mutate({ dealIds: [dealId], ownerId });
   };
 
+  const handleDeleteZeroValue = () => {
+    if (confirm('Excluir todos os deals órfãos com valor zero ou nulo? Esta ação não pode ser desfeita.')) {
+      deleteZeroValue.mutate();
+    }
+  };
+
+  const handleMergeDuplicates = async () => {
+    // Primeiro dry run
+    const result = await mergeDuplicates.mutateAsync(true);
+    if (result?.would_merge > 0) {
+      if (confirm(`${result.would_merge} contatos duplicados encontrados. Deseja unificá-los agora?`)) {
+        mergeDuplicates.mutate(false);
+      }
+    }
+  };
+
   const getUserName = (userId: string | null) => {
     if (!userId) return null;
     const user = users?.find(u => u.user_id === userId);
-    return user?.full_name || user?.email || userId;
+    return user?.full_name || user?.email || userId.slice(0, 8);
+  };
+
+  const goToPage = (page: number) => {
+    setFilters(f => ({ ...f, page }));
+    setSelectedDeals([]);
   };
 
   if (isLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-20 w-full" />
         <Skeleton className="h-96 w-full" />
       </div>
     );
@@ -76,27 +120,48 @@ const DealsOrfaos = () => {
           <div>
             <h1 className="text-2xl font-bold">Deals Órfãos</h1>
             <p className="text-sm text-muted-foreground">
-              {deals?.length || 0} deals sem owner atribuído
+              {total.toLocaleString('pt-BR')} deals sem owner atribuído
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleMergeDuplicates}
+            disabled={mergeDuplicates.isPending}
+          >
+            <GitMerge className="h-4 w-4 mr-2" />
+            Unificar Duplicados
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleDeleteZeroValue}
+            disabled={deleteZeroValue.isPending}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Limpar Valor Zero
+          </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
           </Button>
-          {dealsWithSuggestion.length > 0 && (
+          {(data?.totalWithSuggestion || 0) > 0 && (
             <Button
               onClick={handleApplySuggestions}
               disabled={applySuggestions.isPending}
               className="gap-2"
             >
               <Wand2 className="h-4 w-4" />
-              Aplicar {dealsWithSuggestion.length} Sugestões
+              Aplicar Sugestões
             </Button>
           )}
         </div>
       </div>
+
+      {/* Filtros */}
+      <OrphanDealsFiltersComponent filters={filters} onFiltersChange={setFilters} />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -107,7 +172,7 @@ const DealsOrfaos = () => {
                 <UserX className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{deals?.length || 0}</p>
+                <p className="text-2xl font-bold">{total.toLocaleString('pt-BR')}</p>
                 <p className="text-sm text-muted-foreground">Total sem owner</p>
               </div>
             </div>
@@ -120,8 +185,8 @@ const DealsOrfaos = () => {
                 <Wand2 className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{dealsWithSuggestion.length}</p>
-                <p className="text-sm text-muted-foreground">Com sugestão de owner</p>
+                <p className="text-2xl font-bold">{data?.totalWithSuggestion || 0}</p>
+                <p className="text-sm text-muted-foreground">Com sugestão (página atual)</p>
               </div>
             </div>
           </CardContent>
@@ -133,8 +198,8 @@ const DealsOrfaos = () => {
                 <AlertTriangle className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{dealsWithoutSuggestion.length}</p>
-                <p className="text-sm text-muted-foreground">Sem sugestão</p>
+                <p className="text-2xl font-bold">{data?.totalWithoutSuggestion || 0}</p>
+                <p className="text-sm text-muted-foreground">Sem sugestão (página atual)</p>
               </div>
             </div>
           </CardContent>
@@ -175,8 +240,11 @@ const DealsOrfaos = () => {
 
       {/* Deals Table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Deals sem Owner</CardTitle>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            Mostrando {deals.length} de {total.toLocaleString('pt-BR')}
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -184,7 +252,7 @@ const DealsOrfaos = () => {
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedDeals.length === deals?.length && deals.length > 0}
+                    checked={selectedDeals.length === deals.length && deals.length > 0}
                     onCheckedChange={toggleAll}
                   />
                 </TableHead>
@@ -195,18 +263,19 @@ const DealsOrfaos = () => {
                 <TableHead>Fonte</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead>Sugestão</TableHead>
+                <TableHead className="w-12"></TableHead>
                 <TableHead className="w-48">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deals?.length === 0 ? (
+              {deals.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Nenhum deal órfão encontrado 🎉
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    Nenhum deal órfão encontrado com esses filtros
                   </TableCell>
                 </TableRow>
               ) : (
-                deals?.map(deal => (
+                deals.map(deal => (
                   <TableRow key={deal.id}>
                     <TableCell>
                       <Checkbox
@@ -251,6 +320,19 @@ const DealsOrfaos = () => {
                       )}
                     </TableCell>
                     <TableCell>
+                      {deal.contact_email && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setWebhookDrawerEmail(deal.contact_email)}
+                          title="Ver histórico de webhooks"
+                        >
+                          <Webhook className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Select
                         onValueChange={(value) => handleAssignSingle(deal.id, value)}
                       >
@@ -276,8 +358,76 @@ const DealsOrfaos = () => {
               )}
             </TableBody>
           </Table>
+
+          {/* Paginação */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Itens por página:</span>
+                <Select 
+                  value={String(filters.per_page || 50)} 
+                  onValueChange={(v) => setFilters(f => ({ ...f, per_page: Number(v), page: 1 }))}
+                >
+                  <SelectTrigger className="w-20 h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => goToPage(Math.max(1, (filters.page || 1) - 1))}
+                      className={filters.page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                  
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const page = i + 1;
+                    return (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          onClick={() => goToPage(page)}
+                          isActive={page === (filters.page || 1)}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    );
+                  })}
+                  
+                  {totalPages > 5 && (
+                    <PaginationItem>
+                      <span className="px-2">...</span>
+                    </PaginationItem>
+                  )}
+
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => goToPage(Math.min(totalPages, (filters.page || 1) + 1))}
+                      className={(filters.page || 1) >= totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Webhook History Drawer */}
+      <WebhookHistoryDrawer
+        email={webhookDrawerEmail}
+        open={!!webhookDrawerEmail}
+        onClose={() => setWebhookDrawerEmail(null)}
+      />
     </div>
   );
 };
