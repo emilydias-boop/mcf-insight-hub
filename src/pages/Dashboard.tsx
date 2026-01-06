@@ -50,11 +50,13 @@ export default function Dashboard() {
   // Hook para dados históricos (weekly_metrics) - para semanas passadas
   const { data: directorKPIsFromDB, isLoading: loadingKPIsFromDB } = useDirectorKPIsFromMetrics(periodo.inicio, periodo.fim);
   
-  // Estratégia híbrida: usar planilha para semanas passadas, tempo real para atual
-  const directorKPIs = (!isCurrentWeek && directorKPIsFromDB && directorKPIsFromDB.faturamentoTotal.value > 0) 
+  // Estratégia híbrida: usar planilha para semanas passadas, tempo real para atual e para mês
+  // SEMPRE usar tempo real para período "mês" (weekly_metrics só tem dados semanais)
+  const shouldUseRealtimeData = isCurrentWeek || periodo.tipo === 'mes';
+  const directorKPIs = (!shouldUseRealtimeData && directorKPIsFromDB && directorKPIsFromDB.faturamentoTotal.value > 0) 
     ? directorKPIsFromDB 
     : directorKPIsRealtime;
-  const loadingKPIs = isCurrentWeek ? loadingKPIsRealtime : (loadingKPIsFromDB || loadingKPIsRealtime);
+  const loadingKPIs = shouldUseRealtimeData ? loadingKPIsRealtime : (loadingKPIsFromDB || loadingKPIsRealtime);
 
   const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(canal, 52);
   const PIPELINE_INSIDE_SALES_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
