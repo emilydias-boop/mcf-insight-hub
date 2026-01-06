@@ -38,39 +38,21 @@ serve(async (req) => {
   try {
     const { dry_run = true, limit = 100 } = await req.json().catch(() => ({}));
 
-    console.log(`🔍 Buscando contatos duplicados (dry_run: ${dry_run}, limit: ${limit})`);
+    console.log(`🔍 Buscando contatos duplicados via RPC (dry_run: ${dry_run}, limit: ${limit})`);
 
-    // 1. Encontrar grupos de duplicados por email (ignoring null emails)
-    const { data: duplicatesByEmail, error: emailError } = await supabase
-      .from('crm_contacts')
-      .select('id, email, phone, name, created_at')
-      .not('email', 'is', null)
-      .order('email')
-      .order('created_at', { ascending: true });
+    // 1. Usar RPC para encontrar emails duplicados de forma eficiente
+    const { data: duplicateEmails, error: rpcError } = await supabase
+      .rpc('get_duplicate_contact_emails', { limit_count: limit });
 
-    if (emailError) throw emailError;
-
-    // Agrupar por email
-    const emailGroups: Record<string, any[]> = {};
-    for (const contact of duplicatesByEmail || []) {
-      const email = contact.email?.toLowerCase();
-      if (!email) continue;
-      
-      if (!emailGroups[email]) {
-        emailGroups[email] = [];
-      }
-      emailGroups[email].push(contact);
+    if (rpcError) {
+      console.error('Erro ao buscar duplicados via RPC:', rpcError);
+      throw rpcError;
     }
 
-    // Filtrar apenas grupos com 2+ contatos
-    const duplicateGroups = Object.entries(emailGroups)
-      .filter(([_, contacts]) => contacts.length >= 2)
-      .slice(0, limit);
-
-    console.log(`📊 Encontrados ${duplicateGroups.length} grupos de duplicados por email`);
+    console.log(`📊 Encontrados ${duplicateEmails?.length || 0} emails duplicados`);
 
     const results = {
-      total_groups: duplicateGroups.length,
+      total_groups: duplicateEmails?.length || 0,
       merged: 0,
       deals_updated: 0,
       contacts_deleted: 0,
@@ -79,10 +61,13 @@ serve(async (req) => {
       groups_processed: [] as any[],
     };
 
-    for (const [email, contacts] of duplicateGroups) {
+    // 2. Para cada email duplicado, buscar os contatos e processar
+    for (const { email, contact_count } of duplicateEmails || []) {
       try {
-        // Ordenar por: quem tem mais deals primeiro, depois mais antigo
-        const { data: contactsWithDeals } = await supabase
+        console.log(`📧 Processando email: ${email} (${contact_count} contatos)`);
+
+        // Buscar todos os contatos com este email (case insensitive)
+        const { data: contacts, error: contactsError } = await supabase
           .from('crm_contacts')
           .select(`
             id,
@@ -92,13 +77,22 @@ serve(async (req) => {
             created_at,
             crm_deals(id, owner_id)
           `)
-          .in('id', contacts.map(c => c.id))
+          .ilike('email', email)
           .order('created_at', { ascending: true });
 
-        if (!contactsWithDeals || contactsWithDeals.length < 2) continue;
+        if (contactsError) {
+          console.error(`Erro ao buscar contatos do email ${email}:`, contactsError);
+          results.errors.push(`Erro ao buscar ${email}: ${contactsError.message}`);
+          continue;
+        }
+
+        if (!contacts || contacts.length < 2) {
+          console.log(`⏭️ Email ${email} não tem duplicados reais, pulando...`);
+          continue;
+        }
 
         // Escolher primary: quem tem mais deals, ou o mais antigo
-        const sortedContacts = contactsWithDeals.sort((a, b) => {
+        const sortedContacts = contacts.sort((a, b) => {
           const aDeals = (a.crm_deals as any[])?.length || 0;
           const bDeals = (b.crm_deals as any[])?.length || 0;
           if (bDeals !== aDeals) return bDeals - aDeals;
@@ -121,7 +115,12 @@ serve(async (req) => {
           email,
           primary_id: primary.id,
           primary_name: primary.name,
-          duplicates: duplicates.map(d => ({ id: d.id, name: d.name })),
+          primary_deals: (primary.crm_deals as any[])?.length || 0,
+          duplicates: duplicates.map(d => ({ 
+            id: d.id, 
+            name: d.name,
+            deals: (d.crm_deals as any[])?.length || 0
+          })),
           phone_before: primary.phone,
           phone_after: normalizedPhone,
         };
@@ -167,7 +166,6 @@ serve(async (req) => {
               .eq('id', dup.id);
 
             if (deleteError) {
-              // Se falhar por constraint, apenas logar
               console.error(`Erro ao deletar contato ${dup.id}:`, deleteError);
               results.errors.push(`Não foi possível deletar ${dup.id}: ${deleteError.message}`);
             } else {

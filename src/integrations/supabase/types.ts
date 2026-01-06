@@ -5114,6 +5114,13 @@ export type Database = {
     }
     Functions: {
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
+      get_duplicate_contact_emails: {
+        Args: { limit_count?: number }
+        Returns: {
+          contact_count: number
+          email: string
+        }[]
+      }
       get_novo_lead_count:
         | { Args: { target_date: string }; Returns: Json }
         | {
