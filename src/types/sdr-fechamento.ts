@@ -96,6 +96,11 @@ export interface SdrMonthPayout {
   ifood_ultrameta_autorizado_em: string | null;
   total_ifood: number | null;
   nfse_id: string | null;
+  // Metas ajustadas proporcionalmente aos dias úteis do mês
+  meta_agendadas_ajustada: number | null;
+  meta_realizadas_ajustada: number | null;
+  meta_tentativas_ajustada: number | null;
+  dias_uteis_mes: number | null;
   status: PayoutStatus;
   aprovado_por: string | null;
   aprovado_em: string | null;

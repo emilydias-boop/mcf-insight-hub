@@ -3317,12 +3317,16 @@ export type Database = {
           aprovado_em: string | null
           aprovado_por: string | null
           created_at: string | null
+          dias_uteis_mes: number | null
           id: string
           ifood_mensal: number | null
           ifood_ultrameta: number | null
           ifood_ultrameta_autorizado: boolean | null
           ifood_ultrameta_autorizado_em: string | null
           ifood_ultrameta_autorizado_por: string | null
+          meta_agendadas_ajustada: number | null
+          meta_realizadas_ajustada: number | null
+          meta_tentativas_ajustada: number | null
           mult_organizacao: number | null
           mult_reunioes_agendadas: number | null
           mult_reunioes_realizadas: number | null
@@ -3350,12 +3354,16 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           created_at?: string | null
+          dias_uteis_mes?: number | null
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
           ifood_ultrameta_autorizado?: boolean | null
           ifood_ultrameta_autorizado_em?: string | null
           ifood_ultrameta_autorizado_por?: string | null
+          meta_agendadas_ajustada?: number | null
+          meta_realizadas_ajustada?: number | null
+          meta_tentativas_ajustada?: number | null
           mult_organizacao?: number | null
           mult_reunioes_agendadas?: number | null
           mult_reunioes_realizadas?: number | null
@@ -3383,12 +3391,16 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           created_at?: string | null
+          dias_uteis_mes?: number | null
           id?: string
           ifood_mensal?: number | null
           ifood_ultrameta?: number | null
           ifood_ultrameta_autorizado?: boolean | null
           ifood_ultrameta_autorizado_em?: string | null
           ifood_ultrameta_autorizado_por?: string | null
+          meta_agendadas_ajustada?: number | null
+          meta_realizadas_ajustada?: number | null
+          meta_tentativas_ajustada?: number | null
           mult_organizacao?: number | null
           mult_reunioes_agendadas?: number | null
           mult_reunioes_realizadas?: number | null
