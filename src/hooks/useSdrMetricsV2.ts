@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { format, startOfDay, endOfDay } from "date-fns";
 
-// Interfaces para métricas V2 com nova lógica de contagem
+// Interfaces para métricas V2 - conta todas as movimentações LQ→R1 e NoShow→R1
 export interface SdrMetricsV2 {
   sdr_email: string;
   sdr_name: string;
@@ -31,8 +31,8 @@ export interface MeetingV2 {
   closer: string | null;
   origin_name: string | null;
   probability: number | null;
-  conta: boolean; // Indica se este agendamento conta para as métricas
-  total_movimentacoes: number; // Quantas vezes foi para R1 Agendada no período
+  conta: boolean;
+  total_movimentacoes: number;
   from_stage?: string;
 }
 
@@ -103,7 +103,7 @@ export const useSdrMetricsV2 = (startDate: Date | null, endDate: Date | null, sd
   });
 };
 
-// Hook para buscar lista de reuniões com detalhes (TODOS os movimentos)
+// Hook para buscar lista de reuniões com detalhes (todas as movimentações)
 export const useSdrMeetingsV2 = (startDate: Date | null, endDate: Date | null, sdrEmailFilter?: string) => {
   return useQuery({
     queryKey: ['sdr-meetings-v2', startDate?.toISOString(), endDate?.toISOString(), sdrEmailFilter],
@@ -113,7 +113,6 @@ export const useSdrMeetingsV2 = (startDate: Date | null, endDate: Date | null, s
       const start = format(startOfDay(startDate), 'yyyy-MM-dd');
       const end = format(endOfDay(endDate), 'yyyy-MM-dd');
 
-      // Usar nova RPC que retorna TODOS os movimentos com indicação se conta ou não
       const { data, error } = await supabase.rpc('get_sdr_all_movements_v2', {
         start_date: start,
         end_date: end,
