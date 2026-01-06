@@ -203,3 +203,6 @@ verify_jwt = false
 
 [functions.backfill-orphan-owners]
 verify_jwt = false
+
+[functions.merge-duplicate-contacts]
+verify_jwt = false
