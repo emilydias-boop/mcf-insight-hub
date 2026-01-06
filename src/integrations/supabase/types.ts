@@ -346,6 +346,42 @@ export type Database = {
         }
         Relationships: []
       }
+      auditoria_fechamento: {
+        Row: {
+          acao: string
+          antes_json: Json | null
+          created_at: string
+          depois_json: Json | null
+          entidade: string
+          entidade_id: string
+          id: string
+          motivo: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          acao: string
+          antes_json?: Json | null
+          created_at?: string
+          depois_json?: Json | null
+          entidade: string
+          entidade_id: string
+          id?: string
+          motivo?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          acao?: string
+          antes_json?: Json | null
+          created_at?: string
+          depois_json?: Json | null
+          entidade?: string
+          entidade_id?: string
+          id?: string
+          motivo?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       calls: {
         Row: {
           contact_id: string | null
@@ -430,6 +466,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      cargos_catalogo: {
+        Row: {
+          area: string
+          ativo: boolean
+          cargo_base: string
+          created_at: string
+          fixo_valor: number
+          id: string
+          modelo_variavel: string
+          nivel: number | null
+          nome_exibicao: string
+          ote_total: number
+          updated_at: string
+          variavel_valor: number
+        }
+        Insert: {
+          area: string
+          ativo?: boolean
+          cargo_base: string
+          created_at?: string
+          fixo_valor?: number
+          id?: string
+          modelo_variavel?: string
+          nivel?: number | null
+          nome_exibicao: string
+          ote_total?: number
+          updated_at?: string
+          variavel_valor?: number
+        }
+        Update: {
+          area?: string
+          ativo?: boolean
+          cargo_base?: string
+          created_at?: string
+          fixo_valor?: number
+          id?: string
+          modelo_variavel?: string
+          nivel?: number | null
+          nome_exibicao?: string
+          ote_total?: number
+          updated_at?: string
+          variavel_valor?: number
+        }
+        Relationships: []
       }
       categories: {
         Row: {
@@ -1824,6 +1905,7 @@ export type Database = {
           agencia: string | null
           banco: string | null
           cargo: string | null
+          cargo_catalogo_id: string | null
           cep: string | null
           cidade: string | null
           conta: string | null
@@ -1867,6 +1949,7 @@ export type Database = {
           agencia?: string | null
           banco?: string | null
           cargo?: string | null
+          cargo_catalogo_id?: string | null
           cep?: string | null
           cidade?: string | null
           conta?: string | null
@@ -1910,6 +1993,7 @@ export type Database = {
           agencia?: string | null
           banco?: string | null
           cargo?: string | null
+          cargo_catalogo_id?: string | null
           cep?: string | null
           cidade?: string | null
           conta?: string | null
@@ -1951,6 +2035,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "employees_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "employees_gestor_id_fkey"
             columns: ["gestor_id"]
             isOneToOne: false
@@ -1976,6 +2067,191 @@ export type Database = {
             columns: ["sdr_id"]
             isOneToOne: false
             referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fechamento_componentes_realizado: {
+        Row: {
+          created_at: string
+          fechamento_pessoa_id: string
+          id: string
+          meta_componente_id: string
+          observacao: string | null
+          percentual_realizado: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fechamento_pessoa_id: string
+          id?: string
+          meta_componente_id: string
+          observacao?: string | null
+          percentual_realizado?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fechamento_pessoa_id?: string
+          id?: string
+          meta_componente_id?: string
+          observacao?: string | null
+          percentual_realizado?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_componentes_realizado_fechamento_pessoa_id_fkey"
+            columns: ["fechamento_pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "fechamento_pessoa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamento_componentes_realizado_meta_componente_id_fkey"
+            columns: ["meta_componente_id"]
+            isOneToOne: false
+            referencedRelation: "metas_componentes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fechamento_mes: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          competencia: string
+          created_at: string
+          criado_em: string
+          criado_por: string | null
+          id: string
+          observacao_geral: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          competencia: string
+          created_at?: string
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          observacao_geral?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          competencia?: string
+          created_at?: string
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          observacao_geral?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fechamento_pessoa: {
+        Row: {
+          ajuste_manual_motivo: string | null
+          ajuste_manual_valor: number
+          cargo_catalogo_id: string | null
+          created_at: string
+          employee_id: string
+          fechamento_mes_id: string
+          fixo_valor: number
+          id: string
+          ifood_mensal: number | null
+          ifood_pendente: number | null
+          ifood_ultrameta_global: number | null
+          marcado_critico: boolean
+          meta_mes_id: string | null
+          multiplicador: number
+          ote_total: number
+          percentual_global: number
+          status: string
+          total_conta: number
+          updated_at: string
+          variavel_paga: number
+          variavel_valor: number
+        }
+        Insert: {
+          ajuste_manual_motivo?: string | null
+          ajuste_manual_valor?: number
+          cargo_catalogo_id?: string | null
+          created_at?: string
+          employee_id: string
+          fechamento_mes_id: string
+          fixo_valor?: number
+          id?: string
+          ifood_mensal?: number | null
+          ifood_pendente?: number | null
+          ifood_ultrameta_global?: number | null
+          marcado_critico?: boolean
+          meta_mes_id?: string | null
+          multiplicador?: number
+          ote_total?: number
+          percentual_global?: number
+          status?: string
+          total_conta?: number
+          updated_at?: string
+          variavel_paga?: number
+          variavel_valor?: number
+        }
+        Update: {
+          ajuste_manual_motivo?: string | null
+          ajuste_manual_valor?: number
+          cargo_catalogo_id?: string | null
+          created_at?: string
+          employee_id?: string
+          fechamento_mes_id?: string
+          fixo_valor?: number
+          id?: string
+          ifood_mensal?: number | null
+          ifood_pendente?: number | null
+          ifood_ultrameta_global?: number | null
+          marcado_critico?: boolean
+          meta_mes_id?: string | null
+          multiplicador?: number
+          ote_total?: number
+          percentual_global?: number
+          status?: string
+          total_conta?: number
+          updated_at?: string
+          variavel_paga?: number
+          variavel_valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_pessoa_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamento_pessoa_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamento_pessoa_fechamento_mes_id_fkey"
+            columns: ["fechamento_mes_id"]
+            isOneToOne: false
+            referencedRelation: "fechamento_mes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fechamento_pessoa_meta_mes_id_fkey"
+            columns: ["meta_mes_id"]
+            isOneToOne: false
+            referencedRelation: "metas_mes"
             referencedColumns: ["id"]
           },
         ]
@@ -2625,6 +2901,104 @@ export type Database = {
           },
         ]
       }
+      metas_componentes: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          meta_mes_id: string
+          nome_componente: string
+          ordem: number
+          valor_base: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          meta_mes_id: string
+          nome_componente: string
+          ordem?: number
+          valor_base?: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          meta_mes_id?: string
+          nome_componente?: string
+          ordem?: number
+          valor_base?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metas_componentes_meta_mes_id_fkey"
+            columns: ["meta_mes_id"]
+            isOneToOne: false
+            referencedRelation: "metas_mes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      metas_mes: {
+        Row: {
+          area: string
+          ativo: boolean
+          cargo_base: string
+          cargo_catalogo_id: string | null
+          competencia: string
+          created_at: string
+          created_by: string | null
+          id: string
+          nivel: number | null
+          observacao: string | null
+          regua_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          area: string
+          ativo?: boolean
+          cargo_base: string
+          cargo_catalogo_id?: string | null
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nivel?: number | null
+          observacao?: string | null
+          regua_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area?: string
+          ativo?: boolean
+          cargo_base?: string
+          cargo_catalogo_id?: string | null
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nivel?: number | null
+          observacao?: string | null
+          regua_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metas_mes_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "metas_mes_regua_id_fkey"
+            columns: ["regua_id"]
+            isOneToOne: false
+            referencedRelation: "regua_multiplicador"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       operational_costs: {
         Row: {
           amount: number
@@ -2884,6 +3258,68 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      regua_faixas: {
+        Row: {
+          created_at: string
+          faixa_ate: number
+          faixa_de: number
+          id: string
+          multiplicador: number
+          ordem: number
+          regua_id: string
+        }
+        Insert: {
+          created_at?: string
+          faixa_ate: number
+          faixa_de: number
+          id?: string
+          multiplicador: number
+          ordem?: number
+          regua_id: string
+        }
+        Update: {
+          created_at?: string
+          faixa_ate?: number
+          faixa_de?: number
+          id?: string
+          multiplicador?: number
+          ordem?: number
+          regua_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regua_faixas_regua_id_fkey"
+            columns: ["regua_id"]
+            isOneToOne: false
+            referencedRelation: "regua_multiplicador"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      regua_multiplicador: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome_regua: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_regua: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome_regua?: string
+          updated_at?: string
         }
         Relationships: []
       }
