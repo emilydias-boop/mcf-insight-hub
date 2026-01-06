@@ -76,7 +76,7 @@ export function useTVRevenueData(viewDate: Date = new Date()): TVRevenueData {
         .lte("sale_date", monthEndBr);
 
       // Calcular totais (excluindo categorias que não contam)
-      const excludedCategories = ["clube_arremate", "efeito_alavanca", "renovacao", "imersao"];
+      const excludedCategories = ["clube_arremate", "efeito_alavanca", "imersao"];
       
       const filterRevenue = (transactions: typeof weeklyRevenue) => {
         return (transactions || [])
