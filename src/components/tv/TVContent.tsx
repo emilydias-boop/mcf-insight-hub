@@ -1,9 +1,11 @@
 import { PipelineColumn } from "./PipelineColumn";
 import { SdrRanking } from "./SdrRanking";
 import { SdrPerformanceTable } from "./SdrPerformanceTable";
+import { RevenueProgressBar } from "./RevenueProgressBar";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTVRevenueData } from "@/hooks/useTVRevenueData";
 
 interface TVContentProps {
   totalNovoLead: { valor: number; meta: number };
@@ -32,6 +34,7 @@ export function TVContent({
   lastUpdate,
 }: TVContentProps) {
   const isMobile = useIsMobile();
+  const { semanal, mensal, isLoading: revenueLoading } = useTVRevenueData();
 
   if (isLoading) {
     return (
@@ -61,7 +64,23 @@ export function TVContent({
           </div>
         </div>
 
-        {/* Gauges Lead A/B - PRIMEIRO */}
+        {/* Barras de Progresso de Faturamento */}
+        <div className="grid grid-cols-1 gap-2 shrink-0">
+          <RevenueProgressBar
+            title="Meta do Mês"
+            atual={mensal.atual}
+            meta={mensal.meta}
+            percentual={mensal.percentual}
+          />
+          <RevenueProgressBar
+            title="Meta da Semana"
+            atual={semanal.atual}
+            meta={semanal.meta}
+            percentual={semanal.percentual}
+          />
+        </div>
+
+        {/* Gauges Lead A/B */}
         <div className="grid grid-cols-2 gap-2 shrink-0">
           <div>
             <h3 className="font-bold text-center text-xs mb-1">Lead A</h3>
@@ -105,7 +124,23 @@ export function TVContent({
 
   // Layout Desktop/TV
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col h-full gap-3">
+      {/* Barras de Progresso de Faturamento - Topo */}
+      <div className="grid grid-cols-2 gap-4 shrink-0">
+        <RevenueProgressBar
+          title="Meta do Mês"
+          atual={mensal.atual}
+          meta={mensal.meta}
+          percentual={mensal.percentual}
+        />
+        <RevenueProgressBar
+          title="Meta da Semana"
+          atual={semanal.atual}
+          meta={semanal.meta}
+          percentual={semanal.percentual}
+        />
+      </div>
+
       {/* Grid principal - mais espaço para tabela */}
       <div className="grid grid-cols-[170px_170px_160px_1fr] gap-4 flex-1 min-h-0">
         {/* Novo Lead Total - Compacto inline */}
