@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -8,6 +8,7 @@ import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
 import { useCRMPipelines } from '@/components/crm/PipelineSelector';
+import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -32,6 +33,28 @@ const Negocios = () => {
   
   // Buscar pipelines para definir o default
   const { data: pipelines } = useCRMPipelines();
+  
+  // Buscar origens do pipeline selecionado
+  const { data: pipelineOrigins } = useCRMOriginsByPipeline(selectedPipelineId);
+  
+  // Calcular o originId correto para usar nas queries
+  const effectiveOriginId = useMemo(() => {
+    // Se já tem uma origem selecionada manualmente, usar ela
+    if (selectedOriginId) return selectedOriginId;
+    
+    // Se tem um pipeline selecionado, verificar se é um grupo ou uma origem
+    if (selectedPipelineId && pipelineOrigins && Array.isArray(pipelineOrigins)) {
+      // pipelineOrigins pode ser uma lista flat de origens quando um pipeline está selecionado
+      // Nesse caso, não há originId implícito - precisamos que o usuário selecione
+      // Ou podemos pegar a primeira origem como default
+      if (pipelineOrigins.length > 0 && !('children' in pipelineOrigins[0])) {
+        // É uma lista flat de origens - pegar a primeira como default
+        return (pipelineOrigins[0] as any).id;
+      }
+    }
+    
+    return undefined;
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   useEffect(() => {
@@ -63,9 +86,9 @@ const Negocios = () => {
     enabled: !!user?.id
   });
   
-  // Usar pipeline como filtro principal, sub-origem como filtro secundário
+  // Usar o effectiveOriginId calculado para buscar deals
   const { data: deals, isLoading, error } = useCRMDeals({
-    originId: selectedOriginId || selectedPipelineId || undefined,
+    originId: effectiveOriginId,
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
@@ -218,7 +241,7 @@ const Negocios = () => {
                 ...deal,
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
               }))}
-              originId={selectedOriginId || selectedPipelineId || undefined}
+              originId={effectiveOriginId}
             />
           )}
         </div>

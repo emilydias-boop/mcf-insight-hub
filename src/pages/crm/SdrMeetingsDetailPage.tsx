@@ -2,18 +2,21 @@ import { useState, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SdrDetailHeader } from "@/components/sdr/SdrDetailHeader";
 import { SdrDetailKPICards } from "@/components/sdr/SdrDetailKPICards";
 import { SdrMeetingsChart } from "@/components/sdr/SdrMeetingsChart";
 import { SdrRankingBlock } from "@/components/sdr/SdrRankingBlock";
 import { SdrLeadsTable } from "@/components/sdr/SdrLeadsTable";
+import { SdrDealsTable } from "@/components/sdr/SdrDealsTable";
 import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
 import { GhostCasesBySdr } from "@/components/sdr/GhostCasesBySdr";
 import { useSdrDetailData } from "@/hooks/useSdrDetailData";
+import { useSdrDeals } from "@/hooks/useSdrDeals";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { Meeting } from "@/hooks/useSdrMeetings";
 
@@ -64,6 +67,9 @@ export default function SdrMeetingsDetailPage() {
     startDate,
     endDate,
   });
+
+  // Buscar todos os deals do SDR (independente de reunião)
+  const { data: sdrDeals = [], isLoading: isLoadingDeals } = useSdrDeals(sdrEmail);
 
   const handleBack = () => {
     // Navigate back preserving filters
@@ -131,7 +137,8 @@ export default function SdrMeetingsDetailPage() {
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-          <TabsTrigger value="leads">Leads ({meetings.length})</TabsTrigger>
+          <TabsTrigger value="leads">Reuniões ({meetings.length})</TabsTrigger>
+          <TabsTrigger value="deals">Todos os Negócios ({sdrDeals.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -168,10 +175,30 @@ export default function SdrMeetingsDetailPage() {
         <TabsContent value="leads">
           <Card className="bg-card border-border">
             <CardContent className="p-4">
+              {meetings.length === 0 && !isLoading && (
+                <Alert className="mb-4">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Esta aba lista apenas leads que tiveram movimento para "Reunião 01 Agendada / R1 Agendada" no período selecionado. 
+                    Leads em estágios anteriores (Novo Lead, Lead Qualificado) aparecem na aba "Todos os Negócios".
+                  </AlertDescription>
+                </Alert>
+              )}
               <SdrLeadsTable
                 meetings={meetings}
                 isLoading={isLoading}
                 onSelectMeeting={handleSelectMeeting}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="deals">
+          <Card className="bg-card border-border">
+            <CardContent className="p-4">
+              <SdrDealsTable
+                deals={sdrDeals}
+                isLoading={isLoadingDeals}
               />
             </CardContent>
           </Card>
