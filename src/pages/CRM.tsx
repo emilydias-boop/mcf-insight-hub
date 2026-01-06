@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
-import { LayoutDashboard, Users, Briefcase, MessageCircle, Settings, Shield, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, MessageCircle, Settings, Shield, CalendarDays, UserX } from 'lucide-react';
 
 const CRM = () => {
   const navItems = [
@@ -9,6 +9,7 @@ const CRM = () => {
     { to: '/crm/negocios', label: 'Negócios', icon: Briefcase },
     { to: '/crm/atendimentos', label: 'Atendimentos', icon: MessageCircle },
     { to: '/crm/agenda', label: 'Agenda', icon: CalendarDays },
+    { to: '/crm/deals-orfaos', label: 'Órfãos', icon: UserX },
     { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
     { to: '/crm/configuracoes', label: 'Configurações', icon: Settings },
   ];

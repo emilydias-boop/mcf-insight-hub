@@ -200,3 +200,6 @@ verify_jwt = false
 
 [functions.backfill-deal-owners]
 verify_jwt = false
+
+[functions.backfill-orphan-owners]
+verify_jwt = false

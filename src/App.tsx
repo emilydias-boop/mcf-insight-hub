@@ -48,6 +48,7 @@ import ImportarHistorico from "./pages/crm/ImportarHistorico";
 import AuditoriaAgendamentos from "./pages/crm/AuditoriaAgendamentos";
 import Atendimentos from "./pages/crm/Atendimentos";
 import Agenda from "./pages/crm/Agenda";
+import DealsOrfaos from "./pages/crm/DealsOrfaos";
 import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import TVSdrPerformance from "./pages/TVSdrPerformance";
 import TVSdrFullscreen from "./pages/TVSdrFullscreen";
@@ -153,6 +154,7 @@ const App = () => (
                 <Route path="importar-contatos" element={<ImportarContatos />} />
                 <Route path="importar-negocios" element={<ImportarNegocios />} />
                 <Route path="importar-historico" element={<ImportarHistorico />} />
+                <Route path="deals-orfaos" element={<DealsOrfaos />} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>

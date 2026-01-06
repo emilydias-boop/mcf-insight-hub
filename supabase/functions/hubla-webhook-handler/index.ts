@@ -325,7 +325,22 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         return;
       }
       
-      // 5. Criar novo deal
+      // 4.1 NOVO: Herdar owner de outro deal do mesmo contato
+      let inheritedOwnerId: string | null = null;
+      const { data: dealWithOwner } = await supabase
+        .from('crm_deals')
+        .select('owner_id')
+        .eq('contact_id', contactId)
+        .not('owner_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      
+      if (dealWithOwner?.owner_id) {
+        inheritedOwnerId = dealWithOwner.owner_id;
+        console.log(`[CRM] Owner herdado de outro deal: ${inheritedOwnerId}`);
+      }
+      
+      // 5. Criar novo deal (com owner herdado se disponível)
       const { data: newDeal, error: dealError } = await supabase
         .from('crm_deals')
         .insert({
@@ -335,6 +350,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
           contact_id: contactId,
           origin_id: originId,
           stage_id: stageId,
+          owner_id: inheritedOwnerId, // NOVO: owner herdado
           product_name: data.productName,
           tags: ['A010', 'Hubla'],
           custom_fields: { source: 'hubla', product: data.productName },
@@ -344,14 +360,14 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         .single();
       
       if (!dealError && newDeal) {
-        console.log(`[CRM] Deal criado: ${data.name} - A010 (${newDeal.id})`);
+        console.log(`[CRM] Deal criado: ${data.name} - A010 (${newDeal.id}) com owner: ${inheritedOwnerId || 'nenhum'}`);
         
         // 6. Gerar tarefas automáticas baseadas nos templates do estágio
         if (stageId) {
           await generateTasksForDeal(supabase, {
             dealId: newDeal.id,
             contactId: contactId,
-            ownerId: null,
+            ownerId: inheritedOwnerId, // NOVO: passar owner herdado para as tarefas
             originId,
             stageId,
           });
