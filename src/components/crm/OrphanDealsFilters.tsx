@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCRMOrigins } from '@/hooks/useCRMData';
-import { X } from 'lucide-react';
+import { X, Search } from 'lucide-react';
 import type { OrphanDealsFilters } from '@/hooks/useOrphanDeals';
 
 interface Props {
@@ -32,10 +32,22 @@ export function OrphanDealsFiltersComponent({ filters, onFiltersChange }: Props)
 
   const hasActiveFilters = filters.origin_id || filters.data_source || 
     filters.has_suggestion !== null && filters.has_suggestion !== undefined ||
-    filters.date_from || filters.date_to || filters.min_value;
+    filters.date_from || filters.date_to || filters.min_value || filters.search;
 
   return (
     <div className="flex flex-wrap items-end gap-3 p-4 bg-muted/30 rounded-lg">
+      <div className="space-y-1.5">
+        <Label className="text-xs">Pesquisar</Label>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Nome do deal..."
+            value={filters.search || ''}
+            onChange={(e) => updateFilter('search', e.target.value || undefined)}
+            className="pl-9 w-56 h-9"
+          />
+        </div>
+      </div>
       <div className="space-y-1.5">
         <Label className="text-xs">Origem</Label>
         <Select 
