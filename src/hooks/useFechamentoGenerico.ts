@@ -631,8 +631,9 @@ export const useGenerateFechamento = () => {
           id,
           nome_completo,
           cargo,
+          salario_base,
           cargo_catalogo_id,
-          cargo_catalogo:cargo_catalogo_id(
+          cargo_catalogo:cargos_catalogo(
             id,
             fixo_valor,
             variavel_valor,
@@ -640,8 +641,7 @@ export const useGenerateFechamento = () => {
             modelo_variavel
           )
         `)
-        .eq('status', 'ativo')
-        .not('cargo_catalogo_id', 'is', null);
+        .eq('status', 'ativo');
 
       if (empError) throw empError;
 
