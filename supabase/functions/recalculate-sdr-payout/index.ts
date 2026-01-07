@@ -201,13 +201,47 @@ serve(async (req) => {
       try {
         console.log(`   ⏳ Processando SDR: ${sdr.name} (${sdr.id})`);
 
-        // ===== USAR RPC get_sdr_metrics_v2 PARA CONSISTÊNCIA =====
+        // Get comp plan first
+        const { data: compPlan, error: compError } = await supabase
+          .from('sdr_comp_plan')
+          .select('*')
+          .eq('sdr_id', sdr.id)
+          .lte('vigencia_inicio', monthStart)
+          .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+          .order('vigencia_inicio', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (compError || !compPlan) {
+          console.log(`   ⚠️ Plano de compensação não encontrado para ${sdr.name}`);
+          continue;
+        }
+
+        // ===== BUSCAR KPI EXISTENTE PARA VERIFICAR MODO =====
+        const { data: existingKpi } = await supabase
+          .from('sdr_month_kpi')
+          .select('*')
+          .eq('sdr_id', sdr.id)
+          .eq('ano_mes', ano_mes)
+          .maybeSingle();
+
+        const isManualMode = existingKpi?.modo_entrada === 'manual';
+        
         let reunioesAgendadas = 0;
         let noShows = 0;
         let reunioesRealizadas = 0;
         let taxaNoShow = 0;
 
-        if (sdr.email) {
+        if (isManualMode && existingKpi) {
+          // ===== MODO MANUAL: PRESERVAR VALORES DO KPI EXISTENTE =====
+          reunioesAgendadas = existingKpi.reunioes_agendadas || 0;
+          noShows = existingKpi.no_shows || 0;
+          reunioesRealizadas = existingKpi.reunioes_realizadas || 0;
+          taxaNoShow = existingKpi.taxa_no_show || 0;
+          console.log(`   📝 Modo Manual: usando valores do KPI existente para ${sdr.name}`);
+          console.log(`   📊 Valores manuais: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
+        } else if (sdr.email) {
+          // ===== MODO AUTO: BUSCAR DA RPC =====
           const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
             start_date: monthStart,
             end_date: monthEnd,
@@ -231,30 +265,7 @@ serve(async (req) => {
           console.log(`   ⚠️ SDR ${sdr.name} não tem email configurado`);
         }
 
-        // Get comp plan
-        const { data: compPlan, error: compError } = await supabase
-          .from('sdr_comp_plan')
-          .select('*')
-          .eq('sdr_id', sdr.id)
-          .lte('vigencia_inicio', monthStart)
-          .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
-          .order('vigencia_inicio', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (compError || !compPlan) {
-          console.log(`   ⚠️ Plano de compensação não encontrado para ${sdr.name}`);
-          continue;
-        }
-
-        // ===== ATUALIZAR sdr_month_kpi COM DADOS DA RPC =====
-        const { data: existingKpi } = await supabase
-          .from('sdr_month_kpi')
-          .select('id, tentativas_ligacoes, score_organizacao')
-          .eq('sdr_id', sdr.id)
-          .eq('ano_mes', ano_mes)
-          .maybeSingle();
-
+        // ===== ATUALIZAR/CRIAR KPI =====
         const kpiData = {
           sdr_id: sdr.id,
           ano_mes: ano_mes,
@@ -265,6 +276,8 @@ serve(async (req) => {
           // Preservar tentativas e organização se já existirem
           tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
           score_organizacao: existingKpi?.score_organizacao || 0,
+          // Preservar modo_entrada
+          modo_entrada: existingKpi?.modo_entrada || 'auto',
           updated_at: new Date().toISOString(),
         };
 
