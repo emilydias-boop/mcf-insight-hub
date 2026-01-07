@@ -186,13 +186,50 @@ Deno.serve(async (req) => {
     // Verificar se já existe KPI e preservar tentativas/organização
     const { data: existingKpi, error: kpiCheckError } = await supabase
       .from('sdr_month_kpi')
-      .select('id, tentativas_ligacoes, score_organizacao')
+      .select('id, tentativas_ligacoes, score_organizacao, modo_entrada')
       .eq('sdr_id', sdr_id)
       .eq('ano_mes', ano_mes)
       .maybeSingle()
 
     if (kpiCheckError) {
       console.error('Erro ao verificar KPI existente:', kpiCheckError)
+    }
+
+    // Se modo_entrada = 'manual', não sobrescrever os valores de KPI automáticos
+    const isManualMode = existingKpi?.modo_entrada === 'manual'
+    
+    if (isManualMode) {
+      console.log('⚠️ Modo manual ativo - não sobrescrevendo valores de KPI')
+      
+      // Apenas atualizar intermediações
+      const { error: updateError } = await supabase
+        .from('sdr_month_kpi')
+        .update({
+          intermediacoes_contrato: totalIntermediacoes || 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingKpi.id)
+      
+      if (updateError) {
+        console.error('Erro ao atualizar intermediações:', updateError)
+      }
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Modo manual ativo - apenas intermediações atualizadas',
+          kpi: existingKpi,
+          stats: {
+            reunioes_agendadas: reunioesAgendadas,
+            no_shows: noShows,
+            reunioes_realizadas: reunioesRealizadas,
+            taxa_no_show: taxaNoShow,
+            intermediacoes_contrato: totalIntermediacoes || 0,
+            manual_mode: true,
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     const kpiData = {
@@ -206,6 +243,7 @@ Deno.serve(async (req) => {
       // Preservar tentativas e organização se já existirem
       tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
       score_organizacao: existingKpi?.score_organizacao || 0,
+      modo_entrada: 'auto',
       updated_at: new Date().toISOString(),
     }
 
