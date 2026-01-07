@@ -3,10 +3,9 @@ import { PIPELINE_STAGES } from "@/constants/team";
 
 interface PipelineColumnProps {
   funnelData: { etapa: string; leads: number; meta: number }[];
-  leadType: "A" | "B";
 }
 
-export function PipelineColumn({ funnelData, leadType }: PipelineColumnProps) {
+export function PipelineColumn({ funnelData }: PipelineColumnProps) {
   const stageOrder = [
     PIPELINE_STAGES.R1_AGENDADA,
     PIPELINE_STAGES.R1_REALIZADA,
@@ -28,11 +27,10 @@ export function PipelineColumn({ funnelData, leadType }: PipelineColumnProps) {
         const data = getStageData(stage);
         return (
           <GaugeSemicircle
-            key={`${leadType}-${stage}`}
+            key={stage}
             titulo={stage}
             valor={data.valor}
             meta={data.meta}
-            leadType={leadType}
           />
         );
       })}

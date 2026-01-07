@@ -7,29 +7,6 @@ import { startOfDay, endOfDay } from "date-fns";
 // Funções isDealCreatedToday e getLeadType foram movidas para RPCs do banco
 // para contornar limite de 1000 registros do Supabase client
 
-// Função para determinar tipo de lead baseado no VALOR do produto Hubla
-// Lead A = R$ 497 (valor >= 450), Lead B = R$ 397 (valor >= 350)
-const getLeadTypeFromHubla = (productName: string, productPrice: number | null): 'A' | 'B' | null => {
-  const lower = productName.toLowerCase();
-  
-  // Excluir produtos que NÃO são Inside Sales
-  if (lower.includes('clube do arremate')) return null;
-  if (lower.includes('efeito alavanca')) return null;
-  if (lower.includes('clube arremate')) return null;
-  
-  // Classificar por VALOR (não por nome)
-  const price = productPrice || 0;
-  
-  // Lead A = R$ 497 (geralmente entre 450-500)
-  if (price >= 450) return 'A';
-  
-  // Lead B = R$ 397 (geralmente entre 350-420)
-  if (price >= 350) return 'B';
-  
-  // Valores muito baixos (recorrências, etc) = não contar
-  return null;
-};
-
 interface SdrData {
   nome: string;
   email: string;
@@ -171,16 +148,10 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       console.log('[TV-SDR] Contratos após dedup por email:', uniqueHublaContracts.length, 'de', hublaContracts.length);
 
-      // Contar contratos por tipo de lead (usando VALOR)
-      const contratosLeadA = uniqueHublaContracts.filter(c => 
-        getLeadTypeFromHubla(c.product_name, c.product_price) === 'A'
-      ).length || 0;
+      // Total de contratos (sem separação por tag)
+      const totalContratos = uniqueHublaContracts.length;
 
-      const contratosLeadB = uniqueHublaContracts.filter(c => 
-        getLeadTypeFromHubla(c.product_name, c.product_price) === 'B'
-      ).length || 0;
-
-      console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB, 'Total único:', uniqueHublaContracts.length);
+      console.log('[TV-SDR] Hubla contracts - Total:', totalContratos);
 
       // 2. Rastrear SDR original usando APENAS emails dos contratos únicos
       const hublaEmails = uniqueHublaContracts.map(c => c.customer_email).filter(Boolean) as string[];
@@ -382,22 +353,17 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       const { data: funnelMetricsRpc } = await supabase
         .rpc('get_tv_funnel_metrics', { target_date: today });
 
-      // Processar resultado da RPC do funil
-      const stageCountsA = new Map<string, number>();
-      const stageCountsB = new Map<string, number>();
+      // Processar resultado da RPC do funil - somar todos os leads (sem separar por tag)
+      const stageCounts = new Map<string, number>();
       
       if (Array.isArray(funnelMetricsRpc)) {
         funnelMetricsRpc.forEach((m: any) => {
-          if (m.lead_type === 'A') {
-            stageCountsA.set(m.stage_name, m.unique_leads || 0);
-          } else if (m.lead_type === 'B') {
-            stageCountsB.set(m.stage_name, m.unique_leads || 0);
-          }
+          const current = stageCounts.get(m.stage_name) || 0;
+          stageCounts.set(m.stage_name, current + (m.unique_leads || 0));
         });
       }
 
-      console.log('[TV-SDR] Funnel RPC - Lead A:', Array.from(stageCountsA.entries()));
-      console.log('[TV-SDR] Funnel RPC - Lead B:', Array.from(stageCountsB.entries()));
+      console.log('[TV-SDR] Funnel RPC - Totais:', Array.from(stageCounts.entries()));
 
       const funnelStages = [
         PIPELINE_STAGES.R1_AGENDADA,
@@ -406,22 +372,13 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         PIPELINE_STAGES.CONTRATO_PAGO,
       ];
 
-      const funnelDataA = funnelStages.map((stageName) => ({
+      const funnelData = funnelStages.map((stageName) => ({
         etapa: stageName,
         // Usar Hubla para Contrato Pago, Clint para outras etapas
         leads: stageName === PIPELINE_STAGES.CONTRATO_PAGO 
-          ? contratosLeadA 
-          : stageCountsA.get(stageName) || 0,
+          ? totalContratos 
+          : stageCounts.get(stageName) || 0,
         meta: dailyTargetMap.get(stageName) || 0,
-      }));
-
-      const funnelDataB = funnelStages.map((stageName) => ({
-        etapa: stageName,
-        // Usar Hubla para Contrato Pago, Clint para outras etapas
-        leads: stageName === PIPELINE_STAGES.CONTRATO_PAGO 
-          ? contratosLeadB 
-          : stageCountsB.get(stageName) || 0,
-        meta: Math.round((dailyTargetMap.get(stageName) || 0) * 0.6),
       }));
 
       console.log('[TV-SDR] Final data:', {
@@ -435,8 +392,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
           valor: totalNovoLeadCount,
           meta: totalNovoLeadMeta,
         },
-        funnelDataA,
-        funnelDataB,
+        funnelData,
         topSdrs,
         allSdrs: sdrsData,
         dealsWithoutCloser,

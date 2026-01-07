@@ -9,7 +9,7 @@ import { useTVRevenueData } from "@/hooks/useTVRevenueData";
 
 interface TVContentProps {
   totalNovoLead: { valor: number; meta: number };
-  funnelDataA: any[];
+  funnelData: any[];
   topSdrs: any[];
   allSdrs: any[];
   isLoading?: boolean;
@@ -25,7 +25,7 @@ const getPercentColor = (pct: number): string => {
 
 export function TVContent({
   totalNovoLead,
-  funnelDataA,
+  funnelData,
   topSdrs,
   allSdrs,
   isLoading,
@@ -78,10 +78,10 @@ export function TVContent({
           />
         </div>
 
-        {/* Pipeline Lead A */}
+        {/* Pipeline Lead */}
         <div className="shrink-0">
-          <h3 className="font-bold text-center text-xs mb-1">Lead A</h3>
-          <PipelineColumn funnelData={funnelDataA} leadType="A" />
+          <h3 className="font-bold text-center text-xs mb-1">Lead</h3>
+          <PipelineColumn funnelData={funnelData} />
         </div>
 
         {/* Ranking TOP 4 - SEGUNDO */}
@@ -145,10 +145,10 @@ export function TVContent({
         </div>
         <div className="col-span-2"></div>
 
-        {/* Coluna 1: Lead A */}
+        {/* Coluna 1: Lead */}
         <div className="flex flex-col gap-2 h-full">
-          <h3 className="font-bold text-center text-base">Lead A</h3>
-          <PipelineColumn funnelData={funnelDataA} leadType="A" />
+          <h3 className="font-bold text-center text-base">Lead</h3>
+          <PipelineColumn funnelData={funnelData} />
         </div>
 
         {/* Coluna 2: Ranking */}
