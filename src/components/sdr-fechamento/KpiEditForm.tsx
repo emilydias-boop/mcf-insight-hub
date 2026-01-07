@@ -23,6 +23,8 @@ interface KpiEditFormProps {
   onSave: (kpiData: Partial<SdrMonthKpi>) => void;
   isSaving?: boolean;
   intermediacoes?: number;
+  sdrMetaDiaria?: number;
+  diasUteisMes?: number;
 }
 
 export const KpiEditForm = ({
@@ -34,7 +36,12 @@ export const KpiEditForm = ({
   onSave,
   isSaving = false,
   intermediacoes = 0,
+  sdrMetaDiaria = 10,
+  diasUteisMes = 19,
 }: KpiEditFormProps) => {
+  // Calcular metas baseadas na meta diária do SDR
+  const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
+  const metaRealizadasCalculada = Math.round(metaAgendadasCalculada * 0.7);
   const [formData, setFormData] = useState({
     reunioes_agendadas: 0,
     reunioes_realizadas: 0,
@@ -190,11 +197,9 @@ export const KpiEditForm = ({
                   </Badge>
                 )}
               </Label>
-              {compPlan && (
-                <span className="text-[10px] text-muted-foreground/70 block">
-                  Meta: {compPlan.meta_reunioes_agendadas}
-                </span>
-              )}
+              <span className="text-[10px] text-muted-foreground/70 block">
+                Meta: {metaAgendadasCalculada} ({sdrMetaDiaria}/dia × {diasUteisMes} dias)
+              </span>
               <Input
                 id="reunioes_agendadas"
                 type="number"
@@ -222,11 +227,9 @@ export const KpiEditForm = ({
                   </Badge>
                 )}
               </Label>
-              {compPlan && (
-                <span className="text-[10px] text-muted-foreground/70 block">
-                  Meta: {compPlan.meta_reunioes_realizadas}
-                </span>
-              )}
+              <span className="text-[10px] text-muted-foreground/70 block">
+                Meta: {metaRealizadasCalculada} (70% de {metaAgendadasCalculada})
+              </span>
               <Input
                 id="reunioes_realizadas"
                 type="number"

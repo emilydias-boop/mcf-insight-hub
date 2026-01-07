@@ -88,7 +88,7 @@ export const SdrIndicatorCard = ({
             <span className="ml-1.5 font-medium">
               {isPercentage ? `${metaAjustada ?? meta}%` : (metaAjustada ?? meta).toLocaleString('pt-BR')}
               {metaAjustada && metaAjustada !== meta && !isPercentage && (
-                <span className="text-[10px] text-muted-foreground/60 ml-1">(base: {meta.toLocaleString('pt-BR')})</span>
+                <span className="text-[10px] text-muted-foreground/60 ml-1">({meta}/dia)</span>
               )}
             </span>
           </div>

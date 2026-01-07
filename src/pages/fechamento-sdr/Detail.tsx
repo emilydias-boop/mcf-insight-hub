@@ -358,36 +358,46 @@ const FechamentoSDRDetail = () => {
           onSave={handleSaveKpi}
           isSaving={recalculateWithKpi.isPending}
           intermediacoes={intermediacaoCount}
+          sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
+          diasUteisMes={payout.dias_uteis_mes || 19}
         />
       )}
 
       {/* Indicators Grid */}
       <div>
         <h2 className="text-sm font-semibold mb-3">Indicadores de Meta</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          <SdrIndicatorCard
-            title="Reuniões Agendadas"
-            meta={compPlan?.meta_reunioes_agendadas || 0}
-            metaAjustada={payout.meta_agendadas_ajustada ?? undefined}
-            realizado={kpi?.reunioes_agendadas || 0}
-            pct={payout.pct_reunioes_agendadas || 0}
-            multiplicador={payout.mult_reunioes_agendadas || 0}
-            valorBase={compPlan?.valor_meta_rpg || 0}
-            valorFinal={payout.valor_reunioes_agendadas || 0}
-            isManual={false}
-          />
+        {(() => {
+          // Usar meta_diaria do SDR multiplicada pelos dias úteis do mês
+          const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
+          const diasUteisMes = payout.dias_uteis_mes || 19;
+          const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
+          const metaRealizadasCalculada = Math.round(metaAgendadasCalculada * 0.7);
+          
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <SdrIndicatorCard
+                title="Reuniões Agendadas"
+                meta={sdrMetaDiaria}
+                metaAjustada={payout.meta_agendadas_ajustada ?? metaAgendadasCalculada}
+                realizado={kpi?.reunioes_agendadas || 0}
+                pct={payout.pct_reunioes_agendadas || 0}
+                multiplicador={payout.mult_reunioes_agendadas || 0}
+                valorBase={compPlan?.valor_meta_rpg || 0}
+                valorFinal={payout.valor_reunioes_agendadas || 0}
+                isManual={false}
+              />
 
-          <SdrIndicatorCard
-            title="Reuniões Realizadas"
-            meta={compPlan?.meta_reunioes_realizadas || 0}
-            metaAjustada={payout.meta_realizadas_ajustada ?? undefined}
-            realizado={kpi?.reunioes_realizadas || 0}
-            pct={payout.pct_reunioes_realizadas || 0}
-            multiplicador={payout.mult_reunioes_realizadas || 0}
-            valorBase={compPlan?.valor_docs_reuniao || 0}
-            valorFinal={payout.valor_reunioes_realizadas || 0}
-            isManual={false}
-          />
+              <SdrIndicatorCard
+                title="Reuniões Realizadas"
+                meta={Math.round(sdrMetaDiaria * 0.7)}
+                metaAjustada={payout.meta_realizadas_ajustada ?? metaRealizadasCalculada}
+                realizado={kpi?.reunioes_realizadas || 0}
+                pct={payout.pct_reunioes_realizadas || 0}
+                multiplicador={payout.mult_reunioes_realizadas || 0}
+                valorBase={compPlan?.valor_docs_reuniao || 0}
+                valorFinal={payout.valor_reunioes_realizadas || 0}
+                isManual={false}
+              />
 
           <NoShowIndicator
             agendadas={kpi?.reunioes_agendadas || 0}
@@ -406,18 +416,20 @@ const FechamentoSDRDetail = () => {
             isManual={true}
           />
 
-          <SdrIndicatorCard
-            title="Organização Clint"
-            meta={compPlan?.meta_organizacao || 100}
-            realizado={kpi?.score_organizacao || 0}
-            pct={payout.pct_organizacao || 0}
-            multiplicador={payout.mult_organizacao || 0}
-            valorBase={compPlan?.valor_organizacao || 0}
-            valorFinal={payout.valor_organizacao || 0}
-            isPercentage
-            isManual={true}
-          />
-        </div>
+              <SdrIndicatorCard
+                title="Organização Clint"
+                meta={compPlan?.meta_organizacao || 100}
+                realizado={kpi?.score_organizacao || 0}
+                pct={payout.pct_organizacao || 0}
+                multiplicador={payout.mult_organizacao || 0}
+                valorBase={compPlan?.valor_organizacao || 0}
+                valorFinal={payout.valor_organizacao || 0}
+                isPercentage
+                isManual={true}
+              />
+            </div>
+          );
+        })()}
       </div>
 
       {/* Intermediações */}
