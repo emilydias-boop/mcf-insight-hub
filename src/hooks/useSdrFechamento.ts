@@ -774,10 +774,23 @@ export const useUpdateCompPlan = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['comp-plans-all'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-comp-plan'] });
-      toast.success('Plano OTE atualizado com sucesso');
+      
+      // Recalcular payout do SDR para o mês vigente automaticamente
+      try {
+        const anoMesAtual = new Date().toISOString().slice(0, 7);
+        await supabase.functions.invoke('recalculate-sdr-payout', {
+          body: { sdr_id: data.sdr_id, ano_mes: anoMesAtual }
+        });
+        queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
+        queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
+        toast.success('Plano OTE atualizado e payout recalculado');
+      } catch (recalcError) {
+        console.error('Erro ao recalcular payout:', recalcError);
+        toast.success('Plano OTE atualizado (recálculo pendente)');
+      }
     },
     onError: (error: Error) => {
       toast.error(`Erro ao atualizar plano: ${error.message}`);
