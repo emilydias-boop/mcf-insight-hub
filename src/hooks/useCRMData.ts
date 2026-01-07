@@ -4,20 +4,93 @@ import { toast } from 'sonner';
 
 // ==================== STAGES ====================
 
-export const useCRMStages = (originId?: string) => {
+export const useCRMStages = (originId?: string, groupId?: string) => {
   return useQuery({
-    queryKey: ['crm-stages', originId],
+    queryKey: ['crm-stages', originId, groupId],
     queryFn: async () => {
-      let query = supabase
-        .from('crm_stages')
-        .select('*')
-        .eq('is_active', true);
-      
+      // Se temos um originId específico
       if (originId) {
-        query = query.eq('origin_id', originId);
+        // Verificar se é uma origin ou um group
+        const { data: origin } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .eq('id', originId)
+          .maybeSingle();
+        
+        if (origin) {
+          // É uma origin específica
+          const { data, error } = await supabase
+            .from('crm_stages')
+            .select('*')
+            .eq('origin_id', originId)
+            .eq('is_active', true)
+            .order('stage_order');
+          
+          if (error) throw error;
+          return data;
+        } else {
+          // Pode ser um group_id - buscar estágios de todas origins do grupo
+          const { data: originsInGroup } = await supabase
+            .from('crm_origins')
+            .select('id')
+            .eq('group_id', originId);
+          
+          if (originsInGroup && originsInGroup.length > 0) {
+            const { data, error } = await supabase
+              .from('crm_stages')
+              .select('*')
+              .in('origin_id', originsInGroup.map(o => o.id))
+              .eq('is_active', true)
+              .order('stage_order');
+            
+            if (error) throw error;
+            
+            // Deduplicar por stage_name (manter o de menor stage_order)
+            const stageMap = new Map();
+            data.forEach((stage: any) => {
+              if (!stageMap.has(stage.stage_name) || stage.stage_order < stageMap.get(stage.stage_name).stage_order) {
+                stageMap.set(stage.stage_name, stage);
+              }
+            });
+            return Array.from(stageMap.values()).sort((a, b) => a.stage_order - b.stage_order);
+          }
+        }
       }
       
-      const { data, error } = await query.order('stage_order');
+      // Se temos um groupId explícito
+      if (groupId) {
+        const { data: originsInGroup } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .eq('group_id', groupId);
+        
+        if (originsInGroup && originsInGroup.length > 0) {
+          const { data, error } = await supabase
+            .from('crm_stages')
+            .select('*')
+            .in('origin_id', originsInGroup.map(o => o.id))
+            .eq('is_active', true)
+            .order('stage_order');
+          
+          if (error) throw error;
+          
+          // Deduplicar
+          const stageMap = new Map();
+          data.forEach((stage: any) => {
+            if (!stageMap.has(stage.stage_name) || stage.stage_order < stageMap.get(stage.stage_name).stage_order) {
+              stageMap.set(stage.stage_name, stage);
+            }
+          });
+          return Array.from(stageMap.values()).sort((a, b) => a.stage_order - b.stage_order);
+        }
+      }
+      
+      // Sem filtro - buscar todos
+      const { data, error } = await supabase
+        .from('crm_stages')
+        .select('*')
+        .eq('is_active', true)
+        .order('stage_order');
       
       if (error) throw error;
       return data;
