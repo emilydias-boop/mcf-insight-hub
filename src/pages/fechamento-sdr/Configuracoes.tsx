@@ -138,35 +138,33 @@ const EditSdrDialog = ({ sdr, onSuccess }: { sdr: Sdr; onSuccess: () => void }) 
 // Edit Comp Plan Dialog
 const EditCompPlanDialog = ({ plan, onSuccess }: { plan: SdrCompPlan; onSuccess: () => void }) => {
   const [open, setOpen] = useState(false);
-  const [oteTotal, setOteTotal] = useState(String(plan.ote_total));
   const [fixoValor, setFixoValor] = useState(String(plan.fixo_valor));
   const [valorMetaRpg, setValorMetaRpg] = useState(String(plan.valor_meta_rpg));
   const [valorDocsReuniao, setValorDocsReuniao] = useState(String(plan.valor_docs_reuniao));
   const [valorTentativas, setValorTentativas] = useState(String(plan.valor_tentativas));
   const [valorOrganizacao, setValorOrganizacao] = useState(String(plan.valor_organizacao));
-  const [metaReunioesAgendadas, setMetaReunioesAgendadas] = useState(String(plan.meta_reunioes_agendadas || 40));
-  const [metaReunioesRealizadas, setMetaReunioesRealizadas] = useState(String(plan.meta_reunioes_realizadas || 30));
-  const [metaTentativas, setMetaTentativas] = useState(String(plan.meta_tentativas || 300));
-  const [metaOrganizacao, setMetaOrganizacao] = useState(String(plan.meta_organizacao || 100));
   
   const updateCompPlan = useUpdateCompPlan();
 
+  // Auto-calcular OTE e Variável
+  const variavelTotal = Number(valorMetaRpg) + Number(valorDocsReuniao) + Number(valorTentativas) + Number(valorOrganizacao);
+  const oteCalculado = Number(fixoValor) + variavelTotal;
+
   const handleSubmit = async () => {
-    const variavelTotal = Number(valorMetaRpg) + Number(valorDocsReuniao) + Number(valorTentativas) + Number(valorOrganizacao);
-    
     await updateCompPlan.mutateAsync({
       id: plan.id,
-      ote_total: Number(oteTotal),
+      ote_total: oteCalculado,
       fixo_valor: Number(fixoValor),
       variavel_total: variavelTotal,
       valor_meta_rpg: Number(valorMetaRpg),
       valor_docs_reuniao: Number(valorDocsReuniao),
       valor_tentativas: Number(valorTentativas),
       valor_organizacao: Number(valorOrganizacao),
-      meta_reunioes_agendadas: Number(metaReunioesAgendadas),
-      meta_reunioes_realizadas: Number(metaReunioesRealizadas),
-      meta_tentativas: Number(metaTentativas),
-      meta_organizacao: Number(metaOrganizacao),
+      // Valores padrão para campos obsoletos (não usados no cálculo)
+      meta_reunioes_agendadas: 0,
+      meta_reunioes_realizadas: 0,
+      meta_tentativas: 0,
+      meta_organizacao: 100,
     });
     setOpen(false);
     onSuccess();
@@ -179,16 +177,21 @@ const EditCompPlanDialog = ({ plan, onSuccess }: { plan: SdrCompPlan; onSuccess:
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Editar Plano OTE</DialogTitle>
-          <DialogDescription>Atualize os valores do plano de compensação</DialogDescription>
+          <DialogDescription>
+            Atualize os valores do plano de compensação. Metas são calculadas automaticamente.
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 py-4">
-          <div className="space-y-2">
-            <Label>OTE Total (R$)</Label>
-            <Input type="number" value={oteTotal} onChange={(e) => setOteTotal(e.target.value)} />
-          </div>
+        
+        {/* Nota informativa sobre metas automáticas */}
+        <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2.5 border">
+          <strong>Metas automáticas:</strong> Reuniões Agendadas usa meta diária do SDR × dias úteis, 
+          Realizadas usa 70% do realizado, Tentativas usa 84/dia e Organização usa 100%.
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 py-2">
           <div className="space-y-2">
             <Label>Fixo (R$)</Label>
             <Input type="number" value={fixoValor} onChange={(e) => setFixoValor(e.target.value)} />
@@ -209,23 +212,26 @@ const EditCompPlanDialog = ({ plan, onSuccess }: { plan: SdrCompPlan; onSuccess:
             <Label>Valor Organização (R$)</Label>
             <Input type="number" value={valorOrganizacao} onChange={(e) => setValorOrganizacao(e.target.value)} />
           </div>
+          
+          {/* OTE Calculado - Read-only */}
           <div className="space-y-2">
-            <Label>Meta Reuniões Agendadas</Label>
-            <Input type="number" value={metaReunioesAgendadas} onChange={(e) => setMetaReunioesAgendadas(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Meta Reuniões Realizadas</Label>
-            <Input type="number" value={metaReunioesRealizadas} onChange={(e) => setMetaReunioesRealizadas(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Meta Tentativas</Label>
-            <Input type="number" value={metaTentativas} onChange={(e) => setMetaTentativas(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Meta Organização</Label>
-            <Input type="number" value={metaOrganizacao} onChange={(e) => setMetaOrganizacao(e.target.value)} />
+            <Label className="text-muted-foreground">OTE Calculado</Label>
+            <div className="h-9 px-3 py-2 rounded-md border bg-muted/50 text-sm font-medium">
+              R$ {oteCalculado.toLocaleString('pt-BR')}
+            </div>
           </div>
         </div>
+        
+        {/* Preview da composição */}
+        <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2 grid grid-cols-2 gap-1">
+          <span>Fixo:</span>
+          <span className="text-right">R$ {Number(fixoValor).toLocaleString('pt-BR')}</span>
+          <span>Variável Total:</span>
+          <span className="text-right">R$ {variavelTotal.toLocaleString('pt-BR')}</span>
+          <span className="font-medium border-t pt-1 mt-1">OTE Total:</span>
+          <span className="text-right font-medium border-t pt-1 mt-1">R$ {oteCalculado.toLocaleString('pt-BR')}</span>
+        </div>
+        
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={updateCompPlan.isPending}>
@@ -368,16 +374,11 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
   const [open, setOpen] = useState(false);
   const [sdrId, setSdrId] = useState('');
   const [vigenciaInicio, setVigenciaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [oteTotal, setOteTotal] = useState('4000');
   const [fixoValor, setFixoValor] = useState('2000');
   const [valorMetaRpg, setValorMetaRpg] = useState('500');
   const [valorDocsReuniao, setValorDocsReuniao] = useState('500');
   const [valorTentativas, setValorTentativas] = useState('500');
   const [valorOrganizacao, setValorOrganizacao] = useState('500');
-  const [metaReunioesAgendadas, setMetaReunioesAgendadas] = useState('40');
-  const [metaReunioesRealizadas, setMetaReunioesRealizadas] = useState('30');
-  const [metaTentativas, setMetaTentativas] = useState('300');
-  const [metaOrganizacao, setMetaOrganizacao] = useState('100');
   const [ifoodMensal, setIfoodMensal] = useState('630');
   const [ifoodUltrameta, setIfoodUltrameta] = useState('840');
   const [diasUteis, setDiasUteis] = useState('22');
@@ -385,29 +386,32 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
 
   const createCompPlan = useCreateCompPlan();
 
+  // Auto-calcular OTE e Variável
+  const variavelTotal = Number(valorMetaRpg) + Number(valorDocsReuniao) + Number(valorTentativas) + Number(valorOrganizacao);
+  const oteCalculado = Number(fixoValor) + variavelTotal;
+
   const handleSubmit = async () => {
     if (!sdrId) {
       toast.error('Selecione um SDR');
       return;
     }
 
-    const variavelTotal = Number(valorMetaRpg) + Number(valorDocsReuniao) + Number(valorTentativas) + Number(valorOrganizacao);
-
     await createCompPlan.mutateAsync({
       sdr_id: sdrId,
       vigencia_inicio: vigenciaInicio,
       vigencia_fim: null,
-      ote_total: Number(oteTotal),
+      ote_total: oteCalculado,
       fixo_valor: Number(fixoValor),
       variavel_total: variavelTotal,
       valor_meta_rpg: Number(valorMetaRpg),
       valor_docs_reuniao: Number(valorDocsReuniao),
       valor_tentativas: Number(valorTentativas),
       valor_organizacao: Number(valorOrganizacao),
-      meta_reunioes_agendadas: Number(metaReunioesAgendadas),
-      meta_reunioes_realizadas: Number(metaReunioesRealizadas),
-      meta_tentativas: Number(metaTentativas),
-      meta_organizacao: Number(metaOrganizacao),
+      // Valores padrão para campos obsoletos (não usados no cálculo)
+      meta_reunioes_agendadas: 0,
+      meta_reunioes_realizadas: 0,
+      meta_tentativas: 0,
+      meta_organizacao: 100,
       ifood_mensal: Number(ifoodMensal),
       ifood_ultrameta: Number(ifoodUltrameta),
       dias_uteis: Number(diasUteis),
@@ -426,7 +430,7 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
           Novo Plano OTE
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cadastrar Plano OTE</DialogTitle>
           <DialogDescription>
@@ -435,7 +439,14 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
               : 'O plano será criado como pendente e precisará de aprovação do Admin.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 py-4">
+        
+        {/* Nota informativa sobre metas automáticas */}
+        <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2.5 border">
+          <strong>Metas automáticas:</strong> Reuniões Agendadas usa meta diária do SDR × dias úteis, 
+          Realizadas usa 70% do realizado, Tentativas usa 84/dia e Organização usa 100%.
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 py-2">
           <div className="space-y-2 col-span-2">
             <Label>SDR</Label>
             <Select value={sdrId} onValueChange={setSdrId}>
@@ -454,8 +465,8 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
             <Input type="date" value={vigenciaInicio} onChange={(e) => setVigenciaInicio(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>OTE Total (R$)</Label>
-            <Input type="number" value={oteTotal} onChange={(e) => setOteTotal(e.target.value)} />
+            <Label>Dias Úteis</Label>
+            <Input type="number" value={diasUteis} onChange={(e) => setDiasUteis(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label>Fixo (R$)</Label>
@@ -477,22 +488,15 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
             <Label>Valor Organização (R$)</Label>
             <Input type="number" value={valorOrganizacao} onChange={(e) => setValorOrganizacao(e.target.value)} />
           </div>
+          
+          {/* OTE Calculado - Read-only */}
           <div className="space-y-2">
-            <Label>Meta Reuniões Agendadas</Label>
-            <Input type="number" value={metaReunioesAgendadas} onChange={(e) => setMetaReunioesAgendadas(e.target.value)} />
+            <Label className="text-muted-foreground">OTE Calculado</Label>
+            <div className="h-9 px-3 py-2 rounded-md border bg-muted/50 text-sm font-medium">
+              R$ {oteCalculado.toLocaleString('pt-BR')}
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Meta Reuniões Realizadas</Label>
-            <Input type="number" value={metaReunioesRealizadas} onChange={(e) => setMetaReunioesRealizadas(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Meta Tentativas</Label>
-            <Input type="number" value={metaTentativas} onChange={(e) => setMetaTentativas(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Meta Organização</Label>
-            <Input type="number" value={metaOrganizacao} onChange={(e) => setMetaOrganizacao(e.target.value)} />
-          </div>
+          
           <div className="space-y-2">
             <Label>iFood Mensal (R$)</Label>
             <Input type="number" value={ifoodMensal} onChange={(e) => setIfoodMensal(e.target.value)} />
@@ -502,6 +506,17 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
             <Input type="number" value={ifoodUltrameta} onChange={(e) => setIfoodUltrameta(e.target.value)} />
           </div>
         </div>
+        
+        {/* Preview da composição */}
+        <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2 grid grid-cols-2 gap-1">
+          <span>Fixo:</span>
+          <span className="text-right">R$ {Number(fixoValor).toLocaleString('pt-BR')}</span>
+          <span>Variável Total:</span>
+          <span className="text-right">R$ {variavelTotal.toLocaleString('pt-BR')}</span>
+          <span className="font-medium border-t pt-1 mt-1">OTE Total:</span>
+          <span className="text-right font-medium border-t pt-1 mt-1">R$ {oteCalculado.toLocaleString('pt-BR')}</span>
+        </div>
+        
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={createCompPlan.isPending}>
