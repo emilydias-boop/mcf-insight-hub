@@ -41,7 +41,6 @@ export const KpiEditForm = ({
 }: KpiEditFormProps) => {
   // Calcular metas baseadas na meta diária do SDR
   const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
-  const metaRealizadasCalculada = Math.round(metaAgendadasCalculada * 0.7);
   const [formData, setFormData] = useState({
     reunioes_agendadas: 0,
     reunioes_realizadas: 0,
@@ -228,7 +227,7 @@ export const KpiEditForm = ({
                 )}
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
-                Meta: {metaRealizadasCalculada} (70% de {metaAgendadasCalculada})
+                Meta: {Math.round(formData.reunioes_agendadas * 0.7)} (70% de {formData.reunioes_agendadas} agendadas)
               </span>
               <Input
                 id="reunioes_realizadas"

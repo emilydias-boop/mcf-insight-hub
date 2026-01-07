@@ -371,7 +371,9 @@ const FechamentoSDRDetail = () => {
           const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
           const diasUteisMes = payout.dias_uteis_mes || 19;
           const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
-          const metaRealizadasCalculada = Math.round(metaAgendadasCalculada * 0.7);
+          // Meta de Realizadas = 70% do que foi REALMENTE agendado
+          const agendadasRealizado = kpi?.reunioes_agendadas || 0;
+          const metaRealizadasCalculada = Math.round(agendadasRealizado * 0.7);
           
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -389,10 +391,10 @@ const FechamentoSDRDetail = () => {
 
               <SdrIndicatorCard
                 title="Reuniões Realizadas"
-                meta={Math.round(sdrMetaDiaria * 0.7)}
-                metaAjustada={payout.meta_realizadas_ajustada ?? metaRealizadasCalculada}
+                meta={agendadasRealizado}
+                metaAjustada={metaRealizadasCalculada}
                 realizado={kpi?.reunioes_realizadas || 0}
-                pct={payout.pct_reunioes_realizadas || 0}
+                pct={metaRealizadasCalculada > 0 ? Math.round((kpi?.reunioes_realizadas || 0) / metaRealizadasCalculada * 100) : 0}
                 multiplicador={payout.mult_reunioes_realizadas || 0}
                 valorBase={compPlan?.valor_docs_reuniao || 0}
                 valorFinal={payout.valor_reunioes_realizadas || 0}
