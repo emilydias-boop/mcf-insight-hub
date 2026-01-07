@@ -111,7 +111,7 @@ const Negocios = () => {
     });
   };
   
-  const filteredDeals = dealsData.filter((deal: any) => {
+  const filteredDeals = (dealsData || []).filter((deal: any) => {
     if (!deal || !deal.id || !deal.name) return false;
     
     // Filtro por role: SDR/Closer veem apenas seus próprios deals
