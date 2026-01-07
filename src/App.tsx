@@ -61,6 +61,9 @@ import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
 import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
 import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import RHColaboradores from "./pages/rh/Colaboradores";
+import RHCargos from "./pages/rh/Cargos";
+import RHReguas from "./pages/rh/Reguas";
+import RHMetas from "./pages/rh/Metas";
 import Financeiro from "./pages/Financeiro";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
@@ -133,6 +136,9 @@ const App = () => (
               <Route path="meu-fechamento" element={<ResourceGuard resource="fechamento_sdr"><MeuFechamento /></ResourceGuard>} />
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
+              <Route path="rh/cargos" element={<ResourceGuard resource={"rh" as any}><RHCargos /></ResourceGuard>} />
+              <Route path="rh/reguas" element={<ResourceGuard resource={"rh" as any}><RHReguas /></ResourceGuard>} />
+              <Route path="rh/metas" element={<ResourceGuard resource={"rh" as any}><RHMetas /></ResourceGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="sdr/minhas-reunioes" element={<ResourceGuard resource="crm"><MinhasReunioes /></ResourceGuard>} />
