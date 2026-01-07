@@ -880,3 +880,28 @@ export const useUpdateKpi = () => {
     },
   });
 };
+
+// Delete Comp Plan
+export const useDeleteCompPlan = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (planId: string) => {
+      const { error } = await supabase
+        .from('sdr_comp_plan')
+        .delete()
+        .eq('id', planId);
+
+      if (error) throw error;
+      return planId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comp-plans-all'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-comp-plan'] });
+      toast.success('Plano OTE excluído com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao excluir plano: ${error.message}`);
+    },
+  });
+};
