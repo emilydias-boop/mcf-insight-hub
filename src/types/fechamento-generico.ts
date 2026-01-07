@@ -138,9 +138,7 @@ export const AREA_OPTIONS = [
 ];
 
 export const MODELO_VARIAVEL_OPTIONS = [
-  { value: 'nenhum', label: 'Nenhum' },
-  { value: 'pct_faturamento', label: '% sobre faturamento' },
-  { value: 'comissao_contrato', label: 'Comissão por contrato' },
-  { value: 'modelo_sdr', label: 'Modelo SDR' },
-  { value: 'componentes', label: 'Por componentes' },
+  { value: 'fixo_puro', label: 'Fixo Puro' },
+  { value: 'score_metricas', label: 'Score Métricas (SDR)' },
+  { value: 'componentes_regua_global', label: 'Componentes + Régua Global' },
 ];
