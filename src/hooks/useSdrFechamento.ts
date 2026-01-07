@@ -778,17 +778,34 @@ export const useUpdateCompPlan = () => {
       queryClient.invalidateQueries({ queryKey: ['comp-plans-all'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-comp-plan'] });
       
-      // Recalcular payout do SDR para o mês vigente automaticamente
+      // Recalcular todos os payouts pendentes (DRAFT/APPROVED) do SDR
       try {
+        const { data: pendingPayouts } = await supabase
+          .from('sdr_month_payout')
+          .select('ano_mes')
+          .eq('sdr_id', data.sdr_id)
+          .in('status', ['DRAFT', 'APPROVED']);
+
+        const mesesRecalcular = pendingPayouts?.map(p => p.ano_mes) || [];
+        
+        // Adicionar mês atual se não estiver na lista
         const anoMesAtual = new Date().toISOString().slice(0, 7);
-        await supabase.functions.invoke('recalculate-sdr-payout', {
-          body: { sdr_id: data.sdr_id, ano_mes: anoMesAtual }
-        });
+        if (!mesesRecalcular.includes(anoMesAtual)) {
+          mesesRecalcular.push(anoMesAtual);
+        }
+
+        // Recalcular cada mês pendente
+        for (const anoMes of mesesRecalcular) {
+          await supabase.functions.invoke('recalculate-sdr-payout', {
+            body: { sdr_id: data.sdr_id, ano_mes: anoMes }
+          });
+        }
+
         queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
         queryClient.invalidateQueries({ queryKey: ['sdr-payout-detail'] });
-        toast.success('Plano OTE atualizado e payout recalculado');
+        toast.success(`Plano OTE atualizado e ${mesesRecalcular.length} mês(es) recalculado(s)`);
       } catch (recalcError) {
-        console.error('Erro ao recalcular payout:', recalcError);
+        console.error('Erro ao recalcular payouts:', recalcError);
         toast.success('Plano OTE atualizado (recálculo pendente)');
       }
     },
