@@ -49,7 +49,7 @@ interface CargoFormDialogProps {
 }
 
 export function CargoFormDialog({ open, onOpenChange, cargo }: CargoFormDialogProps) {
-  const { createCargo, updateCargo } = useCargoMutations();
+  const { create, update } = useCargoMutations();
   const isEditing = !!cargo;
 
   const form = useForm<CargoFormValues>({
@@ -98,17 +98,24 @@ export function CargoFormDialog({ open, onOpenChange, cargo }: CargoFormDialogPr
 
   const onSubmit = (values: CargoFormValues) => {
     const data = {
-      ...values,
+      area: values.area,
+      cargo_base: values.cargo_base,
+      nivel: values.nivel,
+      nome_exibicao: values.nome_exibicao,
+      fixo_valor: values.fixo_valor,
+      variavel_valor: values.variavel_valor,
+      modelo_variavel: values.modelo_variavel,
+      ativo: values.ativo,
       ote_total: (values.fixo_valor || 0) + (values.variavel_valor || 0),
     };
 
     if (isEditing) {
-      updateCargo.mutate(
+      update.mutate(
         { id: cargo.id, ...data },
         { onSuccess: () => onOpenChange(false) }
       );
     } else {
-      createCargo.mutate(data, {
+      create.mutate(data, {
         onSuccess: () => onOpenChange(false),
       });
     }
@@ -310,7 +317,7 @@ export function CargoFormDialog({ open, onOpenChange, cargo }: CargoFormDialogPr
               </Button>
               <Button 
                 type="submit" 
-                disabled={createCargo.isPending || updateCargo.isPending}
+                disabled={create.isPending || update.isPending}
               >
                 {isEditing ? "Salvar" : "Criar Cargo"}
               </Button>

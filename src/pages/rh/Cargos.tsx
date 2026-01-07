@@ -36,7 +36,7 @@ import { CargoCatalogo, AREA_OPTIONS, MODELO_VARIAVEL_OPTIONS } from "@/types/fe
 
 export default function RHCargos() {
   const { data: cargos = [], isLoading } = useCargos();
-  const { deleteCargo } = useCargoMutations();
+  const { remove } = useCargoMutations();
   
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState<string>("all");
@@ -79,7 +79,7 @@ export default function RHCargos() {
 
   const confirmDelete = () => {
     if (cargoToDelete) {
-      deleteCargo.mutate(cargoToDelete.id);
+      remove.mutate(cargoToDelete.id);
       setDeleteDialogOpen(false);
       setCargoToDelete(null);
     }
