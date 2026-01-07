@@ -217,6 +217,7 @@ interface DealFilters {
   stageId?: string;
   contactId?: string;
   ownerId?: string;
+  groupId?: string; // Novo: buscar por grupo
 }
 
 export const useCRMDeals = (filters: DealFilters = {}) => {
@@ -228,12 +229,36 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         .select(`
           *,
           crm_contacts(name, email, phone),
-          crm_origins(name),
+          crm_origins(name, group_id),
           crm_stages(stage_name, color)
         `)
         .order('created_at', { ascending: false });
       
-      if (filters.originId) query = query.eq('origin_id', filters.originId);
+      // Se temos originId, verificar se é uma origin ou um group
+      if (filters.originId) {
+        // Primeiro, verificar se existe uma origin com esse ID
+        const { data: origin } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .eq('id', filters.originId)
+          .maybeSingle();
+        
+        if (origin) {
+          // É uma origin específica
+          query = query.eq('origin_id', filters.originId);
+        } else {
+          // Pode ser um group_id - buscar todas origins do grupo
+          const { data: originsInGroup } = await supabase
+            .from('crm_origins')
+            .select('id')
+            .eq('group_id', filters.originId);
+          
+          if (originsInGroup && originsInGroup.length > 0) {
+            query = query.in('origin_id', originsInGroup.map(o => o.id));
+          }
+        }
+      }
+      
       if (filters.stageId) query = query.eq('stage_id', filters.stageId);
       if (filters.contactId) query = query.eq('contact_id', filters.contactId);
       if (filters.ownerId) query = query.eq('owner_id', filters.ownerId);

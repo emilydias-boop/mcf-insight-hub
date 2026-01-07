@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
 import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
@@ -11,15 +11,17 @@ import { useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 
 const Negocios = () => {
   const { role, user } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [filters, setFilters] = useState<DealFiltersState>({
     search: '',
     dateRange: undefined,
@@ -60,9 +62,12 @@ const Negocios = () => {
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current) {
       hasSetDefault.current = true;
+      // Buscar pelo grupo correto (Perpétuo - X1 ou variações de Inside Sales)
       const insideSales = pipelines.find(p => 
-        p.name === 'PIPELINE INSIDE SALES' || 
-        p.display_name?.includes('Inside Sales')
+        p.name === 'Perpétuo - X1' || 
+        p.name?.toLowerCase().includes('perpétuo') ||
+        p.name?.toLowerCase().includes('inside sales') ||
+        p.display_name?.toLowerCase().includes('inside sales')
       );
       if (insideSales) {
         setSelectedPipelineId(insideSales.id);
@@ -105,6 +110,17 @@ const Negocios = () => {
       onSuccess: () => toast.success('Dados sincronizados com sucesso!'),
       onError: () => toast.error('Erro ao sincronizar dados'),
     });
+  };
+  
+  // Refresh local - apenas invalida cache sem chamar edge function
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] }),
+      queryClient.invalidateQueries({ queryKey: ['crm-stages'] }),
+    ]);
+    toast.success('Dados atualizados!');
+    setIsRefreshing(false);
   };
   
   const filteredDeals = dealsData.filter((deal: any) => {
@@ -173,6 +189,15 @@ const Negocios = () => {
           </div>
           
           <div className="flex gap-2">
+            <Button 
+              variant="ghost" 
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              size="sm"
+              title="Atualizar lista de negócios"
+            >
+              <RotateCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </Button>
             <Button 
               variant="outline" 
               onClick={handleSync}
