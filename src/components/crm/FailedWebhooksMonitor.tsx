@@ -51,7 +51,7 @@ export function FailedWebhooksMonitor() {
   });
   
   const { data: summary, isLoading, refetch } = useFailedWebhooksSummary(90);
-  const { data: kpiComparison, isLoading: isLoadingComparison } = useKpiComparison(currentMonth);
+  const { data: kpiComparison, isLoading: isLoadingComparison } = useKpiComparison(selectedMonth);
   const reprocessMutation = useReprocessFailedWebhooks();
   const fixActivitiesMutation = useFixReprocessedActivities();
   const repairOrphanMutation = useRepairOrphanDealOwners();
@@ -59,7 +59,7 @@ export function FailedWebhooksMonitor() {
   const { toast } = useToast();
 
   const handleSyncAllKpis = () => {
-    syncAllKpisMutation.mutate(currentMonth, {
+    syncAllKpisMutation.mutate(selectedMonth, {
       onSuccess: (data) => {
         toast({
           title: `KPIs sincronizados`,
