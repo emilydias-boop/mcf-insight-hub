@@ -186,6 +186,16 @@ export function MetaFormDialog({
 
   const onSubmit = async (values: MetaFormValues) => {
     try {
+      const metaData = {
+        competencia: values.competencia,
+        area: values.area,
+        cargo_base: values.cargo_base,
+        nivel: values.nivel || undefined,
+        cargo_catalogo_id: values.cargo_catalogo_id || undefined,
+        regua_id: values.regua_id || undefined,
+        observacao: values.observacao || undefined,
+      };
+
       if (isEditing) {
         // Update meta
         await updateMeta.mutateAsync({ id: meta.id, ...values });
@@ -197,7 +207,7 @@ export function MetaFormDialog({
         // Delete removed componentes
         for (const existing of existingComponentes) {
           if (!newCompIds.has(existing.id)) {
-            await deleteComponente.mutateAsync(existing.id);
+            await deleteComponente.mutateAsync({ id: existing.id, metaMesId: meta.id });
           }
         }
 
@@ -217,18 +227,28 @@ export function MetaFormDialog({
               nome_componente: comp.nome_componente,
               valor_base: comp.valor_base,
               ordem: comp.ordem,
-              ativo: comp.ativo,
             });
           }
         }
 
         onOpenChange(false);
       } else {
-        // Create new meta with componentes
-        createMeta.mutate(
-          { ...values, componentes: componentes.filter(c => c.nome_componente) },
-          { onSuccess: () => onOpenChange(false) }
-        );
+        // Create new meta first, then add componentes
+        const newMeta = await createMeta.mutateAsync(metaData);
+        
+        // Create componentes for the new meta
+        for (const comp of componentes) {
+          if (comp.nome_componente) {
+            await createComponente.mutateAsync({
+              meta_mes_id: newMeta.id,
+              nome_componente: comp.nome_componente,
+              valor_base: comp.valor_base,
+              ordem: comp.ordem,
+            });
+          }
+        }
+        
+        onOpenChange(false);
       }
     } catch (error) {
       console.error("Error saving meta:", error);

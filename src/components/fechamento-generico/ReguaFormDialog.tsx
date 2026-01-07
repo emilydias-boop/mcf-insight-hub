@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useReguaFaixas, useReguaMutations } from "@/hooks/useFechamentoGenerico";
-import { ReguaMultiplicador, ReguaFaixa } from "@/types/fechamento-generico";
+import { ReguaMultiplicador } from "@/types/fechamento-generico";
 
 const reguaSchema = z.object({
   nome_regua: z.string().min(1, "Nome é obrigatório"),
@@ -141,7 +141,7 @@ export function ReguaFormDialog({ open, onOpenChange, regua }: ReguaFormDialogPr
         // Delete removed faixas
         for (const existing of existingFaixas) {
           if (!newFaixaIds.has(existing.id)) {
-            await deleteFaixa.mutateAsync(existing.id);
+            await deleteFaixa.mutateAsync({ id: existing.id, reguaId: regua.id });
           }
         }
 
@@ -168,11 +168,21 @@ export function ReguaFormDialog({ open, onOpenChange, regua }: ReguaFormDialogPr
 
         onOpenChange(false);
       } else {
-        // Create new régua with faixas
-        createRegua.mutate(
-          { ...values, faixas },
-          { onSuccess: () => onOpenChange(false) }
-        );
+        // Create new régua first, then add faixas
+        const newRegua = await createRegua.mutateAsync({ nome_regua: values.nome_regua, ativo: values.ativo });
+        
+        // Create faixas for the new régua
+        for (const faixa of faixas) {
+          await createFaixa.mutateAsync({
+            regua_id: newRegua.id,
+            faixa_de: faixa.faixa_de,
+            faixa_ate: faixa.faixa_ate,
+            multiplicador: faixa.multiplicador,
+            ordem: faixa.ordem,
+          });
+        }
+        
+        onOpenChange(false);
       }
     } catch (error) {
       console.error("Error saving régua:", error);

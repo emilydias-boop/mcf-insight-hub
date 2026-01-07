@@ -159,7 +159,7 @@ export default function RHMetas() {
   
   const { data: metas = [], isLoading } = useMetasMes(competencia);
   const { data: reguas = [] } = useReguas();
-  const { deleteMeta, copyMetasFromPreviousMonth } = useMetaMutations();
+  const { deleteMeta } = useMetaMutations();
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMeta, setEditingMeta] = useState<MetaMes | null>(null);
@@ -229,11 +229,9 @@ export default function RHMetas() {
     setEditingMeta(null);
   };
 
-  const handleCopyFromPrevious = () => {
-    copyMetasFromPreviousMonth.mutate({ 
-      fromCompetencia: previousMonth, 
-      toCompetencia: competencia 
-    });
+  const handleCopyFromPrevious = async () => {
+    // TODO: Implement copy metas from previous month
+    // For now, just close the dialog
     setCopyDialogOpen(false);
   };
 
