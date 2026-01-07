@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
+import { createClient } from "npm:@supabase/supabase-js@2.83.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -169,8 +169,8 @@ serve(async (req) => {
     const calendarIfoodMensal = calendarData?.ifood_mensal_calculado ?? null;
     console.log(`📅 Calendário ${ano_mes}: iFood Mensal = ${calendarIfoodMensal ?? 'não definido'}`);
 
-    // Get SDRs to process (with email for RPC call)
-    let sdrsQuery = supabase.from('sdr').select('id, name, email').eq('active', true);
+    // Get SDRs to process (with email and meta_diaria for RPC call)
+    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
@@ -335,9 +335,25 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = interCount;
         }
 
-        // Calculate values - passa dias_uteis_final do calendário para ajuste proporcional
-        const diasUteisMes = calendarData?.dias_uteis_final ?? null;
-        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, calendarIfoodMensal, diasUteisMes);
+        // ===== CALCULAR META BASEADA EM META_DIARIA =====
+        const metaDiaria = sdr.meta_diaria || 0;
+        const diasUteisPlano = compPlan.dias_uteis || 22;
+        const diasUteisMes = calendarData?.dias_uteis_final ?? diasUteisPlano;
+        
+        // Calcular meta mensal baseada na meta diária
+        let metaReunioesBase = compPlan.meta_reunioes_agendadas;
+        if (metaDiaria > 0) {
+          metaReunioesBase = metaDiaria * diasUteisPlano;
+          console.log(`   📋 Meta diária ${sdr.name}: ${metaDiaria} × ${diasUteisPlano} dias = ${metaReunioesBase} reuniões/mês`);
+        }
+        
+        // Criar cópia do compPlan com meta calculada
+        const compPlanAjustado = {
+          ...compPlan,
+          meta_reunioes_agendadas: metaReunioesBase,
+        };
+        
+        const calculatedValues = calculatePayoutValues(compPlanAjustado as CompPlan, kpi as Kpi, calendarIfoodMensal, diasUteisMes);
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
           pct_agendadas: calculatedValues.pct_reunioes_agendadas.toFixed(1),
