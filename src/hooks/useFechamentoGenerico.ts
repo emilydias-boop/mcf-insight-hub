@@ -647,17 +647,22 @@ export const useGenerateFechamento = () => {
 
       // 3. Create fechamento_pessoa for each employee
       if (employees && employees.length > 0) {
-        const pessoasToInsert = employees.map((emp: any) => ({
-          fechamento_mes_id: fechamento.id,
-          employee_id: emp.id,
-          cargo_catalogo_id: emp.cargo_catalogo_id,
-          fixo_valor: emp.cargo_catalogo?.fixo_valor || 0,
-          variavel_bruto: emp.cargo_catalogo?.variavel_valor || 0,
-          multiplicador_final: 1,
-          variavel_final: emp.cargo_catalogo?.variavel_valor || 0,
-          total_a_pagar: (emp.cargo_catalogo?.fixo_valor || 0) + (emp.cargo_catalogo?.variavel_valor || 0),
-          status: 'em_revisao',
-        }));
+        const pessoasToInsert = employees.map((emp: any) => {
+          // Usa valores do catálogo se disponível, senão fallback para salario_base
+          const fixo = emp.cargo_catalogo?.fixo_valor || emp.salario_base || 0;
+          const variavel = emp.cargo_catalogo?.variavel_valor || 0;
+          return {
+            fechamento_mes_id: fechamento.id,
+            employee_id: emp.id,
+            cargo_catalogo_id: emp.cargo_catalogo_id,
+            fixo_valor: fixo,
+            variavel_bruto: variavel,
+            multiplicador_final: 1,
+            variavel_final: variavel,
+            total_a_pagar: fixo + variavel,
+            status: 'em_revisao',
+          };
+        });
 
         const { error: pessoasError } = await supabase
           .from('fechamento_pessoa')
