@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2, Wrench, Users } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2, Wrench, Users, BarChart3 } from "lucide-react";
+import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFailedWebhooksSummary, useReprocessFailedWebhooks, type ReprocessResult } from "@/hooks/useFailedWebhooks";
 import { useFixReprocessedActivities, useRepairOrphanDealOwners, type FixActivitiesResult, type RepairOrphanResult } from "@/hooks/useFixReprocessedActivities";
+import { useSyncAllSdrKpis } from "@/hooks/useSyncAllSdrKpis";
+import { useKpiComparison } from "@/hooks/useKpiComparison";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -21,17 +23,47 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export function FailedWebhooksMonitor() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastResult, setLastResult] = useState<ReprocessResult | null>(null);
   const [lastFixResult, setLastFixResult] = useState<FixActivitiesResult | null>(null);
   const [lastRepairResult, setLastRepairResult] = useState<RepairOrphanResult | null>(null);
+  const currentMonth = format(new Date(), 'yyyy-MM');
+  
   const { data: summary, isLoading, refetch } = useFailedWebhooksSummary(30);
+  const { data: kpiComparison, isLoading: isLoadingComparison } = useKpiComparison(currentMonth);
   const reprocessMutation = useReprocessFailedWebhooks();
   const fixActivitiesMutation = useFixReprocessedActivities();
   const repairOrphanMutation = useRepairOrphanDealOwners();
+  const syncAllKpisMutation = useSyncAllSdrKpis();
   const { toast } = useToast();
+
+  const handleSyncAllKpis = () => {
+    syncAllKpisMutation.mutate(currentMonth, {
+      onSuccess: (data) => {
+        toast({
+          title: `KPIs sincronizados`,
+          description: `${data.success}/${data.total} SDRs atualizados`,
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Erro na sincronização",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    });
+  };
 
   const handleReprocessAll = () => {
     reprocessMutation.mutate({ all: true, daysBack: 30 }, {
@@ -220,8 +252,86 @@ export function FailedWebhooksMonitor() {
           </div>
 
           <CollapsibleContent className="mt-4 space-y-4">
-            {/* Fix orphan activities button */}
-            <div className="flex items-center gap-2">
+            {/* KPI Comparison Section */}
+            {kpiComparison && kpiComparison.total_diferenca !== 0 && (
+              <div className="p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Métricas Desatualizadas
+                    <Badge variant="destructive">
+                      {kpiComparison.total_diferenca > 0 ? '+' : ''}{kpiComparison.total_diferenca}
+                    </Badge>
+                  </h4>
+                  <Button 
+                    size="sm" 
+                    variant="default"
+                    className="bg-yellow-600 hover:bg-yellow-700 gap-1"
+                    onClick={handleSyncAllKpis}
+                    disabled={syncAllKpisMutation.isPending}
+                  >
+                    {syncAllKpisMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                    Resincronizar Todos os KPIs
+                  </Button>
+                </div>
+                
+                <div className="max-h-48 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">SDR</TableHead>
+                        <TableHead className="text-xs text-center">KPI Atual</TableHead>
+                        <TableHead className="text-xs text-center">Atividades</TableHead>
+                        <TableHead className="text-xs text-center">Diferença</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {kpiComparison.items
+                        .filter(item => item.diferenca !== 0)
+                        .map((item) => (
+                          <TableRow key={item.sdr_id}>
+                            <TableCell className="text-xs py-1">{item.sdr_name}</TableCell>
+                            <TableCell className="text-xs text-center py-1">{item.kpi_atual}</TableCell>
+                            <TableCell className="text-xs text-center py-1">{item.atividades_reais}</TableCell>
+                            <TableCell className="text-xs text-center py-1">
+                              <span className={item.diferenca > 0 ? 'text-green-600' : 'text-red-600'}>
+                                {item.diferenca > 0 ? '+' : ''}{item.diferenca}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      <TableRow className="bg-muted/50 font-semibold">
+                        <TableCell className="text-xs py-1">TOTAL</TableCell>
+                        <TableCell className="text-xs text-center py-1">{kpiComparison.total_kpi}</TableCell>
+                        <TableCell className="text-xs text-center py-1">{kpiComparison.total_atividades}</TableCell>
+                        <TableCell className="text-xs text-center py-1">
+                          <span className={kpiComparison.total_diferenca > 0 ? 'text-green-600' : 'text-red-600'}>
+                            {kpiComparison.total_diferenca > 0 ? '+' : ''}{kpiComparison.total_diferenca}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {/* Sync result */}
+            {syncAllKpisMutation.isSuccess && (
+              <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/30">
+                <h4 className="text-sm font-medium mb-2 text-green-700">✓ Sincronização concluída</h4>
+                <p className="text-xs text-muted-foreground">
+                  {syncAllKpisMutation.data?.success}/{syncAllKpisMutation.data?.total} SDRs atualizados
+                </p>
+              </div>
+            )}
+
+            {/* Fix orphan activities buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
               <Button 
                 size="sm" 
                 variant="secondary" 
@@ -275,27 +385,6 @@ export function FailedWebhooksMonitor() {
                 </div>
               </div>
             )}
-
-            {/* Fix orphan activities button */}
-            <div className="flex items-center gap-2">
-              <Button 
-                size="sm" 
-                variant="secondary" 
-                disabled={fixActivitiesMutation.isPending}
-                onClick={handleFixActivities}
-                className="gap-1"
-              >
-                {fixActivitiesMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Wrench className="h-3 w-3" />
-                )}
-                Corrigir Atividades Órfãs
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Atribui owner_email às atividades reprocessadas
-              </span>
-            </div>
 
             {/* Last fix result */}
             {lastFixResult && (
