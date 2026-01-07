@@ -305,7 +305,8 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
           crm_origins(name, group_id),
           crm_stages(stage_name, color)
         `)
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false })
+        .limit(5000);
       
       // Se temos originId, verificar se é uma origin ou um group
       if (filters.originId) {
