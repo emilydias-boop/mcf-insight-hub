@@ -61,23 +61,39 @@ serve(async (req) => {
       const url = new URL(req.url);
       const urlAll = url.searchParams.get('all') === 'true';
       const body = await req.json().catch(() => ({}));
-      const { webhook_id, webhook_ids, dry_run = false, all: bodyAll, days_back = 7 } = body;
+      const { webhook_id, webhook_ids, dry_run = false, all: bodyAll, days_back = 7, year_month } = body;
       
       // Accept 'all' from querystring OR body
       const reprocessAll = urlAll || bodyAll === true;
 
-      console.log(`[reprocess] Request received - urlAll: ${urlAll}, bodyAll: ${bodyAll}, reprocessAll: ${reprocessAll}, days_back: ${days_back}`);
+      console.log(`[reprocess] Request received - urlAll: ${urlAll}, bodyAll: ${bodyAll}, reprocessAll: ${reprocessAll}, days_back: ${days_back}, year_month: ${year_month}`);
 
       let webhooksToProcess = [];
 
-      if (reprocessAll) {
-        const { data, error } = await supabase
+      if (reprocessAll || year_month) {
+        let query = supabase
           .from('webhook_events')
           .select('*')
-          .eq('status', 'error')
-          .gte('created_at', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
+          .eq('status', 'error');
+        
+        // If year_month is provided, filter by that specific month
+        if (year_month) {
+          const [year, month] = year_month.split('-');
+          const startDate = `${year}-${month}-01T00:00:00.000Z`;
+          const nextMonth = parseInt(month) === 12 ? 1 : parseInt(month) + 1;
+          const nextYear = parseInt(month) === 12 ? parseInt(year) + 1 : parseInt(year);
+          const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
+          
+          console.log(`[reprocess] Filtering by month: ${startDate} to ${endDate}`);
+          query = query.gte('created_at', startDate).lt('created_at', endDate);
+        } else {
+          // Use days_back filter
+          query = query.gte('created_at', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString());
+        }
+        
+        const { data, error } = await query
           .order('created_at', { ascending: true })
-          .limit(200);
+          .limit(500);
         if (error) throw error;
         webhooksToProcess = data || [];
       } else if (webhook_ids && Array.isArray(webhook_ids)) {

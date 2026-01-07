@@ -111,12 +111,13 @@ export const useReprocessFailedWebhooks = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: { all?: boolean; webhookIds?: string[]; daysBack?: number }): Promise<ReprocessResult> => {
+    mutationFn: async (params: { all?: boolean; webhookIds?: string[]; daysBack?: number; yearMonth?: string }): Promise<ReprocessResult> => {
       const { data, error } = await supabase.functions.invoke('reprocess-failed-webhooks', {
         body: {
           all: params.all || false,
           webhook_ids: params.webhookIds,
           days_back: params.daysBack || 30,
+          year_month: params.yearMonth,
           dry_run: false
         }
       });
