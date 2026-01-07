@@ -209,3 +209,6 @@ verify_jwt = false
 
 [functions.repair-activity-owners]
 verify_jwt = false
+
+[functions.fix-reprocessed-activities]
+verify_jwt = false

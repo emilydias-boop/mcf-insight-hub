@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2, Wrench } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFailedWebhooksSummary, useReprocessFailedWebhooks, type ReprocessResult } from "@/hooks/useFailedWebhooks";
+import { useFixReprocessedActivities, type FixActivitiesResult } from "@/hooks/useFixReprocessedActivities";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -24,8 +25,10 @@ import {
 export function FailedWebhooksMonitor() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastResult, setLastResult] = useState<ReprocessResult | null>(null);
+  const [lastFixResult, setLastFixResult] = useState<FixActivitiesResult | null>(null);
   const { data: summary, isLoading, refetch } = useFailedWebhooksSummary(30);
   const reprocessMutation = useReprocessFailedWebhooks();
+  const fixActivitiesMutation = useFixReprocessedActivities();
   const { toast } = useToast();
 
   const handleReprocessAll = () => {
@@ -41,6 +44,25 @@ export function FailedWebhooksMonitor() {
       onError: (error) => {
         toast({
           title: "Erro no reprocessamento",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  const handleFixActivities = () => {
+    fixActivitiesMutation.mutate({ dryRun: false }, {
+      onSuccess: (data) => {
+        setLastFixResult(data);
+        toast({
+          title: `Correção concluída`,
+          description: `${data.fixed} atividades corrigidas, ${data.skipped} puladas`,
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Erro na correção",
           description: error.message,
           variant: "destructive",
         });
@@ -176,6 +198,48 @@ export function FailedWebhooksMonitor() {
           </div>
 
           <CollapsibleContent className="mt-4 space-y-4">
+            {/* Fix orphan activities button */}
+            <div className="flex items-center gap-2">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                disabled={fixActivitiesMutation.isPending}
+                onClick={handleFixActivities}
+                className="gap-1"
+              >
+                {fixActivitiesMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Wrench className="h-3 w-3" />
+                )}
+                Corrigir Atividades Órfãs
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Atribui owner_email às atividades reprocessadas
+              </span>
+            </div>
+
+            {/* Last fix result */}
+            {lastFixResult && (
+              <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                <h4 className="text-sm font-medium mb-2">Última correção</h4>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Corrigidas</p>
+                    <p className="font-semibold text-blue-600">{lastFixResult.fixed}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Puladas</p>
+                    <p className="font-semibold">{lastFixResult.skipped}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Erros</p>
+                    <p className="font-semibold text-destructive">{lastFixResult.errors}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Last reprocess result */}
             {lastResult && (
               <div className="p-3 bg-muted rounded-lg border">
