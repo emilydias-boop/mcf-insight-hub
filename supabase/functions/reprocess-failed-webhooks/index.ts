@@ -76,7 +76,8 @@ serve(async (req) => {
           .select('*')
           .eq('status', 'error')
           .gte('created_at', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
-          .limit(50);
+          .order('created_at', { ascending: true })
+          .limit(200);
         if (error) throw error;
         webhooksToProcess = data || [];
       } else if (webhook_ids && Array.isArray(webhook_ids)) {
@@ -362,8 +363,17 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
       }
 
       // owner_id armazena o email diretamente (campo TEXT)
-      const ownerId = eventData.deal_user || deal.user_email || deal.owner_email || null;
-      console.log(`[reprocess] Owner email: ${ownerId}`);
+      // Tentar múltiplos caminhos para extrair o email do SDR
+      const ownerId = eventData.deal_user || 
+                      deal.user_email || 
+                      deal.owner_email || 
+                      eventData.responsible_email ||
+                      eventData.assigned_to ||
+                      deal.responsible?.email ||
+                      deal.user?.email ||
+                      eventData.user?.email ||
+                      null;
+      console.log(`[reprocess] Owner email extracted: ${ownerId}`);
 
       const newDealData = {
         clint_id: dealClintId,

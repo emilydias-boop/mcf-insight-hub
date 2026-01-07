@@ -6,7 +6,8 @@ import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2 } from "lucid
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useFailedWebhooksSummary, useReprocessFailedWebhooks } from "@/hooks/useFailedWebhooks";
+import { useFailedWebhooksSummary, useReprocessFailedWebhooks, type ReprocessResult } from "@/hooks/useFailedWebhooks";
+import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AlertDialog,
@@ -22,11 +23,29 @@ import {
 
 export function FailedWebhooksMonitor() {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { data: summary, isLoading } = useFailedWebhooksSummary(30);
+  const [lastResult, setLastResult] = useState<ReprocessResult | null>(null);
+  const { data: summary, isLoading, refetch } = useFailedWebhooksSummary(30);
   const reprocessMutation = useReprocessFailedWebhooks();
+  const { toast } = useToast();
 
   const handleReprocessAll = () => {
-    reprocessMutation.mutate({ all: true, daysBack: 30 });
+    reprocessMutation.mutate({ all: true, daysBack: 30 }, {
+      onSuccess: (data) => {
+        setLastResult(data);
+        toast({
+          title: `Reprocessamento concluído`,
+          description: `${data.processed} processados, ${data.errors} erros de ${data.total} webhooks`,
+        });
+        refetch();
+      },
+      onError: (error) => {
+        toast({
+          title: "Erro no reprocessamento",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    });
   };
 
   if (isLoading) {
@@ -157,6 +176,27 @@ export function FailedWebhooksMonitor() {
           </div>
 
           <CollapsibleContent className="mt-4 space-y-4">
+            {/* Last reprocess result */}
+            {lastResult && (
+              <div className="p-3 bg-muted rounded-lg border">
+                <h4 className="text-sm font-medium mb-2">Último reprocessamento</h4>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Total</p>
+                    <p className="font-semibold">{lastResult.total}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Sucesso</p>
+                    <p className="font-semibold text-green-600">{lastResult.processed}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Erros</p>
+                    <p className="font-semibold text-destructive">{lastResult.errors}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Top SDRs with failures */}
             {topSdrs.length > 0 && (
               <div>
