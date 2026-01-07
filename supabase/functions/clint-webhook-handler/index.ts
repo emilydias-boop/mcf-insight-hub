@@ -1067,10 +1067,17 @@ async function createDealActivity(
   toStage: string | null,
   metadata: any
 ) {
+  // CORREÇÃO: Usar deal_updated_stage_at como created_at quando disponível
+  // Isso garante que atividades reprocessadas tenham a data original correta
+  const originalTimestamp = metadata?.deal_updated_stage_at || metadata?.deal_updated_at;
+  const activityCreatedAt = originalTimestamp ? new Date(originalTimestamp).toISOString() : new Date().toISOString();
+  
+  console.log('[ACTIVITY] Using created_at:', activityCreatedAt, 'from metadata:', !!originalTimestamp);
+
   // PREVENÇÃO DE DUPLICATAS COM DEDUPE_KEY
-  // Gerar chave única baseada em deal_id + activity_type + to_stage + janela de 1 minuto
-  const timeWindow = Math.floor(Date.now() / 60000); // Janela de 1 minuto
-  const dedupeKey = `${dealId}-${activityType}-${toStage || 'null'}-${timeWindow}`;
+  // Gerar chave única baseada em deal_id + activity_type + to_stage + data original (não now())
+  const dateKey = activityCreatedAt.substring(0, 16); // YYYY-MM-DDTHH:MM (precisão de minuto)
+  const dedupeKey = `${dealId}-${activityType}-${toStage || 'null'}-${dateKey}`;
   
   console.log('[ACTIVITY] Attempting insert with dedupe_key:', dedupeKey);
 
@@ -1086,8 +1093,11 @@ async function createDealActivity(
     return;
   }
 
-  // Também verificar por deal_id + to_stage nos últimos 60 segundos (backup check)
-  const cutoffTime = new Date(Date.now() - 60 * 1000).toISOString();
+  // Também verificar por deal_id + to_stage + created_at similar (backup check)
+  // Janela de 60 segundos ao redor da data original
+  const activityDate = new Date(activityCreatedAt);
+  const cutoffBefore = new Date(activityDate.getTime() - 60 * 1000).toISOString();
+  const cutoffAfter = new Date(activityDate.getTime() + 60 * 1000).toISOString();
   
   const { data: recentActivity } = await supabase
     .from('deal_activities')
@@ -1095,7 +1105,8 @@ async function createDealActivity(
     .eq('deal_id', dealId)
     .eq('activity_type', activityType)
     .eq('to_stage', toStage || '')
-    .gte('created_at', cutoffTime)
+    .gte('created_at', cutoffBefore)
+    .lte('created_at', cutoffAfter)
     .limit(1);
 
   if (recentActivity && recentActivity.length > 0) {
@@ -1104,7 +1115,7 @@ async function createDealActivity(
     return;
   }
 
-  // Inserir com dedupe_key no metadata
+  // Inserir com dedupe_key no metadata E created_at correto
   const { error } = await supabase
     .from('deal_activities')
     .insert({
@@ -1113,6 +1124,7 @@ async function createDealActivity(
       description: description,
       from_stage: fromStage,
       to_stage: toStage,
+      created_at: activityCreatedAt, // USAR DATA ORIGINAL, NÃO NOW()
       metadata: { ...metadata, dedupe_key: dedupeKey },
       user_id: null // Webhook, não tem usuário
     });
@@ -1125,7 +1137,7 @@ async function createDealActivity(
     }
     console.error('[ACTIVITY] Error creating activity:', error);
   } else {
-    console.log('[ACTIVITY] Created:', activityType, 'for deal:', dealId, 'with dedupe_key:', dedupeKey);
+    console.log('[ACTIVITY] Created:', activityType, 'for deal:', dealId, 'at:', activityCreatedAt, 'with dedupe_key:', dedupeKey);
   }
 }
 
