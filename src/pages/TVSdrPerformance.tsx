@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { TVContent } from "@/components/tv/TVContent";
 import { SaleCelebration } from "@/components/tv/SaleCelebration";
 import { useTVSdrData } from "@/hooks/useTVSdrData";
 import { useSalesCelebration } from "@/hooks/useSalesCelebration";
 import { Button } from "@/components/ui/button";
-import { PartyPopper, PartyPopperIcon } from "lucide-react";
+import { PartyPopper, Settings } from "lucide-react";
 
 export default function TVSdrPerformance() {
   const { data, isLoading } = useTVSdrData();
@@ -34,8 +35,14 @@ export default function TVSdrPerformance() {
         />
       )}
 
-      {/* Botão de pausar celebrações */}
-      <div className="fixed bottom-4 right-4 z-50">
+      {/* Botão de pausar celebrações e configurações */}
+      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
+        <Link to="/tv-sdr/configuracoes">
+          <Button variant="outline" size="sm" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Configurações
+          </Button>
+        </Link>
         <Button
           variant={celebrationsPaused ? "outline" : "default"}
           size="sm"
