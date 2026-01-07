@@ -22,8 +22,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { useSdrPayouts, useRecalculateAllPayouts } from '@/hooks/useSdrFechamento';
+import { useSyncAllSdrKpis } from '@/hooks/useSyncAllSdrKpis';
 import { formatCurrency } from '@/lib/formatters';
-import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed } from 'lucide-react';
+import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed, Database } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -36,6 +37,7 @@ const FechamentoSDRList = () => {
   
   const { data: payouts, isLoading } = useSdrPayouts(selectedMonth);
   const recalculateAll = useRecalculateAllPayouts();
+  const syncAllKpis = useSyncAllSdrKpis();
 
   // Mutation to call edge function for recalculation with correct iFood from calendar
   const recalculateViaEdge = useMutation({
@@ -223,6 +225,15 @@ const FechamentoSDRList = () => {
               ))}
             </SelectContent>
           </Select>
+
+          <Button
+            variant="outline"
+            onClick={() => syncAllKpis.mutate(selectedMonth)}
+            disabled={syncAllKpis.isPending}
+          >
+            <Database className={`h-4 w-4 mr-2 ${syncAllKpis.isPending ? 'animate-spin' : ''}`} />
+            Sincronizar KPIs
+          </Button>
 
           <Button
             variant="outline"
