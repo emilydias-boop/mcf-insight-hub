@@ -54,6 +54,7 @@ import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import TVSdrPerformance from "./pages/TVSdrPerformance";
 import TVSdrFullscreen from "./pages/TVSdrFullscreen";
 import TVSdrCelebrationDemo from "./pages/TVSdrCelebrationDemo";
+import TVSdrConfiguracoes from "./pages/tv-sdr/Configuracoes";
 import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
 import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
@@ -125,6 +126,7 @@ const App = () => (
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
               <Route path="tv-sdr" element={<ResourceGuard resource="tv_sdr"><TVSdrPerformance /></ResourceGuard>} />
+              <Route path="tv-sdr/configuracoes" element={<ResourceGuard resource="tv_sdr"><TVSdrConfiguracoes /></ResourceGuard>} />
               <Route path="fechamento-sdr" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard>} />
               <Route path="fechamento-sdr/configuracoes" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard>} />
               <Route path="fechamento-sdr/:payoutId" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRDetail /></ResourceGuard>} />
