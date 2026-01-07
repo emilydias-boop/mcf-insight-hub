@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { INSIDE_SALES_ORIGIN_ID, SDR_LIST, PIPELINE_STAGES } from "@/constants/team";
+import { INSIDE_SALES_ORIGIN_ID, PIPELINE_STAGES } from "@/constants/team";
 import { startOfDay, endOfDay } from "date-fns";
 
 // Funções isDealCreatedToday e getLeadType foram movidas para RPCs do banco
@@ -90,6 +90,21 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       todayStartBrazil.setHours(3, 0, 0, 0); // 00:00 Brasil = 03:00 UTC
       const todayEndBrazil = new Date(todayStartBrazil);
       todayEndBrazil.setDate(todayEndBrazil.getDate() + 1);
+
+      // 0. Buscar SDRs visíveis na TV do banco (em vez de SDR_LIST hardcoded)
+      const { data: tvSdrs } = await supabase
+        .from("profiles")
+        .select("email, full_name")
+        .eq("show_on_tv", true)
+        .not("email", "is", null)
+        .ilike("email", "%@minhacasafinanciada%");
+
+      const SDR_LIST_DYNAMIC = (tvSdrs || []).map(p => ({
+        nome: p.full_name || p.email?.split('@')[0] || 'SDR',
+        email: p.email || ''
+      })).filter(s => s.email);
+
+      console.log('[TV-SDR] SDRs visíveis na TV:', SDR_LIST_DYNAMIC.length);
 
       // 1. Buscar contratos pagos do HUBLA (fonte primária)
       const { data: hublaSourceContracts } = await supabase
@@ -226,7 +241,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
           
           if (r1Event) {
             const sdrEmail = (r1Event.event_data as any)?.deal_user;
-            if (sdrEmail && SDR_LIST.some(sdr => sdr.email === sdrEmail)) {
+            if (sdrEmail && SDR_LIST_DYNAMIC.some(sdr => sdr.email === sdrEmail)) {
               sdrIntermediacao.set(sdrEmail, (sdrIntermediacao.get(sdrEmail) || 0) + 1);
             }
           }
@@ -248,8 +263,8 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       }
 
       // 4. Buscar Novos Leads via RPC dedicada (conta leads genuinamente novos)
-      // Filtrar apenas emails da SDR_LIST para consistência com a tabela
-      const sdrEmails = SDR_LIST.map(sdr => sdr.email.toLowerCase());
+      // Filtrar apenas emails dos SDRs visíveis na TV
+      const sdrEmails = SDR_LIST_DYNAMIC.map(sdr => sdr.email.toLowerCase());
       const { data: novoLeadRpc, error: novoLeadError } = await supabase
         .rpc('get_novo_lead_count', { target_date: today, valid_emails: sdrEmails });
 
@@ -322,7 +337,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       const totalNovoLeadMeta = dailyTargetMap.get(PIPELINE_STAGES.NOVO_LEAD) || 80;
 
       // 5. Calcular métricas por SDR usando dados da RPC
-      const sdrsData: SdrData[] = SDR_LIST.map((sdr) => {
+      const sdrsData: SdrData[] = SDR_LIST_DYNAMIC.map((sdr) => {
         const rpcMetrics = rpcMetricsMap.get(sdr.email);
         
         // Novo Lead: buscar da RPC get_novo_lead_count

@@ -3155,6 +3155,7 @@ export type Database = {
           full_name: string | null
           id: string
           last_login_at: string | null
+          show_on_tv: boolean | null
           squad: string | null
           updated_at: string | null
           whatsapp_signature: string | null
@@ -3168,6 +3169,7 @@ export type Database = {
           full_name?: string | null
           id: string
           last_login_at?: string | null
+          show_on_tv?: boolean | null
           squad?: string | null
           updated_at?: string | null
           whatsapp_signature?: string | null
@@ -3181,6 +3183,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           last_login_at?: string | null
+          show_on_tv?: boolean | null
           squad?: string | null
           updated_at?: string | null
           whatsapp_signature?: string | null
