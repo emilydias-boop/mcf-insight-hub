@@ -181,20 +181,13 @@ export const KpiEditForm = ({
         
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            {/* Campo: Reuniões Agendadas - Manual para override months */}
+            {/* Campo: Reuniões Agendadas - Editável */}
             <div className="space-y-1">
               <Label htmlFor="reunioes_agendadas" className="flex items-center gap-1.5 text-xs">
                 Reuniões Agendadas
-                {isManualOverrideMonth ? (
-                  <Badge variant="outline" className="text-[10px] h-4 border-orange-500 text-orange-500">
-                    Manual
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary" className="text-[10px] h-4">
-                    <Zap className="h-2.5 w-2.5 mr-0.5" />
-                    Auto
-                  </Badge>
-                )}
+                <Badge variant="outline" className="text-[10px] h-4 border-blue-500 text-blue-500">
+                  Editável
+                </Badge>
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
                 Meta: {metaAgendadasCalculada} ({sdrMetaDiaria}/dia × {diasUteisMes} dias)
@@ -204,27 +197,19 @@ export const KpiEditForm = ({
                 type="number"
                 min="0"
                 value={formData.reunioes_agendadas}
-                readOnly={!isManualOverrideMonth}
-                onChange={isManualOverrideMonth ? (e) => handleChange('reunioes_agendadas', e.target.value) : undefined}
+                onChange={(e) => handleChange('reunioes_agendadas', e.target.value)}
                 disabled={disabled}
-                className={cn("h-8 text-sm", isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50")}
+                className="h-8 text-sm"
               />
             </div>
 
-            {/* Campo: Reuniões Realizadas - Manual para override months */}
+            {/* Campo: Reuniões Realizadas - Editável */}
             <div className="space-y-1">
               <Label htmlFor="reunioes_realizadas" className="flex items-center gap-1.5 text-xs">
                 Reuniões Realizadas
-                {isManualOverrideMonth ? (
-                  <Badge variant="outline" className="text-[10px] h-4 border-orange-500 text-orange-500">
-                    Manual
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary" className="text-[10px] h-4">
-                    <Zap className="h-2.5 w-2.5 mr-0.5" />
-                    Auto
-                  </Badge>
-                )}
+                <Badge variant="outline" className="text-[10px] h-4 border-blue-500 text-blue-500">
+                  Editável
+                </Badge>
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
                 Meta: {Math.round(formData.reunioes_agendadas * 0.7)} (70% de {formData.reunioes_agendadas} agendadas)
@@ -234,27 +219,19 @@ export const KpiEditForm = ({
                 type="number"
                 min="0"
                 value={formData.reunioes_realizadas}
-                readOnly={!isManualOverrideMonth}
-                onChange={isManualOverrideMonth ? (e) => handleChange('reunioes_realizadas', e.target.value) : undefined}
+                onChange={(e) => handleChange('reunioes_realizadas', e.target.value)}
                 disabled={disabled}
-                className={cn("h-8 text-sm", isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50")}
+                className="h-8 text-sm"
               />
             </div>
 
-            {/* Campo: No-Shows - Manual para override months */}
+            {/* Campo: No-Shows - Editável */}
             <div className="space-y-1">
               <Label htmlFor="no_shows" className="flex items-center gap-1.5 text-xs">
                 No-Shows
-                {isManualOverrideMonth ? (
-                  <Badge variant="outline" className="text-[10px] h-4 border-orange-500 text-orange-500">
-                    Manual
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary" className="text-[10px] h-4">
-                    <Zap className="h-2.5 w-2.5 mr-0.5" />
-                    Auto
-                  </Badge>
-                )}
+                <Badge variant="outline" className="text-[10px] h-4 border-blue-500 text-blue-500">
+                  Editável
+                </Badge>
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
                 Taxa: {taxaNoShow}% / Max: 30%
@@ -264,10 +241,9 @@ export const KpiEditForm = ({
                 type="number"
                 min="0"
                 value={formData.no_shows}
-                readOnly={!isManualOverrideMonth}
-                onChange={isManualOverrideMonth ? (e) => handleChange('no_shows', e.target.value) : undefined}
+                onChange={(e) => handleChange('no_shows', e.target.value)}
                 disabled={disabled}
-                className={cn("h-8 text-sm", isManualOverrideMonth ? "border-orange-500/50" : "bg-muted/50")}
+                className="h-8 text-sm"
               />
             </div>
 
