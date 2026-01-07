@@ -251,49 +251,41 @@ serve(async (req) => {
           continue;
         }
 
-        // ===== ATUALIZAR sdr_month_kpi COM DADOS DA RPC =====
+        // ===== BUSCAR KPI EXISTENTE (NÃO SOBRESCREVER VALORES MANUAIS) =====
         const { data: existingKpi } = await supabase
           .from('sdr_month_kpi')
-          .select('id, tentativas_ligacoes, score_organizacao')
+          .select('*')
           .eq('sdr_id', sdr.id)
           .eq('ano_mes', ano_mes)
           .maybeSingle();
 
-        const kpiData = {
-          sdr_id: sdr.id,
-          ano_mes: ano_mes,
-          reunioes_agendadas: reunioesAgendadas,
-          no_shows: noShows,
-          reunioes_realizadas: reunioesRealizadas,
-          taxa_no_show: taxaNoShow,
-          // Preservar tentativas e organização se já existirem
-          tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
-          score_organizacao: existingKpi?.score_organizacao || 0,
-          updated_at: new Date().toISOString(),
-        };
-
         let kpi;
         if (existingKpi) {
-          const { data: updatedKpi, error: updateError } = await supabase
-            .from('sdr_month_kpi')
-            .update(kpiData)
-            .eq('id', existingKpi.id)
-            .select()
-            .single();
-          
-          if (updateError) {
-            console.error(`   ❌ Erro ao atualizar KPI: ${updateError.message}`);
-            errors++;
-            continue;
-          }
-          kpi = updatedKpi;
+          // KPI já existe - usar os valores do banco (respeita edições manuais)
+          console.log(`   📊 Usando KPI existente (valores manuais preservados):`, {
+            reunioes_agendadas: existingKpi.reunioes_agendadas,
+            reunioes_realizadas: existingKpi.reunioes_realizadas,
+            no_shows: existingKpi.no_shows,
+          });
+          kpi = existingKpi;
         } else {
+          // KPI não existe - criar com dados da RPC
+          const kpiData = {
+            sdr_id: sdr.id,
+            ano_mes: ano_mes,
+            reunioes_agendadas: reunioesAgendadas,
+            no_shows: noShows,
+            reunioes_realizadas: reunioesRealizadas,
+            taxa_no_show: taxaNoShow,
+            tentativas_ligacoes: 0,
+            score_organizacao: 0,
+            intermediacoes_contrato: 0,
+            updated_at: new Date().toISOString(),
+          };
+
           const { data: newKpi, error: createError } = await supabase
             .from('sdr_month_kpi')
-            .insert({
-              ...kpiData,
-              intermediacoes_contrato: 0,
-            })
+            .insert(kpiData)
             .select()
             .single();
           
@@ -303,6 +295,7 @@ serve(async (req) => {
             continue;
           }
           kpi = newKpi;
+          console.log(`   📊 Novo KPI criado com dados da RPC`);
         }
 
         console.log(`   📊 KPI atualizado para ${sdr.name}:`, {
