@@ -63,7 +63,6 @@ export interface SdrMonthKpi {
   no_shows: number;
   intermediacoes_contrato: number;
   taxa_no_show: number | null;
-  modo_entrada?: 'auto' | 'manual';
   created_at: string;
   updated_at: string;
 }

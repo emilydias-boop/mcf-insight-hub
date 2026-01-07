@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.83.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.83.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -169,8 +169,8 @@ serve(async (req) => {
     const calendarIfoodMensal = calendarData?.ifood_mensal_calculado ?? null;
     console.log(`📅 Calendário ${ano_mes}: iFood Mensal = ${calendarIfoodMensal ?? 'não definido'}`);
 
-    // Get SDRs to process (with email and meta_diaria for RPC call)
-    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria').eq('active', true);
+    // Get SDRs to process (with email for RPC call)
+    let sdrsQuery = supabase.from('sdr').select('id, name, email').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
@@ -201,47 +201,13 @@ serve(async (req) => {
       try {
         console.log(`   ⏳ Processando SDR: ${sdr.name} (${sdr.id})`);
 
-        // Get comp plan first
-        const { data: compPlan, error: compError } = await supabase
-          .from('sdr_comp_plan')
-          .select('*')
-          .eq('sdr_id', sdr.id)
-          .lte('vigencia_inicio', monthStart)
-          .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
-          .order('vigencia_inicio', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (compError || !compPlan) {
-          console.log(`   ⚠️ Plano de compensação não encontrado para ${sdr.name}`);
-          continue;
-        }
-
-        // ===== BUSCAR KPI EXISTENTE PARA VERIFICAR MODO =====
-        const { data: existingKpi } = await supabase
-          .from('sdr_month_kpi')
-          .select('*')
-          .eq('sdr_id', sdr.id)
-          .eq('ano_mes', ano_mes)
-          .maybeSingle();
-
-        const isManualMode = existingKpi?.modo_entrada === 'manual';
-        
+        // ===== USAR RPC get_sdr_metrics_v2 PARA CONSISTÊNCIA =====
         let reunioesAgendadas = 0;
         let noShows = 0;
         let reunioesRealizadas = 0;
         let taxaNoShow = 0;
 
-        if (isManualMode && existingKpi) {
-          // ===== MODO MANUAL: PRESERVAR VALORES DO KPI EXISTENTE =====
-          reunioesAgendadas = existingKpi.reunioes_agendadas || 0;
-          noShows = existingKpi.no_shows || 0;
-          reunioesRealizadas = existingKpi.reunioes_realizadas || 0;
-          taxaNoShow = existingKpi.taxa_no_show || 0;
-          console.log(`   📝 Modo Manual: usando valores do KPI existente para ${sdr.name}`);
-          console.log(`   📊 Valores manuais: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
-        } else if (sdr.email) {
-          // ===== MODO AUTO: BUSCAR DA RPC =====
+        if (sdr.email) {
           const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
             start_date: monthStart,
             end_date: monthEnd,
@@ -265,7 +231,30 @@ serve(async (req) => {
           console.log(`   ⚠️ SDR ${sdr.name} não tem email configurado`);
         }
 
-        // ===== ATUALIZAR/CRIAR KPI =====
+        // Get comp plan
+        const { data: compPlan, error: compError } = await supabase
+          .from('sdr_comp_plan')
+          .select('*')
+          .eq('sdr_id', sdr.id)
+          .lte('vigencia_inicio', monthStart)
+          .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
+          .order('vigencia_inicio', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (compError || !compPlan) {
+          console.log(`   ⚠️ Plano de compensação não encontrado para ${sdr.name}`);
+          continue;
+        }
+
+        // ===== ATUALIZAR sdr_month_kpi COM DADOS DA RPC =====
+        const { data: existingKpi } = await supabase
+          .from('sdr_month_kpi')
+          .select('id, tentativas_ligacoes, score_organizacao')
+          .eq('sdr_id', sdr.id)
+          .eq('ano_mes', ano_mes)
+          .maybeSingle();
+
         const kpiData = {
           sdr_id: sdr.id,
           ano_mes: ano_mes,
@@ -276,8 +265,6 @@ serve(async (req) => {
           // Preservar tentativas e organização se já existirem
           tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
           score_organizacao: existingKpi?.score_organizacao || 0,
-          // Preservar modo_entrada
-          modo_entrada: existingKpi?.modo_entrada || 'auto',
           updated_at: new Date().toISOString(),
         };
 
@@ -335,25 +322,9 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = interCount;
         }
 
-        // ===== CALCULAR META BASEADA EM META_DIARIA =====
-        const metaDiaria = sdr.meta_diaria || 0;
-        const diasUteisPlano = compPlan.dias_uteis || 22;
-        const diasUteisMes = calendarData?.dias_uteis_final ?? diasUteisPlano;
-        
-        // Calcular meta mensal baseada na meta diária
-        let metaReunioesBase = compPlan.meta_reunioes_agendadas;
-        if (metaDiaria > 0) {
-          metaReunioesBase = metaDiaria * diasUteisPlano;
-          console.log(`   📋 Meta diária ${sdr.name}: ${metaDiaria} × ${diasUteisPlano} dias = ${metaReunioesBase} reuniões/mês`);
-        }
-        
-        // Criar cópia do compPlan com meta calculada
-        const compPlanAjustado = {
-          ...compPlan,
-          meta_reunioes_agendadas: metaReunioesBase,
-        };
-        
-        const calculatedValues = calculatePayoutValues(compPlanAjustado as CompPlan, kpi as Kpi, calendarIfoodMensal, diasUteisMes);
+        // Calculate values - passa dias_uteis_final do calendário para ajuste proporcional
+        const diasUteisMes = calendarData?.dias_uteis_final ?? null;
+        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, calendarIfoodMensal, diasUteisMes);
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
           pct_agendadas: calculatedValues.pct_reunioes_agendadas.toFixed(1),

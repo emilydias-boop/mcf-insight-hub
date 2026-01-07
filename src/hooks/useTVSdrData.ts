@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { INSIDE_SALES_ORIGIN_ID, PIPELINE_STAGES } from "@/constants/team";
+import { INSIDE_SALES_ORIGIN_ID, SDR_LIST, PIPELINE_STAGES } from "@/constants/team";
 import { startOfDay, endOfDay } from "date-fns";
 
 // Funções isDealCreatedToday e getLeadType foram movidas para RPCs do banco
@@ -91,21 +91,6 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       const todayEndBrazil = new Date(todayStartBrazil);
       todayEndBrazil.setDate(todayEndBrazil.getDate() + 1);
 
-      // 0. Buscar SDRs visíveis na TV do banco (em vez de SDR_LIST hardcoded)
-      const { data: tvSdrs } = await supabase
-        .from("profiles")
-        .select("email, full_name")
-        .eq("show_on_tv", true)
-        .not("email", "is", null)
-        .ilike("email", "%@minhacasafinanciada%");
-
-      const SDR_LIST_DYNAMIC = (tvSdrs || []).map(p => ({
-        nome: p.full_name || p.email?.split('@')[0] || 'SDR',
-        email: p.email || ''
-      })).filter(s => s.email);
-
-      console.log('[TV-SDR] SDRs visíveis na TV:', SDR_LIST_DYNAMIC.length);
-
       // 1. Buscar contratos pagos do HUBLA (fonte primária)
       const { data: hublaSourceContracts } = await supabase
         .from("hubla_transactions")
@@ -187,12 +172,15 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       console.log('[TV-SDR] Contratos após dedup por email:', uniqueHublaContracts.length, 'de', hublaContracts.length);
 
       // Contar contratos por tipo de lead (usando VALOR)
-      const contratosLeadA = uniqueHublaContracts.filter(c => {
-        const leadType = getLeadTypeFromHubla(c.product_name, c.product_price);
-        return leadType === 'A' || leadType === 'B'; // Contar ambos como Lead A
-      }).length || 0;
+      const contratosLeadA = uniqueHublaContracts.filter(c => 
+        getLeadTypeFromHubla(c.product_name, c.product_price) === 'A'
+      ).length || 0;
 
-      console.log('[TV-SDR] Hubla contracts - Total:', contratosLeadA);
+      const contratosLeadB = uniqueHublaContracts.filter(c => 
+        getLeadTypeFromHubla(c.product_name, c.product_price) === 'B'
+      ).length || 0;
+
+      console.log('[TV-SDR] Hubla contracts - Lead A:', contratosLeadA, 'Lead B:', contratosLeadB, 'Total único:', uniqueHublaContracts.length);
 
       // 2. Rastrear SDR original usando APENAS emails dos contratos únicos
       const hublaEmails = uniqueHublaContracts.map(c => c.customer_email).filter(Boolean) as string[];
@@ -241,7 +229,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
           
           if (r1Event) {
             const sdrEmail = (r1Event.event_data as any)?.deal_user;
-            if (sdrEmail && SDR_LIST_DYNAMIC.some(sdr => sdr.email === sdrEmail)) {
+            if (sdrEmail && SDR_LIST.some(sdr => sdr.email === sdrEmail)) {
               sdrIntermediacao.set(sdrEmail, (sdrIntermediacao.get(sdrEmail) || 0) + 1);
             }
           }
@@ -250,9 +238,9 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       console.log('[TV-SDR] Intermediações por SDR:', Array.from(sdrIntermediacao.entries()));
 
-      // 3. USAR RPC get_sdr_metrics_v3 (corrigida: usa data do deal para atividades reprocessadas)
+      // 3. USAR RPC get_sdr_metrics_v2 (mesma que Relatórios usam)
       const { data: sdrMetricsRpc, error: rpcError } = await supabase
-        .rpc('get_sdr_metrics_v3', { 
+        .rpc('get_sdr_metrics_v2', { 
           start_date: today,
           end_date: today,
           sdr_email_filter: null
@@ -263,8 +251,8 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       }
 
       // 4. Buscar Novos Leads via RPC dedicada (conta leads genuinamente novos)
-      // Filtrar apenas emails dos SDRs visíveis na TV
-      const sdrEmails = SDR_LIST_DYNAMIC.map(sdr => sdr.email.toLowerCase());
+      // Filtrar apenas emails da SDR_LIST para consistência com a tabela
+      const sdrEmails = SDR_LIST.map(sdr => sdr.email.toLowerCase());
       const { data: novoLeadRpc, error: novoLeadError } = await supabase
         .rpc('get_novo_lead_count', { target_date: today, valid_emails: sdrEmails });
 
@@ -297,14 +285,14 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         reagendamento: number;
       }>();
       
-      // get_sdr_metrics_v3 retorna um array diretamente
-      if (sdrMetricsRpc && Array.isArray(sdrMetricsRpc)) {
-        (sdrMetricsRpc as any[]).forEach((m: any) => {
+      const metricsResult = sdrMetricsRpc as unknown as { metrics: any[] };
+      if (metricsResult?.metrics && Array.isArray(metricsResult.metrics)) {
+        metricsResult.metrics.forEach((m: any) => {
           if (m.sdr_email) {
             rpcMetricsMap.set(m.sdr_email, {
               r1_agendada: m.total_agendamentos || 0,
-              r1_realizada: m.r1_realizada || 0,
-              no_show: m.no_show || 0,
+              r1_realizada: m.realizadas || 0,
+              no_show: m.no_shows || 0,
               primeiro_agendamento: m.primeiro_agendamento || 0,
               reagendamento: m.reagendamento || 0,
             });
@@ -337,7 +325,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
       const totalNovoLeadMeta = dailyTargetMap.get(PIPELINE_STAGES.NOVO_LEAD) || 80;
 
       // 5. Calcular métricas por SDR usando dados da RPC
-      const sdrsData: SdrData[] = SDR_LIST_DYNAMIC.map((sdr) => {
+      const sdrsData: SdrData[] = SDR_LIST.map((sdr) => {
         const rpcMetrics = rpcMetricsMap.get(sdr.email);
         
         // Novo Lead: buscar da RPC get_novo_lead_count
@@ -396,14 +384,20 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       // Processar resultado da RPC do funil
       const stageCountsA = new Map<string, number>();
+      const stageCountsB = new Map<string, number>();
       
       if (Array.isArray(funnelMetricsRpc)) {
         funnelMetricsRpc.forEach((m: any) => {
-          stageCountsA.set(m.stage_name, (stageCountsA.get(m.stage_name) || 0) + (m.unique_leads || 0));
+          if (m.lead_type === 'A') {
+            stageCountsA.set(m.stage_name, m.unique_leads || 0);
+          } else if (m.lead_type === 'B') {
+            stageCountsB.set(m.stage_name, m.unique_leads || 0);
+          }
         });
       }
 
-      console.log('[TV-SDR] Funnel RPC:', Array.from(stageCountsA.entries()));
+      console.log('[TV-SDR] Funnel RPC - Lead A:', Array.from(stageCountsA.entries()));
+      console.log('[TV-SDR] Funnel RPC - Lead B:', Array.from(stageCountsB.entries()));
 
       const funnelStages = [
         PIPELINE_STAGES.R1_AGENDADA,
@@ -421,11 +415,19 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         meta: dailyTargetMap.get(stageName) || 0,
       }));
 
+      const funnelDataB = funnelStages.map((stageName) => ({
+        etapa: stageName,
+        // Usar Hubla para Contrato Pago, Clint para outras etapas
+        leads: stageName === PIPELINE_STAGES.CONTRATO_PAGO 
+          ? contratosLeadB 
+          : stageCountsB.get(stageName) || 0,
+        meta: Math.round((dailyTargetMap.get(stageName) || 0) * 0.6),
+      }));
+
       console.log('[TV-SDR] Final data:', {
         totalNovoLead: totalNovoLeadCount,
         topSdrs: topSdrs.length,
         allSdrs: sdrsData.length,
-        funnelDataA,
       });
 
       return {
@@ -434,6 +436,7 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
           meta: totalNovoLeadMeta,
         },
         funnelDataA,
+        funnelDataB,
         topSdrs,
         allSdrs: sdrsData,
         dealsWithoutCloser,

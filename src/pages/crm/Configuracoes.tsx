@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings, Users, Zap, Database, Shield, Upload, FileText, History } from 'lucide-react';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
-import { FailedWebhooksMonitor } from '@/components/crm/FailedWebhooksMonitor';
 import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
 import { WhatsAppConfigCard } from '@/components/whatsapp/WhatsAppConfigCard';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,11 +46,7 @@ const ConfiguracoesContent = () => {
 
   return (
     <div className="space-y-6">
-      {/* Webhook Monitors - side by side */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <WebhookMonitor />
-        <FailedWebhooksMonitor />
-      </div>
+      <WebhookMonitor />
 
       {/* WhatsApp Z-API Configuration */}
       <WhatsAppConfigCard />

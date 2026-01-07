@@ -61,39 +61,22 @@ serve(async (req) => {
       const url = new URL(req.url);
       const urlAll = url.searchParams.get('all') === 'true';
       const body = await req.json().catch(() => ({}));
-      const { webhook_id, webhook_ids, dry_run = false, all: bodyAll, days_back = 7, year_month } = body;
+      const { webhook_id, webhook_ids, dry_run = false, all: bodyAll, days_back = 7 } = body;
       
       // Accept 'all' from querystring OR body
       const reprocessAll = urlAll || bodyAll === true;
 
-      console.log(`[reprocess] Request received - urlAll: ${urlAll}, bodyAll: ${bodyAll}, reprocessAll: ${reprocessAll}, days_back: ${days_back}, year_month: ${year_month}`);
+      console.log(`[reprocess] Request received - urlAll: ${urlAll}, bodyAll: ${bodyAll}, reprocessAll: ${reprocessAll}, days_back: ${days_back}`);
 
       let webhooksToProcess = [];
 
-      if (reprocessAll || year_month) {
-        let query = supabase
+      if (reprocessAll) {
+        const { data, error } = await supabase
           .from('webhook_events')
           .select('*')
-          .eq('status', 'error');
-        
-        // If year_month is provided, filter by that specific month
-        if (year_month) {
-          const [year, month] = year_month.split('-');
-          const startDate = `${year}-${month}-01T00:00:00.000Z`;
-          const nextMonth = parseInt(month) === 12 ? 1 : parseInt(month) + 1;
-          const nextYear = parseInt(month) === 12 ? parseInt(year) + 1 : parseInt(year);
-          const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000Z`;
-          
-          console.log(`[reprocess] Filtering by month: ${startDate} to ${endDate}`);
-          query = query.gte('created_at', startDate).lt('created_at', endDate);
-        } else {
-          // Use days_back filter
-          query = query.gte('created_at', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString());
-        }
-        
-        const { data, error } = await query
-          .order('created_at', { ascending: true })
-          .limit(500);
+          .eq('status', 'error')
+          .gte('created_at', new Date(Date.now() - days_back * 24 * 60 * 60 * 1000).toISOString())
+          .limit(50);
         if (error) throw error;
         webhooksToProcess = data || [];
       } else if (webhook_ids && Array.isArray(webhook_ids)) {
@@ -379,17 +362,8 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
       }
 
       // owner_id armazena o email diretamente (campo TEXT)
-      // Tentar múltiplos caminhos para extrair o email do SDR
-      const ownerId = eventData.deal_user || 
-                      deal.user_email || 
-                      deal.owner_email || 
-                      eventData.responsible_email ||
-                      eventData.assigned_to ||
-                      deal.responsible?.email ||
-                      deal.user?.email ||
-                      eventData.user?.email ||
-                      null;
-      console.log(`[reprocess] Owner email extracted: ${ownerId}`);
+      const ownerId = eventData.deal_user || deal.user_email || deal.owner_email || null;
+      console.log(`[reprocess] Owner email: ${ownerId}`);
 
       const newDealData = {
         clint_id: dealClintId,
@@ -427,19 +401,6 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
   const toStage = eventData.to_stage || eventData.stage_to || eventData.deal_stage || deal?.stage;
 
   if (toStage && dealId && !dryRun) {
-    // Extrair owner_email para incluir no metadata da atividade (importante para métricas de SDR)
-    const ownerEmail = eventData.deal_user || 
-                       deal.user_email || 
-                       deal.owner_email || 
-                       eventData.responsible_email ||
-                       eventData.assigned_to ||
-                       deal.responsible?.email ||
-                       deal.user?.email ||
-                       eventData.user?.email ||
-                       null;
-    
-    console.log(`[reprocess] Creating activity with owner_email: ${ownerEmail}`);
-
     const { error: activityError } = await supabase
       .from('deal_activities')
       .insert({
@@ -450,9 +411,7 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
         description: `Reprocessado: ${fromStage || 'N/A'} → ${toStage}`,
         metadata: {
           reprocessed: true,
-          original_webhook_created_at: eventData.created_at || new Date().toISOString(),
-          owner_email: ownerEmail,
-          deal_user: ownerEmail
+          original_webhook_created_at: eventData.created_at || new Date().toISOString()
         }
       });
 

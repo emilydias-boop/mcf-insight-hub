@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,13 +58,13 @@ Deno.serve(async (req) => {
 
     console.log(`Período: ${monthStart} até ${monthEnd}`)
 
-    // ===== USAR RPC get_sdr_metrics_v3 (SEM FILTRO RESTRITIVO DE from_stage) =====
+    // ===== USAR RPC get_sdr_metrics_v2 PARA CONSISTÊNCIA =====
     let reunioesAgendadas = 0
     let noShows = 0
     let reunioesRealizadas = 0
     let taxaNoShow = 0
 
-    const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v3', {
+    const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
       start_date: monthStart,
       end_date: monthEnd,
       sdr_email_filter: sdr.email
@@ -78,20 +78,16 @@ Deno.serve(async (req) => {
       )
     }
 
-    // get_sdr_metrics_v3 retorna um array diretamente, não { metrics: [...] }
-    if (metricsData && Array.isArray(metricsData) && metricsData.length > 0) {
-      const metrics = metricsData[0]
+    if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
+      const metrics = metricsData.metrics[0]
       reunioesAgendadas = metrics.total_agendamentos || 0
-      noShows = metrics.no_show || 0  // campo correto é no_show
-      reunioesRealizadas = metrics.r1_realizada || 0  // campo correto é r1_realizada
+      noShows = metrics.no_shows || 0
+      reunioesRealizadas = metrics.realizadas || 0
+      taxaNoShow = metrics.taxa_no_show || 0
       
-      // Calcular taxa de no-show
-      const totalMeetings = reunioesAgendadas + noShows
-      taxaNoShow = totalMeetings > 0 ? (noShows / totalMeetings) * 100 : 0
-      
-      console.log(`📊 Métricas da RPC: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}, Taxa No-Show=${taxaNoShow.toFixed(1)}%`)
+      console.log(`📊 Métricas da RPC: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`)
     } else {
-      console.log('⚠️ Nenhuma métrica encontrada na RPC, metricsData:', JSON.stringify(metricsData))
+      console.log('⚠️ Nenhuma métrica encontrada na RPC')
     }
 
     // ========== INTERMEDIAÇÕES AUTOMÁTICAS ==========
@@ -186,50 +182,13 @@ Deno.serve(async (req) => {
     // Verificar se já existe KPI e preservar tentativas/organização
     const { data: existingKpi, error: kpiCheckError } = await supabase
       .from('sdr_month_kpi')
-      .select('id, tentativas_ligacoes, score_organizacao, modo_entrada')
+      .select('id, tentativas_ligacoes, score_organizacao')
       .eq('sdr_id', sdr_id)
       .eq('ano_mes', ano_mes)
       .maybeSingle()
 
     if (kpiCheckError) {
       console.error('Erro ao verificar KPI existente:', kpiCheckError)
-    }
-
-    // Se modo_entrada = 'manual', não sobrescrever os valores de KPI automáticos
-    const isManualMode = existingKpi?.modo_entrada === 'manual'
-    
-    if (isManualMode) {
-      console.log('⚠️ Modo manual ativo - não sobrescrevendo valores de KPI')
-      
-      // Apenas atualizar intermediações
-      const { error: updateError } = await supabase
-        .from('sdr_month_kpi')
-        .update({
-          intermediacoes_contrato: totalIntermediacoes || 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingKpi.id)
-      
-      if (updateError) {
-        console.error('Erro ao atualizar intermediações:', updateError)
-      }
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Modo manual ativo - apenas intermediações atualizadas',
-          kpi: existingKpi,
-          stats: {
-            reunioes_agendadas: reunioesAgendadas,
-            no_shows: noShows,
-            reunioes_realizadas: reunioesRealizadas,
-            taxa_no_show: taxaNoShow,
-            intermediacoes_contrato: totalIntermediacoes || 0,
-            manual_mode: true,
-          }
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
     }
 
     const kpiData = {
@@ -243,7 +202,6 @@ Deno.serve(async (req) => {
       // Preservar tentativas e organização se já existirem
       tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
       score_organizacao: existingKpi?.score_organizacao || 0,
-      modo_entrada: 'auto',
       updated_at: new Date().toISOString(),
     }
 

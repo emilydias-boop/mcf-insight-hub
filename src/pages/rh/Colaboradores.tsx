@@ -8,17 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Search, Users, UserCheck, Clock, FileWarning, Link } from 'lucide-react';
-import { differenceInDays } from 'date-fns';
+import { Plus, Search, Users, UserCheck, Clock, FileWarning } from 'lucide-react';
+import { format, differenceInDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import EmployeeDrawer from '@/components/hr/EmployeeDrawer';
 import EmployeeFormDialog from '@/components/hr/EmployeeFormDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { useAutoLinkCargos } from '@/hooks/useFechamentoGenerico';
 
 export default function Colaboradores() {
   const { data: employees, isLoading } = useEmployees();
-  const autoLinkCargos = useAutoLinkCargos();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [cargoFilter, setCargoFilter] = useState<string>('all');
@@ -136,20 +135,10 @@ export default function Colaboradores() {
           <h1 className="text-2xl font-bold">Colaboradores</h1>
           <p className="text-muted-foreground">Gestão de fichas de RH</p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={() => autoLinkCargos.mutate()}
-            disabled={autoLinkCargos.isPending}
-          >
-            <Link className="h-4 w-4 mr-2" />
-            {autoLinkCargos.isPending ? 'Vinculando...' : 'Auto-vincular Cargos'}
-          </Button>
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Colaborador
-          </Button>
-        </div>
+        <Button onClick={() => setFormOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Novo Colaborador
+        </Button>
       </div>
 
       {/* Stats Cards */}

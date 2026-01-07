@@ -60,6 +60,7 @@ export default function TVSdrFullscreen() {
       <TVContent
         totalNovoLead={data?.totalNovoLead || { valor: 0, meta: 560 }}
         funnelDataA={data?.funnelDataA || []}
+        funnelDataB={data?.funnelDataB || []}
         topSdrs={data?.topSdrs || []}
         allSdrs={data?.allSdrs || []}
         isLoading={isLoading}

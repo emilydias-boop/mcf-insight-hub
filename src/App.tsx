@@ -54,18 +54,12 @@ import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import TVSdrPerformance from "./pages/TVSdrPerformance";
 import TVSdrFullscreen from "./pages/TVSdrFullscreen";
 import TVSdrCelebrationDemo from "./pages/TVSdrCelebrationDemo";
-import TVSdrConfiguracoes from "./pages/tv-sdr/Configuracoes";
 import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
 import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
 import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
 import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import RHColaboradores from "./pages/rh/Colaboradores";
-import RHCargos from "./pages/rh/Cargos";
-import RHReguas from "./pages/rh/Reguas";
-import RHMetas from "./pages/rh/Metas";
-import RHFechamento from "./pages/rh/Fechamento";
-import RHAuditoria from "./pages/rh/AuditoriaFechamentos";
 import Financeiro from "./pages/Financeiro";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
@@ -131,18 +125,12 @@ const App = () => (
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
               <Route path="tv-sdr" element={<ResourceGuard resource="tv_sdr"><TVSdrPerformance /></ResourceGuard>} />
-              <Route path="tv-sdr/configuracoes" element={<ResourceGuard resource="tv_sdr"><TVSdrConfiguracoes /></ResourceGuard>} />
               <Route path="fechamento-sdr" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard>} />
               <Route path="fechamento-sdr/configuracoes" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard>} />
               <Route path="fechamento-sdr/:payoutId" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRDetail /></ResourceGuard>} />
               <Route path="meu-fechamento" element={<ResourceGuard resource="fechamento_sdr"><MeuFechamento /></ResourceGuard>} />
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
-              <Route path="rh/cargos" element={<ResourceGuard resource={"rh" as any}><RHCargos /></ResourceGuard>} />
-              <Route path="rh/reguas" element={<ResourceGuard resource={"rh" as any}><RHReguas /></ResourceGuard>} />
-              <Route path="rh/metas" element={<ResourceGuard resource={"rh" as any}><RHMetas /></ResourceGuard>} />
-              <Route path="rh/fechamento" element={<ResourceGuard resource={"rh" as any}><RHFechamento /></ResourceGuard>} />
-              <Route path="rh/auditoria" element={<ResourceGuard resource={"rh" as any}><RHAuditoria /></ResourceGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="sdr/minhas-reunioes" element={<ResourceGuard resource="crm"><MinhasReunioes /></ResourceGuard>} />

@@ -123,20 +123,7 @@ const menuItems: MenuItem[] = [
   { title: "Produtos", url: "/produtos", icon: Package, requiredRoles: ['admin', 'manager', 'coordenador'] },
   
   // RH (para admin/rh)
-  { 
-    title: "RH", 
-    icon: Building2, 
-    resource: "rh" as any, 
-    requiredRoles: ['admin', 'rh'],
-    items: [
-      { title: "Colaboradores", url: "/rh/colaboradores" },
-      { title: "Cargos", url: "/rh/cargos" },
-      { title: "Réguas", url: "/rh/reguas" },
-      { title: "Metas", url: "/rh/metas" },
-      { title: "Fechamento Mensal", url: "/rh/fechamento" },
-      { title: "Auditoria", url: "/rh/auditoria" },
-    ]
-  },
+  { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
   
   // Produtos separados
   { title: "Consórcio", url: "/consorcio", icon: Handshake, requiredRoles: ['admin', 'manager', 'coordenador'], requiredProducts: ['consorcio'] },

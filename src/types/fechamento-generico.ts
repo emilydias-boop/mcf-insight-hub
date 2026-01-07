@@ -114,15 +114,14 @@ export interface AuditoriaFechamento {
 
 // Labels and mappings
 export const FECHAMENTO_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  rascunho: { label: 'Rascunho', color: 'bg-yellow-500' },
-  em_revisao: { label: 'Em Revisão', color: 'bg-blue-500' },
+  aberto: { label: 'Aberto', color: 'bg-yellow-500' },
+  calculado: { label: 'Calculado', color: 'bg-blue-500' },
   aprovado: { label: 'Aprovado', color: 'bg-green-500' },
   pago: { label: 'Pago', color: 'bg-purple-500' },
 };
 
 export const PESSOA_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  rascunho: { label: 'Rascunho', color: 'bg-yellow-500' },
-  em_revisao: { label: 'Em Revisão', color: 'bg-blue-500' },
+  calculado: { label: 'Calculado', color: 'bg-blue-500' },
   aprovado: { label: 'Aprovado', color: 'bg-green-500' },
   pago: { label: 'Pago', color: 'bg-purple-500' },
 };
@@ -138,7 +137,9 @@ export const AREA_OPTIONS = [
 ];
 
 export const MODELO_VARIAVEL_OPTIONS = [
-  { value: 'fixo_puro', label: 'Fixo Puro' },
-  { value: 'score_metricas', label: 'Score Métricas (SDR)' },
-  { value: 'componentes_regua_global', label: 'Componentes + Régua Global' },
+  { value: 'nenhum', label: 'Nenhum' },
+  { value: 'pct_faturamento', label: '% sobre faturamento' },
+  { value: 'comissao_contrato', label: 'Comissão por contrato' },
+  { value: 'modelo_sdr', label: 'Modelo SDR' },
+  { value: 'componentes', label: 'Por componentes' },
 ];

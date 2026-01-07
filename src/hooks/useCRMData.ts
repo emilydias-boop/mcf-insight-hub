@@ -4,93 +4,20 @@ import { toast } from 'sonner';
 
 // ==================== STAGES ====================
 
-export const useCRMStages = (originId?: string, groupId?: string) => {
+export const useCRMStages = (originId?: string) => {
   return useQuery({
-    queryKey: ['crm-stages', originId, groupId],
+    queryKey: ['crm-stages', originId],
     queryFn: async () => {
-      // Se temos um originId específico
-      if (originId) {
-        // Verificar se é uma origin ou um group
-        const { data: origin } = await supabase
-          .from('crm_origins')
-          .select('id')
-          .eq('id', originId)
-          .maybeSingle();
-        
-        if (origin) {
-          // É uma origin específica
-          const { data, error } = await supabase
-            .from('crm_stages')
-            .select('*')
-            .eq('origin_id', originId)
-            .eq('is_active', true)
-            .order('stage_order');
-          
-          if (error) throw error;
-          return data;
-        } else {
-          // Pode ser um group_id - buscar estágios de todas origins do grupo
-          const { data: originsInGroup } = await supabase
-            .from('crm_origins')
-            .select('id')
-            .eq('group_id', originId);
-          
-          if (originsInGroup && originsInGroup.length > 0) {
-            const { data, error } = await supabase
-              .from('crm_stages')
-              .select('*')
-              .in('origin_id', originsInGroup.map(o => o.id))
-              .eq('is_active', true)
-              .order('stage_order');
-            
-            if (error) throw error;
-            
-            // Deduplicar por stage_name (manter o de menor stage_order)
-            const stageMap = new Map();
-            data.forEach((stage: any) => {
-              if (!stageMap.has(stage.stage_name) || stage.stage_order < stageMap.get(stage.stage_name).stage_order) {
-                stageMap.set(stage.stage_name, stage);
-              }
-            });
-            return Array.from(stageMap.values()).sort((a, b) => a.stage_order - b.stage_order);
-          }
-        }
-      }
-      
-      // Se temos um groupId explícito
-      if (groupId) {
-        const { data: originsInGroup } = await supabase
-          .from('crm_origins')
-          .select('id')
-          .eq('group_id', groupId);
-        
-        if (originsInGroup && originsInGroup.length > 0) {
-          const { data, error } = await supabase
-            .from('crm_stages')
-            .select('*')
-            .in('origin_id', originsInGroup.map(o => o.id))
-            .eq('is_active', true)
-            .order('stage_order');
-          
-          if (error) throw error;
-          
-          // Deduplicar
-          const stageMap = new Map();
-          data.forEach((stage: any) => {
-            if (!stageMap.has(stage.stage_name) || stage.stage_order < stageMap.get(stage.stage_name).stage_order) {
-              stageMap.set(stage.stage_name, stage);
-            }
-          });
-          return Array.from(stageMap.values()).sort((a, b) => a.stage_order - b.stage_order);
-        }
-      }
-      
-      // Sem filtro - buscar todos
-      const { data, error } = await supabase
+      let query = supabase
         .from('crm_stages')
         .select('*')
-        .eq('is_active', true)
-        .order('stage_order');
+        .eq('is_active', true);
+      
+      if (originId) {
+        query = query.eq('origin_id', originId);
+      }
+      
+      const { data, error } = await query.order('stage_order');
       
       if (error) throw error;
       return data;
@@ -290,7 +217,6 @@ interface DealFilters {
   stageId?: string;
   contactId?: string;
   ownerId?: string;
-  groupId?: string; // Novo: buscar por grupo
 }
 
 export const useCRMDeals = (filters: DealFilters = {}) => {
@@ -302,37 +228,12 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         .select(`
           *,
           crm_contacts(name, email, phone),
-          crm_origins(name, group_id),
+          crm_origins(name),
           crm_stages(stage_name, color)
         `)
-        .order('updated_at', { ascending: false })
-        .limit(5000);
+        .order('created_at', { ascending: false });
       
-      // Se temos originId, verificar se é uma origin ou um group
-      if (filters.originId) {
-        // Primeiro, verificar se existe uma origin com esse ID
-        const { data: origin } = await supabase
-          .from('crm_origins')
-          .select('id')
-          .eq('id', filters.originId)
-          .maybeSingle();
-        
-        if (origin) {
-          // É uma origin específica
-          query = query.eq('origin_id', filters.originId);
-        } else {
-          // Pode ser um group_id - buscar todas origins do grupo
-          const { data: originsInGroup } = await supabase
-            .from('crm_origins')
-            .select('id')
-            .eq('group_id', filters.originId);
-          
-          if (originsInGroup && originsInGroup.length > 0) {
-            query = query.in('origin_id', originsInGroup.map(o => o.id));
-          }
-        }
-      }
-      
+      if (filters.originId) query = query.eq('origin_id', filters.originId);
       if (filters.stageId) query = query.eq('stage_id', filters.stageId);
       if (filters.contactId) query = query.eq('contact_id', filters.contactId);
       if (filters.ownerId) query = query.eq('owner_id', filters.ownerId);
