@@ -715,3 +715,98 @@ export const useAproveFechamentoPessoa = () => {
     onError: (error: Error) => toast.error(error.message),
   });
 };
+
+// ============ AUTO-LINK CARGOS ============
+
+export const useAutoLinkCargos = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      // Mapeamento de departamento para area
+      const deptToArea: Record<string, string> = {
+        'BU - Incorporador 50K': 'Inside Sales',
+        'Consórcio': 'Consórcio',
+        'Crédito': 'Crédito',
+        'Marketing': 'Marketing',
+      };
+
+      // Mapeamento de cargo para cargo_base
+      const cargoToBase: Record<string, string> = {
+        'SDR': 'SDR',
+        'Closer': 'Closer',
+        'Coordenadora de Vendas': 'Coordenador',
+        'Coordenador': 'Coordenador',
+        'Supervisor': 'Supervisor',
+      };
+
+      // Buscar employees ativos sem cargo_catalogo_id
+      const { data: employees, error: empError } = await supabase
+        .from('employees')
+        .select('id, cargo, nivel, departamento')
+        .eq('status', 'ativo')
+        .is('cargo_catalogo_id', null);
+
+      if (empError) throw empError;
+
+      // Buscar todos os cargos do catalogo ativos
+      const { data: cargos, error: cargoError } = await supabase
+        .from('cargos_catalogo')
+        .select('id, area, cargo_base, nivel')
+        .eq('ativo', true);
+
+      if (cargoError) throw cargoError;
+
+      let linked = 0;
+      let skipped = 0;
+
+      for (const emp of employees || []) {
+        const area = deptToArea[emp.departamento || ''];
+        const cargoBase = cargoToBase[emp.cargo || ''];
+
+        if (!area || !cargoBase) {
+          skipped++;
+          continue;
+        }
+
+        // Encontrar cargo correspondente (prioriza match com nível)
+        let match = cargos?.find(c =>
+          c.area === area &&
+          c.cargo_base === cargoBase &&
+          c.nivel === emp.nivel
+        );
+
+        // Se não encontrar com nível, tenta sem nível
+        if (!match) {
+          match = cargos?.find(c =>
+            c.area === area &&
+            c.cargo_base === cargoBase &&
+            c.nivel === null
+          );
+        }
+
+        if (match) {
+          const { error: updateError } = await supabase
+            .from('employees')
+            .update({ cargo_catalogo_id: match.id })
+            .eq('id', emp.id);
+
+          if (!updateError) {
+            linked++;
+          } else {
+            skipped++;
+          }
+        } else {
+          skipped++;
+        }
+      }
+
+      return { linked, skipped };
+    },
+    onSuccess: ({ linked, skipped }) => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      toast.success(`${linked} colaboradores vinculados, ${skipped} ignorados`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+};
