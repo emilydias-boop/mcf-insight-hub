@@ -297,14 +297,14 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
         reagendamento: number;
       }>();
       
-      const metricsResult = sdrMetricsRpc as unknown as { metrics: any[] };
-      if (metricsResult?.metrics && Array.isArray(metricsResult.metrics)) {
-        metricsResult.metrics.forEach((m: any) => {
+      // get_sdr_metrics_v3 retorna um array diretamente
+      if (sdrMetricsRpc && Array.isArray(sdrMetricsRpc)) {
+        (sdrMetricsRpc as any[]).forEach((m: any) => {
           if (m.sdr_email) {
             rpcMetricsMap.set(m.sdr_email, {
               r1_agendada: m.total_agendamentos || 0,
-              r1_realizada: m.realizadas || 0,
-              no_show: m.no_shows || 0,
+              r1_realizada: m.r1_realizada || 0,
+              no_show: m.no_show || 0,
               primeiro_agendamento: m.primeiro_agendamento || 0,
               reagendamento: m.reagendamento || 0,
             });
