@@ -1067,10 +1067,29 @@ async function createDealActivity(
   toStage: string | null,
   metadata: any
 ) {
-  // PREVENÇÃO DE DUPLICATAS: Verificar se existe activity idêntica nos últimos 60 segundos
+  // PREVENÇÃO DE DUPLICATAS COM DEDUPE_KEY
+  // Gerar chave única baseada em deal_id + activity_type + to_stage + janela de 1 minuto
+  const timeWindow = Math.floor(Date.now() / 60000); // Janela de 1 minuto
+  const dedupeKey = `${dealId}-${activityType}-${toStage || 'null'}-${timeWindow}`;
+  
+  console.log('[ACTIVITY] Attempting insert with dedupe_key:', dedupeKey);
+
+  // Primeiro, verificar se já existe com a mesma dedupe_key
+  const { data: existingActivity } = await supabase
+    .from('deal_activities')
+    .select('id')
+    .eq('metadata->>dedupe_key', dedupeKey)
+    .limit(1);
+
+  if (existingActivity && existingActivity.length > 0) {
+    console.log('[ACTIVITY] DUPLICATE DETECTED via dedupe_key - Skipping insert. Existing activity:', existingActivity[0].id);
+    return;
+  }
+
+  // Também verificar por deal_id + to_stage nos últimos 60 segundos (backup check)
   const cutoffTime = new Date(Date.now() - 60 * 1000).toISOString();
   
-  const { data: existingActivity } = await supabase
+  const { data: recentActivity } = await supabase
     .from('deal_activities')
     .select('id, created_at')
     .eq('deal_id', dealId)
@@ -1079,12 +1098,13 @@ async function createDealActivity(
     .gte('created_at', cutoffTime)
     .limit(1);
 
-  if (existingActivity && existingActivity.length > 0) {
-    console.log('[ACTIVITY] DUPLICATE DETECTED - Skipping insert. Existing activity:', existingActivity[0].id);
-    console.log('[ACTIVITY] Deal:', dealId, 'Stage:', toStage, 'Within 60s of:', existingActivity[0].created_at);
-    return; // Não inserir duplicata
+  if (recentActivity && recentActivity.length > 0) {
+    console.log('[ACTIVITY] DUPLICATE DETECTED via time window - Skipping insert. Existing activity:', recentActivity[0].id);
+    console.log('[ACTIVITY] Deal:', dealId, 'Stage:', toStage, 'Within 60s of:', recentActivity[0].created_at);
+    return;
   }
 
+  // Inserir com dedupe_key no metadata
   const { error } = await supabase
     .from('deal_activities')
     .insert({
@@ -1093,14 +1113,19 @@ async function createDealActivity(
       description: description,
       from_stage: fromStage,
       to_stage: toStage,
-      metadata: metadata,
+      metadata: { ...metadata, dedupe_key: dedupeKey },
       user_id: null // Webhook, não tem usuário
     });
 
   if (error) {
+    // Se o erro for de constraint única (race condition), ignorar silenciosamente
+    if (error.code === '23505') {
+      console.log('[ACTIVITY] DUPLICATE CONSTRAINT - Another process already inserted this activity');
+      return;
+    }
     console.error('[ACTIVITY] Error creating activity:', error);
   } else {
-    console.log('[ACTIVITY] Created:', activityType, 'for deal:', dealId);
+    console.log('[ACTIVITY] Created:', activityType, 'for deal:', dealId, 'with dedupe_key:', dedupeKey);
   }
 }
 

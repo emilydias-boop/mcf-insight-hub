@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -271,6 +271,49 @@ export const useCRMDeal = (id: string) => {
       return data;
     },
     enabled: !!id,
+  });
+};
+
+// Hook para paginação infinita de deals
+interface InfiniteDealsFilters {
+  originId?: string;
+  stageId?: string;
+  searchTerm?: string;
+  pageSize?: number;
+}
+
+export const useCRMDealsInfinite = (filters: InfiniteDealsFilters = {}) => {
+  const pageSize = filters.pageSize || 100;
+  
+  return useInfiniteQuery({
+    queryKey: ['crm-deals-infinite', filters],
+    queryFn: async ({ pageParam = 0 }) => {
+      let query = supabase
+        .from('crm_deals')
+        .select(`
+          *,
+          crm_contacts(name, email, phone),
+          crm_origins(name),
+          crm_stages(stage_name, color)
+        `)
+        .order('created_at', { ascending: false })
+        .range(pageParam, pageParam + pageSize - 1);
+      
+      if (filters.originId) query = query.eq('origin_id', filters.originId);
+      if (filters.stageId) query = query.eq('stage_id', filters.stageId);
+      if (filters.searchTerm) query = query.ilike('name', `%${filters.searchTerm}%`);
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      return {
+        data: data || [],
+        nextOffset: data && data.length === pageSize ? pageParam + pageSize : undefined
+      };
+    },
+    getNextPageParam: (lastPage) => lastPage.nextOffset,
+    initialPageParam: 0,
   });
 };
 

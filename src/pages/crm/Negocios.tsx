@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, AlertCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useCRMDeals, useSyncClintData } from '@/hooks/useCRMData';
-import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
+import { useCRMDealsInfinite, useSyncClintData } from '@/hooks/useCRMData';
+import { DealKanbanBoardInfinite } from '@/components/crm/DealKanbanBoardInfinite';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
@@ -86,15 +86,26 @@ const Negocios = () => {
     enabled: !!user?.id
   });
   
-  // Usar o effectiveOriginId calculado para buscar deals
-  const { data: deals, isLoading, error } = useCRMDeals({
+  // Usar o effectiveOriginId calculado para buscar deals com paginação infinita
+  const { 
+    data: dealsPages, 
+    isLoading, 
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage 
+  } = useCRMDealsInfinite({
     originId: effectiveOriginId,
     searchTerm: filters.search || undefined,
+    pageSize: 100,
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
   
-  const dealsData = deals || [];
+  // Flatten pages into single array
+  const dealsData = useMemo(() => {
+    return dealsPages?.pages.flatMap(page => page.data) || [];
+  }, [dealsPages]);
   const visibleStages = getVisibleStages();
   
   // Verificar se é SDR ou Closer (veem apenas próprios deals)
@@ -237,12 +248,15 @@ const Negocios = () => {
               </div>
             </div>
           ) : (
-            <DealKanbanBoard 
+          <DealKanbanBoardInfinite 
               deals={filteredDeals.map((deal: any) => ({
                 ...deal,
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
               }))}
               originId={effectiveOriginId}
+              hasNextPage={hasNextPage}
+              isFetchingNextPage={isFetchingNextPage}
+              fetchNextPage={fetchNextPage}
             />
           )}
         </div>
