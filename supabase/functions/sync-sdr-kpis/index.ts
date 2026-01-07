@@ -58,13 +58,13 @@ Deno.serve(async (req) => {
 
     console.log(`Período: ${monthStart} até ${monthEnd}`)
 
-    // ===== USAR RPC get_sdr_metrics_v2 PARA CONSISTÊNCIA =====
+    // ===== USAR RPC get_sdr_metrics_v3 (SEM FILTRO RESTRITIVO DE from_stage) =====
     let reunioesAgendadas = 0
     let noShows = 0
     let reunioesRealizadas = 0
     let taxaNoShow = 0
 
-    const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
+    const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v3', {
       start_date: monthStart,
       end_date: monthEnd,
       sdr_email_filter: sdr.email
