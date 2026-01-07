@@ -40,13 +40,14 @@ import {
   useApproveSdr,
   useCreateCompPlan,
   useApproveCompPlan,
+  useDeleteCompPlan,
   useUsers,
   useUpdateSdr,
   useUpdateCompPlan,
 } from '@/hooks/useSdrFechamento';
 import { Sdr, SdrCompPlan, SdrStatus } from '@/types/sdr-fechamento';
 import { formatCurrency } from '@/lib/formatters';
-import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
 
@@ -538,6 +539,7 @@ const ConfiguracoesSdr = () => {
   
   const approveSdr = useApproveSdr();
   const approveCompPlan = useApproveCompPlan();
+  const deleteCompPlan = useDeleteCompPlan();
   const updateSdr = useUpdateSdr();
 
   const handleApproveSdr = async (sdrId: string, approve: boolean) => {
@@ -556,6 +558,14 @@ const ConfiguracoesSdr = () => {
       active: !sdr.active,
     });
     refetchSdrs();
+  };
+
+  const handleDeleteCompPlan = async (planId: string, sdrName: string) => {
+    if (!window.confirm(`Deseja excluir o plano OTE de ${sdrName}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    await deleteCompPlan.mutateAsync(planId);
+    refetchPlans();
   };
 
   return (
@@ -745,7 +755,19 @@ const ConfiguracoesSdr = () => {
                               </>
                             )}
                             {(plan.status === 'APPROVED' || (plan.status as string) === 'active') && (
-                              <EditCompPlanDialog plan={plan as SdrCompPlan} onSuccess={() => refetchPlans()} />
+                              <>
+                                <EditCompPlanDialog plan={plan as SdrCompPlan} onSuccess={() => refetchPlans()} />
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-red-500 hover:text-red-400"
+                                  onClick={() => handleDeleteCompPlan(plan.id, (plan as any).sdr?.name || 'N/A')}
+                                  disabled={deleteCompPlan.isPending}
+                                  title="Excluir plano OTE"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
                             )}
                           </div>
                         </TableCell>
