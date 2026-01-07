@@ -41,6 +41,8 @@ export interface UserDetails {
   blocked_until: string | null;
   last_login_at: string | null;
   squad: string | null;
+  // Visibilidade na TV SDR
+  show_on_tv: boolean | null;
   // Employment (legado - para módulo RH)
   employment: {
     position: string | null;

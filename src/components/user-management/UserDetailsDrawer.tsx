@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { 
   Loader2, Shield, Settings, Link2, KeyRound, 
-  Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Search 
+  Mail, Calendar, Clock, AlertTriangle, LogOut, RefreshCw, Search, Tv 
 } from "lucide-react";
 import { useClintUsers } from "@/hooks/useClintAPI";
 import { toast } from "sonner";
@@ -62,6 +63,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     email: "",
     access_status: "ativo" as AccessStatus,
     squad: "",
+    show_on_tv: true,
   });
 
   // Form state for Security tab
@@ -104,6 +106,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         email: userDetails.email || "",
         access_status: userDetails.access_status || "ativo",
         squad: userDetails.squad || "",
+        show_on_tv: userDetails.show_on_tv ?? true,
       });
       setBlockedUntil(userDetails.blocked_until || "");
     }
@@ -356,7 +359,27 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                   />
                 </div>
 
-                <Button 
+                <Separator className="my-4" />
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Tv className="h-4 w-4 text-muted-foreground" />
+                      <Label>Exibir na TV SDR</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Se ativado, este usuário aparece no ranking da TV de performance
+                    </p>
+                  </div>
+                  <Switch
+                    checked={generalData.show_on_tv}
+                    onCheckedChange={(checked) => 
+                      setGeneralData({ ...generalData, show_on_tv: checked })
+                    }
+                  />
+                </div>
+
+                <Button
                   onClick={handleSaveGeneral} 
                   className="w-full"
                   disabled={updateAccess.isPending}
