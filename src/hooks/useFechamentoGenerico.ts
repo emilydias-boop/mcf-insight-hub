@@ -617,7 +617,7 @@ export const useGenerateFechamento = () => {
         .from('fechamento_mes')
         .insert({ 
           competencia, 
-          status: 'aberto',
+          status: 'rascunho',
         })
         .select()
         .single();
@@ -656,7 +656,7 @@ export const useGenerateFechamento = () => {
           multiplicador_final: 1,
           variavel_final: emp.cargo_catalogo?.variavel_valor || 0,
           total_a_pagar: (emp.cargo_catalogo?.fixo_valor || 0) + (emp.cargo_catalogo?.variavel_valor || 0),
-          status: 'calculado',
+          status: 'em_revisao',
         }));
 
         const { error: pessoasError } = await supabase
@@ -669,7 +669,7 @@ export const useGenerateFechamento = () => {
       // Update fechamento status
       await supabase
         .from('fechamento_mes')
-        .update({ status: 'calculado' })
+        .update({ status: 'em_revisao' })
         .eq('id', fechamento.id);
 
       return { fechamentoId: fechamento.id, count: employees?.length || 0 };
