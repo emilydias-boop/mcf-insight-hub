@@ -10,6 +10,14 @@ export interface FixActivitiesResult {
   errors: number;
 }
 
+export interface RepairOrphanResult {
+  success: boolean;
+  dry_run: boolean;
+  deals_fixed: number;
+  activities_fixed: number;
+  not_found: number;
+}
+
 export const useFixReprocessedActivities = () => {
   const queryClient = useQueryClient();
 
@@ -28,6 +36,29 @@ export const useFixReprocessedActivities = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sdr-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['deal-activities'] });
+    }
+  });
+};
+
+export const useRepairOrphanDealOwners = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (params: { dryRun?: boolean }): Promise<RepairOrphanResult> => {
+      const { data, error } = await supabase.functions.invoke('repair-orphan-deal-owners', {
+        body: {
+          dry_run: params.dryRun || false,
+          limit: 100
+        }
+      });
+
+      if (error) throw error;
+      return data as RepairOrphanResult;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-activities'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
     }
   });
 };

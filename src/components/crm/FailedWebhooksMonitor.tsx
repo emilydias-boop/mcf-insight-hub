@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2, Wrench } from "lucide-react";
+import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2, Wrench, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFailedWebhooksSummary, useReprocessFailedWebhooks, type ReprocessResult } from "@/hooks/useFailedWebhooks";
-import { useFixReprocessedActivities, type FixActivitiesResult } from "@/hooks/useFixReprocessedActivities";
+import { useFixReprocessedActivities, useRepairOrphanDealOwners, type FixActivitiesResult, type RepairOrphanResult } from "@/hooks/useFixReprocessedActivities";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -26,9 +26,11 @@ export function FailedWebhooksMonitor() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastResult, setLastResult] = useState<ReprocessResult | null>(null);
   const [lastFixResult, setLastFixResult] = useState<FixActivitiesResult | null>(null);
+  const [lastRepairResult, setLastRepairResult] = useState<RepairOrphanResult | null>(null);
   const { data: summary, isLoading, refetch } = useFailedWebhooksSummary(30);
   const reprocessMutation = useReprocessFailedWebhooks();
   const fixActivitiesMutation = useFixReprocessedActivities();
+  const repairOrphanMutation = useRepairOrphanDealOwners();
   const { toast } = useToast();
 
   const handleReprocessAll = () => {
@@ -63,6 +65,26 @@ export function FailedWebhooksMonitor() {
       onError: (error) => {
         toast({
           title: "Erro na correção",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  const handleRepairOrphans = () => {
+    repairOrphanMutation.mutate({ dryRun: false }, {
+      onSuccess: (data) => {
+        setLastRepairResult(data);
+        toast({
+          title: `Reparação concluída`,
+          description: `${data.deals_fixed} deals e ${data.activities_fixed} atividades reparadas`,
+        });
+        refetch();
+      },
+      onError: (error) => {
+        toast({
+          title: "Erro na reparação",
           description: error.message,
           variant: "destructive",
         });
@@ -198,6 +220,62 @@ export function FailedWebhooksMonitor() {
           </div>
 
           <CollapsibleContent className="mt-4 space-y-4">
+            {/* Fix orphan activities button */}
+            <div className="flex items-center gap-2">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                disabled={fixActivitiesMutation.isPending}
+                onClick={handleFixActivities}
+                className="gap-1"
+              >
+                {fixActivitiesMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Wrench className="h-3 w-3" />
+                )}
+                Corrigir Atividades Órfãs
+              </Button>
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                disabled={repairOrphanMutation.isPending}
+                onClick={handleRepairOrphans}
+                className="gap-1"
+              >
+                {repairOrphanMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Users className="h-3 w-3" />
+                )}
+                Reparar Deals Órfãos
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Busca owner nos webhooks originais
+              </span>
+            </div>
+
+            {/* Last repair result */}
+            {lastRepairResult && (
+              <div className="p-3 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                <h4 className="text-sm font-medium mb-2">Última reparação de órfãos</h4>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Deals</p>
+                    <p className="font-semibold text-purple-600">{lastRepairResult.deals_fixed}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Atividades</p>
+                    <p className="font-semibold text-purple-600">{lastRepairResult.activities_fixed}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-muted-foreground text-xs">Não encontrados</p>
+                    <p className="font-semibold text-muted-foreground">{lastRepairResult.not_found}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Fix orphan activities button */}
             <div className="flex items-center gap-2">
               <Button 

@@ -212,3 +212,6 @@ verify_jwt = false
 
 [functions.fix-reprocessed-activities]
 verify_jwt = false
+
+[functions.repair-orphan-deal-owners]
+verify_jwt = false
