@@ -3681,18 +3681,63 @@ export type Database = {
       sdr_levels: {
         Row: {
           description: string | null
+          dias_uteis: number | null
           fixo_valor: number
+          ifood_mensal: number | null
+          ifood_ultrameta: number | null
           level: number
+          meta_no_show_pct: number | null
+          meta_organizacao: number | null
+          meta_reunioes_agendadas: number | null
+          meta_reunioes_realizadas: number | null
+          meta_tentativas: number | null
+          ote_total: number | null
+          updated_at: string | null
+          valor_docs_reuniao: number | null
+          valor_meta_rpg: number | null
+          valor_organizacao: number | null
+          valor_tentativas: number | null
+          variavel_total: number | null
         }
         Insert: {
           description?: string | null
+          dias_uteis?: number | null
           fixo_valor: number
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
           level: number
+          meta_no_show_pct?: number | null
+          meta_organizacao?: number | null
+          meta_reunioes_agendadas?: number | null
+          meta_reunioes_realizadas?: number | null
+          meta_tentativas?: number | null
+          ote_total?: number | null
+          updated_at?: string | null
+          valor_docs_reuniao?: number | null
+          valor_meta_rpg?: number | null
+          valor_organizacao?: number | null
+          valor_tentativas?: number | null
+          variavel_total?: number | null
         }
         Update: {
           description?: string | null
+          dias_uteis?: number | null
           fixo_valor?: number
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
           level?: number
+          meta_no_show_pct?: number | null
+          meta_organizacao?: number | null
+          meta_reunioes_agendadas?: number | null
+          meta_reunioes_realizadas?: number | null
+          meta_tentativas?: number | null
+          ote_total?: number | null
+          updated_at?: string | null
+          valor_docs_reuniao?: number | null
+          valor_meta_rpg?: number | null
+          valor_organizacao?: number | null
+          valor_tentativas?: number | null
+          variavel_total?: number | null
         }
         Relationships: []
       }

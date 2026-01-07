@@ -46,9 +46,10 @@ import {
 } from '@/hooks/useSdrFechamento';
 import { Sdr, SdrCompPlan, SdrStatus } from '@/types/sdr-fechamento';
 import { formatCurrency } from '@/lib/formatters';
-import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
+import { SdrLevelsTab } from '@/components/sdr-fechamento/SdrLevelsTab';
 
 const StatusBadge = ({ status }: { status: SdrStatus }) => {
   const config = {
@@ -562,6 +563,10 @@ const ConfiguracoesSdr = () => {
             <FileText className="h-4 w-4" />
             Planos OTE
           </TabsTrigger>
+          <TabsTrigger value="levels" className="flex items-center gap-2">
+            <Layers className="h-4 w-4" />
+            Níveis OTE
+          </TabsTrigger>
           <TabsTrigger value="calendar" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Dias Úteis
@@ -739,6 +744,17 @@ const ConfiguracoesSdr = () => {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="levels">
+          <Card>
+            <CardHeader>
+              <CardTitle>Níveis OTE</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SdrLevelsTab />
             </CardContent>
           </Card>
         </TabsContent>
