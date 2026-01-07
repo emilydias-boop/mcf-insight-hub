@@ -250,9 +250,9 @@ export const useTVSdrData = (viewDate: Date = new Date()) => {
 
       console.log('[TV-SDR] Intermediações por SDR:', Array.from(sdrIntermediacao.entries()));
 
-      // 3. USAR RPC get_sdr_metrics_v2 (mesma que Relatórios usam)
+      // 3. USAR RPC get_sdr_metrics_v3 (corrigida: usa data do deal para atividades reprocessadas)
       const { data: sdrMetricsRpc, error: rpcError } = await supabase
-        .rpc('get_sdr_metrics_v2', { 
+        .rpc('get_sdr_metrics_v3', { 
           start_date: today,
           end_date: today,
           sdr_email_filter: null

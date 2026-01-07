@@ -5177,7 +5177,17 @@ export type Database = {
           sdr_email_filter?: string
           start_date: string
         }
-        Returns: Json
+        Returns: {
+          ganho: number
+          lq: number
+          no_show: number
+          novo_lead: number
+          perdido: number
+          r1_agendada: number
+          r1_realizada: number
+          sdr_email: string
+          total_agendamentos: number
+        }[]
       }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_sdr_metrics: { Args: { target_date: string }; Returns: Json }
