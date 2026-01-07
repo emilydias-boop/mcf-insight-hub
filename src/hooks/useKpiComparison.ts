@@ -57,10 +57,11 @@ export const useKpiComparison = (anoMes?: string) => {
 
       if (activitiesError) throw activitiesError;
 
-      // Count activities by owner_email
+      // Count activities by owner_email or deal_user
       const activityCountByEmail: Record<string, number> = {};
       activities?.forEach((activity) => {
-        const ownerEmail = (activity.metadata as any)?.owner_email;
+        const metadata = activity.metadata as any;
+        const ownerEmail = metadata?.owner_email || metadata?.deal_user;
         if (ownerEmail) {
           activityCountByEmail[ownerEmail] = (activityCountByEmail[ownerEmail] || 0) + 1;
         }

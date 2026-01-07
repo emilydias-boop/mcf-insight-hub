@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2, Wrench, Users, BarChart3 } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Loader2, Wrench, Users, BarChart3, Calendar } from "lucide-react";
+import { formatDistanceToNow, format, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFailedWebhooksSummary, useReprocessFailedWebhooks, type ReprocessResult } from "@/hooks/useFailedWebhooks";
 import { useFixReprocessedActivities, useRepairOrphanDealOwners, type FixActivitiesResult, type RepairOrphanResult } from "@/hooks/useFixReprocessedActivities";
@@ -38,8 +39,18 @@ export function FailedWebhooksMonitor() {
   const [lastFixResult, setLastFixResult] = useState<FixActivitiesResult | null>(null);
   const [lastRepairResult, setLastRepairResult] = useState<RepairOrphanResult | null>(null);
   const currentMonth = format(new Date(), 'yyyy-MM');
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   
-  const { data: summary, isLoading, refetch } = useFailedWebhooksSummary(30);
+  // Generate last 3 months for selector
+  const monthOptions = [0, 1, 2].map(i => {
+    const date = subMonths(new Date(), i);
+    return {
+      value: format(date, 'yyyy-MM'),
+      label: format(date, 'MMMM yyyy', { locale: ptBR })
+    };
+  });
+  
+  const { data: summary, isLoading, refetch } = useFailedWebhooksSummary(90);
   const { data: kpiComparison, isLoading: isLoadingComparison } = useKpiComparison(currentMonth);
   const reprocessMutation = useReprocessFailedWebhooks();
   const fixActivitiesMutation = useFixReprocessedActivities();
@@ -66,11 +77,31 @@ export function FailedWebhooksMonitor() {
   };
 
   const handleReprocessAll = () => {
-    reprocessMutation.mutate({ all: true, daysBack: 30 }, {
+    reprocessMutation.mutate({ all: true, daysBack: 90 }, {
       onSuccess: (data) => {
         setLastResult(data);
         toast({
           title: `Reprocessamento concluído`,
+          description: `${data.processed} processados, ${data.errors} erros de ${data.total} webhooks`,
+        });
+        refetch();
+      },
+      onError: (error) => {
+        toast({
+          title: "Erro no reprocessamento",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  const handleReprocessMonth = () => {
+    reprocessMutation.mutate({ yearMonth: selectedMonth }, {
+      onSuccess: (data) => {
+        setLastResult(data);
+        toast({
+          title: `Reprocessamento de ${monthOptions.find(m => m.value === selectedMonth)?.label} concluído`,
           description: `${data.processed} processados, ${data.errors} erros de ${data.total} webhooks`,
         });
         refetch();
@@ -224,11 +255,42 @@ export function FailedWebhooksMonitor() {
             </div>
           </div>
           <CardDescription>
-            Webhooks que falharam nos últimos 30 dias
+            Webhooks que falharam nos últimos 90 dias
           </CardDescription>
         </CardHeader>
 
         <CardContent className="pt-0">
+          {/* Month selector and reprocess by month */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-[180px]">
+                <Calendar className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Selecionar mês" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              size="sm" 
+              variant="default"
+              className="bg-orange-600 hover:bg-orange-700 gap-1"
+              onClick={handleReprocessMonth}
+              disabled={reprocessMutation.isPending}
+            >
+              {reprocessMutation.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              Reprocessar Mês
+            </Button>
+          </div>
+
           {/* Summary row - always visible */}
           <div className="grid grid-cols-3 gap-3">
             <div className="p-2 border rounded-lg text-center">
