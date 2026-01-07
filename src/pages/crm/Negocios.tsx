@@ -89,6 +89,7 @@ const Negocios = () => {
   // Usar o effectiveOriginId calculado para buscar deals
   const { data: deals, isLoading, error } = useCRMDeals({
     originId: effectiveOriginId,
+    searchTerm: filters.search || undefined,
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();

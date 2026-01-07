@@ -217,12 +217,16 @@ interface DealFilters {
   stageId?: string;
   contactId?: string;
   ownerId?: string;
+  searchTerm?: string;
+  limit?: number;
 }
 
 export const useCRMDeals = (filters: DealFilters = {}) => {
   return useQuery({
     queryKey: ['crm-deals', filters],
     queryFn: async () => {
+      const limit = filters.limit || 5000;
+      
       let query = supabase
         .from('crm_deals')
         .select(`
@@ -231,12 +235,14 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
           crm_origins(name),
           crm_stages(stage_name, color)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(limit);
       
       if (filters.originId) query = query.eq('origin_id', filters.originId);
       if (filters.stageId) query = query.eq('stage_id', filters.stageId);
       if (filters.contactId) query = query.eq('contact_id', filters.contactId);
       if (filters.ownerId) query = query.eq('owner_id', filters.ownerId);
+      if (filters.searchTerm) query = query.ilike('name', `%${filters.searchTerm}%`);
       
       const { data, error } = await query;
       
