@@ -51,6 +51,10 @@ interface Kpi {
   no_shows: number;
 }
 
+// Constantes de metas fixas
+const META_TENTATIVAS_DIARIA = 84; // Meta fixa de 84 tentativas por dia
+const META_ORGANIZACAO = 100; // Meta fixa de 100%
+
 const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: number, calendarIfoodMensal?: number, diasUteisMes?: number) => {
   // Dias úteis do mês (do calendário ou padrão)
   const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
@@ -61,11 +65,8 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: numb
   // Meta de Realizadas = 70% do que foi REALMENTE agendado (não da meta teórica)
   const metaRealizadasAjustada = Math.round(kpi.reunioes_agendadas * 0.7);
   
-  const proporcaoTentativas = compPlan.meta_reunioes_agendadas > 0 
-    ? compPlan.meta_tentativas / compPlan.meta_reunioes_agendadas 
-    : 17;
-  const metaTentativasAjustada = Math.round(metaAgendadasAjustada * proporcaoTentativas);
-  // meta_organizacao é percentual, não precisa ajustar
+  // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos)
+  const metaTentativasAjustada = Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
 
   const pct_reunioes_agendadas = metaAgendadasAjustada > 0 
     ? (kpi.reunioes_agendadas / metaAgendadasAjustada) * 100 
@@ -76,9 +77,8 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: numb
   const pct_tentativas = metaTentativasAjustada > 0
     ? (kpi.tentativas_ligacoes / metaTentativasAjustada) * 100
     : 0;
-  const pct_organizacao = compPlan.meta_organizacao > 0
-    ? (kpi.score_organizacao / compPlan.meta_organizacao) * 100
-    : 0;
+  // Organização = meta fixa de 100%
+  const pct_organizacao = (kpi.score_organizacao / META_ORGANIZACAO) * 100;
 
   const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0);
 

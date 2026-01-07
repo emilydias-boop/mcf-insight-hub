@@ -185,24 +185,41 @@ export const useOwnPayout = (anoMes: string) => {
   });
 };
 
+// Constantes de metas fixas (iguais à edge function)
+const META_TENTATIVAS_DIARIA = 84; // Meta fixa de 84 tentativas por dia
+const META_ORGANIZACAO = 100; // Meta fixa de 100%
+
 // Calculate payout values
 const calculatePayoutValues = (
   compPlan: SdrCompPlan,
-  kpi: SdrMonthKpi
+  kpi: SdrMonthKpi,
+  sdrMetaDiaria?: number,
+  diasUteisMes?: number
 ) => {
+  // Dias úteis do mês (do calendário ou padrão)
+  const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
+
+  // Meta de agendadas = meta_diaria do SDR × dias úteis do mês
+  const metaAgendadasAjustada = Math.round((sdrMetaDiaria || 0) * diasUteisReal);
+  
+  // Meta de Realizadas = 70% do que foi REALMENTE agendado
+  const metaRealizadasAjustada = Math.round(kpi.reunioes_agendadas * 0.7);
+  
+  // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos)
+  const metaTentativasAjustada = Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
+
   // Calculate percentages
-  const pct_reunioes_agendadas = compPlan.meta_reunioes_agendadas > 0 
-    ? (kpi.reunioes_agendadas / compPlan.meta_reunioes_agendadas) * 100 
+  const pct_reunioes_agendadas = metaAgendadasAjustada > 0 
+    ? (kpi.reunioes_agendadas / metaAgendadasAjustada) * 100 
     : 0;
-  const pct_reunioes_realizadas = compPlan.meta_reunioes_realizadas > 0
-    ? (kpi.reunioes_realizadas / compPlan.meta_reunioes_realizadas) * 100
+  const pct_reunioes_realizadas = metaRealizadasAjustada > 0
+    ? (kpi.reunioes_realizadas / metaRealizadasAjustada) * 100
     : 0;
-  const pct_tentativas = compPlan.meta_tentativas > 0
-    ? (kpi.tentativas_ligacoes / compPlan.meta_tentativas) * 100
+  const pct_tentativas = metaTentativasAjustada > 0
+    ? (kpi.tentativas_ligacoes / metaTentativasAjustada) * 100
     : 0;
-  const pct_organizacao = compPlan.meta_organizacao > 0
-    ? (kpi.score_organizacao / compPlan.meta_organizacao) * 100
-    : 0;
+  // Organização = meta fixa de 100%
+  const pct_organizacao = (kpi.score_organizacao / META_ORGANIZACAO) * 100;
 
   // Get multipliers
   const mult_reunioes_agendadas = getMultiplier(pct_reunioes_agendadas);
