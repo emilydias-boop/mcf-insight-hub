@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useUpdateCRMDeal, useCRMStages, useCRMDeal } from '@/hooks/useCRMData';
+import { Button } from '@/components/ui/button';
+import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
@@ -11,7 +12,7 @@ import { StageChangeModal } from './StageChangeModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useGenerateTasksForStage } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
-import { Inbox } from 'lucide-react';
+import { Inbox, ChevronDown } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -31,8 +32,10 @@ interface DealKanbanBoardProps {
   originId?: string;
 }
 
+const INITIAL_VISIBLE_COUNT = 50;
+
 export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
-  const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
+  const { canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
   const generateTasks = useGenerateTasksForStage();
@@ -42,6 +45,9 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   
+  // State para virtualização por coluna - quantos cards mostrar por estágio
+  const [visibleCountByStage, setVisibleCountByStage] = useState<Record<string, number>>({});
+  
   // State para modal de mudança de estágio
   const [stageChangeModal, setStageChangeModal] = useState<{
     open: boolean;
@@ -50,15 +56,30 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
     newStageName: string;
   }>({ open: false, dealId: '', dealName: '', newStageName: '' });
   
-  const visibleStages = (stages || []).filter((s: any) => s.is_active);
+  const visibleStages = useMemo(() => 
+    (stages || []).filter((s: any) => s.is_active), 
+    [stages]
+  );
   
-  const getDealsByStage = (stageId: string) => {
-    return deals.filter(deal => 
-      deal && 
-      deal.id && 
-      deal.name && 
-      deal.stage_id === stageId
-    );
+  // Memoize deals by stage para evitar recálculos
+  const dealsByStage = useMemo(() => {
+    const map: Record<string, typeof deals> = {};
+    visibleStages.forEach((stage: any) => {
+      map[stage.id] = deals.filter(deal => 
+        deal && deal.id && deal.name && deal.stage_id === stage.id
+      );
+    });
+    return map;
+  }, [deals, visibleStages]);
+  
+  const getVisibleCountForStage = (stageId: string) => 
+    visibleCountByStage[stageId] || INITIAL_VISIBLE_COUNT;
+  
+  const loadMoreForStage = (stageId: string) => {
+    setVisibleCountByStage(prev => ({
+      ...prev,
+      [stageId]: (prev[stageId] || INITIAL_VISIBLE_COUNT) + 50
+    }));
   };
 
   const handleDealClick = (dealId: string) => {
@@ -158,12 +179,15 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-3 h-full overflow-x-auto pb-4">
           {visibleStages.map((stage: any) => {
-            const stageDeals = getDealsByStage(stage.id);
+            const stageDeals = dealsByStage[stage.id] || [];
+            const visibleCount = getVisibleCountForStage(stage.id);
+            const visibleDeals = stageDeals.slice(0, visibleCount);
+            const remainingCount = stageDeals.length - visibleCount;
             
             return (
               <div key={stage.id} className="flex-shrink-0 w-[280px] h-full">
                 <Card className="h-full flex flex-col">
-                  <CardHeader className={`flex-shrink-0 ${stage.color || 'bg-muted'}`}>
+                  <CardHeader className={`flex-shrink-0 py-3 ${stage.color || 'bg-muted'}`}>
                     <CardTitle className="text-sm font-medium flex items-center justify-between">
                       <span>{stage.stage_name}</span>
                       <Badge variant="secondary">{stageDeals.length}</Badge>
@@ -175,7 +199,7 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className="flex-1 overflow-y-auto p-4 space-y-3"
+                        className="flex-1 overflow-y-auto p-3 space-y-2"
                       >
                         {stageDeals.length === 0 ? (
                           <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -185,18 +209,31 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
                             </p>
                           </div>
                         ) : (
-                          stageDeals.map((deal, index) => (
-                            <Draggable key={deal.id} draggableId={deal.id} index={index}>
-                              {(provided, snapshot) => (
-                                <DealKanbanCard
-                                  deal={deal}
-                                  isDragging={snapshot.isDragging}
-                                  provided={provided}
-                                  onClick={() => handleDealClick(deal.id)}
-                                />
-                              )}
-                            </Draggable>
-                          ))
+                          <>
+                            {visibleDeals.map((deal, index) => (
+                              <Draggable key={deal.id} draggableId={deal.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <DealKanbanCard
+                                    deal={deal}
+                                    isDragging={snapshot.isDragging}
+                                    provided={provided}
+                                    onClick={() => handleDealClick(deal.id)}
+                                  />
+                                )}
+                              </Draggable>
+                            ))}
+                            {remainingCount > 0 && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="w-full text-muted-foreground"
+                                onClick={() => loadMoreForStage(stage.id)}
+                              >
+                                <ChevronDown className="h-4 w-4 mr-1" />
+                                Carregar mais ({remainingCount})
+                              </Button>
+                            )}
+                          </>
                         )}
                         {provided.placeholder}
                       </div>
