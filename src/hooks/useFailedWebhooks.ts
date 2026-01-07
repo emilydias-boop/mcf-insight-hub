@@ -1,6 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+
+export interface ReprocessResult {
+  success: boolean;
+  dry_run: boolean;
+  total: number;
+  processed: number;
+  errors: number;
+  results: Array<{
+    id: string;
+    success: boolean;
+    error?: string;
+    contact_id?: string;
+    deal_id?: string;
+    activity_created?: boolean;
+  }>;
+}
 
 export interface FailedWebhookSummary {
   total: number;
@@ -96,7 +111,7 @@ export const useReprocessFailedWebhooks = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (params: { all?: boolean; webhookIds?: string[]; daysBack?: number }) => {
+    mutationFn: async (params: { all?: boolean; webhookIds?: string[]; daysBack?: number }): Promise<ReprocessResult> => {
       const { data, error } = await supabase.functions.invoke('reprocess-failed-webhooks', {
         body: {
           all: params.all || false,
@@ -107,27 +122,13 @@ export const useReprocessFailedWebhooks = () => {
       });
 
       if (error) throw error;
-      return data;
+      return data as ReprocessResult;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['failed-webhooks-summary'] });
       queryClient.invalidateQueries({ queryKey: ['failed-webhooks-list'] });
       queryClient.invalidateQueries({ queryKey: ['webhook-logs'] });
       queryClient.invalidateQueries({ queryKey: ['webhook-stats'] });
-      
-      const processed = data?.processed || 0;
-      const errors = data?.errors || 0;
-      
-      if (processed > 0) {
-        toast.success(`${processed} webhook(s) reprocessado(s) com sucesso`);
-      }
-      if (errors > 0) {
-        toast.warning(`${errors} webhook(s) falharam ao reprocessar`);
-      }
-    },
-    onError: (error: any) => {
-      console.error('Error reprocessing webhooks:', error);
-      toast.error('Erro ao reprocessar webhooks');
     }
   });
 };
