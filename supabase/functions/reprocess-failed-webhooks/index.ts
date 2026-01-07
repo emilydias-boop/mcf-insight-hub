@@ -411,6 +411,19 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
   const toStage = eventData.to_stage || eventData.stage_to || eventData.deal_stage || deal?.stage;
 
   if (toStage && dealId && !dryRun) {
+    // Extrair owner_email para incluir no metadata da atividade (importante para métricas de SDR)
+    const ownerEmail = eventData.deal_user || 
+                       deal.user_email || 
+                       deal.owner_email || 
+                       eventData.responsible_email ||
+                       eventData.assigned_to ||
+                       deal.responsible?.email ||
+                       deal.user?.email ||
+                       eventData.user?.email ||
+                       null;
+    
+    console.log(`[reprocess] Creating activity with owner_email: ${ownerEmail}`);
+
     const { error: activityError } = await supabase
       .from('deal_activities')
       .insert({
@@ -421,7 +434,9 @@ async function handleDealEvent(supabase: any, eventData: any, contactId: string,
         description: `Reprocessado: ${fromStage || 'N/A'} → ${toStage}`,
         metadata: {
           reprocessed: true,
-          original_webhook_created_at: eventData.created_at || new Date().toISOString()
+          original_webhook_created_at: eventData.created_at || new Date().toISOString(),
+          owner_email: ownerEmail,
+          deal_user: ownerEmail
         }
       });
 
