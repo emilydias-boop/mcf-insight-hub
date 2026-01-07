@@ -3155,6 +3155,7 @@ export type Database = {
           full_name: string | null
           id: string
           last_login_at: string | null
+          show_on_tv: boolean | null
           squad: string | null
           updated_at: string | null
           whatsapp_signature: string | null
@@ -3168,6 +3169,7 @@ export type Database = {
           full_name?: string | null
           id: string
           last_login_at?: string | null
+          show_on_tv?: boolean | null
           squad?: string | null
           updated_at?: string | null
           whatsapp_signature?: string | null
@@ -3181,6 +3183,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           last_login_at?: string | null
+          show_on_tv?: boolean | null
           squad?: string | null
           updated_at?: string | null
           whatsapp_signature?: string | null
@@ -3678,18 +3681,63 @@ export type Database = {
       sdr_levels: {
         Row: {
           description: string | null
+          dias_uteis: number | null
           fixo_valor: number
+          ifood_mensal: number | null
+          ifood_ultrameta: number | null
           level: number
+          meta_no_show_pct: number | null
+          meta_organizacao: number | null
+          meta_reunioes_agendadas: number | null
+          meta_reunioes_realizadas: number | null
+          meta_tentativas: number | null
+          ote_total: number | null
+          updated_at: string | null
+          valor_docs_reuniao: number | null
+          valor_meta_rpg: number | null
+          valor_organizacao: number | null
+          valor_tentativas: number | null
+          variavel_total: number | null
         }
         Insert: {
           description?: string | null
+          dias_uteis?: number | null
           fixo_valor: number
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
           level: number
+          meta_no_show_pct?: number | null
+          meta_organizacao?: number | null
+          meta_reunioes_agendadas?: number | null
+          meta_reunioes_realizadas?: number | null
+          meta_tentativas?: number | null
+          ote_total?: number | null
+          updated_at?: string | null
+          valor_docs_reuniao?: number | null
+          valor_meta_rpg?: number | null
+          valor_organizacao?: number | null
+          valor_tentativas?: number | null
+          variavel_total?: number | null
         }
         Update: {
           description?: string | null
+          dias_uteis?: number | null
           fixo_valor?: number
+          ifood_mensal?: number | null
+          ifood_ultrameta?: number | null
           level?: number
+          meta_no_show_pct?: number | null
+          meta_organizacao?: number | null
+          meta_reunioes_agendadas?: number | null
+          meta_reunioes_realizadas?: number | null
+          meta_tentativas?: number | null
+          ote_total?: number | null
+          updated_at?: string | null
+          valor_docs_reuniao?: number | null
+          valor_meta_rpg?: number | null
+          valor_organizacao?: number | null
+          valor_tentativas?: number | null
+          variavel_total?: number | null
         }
         Relationships: []
       }
@@ -3699,6 +3747,7 @@ export type Database = {
           created_at: string | null
           id: string
           intermediacoes_contrato: number | null
+          modo_entrada: string | null
           no_shows: number | null
           reunioes_agendadas: number | null
           reunioes_realizadas: number | null
@@ -3713,6 +3762,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           intermediacoes_contrato?: number | null
+          modo_entrada?: string | null
           no_shows?: number | null
           reunioes_agendadas?: number | null
           reunioes_realizadas?: number | null
@@ -3727,6 +3777,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           intermediacoes_contrato?: number | null
+          modo_entrada?: string | null
           no_shows?: number | null
           reunioes_agendadas?: number | null
           reunioes_realizadas?: number | null
@@ -5167,6 +5218,24 @@ export type Database = {
           start_date: string
         }
         Returns: Json
+      }
+      get_sdr_metrics_v3: {
+        Args: {
+          end_date: string
+          sdr_email_filter?: string
+          start_date: string
+        }
+        Returns: {
+          ganho: number
+          lq: number
+          no_show: number
+          novo_lead: number
+          perdido: number
+          r1_agendada: number
+          r1_realizada: number
+          sdr_email: string
+          total_agendamentos: number
+        }[]
       }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_sdr_metrics: { Args: { target_date: string }; Returns: Json }

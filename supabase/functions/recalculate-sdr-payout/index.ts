@@ -51,16 +51,23 @@ interface Kpi {
   no_shows: number;
 }
 
-const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, calendarIfoodMensal?: number, diasUteisMes?: number) => {
-  // Calcular fator de ajuste proporcional aos dias úteis
-  const diasUteisPlano = compPlan.dias_uteis || 19;
-  const diasUteisReal = diasUteisMes || diasUteisPlano;
-  const fatorAjuste = diasUteisReal / diasUteisPlano;
+const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: number, calendarIfoodMensal?: number, diasUteisMes?: number) => {
+  // Dias úteis do mês (do calendário ou padrão)
+  const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
 
-  // Metas ajustadas proporcionalmente aos dias úteis do mês
-  const metaAgendadasAjustada = Math.round(compPlan.meta_reunioes_agendadas * fatorAjuste);
-  const metaRealizadasAjustada = Math.round(compPlan.meta_reunioes_realizadas * fatorAjuste);
-  const metaTentativasAjustada = Math.round(compPlan.meta_tentativas * fatorAjuste);
+  // Meta de agendadas = meta_diaria do SDR × dias úteis do mês
+  const metaAgendadasAjustada = Math.round((sdrMetaDiaria || 0) * diasUteisReal);
+  
+  // Manter proporção para realizadas e tentativas baseado no comp_plan
+  const proporcaoRealizadas = compPlan.meta_reunioes_agendadas > 0 
+    ? compPlan.meta_reunioes_realizadas / compPlan.meta_reunioes_agendadas 
+    : 0.7;
+  const metaRealizadasAjustada = Math.round(metaAgendadasAjustada * proporcaoRealizadas);
+  
+  const proporcaoTentativas = compPlan.meta_reunioes_agendadas > 0 
+    ? compPlan.meta_tentativas / compPlan.meta_reunioes_agendadas 
+    : 17;
+  const metaTentativasAjustada = Math.round(metaAgendadasAjustada * proporcaoTentativas);
   // meta_organizacao é percentual, não precisa ajustar
 
   const pct_reunioes_agendadas = metaAgendadasAjustada > 0 
@@ -170,7 +177,7 @@ serve(async (req) => {
     console.log(`📅 Calendário ${ano_mes}: iFood Mensal = ${calendarIfoodMensal ?? 'não definido'}`);
 
     // Get SDRs to process (with email for RPC call)
-    let sdrsQuery = supabase.from('sdr').select('id, name, email').eq('active', true);
+    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
@@ -324,7 +331,7 @@ serve(async (req) => {
 
         // Calculate values - passa dias_uteis_final do calendário para ajuste proporcional
         const diasUteisMes = calendarData?.dias_uteis_final ?? null;
-        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, calendarIfoodMensal, diasUteisMes);
+        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, sdr.meta_diaria || 0, calendarIfoodMensal, diasUteisMes);
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
           pct_agendadas: calculatedValues.pct_reunioes_agendadas.toFixed(1),
