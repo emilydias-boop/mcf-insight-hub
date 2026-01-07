@@ -78,16 +78,20 @@ Deno.serve(async (req) => {
       )
     }
 
-    if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
-      const metrics = metricsData.metrics[0]
+    // get_sdr_metrics_v3 retorna um array diretamente, não { metrics: [...] }
+    if (metricsData && Array.isArray(metricsData) && metricsData.length > 0) {
+      const metrics = metricsData[0]
       reunioesAgendadas = metrics.total_agendamentos || 0
-      noShows = metrics.no_shows || 0
-      reunioesRealizadas = metrics.realizadas || 0
-      taxaNoShow = metrics.taxa_no_show || 0
+      noShows = metrics.no_show || 0  // campo correto é no_show
+      reunioesRealizadas = metrics.r1_realizada || 0  // campo correto é r1_realizada
       
-      console.log(`📊 Métricas da RPC: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`)
+      // Calcular taxa de no-show
+      const totalMeetings = reunioesAgendadas + noShows
+      taxaNoShow = totalMeetings > 0 ? (noShows / totalMeetings) * 100 : 0
+      
+      console.log(`📊 Métricas da RPC: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}, Taxa No-Show=${taxaNoShow.toFixed(1)}%`)
     } else {
-      console.log('⚠️ Nenhuma métrica encontrada na RPC')
+      console.log('⚠️ Nenhuma métrica encontrada na RPC, metricsData:', JSON.stringify(metricsData))
     }
 
     // ========== INTERMEDIAÇÕES AUTOMÁTICAS ==========
