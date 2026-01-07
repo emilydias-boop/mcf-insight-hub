@@ -56,20 +56,42 @@ serve(async (req) => {
     const dealIds = [...new Set(activitiesToFix.map(a => a.deal_id))];
     const { data: deals, error: dealsError } = await supabase
       .from('crm_deals')
-      .select('id, owner_id')
+      .select('id, owner_id, clint_id')
       .in('id', dealIds);
 
     if (dealsError) throw dealsError;
 
-    const dealOwnerMap = new Map((deals || []).map(d => [d.id, d.owner_id]));
+    const dealMap = new Map((deals || []).map(d => [d.id, { owner_id: d.owner_id, clint_id: d.clint_id }]));
 
     let fixed = 0;
     let skipped = 0;
     let errors = 0;
-    const results: Array<{ id: string; status: string; owner?: string }> = [];
+    const results: Array<{ id: string; status: string; owner?: string; source?: string }> = [];
 
     for (const activity of activitiesToFix) {
-      const ownerEmail = dealOwnerMap.get(activity.deal_id);
+      const dealInfo = dealMap.get(activity.deal_id);
+      let ownerEmail = dealInfo?.owner_id || null;
+      let ownerSource = 'deal';
+
+      // Fallback: buscar owner no webhook_events se o deal não tem owner
+      if (!ownerEmail && dealInfo?.clint_id) {
+        const { data: events } = await supabase
+          .from('webhook_events')
+          .select('event_data')
+          .or(`event_data->>deal_id.eq.${dealInfo.clint_id},event_data->>dealId.eq.${dealInfo.clint_id}`)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        for (const ev of (events || [])) {
+          const data = ev.event_data as Record<string, any>;
+          ownerEmail = data?.deal_user || data?.owner_email || data?.user_email || 
+                       data?.deal?.user || data?.deal?.owner_email || null;
+          if (ownerEmail) {
+            ownerSource = 'webhook';
+            break;
+          }
+        }
+      }
       
       if (!ownerEmail) {
         skipped++;
