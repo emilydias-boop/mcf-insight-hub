@@ -41,7 +41,8 @@ import {
   useMetasMes, 
   useMetaComponentes, 
   useMetaMutations,
-  useReguas 
+  useReguas,
+  useCopyMetasFromMonth,
 } from "@/hooks/useFechamentoGenerico";
 import { MetaFormDialog } from "@/components/fechamento-generico/MetaFormDialog";
 import { CompetenciaSelector } from "@/components/fechamento-generico/CompetenciaSelector";
@@ -160,6 +161,7 @@ export default function RHMetas() {
   const { data: metas = [], isLoading } = useMetasMes(competencia);
   const { data: reguas = [] } = useReguas();
   const { deleteMeta } = useMetaMutations();
+  const copyMetas = useCopyMetasFromMonth();
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMeta, setEditingMeta] = useState<MetaMes | null>(null);
@@ -230,9 +232,15 @@ export default function RHMetas() {
   };
 
   const handleCopyFromPrevious = async () => {
-    // TODO: Implement copy metas from previous month
-    // For now, just close the dialog
-    setCopyDialogOpen(false);
+    try {
+      await copyMetas.mutateAsync({
+        fromCompetencia: previousMonth,
+        toCompetencia: competencia,
+      });
+      setCopyDialogOpen(false);
+    } catch (error) {
+      // Error handled by mutation
+    }
   };
 
   return (
@@ -249,7 +257,7 @@ export default function RHMetas() {
           <Button 
             variant="outline" 
             onClick={() => setCopyDialogOpen(true)}
-            disabled={metas.length > 0}
+            disabled={metas.length > 0 || copyMetas.isPending}
           >
             <Copy className="mr-2 h-4 w-4" />
             Copiar do Mês Anterior
@@ -414,8 +422,11 @@ export default function RHMetas() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCopyFromPrevious}>
-              Copiar Metas
+            <AlertDialogAction 
+              onClick={handleCopyFromPrevious}
+              disabled={copyMetas.isPending}
+            >
+              {copyMetas.isPending ? "Copiando..." : "Copiar Metas"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

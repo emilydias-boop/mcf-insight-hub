@@ -133,6 +133,8 @@ const menuItems: MenuItem[] = [
       { title: "Cargos", url: "/rh/cargos" },
       { title: "Réguas", url: "/rh/reguas" },
       { title: "Metas", url: "/rh/metas" },
+      { title: "Fechamento Mensal", url: "/rh/fechamento" },
+      { title: "Auditoria", url: "/rh/auditoria" },
     ]
   },
   

@@ -64,6 +64,8 @@ import RHColaboradores from "./pages/rh/Colaboradores";
 import RHCargos from "./pages/rh/Cargos";
 import RHReguas from "./pages/rh/Reguas";
 import RHMetas from "./pages/rh/Metas";
+import RHFechamento from "./pages/rh/Fechamento";
+import RHAuditoria from "./pages/rh/AuditoriaFechamentos";
 import Financeiro from "./pages/Financeiro";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
@@ -139,6 +141,8 @@ const App = () => (
               <Route path="rh/cargos" element={<ResourceGuard resource={"rh" as any}><RHCargos /></ResourceGuard>} />
               <Route path="rh/reguas" element={<ResourceGuard resource={"rh" as any}><RHReguas /></ResourceGuard>} />
               <Route path="rh/metas" element={<ResourceGuard resource={"rh" as any}><RHMetas /></ResourceGuard>} />
+              <Route path="rh/fechamento" element={<ResourceGuard resource={"rh" as any}><RHFechamento /></ResourceGuard>} />
+              <Route path="rh/auditoria" element={<ResourceGuard resource={"rh" as any}><RHAuditoria /></ResourceGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="meu-rh" element={<MeuRH />} />
               <Route path="sdr/minhas-reunioes" element={<ResourceGuard resource="crm"><MinhasReunioes /></ResourceGuard>} />
