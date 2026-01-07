@@ -65,6 +65,7 @@ import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
 import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
+import Webhooks from "./pages/crm/Webhooks";
 import NotFound from "./pages/NotFound";
 import DashboardSemanas from "./pages/dashboard/Semanas";
 import ProdutosIndex from "./pages/produtos/Index";
@@ -158,6 +159,7 @@ const App = () => (
                 <Route path="deals-orfaos" element={<DealsOrfaos />} />
                 <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
                 <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
+                <Route path="webhooks" element={<Webhooks />} />
                 <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
             </Route>

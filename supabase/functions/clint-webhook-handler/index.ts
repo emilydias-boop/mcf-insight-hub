@@ -677,46 +677,109 @@ async function handleDealStageChanged(supabase: any, data: any) {
 
     if (contact) {
       contactId = contact.id;
-      console.log('[DEAL.STAGE_CHANGED] Found contact:', contactId);
+      console.log('[DEAL.STAGE_CHANGED] Found contact by email:', contactId);
+    } else {
+      // NOVO: Criar contato se não existir (igual ao handleDealCreated)
+      console.log('[DEAL.STAGE_CHANGED] Contact not found by email, creating...');
+      const normalizedPhone = contactData.phone ? normalizePhone(contactData.phone) : null;
+      
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: contactData.id || `webhook-contact-${Date.now()}`,
+          name: contactData.name || data.contact_name || 'Contato via webhook',
+          email: contactData.email,
+          phone: normalizedPhone,
+          tags: contactData.tags || [],
+        })
+        .select('id')
+        .single();
+      
+      if (!contactError && newContact) {
+        contactId = newContact.id;
+        console.log('[DEAL.STAGE_CHANGED] Contact created:', contactId);
+      } else {
+        console.error('[DEAL.STAGE_CHANGED] Error creating contact:', contactError);
+      }
+    }
+  }
 
-      // 2.2. Tentar buscar deal por contact_id
-      const { data: dealByContact } = await supabase
-        .from('crm_deals')
-        .select('id, stage_id, clint_id, owner_id')
-        .eq('contact_id', contactId)
-        .order('created_at', { ascending: false })
-        .limit(1)
+  // 2.1b. NOVO: Se não tem email mas tem telefone, tentar buscar/criar por telefone
+  if (!contactId && (contactData.phone || data.contact_phone)) {
+    const phone = contactData.phone || data.contact_phone;
+    const normalizedPhone = normalizePhone(phone);
+    
+    if (normalizedPhone) {
+      const { data: contactByPhone } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .eq('phone', normalizedPhone)
         .maybeSingle();
+      
+      if (contactByPhone) {
+        contactId = contactByPhone.id;
+        console.log('[DEAL.STAGE_CHANGED] Found contact by phone:', contactId);
+      } else {
+        // Criar contato pelo telefone
+        console.log('[DEAL.STAGE_CHANGED] Creating contact by phone...');
+        const { data: newContact, error: contactError } = await supabase
+          .from('crm_contacts')
+          .insert({
+            clint_id: contactData.id || `webhook-phone-${Date.now()}`,
+            name: contactData.name || data.contact_name || 'Contato via webhook',
+            email: contactData.email || null,
+            phone: normalizedPhone,
+            tags: contactData.tags || [],
+          })
+          .select('id')
+          .single();
+        
+        if (!contactError && newContact) {
+          contactId = newContact.id;
+          console.log('[DEAL.STAGE_CHANGED] Contact created by phone:', contactId);
+        }
+      }
+    }
+  }
 
-      if (dealByContact) {
-        dealId = dealByContact.id;
-        currentStageId = dealByContact.stage_id;
-        dealHasOwner = !!dealByContact.owner_id;
-        console.log('[DEAL.STAGE_CHANGED] Found deal by contact_id:', dealId, 'clint_id:', dealByContact.clint_id, 'owner_id:', dealByContact.owner_id);
+  // 2.2. Tentar buscar deal por contact_id (se encontrou contato)
+  if (contactId) {
+    const { data: dealByContact } = await supabase
+      .from('crm_deals')
+      .select('id, stage_id, clint_id, owner_id')
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (dealByContact) {
+      dealId = dealByContact.id;
+      currentStageId = dealByContact.stage_id;
+      dealHasOwner = !!dealByContact.owner_id;
+      console.log('[DEAL.STAGE_CHANGED] Found deal by contact_id:', dealId, 'clint_id:', dealByContact.clint_id, 'owner_id:', dealByContact.owner_id);
+      
+      // RECONCILIAÇÃO: Se o deal foi criado via Hubla (clint_id = hubla-deal-*) mas agora
+      // temos o ID real do Clint (data.deal_id é UUID), atualizar o clint_id
+      const existingClintId = dealByContact.clint_id || '';
+      const clintDealId = data.deal_id || '';
+      const isHublaDeal = existingClintId.startsWith('hubla-deal-');
+      const isValidClintUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clintDealId);
+      
+      if (isHublaDeal && isValidClintUUID && existingClintId !== clintDealId) {
+        console.log('[DEAL.STAGE_CHANGED] RECONCILING clint_id: Hubla->', existingClintId, 'Clint->', clintDealId);
         
-        // RECONCILIAÇÃO: Se o deal foi criado via Hubla (clint_id = hubla-deal-*) mas agora
-        // temos o ID real do Clint (data.deal_id é UUID), atualizar o clint_id
-        const existingClintId = dealByContact.clint_id || '';
-        const clintDealId = data.deal_id || '';
-        const isHublaDeal = existingClintId.startsWith('hubla-deal-');
-        const isValidClintUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clintDealId);
+        const { error: reconcileError } = await supabase
+          .from('crm_deals')
+          .update({ 
+            clint_id: clintDealId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', dealId);
         
-        if (isHublaDeal && isValidClintUUID && existingClintId !== clintDealId) {
-          console.log('[DEAL.STAGE_CHANGED] RECONCILING clint_id: Hubla->', existingClintId, 'Clint->', clintDealId);
-          
-          const { error: reconcileError } = await supabase
-            .from('crm_deals')
-            .update({ 
-              clint_id: clintDealId,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', dealId);
-          
-          if (reconcileError) {
-            console.error('[DEAL.STAGE_CHANGED] Error reconciling clint_id:', reconcileError);
-          } else {
-            console.log('[DEAL.STAGE_CHANGED] Successfully reconciled clint_id for deal:', dealId);
-          }
+        if (reconcileError) {
+          console.error('[DEAL.STAGE_CHANGED] Error reconciling clint_id:', reconcileError);
+        } else {
+          console.log('[DEAL.STAGE_CHANGED] Successfully reconciled clint_id for deal:', dealId);
         }
       }
     }
