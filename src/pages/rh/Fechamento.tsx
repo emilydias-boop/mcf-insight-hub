@@ -135,7 +135,7 @@ export default function RHFechamento() {
   const handleApproveAll = async () => {
     if (!currentFechamento) return;
     
-    const pendentes = pessoas.filter((p: any) => p.status === "calculado");
+    const pendentes = pessoas.filter((p: any) => p.status === "em_revisao");
     for (const pessoa of pendentes) {
       await approvePessoa.mutateAsync(pessoa.id);
     }
@@ -168,7 +168,7 @@ export default function RHFechamento() {
               <Button 
                 variant="outline"
                 onClick={handleApproveAll}
-                disabled={!pessoas.some((p: any) => p.status === "calculado")}
+                disabled={!pessoas.some((p: any) => p.status === "em_revisao")}
               >
                 <Check className="mr-2 h-4 w-4" />
                 Aprovar Todos
@@ -272,7 +272,8 @@ export default function RHFechamento() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os Status</SelectItem>
-            <SelectItem value="calculado">Calculado</SelectItem>
+            <SelectItem value="rascunho">Rascunho</SelectItem>
+            <SelectItem value="em_revisao">Em Revisão</SelectItem>
             <SelectItem value="aprovado">Aprovado</SelectItem>
             <SelectItem value="pago">Pago</SelectItem>
           </SelectContent>

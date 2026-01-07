@@ -195,7 +195,7 @@ export function FechamentoPessoaDrawer({
               <X className="h-4 w-4 mr-2" />
               Fechar
             </Button>
-            {pessoa.status === "calculado" && (
+            {pessoa.status === "em_revisao" && (
               <Button className="flex-1" onClick={handleApprove}>
                 <Check className="h-4 w-4 mr-2" />
                 Aprovar

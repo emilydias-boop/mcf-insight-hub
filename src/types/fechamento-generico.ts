@@ -114,14 +114,15 @@ export interface AuditoriaFechamento {
 
 // Labels and mappings
 export const FECHAMENTO_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  aberto: { label: 'Aberto', color: 'bg-yellow-500' },
-  calculado: { label: 'Calculado', color: 'bg-blue-500' },
+  rascunho: { label: 'Rascunho', color: 'bg-yellow-500' },
+  em_revisao: { label: 'Em Revisão', color: 'bg-blue-500' },
   aprovado: { label: 'Aprovado', color: 'bg-green-500' },
   pago: { label: 'Pago', color: 'bg-purple-500' },
 };
 
 export const PESSOA_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  calculado: { label: 'Calculado', color: 'bg-blue-500' },
+  rascunho: { label: 'Rascunho', color: 'bg-yellow-500' },
+  em_revisao: { label: 'Em Revisão', color: 'bg-blue-500' },
   aprovado: { label: 'Aprovado', color: 'bg-green-500' },
   pago: { label: 'Pago', color: 'bg-purple-500' },
 };
