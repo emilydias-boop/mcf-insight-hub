@@ -498,5 +498,215 @@ export const useFechamentoMutations = () => {
 // Helper to get multiplier from régua
 export const getMultiplierFromRegua = (faixas: ReguaFaixa[], pctAtingido: number): number => {
   const faixa = faixas.find(f => pctAtingido >= f.faixa_de && pctAtingido < f.faixa_ate);
-  return faixa?.multiplicador ?? 0;
+  return faixa?.multiplicador ?? 1;
+};
+
+// ============ AUDITORIA ============
+
+export const useAuditoriaFechamento = (filters: { 
+  entidade?: string; 
+  limit?: number;
+} = {}) => {
+  return useQuery({
+    queryKey: ['auditoria-fechamento', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('auditoria_fechamento')
+        .select(`
+          *,
+          usuario:usuario_id(full_name, email)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(filters.limit || 100);
+
+      if (filters.entidade) {
+        query = query.eq('entidade', filters.entidade);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+  });
+};
+
+// ============ COPY METAS ============
+
+export const useCopyMetasFromMonth = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ fromCompetencia, toCompetencia }: { 
+      fromCompetencia: string; 
+      toCompetencia: string;
+    }) => {
+      // 1. Fetch source metas
+      const { data: sourceMetas, error: metasError } = await supabase
+        .from('metas_mes')
+        .select('*')
+        .eq('competencia', fromCompetencia);
+
+      if (metasError) throw metasError;
+      if (!sourceMetas || sourceMetas.length === 0) {
+        throw new Error('Nenhuma meta encontrada no mês de origem');
+      }
+
+      // 2. For each meta, create new with new competencia
+      for (const meta of sourceMetas) {
+        // Fetch components for this meta
+        const { data: sourceComps } = await supabase
+          .from('metas_componentes')
+          .select('*')
+          .eq('meta_mes_id', meta.id);
+
+        // Create new meta
+        const { data: newMeta, error: newMetaError } = await supabase
+          .from('metas_mes')
+          .insert({
+            competencia: toCompetencia,
+            area: meta.area,
+            cargo_base: meta.cargo_base,
+            nivel: meta.nivel,
+            cargo_catalogo_id: meta.cargo_catalogo_id,
+            regua_id: meta.regua_id,
+            ativo: meta.ativo,
+            observacao: meta.observacao,
+          })
+          .select()
+          .single();
+
+        if (newMetaError) throw newMetaError;
+
+        // Copy components
+        if (sourceComps && sourceComps.length > 0) {
+          const newComps = sourceComps.map(comp => ({
+            meta_mes_id: newMeta.id,
+            nome_componente: comp.nome_componente,
+            valor_base: comp.valor_base,
+            ordem: comp.ordem,
+            ativo: comp.ativo,
+          }));
+
+          const { error: compError } = await supabase
+            .from('metas_componentes')
+            .insert(newComps);
+
+          if (compError) throw compError;
+        }
+      }
+
+      return { count: sourceMetas.length };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['metas-mes'] });
+      toast.success(`${data.count} metas copiadas com sucesso`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+};
+
+// ============ GENERATE FECHAMENTO ============
+
+export const useGenerateFechamento = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (competencia: string) => {
+      // 1. Create fechamento_mes record
+      const { data: fechamento, error: fechError } = await supabase
+        .from('fechamento_mes')
+        .insert({ 
+          competencia, 
+          status: 'aberto',
+        })
+        .select()
+        .single();
+
+      if (fechError) throw fechError;
+
+      // 2. Fetch eligible employees (active with cargo_catalogo_id)
+      const { data: employees, error: empError } = await supabase
+        .from('employees')
+        .select(`
+          id,
+          nome_completo,
+          cargo,
+          cargo_catalogo_id,
+          cargo_catalogo:cargo_catalogo_id(
+            id,
+            fixo_valor,
+            variavel_valor,
+            ote_total,
+            modelo_variavel
+          )
+        `)
+        .eq('status', 'ativo')
+        .not('cargo_catalogo_id', 'is', null);
+
+      if (empError) throw empError;
+
+      // 3. Create fechamento_pessoa for each employee
+      if (employees && employees.length > 0) {
+        const pessoasToInsert = employees.map((emp: any) => ({
+          fechamento_mes_id: fechamento.id,
+          employee_id: emp.id,
+          cargo_catalogo_id: emp.cargo_catalogo_id,
+          fixo_valor: emp.cargo_catalogo?.fixo_valor || 0,
+          variavel_bruto: emp.cargo_catalogo?.variavel_valor || 0,
+          multiplicador_final: 1,
+          variavel_final: emp.cargo_catalogo?.variavel_valor || 0,
+          total_a_pagar: (emp.cargo_catalogo?.fixo_valor || 0) + (emp.cargo_catalogo?.variavel_valor || 0),
+          status: 'calculado',
+        }));
+
+        const { error: pessoasError } = await supabase
+          .from('fechamento_pessoa')
+          .insert(pessoasToInsert);
+
+        if (pessoasError) throw pessoasError;
+      }
+
+      // Update fechamento status
+      await supabase
+        .from('fechamento_mes')
+        .update({ status: 'calculado' })
+        .eq('id', fechamento.id);
+
+      return { fechamentoId: fechamento.id, count: employees?.length || 0 };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['fechamentos-mes'] });
+      queryClient.invalidateQueries({ queryKey: ['fechamento-pessoas'] });
+      toast.success(`Fechamento gerado com ${data.count} colaboradores`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+};
+
+// ============ APPROVE PESSOA ============
+
+export const useAproveFechamentoPessoa = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (pessoaId: string) => {
+      const { data, error } = await supabase
+        .from('fechamento_pessoa')
+        .update({ 
+          status: 'aprovado',
+          aprovado_em: new Date().toISOString(),
+        })
+        .eq('id', pessoaId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['fechamento-pessoas', data.fechamento_mes_id] });
+      toast.success('Fechamento aprovado');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 };
