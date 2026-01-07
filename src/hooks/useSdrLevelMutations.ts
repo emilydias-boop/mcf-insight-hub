@@ -110,11 +110,12 @@ export const useBulkApplyLevelToCompPlans = () => {
       
       if (sdrsError) throw sdrsError;
       if (!sdrs || sdrs.length === 0) {
-        return { updated: 0 };
+        return { updated: 0, recalculated: 0, sdrIds: [] };
       }
       
       // 3. Update all active comp plans for these SDRs
       let updated = 0;
+      const sdrIds: string[] = [];
       for (const sdr of sdrs) {
         const { error: updateError } = await supabase
           .from('sdr_comp_plan')
@@ -141,19 +142,64 @@ export const useBulkApplyLevelToCompPlans = () => {
         
         if (!updateError) {
           updated++;
+          sdrIds.push(sdr.id);
         }
       }
       
-      return { updated };
+      // 4. Recalculate payouts for current month for all affected SDRs
+      const now = new Date();
+      const anoMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      let recalculated = 0;
+      for (const sdrId of sdrIds) {
+        try {
+          const { error: recalcError } = await supabase.functions.invoke('recalculate-sdr-payout', {
+            body: { sdr_id: sdrId, ano_mes: anoMes },
+          });
+          if (!recalcError) recalculated++;
+        } catch (e) {
+          console.error(`Erro ao recalcular payout para SDR ${sdrId}:`, e);
+        }
+      }
+      
+      return { updated, recalculated, sdrIds };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['sdr-comp-plans'] });
       queryClient.invalidateQueries({ queryKey: ['all-comp-plans'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
+      if (result.recalculated > 0) {
+        toast.success(`Valores aplicados e ${result.recalculated} payouts recalculados`);
+      }
     },
     onError: (error) => {
       console.error('Bulk apply error:', error);
       toast.error('Erro ao aplicar valores em massa');
+    },
+  });
+};
+
+// Recalculate all payouts for a specific month
+export const useRecalculateMonth = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (anoMes: string) => {
+      const { data, error } = await supabase.functions.invoke('recalculate-sdr-payout', {
+        body: { ano_mes: anoMes },
+      });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-payouts'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-kpi'] });
+      toast.success(`${data?.processed || 0} payouts recalculados`);
+    },
+    onError: (error) => {
+      console.error('Recalculate month error:', error);
+      toast.error('Erro ao recalcular payouts');
     },
   });
 };

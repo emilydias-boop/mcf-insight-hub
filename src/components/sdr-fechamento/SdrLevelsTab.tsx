@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { useSdrLevels, useUpdateSdrLevel, useBulkApplyLevelToCompPlans, useSdrsByLevel } from '@/hooks/useSdrLevelMutations';
+import { useSdrLevels, useUpdateSdrLevel, useBulkApplyLevelToCompPlans, useSdrsByLevel, useRecalculateMonth } from '@/hooks/useSdrLevelMutations';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Zap, Loader2, Users } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pencil, Zap, Loader2, Users, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { format, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface SdrLevel {
   level: number;
@@ -34,13 +37,32 @@ export const SdrLevelsTab = () => {
   const { data: sdrsByLevel } = useSdrsByLevel();
   const updateLevel = useUpdateSdrLevel();
   const bulkApply = useBulkApplyLevelToCompPlans();
+  const recalculateMonth = useRecalculateMonth();
 
   const [editingLevel, setEditingLevel] = useState<SdrLevel | null>(null);
   const [applyingLevel, setApplyingLevel] = useState<number | null>(null);
   const [formData, setFormData] = useState<Partial<SdrLevel>>({});
+  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
 
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  // Generate last 6 months for selection
+  const monthOptions = Array.from({ length: 6 }, (_, i) => {
+    const date = subMonths(new Date(), i);
+    return {
+      value: format(date, 'yyyy-MM'),
+      label: format(date, 'MMMM yyyy', { locale: ptBR }),
+    };
+  });
+
+  const handleRecalculateMonth = async () => {
+    try {
+      await recalculateMonth.mutateAsync(selectedMonth);
+    } catch (error) {
+      // Error handled by mutation
+    }
+  };
 
   const handleEdit = (level: SdrLevel) => {
     setEditingLevel(level);
@@ -99,6 +121,32 @@ export const SdrLevelsTab = () => {
           <p className="text-sm text-muted-foreground">
             Configure os valores padrão por nível e aplique em massa aos planos OTE
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={handleRecalculateMonth}
+            disabled={recalculateMonth.isPending}
+          >
+            {recalculateMonth.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Recalcular Mês
+          </Button>
         </div>
       </div>
 
