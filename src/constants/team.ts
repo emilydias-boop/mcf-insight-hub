@@ -1,8 +1,6 @@
 // Lista completa de SDRs da Pipeline Inside Sales
 export const SDR_LIST = [
-  { nome: "Cristiane Gomes", email: "cristiane.gomes@minhacasafinanciada.com" },
   { nome: "Juliana Rodrigues", email: "juliana.rodrigues@minhacasafinanciada.com" },
-  { nome: "Angelina Maia", email: "angelina.maia@minhacasafinanciada.com" },
   { nome: "Julia Caroline", email: "julia.caroline@minhacasafinanciada.com" },
   { nome: "Antony Elias", email: "antony.elias@minhacasafinanciada.com" },
   { nome: "Vinicius Rangel", email: "rangel.vinicius@minhacasafinanciada.com" },
@@ -10,11 +8,6 @@ export const SDR_LIST = [
   { nome: "Leticia Nunes", email: "leticia.nunes@minhacasafinanciada.com" },
   { nome: "Caroline Correa", email: "carol.correa@minhacasafinanciada.com" },
   { nome: "Caroline Souza", email: "caroline.souza@minhacasafinanciada.com" },
-  { nome: "Yanca Oliveira", email: "yanca.tavares@minhacasafinanciada.com" },
-  { nome: "Cleiton Lima", email: "cleiton.lima@minhacasafinanciada.com" },
-  { nome: "Vitor Costa", email: "vitor.ferreira@minhacasafinanciada.com" },
-  { nome: "Thobson Motta", email: "thobson.motta@minhacasafinanciada.com" },
-  { nome: "Julio Caetano", email: "julio.caetano@minhacasafinanciada.com" },
 ];
 
 // Lista de Closers (para validação)

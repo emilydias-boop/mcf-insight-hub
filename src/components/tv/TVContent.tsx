@@ -10,7 +10,6 @@ import { useTVRevenueData } from "@/hooks/useTVRevenueData";
 interface TVContentProps {
   totalNovoLead: { valor: number; meta: number };
   funnelDataA: any[];
-  funnelDataB: any[];
   topSdrs: any[];
   allSdrs: any[];
   isLoading?: boolean;
@@ -27,7 +26,6 @@ const getPercentColor = (pct: number): string => {
 export function TVContent({
   totalNovoLead,
   funnelDataA,
-  funnelDataB,
   topSdrs,
   allSdrs,
   isLoading,
@@ -80,16 +78,10 @@ export function TVContent({
           />
         </div>
 
-        {/* Gauges Lead A/B */}
-        <div className="grid grid-cols-2 gap-2 shrink-0">
-          <div>
-            <h3 className="font-bold text-center text-xs mb-1">Lead A</h3>
-            <PipelineColumn funnelData={funnelDataA} leadType="A" />
-          </div>
-          <div>
-            <h3 className="font-bold text-center text-xs mb-1">Lead B</h3>
-            <PipelineColumn funnelData={funnelDataB} leadType="B" />
-          </div>
+        {/* Pipeline Lead A */}
+        <div className="shrink-0">
+          <h3 className="font-bold text-center text-xs mb-1">Lead A</h3>
+          <PipelineColumn funnelData={funnelDataA} leadType="A" />
         </div>
 
         {/* Ranking TOP 4 - SEGUNDO */}
@@ -142,9 +134,9 @@ export function TVContent({
       </div>
 
       {/* Grid principal - mais espaço para tabela */}
-      <div className="grid grid-cols-[170px_170px_160px_1fr] gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-[170px_160px_1fr] gap-4 flex-1 min-h-0">
         {/* Novo Lead Total - Compacto inline */}
-        <div className="col-span-2 flex justify-center items-center">
+        <div className="flex justify-center items-center">
           <div className="bg-card border border-primary/20 rounded px-4 py-1.5 flex items-center gap-3 text-base">
             <span className="text-sm font-semibold">📥 Novo Lead</span>
             <span className="font-bold text-foreground text-lg">{totalNovoLead.valor}/{totalNovoLead.meta}</span>
@@ -159,19 +151,13 @@ export function TVContent({
           <PipelineColumn funnelData={funnelDataA} leadType="A" />
         </div>
 
-        {/* Coluna 2: Lead B */}
-        <div className="flex flex-col gap-2 h-full">
-          <h3 className="font-bold text-center text-base">Lead B</h3>
-          <PipelineColumn funnelData={funnelDataB} leadType="B" />
-        </div>
-
-        {/* Coluna 3: Ranking */}
+        {/* Coluna 2: Ranking */}
         <div className="flex flex-col gap-2 h-full">
           <h3 className="font-bold text-center text-base">🏆 Top 4</h3>
           <SdrRanking topSdrs={topSdrs} />
         </div>
 
-        {/* Coluna 4: Tabela */}
+        {/* Coluna 3: Tabela */}
         <div className="h-full flex flex-col min-h-0 overflow-hidden">
           <SdrPerformanceTable 
             sdrs={allSdrs} 
