@@ -1,4 +1,4 @@
-// Fix reprocessed activities - Corrects created_at dates using metadata
+// Fix reprocessed activities - Robust duplicate cleanup with second-level tolerance
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('[FIX-ACTIVITIES] Starting...');
+  console.log('[FIX-ACTIVITIES] Starting robust cleanup v2...');
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -20,168 +20,159 @@ serve(async (req) => {
   );
 
   try {
-    const { dry_run = true } = await req.json().catch(() => ({ dry_run: true }));
+    const body = await req.json().catch(() => ({}));
+    const dry_run = body.dry_run !== false; // Default to true
+    const start_date = body.start_date || '2026-01-05';
+    const end_date = body.end_date || '2026-01-08';
+    const tolerance_seconds = body.tolerance_seconds || 60; // Default 60s tolerance
     
     console.log('[FIX-ACTIVITIES] Mode:', dry_run ? 'DRY RUN' : 'EXECUTE');
+    console.log('[FIX-ACTIVITIES] Date range:', start_date, 'to', end_date);
+    console.log('[FIX-ACTIVITIES] Tolerance:', tolerance_seconds, 'seconds');
 
-    // Step 1: Find activities with wrong dates
-    // Activities created on/after 2026-01-05 but metadata shows December 2025 or earlier
-    const { data: wrongDateActivities, error: fetchError } = await supabase
-      .from('deal_activities')
-      .select('id, deal_id, activity_type, from_stage, to_stage, created_at, metadata')
-      .gte('created_at', '2026-01-05T00:00:00Z')
-      .eq('activity_type', 'stage_change')
-      .not('metadata->deal_updated_stage_at', 'is', null);
+    // Step 1: Fetch all relevant activities - use pagination to avoid limit
+    let allActivities: any[] = [];
+    let offset = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: batch, error: fetchError } = await supabase
+        .from('deal_activities')
+        .select('id, deal_id, activity_type, from_stage, to_stage, created_at, metadata')
+        .gte('created_at', `${start_date}T00:00:00Z`)
+        .lte('created_at', `${end_date}T23:59:59Z`)
+        .in('activity_type', ['stage_change', 'stage_changed'])
+        .order('created_at', { ascending: true })
+        .range(offset, offset + pageSize - 1);
 
-    if (fetchError) throw fetchError;
-
-    console.log('[FIX-ACTIVITIES] Found activities with metadata date:', wrongDateActivities?.length || 0);
-
-    // Filter activities where metadata date is before January 2026
-    const activitiesToFix = (wrongDateActivities || []).filter(activity => {
-      const metadataDate = activity.metadata?.deal_updated_stage_at;
-      if (!metadataDate) return false;
+      if (fetchError) throw fetchError;
+      if (!batch || batch.length === 0) break;
       
-      try {
-        const originalDate = new Date(metadataDate);
-        const jan2026 = new Date('2026-01-01T00:00:00Z');
-        return originalDate < jan2026;
-      } catch {
-        return false;
-      }
+      allActivities = allActivities.concat(batch);
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    console.log('[FIX-ACTIVITIES] Total activities in range:', allActivities.length);
+
+    // Step 2: Group by (deal_id + activity_type + from_stage + to_stage)
+    // Then within each group, find duplicates within tolerance_seconds of each other
+    const groupsByKey: Record<string, Array<{id: string, created_at: string, ts: number}>> = {};
+    
+    allActivities.forEach((activity: any) => {
+      const key = [
+        activity.deal_id,
+        activity.activity_type,
+        activity.from_stage || 'null',
+        activity.to_stage || 'null'
+      ].join('|');
+      
+      if (!groupsByKey[key]) groupsByKey[key] = [];
+      groupsByKey[key].push({
+        id: activity.id,
+        created_at: activity.created_at,
+        ts: new Date(activity.created_at).getTime()
+      });
     });
 
-    console.log('[FIX-ACTIVITIES] Activities with December dates:', activitiesToFix.length);
+    // Step 3: Within each group, find duplicates using tolerance window
+    const duplicateIds: string[] = [];
+    const duplicateClusters: Array<{key: string, kept: string, removed: string[], count: number}> = [];
 
-    // Step 2: Fix dates
-    const fixedActivities: any[] = [];
+    Object.entries(groupsByKey).forEach(([key, activities]) => {
+      if (activities.length <= 1) return;
+      
+      // Sort by timestamp
+      activities.sort((a, b) => a.ts - b.ts);
+      
+      // Use a clustering approach: activities within tolerance_seconds form a cluster
+      const clusters: Array<{id: string, ts: number}[]> = [];
+      let currentCluster: Array<{id: string, ts: number}> = [activities[0]];
+      
+      for (let i = 1; i < activities.length; i++) {
+        const timeDiff = (activities[i].ts - currentCluster[currentCluster.length - 1].ts) / 1000;
+        
+        if (timeDiff <= tolerance_seconds) {
+          // Same cluster
+          currentCluster.push(activities[i]);
+        } else {
+          // New cluster
+          if (currentCluster.length > 0) clusters.push(currentCluster);
+          currentCluster = [activities[i]];
+        }
+      }
+      if (currentCluster.length > 0) clusters.push(currentCluster);
+      
+      // For each cluster with more than 1 activity, keep the first, remove the rest
+      clusters.forEach(cluster => {
+        if (cluster.length > 1) {
+          const kept = cluster[0].id;
+          const removed = cluster.slice(1).map(a => a.id);
+          
+          duplicateClusters.push({
+            key,
+            kept,
+            removed,
+            count: cluster.length
+          });
+          
+          duplicateIds.push(...removed);
+        }
+      });
+    });
+
+    console.log('[FIX-ACTIVITIES] Duplicate clusters found:', duplicateClusters.length);
+    console.log('[FIX-ACTIVITIES] Total duplicates to remove:', duplicateIds.length);
+
+    // Step 4: Execute deletions if not dry_run
+    let duplicatesRemoved = 0;
     const errors: any[] = [];
 
-    for (const activity of activitiesToFix) {
-      const originalDate = activity.metadata?.deal_updated_stage_at;
-      
-      if (!dry_run) {
-        const { error: updateError } = await supabase
+    if (!dry_run && duplicateIds.length > 0) {
+      // Remove duplicates in batches
+      for (let i = 0; i < duplicateIds.length; i += 100) {
+        const batch = duplicateIds.slice(i, i + 100);
+        const { error: delError } = await supabase
           .from('deal_activities')
-          .update({ created_at: originalDate })
-          .eq('id', activity.id);
-
-        if (updateError) {
-          errors.push({ id: activity.id, error: updateError.message });
+          .delete()
+          .in('id', batch);
+        
+        if (delError) {
+          errors.push({ type: 'delete', batch: i, error: delError.message });
         } else {
-          fixedActivities.push({
-            id: activity.id,
-            deal_id: activity.deal_id,
-            old_date: activity.created_at,
-            new_date: originalDate,
-            to_stage: activity.to_stage
-          });
+          duplicatesRemoved += batch.length;
         }
-      } else {
-        fixedActivities.push({
-          id: activity.id,
-          deal_id: activity.deal_id,
-          old_date: activity.created_at,
-          new_date: originalDate,
-          to_stage: activity.to_stage,
-          would_fix: true
-        });
       }
+      console.log('[FIX-ACTIVITIES] Duplicates removed:', duplicatesRemoved);
     }
 
-    console.log('[FIX-ACTIVITIES] Fixed:', fixedActivities.length, 'Errors:', errors.length);
-
-    // Step 3: Remove duplicates (always check, not just when dates fixed)
-    let duplicatesRemoved = 0;
-    let duplicatesFound = 0;
-    
-    if (!dry_run) {
-      // Find and remove duplicate activities manually
-      // Get all stage_change activities and identify duplicates
-      const { data: allActivities, error: allError } = await supabase
-        .from('deal_activities')
-        .select('id, deal_id, to_stage, created_at')
-        .eq('activity_type', 'stage_change')
-        .order('created_at', { ascending: true });
-
-      if (!allError && allActivities) {
-        // Group by deal_id + to_stage + minute
-        const groups: Record<string, string[]> = {};
-        allActivities.forEach((a: any) => {
-          const minute = a.created_at?.substring(0, 16) || '';
-          const key = `${a.deal_id}-${a.to_stage}-${minute}`;
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(a.id);
-        });
-
-        // Find groups with more than 1 activity (duplicates)
-        const duplicateIds: string[] = [];
-        Object.values(groups).forEach(ids => {
-          if (ids.length > 1) {
-            // Keep first, mark rest as duplicates
-            duplicateIds.push(...ids.slice(1));
-          }
-        });
-
-        duplicatesFound = duplicateIds.length;
-        console.log('[FIX-ACTIVITIES] Found duplicate IDs:', duplicatesFound);
-
-        // Delete duplicates in batches
-        for (let i = 0; i < duplicateIds.length; i += 100) {
-          const batch = duplicateIds.slice(i, i + 100);
-          const { error: delError } = await supabase
-            .from('deal_activities')
-            .delete()
-            .in('id', batch);
-          
-          if (!delError) duplicatesRemoved += batch.length;
-        }
-        console.log('[FIX-ACTIVITIES] Duplicates removed:', duplicatesRemoved);
-      }
-    } else {
-      // Dry run - just count duplicates
-      const { data: allActivities } = await supabase
-        .from('deal_activities')
-        .select('id, deal_id, to_stage, created_at')
-        .eq('activity_type', 'stage_change')
-        .order('created_at', { ascending: true });
-
-      if (allActivities) {
-        const groups: Record<string, string[]> = {};
-        allActivities.forEach((a: any) => {
-          const minute = a.created_at?.substring(0, 16) || '';
-          const key = `${a.deal_id}-${a.to_stage}-${minute}`;
-          if (!groups[key]) groups[key] = [];
-          groups[key].push(a.id);
-        });
-
-        Object.values(groups).forEach(ids => {
-          if (ids.length > 1) {
-            duplicatesFound += ids.length - 1;
-          }
-        });
-      }
-    }
-
-    // Step 4: Summary by month
-    const byMonth: Record<string, number> = {};
-    fixedActivities.forEach(a => {
-      const month = a.new_date?.substring(0, 7) || 'unknown';
-      byMonth[month] = (byMonth[month] || 0) + 1;
+    // Stats by deal
+    const dealStats: Record<string, number> = {};
+    duplicateClusters.forEach(c => {
+      const dealId = c.key.split('|')[0];
+      dealStats[dealId] = (dealStats[dealId] || 0) + c.removed.length;
     });
 
     return new Response(
       JSON.stringify({
         success: true,
         dry_run,
-        total_found: wrongDateActivities?.length || 0,
-        activities_to_fix: activitiesToFix.length,
-        fixed: fixedActivities.length,
-        duplicates_found: duplicatesFound,
+        tolerance_seconds,
+        date_range: { start: start_date, end: end_date },
+        total_activities_in_range: allActivities.length,
+        duplicate_clusters: duplicateClusters.length,
+        duplicates_to_remove: duplicateIds.length,
         duplicates_removed: duplicatesRemoved,
         errors: errors.length,
-        by_month: byMonth,
-        sample: fixedActivities.slice(0, 10),
+        top_affected_deals: Object.entries(dealStats)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([deal_id, count]) => ({ deal_id, duplicates: count })),
+        sample_clusters: duplicateClusters.slice(0, 10).map(c => ({
+          key: c.key,
+          kept: c.kept,
+          removed_count: c.removed.length
+        })),
         error_details: errors.slice(0, 5)
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
