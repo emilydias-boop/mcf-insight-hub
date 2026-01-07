@@ -408,8 +408,8 @@ const FechamentoSDRDetail = () => {
 
           <SdrIndicatorCard
             title="Tentativas de Ligações"
-            meta={compPlan?.meta_tentativas || 0}
-            metaAjustada={payout.meta_tentativas_ajustada ?? undefined}
+            meta={84}
+            metaAjustada={payout.meta_tentativas_ajustada ?? (84 * diasUteisMes)}
             realizado={kpi?.tentativas_ligacoes || 0}
             pct={payout.pct_tentativas || 0}
             multiplicador={payout.mult_tentativas || 0}
@@ -420,7 +420,7 @@ const FechamentoSDRDetail = () => {
 
               <SdrIndicatorCard
                 title="Organização Clint"
-                meta={compPlan?.meta_organizacao || 100}
+                meta={100}
                 realizado={kpi?.score_organizacao || 0}
                 pct={payout.pct_organizacao || 0}
                 multiplicador={payout.mult_organizacao || 0}

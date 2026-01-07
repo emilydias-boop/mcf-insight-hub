@@ -41,6 +41,10 @@ export const KpiEditForm = ({
 }: KpiEditFormProps) => {
   // Calcular metas baseadas na meta diária do SDR
   const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
+  // Meta fixa de tentativas: 84 por dia × dias úteis
+  const metaTentativasCalculada = 84 * diasUteisMes;
+  // Meta fixa de organização: 100%
+  const metaOrganizacaoFixa = 100;
   const [formData, setFormData] = useState({
     reunioes_agendadas: 0,
     reunioes_realizadas: 0,
@@ -115,9 +119,9 @@ export const KpiEditForm = ({
     ? ((formData.no_shows / formData.reunioes_agendadas) * 100).toFixed(1)
     : '0.0';
 
-  // Check for pending manual inputs
-  const tentativasPending = formData.tentativas_ligacoes === 0 && (compPlan?.meta_tentativas || 0) > 0;
-  const organizacaoPending = formData.score_organizacao === 0 && (compPlan?.meta_organizacao || 0) > 0;
+  // Check for pending manual inputs (usando metas calculadas, não do plano)
+  const tentativasPending = formData.tentativas_ligacoes === 0 && metaTentativasCalculada > 0;
+  const organizacaoPending = formData.score_organizacao === 0 && metaOrganizacaoFixa > 0;
   const hasPendingFields = tentativasPending || organizacaoPending;
 
   return (
@@ -258,11 +262,9 @@ export const KpiEditForm = ({
                   Manual
                 </Badge>
               </Label>
-              {compPlan && compPlan.meta_tentativas > 0 && (
-                <span className="text-[10px] text-muted-foreground/70 block">
-                  Meta: {compPlan.meta_tentativas}
-                </span>
-              )}
+              <span className="text-[10px] text-muted-foreground/70 block">
+                Meta: {metaTentativasCalculada} (84/dia × {diasUteisMes} dias)
+              </span>
               <Input
                 id="tentativas_ligacoes"
                 type="number"
@@ -289,11 +291,9 @@ export const KpiEditForm = ({
                   Manual
                 </Badge>
               </Label>
-              {compPlan && (
-                <span className="text-[10px] text-muted-foreground/70 block">
-                  Meta: {compPlan.meta_organizacao}%
-                </span>
-              )}
+              <span className="text-[10px] text-muted-foreground/70 block">
+                Meta: {metaOrganizacaoFixa}% (fixa)
+              </span>
               <Input
                 id="score_organizacao"
                 type="number"
