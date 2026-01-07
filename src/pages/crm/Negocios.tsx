@@ -41,22 +41,39 @@ const Negocios = () => {
   
   // Calcular o originId correto para usar nas queries
   const effectiveOriginId = useMemo(() => {
-    // Se já tem uma origem selecionada manualmente, usar ela
+    // Se já tem uma origem específica selecionada, usar ela
     if (selectedOriginId) return selectedOriginId;
     
-    // Se tem um pipeline selecionado, verificar se é um grupo ou uma origem
-    if (selectedPipelineId && pipelineOrigins && Array.isArray(pipelineOrigins)) {
-      // pipelineOrigins pode ser uma lista flat de origens quando um pipeline está selecionado
-      // Nesse caso, não há originId implícito - precisamos que o usuário selecione
-      // Ou podemos pegar a primeira origem como default
-      if (pipelineOrigins.length > 0 && !('children' in pipelineOrigins[0])) {
-        // É uma lista flat de origens - pegar a primeira como default
-        return (pipelineOrigins[0] as any).id;
-      }
-    }
+    // Se tem um pipeline selecionado mas nenhuma origem específica,
+    // passar o pipelineId (group_id) - o hook useCRMDeals
+    // já tem lógica para buscar todas origins do grupo
+    if (selectedPipelineId) return selectedPipelineId;
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins]);
+  }, [selectedOriginId, selectedPipelineId]);
+  
+  // Realtime subscription para atualização automática
+  useEffect(() => {
+    const channel = supabase
+      .channel('crm-deals-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'crm_deals'
+        },
+        (payload) => {
+          console.log('[Realtime] Deal change:', payload);
+          queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   useEffect(() => {
