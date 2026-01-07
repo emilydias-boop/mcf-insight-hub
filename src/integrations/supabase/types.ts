@@ -3702,6 +3702,7 @@ export type Database = {
           created_at: string | null
           id: string
           intermediacoes_contrato: number | null
+          modo_entrada: string | null
           no_shows: number | null
           reunioes_agendadas: number | null
           reunioes_realizadas: number | null
@@ -3716,6 +3717,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           intermediacoes_contrato?: number | null
+          modo_entrada?: string | null
           no_shows?: number | null
           reunioes_agendadas?: number | null
           reunioes_realizadas?: number | null
@@ -3730,6 +3732,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           intermediacoes_contrato?: number | null
+          modo_entrada?: string | null
           no_shows?: number | null
           reunioes_agendadas?: number | null
           reunioes_realizadas?: number | null
