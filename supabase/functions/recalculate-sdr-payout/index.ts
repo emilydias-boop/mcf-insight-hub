@@ -58,11 +58,8 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: numb
   // Meta de agendadas = meta_diaria do SDR × dias úteis do mês
   const metaAgendadasAjustada = Math.round((sdrMetaDiaria || 0) * diasUteisReal);
   
-  // Manter proporção para realizadas e tentativas baseado no comp_plan
-  const proporcaoRealizadas = compPlan.meta_reunioes_agendadas > 0 
-    ? compPlan.meta_reunioes_realizadas / compPlan.meta_reunioes_agendadas 
-    : 0.7;
-  const metaRealizadasAjustada = Math.round(metaAgendadasAjustada * proporcaoRealizadas);
+  // Meta de Realizadas = 70% do que foi REALMENTE agendado (não da meta teórica)
+  const metaRealizadasAjustada = Math.round(kpi.reunioes_agendadas * 0.7);
   
   const proporcaoTentativas = compPlan.meta_reunioes_agendadas > 0 
     ? compPlan.meta_tentativas / compPlan.meta_reunioes_agendadas 
