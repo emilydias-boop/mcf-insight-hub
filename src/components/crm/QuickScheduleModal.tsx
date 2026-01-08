@@ -577,7 +577,7 @@ export function QuickScheduleModal({
             />
           </div>
 
-          {/* Auto-send WhatsApp Toggle */}
+          {/* Auto-send WhatsApp Toggle - hidden for now
           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-2">
               <Send className="h-4 w-4 text-green-600" />
@@ -588,6 +588,7 @@ export function QuickScheduleModal({
               onCheckedChange={setAutoSendWhatsApp} 
             />
           </div>
+          */}
 
           {/* Submit */}
           <Button 
