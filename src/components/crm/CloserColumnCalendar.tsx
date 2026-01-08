@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { format, parseISO, isSameDay, addMinutes, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Settings } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from '@/hooks/useAgendaData';
@@ -13,6 +14,7 @@ interface CloserColumnCalendarProps {
   selectedDate: Date;
   onSelectMeeting: (meeting: MeetingSlot) => void;
   onSelectSlot: (closerId: string, date: Date) => void;
+  onEditHours?: () => void;
 }
 
 const SLOT_DURATION = 30; // 30 min slots
@@ -33,7 +35,8 @@ export function CloserColumnCalendar({
   blockedDates,
   selectedDate, 
   onSelectMeeting,
-  onSelectSlot 
+  onSelectSlot,
+  onEditHours
 }: CloserColumnCalendarProps) {
   const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
 
@@ -109,8 +112,17 @@ export function CloserColumnCalendar({
         className="grid border-b bg-muted/50 sticky top-0 z-10"
         style={{ gridTemplateColumns: `80px repeat(${closers.length}, 1fr)` }}
       >
-        <div className="p-3 text-center text-xs font-medium text-muted-foreground border-r">
-          {format(selectedDate, "EEE dd/MM", { locale: ptBR })}
+        <div className="p-3 text-center text-xs font-medium text-muted-foreground border-r flex items-center justify-center gap-1">
+          <span>{format(selectedDate, "EEE dd/MM", { locale: ptBR })}</span>
+          {onEditHours && (
+            <button
+              onClick={onEditHours}
+              className="hover:bg-muted rounded p-0.5 transition-colors"
+              title="Editar horários"
+            >
+              <Settings className="h-3 w-3" />
+            </button>
+          )}
         </div>
         {closers.map(closer => (
           <div 
