@@ -14,6 +14,7 @@ interface CreateEventRequest {
   durationMinutes?: number;
   leadType?: string;
   notes?: string;
+  sdrEmail?: string;
 }
 
 // Google Calendar JWT authentication
@@ -474,11 +475,26 @@ serve(async (req) => {
       // Continue without Google Calendar - meeting will be created for tracking only
     }
 
-    // Get current user for booked_by tracking
+    // Get booked_by - either from specified SDR email or current user
     const authHeader = req.headers.get('Authorization');
     let bookedBy = null;
     
-    if (authHeader) {
+    // First try to find by sdrEmail if provided
+    if (body.sdrEmail) {
+      const { data: sdrProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', body.sdrEmail)
+        .single();
+      
+      if (sdrProfile) {
+        bookedBy = sdrProfile.id;
+        console.log('📋 SDR atribuído:', body.sdrEmail);
+      }
+    }
+    
+    // Fallback to logged-in user if no SDR specified or not found
+    if (!bookedBy && authHeader) {
       const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
       bookedBy = user?.id;
     }

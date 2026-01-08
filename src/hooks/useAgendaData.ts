@@ -726,6 +726,70 @@ export function useSearchDealsForSchedule(query: string) {
   });
 }
 
+// Hook to search weekly meeting leads
+export function useSearchWeeklyMeetingLeads(statusFilter?: string) {
+  return useQuery({
+    queryKey: ['weekly-meeting-leads', statusFilter],
+    queryFn: async () => {
+      const now = new Date();
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+      
+      let query = supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          deal_id,
+          meeting_slot_id,
+          meeting_slots!inner(
+            scheduled_at,
+            closer:closers(name)
+          )
+        `)
+        .gte('meeting_slots.scheduled_at', weekStart.toISOString())
+        .lte('meeting_slots.scheduled_at', weekEnd.toISOString());
+      
+      if (statusFilter && statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      
+      const { data: attendees, error } = await query.order('meeting_slots(scheduled_at)', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Buscar dados dos deals
+      const dealIds = [...new Set(attendees?.map(a => a.deal_id).filter(Boolean))];
+      
+      let deals: any[] = [];
+      if (dealIds.length > 0) {
+        const { data } = await supabase
+          .from('crm_deals')
+          .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
+          .in('id', dealIds);
+        deals = data || [];
+      }
+      
+      // Combinar dados
+      return (attendees || []).map(a => {
+        const deal = deals.find(d => d.id === a.deal_id);
+        const meetingSlot = a.meeting_slots as any;
+        return {
+          id: a.id,
+          status: a.status,
+          deal_id: a.deal_id,
+          scheduled_at: meetingSlot?.scheduled_at,
+          closer_name: meetingSlot?.closer?.name || 'Sem closer',
+          deal: deal ? {
+            ...deal,
+            contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
+          } : null
+        };
+      });
+    },
+  });
+}
+
 export function useCreateMeeting() {
   const queryClient = useQueryClient();
 
@@ -739,6 +803,7 @@ export function useCreateMeeting() {
       notes,
       leadType,
       sendNotification = true,
+      sdrEmail,
     }: {
       closerId: string;
       dealId: string;
@@ -748,6 +813,7 @@ export function useCreateMeeting() {
       notes?: string;
       leadType?: LeadType;
       sendNotification?: boolean;
+      sdrEmail?: string;
     }) => {
       // Chamar a edge function que cria o evento no Google Calendar com Meet
       const { data, error } = await supabase.functions.invoke('calendly-create-event', {
@@ -759,6 +825,7 @@ export function useCreateMeeting() {
           durationMinutes,
           notes,
           leadType,
+          sdrEmail,
         },
       });
 
@@ -773,6 +840,7 @@ export function useCreateMeeting() {
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['slot-availability'] });
+      queryClient.invalidateQueries({ queryKey: ['weekly-meeting-leads'] });
       toast.success('Reunião agendada com Google Meet');
     },
     onError: (error: any) => {
