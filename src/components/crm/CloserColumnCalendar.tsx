@@ -16,8 +16,8 @@ interface CloserColumnCalendarProps {
 }
 
 const SLOT_DURATION = 30; // 30 min slots
-const START_HOUR = 8;
-const END_HOUR = 18;
+const DEFAULT_START_HOUR = 8;
+const DEFAULT_END_HOUR = 18;
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: 'bg-primary/90 hover:bg-primary',
@@ -35,19 +35,41 @@ export function CloserColumnCalendar({
   onSelectMeeting,
   onSelectSlot 
 }: CloserColumnCalendarProps) {
-  // Generate time slots (30 min intervals)
+  const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+
+  // Generate time slots dynamically based on closers availability for this day
   const timeSlots = useMemo(() => {
+    let minHour = DEFAULT_END_HOUR;
+    let maxHour = DEFAULT_START_HOUR;
+
+    for (const closer of closers) {
+      const dayAvailability = closer.availability.filter(
+        a => a.day_of_week === dayOfWeek && a.is_active
+      );
+      
+      for (const avail of dayAvailability) {
+        const startHour = parseInt(avail.start_time.split(':')[0]);
+        const endHour = parseInt(avail.end_time.split(':')[0]);
+        minHour = Math.min(minHour, startHour);
+        maxHour = Math.max(maxHour, endHour);
+      }
+    }
+
+    // Fallback if no availability found
+    if (minHour >= maxHour) {
+      minHour = DEFAULT_START_HOUR;
+      maxHour = DEFAULT_END_HOUR;
+    }
+
     const slots: Date[] = [];
-    for (let hour = START_HOUR; hour < END_HOUR; hour++) {
+    for (let hour = minHour; hour < maxHour; hour++) {
       for (let minute = 0; minute < 60; minute += SLOT_DURATION) {
         const slot = setMinutes(setHours(selectedDate, hour), minute);
         slots.push(slot);
       }
     }
     return slots;
-  }, [selectedDate]);
-
-  const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+  }, [selectedDate, closers, dayOfWeek]);
 
   const isSlotAvailable = (closerId: string, slotTime: Date) => {
     const closer = closers.find(c => c.id === closerId);
