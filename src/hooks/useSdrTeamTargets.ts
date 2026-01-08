@@ -86,25 +86,35 @@ export const useUpsertSdrTargets = () => {
       // For each target type, upsert the value
       const upsertPromises = Object.entries(targets).map(async ([type, value]) => {
         const config = SDR_TARGET_CONFIGS.find(c => c.type === type);
-        if (!config) return;
+        if (!config) return { success: true };
 
-        // Check if target exists
-        const { data: existing } = await supabase
+        // Check if target exists using maybeSingle() to avoid 406 error
+        const { data: existing, error: selectError } = await supabase
           .from('team_targets')
           .select('id')
           .eq('target_type', type)
           .eq('week_start', weekStartStr)
-          .single();
+          .maybeSingle();
+
+        if (selectError) {
+          console.error('Error checking existing target:', selectError);
+          return { success: false, error: selectError };
+        }
 
         if (existing) {
           // Update
-          return supabase
+          const { error: updateError } = await supabase
             .from('team_targets')
             .update({ target_value: value })
             .eq('id', existing.id);
+          
+          if (updateError) {
+            console.error('Error updating target:', updateError);
+            return { success: false, error: updateError };
+          }
         } else {
           // Insert
-          return supabase
+          const { error: insertError } = await supabase
             .from('team_targets')
             .insert({
               target_type: type,
@@ -114,10 +124,21 @@ export const useUpsertSdrTargets = () => {
               target_value: value,
               current_value: 0,
             });
+          
+          if (insertError) {
+            console.error('Error inserting target:', insertError);
+            return { success: false, error: insertError };
+          }
         }
+
+        return { success: true };
       });
 
-      await Promise.all(upsertPromises);
+      const results = await Promise.all(upsertPromises);
+      const failed = results.filter(r => r && !r.success);
+      if (failed.length > 0) {
+        throw new Error(`Falha ao salvar ${failed.length} metas`);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sdr-team-targets'] });
