@@ -791,59 +791,40 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </AlertDialogContent>
             </AlertDialog>
 
-            {/* Danger Actions - Cancel only */}
-            {isPending && (
+            {/* Delete button - Only visible for coordenador and above */}
+            {isPending && canDeleteMeeting && (
               <>
                 <Separator />
-                <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-muted-foreground">Ações de Status</h4>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-destructive hover:text-destructive"
-                    onClick={() => cancelMeeting.mutate(meeting.id)}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Cancelar Reunião
-                  </Button>
-                </div>
-                
-                {/* Delete button - Only visible for coordenador and above */}
-                {canDeleteMeeting && (
-                  <>
-                    <Separator />
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
-                          className="w-full"
-                          disabled={deleteMeeting.isPending}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {deleteMeeting.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir reunião?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. A reunião será excluída permanentemente do sistema.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Voltar</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={handleDeleteMeeting}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </>
-                )}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="w-full"
+                      disabled={deleteMeeting.isPending}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {deleteMeeting.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Excluir reunião?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta ação não pode ser desfeita. A reunião será excluída permanentemente do sistema.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Voltar</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleDeleteMeeting}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Excluir
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </>
             )}
 
