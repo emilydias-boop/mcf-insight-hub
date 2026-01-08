@@ -14,6 +14,7 @@ export interface MeetingAttendee {
   notified_at: string | null;
   booked_by: string | null;
   notes: string | null;
+  closer_notes: string | null;
   contact?: {
     id: string;
     name: string;
@@ -147,6 +148,7 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
             notified_at,
             booked_by,
             notes,
+            closer_notes,
             contact:crm_contacts(id, name, phone, email),
             deal:crm_deals(id, name)
           )
@@ -959,6 +961,60 @@ export function useDeleteMeeting() {
     },
     onError: () => {
       toast.error('Erro ao excluir reunião');
+    },
+  });
+}
+
+// ============ Attendee Status and Notes Hooks ============
+
+export function useUpdateAttendeeStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ attendeeId, status }: { attendeeId: string; status: string }) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ status })
+        .eq('id', attendeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      toast.success('Status atualizado');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar status');
+    },
+  });
+}
+
+export function useUpdateAttendeeNotes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      attendeeId, 
+      field, 
+      notes 
+    }: { 
+      attendeeId: string; 
+      field: 'notes' | 'closer_notes'; 
+      notes: string;
+    }) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ [field]: notes })
+        .eq('id', attendeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      toast.success('Nota salva');
+    },
+    onError: () => {
+      toast.error('Erro ao salvar nota');
     },
   });
 }
