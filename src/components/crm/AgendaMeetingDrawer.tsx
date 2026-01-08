@@ -371,8 +371,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const selectedParticipant = participants.find(p => p.id === selectedParticipantId) || participants[0];
   
   // Check if current user can edit note for the selected participant
-  const canEditSelectedNote = user?.id === selectedParticipant?.bookedBy 
-    && (activeMeeting?.status === 'scheduled' || activeMeeting?.status === 'rescheduled');
+  // Roles que podem editar notas de qualquer SDR
+  const NOTE_EDIT_ALLOWED_ROLES = ['admin', 'manager', 'coordenador'];
+  const isNoteOwner = user?.id === selectedParticipant?.bookedBy;
+  const hasElevatedRole = role && NOTE_EDIT_ALLOWED_ROLES.includes(role);
+  const isEditableStatus = activeMeeting?.status === 'scheduled' || activeMeeting?.status === 'rescheduled';
+  
+  const canEditSelectedNote = (isNoteOwner || hasElevatedRole) && isEditableStatus;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
