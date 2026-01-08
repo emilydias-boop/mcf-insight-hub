@@ -7,12 +7,12 @@ import {
   Lock, DollarSign, UserCircle
 } from 'lucide-react';
 import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerClose,
-} from '@/components/ui/drawer';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetClose,
+} from '@/components/ui/sheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -271,21 +271,16 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const participants = getParticipantsList();
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90vh]">
-        <DrawerHeader className="border-b pb-4">
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
+        <SheetHeader className="border-b p-4">
           <div className="flex items-center justify-between">
-            <DrawerTitle className="text-lg">
+            <SheetTitle className="text-lg">
               {allMeetings.length > 1 
                 ? `Reuniões às ${format(parseISO(meeting.scheduled_at), 'HH:mm')} (${allMeetings.length})`
                 : 'Detalhes da Reunião'
               }
-            </DrawerTitle>
-            <DrawerClose asChild>
-              <Button variant="ghost" size="icon">
-                <X className="h-4 w-4" />
-              </Button>
-            </DrawerClose>
+            </SheetTitle>
           </div>
           
           {/* Tabs for multiple meetings */}
@@ -304,7 +299,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               ))}
             </div>
           )}
-        </DrawerHeader>
+        </SheetHeader>
 
         <ScrollArea className="flex-1 p-6">
           <div className="space-y-6">
@@ -700,7 +695,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
           </div>
         </ScrollArea>
-      </DrawerContent>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 }
