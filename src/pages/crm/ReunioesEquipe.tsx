@@ -19,6 +19,7 @@ import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { GhostAppointmentsAlert } from "@/components/sdr/GhostAppointmentsAlert";
 import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
+import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { SDR_LIST } from "@/constants/team";
 
 type DatePreset = "today" | "week" | "month" | "custom";
@@ -132,6 +133,12 @@ export default function ReunioesEquipe() {
   // Ghost appointments data
   const { data: ghostCountBySdr } = useGhostCountBySdr();
 
+  // Fetch meeting_slots KPIs for today (agenda-based)
+  const { data: dayAgendaKPIs } = useMeetingSlotsKPIs(dayStart, dayEnd);
+
+  // Fetch meeting_slots KPIs for the week (agenda-based)
+  const { data: weekAgendaKPIs } = useMeetingSlotsKPIs(weekStartDate, weekEndDate);
+
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo(() => {
     return SDR_LIST.map(sdr => ({
@@ -176,22 +183,22 @@ export default function ReunioesEquipe() {
     return baseData.filter(s => s.sdrEmail === sdrFilter);
   }, [datePreset, mergedBySDR, bySDR, sdrFilter]);
 
-  // Values for goals panel
+  // Values for goals panel - using meeting_slots for R1 metrics
   const dayValues = useMemo(() => ({
-    agendamento: dayKPIs.totalAgendamentos,
-    r1Agendada: dayKPIs.totalAgendamentos, // R1 Agendada = total agendamentos
-    r1Realizada: dayKPIs.totalRealizadas,
-    noShow: dayKPIs.totalNoShows,
+    agendamento: dayKPIs.totalAgendamentos, // Kept: deal_activities-based
+    r1Agendada: dayAgendaKPIs?.totalAgendadas || 0, // NEW: meeting_slots for today
+    r1Realizada: dayAgendaKPIs?.totalRealizadas || 0,
+    noShow: dayAgendaKPIs?.totalNoShows || 0,
     contrato: dayKPIs.totalContratos,
-  }), [dayKPIs]);
+  }), [dayKPIs, dayAgendaKPIs]);
 
   const weekValues = useMemo(() => ({
-    agendamento: weekKPIs.totalAgendamentos,
-    r1Agendada: weekKPIs.totalAgendamentos,
-    r1Realizada: weekKPIs.totalRealizadas,
-    noShow: weekKPIs.totalNoShows,
+    agendamento: weekKPIs.totalAgendamentos, // Kept: deal_activities-based
+    r1Agendada: weekAgendaKPIs?.totalAgendadas || 0, // NEW: meeting_slots for the week
+    r1Realizada: weekAgendaKPIs?.totalRealizadas || 0,
+    noShow: weekAgendaKPIs?.totalNoShows || 0,
     contrato: weekKPIs.totalContratos,
-  }), [weekKPIs]);
+  }), [weekKPIs, weekAgendaKPIs]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
