@@ -8,6 +8,7 @@ export interface CloserMetricsRow {
   r2Agendadas: number;
   r2Realizadas: number;
   contratosPagos: number;
+  vendasRealizadas: number;
   noShows: number;
   taxaConversao: number;
   taxaR2: number;
@@ -33,6 +34,7 @@ export function useCloserMetrics({ startDate, endDate }: UseCloserMetricsParams)
           "Reunião 02 Agendada", 
           "Reunião 02 Realizada",
           "Contrato Pago",
+          "Venda realizada",
           "No-Show",
         ]);
 
@@ -44,6 +46,7 @@ export function useCloserMetrics({ startDate, endDate }: UseCloserMetricsParams)
         r2Agendadas: number;
         r2Realizadas: number;
         contratosPagos: number;
+        vendasRealizadas: number;
         noShows: number;
       }> = {};
 
@@ -53,6 +56,7 @@ export function useCloserMetrics({ startDate, endDate }: UseCloserMetricsParams)
           r2Agendadas: 0,
           r2Realizadas: 0,
           contratosPagos: 0,
+          vendasRealizadas: 0,
           noShows: 0,
         };
       });
@@ -84,6 +88,9 @@ export function useCloserMetrics({ startDate, endDate }: UseCloserMetricsParams)
           case "Contrato Pago":
             metrics.contratosPagos++;
             break;
+          case "Venda realizada":
+            metrics.vendasRealizadas++;
+            break;
           case "No-Show":
             metrics.noShows++;
             break;
@@ -114,6 +121,7 @@ export function useCloserMetrics({ startDate, endDate }: UseCloserMetricsParams)
         r2Agendadas: result.reduce((sum, r) => sum + r.r2Agendadas, 0),
         r2Realizadas: result.reduce((sum, r) => sum + r.r2Realizadas, 0),
         contratosPagos: result.reduce((sum, r) => sum + r.contratosPagos, 0),
+        vendasRealizadas: result.reduce((sum, r) => sum + r.vendasRealizadas, 0),
         noShows: result.reduce((sum, r) => sum + r.noShows, 0),
       };
 
