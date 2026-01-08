@@ -328,16 +328,35 @@ export function AgendaCalendar({
                                 }}
                               >
                                 <span className="font-semibold">{format(parseISO(meeting.scheduled_at), 'HH:mm')}</span>
-                                <span className="ml-1 opacity-80">{meeting.deal?.contact?.name?.split(' ')[0] || 'Lead'}</span>
+                                <span className="ml-1 opacity-80">
+                                  {meeting.attendees?.length 
+                                    ? meeting.attendees.length > 1
+                                      ? `${(meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead').split(' ')[0]} +${meeting.attendees.length - 1}`
+                                      : (meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead').split(' ')[0]
+                                    : meeting.deal?.contact?.name?.split(' ')[0] || 'Lead'}
+                                </span>
                               </button>
                             </HoverCardTrigger>
                             <HoverCardContent side="right" className="w-72 p-3">
                               <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
-                                  <span className="font-semibold truncate">{meeting.deal?.contact?.name || 'Lead'}</span>
-                                </div>
-                                <div className="text-sm text-muted-foreground">
+                                <div className="font-semibold text-sm">Participantes:</div>
+                                {meeting.attendees?.length ? (
+                                  <div className="space-y-1">
+                                    {meeting.attendees.map(att => (
+                                      <div key={att.id} className="flex items-center gap-2 text-sm">
+                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
+                                        <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                        {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
+                                    <span className="font-semibold truncate">{meeting.deal?.contact?.name || 'Lead'}</span>
+                                  </div>
+                                )}
+                                <div className="text-sm text-muted-foreground pt-1">
                                   📅 {format(parseISO(meeting.scheduled_at), "EEEE, dd/MM 'às' HH:mm", { locale: ptBR })}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
@@ -346,11 +365,6 @@ export function AgendaCalendar({
                                 <div className="text-sm text-muted-foreground">
                                   ⏱️ Duração: {meeting.duration_minutes || 30} minutos
                                 </div>
-                                {meeting.deal?.contact?.phone && (
-                                  <div className="text-sm text-muted-foreground">
-                                    📱 {meeting.deal.contact.phone}
-                                  </div>
-                                )}
                                 <Badge variant="outline" className="mt-1">
                                   {meeting.status === 'scheduled' && '🟢 Agendada'}
                                   {meeting.status === 'rescheduled' && '🟡 Reagendada'}
@@ -504,9 +518,13 @@ export function AgendaCalendar({
                             // All meetings in this group
                             const meetings = group.meetings;
                             const firstMeeting = meetings[0];
-                            const leadNames = meetings.map(m => 
-                              m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead'
-                            ).join(', ');
+                            const leadNames = meetings.map(m => {
+                              if (m.attendees?.length) {
+                                const firstName = (m.attendees[0].attendee_name || m.attendees[0].contact?.name || 'Lead').split(' ')[0];
+                                return m.attendees.length > 1 ? `${firstName} +${m.attendees.length - 1}` : firstName;
+                              }
+                              return m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead';
+                            }).join(', ');
 
                             return (
                               <Draggable 
@@ -567,12 +585,29 @@ export function AgendaCalendar({
                                           </div>
                                           <div className="space-y-1 mt-2">
                                             {meetings.map(m => (
-                                              <div key={m.id} className="text-xs flex items-center gap-1.5 p-1 bg-muted/50 rounded">
-                                                <div
-                                                  className="w-2 h-2 rounded-full flex-shrink-0"
-                                                  style={{ backgroundColor: closerColor }}
-                                                />
-                                                <span>{m.deal?.contact?.name || m.deal?.name || 'Lead'}</span>
+                                              <div key={m.id} className="text-xs p-1 bg-muted/50 rounded">
+                                                {m.attendees?.length ? (
+                                                  <div className="space-y-0.5">
+                                                    {m.attendees.map(att => (
+                                                      <div key={att.id} className="flex items-center gap-1.5">
+                                                        <div
+                                                          className="w-2 h-2 rounded-full flex-shrink-0"
+                                                          style={{ backgroundColor: closerColor }}
+                                                        />
+                                                        <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                                        {att.is_partner && <Badge variant="outline" className="text-[8px] px-1 py-0">Sócio</Badge>}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <div className="flex items-center gap-1.5">
+                                                    <div
+                                                      className="w-2 h-2 rounded-full flex-shrink-0"
+                                                      style={{ backgroundColor: closerColor }}
+                                                    />
+                                                    <span>{m.deal?.contact?.name || m.deal?.name || 'Lead'}</span>
+                                                  </div>
+                                                )}
                                               </div>
                                             ))}
                                           </div>
