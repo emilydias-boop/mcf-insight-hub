@@ -447,23 +447,12 @@ serve(async (req) => {
         }
       } catch (googleError) {
         console.error('❌ Google Calendar error:', googleError);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Erro ao criar evento no Google Calendar. Verifique a configuração do closer.' 
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        console.log('⚠️ Continuing without Google Calendar integration');
+        // Continue without Google Calendar - meeting will be created for tracking only
       }
     } else {
-      console.error('❌ Google Calendar not configured for this closer');
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Google Calendar não configurado para este closer. Configure o Google Calendar ID nas configurações do closer.' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.log('ℹ️ Google Calendar not configured - creating meeting for tracking only');
+      // Continue without Google Calendar - meeting will be created for tracking only
     }
 
     // Check if there's an existing slot at this time for this closer
