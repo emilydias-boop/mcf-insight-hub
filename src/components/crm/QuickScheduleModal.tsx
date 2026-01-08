@@ -113,12 +113,6 @@ export function QuickScheduleModal({
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
 
-    // Check if slot is available
-    if (slotAvailability && !slotAvailability.available) {
-      toast.error(`Horário cheio: ${slotAvailability.currentCount}/${slotAvailability.maxSlots} Lead ${detectedLeadType}`);
-      return;
-    }
-
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
     scheduledAt.setHours(hours, minutes, 0, 0);
@@ -304,28 +298,16 @@ export function QuickScheduleModal({
             <div className="space-y-2">
               <Label>Horário</Label>
               <Select value={selectedTime} onValueChange={setSelectedTime}>
-                <SelectTrigger className={cn(slotAvailability && !slotAvailability.available && 'border-destructive')}>
+                <SelectTrigger>
                   <Clock className="h-4 w-4 mr-2" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.map(time => {
-                    const status = getTimeSlotStatus(time);
-                    return (
-                      <SelectItem 
-                        key={time} 
-                        value={time}
-                        className={cn(status.isFull && 'opacity-50')}
-                      >
-                        <span className={cn(status.isFull && 'line-through')}>
-                          {time}
-                        </span>
-                        {status.isFull && (
-                          <span className="ml-2 text-destructive text-xs">(cheio)</span>
-                        )}
-                      </SelectItem>
-                    );
-                  })}
+                  {timeSlots.map(time => (
+                    <SelectItem key={time} value={time}>
+                      {time}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -333,15 +315,12 @@ export function QuickScheduleModal({
 
           {/* Slot availability indicator */}
           {selectedCloser && selectedDate && slotAvailability && (
-            <div className={cn(
-              "flex items-center justify-between p-2 rounded-md text-sm",
-              slotAvailability.available ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
-            )}>
+            <div className="flex items-center justify-between p-2 rounded-md text-sm bg-muted">
               <span>
                 Lead {detectedLeadType} às {selectedTime}
               </span>
               <span className="font-medium">
-                {slotAvailability.currentCount}/{slotAvailability.maxSlots} slots
+                {slotAvailability.currentCount} agendamento(s)
               </span>
             </div>
           )}
@@ -373,9 +352,9 @@ export function QuickScheduleModal({
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending || (slotAvailability && !slotAvailability.available)}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending}
           >
-            {createMeeting.isPending ? 'Agendando...' : (slotAvailability && !slotAvailability.available) ? 'Horário Cheio' : 'Agendar Reunião'}
+            {createMeeting.isPending ? 'Agendando...' : 'Agendar Reunião'}
           </Button>
         </div>
       </DialogContent>
