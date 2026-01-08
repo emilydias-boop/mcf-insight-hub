@@ -575,28 +575,26 @@ export function AgendaCalendar({
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
-                                          {/* Header: Horário + SDR */}
-                                          <div className="flex items-center justify-between gap-1 mb-0.5">
-                                            <div className="flex items-center gap-1">
-                                              <div
-                                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                                style={{ backgroundColor: closerColor }}
-                                              />
-                                              <span className="font-medium text-[10px]">
-                                                {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
-                                              </span>
-                                            </div>
-                                            <span className="text-[8px] text-muted-foreground truncate">
-                                              SDR: {firstMeeting.booked_by_profile?.full_name?.split(' ')[0] || 'N/A'}
+                                          {/* Header: Apenas Horário */}
+                                          <div className="flex items-center gap-1 mb-0.5">
+                                            <div
+                                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                              style={{ backgroundColor: closerColor }}
+                                            />
+                                            <span className="font-medium text-[10px]">
+                                              {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
                                             </span>
                                           </div>
 
-                                          {/* Lista de participantes com status individual */}
+                                          {/* Lista de participantes com SDR individual */}
                                           <div className="space-y-0.5">
                                             {(() => {
-                                              const allAttendees = meetings.flatMap(m => m.attendees || []);
-                                              const displayAttendees = allAttendees.slice(0, 3);
-                                              const remaining = allAttendees.length - 3;
+                                              // Flatten meetings com seus attendees, mantendo referência ao meeting para pegar o SDR
+                                              const attendeesWithMeeting = meetings.flatMap(m => 
+                                                (m.attendees || []).map(att => ({ ...att, meetingSdr: m.booked_by_profile?.full_name }))
+                                              );
+                                              const displayAttendees = attendeesWithMeeting.slice(0, 3);
+                                              const remaining = attendeesWithMeeting.length - 3;
                                               
                                               return (
                                                 <>
@@ -608,6 +606,9 @@ export function AgendaCalendar({
                                                           {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
                                                         {att.is_partner && <span className="text-[7px] text-muted-foreground">(S)</span>}
+                                                        <span className="text-[7px] text-muted-foreground truncate">
+                                                          ({att.meetingSdr?.split(' ')[0] || 'N/A'})
+                                                        </span>
                                                       </div>
                                                       <div className="flex-shrink-0">
                                                         {att.status === 'no_show' && <Badge variant="destructive" className="text-[7px] px-1 py-0 h-3">No-show</Badge>}
@@ -633,40 +634,42 @@ export function AgendaCalendar({
                                           )}
                                         </button>
                                       </TooltipTrigger>
-                                      <TooltipContent side="right" className="max-w-[320px]">
+                                        <TooltipContent side="right" className="max-w-[320px]">
                                         <div className="space-y-2">
-                                          {/* Header com SDR e Closer */}
+                                          {/* Header com Closer */}
                                           <div className="flex justify-between text-xs border-b pb-1.5 mb-1.5">
-                                            <span>SDR: <strong>{firstMeeting.booked_by_profile?.full_name || 'N/A'}</strong></span>
                                             <span>Closer: <strong>{group.closer?.name || 'N/A'}</strong></span>
+                                            <span>{meetings.length} reunião(ões)</span>
                                           </div>
                                           
                                           <div className="font-medium">
-                                            {meetings.length} reuniões às {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                            {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')} - {group.duration}min
                                           </div>
                                           
-                                          {/* Participantes com status individual */}
-                                          <div className="space-y-1.5 mt-2">
+                                          {/* Participantes agrupados por SDR */}
+                                          <div className="space-y-2 mt-2">
                                             {meetings.map(m => (
-                                              <div key={m.id}>
+                                              <div key={m.id} className="space-y-1">
+                                                {/* SDR desta reunião */}
+                                                <div className="text-[10px] text-muted-foreground border-b pb-0.5">
+                                                  SDR: {m.booked_by_profile?.full_name || 'N/A'}
+                                                </div>
                                                 {m.attendees?.length ? (
-                                                  <div className="space-y-1">
-                                                    {m.attendees.map(att => (
-                                                      <div key={att.id} className="text-xs p-1.5 bg-muted/50 rounded flex items-center justify-between">
-                                                        <div className="flex items-center gap-1.5">
-                                                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
-                                                          <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
-                                                          {att.is_partner && <Badge variant="outline" className="text-[8px] px-1 py-0">Sócio</Badge>}
-                                                        </div>
-                                                        <div>
-                                                          {att.status === 'no_show' && <Badge variant="destructive" className="text-[8px]">No-show</Badge>}
-                                                          {att.status === 'completed' && <Badge className="text-[8px] bg-green-600">OK</Badge>}
-                                                          {att.status === 'invited' && <Badge variant="secondary" className="text-[8px]">Convidado</Badge>}
-                                                          {att.status === 'confirmed' && <Badge variant="secondary" className="text-[8px]">Confirmado</Badge>}
-                                                        </div>
+                                                  m.attendees.map(att => (
+                                                    <div key={att.id} className="text-xs p-1.5 bg-muted/50 rounded flex items-center justify-between">
+                                                      <div className="flex items-center gap-1.5">
+                                                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
+                                                        <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                                        {att.is_partner && <Badge variant="outline" className="text-[8px] px-1 py-0">Sócio</Badge>}
                                                       </div>
-                                                    ))}
-                                                  </div>
+                                                      <div>
+                                                        {att.status === 'no_show' && <Badge variant="destructive" className="text-[8px]">No-show</Badge>}
+                                                        {att.status === 'completed' && <Badge className="text-[8px] bg-green-600">OK</Badge>}
+                                                        {att.status === 'invited' && <Badge variant="secondary" className="text-[8px]">Agendado</Badge>}
+                                                        {att.status === 'confirmed' && <Badge variant="outline" className="text-[8px]">Confirmado</Badge>}
+                                                      </div>
+                                                    </div>
+                                                  ))
                                                 ) : (
                                                   <div className="text-xs p-1.5 bg-muted/50 rounded flex items-center gap-1.5">
                                                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
