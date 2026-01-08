@@ -15,6 +15,7 @@ export interface MeetingAttendee {
   booked_by: string | null;
   notes: string | null;
   closer_notes: string | null;
+  parent_attendee_id?: string | null;
   contact?: {
     id: string;
     name: string;
@@ -29,6 +30,10 @@ export interface MeetingAttendee {
     id: string;
     full_name: string | null;
     email: string | null;
+  };
+  parent_attendee?: {
+    id: string;
+    attendee_name: string | null;
   };
 }
 
@@ -149,6 +154,7 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
             booked_by,
             notes,
             closer_notes,
+            parent_attendee_id,
             contact:crm_contacts(id, name, phone, email),
             deal:crm_deals(id, name)
           )
@@ -747,6 +753,7 @@ export function useAddMeetingAttendee() {
       attendeeName,
       attendeePhone,
       isPartner = false,
+      parentAttendeeId,
     }: {
       meetingSlotId: string;
       dealId?: string;
@@ -754,6 +761,7 @@ export function useAddMeetingAttendee() {
       attendeeName?: string;
       attendeePhone?: string;
       isPartner?: boolean;
+      parentAttendeeId?: string;
     }) => {
       const { error } = await supabase.from('meeting_slot_attendees').insert({
         meeting_slot_id: meetingSlotId,
@@ -763,6 +771,7 @@ export function useAddMeetingAttendee() {
         attendee_phone: attendeePhone || null,
         is_partner: isPartner,
         status: 'invited',
+        parent_attendee_id: parentAttendeeId || null,
       });
 
       if (error) throw error;

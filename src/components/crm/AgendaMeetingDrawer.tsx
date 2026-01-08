@@ -289,11 +289,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       return;
     }
     
+    if (!selectedParticipant) {
+      toast.error('Selecione um participante primeiro');
+      return;
+    }
+    
     addAttendee.mutate({
       meetingSlotId: activeMeeting.id,
       attendeeName: partnerName,
       attendeePhone: partnerPhone || undefined,
       isPartner: true,
+      parentAttendeeId: selectedParticipant.id,
     }, {
       onSuccess: () => {
         setPartnerName('');
@@ -318,9 +324,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   // Get all participants from the attendees table - all are treated equally
   const getParticipantsList = () => {
-    return activeMeeting.attendees?.map(att => {
+    const attendees = activeMeeting.attendees || [];
+    
+    // Create a map for parent attendee lookup
+    const attendeeMap = new Map(attendees.map(a => [a.id, a]));
+    
+    return attendees.map(att => {
       const name = att.attendee_name || att.contact?.name || 'Participante';
       const phone = att.attendee_phone || att.contact?.phone;
+      const parentAttendee = att.parent_attendee_id ? attendeeMap.get(att.parent_attendee_id) : null;
       
       return {
         id: att.id,
@@ -333,8 +345,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         closerNotes: att.closer_notes,
         status: att.status || 'scheduled',
         bookedByProfile: att.booked_by_profile || activeMeeting.booked_by_profile,
+        parentAttendeeId: att.parent_attendee_id,
+        parentAttendeeName: parentAttendee ? (parentAttendee.attendee_name || parentAttendee.contact?.name || 'Lead') : null,
       };
-    }) || [];
+    });
   };
 
   const participants = getParticipantsList();
@@ -414,54 +428,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
             {/* Participants Section */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm">Participantes ({participants.length})</span>
-                </div>
-                {isPending && participants.length < 4 && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setShowAddPartner(!showAddPartner)}
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Sócio
-                  </Button>
-                )}
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                <span className="font-medium text-sm">Participantes ({participants.length})</span>
               </div>
-
-              {/* Add Partner Form */}
-              {showAddPartner && (
-                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                  <Input
-                    placeholder="Nome do sócio"
-                    value={partnerName}
-                    onChange={(e) => setPartnerName(e.target.value)}
-                  />
-                  <Input
-                    placeholder="Telefone (opcional)"
-                    value={partnerPhone}
-                    onChange={(e) => setPartnerPhone(e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      onClick={handleAddPartner}
-                      disabled={addAttendee.isPending}
-                    >
-                      Adicionar
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      onClick={() => setShowAddPartner(false)}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </div>
-              )}
 
               {/* Participants List - Clickable */}
               <div className="space-y-2">
@@ -490,7 +460,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{p.name}</span>
                           {p.isPartner && (
-                            <Badge variant="outline" className="text-xs">Sócio</Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {p.parentAttendeeName ? `Sócio de ${p.parentAttendeeName.split(' ')[0]}` : 'Sócio'}
+                            </Badge>
                           )}
                           {/* Individual Status Badge */}
                           {p.status && p.status !== 'scheduled' && (
@@ -538,6 +510,55 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   </div>
                 ))}
               </div>
+              
+              {/* Add Partner Button - Only show if participant is selected and is NOT already a partner */}
+              {isPending && selectedParticipant && !selectedParticipant.isPartner && participants.length < 6 && (
+                <>
+                  {!showAddPartner ? (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                      onClick={() => setShowAddPartner(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Adicionar Sócio de {selectedParticipant.name.split(' ')[0]}
+                    </Button>
+                  ) : (
+                    <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        Adicionando sócio vinculado a: <strong>{selectedParticipant.name}</strong>
+                      </p>
+                      <Input
+                        placeholder="Nome do sócio"
+                        value={partnerName}
+                        onChange={(e) => setPartnerName(e.target.value)}
+                      />
+                      <Input
+                        placeholder="Telefone (opcional)"
+                        value={partnerPhone}
+                        onChange={(e) => setPartnerPhone(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          onClick={handleAddPartner}
+                          disabled={addAttendee.isPending}
+                        >
+                          Adicionar
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => setShowAddPartner(false)}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               
               <p className="text-xs text-muted-foreground text-center">
                 Clique em um participante para ver suas informações e notas específicas
