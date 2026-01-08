@@ -19,12 +19,9 @@ interface AgendaCalendarProps {
   viewMode?: ViewMode;
 }
 
-// 30min slots from 8:00 to 18:00
-const TIME_SLOTS = Array.from({ length: 20 }, (_, i) => ({
-  hour: Math.floor(i / 2) + 8,
-  minute: (i % 2) * 30,
-  index: i,
-}));
+// Default fallback values
+const DEFAULT_START_HOUR = 8;
+const DEFAULT_END_HOUR = 18;
 
 const DEFAULT_COLORS: Record<string, string> = {
   'Thayna': '#3B82F6',
@@ -64,18 +61,65 @@ export function AgendaCalendar({
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // Calculate dynamic time slots based on closers availability for selected date(s)
+  const timeSlots = useMemo(() => {
+    const daysToCheck = viewMode === 'day' 
+      ? [selectedDate]
+      : viewMode === 'month'
+        ? eachDayOfInterval({ start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) })
+        : Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+
+    let minHour = DEFAULT_END_HOUR;
+    let maxHour = DEFAULT_START_HOUR;
+
+    // Check availability across all days in view
+    for (const day of daysToCheck) {
+      const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+      
+      for (const closer of closers) {
+        const dayAvailability = closer.availability.filter(
+          a => a.day_of_week === dayOfWeek && a.is_active
+        );
+        
+        for (const avail of dayAvailability) {
+          const startHour = parseInt(avail.start_time.split(':')[0]);
+          const endHour = parseInt(avail.end_time.split(':')[0]);
+          minHour = Math.min(minHour, startHour);
+          maxHour = Math.max(maxHour, endHour);
+        }
+      }
+    }
+
+    // Fallback if no availability found
+    if (minHour >= maxHour) {
+      minHour = DEFAULT_START_HOUR;
+      maxHour = DEFAULT_END_HOUR;
+    }
+
+    const totalSlots = (maxHour - minHour) * 2;
+    return Array.from({ length: totalSlots }, (_, i) => ({
+      hour: Math.floor(i / 2) + minHour,
+      minute: (i % 2) * 30,
+      index: i,
+    }));
+  }, [closers, selectedDate, viewMode, weekStart]);
   
-  // Calcular posição da linha vermelha em pixels
+  // Calcular posição da linha vermelha em pixels (depends on timeSlots)
   const getCurrentTimePosition = useCallback(() => {
+    if (timeSlots.length === 0) return null;
+    
     const hour = currentTime.getHours();
     const minute = currentTime.getMinutes();
+    const minHour = timeSlots[0].hour;
+    const maxHour = timeSlots[timeSlots.length - 1].hour + (timeSlots[timeSlots.length - 1].minute === 30 ? 1 : 0.5);
     
-    if (hour < 8 || hour >= 18) return null; // Fora do horário visível
+    if (hour < minHour || hour >= maxHour) return null;
     
     // Cada slot = 40px, calcular offset
-    const slotsFromStart = (hour - 8) * 2 + (minute / 30);
+    const slotsFromStart = (hour - minHour) * 2 + (minute / 30);
     return slotsFromStart * SLOT_HEIGHT;
-  }, [currentTime]);
+  }, [currentTime, timeSlots]);
   
   const viewDays = useMemo(() => {
     if (viewMode === 'day') {
@@ -470,7 +514,7 @@ export function AgendaCalendar({
             </div>
           )}
           
-          {TIME_SLOTS.map(({ hour, minute }) => {
+          {timeSlots.map(({ hour, minute }) => {
             // Check if this time slot is full for any closer across all days
             const anyDayFull = viewDays.some(day => isSlotFullForAnyCloser(day, hour, minute));
             
