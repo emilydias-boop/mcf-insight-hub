@@ -36,12 +36,12 @@ export default function ReunioesEquipe() {
     : null;
   const initialEnd = searchParams.get("end")
     ? parseISO(searchParams.get("end")!)
-    : null;
+    : initialStart; // Fallback to start if end is missing
 
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   const [datePreset, setDatePreset] = useState<DatePreset>(initialPreset);
   const [customStartDate, setCustomStartDate] = useState<Date | null>(initialStart);
-  const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
 
   // Sync state changes to URL
@@ -82,10 +82,13 @@ export default function ReunioesEquipe() {
       case "month":
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
       case "custom":
-        return { 
-          start: customStartDate || startOfMonth(today), 
-          end: customEndDate || endOfMonth(today) 
-        };
+        const startCustom = customStartDate || startOfMonth(today);
+        const endCustom = customEndDate || customStartDate || endOfMonth(today);
+        // Ensure start <= end
+        if (startCustom > endCustom) {
+          return { start: endCustom, end: startCustom };
+        }
+        return { start: startCustom, end: endCustom };
       default:
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
     }

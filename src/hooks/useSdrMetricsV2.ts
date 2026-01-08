@@ -53,7 +53,7 @@ interface MetricsResponse {
 // Hook para buscar métricas agregadas por SDR
 export const useSdrMetricsV2 = (startDate: Date | null, endDate: Date | null, sdrEmailFilter?: string) => {
   return useQuery({
-    queryKey: ['sdr-metrics-v2', startDate?.toISOString(), endDate?.toISOString(), sdrEmailFilter],
+    queryKey: ['sdr-metrics-v2', startDate ? format(startDate, 'yyyy-MM-dd') : null, endDate ? format(endDate, 'yyyy-MM-dd') : null, sdrEmailFilter],
     queryFn: async (): Promise<MetricsResponse> => {
       if (!startDate || !endDate) {
         return { 
@@ -106,7 +106,7 @@ export const useSdrMetricsV2 = (startDate: Date | null, endDate: Date | null, sd
 // Hook para buscar lista de reuniões com detalhes (todas as movimentações)
 export const useSdrMeetingsV2 = (startDate: Date | null, endDate: Date | null, sdrEmailFilter?: string) => {
   return useQuery({
-    queryKey: ['sdr-meetings-v2', startDate?.toISOString(), endDate?.toISOString(), sdrEmailFilter],
+    queryKey: ['sdr-meetings-v2', startDate ? format(startDate, 'yyyy-MM-dd') : null, endDate ? format(endDate, 'yyyy-MM-dd') : null, sdrEmailFilter],
     queryFn: async (): Promise<MeetingV2[]> => {
       if (!startDate || !endDate) return [];
 
