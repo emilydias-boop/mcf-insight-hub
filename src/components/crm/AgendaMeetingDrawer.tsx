@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -67,12 +67,12 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 // Roles that can delete meetings
-const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador'];
+const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador', 'sdr'];
 
 export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
   const { role } = useAuth();
-  const [notes, setNotes] = useState(meeting?.notes || '');
+  const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
   const [showAddPartner, setShowAddPartner] = useState(false);
   const [partnerName, setPartnerName] = useState('');
@@ -116,6 +116,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   // All meetings at this slot (main + related)
   const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
   const activeMeeting = allMeetings.find(m => m.id === selectedMeetingId) || meeting;
+
+  // Sync closer notes when active meeting changes
+  useEffect(() => {
+    setCloserNotes(activeMeeting?.closer_notes || '');
+  }, [activeMeeting?.id, activeMeeting?.closer_notes]);
 
   // Fetch SDR notes for this deal - MUST be before any conditional return
   const dealId = activeMeeting?.deal_id;
@@ -187,8 +192,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     }
   };
 
-  const handleSaveNotes = () => {
-    updateNotes.mutate({ meetingId: meeting.id, notes });
+  const handleSaveCloserNotes = () => {
+    updateNotes.mutate({ meetingId: activeMeeting.id, notes: closerNotes, field: 'closer_notes' });
   };
 
   const handleCopyLink = () => {
@@ -596,20 +601,36 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
 
 
-            {/* Notes */}
+            {/* SDR Notes (read-only) */}
+            {activeMeeting.notes && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <StickyNote className="h-4 w-4 text-blue-600" />
+                    <h4 className="font-medium text-sm text-blue-700 dark:text-blue-400">Nota do SDR ao Agendar</h4>
+                  </div>
+                  <div className="bg-blue-500/10 rounded-lg p-3">
+                    <p className="text-sm whitespace-pre-wrap">{activeMeeting.notes}</p>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Closer Notes */}
             <Separator />
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-muted-foreground">Notas da Closer</h4>
               <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                value={closerNotes}
+                onChange={(e) => setCloserNotes(e.target.value)}
                 placeholder="Escreva suas observações sobre o lead e a reunião..."
                 rows={4}
               />
               <Button 
                 size="sm" 
-                onClick={handleSaveNotes}
-                disabled={updateNotes.isPending || notes === activeMeeting.notes}
+                onClick={handleSaveCloserNotes}
+                disabled={updateNotes.isPending || closerNotes === (activeMeeting.closer_notes || '')}
               >
                 <Save className="h-4 w-4 mr-2" />
                 Salvar Notas

@@ -34,6 +34,7 @@ export interface MeetingSlot {
   status: string;
   booked_by: string | null;
   notes: string | null;
+  closer_notes: string | null;
   meeting_link: string | null;
   video_conference_link: string | null;
   google_event_id: string | null;
@@ -560,10 +561,11 @@ export function useUpdateMeetingNotes() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ meetingId, notes }: { meetingId: string; notes: string }) => {
+    mutationFn: async ({ meetingId, notes, field = 'notes' }: { meetingId: string; notes: string; field?: 'notes' | 'closer_notes' }) => {
+      const updateData = field === 'closer_notes' ? { closer_notes: notes } : { notes };
       const { error } = await supabase
         .from('meeting_slots')
-        .update({ notes })
+        .update(updateData)
         .eq('id', meetingId);
 
       if (error) throw error;
