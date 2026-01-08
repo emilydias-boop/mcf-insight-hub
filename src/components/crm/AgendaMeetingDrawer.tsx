@@ -71,8 +71,9 @@ const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador', 'sdr'];
 
 export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
+  const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
   const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
   const [showAddPartner, setShowAddPartner] = useState(false);
   const [partnerName, setPartnerName] = useState('');
@@ -117,10 +118,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
   const activeMeeting = allMeetings.find(m => m.id === selectedMeetingId) || meeting;
 
-  // Sync closer notes when active meeting changes
+  // Sync notes when active meeting changes
   useEffect(() => {
     setCloserNotes(activeMeeting?.closer_notes || '');
-  }, [activeMeeting?.id, activeMeeting?.closer_notes]);
+    setSdrNote(activeMeeting?.notes || '');
+  }, [activeMeeting?.id, activeMeeting?.closer_notes, activeMeeting?.notes]);
+
+  // Check if current user is the SDR who booked this meeting
+  const isBookedBySdr = user?.id === activeMeeting?.booked_by;
+  const canEditSdrNote = isBookedBySdr && (activeMeeting?.status === 'scheduled' || activeMeeting?.status === 'rescheduled');
 
   // Fetch SDR notes for this deal - MUST be before any conditional return
   const dealId = activeMeeting?.deal_id;
@@ -601,8 +607,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
 
 
-            {/* SDR Notes (read-only) */}
-            {activeMeeting.notes && (
+            {/* SDR Notes - editable by booking SDR before meeting */}
+            {(activeMeeting.notes || canEditSdrNote) && (
               <>
                 <Separator />
                 <div className="space-y-3">
@@ -610,9 +616,32 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <StickyNote className="h-4 w-4 text-blue-600" />
                     <h4 className="font-medium text-sm text-blue-700 dark:text-blue-400">Nota do SDR ao Agendar</h4>
                   </div>
-                  <div className="bg-blue-500/10 rounded-lg p-3">
-                    <p className="text-sm whitespace-pre-wrap">{activeMeeting.notes}</p>
-                  </div>
+                  
+                  {canEditSdrNote ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        value={sdrNote}
+                        onChange={(e) => setSdrNote(e.target.value)}
+                        placeholder="Adicione observações sobre o lead..."
+                        rows={3}
+                        className="bg-blue-500/10"
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={() => updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' })}
+                        disabled={updateNotes.isPending || sdrNote === (activeMeeting.notes || '')}
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        Salvar Nota
+                      </Button>
+                    </div>
+                  ) : (
+                    activeMeeting.notes && (
+                      <div className="bg-blue-500/10 rounded-lg p-3">
+                        <p className="text-sm whitespace-pre-wrap">{activeMeeting.notes}</p>
+                      </div>
+                    )
+                  )}
                 </div>
               </>
             )}
