@@ -1133,3 +1133,25 @@ export function useUpdateAttendeeNotes() {
     },
   });
 }
+
+export function useUpdateAttendeePhone() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ attendeeId, phone }: { attendeeId: string; phone: string }) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ attendee_phone: phone })
+        .eq('id', attendeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      toast.success('Telefone atualizado');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar telefone');
+    },
+  });
+}
