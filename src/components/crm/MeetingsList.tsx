@@ -80,14 +80,36 @@ export function MeetingsList({ meetings, isLoading, onViewDeal }: MeetingsListPr
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-medium">
-                      {meeting.deal?.contact?.name || meeting.deal?.name || 'Sem lead'}
-                    </span>
-                    {meeting.deal?.contact?.phone && (
-                      <span className="text-sm text-muted-foreground">
-                        {meeting.deal.contact.phone}
-                      </span>
+                  <div className="flex flex-col gap-0.5">
+                    {meeting.attendees?.length ? (
+                      <>
+                        {meeting.attendees.map((att, idx) => (
+                          <div key={att.id} className="flex items-center gap-1.5">
+                            <span className={idx === 0 ? "font-medium" : "text-sm text-muted-foreground"}>
+                              {att.attendee_name || att.contact?.name || 'Lead'}
+                            </span>
+                            {att.is_partner && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">Sócio</Badge>
+                            )}
+                          </div>
+                        ))}
+                        {(meeting.attendees[0]?.attendee_phone || meeting.attendees[0]?.contact?.phone) && (
+                          <span className="text-sm text-muted-foreground">
+                            {meeting.attendees[0].attendee_phone || meeting.attendees[0].contact?.phone}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium">
+                          {meeting.deal?.contact?.name || meeting.deal?.name || 'Sem lead'}
+                        </span>
+                        {meeting.deal?.contact?.phone && (
+                          <span className="text-sm text-muted-foreground">
+                            {meeting.deal.contact.phone}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </TableCell>

@@ -158,16 +158,28 @@ export function CloserColumnCalendar({
                               )}
                             >
                               <div className="font-medium truncate">
-                                {meeting.deal?.contact?.name || meeting.deal?.name || 'Lead'}
+                                {meeting.attendees?.length 
+                                  ? meeting.attendees.length > 1
+                                    ? `${meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead'} +${meeting.attendees.length - 1}`
+                                    : meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead'
+                                  : meeting.deal?.contact?.name || meeting.deal?.name || 'Lead'}
                               </div>
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="right">
                             <div className="space-y-1">
-                              <div className="font-medium">
-                                {meeting.deal?.contact?.name || meeting.deal?.name}
-                              </div>
-                              <div className="text-xs">
+                              <div className="font-semibold text-xs mb-1">Participantes:</div>
+                              {meeting.attendees?.length ? (
+                                meeting.attendees.map(att => (
+                                  <div key={att.id} className="text-xs flex items-center gap-1">
+                                    <span>• {att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                    {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-xs">{meeting.deal?.contact?.name || meeting.deal?.name}</div>
+                              )}
+                              <div className="text-xs text-muted-foreground pt-1">
                                 {format(parseISO(meeting.scheduled_at), "HH:mm")} - {meeting.duration_minutes}min
                               </div>
                               <Badge variant="outline" className="text-xs">
