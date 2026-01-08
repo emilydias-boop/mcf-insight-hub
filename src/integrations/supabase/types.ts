@@ -5279,6 +5279,8 @@ export type Database = {
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
       user_has_permission: {
         Args: {
