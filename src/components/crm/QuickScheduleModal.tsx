@@ -28,6 +28,7 @@ import {
   CloserWithAvailability, 
   useSearchDealsForSchedule, 
   useSearchDealsByPhone,
+  useSearchDealsByEmail,
   useCreateMeeting,
   useCheckSlotAvailability,
   useSendMeetingNotification,
@@ -95,6 +96,10 @@ export function QuickScheduleModal({
   const [phoneQuery, setPhoneQuery] = useState('');
   const [showPhoneResults, setShowPhoneResults] = useState(false);
   
+  // Email search state
+  const [emailQuery, setEmailQuery] = useState('');
+  const [showEmailResults, setShowEmailResults] = useState(false);
+  
   // Selected deal and auto-filled fields
   const [selectedDeal, setSelectedDeal] = useState<DealOption | null>(null);
   const [selectedEmail, setSelectedEmail] = useState('');
@@ -109,6 +114,7 @@ export function QuickScheduleModal({
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
   const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
+  const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
 
@@ -139,8 +145,10 @@ export function QuickScheduleModal({
     setSelectedEmail(deal.contact?.email || '');
     setSelectedPhone(deal.contact?.phone || '');
     setPhoneQuery('');
+    setEmailQuery('');
     setShowResults(false);
     setShowPhoneResults(false);
+    setShowEmailResults(false);
   }, []);
 
   // Clear selection to search again
@@ -150,8 +158,10 @@ export function QuickScheduleModal({
     setSelectedEmail('');
     setSelectedPhone('');
     setPhoneQuery('');
+    setEmailQuery('');
     setShowResults(false);
     setShowPhoneResults(false);
+    setShowEmailResults(false);
   }, []);
 
   const handleSubmit = () => {
@@ -184,11 +194,13 @@ export function QuickScheduleModal({
   const resetForm = () => {
     setNameQuery('');
     setPhoneQuery('');
+    setEmailQuery('');
     setSelectedDeal(null);
     setSelectedEmail('');
     setSelectedPhone('');
     setShowResults(false);
     setShowPhoneResults(false);
+    setShowEmailResults(false);
     setSelectedCloser(preselectedCloserId || '');
     setSelectedDate(undefined);
     setSelectedTime('09:00');
@@ -313,15 +325,27 @@ export function QuickScheduleModal({
               )}
             </div>
 
-            {/* Email Field (read-only, auto-filled) */}
+            {/* Email Field (searchable or read-only when selected) */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Auto-preenchido ao selecionar lead"
-                  value={selectedEmail}
-                  readOnly
+                  placeholder={isSelected ? "Auto-preenchido" : "Digite o email para buscar..."}
+                  value={isSelected ? selectedEmail : emailQuery}
+                  onChange={(e) => {
+                    if (!isSelected) {
+                      const value = e.target.value;
+                      setEmailQuery(value);
+                      setShowEmailResults(value.length >= 3);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (emailQuery.length >= 3 && !isSelected) {
+                      setShowEmailResults(true);
+                    }
+                  }}
+                  readOnly={isSelected}
                   className={cn(
                     "pl-9 pr-9",
                     isSelected && selectedEmail && "bg-muted border-green-500/50"
@@ -331,6 +355,47 @@ export function QuickScheduleModal({
                   <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
                 )}
               </div>
+
+              {/* Email Search Results */}
+              {showEmailResults && emailQuery.length >= 3 && !selectedDeal && (
+                <div className="border rounded-md max-h-48 overflow-y-auto shadow-sm bg-popover">
+                  {searchingEmail ? (
+                    <div className="p-2 space-y-2">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ) : emailSearchResults.length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground text-center">
+                      Nenhum lead encontrado com esse email
+                    </p>
+                  ) : (
+                    emailSearchResults.map(deal => (
+                      <button
+                        key={deal.id}
+                        onClick={() => handleSelectDeal(deal as DealOption)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {deal.contact?.name || deal.name}
+                          </div>
+                          {deal.contact?.email && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              {deal.contact.email}
+                            </div>
+                          )}
+                        </div>
+                        {deal.contact?.phone && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                            <Phone className="h-3 w-3" />
+                            <span>{formatPhoneDisplay(deal.contact.phone)}</span>
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Telefone Field (searchable or read-only when selected) */}
