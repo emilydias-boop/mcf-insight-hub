@@ -612,8 +612,8 @@ export function useSearchDealsByPhone(phoneQuery: string) {
   return useQuery({
     queryKey: ['schedule-search-phone', phoneQuery],
     queryFn: async () => {
-      const digits = phoneQuery.replace(/\D/g, '');
-      if (digits.length < 4) return [];
+  const digits = phoneQuery.replace(/\D/g, '');
+    if (digits.length < 6) return [];
 
       // Buscar contatos pelo telefone
       const { data: contacts } = await supabase
@@ -637,7 +637,7 @@ export function useSearchDealsByPhone(phoneQuery: string) {
         contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
       }));
     },
-    enabled: phoneQuery.replace(/\D/g, '').length >= 4,
+    enabled: phoneQuery.replace(/\D/g, '').length >= 6,
   });
 }
 
