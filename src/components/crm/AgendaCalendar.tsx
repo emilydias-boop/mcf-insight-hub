@@ -575,23 +575,57 @@ export function AgendaCalendar({
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
-                                          <div className="flex items-center gap-1">
-                                            <div
-                                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                              style={{ backgroundColor: closerColor }}
-                                            />
-                                            <span className="font-medium truncate text-[10px]">
-                                              {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                          {/* Header: Horário + SDR */}
+                                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                                            <div className="flex items-center gap-1">
+                                              <div
+                                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                                style={{ backgroundColor: closerColor }}
+                                              />
+                                              <span className="font-medium text-[10px]">
+                                                {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                              </span>
+                                            </div>
+                                            <span className="text-[8px] text-muted-foreground truncate">
+                                              SDR: {firstMeeting.booked_by_profile?.full_name?.split(' ')[0] || 'N/A'}
                                             </span>
-                                            {meetings.length > 1 && (
-                                              <Badge variant="secondary" className="h-3.5 px-1 text-[8px]">
-                                                {meetings.length}
-                                              </Badge>
-                                            )}
                                           </div>
-                                          <div className="truncate text-muted-foreground text-[9px]">
-                                            {leadNames}
+
+                                          {/* Lista de participantes com status individual */}
+                                          <div className="space-y-0.5">
+                                            {(() => {
+                                              const allAttendees = meetings.flatMap(m => m.attendees || []);
+                                              const displayAttendees = allAttendees.slice(0, 3);
+                                              const remaining = allAttendees.length - 3;
+                                              
+                                              return (
+                                                <>
+                                                  {displayAttendees.map(att => (
+                                                    <div key={att.id} className="flex items-center justify-between gap-1">
+                                                      <div className="flex items-center gap-1 min-w-0">
+                                                        <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
+                                                        <span className="text-[9px] truncate">
+                                                          {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
+                                                        </span>
+                                                        {att.is_partner && <span className="text-[7px] text-muted-foreground">(S)</span>}
+                                                      </div>
+                                                      <div className="flex-shrink-0">
+                                                        {att.status === 'no_show' && <Badge variant="destructive" className="text-[7px] px-1 py-0 h-3">No-show</Badge>}
+                                                        {att.status === 'completed' && <Badge className="text-[7px] px-1 py-0 h-3 bg-green-600">OK</Badge>}
+                                                        {att.status === 'invited' && <Badge variant="secondary" className="text-[7px] px-1 py-0 h-3">Agendado</Badge>}
+                                                        {att.status === 'confirmed' && <Badge variant="outline" className="text-[7px] px-1 py-0 h-3">Confirmado</Badge>}
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                  {remaining > 0 && (
+                                                    <span className="text-[8px] text-muted-foreground">+{remaining} mais</span>
+                                                  )}
+                                                </>
+                                              );
+                                            })()}
                                           </div>
+
+                                          {/* Duração */}
                                           {slotsNeeded > 1 && (
                                             <div className="text-[8px] text-muted-foreground mt-0.5">
                                               {group.duration}min
