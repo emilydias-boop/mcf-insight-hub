@@ -331,9 +331,9 @@ export function AgendaCalendar({
                                 <span className="ml-1 opacity-80">
                                   {meeting.attendees?.length 
                                     ? meeting.attendees.length > 1
-                                      ? `${(meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead').split(' ')[0]} +${meeting.attendees.length - 1}`
-                                      : (meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead').split(' ')[0]
-                                    : meeting.deal?.contact?.name?.split(' ')[0] || 'Lead'}
+                                      ? `${(meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || meeting.attendees[0].deal?.name || meeting.deal?.name || 'Lead').split(' ')[0]} +${meeting.attendees.length - 1}`
+                                      : (meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || meeting.attendees[0].deal?.name || meeting.deal?.name || 'Lead').split(' ')[0]
+                                    : meeting.deal?.contact?.name?.split(' ')[0] || meeting.deal?.name?.split(' ')[0] || 'Lead'}
                                 </span>
                               </button>
                             </HoverCardTrigger>
@@ -360,7 +360,7 @@ export function AgendaCalendar({
                                         <div key={att.id} className="flex items-center justify-between p-2 rounded bg-muted/30">
                                           <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
-                                            <span className="text-sm">{att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                            <span className="text-sm">{att.attendee_name || att.contact?.name || att.deal?.name || 'Lead'}</span>
                                             {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
                                           </div>
                                           <div>
@@ -541,7 +541,7 @@ export function AgendaCalendar({
                             const firstMeeting = meetings[0];
                             const leadNames = meetings.map(m => {
                               if (m.attendees?.length) {
-                                const firstName = (m.attendees[0].attendee_name || m.attendees[0].contact?.name || 'Lead').split(' ')[0];
+                                const firstName = (m.attendees[0].attendee_name || m.attendees[0].contact?.name || m.attendees[0].deal?.name || m.deal?.name || 'Lead').split(' ')[0];
                                 return m.attendees.length > 1 ? `${firstName} +${m.attendees.length - 1}` : firstName;
                               }
                               return m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead';
@@ -603,7 +603,7 @@ export function AgendaCalendar({
                                                       <div className="flex items-center gap-1 min-w-0">
                                                         <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
                                                         <span className="text-[9px] truncate">
-                                                          {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
+                                                          {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                         </span>
                                                         {att.is_partner && <span className="text-[7px] text-muted-foreground">(S)</span>}
                                                         <span className="text-[7px] text-muted-foreground truncate">
