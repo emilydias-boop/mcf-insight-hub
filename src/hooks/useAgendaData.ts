@@ -637,6 +637,34 @@ export function useSearchDealsByPhone(phoneQuery: string) {
   });
 }
 
+export function useSearchDealsByEmail(emailQuery: string) {
+  return useQuery({
+    queryKey: ['schedule-search-email', emailQuery],
+    queryFn: async () => {
+      if (emailQuery.length < 3) return [];
+
+      // Buscar contatos pelo email
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', `%${emailQuery}%`)
+        .limit(10);
+
+      if (!contacts || contacts.length === 0) return [];
+
+      // Buscar deals dos contatos encontrados
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
+        .in('contact_id', contacts.map(c => c.id))
+        .limit(10);
+
+      return deals || [];
+    },
+    enabled: emailQuery.length >= 3,
+  });
+}
+
 export function useSearchDealsForSchedule(query: string) {
   return useQuery({
     queryKey: ['schedule-search', query],
