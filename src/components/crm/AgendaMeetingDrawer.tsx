@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
-  Lock, DollarSign, UserCircle, StickyNote
+  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +44,7 @@ import {
   useDeleteMeeting,
   useUpdateAttendeeStatus,
   useUpdateAttendeeNotes,
+  useUpdateAttendeePhone,
 } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -84,6 +85,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [showNoShowConfirm, setShowNoShowConfirm] = useState(false);
+  const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
+  const [editedPhone, setEditedPhone] = useState('');
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
@@ -94,6 +97,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const deleteMeeting = useDeleteMeeting();
   const updateAttendeeStatus = useUpdateAttendeeStatus();
   const updateAttendeeNotes = useUpdateAttendeeNotes();
+  const updateAttendeePhone = useUpdateAttendeePhone();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
 
   // Check if user can delete meetings
@@ -333,8 +337,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     const attendeeMap = new Map(attendees.map(a => [a.id, a]));
     
     return attendees.map(att => {
-      const name = att.attendee_name || att.contact?.name || 'Participante';
-      const phone = att.attendee_phone || att.contact?.phone;
+      // Fallback chain for name: attendee_name -> contact.name -> deal.name -> meeting.deal.contact.name -> meeting.deal.name -> 'Participante'
+      const name = att.attendee_name 
+        || att.contact?.name 
+        || att.deal?.name
+        || activeMeeting.deal?.contact?.name 
+        || activeMeeting.deal?.name 
+        || 'Participante';
+      // Fallback chain for phone: attendee_phone -> contact.phone -> meeting.deal.contact.phone
+      const phone = att.attendee_phone || att.contact?.phone || activeMeeting.deal?.contact?.phone;
       const parentAttendee = att.parent_attendee_id ? attendeeMap.get(att.parent_attendee_id) : null;
       
       return {
@@ -477,9 +488,60 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                             <Badge className="text-xs bg-primary">Selecionado</Badge>
                           )}
                         </div>
-                        {p.phone && (
-                          <span className="text-xs text-muted-foreground">{p.phone}</span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {editingPhoneId === p.id ? (
+                            <>
+                              <Input
+                                value={editedPhone}
+                                onChange={(e) => setEditedPhone(e.target.value)}
+                                className="h-6 text-xs w-32"
+                                placeholder="(XX) XXXXX-XXXX"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateAttendeePhone.mutate({ attendeeId: p.id, phone: editedPhone }, {
+                                    onSuccess: () => setEditingPhoneId(null)
+                                  });
+                                }}
+                                disabled={updateAttendeePhone.isPending}
+                              >
+                                <Check className="h-3 w-3 text-green-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingPhoneId(null);
+                                }}
+                              >
+                                <X className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs text-muted-foreground">{p.phone || 'Sem telefone'}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditedPhone(p.phone || '');
+                                  setEditingPhoneId(p.id);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
