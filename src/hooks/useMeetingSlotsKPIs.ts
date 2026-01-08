@@ -15,29 +15,37 @@ export function useMeetingSlotsKPIs(startDate: Date, endDate: Date) {
       const startISO = startOfDay(startDate).toISOString();
       const endISO = endOfDay(endDate).toISOString();
 
+      // Query meeting_slot_attendees with JOIN to meeting_slots for scheduled_at filter
+      // This ensures R1 Realizada/No-Show only counts button clicks, not webhook stage changes
       const { data, error } = await supabase
-        .from("meeting_slots")
-        .select("status")
-        .gte("scheduled_at", startISO)
-        .lte("scheduled_at", endISO);
+        .from("meeting_slot_attendees")
+        .select(`
+          status,
+          meeting_slot:meeting_slots!inner(scheduled_at)
+        `)
+        .gte("meeting_slot.scheduled_at", startISO)
+        .lte("meeting_slot.scheduled_at", endISO);
 
       if (error) {
-        console.error("Error fetching meeting slots KPIs:", error);
+        console.error("Error fetching meeting slot attendees KPIs:", error);
         throw error;
       }
 
-      const slots = data || [];
+      const attendees = data || [];
 
-      const totalAgendadas = slots.filter(
-        (s) => s.status === "scheduled" || s.status === "rescheduled"
+      // R1 Agendada: scheduled, invited, or rescheduled attendees
+      const totalAgendadas = attendees.filter(
+        (a) => a.status === "scheduled" || a.status === "invited" || a.status === "rescheduled"
       ).length;
 
-      const totalRealizadas = slots.filter(
-        (s) => s.status === "completed"
+      // R1 Realizada: ONLY from "Realizada" button clicks (status = completed)
+      const totalRealizadas = attendees.filter(
+        (a) => a.status === "completed"
       ).length;
 
-      const totalNoShows = slots.filter(
-        (s) => s.status === "no_show"
+      // No-Show: ONLY from "No-Show" button clicks (status = no_show)
+      const totalNoShows = attendees.filter(
+        (a) => a.status === "no_show"
       ).length;
 
       return {
