@@ -117,6 +117,26 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
   const activeMeeting = allMeetings.find(m => m.id === selectedMeetingId) || meeting;
 
+  // Fetch SDR notes for this deal - MUST be before any conditional return
+  const dealId = activeMeeting?.deal_id;
+  const { data: sdrNotes } = useQuery({
+    queryKey: ['deal-sdr-notes', dealId],
+    queryFn: async () => {
+      if (!dealId) return [];
+      
+      const { data, error } = await supabase
+        .from('deal_activities')
+        .select('id, description, created_at')
+        .eq('deal_id', dealId)
+        .eq('activity_type', 'note')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!dealId,
+  });
+
   if (!meeting || !activeMeeting) return null;
 
   const contact = activeMeeting.deal?.contact;
@@ -126,25 +146,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const isCompleted = activeMeeting.status === 'completed';
   // Video conference link (Google Meet) - direct access to the meeting room
   const videoConferenceLink = activeMeeting.video_conference_link;
-
-  // Fetch SDR notes for this deal
-  const { data: sdrNotes } = useQuery({
-    queryKey: ['deal-sdr-notes', activeMeeting.deal_id],
-    queryFn: async () => {
-      if (!activeMeeting.deal_id) return [];
-      
-      const { data, error } = await supabase
-        .from('deal_activities')
-        .select('id, description, created_at')
-        .eq('deal_id', activeMeeting.deal_id)
-        .eq('activity_type', 'note')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!activeMeeting.deal_id,
-  });
 
   // Format date/time for WhatsApp message
   const scheduledDate = parseISO(activeMeeting.scheduled_at);
