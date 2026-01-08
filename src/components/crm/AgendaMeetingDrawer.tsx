@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
-  Lock, DollarSign, UserCircle
+  Lock, DollarSign, UserCircle, StickyNote
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Sheet,
   SheetContent,
@@ -124,6 +126,25 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const isCompleted = activeMeeting.status === 'completed';
   // Video conference link (Google Meet) - direct access to the meeting room
   const videoConferenceLink = activeMeeting.video_conference_link;
+
+  // Fetch SDR notes for this deal
+  const { data: sdrNotes } = useQuery({
+    queryKey: ['deal-sdr-notes', activeMeeting.deal_id],
+    queryFn: async () => {
+      if (!activeMeeting.deal_id) return [];
+      
+      const { data, error } = await supabase
+        .from('deal_activities')
+        .select('id, description, created_at')
+        .eq('deal_id', activeMeeting.deal_id)
+        .eq('activity_type', 'note')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!activeMeeting.deal_id,
+  });
 
   // Format date/time for WhatsApp message
   const scheduledDate = parseISO(activeMeeting.scheduled_at);
@@ -448,7 +469,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             {/* SDR Info Section */}
             {sdrProfile && (
               <>
-                <div className="bg-blue-500/10 rounded-lg p-4 space-y-2">
+                <div className="bg-blue-500/10 rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <UserCircle className="h-4 w-4 text-blue-600" />
                     <span className="font-medium text-sm text-blue-700 dark:text-blue-400">SDR que Agendou</span>
@@ -461,6 +482,30 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <div className="flex items-center gap-2 text-sm">
                       <Mail className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">{sdrProfile.email}</span>
+                    </div>
+                  )}
+                  
+                  {/* Notas do SDR sobre o lead */}
+                  {sdrNotes && sdrNotes.length > 0 && (
+                    <div className="pt-2 border-t border-blue-500/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <StickyNote className="h-4 w-4 text-blue-600" />
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
+                          Notas do SDR ({sdrNotes.length})
+                        </span>
+                      </div>
+                      <ScrollArea className="max-h-[120px]">
+                        <div className="space-y-2">
+                          {sdrNotes.map((note) => (
+                            <div key={note.id} className="bg-white/50 dark:bg-black/20 rounded p-2">
+                              <p className="text-sm whitespace-pre-wrap">{note.description}</p>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDistanceToNow(new Date(note.created_at!), { addSuffix: true, locale: ptBR })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     </div>
                   )}
                 </div>
