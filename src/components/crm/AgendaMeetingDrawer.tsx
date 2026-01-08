@@ -553,22 +553,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-col h-16 gap-1"
-                      onClick={handleCall}
-                      disabled={!contact?.phone}
+                      className="flex-col h-16 gap-1 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
+                      onClick={() => setShowNoShowConfirm(true)}
                     >
-                      <Phone className="h-4 w-4" />
-                      <span className="text-xs">Ligar</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-col h-16 gap-1"
-                      onClick={handleWhatsApp}
-                      disabled={!contact?.phone || isLoadingWhatsApp}
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      <span className="text-xs">{isLoadingWhatsApp ? '...' : 'WhatsApp'}</span>
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="text-xs">No-Show</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -585,35 +574,27 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-col h-16 gap-1 text-green-600 hover:text-green-700"
+                      className="flex-col h-16 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/20"
                       onClick={() => updateStatus.mutate({ meetingId: activeMeeting.id, status: 'completed' })}
                     >
                       <CheckCircle className="h-4 w-4" />
                       <span className="text-xs">Realizada</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-col h-16 gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                      onClick={handleContractPaid}
+                      disabled={updateStatus.isPending}
+                    >
+                      <DollarSign className="h-4 w-4" />
+                      <span className="text-xs">Contrato Pago</span>
                     </Button>
                   </div>
                 </div>
               </>
             )}
 
-            {/* Contract Paid Action - Only shows for completed meetings */}
-            {isCompleted && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-muted-foreground">Próximo Passo</h4>
-                  <Button
-                    variant="default"
-                    className="w-full bg-emerald-600 hover:bg-emerald-700"
-                    onClick={handleContractPaid}
-                    disabled={updateStatus.isPending}
-                  >
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Marcar como Contrato Pago
-                  </Button>
-                </div>
-              </>
-            )}
 
             {/* Notes */}
             <Separator />
@@ -635,62 +616,50 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </Button>
             </div>
 
-            {/* Danger Actions */}
+            {/* No-Show Confirmation Dialog */}
+            <AlertDialog open={showNoShowConfirm} onOpenChange={setShowNoShowConfirm}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                    Confirmar No-Show
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-2">
+                    <p>Ao marcar esta reunião como No-Show:</p>
+                    <ul className="list-disc list-inside space-y-1 text-sm">
+                      <li>O status será alterado para "No-Show"</li>
+                      <li>O SDR <strong>{sdrProfile?.full_name || 'responsável'}</strong> será alertado</li>
+                      <li>O lead deverá ser reagendado pelo SDR</li>
+                    </ul>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleNoShowConfirm}
+                    className="bg-yellow-600 hover:bg-yellow-700"
+                  >
+                    Confirmar No-Show
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Danger Actions - Cancel only */}
             {isPending && (
               <>
                 <Separator />
                 <div className="space-y-3">
                   <h4 className="font-medium text-sm text-muted-foreground">Ações de Status</h4>
-                  <div className="flex gap-2">
-                    {/* No-Show with confirmation */}
-                    <AlertDialog open={showNoShowConfirm} onOpenChange={setShowNoShowConfirm}>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-yellow-600 hover:text-yellow-700"
-                        >
-                          <AlertTriangle className="h-4 w-4 mr-2" />
-                          Marcar No-Show
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                            Confirmar No-Show
-                          </AlertDialogTitle>
-                          <AlertDialogDescription className="space-y-2">
-                            <p>Ao marcar esta reunião como No-Show:</p>
-                            <ul className="list-disc list-inside space-y-1 text-sm">
-                              <li>O status será alterado para "No-Show"</li>
-                              <li>O SDR <strong>{sdrProfile?.full_name || 'responsável'}</strong> será alertado</li>
-                              <li>O lead deverá ser reagendado pelo SDR</li>
-                            </ul>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={handleNoShowConfirm}
-                            className="bg-yellow-600 hover:bg-yellow-700"
-                          >
-                            Confirmar No-Show
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 text-destructive hover:text-destructive"
-                      onClick={() => cancelMeeting.mutate(meeting.id)}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Cancelar
-                    </Button>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-destructive hover:text-destructive"
+                    onClick={() => cancelMeeting.mutate(meeting.id)}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Cancelar Reunião
+                  </Button>
                 </div>
                 
                 {/* Delete button - Only visible for coordenador and above */}
