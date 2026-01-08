@@ -94,11 +94,10 @@ function CloserAvailabilityForm({ closer, leadType }: { closer: CloserWithAvaila
   };
 
   const handleSave = () => {
-    const activeSlots = slots.filter(s => s.is_active);
     updateAvailability.mutate({
       closerId: closer.id,
       leadType,
-      availability: activeSlots,
+      availability: slots,
     });
   };
 
