@@ -296,30 +296,31 @@ export function QuickScheduleModal({
                       Nenhum lead encontrado
                     </p>
                   ) : (
-                    searchResults.map(deal => (
-                      <button
-                        key={deal.id}
-                        onClick={() => handleSelectDeal(deal as DealOption)}
-                        className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">
-                            {deal.contact?.name || deal.name}
-                          </div>
-                          {deal.contact?.email && (
+                    searchResults.map(deal => {
+                      const contact = deal.contact;
+                      return (
+                        <button
+                          key={deal.id}
+                          onClick={() => handleSelectDeal(deal as DealOption)}
+                          className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {contact?.name || deal.name}
+                            </div>
                             <div className="text-xs text-muted-foreground truncate">
-                              {deal.contact.email}
+                              {contact?.email || '(sem email)'}
+                            </div>
+                          </div>
+                          {contact?.phone && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                              <Phone className="h-3 w-3" />
+                              <span>{formatPhoneDisplay(contact.phone)}</span>
                             </div>
                           )}
-                        </div>
-                        {deal.contact?.phone && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
-                            <Phone className="h-3 w-3" />
-                            <span>{formatPhoneDisplay(deal.contact.phone)}</span>
-                          </div>
-                        )}
-                      </button>
-                    ))
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}

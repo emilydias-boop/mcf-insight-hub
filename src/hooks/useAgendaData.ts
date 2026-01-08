@@ -631,7 +631,11 @@ export function useSearchDealsByPhone(phoneQuery: string) {
         .in('contact_id', contacts.map(c => c.id))
         .limit(10);
 
-      return deals || [];
+      // Normalizar contact (pode vir como array)
+      return (deals || []).map(deal => ({
+        ...deal,
+        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
+      }));
     },
     enabled: phoneQuery.replace(/\D/g, '').length >= 4,
   });
@@ -659,7 +663,11 @@ export function useSearchDealsByEmail(emailQuery: string) {
         .in('contact_id', contacts.map(c => c.id))
         .limit(10);
 
-      return deals || [];
+      // Normalizar contact (pode vir como array)
+      return (deals || []).map(deal => ({
+        ...deal,
+        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
+      }));
     },
     enabled: emailQuery.length >= 3,
   });
@@ -706,7 +714,13 @@ export function useSearchDealsForSchedule(query: string) {
         index === self.findIndex(d => d.id === deal.id)
       );
 
-      return uniqueDeals.slice(0, 10);
+      // 5. Normalizar contact (pode vir como array do Supabase)
+      const normalizedDeals = uniqueDeals.map(deal => ({
+        ...deal,
+        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
+      }));
+
+      return normalizedDeals.slice(0, 10);
     },
     enabled: query.length >= 2,
   });
