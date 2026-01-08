@@ -353,38 +353,57 @@ serve(async (req) => {
       google_calendar_id: closer.google_calendar_id,
     });
 
-    // Get contact info
+    // Get deal info with custom_fields for fallback data
+    const { data: deal } = await supabase
+      .from('crm_deals')
+      .select('name, contact_id, custom_fields, owner_id')
+      .eq('id', dealId)
+      .single();
+
+    // Get contact info - try multiple sources
     let contactInfo = { name: '', email: '', phone: '' };
-    if (contactId) {
+    let resolvedContactId = contactId || deal?.contact_id;
+    
+    if (resolvedContactId) {
       const { data: contact } = await supabase
         .from('crm_contacts')
         .select('name, email, phone')
-        .eq('id', contactId)
+        .eq('id', resolvedContactId)
         .single();
       
       if (contact) {
         contactInfo = contact;
       }
     }
-
-    // Get deal info
-    const { data: deal } = await supabase
-      .from('crm_deals')
-      .select('name, contact_id')
-      .eq('id', dealId)
-      .single();
-
-    // If no contactId provided, try to get from deal
-    if (!contactId && deal?.contact_id) {
-      const { data: dealContact } = await supabase
-        .from('crm_contacts')
-        .select('name, email, phone')
-        .eq('id', deal.contact_id)
-        .single();
+    
+    // Fallback: extract from deal.custom_fields or deal.name if contact info is empty
+    if (!contactInfo.name && deal) {
+      const customFields = deal.custom_fields as Record<string, any> | null;
       
-      if (dealContact) {
-        contactInfo = dealContact;
+      // Try to get name from custom_fields or deal name
+      contactInfo.name = customFields?.nome || customFields?.name || deal.name || '';
+      
+      // Try to get phone from custom_fields
+      if (!contactInfo.phone && customFields?.telefone) {
+        contactInfo.phone = customFields.telefone;
       }
+      if (!contactInfo.phone && customFields?.phone) {
+        contactInfo.phone = customFields.phone;
+      }
+      if (!contactInfo.phone && customFields?.celular) {
+        contactInfo.phone = customFields.celular;
+      }
+      
+      // Try to get email from custom_fields
+      if (!contactInfo.email && customFields?.email) {
+        contactInfo.email = customFields.email;
+      }
+      
+      console.log('📋 Using fallback contact info from deal:', { 
+        name: contactInfo.name, 
+        phone: contactInfo.phone ? '***' : 'N/A',
+        source: 'custom_fields/deal.name' 
+      });
     }
 
     console.log('📋 Contact info:', { name: contactInfo.name, email: contactInfo.email });
@@ -501,7 +520,7 @@ serve(async (req) => {
         .insert({
           closer_id: closerId,
           deal_id: dealId,
-          contact_id: contactId || deal?.contact_id,
+          contact_id: resolvedContactId || null,
           scheduled_at: scheduledAt,
           duration_minutes: durationMinutes,
           lead_type: leadType,
@@ -532,15 +551,18 @@ serve(async (req) => {
     const normalizedNotes = notes?.trim() || `Agendado via CRM\nLead Type: ${leadType}`;
 
     // Add attendee record with the same notes as the slot
+    // Include attendee_name and attendee_phone even without contact_id for display purposes
     const { data: attendee, error: attendeeError } = await supabase
       .from('meeting_slot_attendees')
       .insert({
         meeting_slot_id: slotId,
-        contact_id: contactId || deal?.contact_id,
+        contact_id: resolvedContactId || null,
         deal_id: dealId,
         status: 'invited',
         notes: normalizedNotes,
         booked_by: bookedBy,
+        attendee_name: contactInfo.name || deal?.name || null,
+        attendee_phone: contactInfo.phone || null,
       })
       .select('id')
       .single();
