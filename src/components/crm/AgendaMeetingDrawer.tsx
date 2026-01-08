@@ -61,6 +61,7 @@ interface AgendaMeetingDrawerProps {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   scheduled: { label: 'Agendada', color: 'bg-primary' },
+  invited: { label: 'Convidado', color: 'bg-blue-400' },
   rescheduled: { label: 'Reagendada', color: 'bg-yellow-500' },
   completed: { label: 'Realizada', color: 'bg-green-500' },
   no_show: { label: 'No-show', color: 'bg-red-500' },
@@ -106,43 +107,33 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     });
   };
 
-  // Handler to update participant status (individual)
-  const handleParticipantStatusChange = (participantId: string, isMain: boolean, newStatus: string) => {
-    if (isMain) {
-      updateStatus.mutate({ meetingId: activeMeeting.id, status: newStatus }, {
-        onSuccess: () => {
-          if (newStatus === 'no_show') {
-            setShowNoShowConfirm(false);
-            toast.success('Participante marcado como No-Show.');
-          }
+  // Handler to update participant status (individual) - all participants use attendees table
+  const handleParticipantStatusChange = (participantId: string, newStatus: string) => {
+    updateAttendeeStatus.mutate({ attendeeId: participantId, status: newStatus }, {
+      onSuccess: () => {
+        if (newStatus === 'no_show') {
+          setShowNoShowConfirm(false);
+          toast.success('Participante marcado como No-Show.');
         }
-      });
-    } else {
-      updateAttendeeStatus.mutate({ attendeeId: participantId, status: newStatus }, {
-        onSuccess: () => {
-          if (newStatus === 'no_show') {
-            setShowNoShowConfirm(false);
-          }
-        }
-      });
-    }
+      }
+    });
   };
 
   const handleNoShowConfirm = () => {
     if (selectedParticipant) {
-      handleParticipantStatusChange(selectedParticipant.id, selectedParticipant.isMain, 'no_show');
+      handleParticipantStatusChange(selectedParticipant.id, 'no_show');
     }
   };
 
   const handleContractPaid = () => {
     if (selectedParticipant) {
-      handleParticipantStatusChange(selectedParticipant.id, selectedParticipant.isMain, 'contract_paid');
+      handleParticipantStatusChange(selectedParticipant.id, 'contract_paid');
     }
   };
 
   const handleCompleted = () => {
     if (selectedParticipant) {
-      handleParticipantStatusChange(selectedParticipant.id, selectedParticipant.isMain, 'completed');
+      handleParticipantStatusChange(selectedParticipant.id, 'completed');
     }
   };
 
@@ -157,36 +148,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   }, [activeMeeting?.id]);
 
   // Get participants - needed before early return for useEffect dependency
+  // All participants come from meeting_slot_attendees table now
   const getParticipantsListEarly = () => {
     if (!activeMeeting) return [];
-    const participantsList: { 
-      id: string; 
-      isMain: boolean;
-      notes?: string | null;
-      closerNotes?: string | null;
-    }[] = [];
     
-    const contactData = activeMeeting.deal?.contact;
-    if (contactData) {
-      participantsList.push({
-        id: 'main',
-        isMain: true,
-        notes: activeMeeting.notes,
-        closerNotes: activeMeeting.closer_notes,
-      });
-    }
-
-    activeMeeting.attendees?.forEach(att => {
-      if (att.contact_id === activeMeeting.contact_id) return;
-      participantsList.push({
-        id: att.id,
-        isMain: false,
-        notes: att.notes,
-        closerNotes: att.closer_notes,
-      });
-    });
-
-    return participantsList;
+    return activeMeeting.attendees?.map(att => ({
+      id: att.id,
+      notes: att.notes,
+      closerNotes: att.closer_notes,
+    })) || [];
   };
   
   const participantsEarly = getParticipantsListEarly();
@@ -274,15 +244,12 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const handleSaveCloserNotes = () => {
     if (!selectedParticipant) return;
     
-    if (selectedParticipant.isMain) {
-      updateNotes.mutate({ meetingId: activeMeeting.id, notes: closerNotes, field: 'closer_notes' });
-    } else {
-      updateAttendeeNotes.mutate({ 
-        attendeeId: selectedParticipant.id, 
-        field: 'closer_notes', 
-        notes: closerNotes 
-      });
-    }
+    // All participants use the attendees table now
+    updateAttendeeNotes.mutate({ 
+      attendeeId: selectedParticipant.id, 
+      field: 'closer_notes', 
+      notes: closerNotes 
+    });
   };
 
   const handleCopyLink = () => {
@@ -349,62 +316,25 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     });
   };
 
-  // Get all participants (main contact + attendees) for the active meeting
+  // Get all participants from the attendees table - all are treated equally
   const getParticipantsList = () => {
-    const participants: { 
-      id: string; 
-      name: string; 
-      phone: string | null; 
-      isPartner: boolean; 
-      isMain: boolean; 
-      notifiedAt?: string | null;
-      bookedBy?: string | null;
-      notes?: string | null;
-      closerNotes?: string | null;
-      status?: string;
-      bookedByProfile?: { id: string; full_name: string | null; email: string | null };
-    }[] = [];
-    
-    // Main contact
-    if (contact) {
-      participants.push({
-        id: 'main',
-        name: contact.name,
-        phone: contact.phone,
-        isPartner: false,
-        isMain: true,
-        bookedBy: activeMeeting.booked_by,
-        notes: activeMeeting.notes,
-        closerNotes: activeMeeting.closer_notes,
-        status: activeMeeting.status,
-        bookedByProfile: activeMeeting.booked_by_profile,
-      });
-    }
-
-    // Additional attendees
-    activeMeeting.attendees?.forEach(att => {
-      // Skip if it's the same as main contact
-      if (att.contact_id === activeMeeting.contact_id) return;
-      
+    return activeMeeting.attendees?.map(att => {
       const name = att.attendee_name || att.contact?.name || 'Participante';
       const phone = att.attendee_phone || att.contact?.phone;
       
-      participants.push({
+      return {
         id: att.id,
         name,
         phone,
         isPartner: att.is_partner || false,
-        isMain: false,
         notifiedAt: att.notified_at,
         bookedBy: att.booked_by || activeMeeting.booked_by,
         notes: att.notes,
         closerNotes: att.closer_notes,
         status: att.status || 'scheduled',
         bookedByProfile: att.booked_by_profile || activeMeeting.booked_by_profile,
-      });
-    });
-
-    return participants;
+      };
+    }) || [];
   };
 
   const participants = getParticipantsList();
@@ -559,9 +489,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{p.name}</span>
-                          {p.isMain && (
-                            <Badge variant="secondary" className="text-xs">Principal</Badge>
-                          )}
                           {p.isPartner && (
                             <Badge variant="outline" className="text-xs">Sócio</Badge>
                           )}
@@ -594,7 +521,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           <MessageCircle className="h-4 w-4 text-green-600" />
                         </Button>
                       )}
-                      {!p.isMain && p.id && (
+                      {participants.length > 1 && p.id && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -630,10 +557,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                         SDR que Agendou {selectedParticipant.name.split(' ')[0]}
                       </span>
                     </div>
-                    {participants.length > 1 && (
-                      <Badge variant="outline" className="text-xs">
-                        {selectedParticipant.isMain ? 'Principal' : 'Sócio'}
-                      </Badge>
+                    {selectedParticipant.isPartner && (
+                      <Badge variant="outline" className="text-xs">Sócio</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
@@ -669,17 +594,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           <Button 
                             size="sm" 
                             onClick={() => {
-                              // Save to meeting_slots.notes for main, meeting_slot_attendees.notes for others
-                              if (selectedParticipant.isMain) {
-                                updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' });
-                              } else {
-                                // For attendees, we need to update the attendee note
-                                // For now, use the same mutation (will need backend update)
-                                updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' });
-                                toast.info('Nota salva para o participante');
-                              }
+                              // All participants use the attendees table
+                              updateAttendeeNotes.mutate({ 
+                                attendeeId: selectedParticipant.id, 
+                                field: 'notes', 
+                                notes: sdrNote 
+                              });
                             }}
-                            disabled={updateNotes.isPending || sdrNote === (selectedParticipant.notes || '')}
+                            disabled={updateAttendeeNotes.isPending || sdrNote === (selectedParticipant.notes || '')}
                           >
                             <Save className="h-4 w-4 mr-2" />
                             Salvar Nota
@@ -695,8 +617,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                   )}
 
-                  {/* Notas do SDR sobre o lead (do deal) */}
-                  {selectedParticipant.isMain && sdrNotes && sdrNotes.length > 0 && (
+                  {/* Notas do SDR sobre o lead (do deal) - show for participants linked to main contact */}
+                  {sdrNotes && sdrNotes.length > 0 && (
                     <div className="pt-2 border-t border-blue-500/20">
                       <div className="flex items-center gap-2 mb-2">
                         <StickyNote className="h-4 w-4 text-blue-600" />
@@ -753,7 +675,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             </div>
 
             {/* Quick Actions - Per Participant */}
-            {selectedParticipant && (selectedParticipant.status === 'scheduled' || selectedParticipant.status === 'rescheduled') && (
+            {selectedParticipant && !['no_show', 'completed', 'contract_paid', 'cancelled', 'canceled'].includes(selectedParticipant.status || '') && (
               <>
                 <Separator />
                 <div className="space-y-3">
