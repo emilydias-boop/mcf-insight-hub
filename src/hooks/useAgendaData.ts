@@ -607,6 +607,36 @@ export function useUpdateMeetingNotes() {
 
 // ============ Quick Schedule Hooks ============
 
+// Search deals by phone number directly
+export function useSearchDealsByPhone(phoneQuery: string) {
+  return useQuery({
+    queryKey: ['schedule-search-phone', phoneQuery],
+    queryFn: async () => {
+      const digits = phoneQuery.replace(/\D/g, '');
+      if (digits.length < 4) return [];
+
+      // Buscar contatos pelo telefone
+      const { data: contacts } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('phone', `%${digits}%`)
+        .limit(10);
+
+      if (!contacts || contacts.length === 0) return [];
+
+      // Buscar deals dos contatos encontrados
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
+        .in('contact_id', contacts.map(c => c.id))
+        .limit(10);
+
+      return deals || [];
+    },
+    enabled: phoneQuery.replace(/\D/g, '').length >= 4,
+  });
+}
+
 export function useSearchDealsForSchedule(query: string) {
   return useQuery({
     queryKey: ['schedule-search', query],

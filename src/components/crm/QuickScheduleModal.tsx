@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { 
   CloserWithAvailability, 
   useSearchDealsForSchedule, 
+  useSearchDealsByPhone,
   useCreateMeeting,
   useCheckSlotAvailability,
   useSendMeetingNotification,
@@ -90,6 +91,10 @@ export function QuickScheduleModal({
   const [nameQuery, setNameQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   
+  // Phone search state
+  const [phoneQuery, setPhoneQuery] = useState('');
+  const [showPhoneResults, setShowPhoneResults] = useState(false);
+  
   // Selected deal and auto-filled fields
   const [selectedDeal, setSelectedDeal] = useState<DealOption | null>(null);
   const [selectedEmail, setSelectedEmail] = useState('');
@@ -103,6 +108,7 @@ export function QuickScheduleModal({
   const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
+  const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
 
@@ -132,7 +138,9 @@ export function QuickScheduleModal({
     setNameQuery(deal.contact?.name || deal.name);
     setSelectedEmail(deal.contact?.email || '');
     setSelectedPhone(deal.contact?.phone || '');
+    setPhoneQuery('');
     setShowResults(false);
+    setShowPhoneResults(false);
   }, []);
 
   // Clear selection to search again
@@ -141,7 +149,9 @@ export function QuickScheduleModal({
     setNameQuery('');
     setSelectedEmail('');
     setSelectedPhone('');
+    setPhoneQuery('');
     setShowResults(false);
+    setShowPhoneResults(false);
   }, []);
 
   const handleSubmit = () => {
@@ -173,10 +183,12 @@ export function QuickScheduleModal({
 
   const resetForm = () => {
     setNameQuery('');
+    setPhoneQuery('');
     setSelectedDeal(null);
     setSelectedEmail('');
     setSelectedPhone('');
     setShowResults(false);
+    setShowPhoneResults(false);
     setSelectedCloser(preselectedCloserId || '');
     setSelectedDate(undefined);
     setSelectedTime('09:00');
@@ -321,15 +333,27 @@ export function QuickScheduleModal({
               </div>
             </div>
 
-            {/* Telefone Field (read-only, auto-filled) */}
+            {/* Telefone Field (searchable or read-only when selected) */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">Telefone</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Auto-preenchido ao selecionar lead"
-                  value={formatPhoneDisplay(selectedPhone)}
-                  readOnly
+                  placeholder={isSelected ? "Auto-preenchido" : "Digite o telefone para buscar..."}
+                  value={isSelected ? formatPhoneDisplay(selectedPhone) : phoneQuery}
+                  onChange={(e) => {
+                    if (!isSelected) {
+                      const value = e.target.value;
+                      setPhoneQuery(value);
+                      setShowPhoneResults(value.replace(/\D/g, '').length >= 4);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (phoneQuery.replace(/\D/g, '').length >= 4 && !isSelected) {
+                      setShowPhoneResults(true);
+                    }
+                  }}
+                  readOnly={isSelected}
                   className={cn(
                     "pl-9 pr-9",
                     isSelected && selectedPhone && "bg-muted border-green-500/50"
@@ -339,6 +363,42 @@ export function QuickScheduleModal({
                   <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
                 )}
               </div>
+
+              {/* Phone Search Results */}
+              {showPhoneResults && phoneQuery.replace(/\D/g, '').length >= 4 && !selectedDeal && (
+                <div className="border rounded-md max-h-48 overflow-y-auto shadow-sm bg-popover">
+                  {searchingPhone ? (
+                    <div className="p-2 space-y-2">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ) : phoneSearchResults.length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground text-center">
+                      Nenhum lead encontrado com esse telefone
+                    </p>
+                  ) : (
+                    phoneSearchResults.map(deal => (
+                      <button
+                        key={deal.id}
+                        onClick={() => handleSelectDeal(deal as DealOption)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {deal.contact?.name || deal.name}
+                          </div>
+                        </div>
+                        {deal.contact?.phone && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                            <Phone className="h-3 w-3" />
+                            <span>{formatPhoneDisplay(deal.contact.phone)}</span>
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Lead Type Badge */}
