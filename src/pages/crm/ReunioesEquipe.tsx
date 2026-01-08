@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
+import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { GhostAppointmentsAlert } from "@/components/sdr/GhostAppointmentsAlert";
 import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
@@ -92,6 +93,15 @@ export default function ReunioesEquipe() {
 
   const { start, end } = getDateRange();
 
+  // Today's dates for day metrics
+  const today = new Date();
+  const dayStart = startOfDay(today);
+  const dayEnd = endOfDay(today);
+  
+  // Week dates for week metrics
+  const weekStartDate = startOfWeek(today, { locale: ptBR });
+  const weekEndDate = endOfWeek(today, { locale: ptBR });
+
   // Fetch data with optional SDR filter
   const {
     teamKPIs,
@@ -104,6 +114,18 @@ export default function ReunioesEquipe() {
     sdrEmailFilter: sdrFilter !== "all" ? sdrFilter : undefined,
   });
 
+  // Fetch day data for goals panel
+  const { teamKPIs: dayKPIs } = useTeamMeetingsData({
+    startDate: dayStart,
+    endDate: dayEnd,
+  });
+
+  // Fetch week data for goals panel
+  const { teamKPIs: weekKPIs } = useTeamMeetingsData({
+    startDate: weekStartDate,
+    endDate: weekEndDate,
+  });
+
   // Ghost appointments data
   const { data: ghostCountBySdr } = useGhostCountBySdr();
 
@@ -112,6 +134,23 @@ export default function ReunioesEquipe() {
     if (sdrFilter === "all") return bySDR;
     return bySDR.filter(s => s.sdrEmail === sdrFilter);
   }, [bySDR, sdrFilter]);
+
+  // Values for goals panel
+  const dayValues = useMemo(() => ({
+    agendamento: dayKPIs.totalAgendamentos,
+    r1Agendada: dayKPIs.totalAgendamentos, // R1 Agendada = total agendamentos
+    r1Realizada: dayKPIs.totalRealizadas,
+    noShow: dayKPIs.totalNoShows,
+    contrato: dayKPIs.totalContratos,
+  }), [dayKPIs]);
+
+  const weekValues = useMemo(() => ({
+    agendamento: weekKPIs.totalAgendamentos,
+    r1Agendada: weekKPIs.totalAgendamentos,
+    r1Realizada: weekKPIs.totalRealizadas,
+    noShow: weekKPIs.totalNoShows,
+    contrato: weekKPIs.totalContratos,
+  }), [weekKPIs]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
@@ -257,6 +296,9 @@ export default function ReunioesEquipe() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Goals Panel */}
+      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} />
 
       {/* KPI Cards */}
       <TeamKPICards kpis={teamKPIs} isLoading={isLoading} />
