@@ -2750,6 +2750,7 @@ export type Database = {
         Row: {
           attendee_name: string | null
           attendee_phone: string | null
+          booked_by: string | null
           calendly_invitee_uri: string | null
           contact_id: string | null
           created_at: string | null
@@ -2757,12 +2758,14 @@ export type Database = {
           id: string
           is_partner: boolean | null
           meeting_slot_id: string
+          notes: string | null
           notified_at: string | null
           status: string | null
         }
         Insert: {
           attendee_name?: string | null
           attendee_phone?: string | null
+          booked_by?: string | null
           calendly_invitee_uri?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -2770,12 +2773,14 @@ export type Database = {
           id?: string
           is_partner?: boolean | null
           meeting_slot_id: string
+          notes?: string | null
           notified_at?: string | null
           status?: string | null
         }
         Update: {
           attendee_name?: string | null
           attendee_phone?: string | null
+          booked_by?: string | null
           calendly_invitee_uri?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -2783,10 +2788,25 @@ export type Database = {
           id?: string
           is_partner?: boolean | null
           meeting_slot_id?: string
+          notes?: string | null
           notified_at?: string | null
           status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "meeting_slot_attendees_booked_by_fkey"
+            columns: ["booked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slot_attendees_booked_by_fkey"
+            columns: ["booked_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "meeting_slot_attendees_contact_id_fkey"
             columns: ["contact_id"]

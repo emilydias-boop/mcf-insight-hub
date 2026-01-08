@@ -12,6 +12,8 @@ export interface MeetingAttendee {
   is_partner: boolean;
   status: string;
   notified_at: string | null;
+  booked_by: string | null;
+  notes: string | null;
   contact?: {
     id: string;
     name: string;
@@ -21,6 +23,11 @@ export interface MeetingAttendee {
   deal?: {
     id: string;
     name: string;
+  };
+  booked_by_profile?: {
+    id: string;
+    full_name: string | null;
+    email: string | null;
   };
 }
 
@@ -138,6 +145,8 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
             is_partner,
             status,
             notified_at,
+            booked_by,
+            notes,
             contact:crm_contacts(id, name, phone, email),
             deal:crm_deals(id, name)
           )
@@ -148,8 +157,12 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
 
       if (error) throw error;
 
-      // Get unique booked_by IDs to fetch SDR profiles
-      const bookedByIds = [...new Set(meetings?.map(m => m.booked_by).filter(Boolean) as string[])];
+      // Get unique booked_by IDs from meetings AND attendees to fetch SDR profiles
+      const meetingBookedByIds = meetings?.map(m => m.booked_by).filter(Boolean) as string[];
+      const attendeeBookedByIds = meetings?.flatMap(m => 
+        (m.attendees || []).map((a: any) => a.booked_by).filter(Boolean)
+      ) as string[];
+      const bookedByIds = [...new Set([...meetingBookedByIds, ...attendeeBookedByIds])];
       
       let profilesMap: Record<string, { id: string; full_name: string | null; email: string | null }> = {};
       
@@ -167,10 +180,14 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
         }
       }
 
-      // Map profiles to meetings
+      // Map profiles to meetings and attendees
       const meetingsWithProfiles = meetings?.map(m => ({
         ...m,
         booked_by_profile: m.booked_by ? profilesMap[m.booked_by] : undefined,
+        attendees: (m.attendees || []).map((a: any) => ({
+          ...a,
+          booked_by_profile: a.booked_by ? profilesMap[a.booked_by] : undefined,
+        })),
       })) || [];
 
       return meetingsWithProfiles as MeetingSlot[];
