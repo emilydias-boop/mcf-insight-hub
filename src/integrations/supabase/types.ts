@@ -2752,6 +2752,7 @@ export type Database = {
           attendee_phone: string | null
           booked_by: string | null
           calendly_invitee_uri: string | null
+          closer_notes: string | null
           contact_id: string | null
           created_at: string | null
           deal_id: string | null
@@ -2767,6 +2768,7 @@ export type Database = {
           attendee_phone?: string | null
           booked_by?: string | null
           calendly_invitee_uri?: string | null
+          closer_notes?: string | null
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
@@ -2782,6 +2784,7 @@ export type Database = {
           attendee_phone?: string | null
           booked_by?: string | null
           calendly_invitee_uri?: string | null
+          closer_notes?: string | null
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null

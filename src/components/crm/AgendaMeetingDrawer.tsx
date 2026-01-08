@@ -42,6 +42,8 @@ import {
   useRemoveMeetingAttendee,
   useMarkAttendeeNotified,
   useDeleteMeeting,
+  useUpdateAttendeeStatus,
+  useUpdateAttendeeNotes,
 } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -89,6 +91,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const removeAttendee = useRemoveMeetingAttendee();
   const markNotified = useMarkAttendeeNotified();
   const deleteMeeting = useDeleteMeeting();
+  const updateAttendeeStatus = useUpdateAttendeeStatus();
+  const updateAttendeeNotes = useUpdateAttendeeNotes();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
 
   // Check if user can delete meetings
@@ -102,42 +106,73 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     });
   };
 
+  // Handler to update participant status (individual)
+  const handleParticipantStatusChange = (participantId: string, isMain: boolean, newStatus: string) => {
+    if (isMain) {
+      updateStatus.mutate({ meetingId: activeMeeting.id, status: newStatus }, {
+        onSuccess: () => {
+          if (newStatus === 'no_show') {
+            setShowNoShowConfirm(false);
+            toast.success('Participante marcado como No-Show.');
+          }
+        }
+      });
+    } else {
+      updateAttendeeStatus.mutate({ attendeeId: participantId, status: newStatus }, {
+        onSuccess: () => {
+          if (newStatus === 'no_show') {
+            setShowNoShowConfirm(false);
+          }
+        }
+      });
+    }
+  };
+
   const handleNoShowConfirm = () => {
-    updateStatus.mutate({ meetingId: activeMeeting.id, status: 'no_show' }, {
-      onSuccess: () => {
-        setShowNoShowConfirm(false);
-        toast.success('Reunião marcada como No-Show. O SDR será alertado para reagendar.');
-      }
-    });
+    if (selectedParticipant) {
+      handleParticipantStatusChange(selectedParticipant.id, selectedParticipant.isMain, 'no_show');
+    }
   };
 
   const handleContractPaid = () => {
-    updateStatus.mutate({ meetingId: activeMeeting.id, status: 'contract_paid' });
+    if (selectedParticipant) {
+      handleParticipantStatusChange(selectedParticipant.id, selectedParticipant.isMain, 'contract_paid');
+    }
+  };
+
+  const handleCompleted = () => {
+    if (selectedParticipant) {
+      handleParticipantStatusChange(selectedParticipant.id, selectedParticipant.isMain, 'completed');
+    }
   };
 
   // All meetings at this slot (main + related)
   const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
   const activeMeeting = allMeetings.find(m => m.id === selectedMeetingId) || meeting;
 
-  // Sync notes when active meeting changes
+  // Sync notes when active meeting changes (only reset participant selection)
   useEffect(() => {
-    setCloserNotes(activeMeeting?.closer_notes || '');
-    // Note: sdrNote is now synced by selectedParticipant effect below
-  }, [activeMeeting?.id, activeMeeting?.closer_notes]);
+    // Reset participant selection when meeting changes
+    setSelectedParticipantId(null);
+  }, [activeMeeting?.id]);
 
   // Get participants - needed before early return for useEffect dependency
   const getParticipantsListEarly = () => {
     if (!activeMeeting) return [];
     const participantsList: { 
       id: string; 
+      isMain: boolean;
       notes?: string | null;
+      closerNotes?: string | null;
     }[] = [];
     
     const contactData = activeMeeting.deal?.contact;
     if (contactData) {
       participantsList.push({
         id: 'main',
+        isMain: true,
         notes: activeMeeting.notes,
+        closerNotes: activeMeeting.closer_notes,
       });
     }
 
@@ -145,7 +180,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       if (att.contact_id === activeMeeting.contact_id) return;
       participantsList.push({
         id: att.id,
+        isMain: false,
         notes: att.notes,
+        closerNotes: att.closer_notes,
       });
     });
 
@@ -155,10 +192,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const participantsEarly = getParticipantsListEarly();
   const selectedParticipantEarly = participantsEarly.find(p => p.id === selectedParticipantId) || participantsEarly[0];
 
-  // Sync sdrNote when selected participant changes - MUST be before any conditional return
+  // Sync notes when selected participant changes - MUST be before any conditional return
   useEffect(() => {
     setSdrNote(selectedParticipantEarly?.notes || '');
-  }, [selectedParticipantEarly?.id, selectedParticipantEarly?.notes]);
+    setCloserNotes(selectedParticipantEarly?.closerNotes || '');
+  }, [selectedParticipantEarly?.id, selectedParticipantEarly?.notes, selectedParticipantEarly?.closerNotes]);
 
   // Check if current user is the SDR who booked this meeting
   const isBookedBySdr = user?.id === activeMeeting?.booked_by;
@@ -234,7 +272,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const handleSaveCloserNotes = () => {
-    updateNotes.mutate({ meetingId: activeMeeting.id, notes: closerNotes, field: 'closer_notes' });
+    if (!selectedParticipant) return;
+    
+    if (selectedParticipant.isMain) {
+      updateNotes.mutate({ meetingId: activeMeeting.id, notes: closerNotes, field: 'closer_notes' });
+    } else {
+      updateAttendeeNotes.mutate({ 
+        attendeeId: selectedParticipant.id, 
+        field: 'closer_notes', 
+        notes: closerNotes 
+      });
+    }
   };
 
   const handleCopyLink = () => {
@@ -312,6 +360,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
       notifiedAt?: string | null;
       bookedBy?: string | null;
       notes?: string | null;
+      closerNotes?: string | null;
+      status?: string;
       bookedByProfile?: { id: string; full_name: string | null; email: string | null };
     }[] = [];
     
@@ -325,6 +375,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         isMain: true,
         bookedBy: activeMeeting.booked_by,
         notes: activeMeeting.notes,
+        closerNotes: activeMeeting.closer_notes,
+        status: activeMeeting.status,
         bookedByProfile: activeMeeting.booked_by_profile,
       });
     }
@@ -346,6 +398,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         notifiedAt: att.notified_at,
         bookedBy: att.booked_by || activeMeeting.booked_by,
         notes: att.notes,
+        closerNotes: att.closer_notes,
+        status: att.status || 'scheduled',
         bookedByProfile: att.booked_by_profile || activeMeeting.booked_by_profile,
       });
     });
@@ -503,13 +557,19 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                         {p.name.charAt(0)}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{p.name}</span>
                           {p.isMain && (
                             <Badge variant="secondary" className="text-xs">Principal</Badge>
                           )}
                           {p.isPartner && (
                             <Badge variant="outline" className="text-xs">Sócio</Badge>
+                          )}
+                          {/* Individual Status Badge */}
+                          {p.status && p.status !== 'scheduled' && (
+                            <Badge className={cn('text-xs text-white', STATUS_LABELS[p.status]?.color || 'bg-muted')}>
+                              {STATUS_LABELS[p.status]?.label || p.status}
+                            </Badge>
                           )}
                           {selectedParticipant?.id === p.id && (
                             <Badge className="text-xs bg-primary">Selecionado</Badge>
@@ -692,18 +752,21 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </div>
             </div>
 
-            {/* Quick Actions */}
-            {isPending && (
+            {/* Quick Actions - Per Participant */}
+            {selectedParticipant && (selectedParticipant.status === 'scheduled' || selectedParticipant.status === 'rescheduled') && (
               <>
                 <Separator />
                 <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-muted-foreground">Ações Rápidas</h4>
+                  <h4 className="font-medium text-sm text-muted-foreground">
+                    Ações para: {selectedParticipant.name.split(' ')[0]}
+                  </h4>
                   <div className="grid grid-cols-4 gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       className="flex-col h-16 gap-1 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
                       onClick={() => setShowNoShowConfirm(true)}
+                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
                     >
                       <AlertTriangle className="h-4 w-4" />
                       <span className="text-xs">No-Show</span>
@@ -724,7 +787,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       variant="outline"
                       size="sm"
                       className="flex-col h-16 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/20"
-                      onClick={() => updateStatus.mutate({ meetingId: activeMeeting.id, status: 'completed' })}
+                      onClick={handleCompleted}
+                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
                     >
                       <CheckCircle className="h-4 w-4" />
                       <span className="text-xs">Realizada</span>
@@ -734,7 +798,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       size="sm"
                       className="flex-col h-16 gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
                       onClick={handleContractPaid}
-                      disabled={updateStatus.isPending}
+                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
                     >
                       <DollarSign className="h-4 w-4" />
                       <span className="text-xs">Contrato Pago</span>
@@ -746,25 +810,35 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
 
 
-            {/* Closer Notes */}
-            <Separator />
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground">Notas da Closer</h4>
-              <Textarea
-                value={closerNotes}
-                onChange={(e) => setCloserNotes(e.target.value)}
-                placeholder="Escreva suas observações sobre o lead e a reunião..."
-                rows={4}
-              />
-              <Button 
-                size="sm" 
-                onClick={handleSaveCloserNotes}
-                disabled={updateNotes.isPending || closerNotes === (activeMeeting.closer_notes || '')}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Salvar Notas
-              </Button>
-            </div>
+            {/* Closer Notes - Per Participant */}
+            {selectedParticipant && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">
+                    Notas da Closer para: {selectedParticipant.name.split(' ')[0]}
+                  </h4>
+                  <Textarea
+                    value={closerNotes}
+                    onChange={(e) => setCloserNotes(e.target.value)}
+                    placeholder={`Escreva suas observações sobre ${selectedParticipant.name.split(' ')[0]}...`}
+                    rows={4}
+                  />
+                  <Button 
+                    size="sm" 
+                    onClick={handleSaveCloserNotes}
+                    disabled={
+                      updateNotes.isPending || 
+                      updateAttendeeNotes.isPending || 
+                      closerNotes === (selectedParticipant.closerNotes || '')
+                    }
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Salvar Notas
+                  </Button>
+                </div>
+              </>
+            )}
 
             {/* No-Show Confirmation Dialog */}
             <AlertDialog open={showNoShowConfirm} onOpenChange={setShowNoShowConfirm}>
