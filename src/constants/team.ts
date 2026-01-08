@@ -19,6 +19,13 @@ export const CLOSER_LIST = [
   { nome: "Jessica Bellini", variations: ["jessica bellini", "Jessica Bellini", "Jéssica Bellini", "jéssica bellini", "bellini"] },
 ];
 
+// Lista de Closers ATIVOS para o painel de resumo
+export const CLOSER_LIST_ACTIVE = [
+  { nome: "Thayna", variations: ["thayna", "thaynar", "thayna dos santos", "thayna dos santos tavares"] },
+  { nome: "Julio", variations: ["julio", "júlio", "julio caetano"] },
+  { nome: "Cristiane", variations: ["cristiane", "cristiane gomes"] },
+];
+
 // Produtos que disparam confetti (case insensitive, busca parcial)
 export const CONFETTI_PRODUCTS = [
   // Contratos específicos (apenas A000 e Anticrise)
