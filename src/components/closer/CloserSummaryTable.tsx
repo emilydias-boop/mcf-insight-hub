@@ -28,7 +28,7 @@ export function CloserSummaryTable({ data, isLoading }: CloserSummaryTableProps)
 
   // Check if there's any activity
   const hasActivity = data.some(row => 
-    row.r1Realizadas > 0 || row.r2Agendadas > 0 || row.contratosPagos > 0 || row.noShows > 0
+    row.r1Realizadas > 0 || row.r2Agendadas > 0 || row.contratosPagos > 0 || row.vendasRealizadas > 0 || row.noShows > 0
   );
 
   if (!hasActivity) {
@@ -47,9 +47,10 @@ export function CloserSummaryTable({ data, isLoading }: CloserSummaryTableProps)
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">Closer</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizadas</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Contratos</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R2 Agendadas</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R2 Realizadas</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Contratos</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Vendas</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-Shows</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa R2</TableHead>
@@ -65,6 +66,9 @@ export function CloserSummaryTable({ data, isLoading }: CloserSummaryTableProps)
                   <span className="text-blue-400">{row.r1Realizadas}</span>
                 </TableCell>
                 <TableCell className="text-center">
+                  <span className="text-amber-400 font-medium">{row.contratosPagos}</span>
+                </TableCell>
+                <TableCell className="text-center">
                   <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
                     {row.r2Agendadas}
                   </Badge>
@@ -73,7 +77,7 @@ export function CloserSummaryTable({ data, isLoading }: CloserSummaryTableProps)
                   <span className="text-green-400">{row.r2Realizadas}</span>
                 </TableCell>
                 <TableCell className="text-center">
-                  <span className="text-amber-400 font-medium">{row.contratosPagos}</span>
+                  <span className="text-emerald-400 font-medium">{row.vendasRealizadas}</span>
                 </TableCell>
                 <TableCell className="text-center">
                   <span className="text-red-400">{row.noShows}</span>
