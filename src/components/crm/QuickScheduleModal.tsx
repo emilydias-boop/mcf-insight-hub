@@ -320,7 +320,10 @@ export function QuickScheduleModal({
                 Lead {detectedLeadType} às {selectedTime}
               </span>
               <span className="font-medium">
-                {slotAvailability.currentCount} agendamento(s)
+                {slotAvailability.currentCount === 0 
+                  ? 'Ainda não possui agendamento'
+                  : `Já possui ${slotAvailability.currentCount} agendamento${slotAvailability.currentCount !== 1 ? 's' : ''}`
+                }
               </span>
             </div>
           )}

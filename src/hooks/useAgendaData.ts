@@ -846,22 +846,33 @@ export function useCheckSlotAvailability(
 
       const maxSlots = availability?.max_slots_per_hour || 3;
 
-      // Count existing meetings in this hour for this lead type
+      // Count existing attendees in meetings for this hour and lead type
       const hourStart = new Date(scheduledAt);
       hourStart.setMinutes(0, 0, 0);
       const hourEnd = new Date(scheduledAt);
       hourEnd.setMinutes(59, 59, 999);
 
-      const { data: meetings, count } = await supabase
+      // First get meeting IDs for this slot
+      const { data: meetingIds } = await supabase
         .from('meeting_slots')
-        .select('id', { count: 'exact' })
+        .select('id')
         .eq('closer_id', closerId)
         .eq('lead_type', leadType)
         .gte('scheduled_at', hourStart.toISOString())
         .lte('scheduled_at', hourEnd.toISOString())
         .neq('status', 'canceled');
 
-      const currentCount = count || 0;
+      // Count attendees in those meetings
+      const ids = (meetingIds || []).map(m => m.id);
+      let currentCount = 0;
+      
+      if (ids.length > 0) {
+        const { count } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id', { count: 'exact' })
+          .in('meeting_slot_id', ids);
+        currentCount = count || 0;
+      }
 
       return {
         available: currentCount < maxSlots,
