@@ -455,6 +455,15 @@ serve(async (req) => {
       // Continue without Google Calendar - meeting will be created for tracking only
     }
 
+    // Get current user for booked_by tracking
+    const authHeader = req.headers.get('Authorization');
+    let bookedBy = null;
+    
+    if (authHeader) {
+      const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+      bookedBy = user?.id;
+    }
+
     // Check if there's an existing slot at this time for this closer
     const { data: existingSlot } = await supabase
       .from('meeting_slots')
@@ -486,15 +495,6 @@ serve(async (req) => {
       slotId = existingSlot.id;
       console.log('📍 Adding to existing slot:', slotId);
     } else {
-      // Get current user
-      const authHeader = req.headers.get('Authorization');
-      let bookedBy = null;
-      
-      if (authHeader) {
-        const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-        bookedBy = user?.id;
-      }
-
       // Create new slot
       const { data: newSlot, error: slotError } = await supabase
         .from('meeting_slots')
@@ -536,6 +536,8 @@ serve(async (req) => {
         contact_id: contactId || deal?.contact_id,
         deal_id: dealId,
         status: 'invited',
+        notes: notes || null,
+        booked_by: bookedBy,
       })
       .select('id')
       .single();
