@@ -2761,6 +2761,7 @@ export type Database = {
           meeting_slot_id: string
           notes: string | null
           notified_at: string | null
+          parent_attendee_id: string | null
           status: string | null
         }
         Insert: {
@@ -2777,6 +2778,7 @@ export type Database = {
           meeting_slot_id: string
           notes?: string | null
           notified_at?: string | null
+          parent_attendee_id?: string | null
           status?: string | null
         }
         Update: {
@@ -2793,6 +2795,7 @@ export type Database = {
           meeting_slot_id?: string
           notes?: string | null
           notified_at?: string | null
+          parent_attendee_id?: string | null
           status?: string | null
         }
         Relationships: [
@@ -2829,6 +2832,13 @@ export type Database = {
             columns: ["meeting_slot_id"]
             isOneToOne: false
             referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slot_attendees_parent_attendee_id_fkey"
+            columns: ["parent_attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
             referencedColumns: ["id"]
           },
         ]
