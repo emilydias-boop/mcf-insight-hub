@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, Tag, Send } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -66,6 +66,19 @@ function detectLeadType(tags?: string[]): LeadType {
   return 'A';
 }
 
+// Helper to format phone for display
+function formatPhoneDisplay(phone: string | null | undefined): string {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return phone;
+}
+
 export function QuickScheduleModal({ 
   open, 
   onOpenChange, 
@@ -73,15 +86,23 @@ export function QuickScheduleModal({
   preselectedCloserId,
   preselectedDate 
 }: QuickScheduleModalProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+  // Search state
+  const [nameQuery, setNameQuery] = useState('');
+  const [showResults, setShowResults] = useState(false);
+  
+  // Selected deal and auto-filled fields
   const [selectedDeal, setSelectedDeal] = useState<DealOption | null>(null);
+  const [selectedEmail, setSelectedEmail] = useState('');
+  const [selectedPhone, setSelectedPhone] = useState('');
+  
+  // Form state
   const [selectedCloser, setSelectedCloser] = useState(preselectedCloserId || '');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
   const [notes, setNotes] = useState('');
   const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(searchQuery);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
 
@@ -105,10 +126,23 @@ export function QuickScheduleModal({
     detectedLeadType
   );
 
-  const handleSelectDeal = (deal: DealOption) => {
+  // Handle selecting a deal from search results
+  const handleSelectDeal = useCallback((deal: DealOption) => {
     setSelectedDeal(deal);
-    setSearchQuery(deal.contact?.name || deal.name);
-  };
+    setNameQuery(deal.contact?.name || deal.name);
+    setSelectedEmail(deal.contact?.email || '');
+    setSelectedPhone(deal.contact?.phone || '');
+    setShowResults(false);
+  }, []);
+
+  // Clear selection to search again
+  const handleClearSelection = useCallback(() => {
+    setSelectedDeal(null);
+    setNameQuery('');
+    setSelectedEmail('');
+    setSelectedPhone('');
+    setShowResults(false);
+  }, []);
 
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
@@ -138,8 +172,11 @@ export function QuickScheduleModal({
   };
 
   const resetForm = () => {
-    setSearchQuery('');
+    setNameQuery('');
     setSelectedDeal(null);
+    setSelectedEmail('');
+    setSelectedPhone('');
+    setShowResults(false);
     setSelectedCloser(preselectedCloserId || '');
     setSelectedDate(undefined);
     setSelectedTime('09:00');
@@ -169,6 +206,8 @@ export function QuickScheduleModal({
     return { isFull: false };
   }, [slotAvailability, selectedTime]);
 
+  const isSelected = !!selectedDeal;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -180,71 +219,144 @@ export function QuickScheduleModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Deal Search */}
-          <div className="space-y-2">
-            <Label>Buscar Lead/Negócio</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Digite o nome do lead..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  if (selectedDeal) setSelectedDeal(null);
-                }}
-                className="pl-9"
-              />
-            </div>
-            
-            {/* Search Results */}
-            {searchQuery.length >= 2 && !selectedDeal && (
-              <div className="border rounded-md max-h-40 overflow-y-auto">
-                {searching ? (
-                  <div className="p-2 space-y-2">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-8 w-full" />
-                  </div>
-                ) : searchResults.length === 0 ? (
-                  <p className="p-3 text-sm text-muted-foreground text-center">
-                    Nenhum resultado
-                  </p>
-                ) : (
-                  searchResults.map(deal => (
-                    <button
-                      key={deal.id}
-                      onClick={() => handleSelectDeal(deal as DealOption)}
-                      className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-b last:border-b-0"
-                    >
-                      <div className="font-medium">{deal.contact?.name || deal.name}</div>
-                      {deal.contact?.phone && (
-                        <div className="text-xs text-muted-foreground">{deal.contact.phone}</div>
-                      )}
-                    </button>
-                  ))
+          {/* 3-Field Search Section */}
+          <div className="space-y-3">
+            {/* Nome Field with Search */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Nome</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Digite o nome do lead..."
+                  value={nameQuery}
+                  onChange={(e) => {
+                    setNameQuery(e.target.value);
+                    if (selectedDeal) {
+                      setSelectedDeal(null);
+                      setSelectedEmail('');
+                      setSelectedPhone('');
+                    }
+                    setShowResults(e.target.value.length >= 2);
+                  }}
+                  onFocus={() => {
+                    if (nameQuery.length >= 2 && !selectedDeal) {
+                      setShowResults(true);
+                    }
+                  }}
+                  className={cn(
+                    "pl-9 pr-9",
+                    isSelected && "bg-muted border-green-500/50"
+                  )}
+                  readOnly={isSelected}
+                />
+                {isSelected && (
+                  <button
+                    onClick={handleClearSelection}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 )}
               </div>
-            )}
-
-            {selectedDeal && (
-              <div className="bg-muted/50 rounded-md p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-sm">{selectedDeal.contact?.name || selectedDeal.name}</div>
-                    {selectedDeal.contact?.phone && (
-                      <div className="text-xs text-muted-foreground">{selectedDeal.contact.phone}</div>
-                    )}
-                  </div>
-                  <Badge 
-                    variant="outline" 
-                    className={cn(
-                      "font-semibold",
-                      detectedLeadType === 'A' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
-                    )}
-                  >
-                    <Tag className="h-3 w-3 mr-1" />
-                    Lead {detectedLeadType}
-                  </Badge>
+              
+              {/* Search Results with Phone for Differentiation */}
+              {showResults && nameQuery.length >= 2 && !selectedDeal && (
+                <div className="border rounded-md max-h-48 overflow-y-auto shadow-sm bg-popover">
+                  {searching ? (
+                    <div className="p-2 space-y-2">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <p className="p-3 text-sm text-muted-foreground text-center">
+                      Nenhum lead encontrado
+                    </p>
+                  ) : (
+                    searchResults.map(deal => (
+                      <button
+                        key={deal.id}
+                        onClick={() => handleSelectDeal(deal as DealOption)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {deal.contact?.name || deal.name}
+                          </div>
+                          {deal.contact?.email && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              {deal.contact.email}
+                            </div>
+                          )}
+                        </div>
+                        {deal.contact?.phone && (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                            <Phone className="h-3 w-3" />
+                            <span>{formatPhoneDisplay(deal.contact.phone)}</span>
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  )}
                 </div>
+              )}
+            </div>
+
+            {/* Email Field (read-only, auto-filled) */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Auto-preenchido ao selecionar lead"
+                  value={selectedEmail}
+                  readOnly
+                  className={cn(
+                    "pl-9 pr-9",
+                    isSelected && selectedEmail && "bg-muted border-green-500/50"
+                  )}
+                />
+                {isSelected && selectedEmail && (
+                  <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+            </div>
+
+            {/* Telefone Field (read-only, auto-filled) */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Telefone</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Auto-preenchido ao selecionar lead"
+                  value={formatPhoneDisplay(selectedPhone)}
+                  readOnly
+                  className={cn(
+                    "pl-9 pr-9",
+                    isSelected && selectedPhone && "bg-muted border-green-500/50"
+                  )}
+                />
+                {isSelected && selectedPhone && (
+                  <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                )}
+              </div>
+            </div>
+
+            {/* Lead Type Badge */}
+            {selectedDeal && (
+              <div className="flex items-center gap-2 pt-1">
+                <Badge 
+                  variant="outline" 
+                  className={cn(
+                    "font-semibold",
+                    detectedLeadType === 'A' ? 'border-blue-500 text-blue-600' : 'border-purple-500 text-purple-600'
+                  )}
+                >
+                  <Tag className="h-3 w-3 mr-1" />
+                  Lead {detectedLeadType}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  Detectado automaticamente pelas tags
+                </span>
               </div>
             )}
           </div>
