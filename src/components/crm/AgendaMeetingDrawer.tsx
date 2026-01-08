@@ -3,7 +3,8 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
-  ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send
+  ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
+  Lock, DollarSign, UserCircle
 } from 'lucide-react';
 import {
   Drawer,
@@ -44,6 +45,7 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useConversationsContext } from '@/contexts/ConversationsContext';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AgendaMeetingDrawerProps {
   meeting: MeetingSlot | null;
@@ -59,16 +61,22 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   completed: { label: 'Realizada', color: 'bg-green-500' },
   no_show: { label: 'No-show', color: 'bg-red-500' },
   canceled: { label: 'Cancelada', color: 'bg-muted' },
+  contract_paid: { label: 'Contrato Pago', color: 'bg-emerald-600' },
 };
+
+// Roles that can delete meetings
+const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador'];
 
 export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [notes, setNotes] = useState(meeting?.notes || '');
   const [isLoadingWhatsApp, setIsLoadingWhatsApp] = useState(false);
   const [showAddPartner, setShowAddPartner] = useState(false);
   const [partnerName, setPartnerName] = useState('');
   const [partnerPhone, setPartnerPhone] = useState('');
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [showNoShowConfirm, setShowNoShowConfirm] = useState(false);
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
@@ -79,12 +87,28 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const deleteMeeting = useDeleteMeeting();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
 
+  // Check if user can delete meetings
+  const canDeleteMeeting = role && DELETE_ALLOWED_ROLES.includes(role);
+
   const handleDeleteMeeting = () => {
     deleteMeeting.mutate(activeMeeting.id, {
       onSuccess: () => {
         onOpenChange(false);
       }
     });
+  };
+
+  const handleNoShowConfirm = () => {
+    updateStatus.mutate({ meetingId: activeMeeting.id, status: 'no_show' }, {
+      onSuccess: () => {
+        setShowNoShowConfirm(false);
+        toast.success('Reunião marcada como No-Show. O SDR será alertado para reagendar.');
+      }
+    });
+  };
+
+  const handleContractPaid = () => {
+    updateStatus.mutate({ meetingId: activeMeeting.id, status: 'contract_paid' });
   };
 
   // All meetings at this slot (main + related)
@@ -94,8 +118,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   if (!meeting || !activeMeeting) return null;
 
   const contact = activeMeeting.deal?.contact;
+  const sdrProfile = activeMeeting.booked_by_profile;
   const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
+  const isCompleted = activeMeeting.status === 'completed';
   // Video conference link (Google Meet) - direct access to the meeting room
   const videoConferenceLink = activeMeeting.video_conference_link;
 
@@ -424,6 +450,29 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
             <Separator />
 
+            {/* SDR Info Section */}
+            {sdrProfile && (
+              <>
+                <div className="bg-blue-500/10 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <UserCircle className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-sm text-blue-700 dark:text-blue-400">SDR que Agendou</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span>{sdrProfile.full_name || 'Não informado'}</span>
+                  </div>
+                  {sdrProfile.email && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">{sdrProfile.email}</span>
+                    </div>
+                  )}
+                </div>
+                <Separator />
+              </>
+            )}
+
             {/* Meeting Info Card */}
             <div className="bg-muted/50 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -483,11 +532,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-col h-16 gap-1"
-                      onClick={() => onReschedule(activeMeeting)}
+                      className="flex-col h-16 gap-1 opacity-50 cursor-not-allowed relative"
+                      disabled
                     >
-                      <Calendar className="h-4 w-4" />
+                      <Lock className="h-4 w-4" />
                       <span className="text-xs">Reagendar</span>
+                      <Badge variant="secondary" className="absolute -top-2 -right-2 text-[10px] px-1">
+                        Em breve
+                      </Badge>
                     </Button>
                     <Button
                       variant="outline"
@@ -503,15 +555,34 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </>
             )}
 
+            {/* Contract Paid Action - Only shows for completed meetings */}
+            {isCompleted && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Próximo Passo</h4>
+                  <Button
+                    variant="default"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700"
+                    onClick={handleContractPaid}
+                    disabled={updateStatus.isPending}
+                  >
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Marcar como Contrato Pago
+                  </Button>
+                </div>
+              </>
+            )}
+
             {/* Notes */}
             <Separator />
             <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground">Notas</h4>
+              <h4 className="font-medium text-sm text-muted-foreground">Notas da Closer</h4>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Adicione notas sobre a reunião..."
-                rows={3}
+                placeholder="Escreva suas observações sobre o lead e a reunião..."
+                rows={4}
               />
               <Button 
                 size="sm" 
@@ -527,57 +598,96 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             {isPending && (
               <>
                 <Separator />
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-yellow-600 hover:text-yellow-700"
-                    onClick={() => updateStatus.mutate({ meetingId: meeting.id, status: 'no_show' })}
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-2" />
-                    Marcar No-Show
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-destructive hover:text-destructive"
-                    onClick={() => cancelMeeting.mutate(meeting.id)}
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Cancelar
-                  </Button>
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">Ações de Status</h4>
+                  <div className="flex gap-2">
+                    {/* No-Show with confirmation */}
+                    <AlertDialog open={showNoShowConfirm} onOpenChange={setShowNoShowConfirm}>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-yellow-600 hover:text-yellow-700"
+                        >
+                          <AlertTriangle className="h-4 w-4 mr-2" />
+                          Marcar No-Show
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                            Confirmar No-Show
+                          </AlertDialogTitle>
+                          <AlertDialogDescription className="space-y-2">
+                            <p>Ao marcar esta reunião como No-Show:</p>
+                            <ul className="list-disc list-inside space-y-1 text-sm">
+                              <li>O status será alterado para "No-Show"</li>
+                              <li>O SDR <strong>{sdrProfile?.full_name || 'responsável'}</strong> será alertado</li>
+                              <li>O lead deverá ser reagendado pelo SDR</li>
+                            </ul>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={handleNoShowConfirm}
+                            className="bg-yellow-600 hover:bg-yellow-700"
+                          >
+                            Confirmar No-Show
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-destructive hover:text-destructive"
+                      onClick={() => cancelMeeting.mutate(meeting.id)}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </Button>
+                  </div>
                 </div>
                 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      className="w-full"
-                      disabled={deleteMeeting.isPending}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {deleteMeeting.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Excluir reunião?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta ação não pode ser desfeita. A reunião será excluída permanentemente do sistema.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Voltar</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={handleDeleteMeeting}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Excluir
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                {/* Delete button - Only visible for coordenador and above */}
+                {canDeleteMeeting && (
+                  <>
+                    <Separator />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          className="w-full"
+                          disabled={deleteMeeting.isPending}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {deleteMeeting.isPending ? 'Excluindo...' : 'Excluir Permanentemente'}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Excluir reunião?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. A reunião será excluída permanentemente do sistema.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Voltar</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={handleDeleteMeeting}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
               </>
             )}
 

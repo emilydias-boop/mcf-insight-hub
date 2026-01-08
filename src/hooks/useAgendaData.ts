@@ -56,6 +56,11 @@ export interface MeetingSlot {
     };
   };
   attendees?: MeetingAttendee[];
+  booked_by_profile?: {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+  };
 }
 
 export type LeadType = 'A' | 'B';
@@ -112,7 +117,8 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
   return useQuery({
     queryKey: ['agenda-meetings', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch meetings
+      const { data: meetings, error } = await supabase
         .from('meeting_slots')
         .select(`
           *,
@@ -140,7 +146,33 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
         .order('scheduled_at', { ascending: true });
 
       if (error) throw error;
-      return data as MeetingSlot[];
+
+      // Get unique booked_by IDs to fetch SDR profiles
+      const bookedByIds = [...new Set(meetings?.map(m => m.booked_by).filter(Boolean) as string[])];
+      
+      let profilesMap: Record<string, { id: string; full_name: string | null; email: string | null }> = {};
+      
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', bookedByIds);
+        
+        if (profiles) {
+          profilesMap = profiles.reduce((acc, p) => {
+            acc[p.id] = p;
+            return acc;
+          }, {} as Record<string, { id: string; full_name: string | null; email: string | null }>);
+        }
+      }
+
+      // Map profiles to meetings
+      const meetingsWithProfiles = meetings?.map(m => ({
+        ...m,
+        booked_by_profile: m.booked_by ? profilesMap[m.booked_by] : undefined,
+      })) || [];
+
+      return meetingsWithProfiles as MeetingSlot[];
     },
   });
 }
