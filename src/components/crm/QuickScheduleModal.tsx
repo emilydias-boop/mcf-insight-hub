@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,9 +32,11 @@ import {
   useCreateMeeting,
   useCheckSlotAvailability,
   useSendMeetingNotification,
+  useSearchWeeklyMeetingLeads,
 } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { SDR_LIST } from '@/constants/team';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -88,6 +90,10 @@ export function QuickScheduleModal({
   preselectedCloserId,
   preselectedDate 
 }: QuickScheduleModalProps) {
+  // Search mode state
+  const [searchMode, setSearchMode] = useState<'normal' | 'weekly'>('normal');
+  const [weeklyStatusFilter, setWeeklyStatusFilter] = useState('all');
+  
   // Search state
   const [nameQuery, setNameQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -105,6 +111,9 @@ export function QuickScheduleModal({
   const [selectedEmail, setSelectedEmail] = useState('');
   const [selectedPhone, setSelectedPhone] = useState('');
   
+  // SDR selection
+  const [selectedSdr, setSelectedSdr] = useState('');
+  
   // Form state
   const [selectedCloser, setSelectedCloser] = useState(preselectedCloserId || '');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
@@ -115,6 +124,7 @@ export function QuickScheduleModal({
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
   const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
   const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
+  const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
 
@@ -164,6 +174,22 @@ export function QuickScheduleModal({
     setShowEmailResults(false);
   }, []);
 
+  // Handle selecting a lead from weekly list
+  const handleSelectWeeklyLead = useCallback((item: any) => {
+    if (!item.deal) return;
+    
+    setSelectedDeal({
+      id: item.deal.id,
+      name: item.deal.name,
+      tags: item.deal.tags,
+      contact: item.deal.contact,
+    });
+    setNameQuery(item.deal.contact?.name || item.deal.name);
+    setSelectedEmail(item.deal.contact?.email || '');
+    setSelectedPhone(item.deal.contact?.phone || '');
+    setSearchMode('normal');
+  }, []);
+
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate) return;
 
@@ -179,6 +205,7 @@ export function QuickScheduleModal({
       notes,
       leadType: detectedLeadType,
       sendNotification: autoSendWhatsApp,
+      sdrEmail: selectedSdr || undefined,
     }, {
       onSuccess: (data) => {
         // Send WhatsApp notification if enabled
@@ -192,12 +219,15 @@ export function QuickScheduleModal({
   };
 
   const resetForm = () => {
+    setSearchMode('normal');
+    setWeeklyStatusFilter('all');
     setNameQuery('');
     setPhoneQuery('');
     setEmailQuery('');
     setSelectedDeal(null);
     setSelectedEmail('');
     setSelectedPhone('');
+    setSelectedSdr('');
     setShowResults(false);
     setShowPhoneResults(false);
     setShowEmailResults(false);
@@ -243,7 +273,93 @@ export function QuickScheduleModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* 3-Field Search Section */}
+          {/* Search Mode Toggle */}
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={searchMode === 'normal' ? 'default' : 'outline'}
+              onClick={() => setSearchMode('normal')}
+              className="flex-1"
+            >
+              <Search className="h-4 w-4 mr-1" />
+              Busca Normal
+            </Button>
+            <Button
+              size="sm"
+              variant={searchMode === 'weekly' ? 'default' : 'outline'}
+              onClick={() => setSearchMode('weekly')}
+              className="flex-1"
+            >
+              <CalendarDays className="h-4 w-4 mr-1" />
+              Leads da Semana
+            </Button>
+          </div>
+
+          {/* Weekly Leads Mode */}
+          {searchMode === 'weekly' && (
+            <div className="space-y-3">
+              <div className="flex gap-2 items-center">
+                <Label className="text-sm shrink-0">Status:</Label>
+                <Select value={weeklyStatusFilter} onValueChange={setWeeklyStatusFilter}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="completed">Realizada</SelectItem>
+                    <SelectItem value="no_show">No-Show</SelectItem>
+                    <SelectItem value="invited">Agendada</SelectItem>
+                    <SelectItem value="cancelled">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="border rounded-md max-h-64 overflow-y-auto">
+                {weeklyLeadsLoading ? (
+                  <div className="p-2 space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : weeklyLeads.length === 0 ? (
+                  <p className="p-3 text-sm text-muted-foreground text-center">
+                    Nenhum lead encontrado com este filtro
+                  </p>
+                ) : (
+                  weeklyLeads.map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSelectWeeklyLead(item)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {item.deal?.contact?.name || item.deal?.name || 'Sem nome'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {format(new Date(item.scheduled_at), "dd/MM HH:mm")} - {item.closer_name}
+                          </div>
+                        </div>
+                        <Badge variant={
+                          item.status === 'completed' ? 'default' :
+                          item.status === 'no_show' ? 'destructive' :
+                          'secondary'
+                        }>
+                          {item.status === 'completed' ? 'Realizada' :
+                           item.status === 'no_show' ? 'No-Show' :
+                           item.status === 'invited' ? 'Agendada' : 
+                           item.status === 'cancelled' ? 'Cancelada' : item.status}
+                        </Badge>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Normal Search Section */}
+          {searchMode === 'normal' && (
           <div className="space-y-3">
             {/* Nome Field with Search */}
             <div className="space-y-1.5">
@@ -485,6 +601,28 @@ export function QuickScheduleModal({
                 </span>
               </div>
             )}
+          </div>
+          )}
+
+          {/* SDR Responsável Selection */}
+          <div className="space-y-2">
+            <Label>SDR Responsável (opcional)</Label>
+            <Select value={selectedSdr} onValueChange={setSelectedSdr}>
+              <SelectTrigger>
+                <User className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Atribuir ao usuário logado" />
+              </SelectTrigger>
+              <SelectContent>
+                {SDR_LIST.map(sdr => (
+                  <SelectItem key={sdr.email} value={sdr.email}>
+                    {sdr.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Se não selecionado, será atribuído a você
+            </p>
           </div>
 
           {/* Closer Selection */}
