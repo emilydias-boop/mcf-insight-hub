@@ -5178,31 +5178,40 @@ export type Database = {
             Args: { target_date: string; valid_emails?: string[] }
             Returns: Json
           }
-      get_sdr_all_movements_v2: {
-        Args: {
-          end_date: string
-          sdr_email_filter?: string
-          start_date: string
-        }
-        Returns: {
-          closer: string
-          conta: boolean
-          contact_email: string
-          contact_name: string
-          contact_phone: string
-          current_owner: string
-          data_agendamento: string
-          deal_id: string
-          deal_name: string
-          from_stage: string
-          intermediador: string
-          origin_name: string
-          probability: number
-          status_atual: string
-          tipo: string
-          total_movimentacoes: number
-        }[]
-      }
+      get_sdr_all_movements_v2:
+        | {
+            Args: {
+              end_date: string
+              sdr_email_filter?: string
+              start_date: string
+            }
+            Returns: {
+              closer: string
+              conta: boolean
+              contact_email: string
+              contact_name: string
+              contact_phone: string
+              current_owner: string
+              data_agendamento: string
+              deal_id: string
+              deal_name: string
+              from_stage: string
+              intermediador: string
+              origin_name: string
+              probability: number
+              status_atual: string
+              tipo: string
+              total_movimentacoes: number
+            }[]
+          }
+        | {
+            Args: {
+              end_date: string
+              sdr_email_filter?: string
+              start_date: string
+            }
+            Returns: Json
+          }
       get_sdr_meetings_v2: {
         Args: {
           end_date: string
@@ -5211,14 +5220,23 @@ export type Database = {
         }
         Returns: Json
       }
-      get_sdr_metrics_v2: {
-        Args: {
-          end_date: string
-          sdr_email_filter?: string
-          start_date: string
-        }
-        Returns: Json
-      }
+      get_sdr_metrics_v2:
+        | {
+            Args: {
+              end_date: string
+              sdr_email_filter?: string
+              start_date: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              end_date: string
+              sdr_email_filter?: string
+              start_date: string
+            }
+            Returns: Json
+          }
       get_sdr_metrics_v3: {
         Args: {
           end_date: string
