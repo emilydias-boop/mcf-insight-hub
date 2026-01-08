@@ -5148,6 +5148,15 @@ export type Database = {
       }
     }
     Views: {
+      deal_current_stages: {
+        Row: {
+          current_stage: string | null
+          current_stage_lower: string | null
+          deal_id: string | null
+          last_stage_change: string | null
+        }
+        Relationships: []
+      }
       deal_task_stats_monthly: {
         Row: {
           completed_by: string | null
@@ -5279,6 +5288,7 @@ export type Database = {
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
+      refresh_deal_current_stages: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }
