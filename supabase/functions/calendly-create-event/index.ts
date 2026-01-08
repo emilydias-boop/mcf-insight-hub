@@ -551,34 +551,10 @@ serve(async (req) => {
       console.log('✅ Added attendee to slot');
     }
 
-    // Update deal stage to "Reunião 01 Agendada"
-    const { data: stages } = await supabase
-      .from('crm_stages')
-      .select('id')
-      .ilike('stage_name', '%Reunião 01 Agendada%')
-      .limit(1);
-
-    if (stages && stages.length > 0) {
-      const { error: dealUpdateError } = await supabase
-        .from('crm_deals')
-        .update({ stage_id: stages[0].id })
-        .eq('id', dealId);
-
-      if (dealUpdateError) {
-        console.error('⚠️ Error updating deal stage:', dealUpdateError);
-      } else {
-        console.log('✅ Updated deal stage to Reunião 01 Agendada');
-      }
-
-      // Log the activity
-      await supabase.from('deal_activities').insert({
-        deal_id: dealId,
-        activity_type: 'meeting_scheduled',
-        description: `Reunião agendada com ${closer.name} para ${scheduledDate.toLocaleString('pt-BR')}`,
-        to_stage: stages[0].id,
-        metadata: { closer_id: closerId, meeting_slot_id: slotId, google_event_id: googleEventId },
-      });
-    }
+    // NOTE: Stage update and activity creation removed intentionally.
+    // The Clint webhook is the single source of truth for stage_change activities.
+    // This function only creates meeting_slots for calendar visualization.
+    // Metrics are calculated exclusively from Clint webhook activities.
 
     // Get the created slot with all relations
     const { data: slot } = await supabase
