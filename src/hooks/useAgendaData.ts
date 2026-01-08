@@ -869,7 +869,7 @@ export function useCheckSlotAvailability(
       if (ids.length > 0) {
         const { count } = await supabase
           .from('meeting_slot_attendees')
-          .select('id', { count: 'exact' })
+          .select('*', { count: 'exact', head: true })
           .in('meeting_slot_id', ids);
         currentCount = count || 0;
       }
