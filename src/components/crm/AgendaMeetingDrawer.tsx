@@ -787,14 +787,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-col h-16 gap-1 opacity-50 cursor-not-allowed relative"
-                      disabled
+                      className="flex-col h-16 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                      onClick={() => onReschedule(activeMeeting)}
                     >
-                      <Lock className="h-4 w-4" />
+                      <Calendar className="h-4 w-4" />
                       <span className="text-xs">Reagendar</span>
-                      <Badge variant="secondary" className="absolute -top-2 -right-2 text-[10px] px-1">
-                        Em breve
-                      </Badge>
                     </Button>
                     <Button
                       variant="outline"
