@@ -497,6 +497,44 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                   )}
                   
+                  {/* Nota do SDR ao Agendar - editável pelo próprio SDR */}
+                  {(activeMeeting.notes || canEditSdrNote) && (
+                    <div className="pt-2 border-t border-blue-500/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <StickyNote className="h-4 w-4 text-blue-600" />
+                        <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
+                          Nota do SDR ao Agendar
+                        </span>
+                      </div>
+                      
+                      {canEditSdrNote ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            value={sdrNote}
+                            onChange={(e) => setSdrNote(e.target.value)}
+                            placeholder="Adicione observações sobre o lead..."
+                            rows={3}
+                            className="bg-white/50 dark:bg-black/20"
+                          />
+                          <Button 
+                            size="sm" 
+                            onClick={() => updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' })}
+                            disabled={updateNotes.isPending || sdrNote === (activeMeeting.notes || '')}
+                          >
+                            <Save className="h-4 w-4 mr-2" />
+                            Salvar Nota
+                          </Button>
+                        </div>
+                      ) : (
+                        activeMeeting.notes && (
+                          <div className="bg-white/50 dark:bg-black/20 rounded p-2">
+                            <p className="text-sm whitespace-pre-wrap">{activeMeeting.notes}</p>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+
                   {/* Notas do SDR sobre o lead */}
                   {sdrNotes && sdrNotes.length > 0 && (
                     <div className="pt-2 border-t border-blue-500/20">
@@ -607,44 +645,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
 
 
-            {/* SDR Notes - editable by booking SDR before meeting */}
-            {(activeMeeting.notes || canEditSdrNote) && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <StickyNote className="h-4 w-4 text-blue-600" />
-                    <h4 className="font-medium text-sm text-blue-700 dark:text-blue-400">Nota do SDR ao Agendar</h4>
-                  </div>
-                  
-                  {canEditSdrNote ? (
-                    <div className="space-y-2">
-                      <Textarea
-                        value={sdrNote}
-                        onChange={(e) => setSdrNote(e.target.value)}
-                        placeholder="Adicione observações sobre o lead..."
-                        rows={3}
-                        className="bg-blue-500/10"
-                      />
-                      <Button 
-                        size="sm" 
-                        onClick={() => updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' })}
-                        disabled={updateNotes.isPending || sdrNote === (activeMeeting.notes || '')}
-                      >
-                        <Save className="h-4 w-4 mr-2" />
-                        Salvar Nota
-                      </Button>
-                    </div>
-                  ) : (
-                    activeMeeting.notes && (
-                      <div className="bg-blue-500/10 rounded-lg p-3">
-                        <p className="text-sm whitespace-pre-wrap">{activeMeeting.notes}</p>
-                      </div>
-                    )
-                  )}
-                </div>
-              </>
-            )}
 
             {/* Closer Notes */}
             <Separator />
