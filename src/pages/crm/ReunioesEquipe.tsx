@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, Users, RefreshCw, UserCheck } from "lucide-react";
+import { Calendar, Users, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -17,10 +17,8 @@ import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 import { GhostAppointmentsAlert } from "@/components/sdr/GhostAppointmentsAlert";
-import { CloserSummaryTable } from "@/components/closer/CloserSummaryTable";
 import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
-import { useCloserMetrics } from "@/hooks/useCloserMetrics";
 import { SDR_LIST } from "@/constants/team";
 
 type DatePreset = "today" | "week" | "month" | "custom";
@@ -130,12 +128,6 @@ export default function ReunioesEquipe() {
 
   // Ghost appointments data
   const { data: ghostCountBySdr } = useGhostCountBySdr();
-
-  // Closer metrics
-  const { data: closerData, isLoading: isLoadingClosers } = useCloserMetrics({
-    startDate: start,
-    endDate: end,
-  });
 
   // Filter bySDR based on sdrFilter (if we need local filtering)
   const filteredBySDR = useMemo(() => {
@@ -329,25 +321,6 @@ export default function ReunioesEquipe() {
             data={filteredBySDR}
             isLoading={isLoading}
             ghostCountBySdr={ghostCountBySdr}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Closer Summary Table */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <UserCheck className="h-5 w-5 text-purple-500" />
-            Resumo por Closer
-            <span className="text-sm font-normal text-muted-foreground">
-              (Thayna, Julio, Cristiane)
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <CloserSummaryTable
-            data={closerData?.byCloser || []}
-            isLoading={isLoadingClosers}
           />
         </CardContent>
       </Card>
