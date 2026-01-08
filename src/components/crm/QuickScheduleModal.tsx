@@ -665,7 +665,12 @@ export function QuickScheduleModal({
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                          disabled={(date) => {
+                            // Permitir qualquer dia da semana atual (a partir de segunda)
+                            const today = new Date();
+                            const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+                            return date < weekStart;
+                          }}
                   />
                 </PopoverContent>
               </Popover>
