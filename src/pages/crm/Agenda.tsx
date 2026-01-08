@@ -309,6 +309,7 @@ export default function Agenda() {
               closerFilter={closerFilter}
               closers={closers}
               viewMode={viewMode}
+              onEditHours={() => setConfigOpen(true)}
             />
           )}
         </TabsContent>

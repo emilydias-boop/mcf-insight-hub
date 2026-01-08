@@ -17,6 +17,7 @@ interface AgendaCalendarProps {
   closerFilter: string | null;
   closers?: CloserWithAvailability[];
   viewMode?: ViewMode;
+  onEditHours?: () => void;
 }
 
 // Default fallback values
@@ -42,12 +43,15 @@ const STATUS_STYLES: Record<string, string> = {
 const SLOT_HEIGHT = 40; // px per 30-min slot
 const MAX_MEETINGS_PER_SLOT = 3; // Default max meetings per slot
 
+import { Settings } from 'lucide-react';
+
 export function AgendaCalendar({ 
   meetings, 
   selectedDate, 
   onSelectMeeting, 
   closerFilter, 
   closers = [],
+  onEditHours,
   viewMode = 'week'
 }: AgendaCalendarProps) {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -479,8 +483,17 @@ export function AgendaCalendar({
         <div className="max-h-[600px] overflow-y-auto relative">
           {/* Header with days - sticky inside scroll container */}
           <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20', gridCols)}>
-            <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30">
-              Hora
+            <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex flex-col items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30 gap-0.5">
+              <span>Hora</span>
+              {onEditHours && (
+                <button
+                  onClick={onEditHours}
+                  className="hover:bg-muted-foreground/20 rounded p-0.5 transition-colors"
+                  title="Editar horários"
+                >
+                  <Settings className="h-3 w-3" />
+                </button>
+              )}
             </div>
             {viewDays.map(day => (
               <div
