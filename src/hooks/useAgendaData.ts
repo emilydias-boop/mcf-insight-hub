@@ -777,7 +777,7 @@ export function useAddMeetingAttendee() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.refetchQueries({ queryKey: ['agenda-meetings'] });
       toast.success('Participante adicionado');
     },
     onError: () => {
@@ -798,13 +798,36 @@ export function useRemoveMeetingAttendee() {
         .eq('id', attendeeId);
 
       if (error) throw error;
+      return attendeeId;
+    },
+    onMutate: async (attendeeId) => {
+      await queryClient.cancelQueries({ queryKey: ['agenda-meetings'] });
+      
+      const previousMeetings = queryClient.getQueriesData({ queryKey: ['agenda-meetings'] });
+      
+      queryClient.setQueriesData({ queryKey: ['agenda-meetings'] }, (old: MeetingSlot[] | undefined) => {
+        if (!old) return old;
+        return old.map((meeting) => ({
+          ...meeting,
+          attendees: meeting.attendees?.filter((a) => a.id !== attendeeId) || [],
+        }));
+      });
+      
+      return { previousMeetings };
+    },
+    onError: (_err, _attendeeId, context) => {
+      if (context?.previousMeetings) {
+        context.previousMeetings.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      toast.error('Erro ao remover participante');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       toast.success('Participante removido');
     },
-    onError: () => {
-      toast.error('Erro ao remover participante');
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
     },
   });
 }
@@ -823,7 +846,7 @@ export function useMarkAttendeeNotified() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.refetchQueries({ queryKey: ['agenda-meetings'] });
     },
   });
 }
