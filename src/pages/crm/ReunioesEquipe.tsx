@@ -132,11 +132,49 @@ export default function ReunioesEquipe() {
   // Ghost appointments data
   const { data: ghostCountBySdr } = useGhostCountBySdr();
 
-  // Filter bySDR based on sdrFilter (if we need local filtering)
+  // Create base dataset with all SDRs (zeros) for "today" preset
+  const allSdrsWithZeros = useMemo(() => {
+    return SDR_LIST.map(sdr => ({
+      sdrEmail: sdr.email,
+      sdrName: sdr.nome,
+      primeiroAgendamento: 0,
+      reagendamento: 0,
+      totalAgendamentos: 0,
+      realizadas: 0,
+      noShows: 0,
+      contratos: 0,
+      taxaConversao: 0,
+      taxaNoShow: 0,
+    }));
+  }, []);
+
+  // Merge real data with base dataset for "today" preset
+  const mergedBySDR = useMemo(() => {
+    const dataMap = new Map(allSdrsWithZeros.map(s => [s.sdrEmail, { ...s }]));
+    
+    // Overwrite with real data where it exists
+    bySDR.forEach(realRow => {
+      if (dataMap.has(realRow.sdrEmail)) {
+        dataMap.set(realRow.sdrEmail, realRow);
+      }
+    });
+
+    // Sort: totalAgendamentos desc, realizadas desc, sdrName asc
+    return Array.from(dataMap.values()).sort((a, b) => {
+      if (b.totalAgendamentos !== a.totalAgendamentos) return b.totalAgendamentos - a.totalAgendamentos;
+      if (b.realizadas !== a.realizadas) return b.realizadas - a.realizadas;
+      return a.sdrName.localeCompare(b.sdrName);
+    });
+  }, [allSdrsWithZeros, bySDR]);
+
+  // Filter bySDR based on sdrFilter and datePreset
   const filteredBySDR = useMemo(() => {
-    if (sdrFilter === "all") return bySDR;
-    return bySDR.filter(s => s.sdrEmail === sdrFilter);
-  }, [bySDR, sdrFilter]);
+    // Use merged data (all SDRs) for "today", otherwise use real data only
+    const baseData = datePreset === "today" ? mergedBySDR : bySDR;
+    
+    if (sdrFilter === "all") return baseData;
+    return baseData.filter(s => s.sdrEmail === sdrFilter);
+  }, [datePreset, mergedBySDR, bySDR, sdrFilter]);
 
   // Values for goals panel
   const dayValues = useMemo(() => ({
