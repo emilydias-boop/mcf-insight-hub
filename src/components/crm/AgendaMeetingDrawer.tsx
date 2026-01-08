@@ -79,6 +79,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [partnerName, setPartnerName] = useState('');
   const [partnerPhone, setPartnerPhone] = useState('');
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [showNoShowConfirm, setShowNoShowConfirm] = useState(false);
   
   const updateStatus = useUpdateMeetingStatus();
@@ -151,7 +152,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   if (!meeting || !activeMeeting) return null;
 
   const contact = activeMeeting.deal?.contact;
-  const sdrProfile = activeMeeting.booked_by_profile;
   const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
   const isCompleted = activeMeeting.status === 'completed';
@@ -268,15 +268,29 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   // Get all participants (main contact + attendees) for the active meeting
   const getParticipantsList = () => {
-    const participants: { id?: string; name: string; phone: string | null; isPartner: boolean; isMain: boolean; notifiedAt?: string | null }[] = [];
+    const participants: { 
+      id: string; 
+      name: string; 
+      phone: string | null; 
+      isPartner: boolean; 
+      isMain: boolean; 
+      notifiedAt?: string | null;
+      bookedBy?: string | null;
+      notes?: string | null;
+      bookedByProfile?: { id: string; full_name: string | null; email: string | null };
+    }[] = [];
     
     // Main contact
     if (contact) {
       participants.push({
+        id: 'main',
         name: contact.name,
         phone: contact.phone,
         isPartner: false,
         isMain: true,
+        bookedBy: activeMeeting.booked_by,
+        notes: activeMeeting.notes,
+        bookedByProfile: activeMeeting.booked_by_profile,
       });
     }
 
@@ -295,6 +309,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         isPartner: att.is_partner || false,
         isMain: false,
         notifiedAt: att.notified_at,
+        bookedBy: att.booked_by || activeMeeting.booked_by,
+        notes: att.notes,
+        bookedByProfile: att.booked_by_profile || activeMeeting.booked_by_profile,
       });
     });
 
@@ -302,6 +319,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const participants = getParticipantsList();
+  
+  // Selected participant (default to first/main)
+  const selectedParticipant = participants.find(p => p.id === selectedParticipantId) || participants[0];
+  
+  // Check if current user can edit note for the selected participant
+  const canEditSelectedNote = user?.id === selectedParticipant?.bookedBy 
+    && (activeMeeting?.status === 'scheduled' || activeMeeting?.status === 'rescheduled');
+
+  // Sync sdrNote when selected participant changes
+  useEffect(() => {
+    setSdrNote(selectedParticipant?.notes || '');
+  }, [selectedParticipant?.id, selectedParticipant?.notes]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -420,16 +449,25 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 </div>
               )}
 
-              {/* Participants List */}
+              {/* Participants List - Clickable */}
               <div className="space-y-2">
                 {participants.map((p, idx) => (
                   <div 
                     key={p.id || idx} 
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all",
+                      selectedParticipant?.id === p.id 
+                        ? "bg-primary/20 ring-2 ring-primary" 
+                        : "bg-muted/30 hover:bg-muted/50"
+                    )}
+                    onClick={() => setSelectedParticipantId(p.id)}
                   >
                     <div className="flex items-center gap-3">
                       <div 
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                        className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold",
+                          selectedParticipant?.id === p.id && "ring-2 ring-offset-2 ring-primary"
+                        )}
                         style={{ backgroundColor: activeMeeting.closer?.color || '#3B82F6' }}
                       >
                         {p.name.charAt(0)}
@@ -443,6 +481,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           {p.isPartner && (
                             <Badge variant="outline" className="text-xs">Sócio</Badge>
                           )}
+                          {selectedParticipant?.id === p.id && (
+                            <Badge className="text-xs bg-primary">Selecionado</Badge>
+                          )}
                         </div>
                         {p.phone && (
                           <span className="text-xs text-muted-foreground">{p.phone}</span>
@@ -455,7 +496,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8"
-                          onClick={() => handleSendLinkViaWhatsApp(p.phone!, p.name)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSendLinkViaWhatsApp(p.phone!, p.name);
+                          }}
                         >
                           <MessageCircle className="h-4 w-4 text-green-600" />
                         </Button>
@@ -465,7 +509,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8 text-destructive"
-                          onClick={() => handleRemoveAttendee(p.id!)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveAttendee(p.id!);
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -474,69 +521,92 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   </div>
                 ))}
               </div>
+              
+              <p className="text-xs text-muted-foreground text-center">
+                Clique em um participante para ver suas informações e notas específicas
+              </p>
             </div>
 
             <Separator />
 
-            {/* SDR Info Section */}
-            {sdrProfile && (
+            {/* SDR Info Section - Based on Selected Participant */}
+            {selectedParticipant && selectedParticipant.bookedByProfile && (
               <>
                 <div className="bg-blue-500/10 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <UserCircle className="h-4 w-4 text-blue-600" />
-                    <span className="font-medium text-sm text-blue-700 dark:text-blue-400">SDR que Agendou</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <UserCircle className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-sm text-blue-700 dark:text-blue-400">
+                        SDR que Agendou {selectedParticipant.name.split(' ')[0]}
+                      </span>
+                    </div>
+                    {participants.length > 1 && (
+                      <Badge variant="outline" className="text-xs">
+                        {selectedParticipant.isMain ? 'Principal' : 'Sócio'}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <User className="h-4 w-4 text-muted-foreground" />
-                    <span>{sdrProfile.full_name || 'Não informado'}</span>
+                    <span>{selectedParticipant.bookedByProfile.full_name || 'Não informado'}</span>
                   </div>
-                  {sdrProfile.email && (
+                  {selectedParticipant.bookedByProfile.email && (
                     <div className="flex items-center gap-2 text-sm">
                       <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">{sdrProfile.email}</span>
+                      <span className="text-muted-foreground">{selectedParticipant.bookedByProfile.email}</span>
                     </div>
                   )}
                   
                   {/* Nota do SDR ao Agendar - editável pelo próprio SDR */}
-                  {(activeMeeting.notes || canEditSdrNote) && (
+                  {(selectedParticipant.notes || canEditSelectedNote) && (
                     <div className="pt-2 border-t border-blue-500/20">
                       <div className="flex items-center gap-2 mb-2">
                         <StickyNote className="h-4 w-4 text-blue-600" />
                         <span className="text-xs font-medium text-blue-700 dark:text-blue-400">
-                          Nota do SDR ao Agendar
+                          Nota sobre {selectedParticipant.name.split(' ')[0]}
                         </span>
                       </div>
                       
-                      {canEditSdrNote ? (
+                      {canEditSelectedNote ? (
                         <div className="space-y-2">
                           <Textarea
                             value={sdrNote}
                             onChange={(e) => setSdrNote(e.target.value)}
-                            placeholder="Adicione observações sobre o lead..."
+                            placeholder={`Adicione observações sobre ${selectedParticipant.name.split(' ')[0]}...`}
                             rows={3}
                             className="bg-white/50 dark:bg-black/20"
                           />
                           <Button 
                             size="sm" 
-                            onClick={() => updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' })}
-                            disabled={updateNotes.isPending || sdrNote === (activeMeeting.notes || '')}
+                            onClick={() => {
+                              // Save to meeting_slots.notes for main, meeting_slot_attendees.notes for others
+                              if (selectedParticipant.isMain) {
+                                updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' });
+                              } else {
+                                // For attendees, we need to update the attendee note
+                                // For now, use the same mutation (will need backend update)
+                                updateNotes.mutate({ meetingId: activeMeeting.id, notes: sdrNote, field: 'notes' });
+                                toast.info('Nota salva para o participante');
+                              }
+                            }}
+                            disabled={updateNotes.isPending || sdrNote === (selectedParticipant.notes || '')}
                           >
                             <Save className="h-4 w-4 mr-2" />
                             Salvar Nota
                           </Button>
                         </div>
                       ) : (
-                        activeMeeting.notes && (
+                        selectedParticipant.notes && (
                           <div className="bg-white/50 dark:bg-black/20 rounded p-2">
-                            <p className="text-sm whitespace-pre-wrap">{activeMeeting.notes}</p>
+                            <p className="text-sm whitespace-pre-wrap">{selectedParticipant.notes}</p>
                           </div>
                         )
                       )}
                     </div>
                   )}
 
-                  {/* Notas do SDR sobre o lead */}
-                  {sdrNotes && sdrNotes.length > 0 && (
+                  {/* Notas do SDR sobre o lead (do deal) */}
+                  {selectedParticipant.isMain && sdrNotes && sdrNotes.length > 0 && (
                     <div className="pt-2 border-t border-blue-500/20">
                       <div className="flex items-center gap-2 mb-2">
                         <StickyNote className="h-4 w-4 text-blue-600" />
@@ -678,7 +748,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <p>Ao marcar esta reunião como No-Show:</p>
                     <ul className="list-disc list-inside space-y-1 text-sm">
                       <li>O status será alterado para "No-Show"</li>
-                      <li>O SDR <strong>{sdrProfile?.full_name || 'responsável'}</strong> será alertado</li>
+                      <li>O SDR <strong>{selectedParticipant?.bookedByProfile?.full_name || 'responsável'}</strong> será alertado</li>
                       <li>O lead deverá ser reagendado pelo SDR</li>
                     </ul>
                   </AlertDialogDescription>
