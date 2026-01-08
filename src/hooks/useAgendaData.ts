@@ -260,8 +260,7 @@ export function useClosersWithAvailability() {
 
       const { data: availability, error: availError } = await supabase
         .from('closer_availability')
-        .select('*')
-        .eq('is_active', true);
+        .select('*');
 
       if (availError) throw availError;
 
