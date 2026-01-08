@@ -122,8 +122,43 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   // Sync notes when active meeting changes
   useEffect(() => {
     setCloserNotes(activeMeeting?.closer_notes || '');
-    setSdrNote(activeMeeting?.notes || '');
-  }, [activeMeeting?.id, activeMeeting?.closer_notes, activeMeeting?.notes]);
+    // Note: sdrNote is now synced by selectedParticipant effect below
+  }, [activeMeeting?.id, activeMeeting?.closer_notes]);
+
+  // Get participants - needed before early return for useEffect dependency
+  const getParticipantsListEarly = () => {
+    if (!activeMeeting) return [];
+    const participantsList: { 
+      id: string; 
+      notes?: string | null;
+    }[] = [];
+    
+    const contactData = activeMeeting.deal?.contact;
+    if (contactData) {
+      participantsList.push({
+        id: 'main',
+        notes: activeMeeting.notes,
+      });
+    }
+
+    activeMeeting.attendees?.forEach(att => {
+      if (att.contact_id === activeMeeting.contact_id) return;
+      participantsList.push({
+        id: att.id,
+        notes: att.notes,
+      });
+    });
+
+    return participantsList;
+  };
+  
+  const participantsEarly = getParticipantsListEarly();
+  const selectedParticipantEarly = participantsEarly.find(p => p.id === selectedParticipantId) || participantsEarly[0];
+
+  // Sync sdrNote when selected participant changes - MUST be before any conditional return
+  useEffect(() => {
+    setSdrNote(selectedParticipantEarly?.notes || '');
+  }, [selectedParticipantEarly?.id, selectedParticipantEarly?.notes]);
 
   // Check if current user is the SDR who booked this meeting
   const isBookedBySdr = user?.id === activeMeeting?.booked_by;
@@ -326,11 +361,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   // Check if current user can edit note for the selected participant
   const canEditSelectedNote = user?.id === selectedParticipant?.bookedBy 
     && (activeMeeting?.status === 'scheduled' || activeMeeting?.status === 'rescheduled');
-
-  // Sync sdrNote when selected participant changes
-  useEffect(() => {
-    setSdrNote(selectedParticipant?.notes || '');
-  }, [selectedParticipant?.id, selectedParticipant?.notes]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
