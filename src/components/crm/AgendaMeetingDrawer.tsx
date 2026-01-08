@@ -163,10 +163,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const selectedParticipantEarly = participantsEarly.find(p => p.id === selectedParticipantId) || participantsEarly[0];
 
   // Sync notes when selected participant changes - MUST be before any conditional return
+  // Fallback: if attendee.notes is empty, use meeting_slots.notes
   useEffect(() => {
-    setSdrNote(selectedParticipantEarly?.notes || '');
+    const attendeeNotes = selectedParticipantEarly?.notes;
+    const slotNotes = activeMeeting?.notes;
+    setSdrNote(attendeeNotes || slotNotes || '');
     setCloserNotes(selectedParticipantEarly?.closerNotes || '');
-  }, [selectedParticipantEarly?.id, selectedParticipantEarly?.notes, selectedParticipantEarly?.closerNotes]);
+  }, [selectedParticipantEarly?.id, selectedParticipantEarly?.notes, selectedParticipantEarly?.closerNotes, activeMeeting?.notes]);
 
   // Check if current user is the SDR who booked this meeting
   const isBookedBySdr = user?.id === activeMeeting?.booked_by;

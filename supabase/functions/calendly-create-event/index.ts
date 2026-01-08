@@ -528,7 +528,10 @@ serve(async (req) => {
       console.log('✅ Created new slot:', slotId);
     }
 
-    // Add attendee record
+    // Normalize notes: use provided notes or generate default
+    const normalizedNotes = notes?.trim() || `Agendado via CRM\nLead Type: ${leadType}`;
+
+    // Add attendee record with the same notes as the slot
     const { data: attendee, error: attendeeError } = await supabase
       .from('meeting_slot_attendees')
       .insert({
@@ -536,7 +539,7 @@ serve(async (req) => {
         contact_id: contactId || deal?.contact_id,
         deal_id: dealId,
         status: 'invited',
-        notes: notes || null,
+        notes: normalizedNotes,
         booked_by: bookedBy,
       })
       .select('id')
