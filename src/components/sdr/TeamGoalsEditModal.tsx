@@ -44,6 +44,39 @@ const dayToMonthMapping: Record<string, SdrTargetType> = {
   'sdr_venda_realizada_dia': 'sdr_venda_realizada_mes',
 };
 
+// Proporções para cálculo em cascata das metas do dia
+const DAY_TARGET_PROPORTIONS = {
+  r1_agendada: 1.00,      // 100% do Agendamento
+  r1_realizada: 0.70,     // 70% da R1 Agendada
+  noshow: 0.30,           // 30% da R1 Agendada
+  contrato: 0.30,         // 30% da R1 Realizada
+  r2_agendada: 1.00,      // 100% do Contrato Pago
+  r2_realizada: 0.75,     // 75% da R2 Agendada
+  venda_realizada: 0.60,  // 60% da R2 Realizada
+};
+
+// Calcula todas as metas do dia em cascata a partir do Agendamento
+const calculateDayCascade = (agendamento: number): Record<string, number> => {
+  const r1Agendada = Math.round(agendamento * DAY_TARGET_PROPORTIONS.r1_agendada);
+  const r1Realizada = Math.round(r1Agendada * DAY_TARGET_PROPORTIONS.r1_realizada);
+  const noShow = Math.round(r1Agendada * DAY_TARGET_PROPORTIONS.noshow);
+  const contratoPago = Math.round(r1Realizada * DAY_TARGET_PROPORTIONS.contrato);
+  const r2Agendada = Math.round(contratoPago * DAY_TARGET_PROPORTIONS.r2_agendada);
+  const r2Realizada = Math.round(r2Agendada * DAY_TARGET_PROPORTIONS.r2_realizada);
+  const vendaRealizada = Math.round(r2Realizada * DAY_TARGET_PROPORTIONS.venda_realizada);
+
+  return {
+    'sdr_agendamento_dia': agendamento,
+    'sdr_r1_agendada_dia': r1Agendada,
+    'sdr_r1_realizada_dia': r1Realizada,
+    'sdr_noshow_dia': noShow,
+    'sdr_contrato_dia': contratoPago,
+    'sdr_r2_agendada_dia': r2Agendada,
+    'sdr_r2_realizada_dia': r2Realizada,
+    'sdr_venda_realizada_dia': vendaRealizada,
+  };
+};
+
 export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: TeamGoalsEditModalProps) {
   const [values, setValues] = useState<Record<SdrTargetType, number>>({} as Record<SdrTargetType, number>);
   const upsertMutation = useUpsertSdrTargets();
@@ -62,27 +95,32 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
       initial[config.type] = existing?.target_value ?? 0;
     });
     
-    // Auto-recalcular semana e mês se estiverem zerados mas o dia tiver valor
-    const dayConfigsList = SDR_TARGET_CONFIGS.filter(c => c.period === 'day');
-    
-    dayConfigsList.forEach(dayConfig => {
-      const dayValue = initial[dayConfig.type] || 0;
+    // Se tem valor de agendamento do dia mas outros estão zerados, aplica cascata
+    const agendamentoDia = initial['sdr_agendamento_dia'] || 0;
+    if (agendamentoDia > 0) {
+      const dayValues = calculateDayCascade(agendamentoDia);
       
-      if (dayValue > 0) {
-        const weekType = dayToWeekMapping[dayConfig.type];
-        const monthType = dayToMonthMapping[dayConfig.type];
+      // Aplica valores em cascata para campos zerados do dia
+      Object.entries(dayValues).forEach(([key, val]) => {
+        if (!initial[key] || initial[key] === 0) {
+          initial[key] = val;
+        }
+      });
+      
+      // Auto-recalcular semana e mês se estiverem zerados
+      Object.keys(dayValues).forEach(dayType => {
+        const dayValue = initial[dayType] || 0;
+        const weekType = dayToWeekMapping[dayType];
+        const monthType = dayToMonthMapping[dayType];
         
-        // Se semana estiver zerada, calcula automaticamente
         if (weekType && (!initial[weekType] || initial[weekType] === 0)) {
           initial[weekType] = dayValue * diasUteisSemana;
         }
-        
-        // Se mês estiver zerado, calcula automaticamente
         if (monthType && (!initial[monthType] || initial[monthType] === 0)) {
           initial[monthType] = dayValue * diasUteisMes;
         }
-      }
-    });
+      });
+    }
     
     setValues(initial as Record<SdrTargetType, number>);
   }, [existingTargets, open, diasUteisSemana, diasUteisMes]);
@@ -93,44 +131,80 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     setValues(prev => ({ ...prev, [type]: Math.max(0, numValue) }));
   };
 
-  // Handler para campos de dia (auto-calcula semana e mês)
+  // Handler para campos de dia (auto-calcula semana e mês, e cascata se for agendamento)
   const handleDayChange = (type: SdrTargetType, value: string) => {
     const numValue = parseInt(value) || 0;
-    const newValues = { ...values, [type]: Math.max(0, numValue) };
+    let newValues = { ...values };
     
-    // Calcula automaticamente semana e mês
-    const weekType = dayToWeekMapping[type];
-    const monthType = dayToMonthMapping[type];
-    
-    if (weekType) {
-      newValues[weekType] = numValue * diasUteisSemana;
-    }
-    if (monthType) {
-      newValues[monthType] = numValue * diasUteisMes;
+    // Se é o Agendamento, calcula todos os outros em cascata
+    if (type === 'sdr_agendamento_dia') {
+      const dayValues = calculateDayCascade(numValue);
+      
+      // Atualiza todos os valores do dia
+      Object.entries(dayValues).forEach(([key, val]) => {
+        newValues[key as SdrTargetType] = val;
+      });
+      
+      // Calcula semana e mês para TODOS os tipos do dia
+      Object.keys(dayValues).forEach(dayType => {
+        const dayVal = dayValues[dayType];
+        const weekType = dayToWeekMapping[dayType];
+        const monthType = dayToMonthMapping[dayType];
+        
+        if (weekType) {
+          newValues[weekType] = dayVal * diasUteisSemana;
+        }
+        if (monthType) {
+          newValues[monthType] = dayVal * diasUteisMes;
+        }
+      });
+    } else {
+      // Para outros campos do dia, permite edição manual
+      newValues[type] = Math.max(0, numValue);
+      
+      // Recalcula apenas semana e mês desse campo específico
+      const weekType = dayToWeekMapping[type];
+      const monthType = dayToMonthMapping[type];
+      
+      if (weekType) {
+        newValues[weekType] = numValue * diasUteisSemana;
+      }
+      if (monthType) {
+        newValues[monthType] = numValue * diasUteisMes;
+      }
     }
     
     setValues(newValues);
   };
 
-  // Função para recalcular todas as metas baseado nos dias
+  // Função para recalcular todas as metas baseado no agendamento
   const handleRecalculate = () => {
+    const agendamento = values['sdr_agendamento_dia'] || 0;
+    const dayValues = calculateDayCascade(agendamento);
+    
     const newValues = { ...values };
     
-    dayConfigs.forEach(dayConfig => {
-      const dayValue = values[dayConfig.type] || 0;
-      const weekType = dayToWeekMapping[dayConfig.type];
-      const monthType = dayToMonthMapping[dayConfig.type];
+    // Aplica valores do dia em cascata
+    Object.entries(dayValues).forEach(([key, val]) => {
+      newValues[key as SdrTargetType] = val;
+    });
+    
+    // Recalcula semana e mês para todos
+    Object.keys(dayValues).forEach(dayType => {
+      const dayVal = dayValues[dayType];
+      const weekType = dayToWeekMapping[dayType];
+      const monthType = dayToMonthMapping[dayType];
       
       if (weekType) {
-        newValues[weekType] = dayValue * diasUteisSemana;
+        newValues[weekType] = dayVal * diasUteisSemana;
       }
       if (monthType) {
-        newValues[monthType] = dayValue * diasUteisMes;
+        newValues[monthType] = dayVal * diasUteisMes;
       }
     });
     
     setValues(newValues);
-    toast.success(`Metas recalculadas: ${diasUteisSemana} dias úteis na semana, ${diasUteisMes} dias úteis no mês`);
+    toast.success(`Metas recalculadas com base no agendamento: ${agendamento}`);
   };
 
   const handleSave = async () => {
