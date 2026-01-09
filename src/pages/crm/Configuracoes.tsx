@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, Video } from 'lucide-react';
+import { Settings, Users, Zap, Database, Shield, Upload, FileText, History } from 'lucide-react';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
 import { WhatsAppConfigCard } from '@/components/whatsapp/WhatsAppConfigCard';
@@ -57,27 +57,8 @@ const ConfiguracoesContent = () => {
         <ActivityTemplateManager />
       )}
 
-      {/* Quick Access to Meeting Links */}
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Video className="h-5 w-5 text-primary" />
-            </div>
-            <CardTitle className="text-foreground">Links de Reunião</CardTitle>
-          </div>
-          <CardDescription className="text-muted-foreground">
-            Configure os links de Google Meet para cada closer por dia e horário
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link to="/crm/configurar-links-reuniao">
-            <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-              Gerenciar Links
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
+
+
 
       <div className="grid gap-6 md:grid-cols-2">
         {settingsSections.map((section) => {
