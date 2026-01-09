@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays } from 'lucide-react';
 import {
@@ -34,6 +34,7 @@ import {
   useSendMeetingNotification,
   useSearchWeeklyMeetingLeads,
 } from '@/hooks/useAgendaData';
+import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { SDR_LIST } from '@/constants/team';
@@ -238,13 +239,25 @@ export function QuickScheduleModal({
     setAutoSendWhatsApp(true);
   };
 
+  // Get day of week for selected date (0=Sunday, 1=Monday, etc.)
+  const dayOfWeek = selectedDate ? getDay(selectedDate) : undefined;
+  
+  // Fetch configured time slots for this day
+  const { data: closerDaySlots } = useCloserDaySlots(dayOfWeek ?? 0);
+
+  // Build time slots from configured meeting links for selected closer
   const timeSlots = useMemo(() => {
-    return Array.from({ length: 44 }, (_, i) => {
-      const hour = Math.floor(i / 4) + 8;
-      const minute = (i % 4) * 15;
-      return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-    });
-  }, []);
+    if (!selectedCloser || !closerDaySlots || dayOfWeek === undefined) {
+      return [];
+    }
+    
+    // Filter slots for selected closer and get unique times
+    const closerSlots = closerDaySlots
+      .filter(s => s.closer_id === selectedCloser)
+      .map(s => s.start_time.substring(0, 5)); // "09:00:00" → "09:00"
+    
+    return [...new Set(closerSlots)].sort();
+  }, [closerDaySlots, selectedCloser, dayOfWeek]);
 
   // Check which time slots are full
   const getTimeSlotStatus = useCallback((time: string) => {
@@ -678,17 +691,40 @@ export function QuickScheduleModal({
 
             <div className="space-y-2">
               <Label>Horário</Label>
-              <Select value={selectedTime} onValueChange={setSelectedTime}>
+              <Select 
+                value={selectedTime} 
+                onValueChange={setSelectedTime}
+                disabled={!selectedCloser || !selectedDate}
+              >
                 <SelectTrigger>
                   <Clock className="h-4 w-4 mr-2" />
-                  <SelectValue />
+                  <SelectValue placeholder={
+                    !selectedCloser 
+                      ? "Selecione o closer" 
+                      : !selectedDate 
+                        ? "Selecione a data"
+                        : timeSlots.length === 0 
+                          ? "Sem horários" 
+                          : "Horário"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.map(time => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
+                  {timeSlots.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      {!selectedCloser 
+                        ? "Selecione um closer primeiro"
+                        : !selectedDate
+                          ? "Selecione uma data primeiro"
+                          : "Nenhum horário configurado para este dia"
+                      }
+                    </div>
+                  ) : (
+                    timeSlots.map(time => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

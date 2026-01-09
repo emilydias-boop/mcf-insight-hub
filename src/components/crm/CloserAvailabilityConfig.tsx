@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Palette, Plus, Trash2 } from 'lucide-react';
+import { Palette, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
 import { CloserWithAvailability, useUpdateCloserColor } from '@/hooks/useAgendaData';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,8 @@ import {
   useCreateCloserMeetingLink, 
   useDeleteCloserMeetingLink 
 } from '@/hooks/useCloserMeetingLinks';
+import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 interface CloserAvailabilityConfigProps {
@@ -38,6 +40,7 @@ const PRESET_COLORS = [
 ];
 
 function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) {
+  const queryClient = useQueryClient();
   const updateColor = useUpdateCloserColor();
   const { data: links, isLoading } = useCloserMeetingLinksList(closer.id);
   const createLink = useCreateCloserMeetingLink();
@@ -47,6 +50,62 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
   const [addingDay, setAddingDay] = useState<number | null>(null);
   const [newTime, setNewTime] = useState('09:00');
   const [newLink, setNewLink] = useState('');
+  const [copyFromDay, setCopyFromDay] = useState<number | null>(null);
+  const [showCopyDialog, setShowCopyDialog] = useState<number | null>(null);
+
+  // Count links per day for copy dialog
+  const linksPerDay = useMemo(() => {
+    const counts: Record<number, number> = {};
+    DAYS_OF_WEEK.forEach(d => counts[d.value] = 0);
+    links?.forEach(link => {
+      counts[link.day_of_week] = (counts[link.day_of_week] || 0) + 1;
+    });
+    return counts;
+  }, [links]);
+
+  // Mutation to copy links from one day to another
+  const copyLinks = useMutation({
+    mutationFn: async ({ fromDay, toDay }: { fromDay: number; toDay: number }) => {
+      const sourceLinks = links?.filter(l => l.day_of_week === fromDay) || [];
+      
+      if (sourceLinks.length === 0) {
+        throw new Error('Dia de origem não tem horários configurados');
+      }
+
+      const targetLinks = links?.filter(l => l.day_of_week === toDay) || [];
+      const existingTimes = new Set(targetLinks.map(l => l.start_time));
+      const linksToCreate = sourceLinks.filter(l => !existingTimes.has(l.start_time));
+
+      if (linksToCreate.length === 0) {
+        throw new Error('Todos os horários já existem no dia de destino');
+      }
+
+      const { error } = await supabase
+        .from('closer_meeting_links')
+        .insert(
+          linksToCreate.map(link => ({
+            closer_id: closer.id,
+            day_of_week: toDay,
+            start_time: link.start_time,
+            google_meet_link: link.google_meet_link,
+          }))
+        );
+
+      if (error) throw error;
+      return linksToCreate.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['closer-meeting-links'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-day-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['unique-slots-for-days'] });
+      toast.success(`${count} horário(s) copiado(s) com sucesso!`);
+      setShowCopyDialog(null);
+      setCopyFromDay(null);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
 
   const handleColorChange = (color: string) => {
     setSelectedColor(color);
@@ -70,6 +129,18 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
         setNewLink('');
       }
     });
+  };
+
+  const handleCopy = (toDay: number) => {
+    if (copyFromDay === null) {
+      toast.error('Selecione um dia para copiar');
+      return;
+    }
+    copyLinks.mutate({ fromDay: copyFromDay, toDay });
+  };
+
+  const getDaysWithLinks = (excludeDay: number) => {
+    return DAYS_OF_WEEK.filter(d => d.value !== excludeDay && linksPerDay[d.value] > 0);
   };
 
   const formatTime = (time: string) => time.substring(0, 5);
@@ -121,7 +192,9 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
         <Skeleton className="h-40 w-full" />
       ) : (
         <div className="space-y-4">
-          {linksByDay.map(day => (
+          {linksByDay.map(day => {
+            const daysWithLinks = getDaysWithLinks(day.value);
+            return (
             <div key={day.value} className="border rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <Label className="font-medium flex items-center gap-2">
@@ -132,15 +205,66 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
                     </span>
                   )}
                 </Label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAddingDay(addingDay === day.value ? null : day.value)}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Adicionar
-                </Button>
+                <div className="flex items-center gap-1">
+                  {daysWithLinks.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setShowCopyDialog(showCopyDialog === day.value ? null : day.value);
+                        setCopyFromDay(null);
+                      }}
+                    >
+                      <Copy className="h-3 w-3 mr-1" />
+                      Copiar
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAddingDay(addingDay === day.value ? null : day.value)}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Adicionar
+                  </Button>
+                </div>
               </div>
+
+              {/* Copy from dialog */}
+              {showCopyDialog === day.value && (
+                <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg space-y-2 border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm font-medium">Copiar horários de:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {daysWithLinks.map(d => (
+                      <Button
+                        key={d.value}
+                        size="sm"
+                        variant={copyFromDay === d.value ? 'default' : 'outline'}
+                        onClick={() => setCopyFromDay(d.value)}
+                      >
+                        {d.label} ({linksPerDay[d.value]})
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowCopyDialog(null)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleCopy(day.value)}
+                      disabled={copyFromDay === null || copyLinks.isPending}
+                    >
+                      {copyLinks.isPending && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                      Copiar para {day.label}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Add form */}
               {addingDay === day.value && (
@@ -196,7 +320,8 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
