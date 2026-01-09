@@ -279,6 +279,7 @@ export default function Agenda() {
               <SelectItem value="completed">Realizadas</SelectItem>
               <SelectItem value="no_show">No-show</SelectItem>
               <SelectItem value="canceled">Canceladas</SelectItem>
+              <SelectItem value="contract_paid">Contrato Pago</SelectItem>
             </SelectContent>
           </Select>
         </div>

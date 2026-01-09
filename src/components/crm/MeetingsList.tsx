@@ -22,6 +22,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secon
   completed: { label: 'Realizada', variant: 'outline', icon: CheckCircle },
   no_show: { label: 'No-show', variant: 'destructive', icon: XCircle },
   canceled: { label: 'Cancelada', variant: 'outline', icon: XCircle },
+  contract_paid: { label: 'Contrato Pago', variant: 'default', icon: CheckCircle },
 };
 
 export function MeetingsList({ meetings, isLoading, onViewDeal }: MeetingsListProps) {

@@ -27,6 +27,7 @@ const STATUS_STYLES: Record<string, string> = {
   completed: 'bg-green-500/80 hover:bg-green-500',
   no_show: 'bg-red-500/80 hover:bg-red-500',
   canceled: 'bg-muted/60 line-through',
+  contract_paid: 'bg-emerald-600/90 hover:bg-emerald-600',
 };
 
 export function CloserColumnCalendar({ 
@@ -222,6 +223,7 @@ export function CloserColumnCalendar({
                                 {meeting.status === 'completed' && 'Realizada'}
                                 {meeting.status === 'no_show' && 'No-show'}
                                 {meeting.status === 'canceled' && 'Cancelada'}
+                                {meeting.status === 'contract_paid' && 'Contrato Pago'}
                               </Badge>
                             </div>
                           </TooltipContent>

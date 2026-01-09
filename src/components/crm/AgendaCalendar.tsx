@@ -38,6 +38,7 @@ const STATUS_STYLES: Record<string, string> = {
   completed: 'border-l-2 border-l-green-500 opacity-75',
   no_show: 'border-l-2 border-l-red-500 opacity-75',
   canceled: 'border-l-2 border-l-muted opacity-50 line-through',
+  contract_paid: 'border-l-2 border-l-emerald-600 opacity-75',
 };
 
 const SLOT_HEIGHT = 40; // px per 30-min slot
@@ -441,6 +442,7 @@ export function AgendaCalendar({
                                   {meeting.status === 'completed' && '✅ Realizada'}
                                   {meeting.status === 'no_show' && '❌ No-show'}
                                   {meeting.status === 'canceled' && '🚫 Cancelada'}
+                                  {meeting.status === 'contract_paid' && '💰 Contrato Pago'}
                                 </Badge>
                               </div>
                             </HoverCardContent>
