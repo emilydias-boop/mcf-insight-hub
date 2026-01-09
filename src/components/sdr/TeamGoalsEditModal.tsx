@@ -49,7 +49,7 @@ const DAY_TARGET_PROPORTIONS = {
   r1_agendada: 1.00,      // 100% do Agendamento
   r1_realizada: 0.70,     // 70% da R1 Agendada
   noshow: 0.30,           // 30% da R1 Agendada
-  contrato: 0.30,         // 30% da R1 Realizada
+  contrato: 0.35,         // 35% da R1 Realizada
   r2_agendada: 1.00,      // 100% do Contrato Pago
   r2_realizada: 0.75,     // 75% da R2 Agendada
   venda_realizada: 0.60,  // 60% da R2 Realizada
