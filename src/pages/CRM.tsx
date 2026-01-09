@@ -1,9 +1,22 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { LayoutDashboard, Users, Briefcase, MessageCircle, Settings, Shield, CalendarDays, UserX, Copy } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const CRM = () => {
-  const navItems = [
+  const { role } = useAuth();
+  const location = useLocation();
+  
+  // Roles que só podem ver Agenda
+  const agendaOnlyRoles = ['sdr', 'closer'];
+  const isAgendaOnly = role && agendaOnlyRoles.includes(role);
+  
+  // Redirecionar para /crm/agenda se for sdr/closer acessando /crm
+  if (isAgendaOnly && location.pathname === '/crm') {
+    return <Navigate to="/crm/agenda" replace />;
+  }
+  
+  const allNavItems = [
     { to: '/crm', label: 'Visão Geral', icon: LayoutDashboard, end: true },
     { to: '/crm/contatos', label: 'Contatos', icon: Users },
     { to: '/crm/negocios', label: 'Negócios', icon: Briefcase },
@@ -14,6 +27,11 @@ const CRM = () => {
     { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
     { to: '/crm/configuracoes', label: 'Configurações', icon: Settings },
   ];
+  
+  // SDR/Closer só vê Agenda
+  const navItems = isAgendaOnly 
+    ? allNavItems.filter(item => item.to === '/crm/agenda')
+    : allNavItems;
 
   return (
     <div className="h-full flex flex-col">
