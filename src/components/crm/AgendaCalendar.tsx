@@ -482,7 +482,7 @@ export function AgendaCalendar({
   }
 
   // Day or Week view rendering with drag-and-drop
-  const gridCols = viewMode === 'day' ? 'grid-cols-[60px_1fr]' : 'grid-cols-[60px_repeat(5,1fr)]';
+  const gridCols = viewMode === 'day' ? 'grid-cols-[60px_1fr]' : 'grid-cols-[60px_repeat(6,1fr)]';
   const currentTimePos = getCurrentTimePosition();
 
   return (
