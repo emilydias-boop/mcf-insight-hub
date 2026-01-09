@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { format, startOfToday, setHours, setMinutes, addMinutes, isBefore, isAfter, startOfDay } from 'date-fns';
+import { format, startOfToday, setHours, setMinutes, addMinutes, isBefore, isAfter, startOfDay, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, Users, ArrowRight, User } from 'lucide-react';
+import { Calendar, Clock, Users, ArrowRight, User, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -36,6 +37,7 @@ interface MoveAttendeeModalProps {
     isPartner: boolean;
   } | null;
   currentMeetingId: string | null;
+  currentMeetingDate?: Date; // Data atual da reunião para validação
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -50,7 +52,8 @@ interface AvailableSlot {
 
 export function MoveAttendeeModal({ 
   attendee, 
-  currentMeetingId, 
+  currentMeetingId,
+  currentMeetingDate,
   open, 
   onOpenChange 
 }: MoveAttendeeModalProps) {
@@ -119,6 +122,12 @@ export function MoveAttendeeModal({
 
   // Filter out the current meeting
   const existingMeetings = meetings?.filter(m => m.id !== currentMeetingId) || [];
+
+  // Verificar se a data selecionada é diferente da data atual da reunião
+  const isDifferentDay = useMemo(() => {
+    if (!selectedDate || !currentMeetingDate) return false;
+    return !isSameDay(selectedDate, currentMeetingDate);
+  }, [selectedDate, currentMeetingDate]);
 
   // Apply closer filter
   const filteredSlots = useMemo(() => {
@@ -283,8 +292,19 @@ export function MoveAttendeeModal({
             </div>
           )}
 
+          {/* Alerta para dias diferentes */}
+          {selectedDate && isDifferentDay && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Para mover para outro dia, primeiro marque como <strong>"No-Show"</strong>. 
+                Apenas remanejamentos no mesmo dia (horário ou closer) são permitidos.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Available Slots & Meetings */}
-          {selectedDate && (
+          {selectedDate && !isDifferentDay && (
             <ScrollArea className="h-[300px]">
               <div className="space-y-4 pr-4">
                 {/* Available Slots Section */}
