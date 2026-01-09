@@ -19,9 +19,16 @@ import { RescheduleModal } from '@/components/crm/RescheduleModal';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { useMyCloser } from '@/hooks/useMyCloser';
 
 export default function Agenda() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const { data: myCloser } = useMyCloser();
+  
+  const isCloser = role === 'closer';
+  
   useMeetingReminders(); // Automatic 15-min reminders
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
@@ -55,6 +62,12 @@ export default function Agenda() {
 
   const filteredMeetings = useMemo(() => {
     let result = meetings;
+    
+    // Closer só vê suas próprias reuniões
+    if (isCloser && myCloser?.id) {
+      result = result.filter(m => m.closer_id === myCloser.id);
+    }
+    
     if (closerFilter) {
       result = result.filter(m => m.closer_id === closerFilter);
     }
@@ -62,7 +75,7 @@ export default function Agenda() {
       result = result.filter(m => m.status === statusFilter);
     }
     return result;
-  }, [meetings, closerFilter, statusFilter]);
+  }, [meetings, closerFilter, statusFilter, isCloser, myCloser?.id]);
 
   const handlePrev = () => {
     if (viewMode === 'day') {
@@ -166,9 +179,11 @@ export default function Agenda() {
         <div className="flex items-center gap-3">
           <CalendarDays className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">Agenda dos Closers</h1>
+            <h1 className="text-2xl font-bold">
+              {isCloser ? 'Minha Agenda' : 'Agenda dos Closers'}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Gerencie reuniões e disponibilidade
+              {isCloser ? 'Suas reuniões agendadas' : 'Gerencie reuniões e disponibilidade'}
             </p>
           </div>
         </div>
@@ -176,14 +191,18 @@ export default function Agenda() {
           <Button variant="outline" size="icon" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')}>
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Métricas
-          </Button>
-          <Button variant="outline" onClick={() => setConfigOpen(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Configurar
-          </Button>
+          {!isCloser && (
+            <>
+              <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')}>
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Métricas
+              </Button>
+              <Button variant="outline" onClick={() => setConfigOpen(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Configurar
+              </Button>
+            </>
+          )}
           <Button onClick={() => setQuickScheduleOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Agendar
@@ -247,26 +266,28 @@ export default function Agenda() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Select value={closerFilter || 'all'} onValueChange={(v) => setCloserFilter(v === 'all' ? null : v)}>
-            <SelectTrigger className="w-[180px]">
-              <Users className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Todos os closers" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os closers</SelectItem>
-              {closers.map(closer => (
-                <SelectItem key={closer.id} value={closer.id}>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: closer.color || '#6B7280' }}
-                    />
-                    {closer.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isCloser && (
+            <Select value={closerFilter || 'all'} onValueChange={(v) => setCloserFilter(v === 'all' ? null : v)}>
+              <SelectTrigger className="w-[180px]">
+                <Users className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Todos os closers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os closers</SelectItem>
+                {closers.map(closer => (
+                  <SelectItem key={closer.id} value={closer.id}>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: closer.color || '#6B7280' }}
+                      />
+                      {closer.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? null : v)}>
             <SelectTrigger className="w-[150px]">
