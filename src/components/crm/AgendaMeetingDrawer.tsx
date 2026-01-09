@@ -43,7 +43,7 @@ import {
   useRemoveMeetingAttendee,
   useMarkAttendeeNotified,
   useDeleteMeeting,
-  useUpdateAttendeeStatus,
+  useUpdateAttendeeAndSlotStatus,
   useUpdateAttendeeNotes,
   useUpdateAttendeePhone,
 } from '@/hooks/useAgendaData';
@@ -127,7 +127,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const removeAttendee = useRemoveMeetingAttendee();
   const markNotified = useMarkAttendeeNotified();
   const deleteMeeting = useDeleteMeeting();
-  const updateAttendeeStatus = useUpdateAttendeeStatus();
+  const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const updateAttendeeNotes = useUpdateAttendeeNotes();
   const updateAttendeePhone = useUpdateAttendeePhone();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
@@ -143,27 +143,23 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     });
   };
 
-  // Handler to update participant status (individual) - all participants use attendees table
-  // Also syncs meeting_slots.status when the principal participant changes to completed/no_show/contract_paid
+  // Handler to update participant status - uses combined mutation to prevent race condition
+  // Syncs meeting_slots.status when the principal participant changes to completed/no_show/contract_paid
   const handleParticipantStatusChange = (participantId: string, newStatus: string) => {
-    updateAttendeeStatus.mutate({ attendeeId: participantId, status: newStatus }, {
+    const statusesToSync = ['completed', 'no_show', 'contract_paid'];
+    const attendee = activeMeeting?.attendees?.find(a => a.id === participantId);
+    const isPrincipal = attendee && !attendee.is_partner && !attendee.parent_attendee_id;
+    const shouldSyncSlot = statusesToSync.includes(newStatus) && isPrincipal;
+
+    updateAttendeeAndSlotStatus.mutate({
+      attendeeId: participantId,
+      status: newStatus,
+      meetingId: activeMeeting?.id,
+      syncSlot: shouldSyncSlot,
+    }, {
       onSuccess: () => {
         if (newStatus === 'no_show') {
           setShowNoShowConfirm(false);
-        }
-        
-        // Sync meeting_slots.status if this is the principal participant (not a partner)
-        const statusesToSync = ['completed', 'no_show', 'contract_paid'];
-        if (statusesToSync.includes(newStatus) && activeMeeting) {
-          // Find the attendee being updated
-          const attendee = activeMeeting.attendees?.find(a => a.id === participantId);
-          // Only sync if it's the principal lead (not a partner and no parent)
-          if (attendee && !attendee.is_partner && !attendee.parent_attendee_id) {
-            updateStatus.mutate(
-              { meetingId: activeMeeting.id, status: newStatus },
-              { onSuccess: () => {} } // Silent - avoid double toast
-            );
-          }
         }
       }
     });
@@ -886,7 +882,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       size="sm"
                       className="flex-col h-16 gap-1 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
                       onClick={() => setShowNoShowConfirm(true)}
-                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
+                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
                     >
                       <AlertTriangle className="h-4 w-4" />
                       <span className="text-xs">No-Show</span>
@@ -905,7 +901,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       size="sm"
                       className="flex-col h-16 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/20"
                       onClick={handleCompleted}
-                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
+                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
                     >
                       <CheckCircle className="h-4 w-4" />
                       <span className="text-xs">Realizada</span>
@@ -915,7 +911,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       size="sm"
                       className="flex-col h-16 gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
                       onClick={handleContractPaid}
-                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
+                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
                     >
                       <DollarSign className="h-4 w-4" />
                       <span className="text-xs">Contrato</span>
@@ -939,7 +935,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       size="sm"
                       className="flex-row h-12 gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
                       onClick={handleContractPaid}
-                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
+                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
                     >
                       <DollarSign className="h-4 w-4" />
                       <span className="text-sm">Marcar Contrato Pago</span>
