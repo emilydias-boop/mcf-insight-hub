@@ -72,6 +72,35 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   contract_paid: { label: 'Contrato Pago', color: 'bg-emerald-600' },
 };
 
+// Parse reschedule history from notes
+const parseRescheduleHistory = (notes: string | null | undefined) => {
+  if (!notes) return { originalNote: null, reschedules: [] };
+  
+  const separator = '--- Reagendado em';
+  const parts = notes.split(separator);
+  
+  if (parts.length <= 1) {
+    return { originalNote: notes.trim() || null, reschedules: [] };
+  }
+  
+  const originalNote = parts[0].trim() || null;
+  const reschedules = parts.slice(1).map(part => {
+    const lines = part.trim().split('\n');
+    const dateMatch = lines[0]?.match(/^(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2})/);
+    const fromToMatch = lines[1]?.match(/De:\s*(.+?)\s*→\s*Para:\s*(.+)/);
+    const motivoMatch = lines[2]?.match(/Motivo:\s*(.+)/);
+    
+    return {
+      date: dateMatch?.[1] || 'Data não informada',
+      from: fromToMatch?.[1] || 'N/A',
+      to: fromToMatch?.[2] || 'N/A',
+      reason: motivoMatch?.[1] || lines.slice(2).join(' ').replace('Motivo:', '').trim() || 'Não informado'
+    };
+  });
+  
+  return { originalNote, reschedules };
+};
+
 // Roles that can delete meetings
 const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador', 'sdr'];
 
@@ -469,6 +498,47 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </Button>
             )}
 
+            {/* Reschedule Banner - Show if participant has reschedule history */}
+            {(() => {
+              const { reschedules } = parseRescheduleHistory(selectedParticipant?.notes);
+              if (reschedules.length === 0) return null;
+              
+              const lastReschedule = reschedules[reschedules.length - 1];
+              
+              return (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <ArrowRightLeft className="h-4 w-4 text-amber-600" />
+                    <span className="font-medium text-sm text-amber-700 dark:text-amber-400">
+                      ⚠️ Reagendamento ({reschedules.length}x)
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p><strong>Último:</strong> {lastReschedule.date}</p>
+                    <p><strong>De:</strong> {lastReschedule.from}</p>
+                    <p><strong>Para:</strong> {lastReschedule.to}</p>
+                    <p><strong>Motivo:</strong> {lastReschedule.reason}</p>
+                  </div>
+                  {reschedules.length > 1 && (
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-amber-600 hover:underline">
+                        Ver histórico completo ({reschedules.length} reagendamentos)
+                      </summary>
+                      <div className="mt-2 space-y-2 pl-2 border-l-2 border-amber-500/30">
+                        {reschedules.slice(0, -1).reverse().map((r, i) => (
+                          <div key={i} className="text-muted-foreground">
+                            <p className="font-medium">{r.date}</p>
+                            <p>{r.from} → {r.to}</p>
+                            <p className="italic">"{r.reason}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Participants Section */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -723,11 +793,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           </Button>
                         </div>
                       ) : (
-                        selectedParticipant.notes && (
-                          <div className="bg-white/50 dark:bg-black/20 rounded p-2">
-                            <p className="text-sm whitespace-pre-wrap">{selectedParticipant.notes}</p>
-                          </div>
-                        )
+                        (() => {
+                          const { originalNote } = parseRescheduleHistory(selectedParticipant.notes);
+                          return originalNote && (
+                            <div className="bg-white/50 dark:bg-black/20 rounded p-2">
+                              <p className="text-sm whitespace-pre-wrap">{originalNote}</p>
+                            </div>
+                          );
+                        })()
                       )}
                     </div>
                   )}
