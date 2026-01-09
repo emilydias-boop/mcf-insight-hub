@@ -52,15 +52,40 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
   const diasUteisSemana = getDiasUteisSemanaAtual();
   const diasUteisMes = getDiasUteisMesAtual();
 
-  // Initialize values from existing targets
+  // Initialize values from existing targets and auto-recalculate if needed
   useEffect(() => {
+    if (!open) return;
+    
     const initial: Record<string, number> = {};
     SDR_TARGET_CONFIGS.forEach(config => {
       const existing = existingTargets.find(t => t.target_type === config.type);
       initial[config.type] = existing?.target_value ?? 0;
     });
+    
+    // Auto-recalcular semana e mês se estiverem zerados mas o dia tiver valor
+    const dayConfigsList = SDR_TARGET_CONFIGS.filter(c => c.period === 'day');
+    
+    dayConfigsList.forEach(dayConfig => {
+      const dayValue = initial[dayConfig.type] || 0;
+      
+      if (dayValue > 0) {
+        const weekType = dayToWeekMapping[dayConfig.type];
+        const monthType = dayToMonthMapping[dayConfig.type];
+        
+        // Se semana estiver zerada, calcula automaticamente
+        if (weekType && (!initial[weekType] || initial[weekType] === 0)) {
+          initial[weekType] = dayValue * diasUteisSemana;
+        }
+        
+        // Se mês estiver zerado, calcula automaticamente
+        if (monthType && (!initial[monthType] || initial[monthType] === 0)) {
+          initial[monthType] = dayValue * diasUteisMes;
+        }
+      }
+    });
+    
     setValues(initial as Record<SdrTargetType, number>);
-  }, [existingTargets, open]);
+  }, [existingTargets, open, diasUteisSemana, diasUteisMes]);
 
   // Handler para campos de semana e mês (edição manual)
   const handleChange = (type: SdrTargetType, value: string) => {
