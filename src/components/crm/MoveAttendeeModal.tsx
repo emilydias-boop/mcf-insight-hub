@@ -14,6 +14,13 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useMeetingsForDate, useMoveAttendeeToMeeting } from '@/hooks/useAgendaData';
 import { useClosers, useCloserAvailability, useBookedSlots } from '@/hooks/useCloserScheduling';
@@ -49,6 +56,7 @@ export function MoveAttendeeModal({
 }: MoveAttendeeModalProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
   const queryClient = useQueryClient();
   
   const { data: closers } = useClosers();
@@ -111,6 +119,17 @@ export function MoveAttendeeModal({
 
   // Filter out the current meeting
   const existingMeetings = meetings?.filter(m => m.id !== currentMeetingId) || [];
+
+  // Apply closer filter
+  const filteredSlots = useMemo(() => {
+    if (!selectedCloser) return availableSlots;
+    return availableSlots.filter(slot => slot.closerId === selectedCloser);
+  }, [availableSlots, selectedCloser]);
+
+  const filteredMeetings = useMemo(() => {
+    if (!selectedCloser) return existingMeetings;
+    return existingMeetings.filter(m => m.closer?.id === selectedCloser);
+  }, [existingMeetings, selectedCloser]);
 
   // Mutation to create new slot and move attendee
   const createSlotAndMove = useMutation({
@@ -183,6 +202,7 @@ export function MoveAttendeeModal({
   const handleClose = () => {
     onOpenChange(false);
     setSelectedDate(null);
+    setSelectedCloser(null);
   };
 
   const isLoading = meetingsLoading || createSlotAndMove.isPending || moveAttendee.isPending;
@@ -234,9 +254,38 @@ export function MoveAttendeeModal({
             </Popover>
           </div>
 
+          {/* Closer Filter */}
+          {selectedDate && closers && closers.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Filtrar por Closer</label>
+              <Select
+                value={selectedCloser || 'all'}
+                onValueChange={(value) => setSelectedCloser(value === 'all' ? null : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os closers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os closers</SelectItem>
+                  {closers.map((closer) => (
+                    <SelectItem key={closer.id} value={closer.id}>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: (closer as any).color || '#3B82F6' }}
+                        />
+                        {closer.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Available Slots & Meetings */}
           {selectedDate && (
-            <ScrollArea className="h-[350px]">
+            <ScrollArea className="h-[300px]">
               <div className="space-y-4 pr-4">
                 {/* Available Slots Section */}
                 <div className="space-y-2">
@@ -244,14 +293,14 @@ export function MoveAttendeeModal({
                     Slots Disponíveis
                   </label>
                   
-                  {availableSlots.length === 0 ? (
+                  {filteredSlots.length === 0 ? (
                     <div className="text-center py-4 text-muted-foreground border rounded-lg">
                       <Clock className="h-6 w-6 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">Nenhum slot disponível</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {availableSlots.map((slot, idx) => (
+                      {filteredSlots.map((slot, idx) => (
                         <div
                           key={`slot-${slot.closerId}-${slot.datetime.getTime()}-${idx}`}
                           className="border rounded-lg p-3 hover:bg-muted/50 transition-colors"
@@ -291,7 +340,7 @@ export function MoveAttendeeModal({
                 </div>
 
                 {/* Existing Meetings Section */}
-                {existingMeetings.length > 0 && (
+                {filteredMeetings.length > 0 && (
                   <>
                     <Separator />
                     <div className="space-y-2">
@@ -300,7 +349,7 @@ export function MoveAttendeeModal({
                       </label>
                       
                       <div className="space-y-2">
-                        {existingMeetings.map((meeting) => {
+                        {filteredMeetings.map((meeting) => {
                           const attendeeCount = meeting.attendees?.filter(a => !a.is_partner).length || 0;
                           const scheduledAt = new Date(meeting.scheduled_at);
                           
