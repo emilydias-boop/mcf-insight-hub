@@ -1,4 +1,4 @@
-import { addDays, getDay, format, parse, isWeekend } from 'date-fns';
+import { addDays, getDay, format, parse, isWeekend, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 
 // Feriados nacionais fixos (MM-DD)
 const FERIADOS_FIXOS = [
@@ -128,4 +128,26 @@ export function gerarDatasVencimento(
   }
   
   return datas;
+}
+
+// Conta dias úteis em um intervalo de datas
+export function contarDiasUteis(startDate: Date, endDate: Date): number {
+  const days = eachDayOfInterval({ start: startDate, end: endDate });
+  return days.filter(day => isDiaUtil(day)).length;
+}
+
+// Dias úteis da semana atual
+export function getDiasUteisSemanaAtual(): number {
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 0 }); // Domingo
+  const weekEnd = endOfWeek(today, { weekStartsOn: 0 }); // Sábado
+  return contarDiasUteis(weekStart, weekEnd);
+}
+
+// Dias úteis do mês atual
+export function getDiasUteisMesAtual(): number {
+  const today = new Date();
+  const monthStart = startOfMonth(today);
+  const monthEnd = endOfMonth(today);
+  return contarDiasUteis(monthStart, monthEnd);
 }
