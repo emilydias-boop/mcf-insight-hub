@@ -852,6 +852,30 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </>
             )}
 
+            {/* Botão Contrato Pago para status "completed" (reunião realizada, falta pagar) */}
+            {selectedParticipant && selectedParticipant.status === 'completed' && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground">
+                    Ações para: {selectedParticipant.name.split(' ')[0]}
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-row h-12 gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                      onClick={handleContractPaid}
+                      disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
+                    >
+                      <DollarSign className="h-4 w-4" />
+                      <span className="text-sm">Marcar Contrato Pago</span>
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+
 
 
             {/* Closer Notes - Per Participant */}
