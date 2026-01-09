@@ -273,6 +273,31 @@ export function AgendaCalendar({
     });
   };
 
+  // Get all unique closers with meetings on a specific day (for fixed column layout)
+  const getActiveClosersForDay = useCallback((day: Date) => {
+    const dayMeetings = filteredMeetings.filter(m => 
+      isSameDay(parseISO(m.scheduled_at), day)
+    );
+    const uniqueCloserIds = [...new Set(dayMeetings.map(m => m.closer_id).filter(Boolean))] as string[];
+    return uniqueCloserIds.sort(); // Consistent alphabetical order
+  }, [filteredMeetings]);
+
+  // Calculate fixed column position for a closer on a specific day
+  const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined) => {
+    if (!closerId) {
+      return { widthPercent: 100, leftPercent: 0, totalClosers: 1 };
+    }
+    const activeClosers = getActiveClosersForDay(day);
+    const totalClosers = activeClosers.length || 1;
+    const columnIndex = activeClosers.indexOf(closerId);
+    
+    return {
+      widthPercent: 100 / totalClosers,
+      leftPercent: columnIndex >= 0 ? (columnIndex * 100 / totalClosers) : 0,
+      totalClosers
+    };
+  }, [getActiveClosersForDay]);
+
   const getCloserColor = (closerId: string | undefined, closerName: string | undefined) => {
     const closer = closers.find(c => c.id === closerId);
     if (closer?.color) return closer.color;
@@ -603,9 +628,8 @@ export function AgendaCalendar({
                             const closerColor = getCloserColor(group.closerId, group.closer?.name);
                             const slotsNeeded = getSlotsNeeded(group.duration);
                             const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
-                            const totalGroups = groupedSlots.length;
-                            const widthPercent = totalGroups > 1 ? 100 / totalGroups : 100;
-                            const leftPercent = groupIndex * widthPercent;
+                            // Use fixed columns per closer for the entire day (prevents overlap)
+                            const { widthPercent, leftPercent, totalClosers } = getCloserColumnPosition(day, group.closerId);
                             
                             // All meetings in this group
                             const meetings = group.meetings;
@@ -641,8 +665,8 @@ export function AgendaCalendar({
                                           style={{ 
                                             height: `${cardHeight}px`,
                                             borderLeftColor: closerColor,
-                                            left: totalGroups > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
-                                            right: totalGroups > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
+                                            left: totalClosers > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
+                                            right: totalClosers > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
