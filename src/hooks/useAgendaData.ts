@@ -1305,3 +1305,71 @@ export function useMeetingsForDate(date: Date | null) {
     enabled: !!date,
   });
 }
+
+// Hook to get available slots count by date for calendar display
+export function useAvailableSlotsCountByDate(
+  closerId: string | undefined,
+  dates: Date[],
+  leadType: 'A' | 'B' = 'A'
+) {
+  return useQuery({
+    queryKey: ['available-slots-count', closerId, dates.map(d => format(d, 'yyyy-MM-dd')), leadType],
+    queryFn: async () => {
+      if (!closerId || dates.length === 0) return {};
+      
+      const result: Record<string, { available: number; total: number }> = {};
+      
+      for (const date of dates) {
+        const dateKey = format(date, 'yyyy-MM-dd');
+        const dayOfWeek = date.getDay();
+        
+        // Fetch availability config for this closer and day
+        const { data: availability } = await supabase
+          .from('closer_availability')
+          .select('start_time, end_time, max_slots_per_hour')
+          .eq('closer_id', closerId)
+          .eq('day_of_week', dayOfWeek)
+          .eq('lead_type', leadType)
+          .eq('is_active', true);
+        
+        if (!availability || availability.length === 0) {
+          result[dateKey] = { available: 0, total: 0 };
+          continue;
+        }
+        
+        // Calculate total slots for the day
+        let totalSlots = 0;
+        
+        for (const slot of availability) {
+          const startHour = parseInt(slot.start_time.split(':')[0]);
+          const endHour = parseInt(slot.end_time.split(':')[0]);
+          const hoursInSlot = endHour - startHour;
+          const maxPerHour = slot.max_slots_per_hour || 3;
+          totalSlots += hoursInSlot * maxPerHour;
+        }
+        
+        // Count existing bookings for this day
+        const dayStart = new Date(date);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(date);
+        dayEnd.setHours(23, 59, 59, 999);
+        
+        const { count } = await supabase
+          .from('meeting_slot_attendees')
+          .select('*, meeting_slots!inner(*)', { count: 'exact', head: true })
+          .eq('meeting_slots.closer_id', closerId)
+          .eq('meeting_slots.lead_type', leadType)
+          .gte('meeting_slots.scheduled_at', dayStart.toISOString())
+          .lte('meeting_slots.scheduled_at', dayEnd.toISOString())
+          .neq('meeting_slots.status', 'canceled');
+        
+        const bookedSlots = count || 0;
+        result[dateKey] = { available: Math.max(0, totalSlots - bookedSlots), total: totalSlots };
+      }
+      
+      return result;
+    },
+    enabled: !!closerId && dates.length > 0,
+    staleTime: 30000,
+  });
+}

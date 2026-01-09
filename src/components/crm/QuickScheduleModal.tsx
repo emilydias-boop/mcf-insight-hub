@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { format, getDay } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import type { DayContentProps } from 'react-day-picker';
 import { ptBR } from 'date-fns/locale';
 import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays } from 'lucide-react';
 import {
@@ -34,6 +35,7 @@ import {
   useCheckSlotAvailability,
   useSendMeetingNotification,
   useSearchWeeklyMeetingLeads,
+  useAvailableSlotsCountByDate,
 } from '@/hooks/useAgendaData';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { cn } from '@/lib/utils';
@@ -97,7 +99,7 @@ export function QuickScheduleModal({
   
   // Search mode state
   const [searchMode, setSearchMode] = useState<'normal' | 'weekly'>('normal');
-  const [weeklyStatusFilter, setWeeklyStatusFilter] = useState('all');
+  const [weeklyStatusFilter] = useState('no_show');
   
   // Search state
   const [nameQuery, setNameQuery] = useState('');
@@ -150,6 +152,34 @@ export function QuickScheduleModal({
   const { data: slotAvailability } = useCheckSlotAvailability(
     selectedCloser,
     scheduledAtForCheck,
+    detectedLeadType
+  );
+
+  // Calculate allowed dates for non-coordinators
+  const allowedDates = useMemo(() => {
+    if (isCoordinatorOrAbove) return []; // Don't show for coordinators
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayOfWeek = getDay(today);
+    const dates: Date[] = [today];
+    
+    if (dayOfWeek === 5) { // Friday
+      dates.push(new Date(today.getTime() + 86400000)); // Saturday
+      dates.push(new Date(today.getTime() + 3 * 86400000)); // Monday
+    } else if (dayOfWeek === 6) { // Saturday
+      dates.push(new Date(today.getTime() + 2 * 86400000)); // Monday
+    } else {
+      dates.push(new Date(today.getTime() + 86400000)); // Tomorrow
+    }
+    
+    return dates;
+  }, [isCoordinatorOrAbove]);
+
+  // Fetch slot counts for allowed dates
+  const { data: slotsCountByDate } = useAvailableSlotsCountByDate(
+    selectedCloser,
+    allowedDates,
     detectedLeadType
   );
 
@@ -225,7 +255,6 @@ export function QuickScheduleModal({
 
   const resetForm = () => {
     setSearchMode('normal');
-    setWeeklyStatusFilter('all');
     setNameQuery('');
     setPhoneQuery('');
     setEmailQuery('');
@@ -312,23 +341,12 @@ export function QuickScheduleModal({
             </Button>
           </div>
 
-          {/* Weekly Leads Mode */}
+          {/* Weekly Leads Mode - Only No-Show */}
           {searchMode === 'weekly' && (
             <div className="space-y-3">
-              <div className="flex gap-2 items-center">
-                <Label className="text-sm shrink-0">Status:</Label>
-                <Select value={weeklyStatusFilter} onValueChange={setWeeklyStatusFilter}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="completed">Realizada</SelectItem>
-                    <SelectItem value="no_show">No-Show</SelectItem>
-                    <SelectItem value="invited">Agendada</SelectItem>
-                    <SelectItem value="cancelled">Cancelada</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Badge variant="destructive" className="text-xs">No-Show</Badge>
+                Leads para reagendar
               </div>
               
               <div className="border rounded-md max-h-64 overflow-y-auto">
@@ -683,6 +701,29 @@ export function QuickScheduleModal({
                     selected={selectedDate}
                     onSelect={setSelectedDate}
                     className="pointer-events-auto"
+                    components={{
+                      DayContent: (props: DayContentProps) => {
+                        const dateKey = format(props.date, 'yyyy-MM-dd');
+                        const slots = slotsCountByDate?.[dateKey];
+                        const isAllowed = allowedDates.some(d => 
+                          format(d, 'yyyy-MM-dd') === dateKey
+                        );
+                        
+                        return (
+                          <div className="relative w-full h-full flex flex-col items-center justify-center">
+                            <span>{props.date.getDate()}</span>
+                            {isAllowed && slots && selectedCloser && (
+                              <span className={cn(
+                                "text-[9px] font-medium leading-none",
+                                slots.available > 0 ? "text-green-600" : "text-red-500"
+                              )}>
+                                {slots.available}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      }
+                    }}
                     disabled={(date) => {
                       // Coordenador ou superior: pode agendar qualquer data
                       if (isCoordinatorOrAbove) {
