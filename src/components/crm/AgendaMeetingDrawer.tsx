@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
-  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check
+  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -46,6 +46,7 @@ import {
   useUpdateAttendeeNotes,
   useUpdateAttendeePhone,
 } from '@/hooks/useAgendaData';
+import { MoveAttendeeModal } from './MoveAttendeeModal';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useConversationsContext } from '@/contexts/ConversationsContext';
@@ -87,6 +88,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [showNoShowConfirm, setShowNoShowConfirm] = useState(false);
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
   const [editedPhone, setEditedPhone] = useState('');
+  const [showMoveModal, setShowMoveModal] = useState(false);
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
@@ -797,7 +799,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   <h4 className="font-medium text-sm text-muted-foreground">
                     Ações para: {selectedParticipant.name.split(' ')[0]}
                   </h4>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-5 gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -820,6 +822,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     <Button
                       variant="outline"
                       size="sm"
+                      className="flex-col h-16 gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                      onClick={() => setShowMoveModal(true)}
+                    >
+                      <ArrowRightLeft className="h-4 w-4" />
+                      <span className="text-xs">Mover</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="flex-col h-16 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/20"
                       onClick={handleCompleted}
                       disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
@@ -835,7 +846,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       disabled={updateStatus.isPending || updateAttendeeStatus.isPending}
                     >
                       <DollarSign className="h-4 w-4" />
-                      <span className="text-xs">Contrato Pago</span>
+                      <span className="text-xs">Contrato</span>
                     </Button>
                   </div>
                 </div>
@@ -949,6 +960,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
             )}
           </div>
         </ScrollArea>
+
+        {/* Move Attendee Modal */}
+        <MoveAttendeeModal
+          attendee={selectedParticipant ? {
+            id: selectedParticipant.id,
+            name: selectedParticipant.name,
+            isPartner: selectedParticipant.isPartner,
+          } : null}
+          currentMeetingId={activeMeeting?.id || null}
+          open={showMoveModal}
+          onOpenChange={setShowMoveModal}
+        />
       </SheetContent>
     </Sheet>
   );

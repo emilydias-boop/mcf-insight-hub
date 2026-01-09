@@ -1223,3 +1223,79 @@ export function useUpdateAttendeePhone() {
     },
   });
 }
+
+// ============ Move Attendee to Another Meeting ============
+
+export function useMoveAttendeeToMeeting() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      attendeeId, 
+      targetMeetingSlotId 
+    }: { 
+      attendeeId: string; 
+      targetMeetingSlotId: string;
+    }) => {
+      // Move the main attendee
+      const { error: mainError } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ meeting_slot_id: targetMeetingSlotId })
+        .eq('id', attendeeId);
+
+      if (mainError) throw mainError;
+
+      // Move any partners linked to this attendee
+      const { error: partnersError } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ meeting_slot_id: targetMeetingSlotId })
+        .eq('parent_attendee_id', attendeeId);
+
+      if (partnersError) throw partnersError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      toast.success('Participante movido para outra reunião');
+    },
+    onError: () => {
+      toast.error('Erro ao mover participante');
+    },
+  });
+}
+
+// ============ Fetch Meetings for a Date (for move attendee modal) ============
+
+export function useMeetingsForDate(date: Date | null) {
+  return useQuery({
+    queryKey: ['meetings-for-date', date?.toISOString()],
+    queryFn: async () => {
+      if (!date) return [];
+
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const { data, error } = await supabase
+        .from('meeting_slots')
+        .select(`
+          id,
+          scheduled_at,
+          status,
+          duration_minutes,
+          closer:closers(id, name, color),
+          attendees:meeting_slot_attendees(id, attendee_name, is_partner)
+        `)
+        .gte('scheduled_at', startOfDay.toISOString())
+        .lte('scheduled_at', endOfDay.toISOString())
+        .in('status', ['scheduled', 'rescheduled'])
+        .order('scheduled_at', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!date,
+  });
+}
