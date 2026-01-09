@@ -27,6 +27,44 @@ const STATUS_STYLES: Record<string, string> = {
   contract_paid: 'bg-emerald-600/90 hover:bg-emerald-600',
 };
 
+const ATTENDEE_STATUS_CONFIG: Record<string, { 
+  label: string; 
+  shortLabel: string; 
+  bgClass: string;
+  variant: 'default' | 'destructive' | 'outline' | 'secondary' 
+}> = {
+  invited: { 
+    label: 'Agendado', 
+    shortLabel: 'Agend.', 
+    bgClass: 'bg-blue-600/80',
+    variant: 'outline'
+  },
+  completed: { 
+    label: 'Compareceu', 
+    shortLabel: 'OK', 
+    bgClass: 'bg-green-600/80',
+    variant: 'default'
+  },
+  no_show: { 
+    label: 'No-show', 
+    shortLabel: 'NS', 
+    bgClass: 'bg-red-600/80',
+    variant: 'destructive'
+  },
+  contract_paid: { 
+    label: 'Contrato Pago', 
+    shortLabel: 'Contrato', 
+    bgClass: 'bg-emerald-600/80',
+    variant: 'default'
+  },
+  rescheduled: { 
+    label: 'Reagendado', 
+    shortLabel: 'Reag.', 
+    bgClass: 'bg-yellow-600/80',
+    variant: 'secondary'
+  },
+};
+
 export function CloserColumnCalendar({ 
   meetings, 
   closers, 
@@ -178,10 +216,10 @@ export function CloserColumnCalendar({
                                         variant="outline" 
                                         className={cn(
                                           "text-[9px] px-1 py-0 border-white/30",
-                                          att.status === 'no_show' ? 'bg-red-600/80' : 'bg-white/20'
+                                          ATTENDEE_STATUS_CONFIG[att.status]?.bgClass || 'bg-white/20'
                                         )}
                                       >
-                                        {att.status === 'no_show' ? 'NS' : 'OK'}
+                                        {ATTENDEE_STATUS_CONFIG[att.status]?.shortLabel || att.status}
                                       </Badge>
                                     </div>
                                   ))
@@ -209,10 +247,10 @@ export function CloserColumnCalendar({
                                       {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
                                     </div>
                                     <Badge 
-                                      variant={att.status === 'no_show' ? 'destructive' : 'default'}
+                                      variant={ATTENDEE_STATUS_CONFIG[att.status]?.variant || 'outline'}
                                       className="text-[9px] px-1 py-0"
                                     >
-                                      {att.status === 'no_show' ? 'No-show' : 'OK'}
+                                      {ATTENDEE_STATUS_CONFIG[att.status]?.label || att.status}
                                     </Badge>
                                   </div>
                                 ))
