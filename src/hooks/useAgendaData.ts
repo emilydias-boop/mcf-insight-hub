@@ -743,6 +743,7 @@ export function useSearchWeeklyMeetingLeads(statusFilter?: string) {
           status,
           deal_id,
           meeting_slot_id,
+          notes,
           meeting_slots!inner(
             scheduled_at,
             closer:closers(name)
@@ -781,6 +782,7 @@ export function useSearchWeeklyMeetingLeads(statusFilter?: string) {
           deal_id: a.deal_id,
           scheduled_at: meetingSlot?.scheduled_at,
           closer_name: meetingSlot?.closer?.name || 'Sem closer',
+          original_notes: a.notes,
           deal: deal ? {
             ...deal,
             contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact

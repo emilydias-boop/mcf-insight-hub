@@ -3,7 +3,7 @@ import { format, getDay } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DayContentProps } from 'react-day-picker';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays } from 'lucide-react';
+import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays, StickyNote } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -127,6 +127,13 @@ export function QuickScheduleModal({
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
   const [notes, setNotes] = useState('');
   const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
+  
+  // State to store weekly lead data for reschedule note concatenation
+  const [weeklyLeadData, setWeeklyLeadData] = useState<{
+    originalNotes?: string;
+    originalDate?: string;
+    closerName?: string;
+  } | null>(null);
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
   const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
@@ -222,6 +229,14 @@ export function QuickScheduleModal({
     setNameQuery(item.deal.contact?.name || item.deal.name);
     setSelectedEmail(item.deal.contact?.email || '');
     setSelectedPhone(item.deal.contact?.phone || '');
+    
+    // Store original appointment data for note history
+    setWeeklyLeadData({
+      originalNotes: item.original_notes,
+      originalDate: item.scheduled_at,
+      closerName: item.closer_name,
+    });
+    
     setSearchMode('normal');
   }, []);
 
@@ -232,12 +247,27 @@ export function QuickScheduleModal({
     const scheduledAt = new Date(selectedDate);
     scheduledAt.setHours(hours, minutes, 0, 0);
 
+    // Build notes with history if rescheduling from weekly no-show
+    let finalNotes = notes;
+    if (weeklyLeadData) {
+      const oldDate = weeklyLeadData.originalDate 
+        ? format(new Date(weeklyLeadData.originalDate), "dd/MM 'às' HH:mm", { locale: ptBR })
+        : 'N/A';
+      const newDateFormatted = format(scheduledAt, "dd/MM 'às' HH:mm", { locale: ptBR });
+      
+      const historyEntry = `--- Reagendado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })} ---\nDe: ${oldDate} (${weeklyLeadData.closerName}) → Para: ${newDateFormatted}\nMotivo: ${notes || 'Não informado'}`;
+      
+      finalNotes = weeklyLeadData.originalNotes 
+        ? `${weeklyLeadData.originalNotes}\n\n${historyEntry}`
+        : historyEntry;
+    }
+
     createMeeting.mutate({
       closerId: selectedCloser,
       dealId: selectedDeal.id,
       contactId: selectedDeal.contact?.id,
       scheduledAt,
-      notes,
+      notes: finalNotes,
       leadType: detectedLeadType,
       sendNotification: autoSendWhatsApp,
       sdrEmail: selectedSdr || undefined,
@@ -270,6 +300,7 @@ export function QuickScheduleModal({
     setSelectedTime('09:00');
     setNotes('');
     setAutoSendWhatsApp(true);
+    setWeeklyLeadData(null);
   };
 
   // Get day of week for selected date (0=Sunday, 1=Monday, etc.)
@@ -837,13 +868,45 @@ export function QuickScheduleModal({
             </div>
           )}
 
+          {/* Original Booking Info (when coming from weekly no-show) */}
+          {weeklyLeadData && (
+            <div className="space-y-3">
+              {/* Original appointment info */}
+              <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+                  <CalendarDays className="h-4 w-4" />
+                  Agendamento Anterior (No-Show)
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {weeklyLeadData.originalDate 
+                    ? format(new Date(weeklyLeadData.originalDate), "dd/MM 'às' HH:mm", { locale: ptBR })
+                    : 'Data não disponível'
+                  } com {weeklyLeadData.closerName}
+                </p>
+              </div>
+              
+              {/* Original note */}
+              {weeklyLeadData.originalNotes && (
+                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-1">
+                  <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+                    <StickyNote className="h-4 w-4" />
+                    Nota do Agendamento Original
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground max-h-24 overflow-y-auto">
+                    {weeklyLeadData.originalNotes}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Notes */}
           <div className="space-y-2">
-            <Label>Notas (opcional)</Label>
+            <Label>{weeklyLeadData ? 'Motivo do Reagendamento' : 'Notas (opcional)'}</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Adicione observações..."
+              placeholder={weeklyLeadData ? 'Ex: Cliente pediu para remarcar, não atendeu, etc...' : 'Adicione observações...'}
               rows={2}
             />
           </div>
