@@ -830,7 +830,13 @@ export function useCreateMeeting() {
       });
 
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) {
+        // Handle specific error cases with user-friendly messages
+        if (data.error === 'Slot is full') {
+          throw new Error(`Este horário já está cheio (${data.currentAttendees}/${data.maxAttendees} participantes)`);
+        }
+        throw new Error(data.error);
+      }
 
       return { ...data, sendNotification };
     },
