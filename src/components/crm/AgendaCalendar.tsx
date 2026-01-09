@@ -151,7 +151,7 @@ export function AgendaCalendar({
         isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 30
+        meetingDate.getMinutes() < minute + 15
       );
     });
   }, [filteredMeetings]);
@@ -193,7 +193,7 @@ export function AgendaCalendar({
       return slotTime >= meetingStart && slotTime < meetingEnd && 
              !(meetingStart.getHours() === hour && 
                meetingStart.getMinutes() >= minute && 
-               meetingStart.getMinutes() < minute + 30);
+               meetingStart.getMinutes() < minute + 15);
     });
   }, [filteredMeetings]);
 
@@ -223,7 +223,7 @@ export function AgendaCalendar({
       const matchesTime = isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 30;
+        meetingDate.getMinutes() < minute + 15;
       
       if (closerId) {
         return matchesTime && meeting.closer_id === closerId;
@@ -245,7 +245,7 @@ export function AgendaCalendar({
       return isSameDay(meetingDate, day) &&
         meetingDate.getHours() === hour &&
         meetingDate.getMinutes() >= minute &&
-        meetingDate.getMinutes() < minute + 30;
+        meetingDate.getMinutes() < minute + 15;
     });
     
     // Count per closer
