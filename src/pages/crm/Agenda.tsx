@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,7 @@ export default function Agenda() {
   // Calculate date range based on viewMode
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (viewMode === 'day') {
-      return { rangeStart: selectedDate, rangeEnd: selectedDate };
+      return { rangeStart: selectedDate, rangeEnd: endOfDay(selectedDate) };
     } else if (viewMode === 'month') {
       return { rangeStart: startOfMonth(selectedDate), rangeEnd: endOfMonth(selectedDate) };
     }
