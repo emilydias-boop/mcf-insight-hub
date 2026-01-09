@@ -63,6 +63,43 @@ export function useCloserDaySlots(dayOfWeek: number) {
   });
 }
 
+// Retorna horários únicos para um conjunto de dias da semana
+export function useUniqueSlotsForDays(daysOfWeek: number[]) {
+  return useQuery({
+    queryKey: ['unique-slots-for-days', daysOfWeek],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('closer_meeting_links')
+        .select('day_of_week, start_time, closer_id')
+        .in('day_of_week', daysOfWeek)
+        .order('start_time');
+
+      if (error) throw error;
+      
+      // Agrupar por dia
+      const byDay: Record<number, { time: string; closerIds: string[] }[]> = {};
+      
+      for (const row of data || []) {
+        if (!byDay[row.day_of_week]) {
+          byDay[row.day_of_week] = [];
+        }
+        
+        const existing = byDay[row.day_of_week]?.find(s => s.time === row.start_time);
+        if (existing) {
+          if (!existing.closerIds.includes(row.closer_id)) {
+            existing.closerIds.push(row.closer_id);
+          }
+        } else {
+          byDay[row.day_of_week].push({ time: row.start_time, closerIds: [row.closer_id] });
+        }
+      }
+      
+      return byDay;
+    },
+    enabled: daysOfWeek.length > 0,
+  });
+}
+
 export function useCreateCloserMeetingLink() {
   const queryClient = useQueryClient();
 

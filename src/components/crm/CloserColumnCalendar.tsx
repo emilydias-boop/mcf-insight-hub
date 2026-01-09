@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
-import { format, parseISO, isSameDay, addMinutes, setHours, setMinutes } from 'date-fns';
+import { format, parseISO, isSameDay, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Settings } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
+import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 
 interface CloserColumnCalendarProps {
   meetings: MeetingSlot[];
@@ -16,10 +17,6 @@ interface CloserColumnCalendarProps {
   onSelectSlot: (closerId: string, date: Date) => void;
   onEditHours?: () => void;
 }
-
-const SLOT_DURATION = 30; // 30 min slots
-const DEFAULT_START_HOUR = 8;
-const DEFAULT_END_HOUR = 18;
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled: 'bg-primary/90 hover:bg-primary',
@@ -40,57 +37,35 @@ export function CloserColumnCalendar({
   onEditHours
 }: CloserColumnCalendarProps) {
   const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
+  
+  // Buscar horários reais configurados em closer_meeting_links
+  const { data: daySlots = [] } = useCloserDaySlots(dayOfWeek);
 
-  // Generate time slots dynamically based on closers availability for this day
+  // Gerar slots únicos baseado nos horários reais
   const timeSlots = useMemo(() => {
-    let minHour = DEFAULT_END_HOUR;
-    let maxHour = DEFAULT_START_HOUR;
-
-    for (const closer of closers) {
-      const dayAvailability = closer.availability.filter(
-        a => a.day_of_week === dayOfWeek && a.is_active
-      );
-      
-      for (const avail of dayAvailability) {
-        const startHour = parseInt(avail.start_time.split(':')[0]);
-        const endHour = parseInt(avail.end_time.split(':')[0]);
-        minHour = Math.min(minHour, startHour);
-        maxHour = Math.max(maxHour, endHour);
-      }
-    }
-
-    // Fallback if no availability found
-    if (minHour >= maxHour) {
-      minHour = DEFAULT_START_HOUR;
-      maxHour = DEFAULT_END_HOUR;
-    }
-
-    const slots: Date[] = [];
-    for (let hour = minHour; hour < maxHour; hour++) {
-      for (let minute = 0; minute < 60; minute += SLOT_DURATION) {
-        const slot = setMinutes(setHours(selectedDate, hour), minute);
-        slots.push(slot);
-      }
-    }
-    return slots;
-  }, [selectedDate, closers, dayOfWeek]);
+    const uniqueTimes = [...new Set(daySlots.map(s => s.start_time))].sort();
+    
+    return uniqueTimes.map(timeStr => {
+      const [hour, minute] = timeStr.split(':').map(Number);
+      return setMinutes(setHours(selectedDate, hour), minute);
+    });
+  }, [daySlots, selectedDate]);
+  
+  // Verificar se um closer tem horário configurado para este slot
+  const isSlotConfigured = (closerId: string, slotTime: Date) => {
+    const timeStr = format(slotTime, 'HH:mm:ss');
+    return daySlots.some(s => s.closer_id === closerId && s.start_time === timeStr);
+  };
 
   const isSlotAvailable = (closerId: string, slotTime: Date) => {
-    const closer = closers.find(c => c.id === closerId);
-    if (!closer) return false;
-
     // Check if date is blocked
     const isBlocked = blockedDates.some(
       bd => bd.closer_id === closerId && isSameDay(parseISO(bd.blocked_date), selectedDate)
     );
     if (isBlocked) return false;
 
-    // Check availability
-    const timeStr = format(slotTime, 'HH:mm');
-    return closer.availability.some(a => {
-      if (a.day_of_week !== dayOfWeek) return false;
-      return timeStr >= a.start_time && timeStr < a.end_time;
-    });
+    // Verificar se o closer tem este horário configurado
+    return isSlotConfigured(closerId, slotTime);
   };
 
   const getMeetingForSlot = (closerId: string, slotTime: Date) => {
@@ -148,7 +123,7 @@ export function CloserColumnCalendar({
           const isCurrentSlot = isToday && 
             now.getHours() === slot.getHours() && 
             now.getMinutes() >= slot.getMinutes() && 
-            now.getMinutes() < slot.getMinutes() + SLOT_DURATION;
+            now.getMinutes() < slot.getMinutes() + 30;
 
           return (
             <div 
