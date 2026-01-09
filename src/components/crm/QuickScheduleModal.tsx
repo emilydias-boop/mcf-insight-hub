@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
-import { format, startOfWeek, endOfWeek, getDay } from 'date-fns';
+import { format, getDay } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
 import { ptBR } from 'date-fns/locale';
 import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays } from 'lucide-react';
 import {
@@ -91,6 +92,9 @@ export function QuickScheduleModal({
   preselectedCloserId,
   preselectedDate 
 }: QuickScheduleModalProps) {
+  const { role } = useAuth();
+  const isCoordinatorOrAbove = ['admin', 'manager', 'coordenador'].includes(role || '');
+  
   // Search mode state
   const [searchMode, setSearchMode] = useState<'normal' | 'weekly'>('normal');
   const [weeklyStatusFilter, setWeeklyStatusFilter] = useState('all');
@@ -678,12 +682,59 @@ export function QuickScheduleModal({
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                          disabled={(date) => {
-                            // Permitir qualquer dia da semana atual (a partir de segunda)
-                            const today = new Date();
-                            const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-                            return date < weekStart;
-                          }}
+                    className="pointer-events-auto"
+                    disabled={(date) => {
+                      // Coordenador ou superior: pode agendar qualquer data
+                      if (isCoordinatorOrAbove) {
+                        return false;
+                      }
+                      
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      
+                      const targetDate = new Date(date);
+                      targetDate.setHours(0, 0, 0, 0);
+                      
+                      const dayOfWeek = getDay(today); // 0=Domingo, 5=Sexta, 6=Sábado
+                      
+                      // Não pode agendar no passado
+                      if (targetDate < today) return true;
+                      
+                      // Se hoje é sexta (5): pode sexta, sábado, segunda
+                      if (dayOfWeek === 5) {
+                        const saturday = new Date(today);
+                        saturday.setDate(today.getDate() + 1);
+                        
+                        const monday = new Date(today);
+                        monday.setDate(today.getDate() + 3);
+                        
+                        const isToday = targetDate.getTime() === today.getTime();
+                        const isSaturday = targetDate.getTime() === saturday.getTime();
+                        const isMonday = targetDate.getTime() === monday.getTime();
+                        
+                        return !(isToday || isSaturday || isMonday);
+                      }
+                      
+                      // Se hoje é sábado (6): pode sábado, segunda
+                      if (dayOfWeek === 6) {
+                        const monday = new Date(today);
+                        monday.setDate(today.getDate() + 2);
+                        
+                        const isToday = targetDate.getTime() === today.getTime();
+                        const isMonday = targetDate.getTime() === monday.getTime();
+                        
+                        return !(isToday || isMonday);
+                      }
+                      
+                      // Dias normais: só hoje ou amanhã
+                      const tomorrow = new Date(today);
+                      tomorrow.setDate(today.getDate() + 1);
+                      
+                      const isToday = targetDate.getTime() === today.getTime();
+                      const isTomorrow = targetDate.getTime() === tomorrow.getTime();
+                      
+                      return !(isToday || isTomorrow);
+                    }}
                   />
                 </PopoverContent>
               </Popover>
