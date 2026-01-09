@@ -799,7 +799,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   <h4 className="font-medium text-sm text-muted-foreground">
                     Ações para: {selectedParticipant.name.split(' ')[0]}
                   </h4>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -809,15 +809,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     >
                       <AlertTriangle className="h-4 w-4" />
                       <span className="text-xs">No-Show</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-col h-16 gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                      onClick={() => onReschedule(activeMeeting)}
-                    >
-                      <Calendar className="h-4 w-4" />
-                      <span className="text-xs">Reagendar</span>
                     </Button>
                     <Button
                       variant="outline"
