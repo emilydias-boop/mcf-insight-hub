@@ -112,12 +112,26 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   // Handler to update participant status (individual) - all participants use attendees table
+  // Also syncs meeting_slots.status when the principal participant changes to completed/no_show/contract_paid
   const handleParticipantStatusChange = (participantId: string, newStatus: string) => {
     updateAttendeeStatus.mutate({ attendeeId: participantId, status: newStatus }, {
       onSuccess: () => {
         if (newStatus === 'no_show') {
           setShowNoShowConfirm(false);
-          toast.success('Participante marcado como No-Show.');
+        }
+        
+        // Sync meeting_slots.status if this is the principal participant (not a partner)
+        const statusesToSync = ['completed', 'no_show', 'contract_paid'];
+        if (statusesToSync.includes(newStatus) && activeMeeting) {
+          // Find the attendee being updated
+          const attendee = activeMeeting.attendees?.find(a => a.id === participantId);
+          // Only sync if it's the principal lead (not a partner and no parent)
+          if (attendee && !attendee.is_partner && !attendee.parent_attendee_id) {
+            updateStatus.mutate(
+              { meetingId: activeMeeting.id, status: newStatus },
+              { onSuccess: () => {} } // Silent - avoid double toast
+            );
+          }
         }
       }
     });
