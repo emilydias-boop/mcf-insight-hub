@@ -216,18 +216,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     enabled: !!dealId,
   });
 
+  // Fetch dynamic meeting link based on closer, day and time - MUST be before any conditional return
+  const { data: dynamicMeetingLink } = useCloserMeetingLink(
+    activeMeeting?.closer_id,
+    activeMeeting?.scheduled_at
+  );
+
   if (!meeting || !activeMeeting) return null;
 
   const contact = activeMeeting.deal?.contact;
   const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
   const isCompleted = activeMeeting.status === 'completed';
-  
-  // Fetch dynamic meeting link based on closer, day and time
-  const { data: dynamicMeetingLink } = useCloserMeetingLink(
-    activeMeeting.closer_id,
-    activeMeeting.scheduled_at
-  );
   
   // Video conference link - use saved link first, fallback to dynamic link
   const videoConferenceLink = activeMeeting.video_conference_link || dynamicMeetingLink;
