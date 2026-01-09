@@ -16,6 +16,9 @@ interface TeamGoalsPanelProps {
     r1Realizada: number;
     noShow: number;
     contrato: number;
+    r2Agendada: number;
+    r2Realizada: number;
+    vendaRealizada: number;
   };
   weekValues: {
     agendamento: number;
@@ -23,6 +26,9 @@ interface TeamGoalsPanelProps {
     r1Realizada: number;
     noShow: number;
     contrato: number;
+    r2Agendada: number;
+    r2Realizada: number;
+    vendaRealizada: number;
   };
 }
 
@@ -47,6 +53,9 @@ export function TeamGoalsPanel({ dayValues, weekValues }: TeamGoalsPanelProps) {
     { titulo: 'R1 Realizada', valor: dayValues.r1Realizada, meta: getTargetValue('sdr_r1_realizada_dia') },
     { titulo: 'No-Show', valor: dayValues.noShow, meta: getTargetValue('sdr_noshow_dia') },
     { titulo: 'Contrato Pago', valor: dayValues.contrato, meta: getTargetValue('sdr_contrato_dia') },
+    { titulo: 'R2 Agendada', valor: dayValues.r2Agendada, meta: getTargetValue('sdr_r2_agendada_dia') },
+    { titulo: 'R2 Realizada', valor: dayValues.r2Realizada, meta: getTargetValue('sdr_r2_realizada_dia') },
+    { titulo: 'Vendas Realizadas', valor: dayValues.vendaRealizada, meta: getTargetValue('sdr_venda_realizada_dia') },
   ], [dayValues, targets]);
 
   // Week gauges configuration
@@ -56,6 +65,9 @@ export function TeamGoalsPanel({ dayValues, weekValues }: TeamGoalsPanelProps) {
     { titulo: 'R1 Realizada', valor: weekValues.r1Realizada, meta: getTargetValue('sdr_r1_realizada_semana') },
     { titulo: 'No-Show', valor: weekValues.noShow, meta: getTargetValue('sdr_noshow_semana') },
     { titulo: 'Contrato Pago', valor: weekValues.contrato, meta: getTargetValue('sdr_contrato_semana') },
+    { titulo: 'R2 Agendada', valor: weekValues.r2Agendada, meta: getTargetValue('sdr_r2_agendada_semana') },
+    { titulo: 'R2 Realizada', valor: weekValues.r2Realizada, meta: getTargetValue('sdr_r2_realizada_semana') },
+    { titulo: 'Vendas Realizadas', valor: weekValues.vendaRealizada, meta: getTargetValue('sdr_venda_realizada_semana') },
   ], [weekValues, targets]);
 
   if (isLoading) {
@@ -98,7 +110,7 @@ export function TeamGoalsPanel({ dayValues, weekValues }: TeamGoalsPanelProps) {
           {/* Day section */}
           <div>
             <h3 className="text-sm font-medium text-muted-foreground mb-2">Dia</h3>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
               {dayGauges.map((gauge, index) => (
                 <GaugeSemicircle
                   key={`day-${index}`}
@@ -113,7 +125,7 @@ export function TeamGoalsPanel({ dayValues, weekValues }: TeamGoalsPanelProps) {
           {/* Week section */}
           <div>
             <h3 className="text-sm font-medium text-muted-foreground mb-2">Semana</h3>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
               {weekGauges.map((gauge, index) => (
                 <GaugeSemicircle
                   key={`week-${index}`}

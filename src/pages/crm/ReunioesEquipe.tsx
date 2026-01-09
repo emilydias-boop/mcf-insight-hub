@@ -20,6 +20,7 @@ import { GhostAppointmentsAlert } from "@/components/sdr/GhostAppointmentsAlert"
 import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
+import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { SDR_LIST } from "@/constants/team";
 
 type DatePreset = "today" | "week" | "month" | "custom";
@@ -139,6 +140,12 @@ export default function ReunioesEquipe() {
   // Fetch meeting_slots KPIs for the week (agenda-based)
   const { data: weekAgendaKPIs } = useMeetingSlotsKPIs(weekStartDate, weekEndDate);
 
+  // Fetch R2 and Vendas KPIs for today
+  const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
+
+  // Fetch R2 and Vendas KPIs for the week
+  const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
+
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo(() => {
     return SDR_LIST.map(sdr => ({
@@ -190,7 +197,10 @@ export default function ReunioesEquipe() {
     r1Realizada: dayAgendaKPIs?.totalRealizadas || 0,
     noShow: dayAgendaKPIs?.totalNoShows || 0,
     contrato: dayKPIs.totalContratos,
-  }), [dayKPIs, dayAgendaKPIs]);
+    r2Agendada: dayR2VendasKPIs?.r2Agendadas || 0,
+    r2Realizada: dayR2VendasKPIs?.r2Realizadas || 0,
+    vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
+  }), [dayKPIs, dayAgendaKPIs, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
     agendamento: weekKPIs.totalAgendamentos, // Kept: deal_activities-based
@@ -198,7 +208,10 @@ export default function ReunioesEquipe() {
     r1Realizada: weekAgendaKPIs?.totalRealizadas || 0,
     noShow: weekAgendaKPIs?.totalNoShows || 0,
     contrato: weekKPIs.totalContratos,
-  }), [weekKPIs, weekAgendaKPIs]);
+    r2Agendada: weekR2VendasKPIs?.r2Agendadas || 0,
+    r2Realizada: weekR2VendasKPIs?.r2Realizadas || 0,
+    vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
+  }), [weekKPIs, weekAgendaKPIs, weekR2VendasKPIs]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
