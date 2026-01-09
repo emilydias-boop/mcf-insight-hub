@@ -540,13 +540,18 @@ export function AgendaCalendar({
                   minute === 0 && 'border-t border-t-border/50'
                 )}
               >
-                <div className={cn(
-                  'min-w-[60px] w-[60px] flex-shrink-0 h-[40px] flex items-center justify-center text-xs border-r bg-muted/30',
-                  minute === 30 && 'text-muted-foreground/60',
-                  anyDayFull ? 'line-through text-muted-foreground/40' : 'text-muted-foreground'
-                )}>
-                  {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
-                </div>
+                  <div 
+                    className={cn(
+                      'min-w-[60px] w-[60px] flex-shrink-0 h-[40px] flex items-center justify-center text-xs border-r bg-muted/30',
+                      minute === 30 && 'text-muted-foreground/60',
+                      anyDayFull ? 'line-through text-muted-foreground/40' : 'text-muted-foreground',
+                      onEditHours && 'cursor-pointer hover:bg-muted/50 hover:text-foreground transition-colors'
+                    )}
+                    onClick={onEditHours}
+                    title={onEditHours ? "Clique para editar horários" : undefined}
+                  >
+                    {`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}
+                  </div>
                 {viewDays.map(day => {
                   const groupedSlots = getGroupedMeetingsInSlot(day, hour, minute);
                   const isOccupied = isSlotOccupiedByEarlierMeeting(day, hour, minute);
