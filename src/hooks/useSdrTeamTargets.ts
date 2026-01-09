@@ -11,11 +11,17 @@ export type SdrTargetType =
   | 'sdr_r1_realizada_dia'
   | 'sdr_noshow_dia'
   | 'sdr_contrato_dia'
+  | 'sdr_r2_agendada_dia'
+  | 'sdr_r2_realizada_dia'
+  | 'sdr_venda_realizada_dia'
   | 'sdr_agendamento_semana'
   | 'sdr_r1_agendada_semana'
   | 'sdr_r1_realizada_semana'
   | 'sdr_noshow_semana'
-  | 'sdr_contrato_semana';
+  | 'sdr_contrato_semana'
+  | 'sdr_r2_agendada_semana'
+  | 'sdr_r2_realizada_semana'
+  | 'sdr_venda_realizada_semana';
 
 export interface SdrTarget {
   id: string;
@@ -39,11 +45,17 @@ export const SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
   { type: 'sdr_r1_realizada_dia', label: 'R1 Realizada', period: 'day' },
   { type: 'sdr_noshow_dia', label: 'No-Show', period: 'day' },
   { type: 'sdr_contrato_dia', label: 'Contrato Pago', period: 'day' },
+  { type: 'sdr_r2_agendada_dia', label: 'R2 Agendada', period: 'day' },
+  { type: 'sdr_r2_realizada_dia', label: 'R2 Realizada', period: 'day' },
+  { type: 'sdr_venda_realizada_dia', label: 'Vendas Realizadas', period: 'day' },
   { type: 'sdr_agendamento_semana', label: 'Agendamento', period: 'week' },
   { type: 'sdr_r1_agendada_semana', label: 'R1 Agendada', period: 'week' },
   { type: 'sdr_r1_realizada_semana', label: 'R1 Realizada', period: 'week' },
   { type: 'sdr_noshow_semana', label: 'No-Show', period: 'week' },
   { type: 'sdr_contrato_semana', label: 'Contrato Pago', period: 'week' },
+  { type: 'sdr_r2_agendada_semana', label: 'R2 Agendada', period: 'week' },
+  { type: 'sdr_r2_realizada_semana', label: 'R2 Realizada', period: 'week' },
+  { type: 'sdr_venda_realizada_semana', label: 'Vendas Realizadas', period: 'week' },
 ];
 
 // Fetch SDR team targets for current day/week
