@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Mail, Lock, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
 
 export default function Auth() {
   const [loginEmail, setLoginEmail] = useState('');
@@ -16,8 +16,11 @@ export default function Auth() {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupName, setSignupName] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [sendingReset, setSendingReset] = useState(false);
 
-  const { signIn, signUp, user, loading } = useAuth();
+  const { signIn, signUp, resetPassword, user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,6 +35,20 @@ export default function Auth() {
       await signIn(loginEmail, loginPassword);
     } catch (error) {
       // Error handled in AuthContext
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSendingReset(true);
+    try {
+      await resetPassword(forgotEmail);
+      setShowForgotPassword(false);
+      setForgotEmail('');
+    } catch (error) {
+      // Error handled in AuthContext
+    } finally {
+      setSendingReset(false);
     }
   };
 
@@ -107,6 +124,16 @@ export default function Auth() {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Esqueceu sua senha?
+                  </button>
                 </div>
 
                 <Button type="submit" className="w-full" disabled={loading}>
@@ -191,6 +218,46 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recuperar Senha</DialogTitle>
+            <DialogDescription>
+              Digite seu email para receber um link de recuperação de senha.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="forgot-email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button type="submit" disabled={sendingReset}>
+                {sendingReset ? 'Enviando...' : 'Enviar link de recuperação'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setShowForgotPassword(false)}
+              >
+                Voltar ao login
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

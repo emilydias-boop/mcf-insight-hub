@@ -18,6 +18,7 @@ interface AuthContextType extends AuthState {
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -230,6 +231,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return role === requiredRole;
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      
+      if (error) throw error;
+      
+      toast.success('Email de recuperação enviado! Verifique sua caixa de entrada.');
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao enviar email de recuperação');
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -241,6 +257,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signUp,
         signOut,
         hasRole,
+        resetPassword,
       }}
     >
       {children}
