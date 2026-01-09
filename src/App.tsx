@@ -144,23 +144,23 @@ const App = () => (
               <Route path="produtos/consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarConsorcio /></RoleGuard>} />
               <Route path="produtos/:setor" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SetorGenerico /></RoleGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
-                <Route index element={<CRMOverview />} />
-                <Route path="contatos" element={<Contatos />} />
-                <Route path="negocios" element={<Negocios />} />
-                <Route path="atendimentos" element={<Atendimentos />} />
+                <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
+                <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Contatos /></RoleGuard>} />
+                <Route path="negocios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Negocios /></RoleGuard>} />
+                <Route path="atendimentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Atendimentos /></RoleGuard>} />
                 <Route path="agenda" element={<Agenda />} />
-                <Route path="agenda/metricas" element={<AgendaMetricas />} />
-                <Route path="origens" element={<Origens />} />
-                <Route path="grupos" element={<Grupos />} />
-                <Route path="tags" element={<Tags />} />
-                <Route path="importar-contatos" element={<ImportarContatos />} />
-                <Route path="importar-negocios" element={<ImportarNegocios />} />
-                <Route path="importar-historico" element={<ImportarHistorico />} />
-                <Route path="deals-orfaos" element={<DealsOrfaos />} />
-                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
-                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
-                <Route path="webhooks" element={<Webhooks />} />
-                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
+                <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
+                <Route path="origens" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Origens /></RoleGuard>} />
+                <Route path="grupos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Grupos /></RoleGuard>} />
+                <Route path="tags" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Tags /></RoleGuard>} />
+                <Route path="importar-contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarContatos /></RoleGuard>} />
+                <Route path="importar-negocios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarNegocios /></RoleGuard>} />
+                <Route path="importar-historico" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarHistorico /></RoleGuard>} />
+                <Route path="deals-orfaos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DealsOrfaos /></RoleGuard>} />
+                <Route path="contatos-duplicados" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ContatosDuplicados /></RoleGuard>} />
+                <Route path="auditoria-agendamentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AuditoriaAgendamentos /></RoleGuard>} />
+                <Route path="webhooks" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Webhooks /></RoleGuard>} />
+                <Route path="configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfiguracoesCRM /></RoleGuard>} />
               </Route>
             </Route>
             
