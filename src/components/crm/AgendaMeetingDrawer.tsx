@@ -749,6 +749,16 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                 <span>
                   {format(parseISO(activeMeeting.scheduled_at), 'HH:mm')} - {activeMeeting.duration_minutes}min
                 </span>
+                {isPending && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 ml-auto"
+                    onClick={() => onReschedule(activeMeeting)}
+                  >
+                    <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                  </Button>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-primary" />
