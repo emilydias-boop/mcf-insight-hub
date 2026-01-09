@@ -107,6 +107,10 @@ export default function ReunioesEquipe() {
   const weekStartDate = startOfWeek(today, { locale: ptBR });
   const weekEndDate = endOfWeek(today, { locale: ptBR });
 
+  // Month dates for month metrics
+  const monthStartDate = startOfMonth(today);
+  const monthEndDate = endOfMonth(today);
+
   // Fetch data with optional SDR filter
   const {
     teamKPIs,
@@ -145,6 +149,18 @@ export default function ReunioesEquipe() {
 
   // Fetch R2 and Vendas KPIs for the week
   const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
+
+  // Fetch month data for goals panel
+  const { teamKPIs: monthKPIs } = useTeamMeetingsData({
+    startDate: monthStartDate,
+    endDate: monthEndDate,
+  });
+
+  // Fetch meeting_slots KPIs for the month (agenda-based)
+  const { data: monthAgendaKPIs } = useMeetingSlotsKPIs(monthStartDate, monthEndDate);
+
+  // Fetch R2 and Vendas KPIs for the month
+  const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo(() => {
@@ -213,6 +229,17 @@ export default function ReunioesEquipe() {
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
   }), [weekKPIs, weekAgendaKPIs, weekR2VendasKPIs]);
 
+  const monthValues = useMemo(() => ({
+    agendamento: monthKPIs.totalAgendamentos,
+    r1Agendada: monthAgendaKPIs?.totalAgendadas || 0,
+    r1Realizada: monthAgendaKPIs?.totalRealizadas || 0,
+    noShow: monthAgendaKPIs?.totalNoShows || 0,
+    contrato: monthKPIs.totalContratos,
+    r2Agendada: monthR2VendasKPIs?.r2Agendadas || 0,
+    r2Realizada: monthR2VendasKPIs?.r2Realizadas || 0,
+    vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
+  }), [monthKPIs, monthAgendaKPIs, monthR2VendasKPIs]);
+
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
     setDatePreset(preset);
@@ -268,7 +295,7 @@ export default function ReunioesEquipe() {
       </div>
 
       {/* Goals Panel - FIRST */}
-      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} />
+      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
 
       {/* Filters */}
       <Card className="bg-card border-border">
