@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@/hooks/useAgendaData';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-
+import { useUniqueSlotsForDays } from '@/hooks/useCloserMeetingLinks';
 export type ViewMode = 'day' | 'week' | 'month';
 
 interface AgendaCalendarProps {
@@ -67,36 +67,42 @@ export function AgendaCalendar({
     return () => clearInterval(timer);
   }, []);
 
-  // Calculate dynamic time slots based on closers availability for selected date(s)
-  const timeSlots = useMemo(() => {
-    const daysToCheck = viewMode === 'day' 
-      ? [selectedDate]
+  // Get days of week that will be displayed in this view
+  const daysOfWeekInView = useMemo(() => {
+    const days = viewMode === 'day' 
+      ? [selectedDate.getDay()]
       : viewMode === 'month'
-        ? eachDayOfInterval({ start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) })
-        : Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+        ? [0, 1, 2, 3, 4, 5, 6] // All days for month view
+        : Array.from({ length: 6 }, (_, i) => ((i + 1) % 7)); // Mon-Sat (1,2,3,4,5,6)
+    return days;
+  }, [selectedDate, viewMode]);
 
+  // Fetch actual meeting link slots from closer_meeting_links table
+  const { data: meetingLinkSlots } = useUniqueSlotsForDays(daysOfWeekInView);
+
+  // Calculate dynamic time slots based on closer_meeting_links data
+  const timeSlots = useMemo(() => {
     let minHour = DEFAULT_END_HOUR;
     let maxHour = DEFAULT_START_HOUR;
 
-    // Check availability across all days in view
-    for (const day of daysToCheck) {
-      const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
-      
-      for (const closer of closers) {
-        const dayAvailability = closer.availability.filter(
-          a => a.day_of_week === dayOfWeek && a.is_active
-        );
-        
-        for (const avail of dayAvailability) {
-          const startHour = parseInt(avail.start_time.split(':')[0]);
-          const endHour = parseInt(avail.end_time.split(':')[0]);
-          minHour = Math.min(minHour, startHour);
-          maxHour = Math.max(maxHour, endHour);
+    // Use real time slots from closer_meeting_links
+    if (meetingLinkSlots) {
+      for (const dayOfWeek of Object.keys(meetingLinkSlots)) {
+        const slots = meetingLinkSlots[Number(dayOfWeek)];
+        for (const slot of slots || []) {
+          const [hourStr, minuteStr] = slot.time.split(':');
+          const hour = parseInt(hourStr);
+          const minute = parseInt(minuteStr);
+          minHour = Math.min(minHour, hour);
+          // Add 30 min for the slot duration, then round up to next hour for display
+          const slotEndMinutes = hour * 60 + minute + 30;
+          const slotEndHour = Math.ceil(slotEndMinutes / 60);
+          maxHour = Math.max(maxHour, slotEndHour);
         }
       }
     }
 
-    // Fallback if no availability found
+    // Fallback if no slots found
     if (minHour >= maxHour) {
       minHour = DEFAULT_START_HOUR;
       maxHour = DEFAULT_END_HOUR;
@@ -108,7 +114,7 @@ export function AgendaCalendar({
       minute: (i % 4) * 15,
       index: i,
     }));
-  }, [closers, selectedDate, viewMode, weekStart]);
+  }, [meetingLinkSlots]);
   
   // Calcular posição da linha vermelha em pixels (depends on timeSlots)
   const getCurrentTimePosition = useCallback(() => {
@@ -135,8 +141,8 @@ export function AgendaCalendar({
       const monthEnd = endOfMonth(selectedDate);
       return eachDayOfInterval({ start: monthStart, end: monthEnd });
     }
-    // week view
-    return Array.from({ length: 5 }, (_, i) => addDays(weekStart, i));
+    // week view - include Saturday (6 days: Mon-Sat)
+    return Array.from({ length: 6 }, (_, i) => addDays(weekStart, i));
   }, [selectedDate, viewMode, weekStart]);
 
   const filteredMeetings = useMemo(() => {
