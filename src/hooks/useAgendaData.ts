@@ -1217,6 +1217,55 @@ export function useUpdateAttendeeStatus() {
   });
 }
 
+// Combined mutation to update attendee AND meeting slot status atomically
+// This prevents race conditions where the cache is invalidated with inconsistent data
+export function useUpdateAttendeeAndSlotStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      attendeeId, 
+      status, 
+      meetingId,
+      syncSlot = false 
+    }: { 
+      attendeeId: string; 
+      status: string;
+      meetingId?: string;
+      syncSlot?: boolean;
+    }) => {
+      // 1. Update attendee status
+      const { error: attendeeError } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ status })
+        .eq('id', attendeeId);
+
+      if (attendeeError) throw attendeeError;
+
+      // 2. Optionally sync meeting_slots status (for principal participants)
+      if (syncSlot && meetingId) {
+        const { error: slotError } = await supabase
+          .from('meeting_slots')
+          .update({ status })
+          .eq('id', meetingId);
+
+        if (slotError) throw slotError;
+      }
+    },
+    onSuccess: () => {
+      // Only invalidate ONCE after both updates complete - prevents race condition
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      toast.success('Status atualizado');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar status');
+    },
+  });
+}
+
 export function useUpdateAttendeeNotes() {
   const queryClient = useQueryClient();
 
