@@ -456,16 +456,16 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </div>
             )}
 
-            {/* Send link to all participants */}
-            {videoConferenceLink && participants.length > 0 && (
+            {/* Copy meeting link */}
+            {videoConferenceLink && (
               <Button 
                 variant="secondary" 
                 size="sm" 
                 className="w-full"
-                onClick={handleSendToAll}
+                onClick={handleCopyLink}
               >
-                <Send className="h-4 w-4 mr-2" />
-                Enviar link para todos via WhatsApp
+                <Copy className="h-4 w-4 mr-2" />
+                Copiar link da reunião
               </Button>
             )}
 
