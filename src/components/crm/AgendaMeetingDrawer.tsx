@@ -951,6 +951,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </>
             )}
 
+            {/* Reschedule Entire Meeting Button */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+              onClick={() => onReschedule(activeMeeting)}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Reagendar Reunião Inteira
+            </Button>
+
             {/* View Deal Button */}
             {meeting.deal_id && (
               <Button variant="secondary" className="w-full" onClick={handleViewDeal}>
