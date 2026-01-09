@@ -4,9 +4,10 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
-  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft
+  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Sheet,
@@ -221,8 +222,15 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const statusInfo = STATUS_LABELS[activeMeeting.status] || STATUS_LABELS.scheduled;
   const isPending = activeMeeting.status === 'scheduled' || activeMeeting.status === 'rescheduled';
   const isCompleted = activeMeeting.status === 'completed';
-  // Video conference link (Google Meet) - direct access to the meeting room
-  const videoConferenceLink = activeMeeting.video_conference_link;
+  
+  // Fetch dynamic meeting link based on closer, day and time
+  const { data: dynamicMeetingLink } = useCloserMeetingLink(
+    activeMeeting.closer_id,
+    activeMeeting.scheduled_at
+  );
+  
+  // Video conference link - use saved link first, fallback to dynamic link
+  const videoConferenceLink = activeMeeting.video_conference_link || dynamicMeetingLink;
 
   // Format date/time for WhatsApp message
   const scheduledDate = parseISO(activeMeeting.scheduled_at);

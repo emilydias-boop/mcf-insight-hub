@@ -678,6 +678,41 @@ export type Database = {
         }
         Relationships: []
       }
+      closer_meeting_links: {
+        Row: {
+          closer_id: string
+          created_at: string | null
+          day_of_week: number
+          google_meet_link: string
+          id: string
+          start_time: string
+        }
+        Insert: {
+          closer_id: string
+          created_at?: string | null
+          day_of_week: number
+          google_meet_link: string
+          id?: string
+          start_time: string
+        }
+        Update: {
+          closer_id?: string
+          created_at?: string | null
+          day_of_week?: number
+          google_meet_link?: string
+          id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closer_meeting_links_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       closers: {
         Row: {
           calendly_default_link: string | null
