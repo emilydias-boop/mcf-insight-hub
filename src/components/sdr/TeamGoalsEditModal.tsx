@@ -44,15 +44,16 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
 
   const dayConfigs = SDR_TARGET_CONFIGS.filter(c => c.period === 'day');
   const weekConfigs = SDR_TARGET_CONFIGS.filter(c => c.period === 'week');
+  const monthConfigs = SDR_TARGET_CONFIGS.filter(c => c.period === 'month');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Editar Metas da Equipe</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-6 py-4">
+        <div className="grid grid-cols-3 gap-6 py-4">
           {/* Day targets */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
@@ -81,6 +82,28 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
               Metas da Semana
             </h3>
             {weekConfigs.map(config => (
+              <div key={config.type} className="space-y-1">
+                <Label htmlFor={config.type} className="text-sm">
+                  {config.label}
+                </Label>
+                <Input
+                  id={config.type}
+                  type="number"
+                  min={0}
+                  value={values[config.type] ?? 0}
+                  onChange={(e) => handleChange(config.type, e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Month targets */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+              Metas do Mês
+            </h3>
+            {monthConfigs.map(config => (
               <div key={config.type} className="space-y-1">
                 <Label htmlFor={config.type} className="text-sm">
                   {config.label}
