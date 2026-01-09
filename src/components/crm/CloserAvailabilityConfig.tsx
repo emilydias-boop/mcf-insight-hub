@@ -6,10 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Save, Palette } from 'lucide-react';
+import { Save, Palette, Plus, Trash2, Link as LinkIcon } from 'lucide-react';
 import { CloserWithAvailability, useUpdateAvailability, useUpdateCloserColor } from '@/hooks/useAgendaData';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
 import { cn } from '@/lib/utils';
+import { 
+  useCloserMeetingLinksList, 
+  useCreateCloserMeetingLink, 
+  useDeleteCloserMeetingLink 
+} from '@/hooks/useCloserMeetingLinks';
+import { toast } from 'sonner';
 
 interface CloserAvailabilityConfigProps {
   open: boolean;
@@ -216,6 +222,132 @@ function CloserAvailabilityForm({ closer, leadType }: { closer: CloserWithAvaila
   );
 }
 
+function MeetingLinksForm({ closerId }: { closerId: string }) {
+  const { data: links, isLoading } = useCloserMeetingLinksList(closerId);
+  const createLink = useCreateCloserMeetingLink();
+  const deleteLink = useDeleteCloserMeetingLink();
+  
+  const [addingDay, setAddingDay] = useState<number | null>(null);
+  const [newTime, setNewTime] = useState('09:00');
+  const [newLink, setNewLink] = useState('');
+
+  const handleAdd = () => {
+    if (!addingDay || !newTime || !newLink) {
+      toast.error('Preencha todos os campos');
+      return;
+    }
+    createLink.mutate({
+      closer_id: closerId,
+      day_of_week: addingDay,
+      start_time: newTime,
+      google_meet_link: newLink,
+    }, {
+      onSuccess: () => {
+        setAddingDay(null);
+        setNewTime('09:00');
+        setNewLink('');
+      }
+    });
+  };
+
+  const formatTime = (time: string) => {
+    return time.substring(0, 5);
+  };
+
+  if (isLoading) {
+    return <Skeleton className="h-40 w-full" />;
+  }
+
+  const linksByDay = DAYS_OF_WEEK.map(day => ({
+    ...day,
+    links: (links || [])
+      .filter(l => l.day_of_week === day.value)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+  }));
+
+  return (
+    <div className="space-y-4">
+      {linksByDay.map(day => (
+        <div key={day.value} className="border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <Label className="font-medium flex items-center gap-2">
+              <LinkIcon className="h-4 w-4" />
+              {day.label}
+              {day.links.length > 0 && (
+                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                  {day.links.length} horário{day.links.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </Label>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAddingDay(addingDay === day.value ? null : day.value)}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Adicionar
+            </Button>
+          </div>
+
+          {/* Add form */}
+          {addingDay === day.value && (
+            <div className="mb-3 p-3 bg-muted/50 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                  className="w-28"
+                />
+                <Input
+                  placeholder="https://meet.google.com/..."
+                  value={newLink}
+                  onChange={(e) => setNewLink(e.target.value)}
+                  className="flex-1"
+                />
+                <Button 
+                  size="sm" 
+                  onClick={handleAdd}
+                  disabled={createLink.isPending}
+                >
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Links list */}
+          {day.links.length === 0 ? (
+            <p className="text-sm text-muted-foreground pl-6">Nenhum horário configurado</p>
+          ) : (
+            <div className="space-y-2">
+              {day.links.map(link => (
+                <div key={link.id} className="flex items-center gap-2 pl-6">
+                  <span className="font-mono text-sm w-14">{formatTime(link.start_time)}</span>
+                  <Input
+                    value={link.google_meet_link}
+                    readOnly
+                    className="flex-1 text-xs bg-muted"
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => deleteLink.mutate(link.id)}
+                    disabled={deleteLink.isPending}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoading }: CloserAvailabilityConfigProps) {
   const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('availability');
@@ -259,9 +391,10 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
 
             {/* Config Type Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
                 <TabsTrigger value="blocked">Datas Bloqueadas</TabsTrigger>
+                <TabsTrigger value="links">Links de Reunião</TabsTrigger>
               </TabsList>
 
               <TabsContent value="availability" className="mt-4">
@@ -289,6 +422,12 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
               <TabsContent value="blocked" className="mt-4">
                 {currentCloserId && (
                   <BlockedDatesConfig closerId={currentCloserId} />
+                )}
+              </TabsContent>
+
+              <TabsContent value="links" className="mt-4">
+                {currentCloserId && (
+                  <MeetingLinksForm closerId={currentCloserId} />
                 )}
               </TabsContent>
             </Tabs>
