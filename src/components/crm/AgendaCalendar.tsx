@@ -722,14 +722,56 @@ export function AgendaCalendar({
                                           
                                           {/* Participantes agrupados por SDR */}
                                           <div className="space-y-2 mt-2">
-                                            {meetings.map(m => (
-                                              <div key={m.id} className="space-y-1">
-                                                {/* SDR desta reunião */}
-                                                <div className="text-[10px] text-muted-foreground border-b pb-0.5">
-                                                  SDR: {m.booked_by_profile?.full_name || 'N/A'}
-                                                </div>
-                                                {m.attendees?.length ? (
-                                                  m.attendees.map(att => (
+                                            {(() => {
+                                              type AttendeeWithSdr = {
+                                                id: string;
+                                                attendee_name: string;
+                                                status: string;
+                                                is_partner: boolean;
+                                                contact?: { id: string; name: string; phone: string; email: string } | null;
+                                                sdrName: string;
+                                                sdrId: string;
+                                              };
+                                              
+                                              // Flatten all attendees with their SDR info
+                                              const allAttendees: AttendeeWithSdr[] = meetings.flatMap(m => 
+                                                (m.attendees && m.attendees.length > 0) 
+                                                  ? m.attendees.map(att => ({
+                                                      id: att.id,
+                                                      attendee_name: att.attendee_name,
+                                                      status: att.status,
+                                                      is_partner: att.is_partner,
+                                                      contact: att.contact,
+                                                      sdrName: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name || 'N/A',
+                                                      sdrId: att.booked_by || m.booked_by || 'unknown'
+                                                    }))
+                                                  : [{
+                                                      id: m.id,
+                                                      attendee_name: m.deal?.contact?.name || m.deal?.name || 'Lead',
+                                                      status: m.status,
+                                                      is_partner: false,
+                                                      contact: m.deal?.contact,
+                                                      sdrName: m.booked_by_profile?.full_name || 'N/A',
+                                                      sdrId: m.booked_by || 'unknown'
+                                                    }]
+                                              );
+                                              
+                                              // Group by SDR
+                                              const groupedBySdr = allAttendees.reduce((acc, att) => {
+                                                const key = att.sdrId;
+                                                if (!acc[key]) {
+                                                  acc[key] = { sdrName: att.sdrName, attendees: [] as AttendeeWithSdr[] };
+                                                }
+                                                acc[key].attendees.push(att);
+                                                return acc;
+                                              }, {} as Record<string, { sdrName: string; attendees: AttendeeWithSdr[] }>);
+                                              
+                                              return Object.entries(groupedBySdr).map(([sdrId, sdrGroup]) => (
+                                                <div key={sdrId} className="space-y-1">
+                                                  <div className="text-[10px] text-muted-foreground border-b pb-0.5">
+                                                    SDR: {sdrGroup.sdrName}
+                                                  </div>
+                                                  {sdrGroup.attendees.map(att => (
                                                     <div key={att.id} className="text-xs p-1.5 bg-muted/50 rounded flex items-center justify-between">
                                                       <div className="flex items-center gap-1.5">
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
@@ -743,15 +785,10 @@ export function AgendaCalendar({
                                                         {att.status === 'confirmed' && <Badge variant="outline" className="text-[8px]">Confirmado</Badge>}
                                                       </div>
                                                     </div>
-                                                  ))
-                                                ) : (
-                                                  <div className="text-xs p-1.5 bg-muted/50 rounded flex items-center gap-1.5">
-                                                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
-                                                    <span>{m.deal?.contact?.name || m.deal?.name || 'Lead'}</span>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            ))}
+                                                  ))}
+                                                </div>
+                                              ));
+                                            })()}
                                           </div>
                                           
                                           <div className="text-xs text-muted-foreground pt-1">
