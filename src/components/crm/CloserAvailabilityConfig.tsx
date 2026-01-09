@@ -4,10 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Save, Palette, Plus, Trash2, Link as LinkIcon } from 'lucide-react';
-import { CloserWithAvailability, useUpdateAvailability, useUpdateCloserColor } from '@/hooks/useAgendaData';
+import { Palette, Plus, Trash2 } from 'lucide-react';
+import { CloserWithAvailability, useUpdateCloserColor } from '@/hooks/useAgendaData';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
 import { cn } from '@/lib/utils';
 import { 
@@ -38,198 +37,21 @@ const PRESET_COLORS = [
   '#EF4444', '#06B6D4', '#84CC16', '#F59E0B', '#6366F1',
 ];
 
-type LeadType = 'A' | 'B';
-
-interface AvailabilitySlot {
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  slot_duration_minutes: number;
-  is_active: boolean;
-  lead_type: LeadType;
-  max_slots_per_hour: number;
-}
-
-function CloserAvailabilityForm({ closer, leadType }: { closer: CloserWithAvailability; leadType: LeadType }) {
-  const updateAvailability = useUpdateAvailability();
+function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) {
   const updateColor = useUpdateCloserColor();
-  const [selectedColor, setSelectedColor] = useState(closer.color || '#3B82F6');
+  const { data: links, isLoading } = useCloserMeetingLinksList(closer.id);
+  const createLink = useCreateCloserMeetingLink();
+  const deleteLink = useDeleteCloserMeetingLink();
   
-  const [slots, setSlots] = useState<AvailabilitySlot[]>(() => {
-    return DAYS_OF_WEEK.flatMap(day => {
-      const existing = closer.availability.filter(a => 
-        a.day_of_week === day.value && (a.lead_type || 'A') === leadType
-      );
-      if (existing.length > 0) {
-        return existing.map(e => ({
-          day_of_week: e.day_of_week,
-          start_time: e.start_time,
-          end_time: e.end_time,
-          slot_duration_minutes: e.slot_duration_minutes,
-          is_active: e.is_active,
-          lead_type: (e.lead_type || 'A') as LeadType,
-          max_slots_per_hour: e.max_slots_per_hour || 3,
-        }));
-      }
-      return [
-        { day_of_week: day.value, start_time: '09:00', end_time: '12:00', slot_duration_minutes: 30, is_active: day.value !== 6, lead_type: leadType, max_slots_per_hour: 3 },
-        { day_of_week: day.value, start_time: '14:00', end_time: '18:00', slot_duration_minutes: 30, is_active: day.value !== 6, lead_type: leadType, max_slots_per_hour: 3 },
-      ];
-    });
-  });
-
-  const updateSlot = (dayOfWeek: number, index: number, field: keyof AvailabilitySlot, value: string | number | boolean) => {
-    setSlots(prev => {
-      const daySlots = prev.filter(s => s.day_of_week === dayOfWeek);
-      const otherSlots = prev.filter(s => s.day_of_week !== dayOfWeek);
-      daySlots[index] = { ...daySlots[index], [field]: value };
-      return [...otherSlots, ...daySlots].sort((a, b) => a.day_of_week - b.day_of_week);
-    });
-  };
-
-  const toggleDayActive = (dayOfWeek: number, isActive: boolean) => {
-    setSlots(prev => prev.map(s => 
-      s.day_of_week === dayOfWeek ? { ...s, is_active: isActive } : s
-    ));
-  };
-
-  const updateMaxSlots = (dayOfWeek: number, maxSlots: number) => {
-    setSlots(prev => prev.map(s => 
-      s.day_of_week === dayOfWeek ? { ...s, max_slots_per_hour: maxSlots } : s
-    ));
-  };
-
-  const handleSave = () => {
-    updateAvailability.mutate({
-      closerId: closer.id,
-      leadType,
-      availability: slots,
-    });
-  };
+  const [selectedColor, setSelectedColor] = useState(closer.color || '#3B82F6');
+  const [addingDay, setAddingDay] = useState<number | null>(null);
+  const [newTime, setNewTime] = useState('09:00');
+  const [newLink, setNewLink] = useState('');
 
   const handleColorChange = (color: string) => {
     setSelectedColor(color);
     updateColor.mutate({ closerId: closer.id, color });
   };
-
-  return (
-    <div className="space-y-6">
-      {/* Color Picker - only show on Lead A tab */}
-      {leadType === 'A' && (
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2">
-            <Palette className="h-4 w-4" />
-            Cor do Closer
-          </Label>
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1.5">
-              {PRESET_COLORS.map(color => (
-                <button
-                  key={color}
-                  onClick={() => handleColorChange(color)}
-                  className={cn(
-                    'w-7 h-7 rounded-full transition-all',
-                    selectedColor === color && 'ring-2 ring-offset-2 ring-primary'
-                  )}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
-            </div>
-            <Input
-              type="color"
-              value={selectedColor}
-              onChange={(e) => handleColorChange(e.target.value)}
-              className="w-10 h-8 p-0 border-0 cursor-pointer"
-            />
-            <div
-              className="w-8 h-8 rounded border"
-              style={{ backgroundColor: selectedColor }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Availability by Day */}
-      {DAYS_OF_WEEK.map(day => {
-        const daySlots = slots.filter(s => s.day_of_week === day.value);
-        const isDayActive = daySlots.some(s => s.is_active);
-        const maxSlotsValue = daySlots[0]?.max_slots_per_hour || 3;
-
-        return (
-          <div key={day.value} className="border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={isDayActive}
-                  onCheckedChange={(checked) => toggleDayActive(day.value, checked)}
-                />
-                <Label className={cn('font-medium', !isDayActive && 'text-muted-foreground')}>
-                  {day.label}
-                </Label>
-              </div>
-              {isDayActive && (
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm text-muted-foreground">Máx/hora:</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={maxSlotsValue}
-                    onChange={(e) => updateMaxSlots(day.value, parseInt(e.target.value) || 3)}
-                    className="w-16 h-8"
-                  />
-                </div>
-              )}
-            </div>
-
-            {isDayActive && (
-              <div className="space-y-2 pl-10">
-                {daySlots.map((slot, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={slot.start_time}
-                      onChange={(e) => updateSlot(day.value, idx, 'start_time', e.target.value)}
-                      className="w-28"
-                    />
-                    <span className="text-muted-foreground">até</span>
-                    <Input
-                      type="time"
-                      value={slot.end_time}
-                      onChange={(e) => updateSlot(day.value, idx, 'end_time', e.target.value)}
-                      className="w-28"
-                    />
-                    <span className="text-sm text-muted-foreground ml-2">
-                      (slots de 30min)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      <Button 
-        onClick={handleSave} 
-        disabled={updateAvailability.isPending}
-        className="w-full"
-      >
-        <Save className="h-4 w-4 mr-2" />
-        Salvar Disponibilidade Lead {leadType}
-      </Button>
-    </div>
-  );
-}
-
-function MeetingLinksForm({ closerId }: { closerId: string }) {
-  const { data: links, isLoading } = useCloserMeetingLinksList(closerId);
-  const createLink = useCreateCloserMeetingLink();
-  const deleteLink = useDeleteCloserMeetingLink();
-  
-  const [addingDay, setAddingDay] = useState<number | null>(null);
-  const [newTime, setNewTime] = useState('09:00');
-  const [newLink, setNewLink] = useState('');
 
   const handleAdd = () => {
     if (!addingDay || !newTime || !newLink) {
@@ -237,7 +59,7 @@ function MeetingLinksForm({ closerId }: { closerId: string }) {
       return;
     }
     createLink.mutate({
-      closer_id: closerId,
+      closer_id: closer.id,
       day_of_week: addingDay,
       start_time: newTime,
       google_meet_link: newLink,
@@ -250,13 +72,7 @@ function MeetingLinksForm({ closerId }: { closerId: string }) {
     });
   };
 
-  const formatTime = (time: string) => {
-    return time.substring(0, 5);
-  };
-
-  if (isLoading) {
-    return <Skeleton className="h-40 w-full" />;
-  }
+  const formatTime = (time: string) => time.substring(0, 5);
 
   const linksByDay = DAYS_OF_WEEK.map(day => ({
     ...day,
@@ -266,84 +82,123 @@ function MeetingLinksForm({ closerId }: { closerId: string }) {
   }));
 
   return (
-    <div className="space-y-4">
-      {linksByDay.map(day => (
-        <div key={day.value} className="border rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <Label className="font-medium flex items-center gap-2">
-              <LinkIcon className="h-4 w-4" />
-              {day.label}
-              {day.links.length > 0 && (
-                <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-                  {day.links.length} horário{day.links.length !== 1 ? 's' : ''}
-                </span>
-              )}
-            </Label>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setAddingDay(addingDay === day.value ? null : day.value)}
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              Adicionar
-            </Button>
+    <div className="space-y-6">
+      {/* Color Picker */}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          Cor do Closer
+        </Label>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5">
+            {PRESET_COLORS.map(color => (
+              <button
+                key={color}
+                onClick={() => handleColorChange(color)}
+                className={cn(
+                  'w-7 h-7 rounded-full transition-all',
+                  selectedColor === color && 'ring-2 ring-offset-2 ring-primary'
+                )}
+                style={{ backgroundColor: color }}
+              />
+            ))}
           </div>
+          <Input
+            type="color"
+            value={selectedColor}
+            onChange={(e) => handleColorChange(e.target.value)}
+            className="w-10 h-8 p-0 border-0 cursor-pointer"
+          />
+          <div
+            className="w-8 h-8 rounded border"
+            style={{ backgroundColor: selectedColor }}
+          />
+        </div>
+      </div>
 
-          {/* Add form */}
-          {addingDay === day.value && (
-            <div className="mb-3 p-3 bg-muted/50 rounded-lg space-y-2">
-              <div className="flex items-center gap-2">
-                <Input
-                  type="time"
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                  className="w-28"
-                />
-                <Input
-                  placeholder="https://meet.google.com/..."
-                  value={newLink}
-                  onChange={(e) => setNewLink(e.target.value)}
-                  className="flex-1"
-                />
-                <Button 
-                  size="sm" 
-                  onClick={handleAdd}
-                  disabled={createLink.isPending}
+      {/* Slots by Day */}
+      {isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : (
+        <div className="space-y-4">
+          {linksByDay.map(day => (
+            <div key={day.value} className="border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="font-medium flex items-center gap-2">
+                  {day.label}
+                  {day.links.length > 0 && (
+                    <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                      {day.links.length} horário{day.links.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </Label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAddingDay(addingDay === day.value ? null : day.value)}
                 >
-                  Salvar
+                  <Plus className="h-3 w-3 mr-1" />
+                  Adicionar
                 </Button>
               </div>
-            </div>
-          )}
 
-          {/* Links list */}
-          {day.links.length === 0 ? (
-            <p className="text-sm text-muted-foreground pl-6">Nenhum horário configurado</p>
-          ) : (
-            <div className="space-y-2">
-              {day.links.map(link => (
-                <div key={link.id} className="flex items-center gap-2 pl-6">
-                  <span className="font-mono text-sm w-14">{formatTime(link.start_time)}</span>
-                  <Input
-                    value={link.google_meet_link}
-                    readOnly
-                    className="flex-1 text-xs bg-muted"
-                  />
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => deleteLink.mutate(link.id)}
-                    disabled={deleteLink.isPending}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+              {/* Add form */}
+              {addingDay === day.value && (
+                <div className="mb-3 p-3 bg-muted/50 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      value={newTime}
+                      onChange={(e) => setNewTime(e.target.value)}
+                      className="w-28"
+                    />
+                    <Input
+                      placeholder="https://meet.google.com/..."
+                      value={newLink}
+                      onChange={(e) => setNewLink(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button 
+                      size="sm" 
+                      onClick={handleAdd}
+                      disabled={createLink.isPending}
+                    >
+                      Salvar
+                    </Button>
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* Links list */}
+              {day.links.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum horário configurado</p>
+              ) : (
+                <div className="space-y-2">
+                  {day.links.map(link => (
+                    <div key={link.id} className="flex items-center gap-2">
+                      <span className="font-mono text-sm w-14">{formatTime(link.start_time)}</span>
+                      <Input
+                        value={link.google_meet_link}
+                        readOnly
+                        className="flex-1 text-xs bg-muted"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => deleteLink.mutate(link.id)}
+                        disabled={deleteLink.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -351,7 +206,6 @@ function MeetingLinksForm({ closerId }: { closerId: string }) {
 export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoading }: CloserAvailabilityConfigProps) {
   const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('availability');
-  const [selectedLeadType, setSelectedLeadType] = useState<LeadType>('A');
 
   const currentCloserId = selectedCloser || closers[0]?.id;
   const currentCloser = closers.find(c => c.id === currentCloserId);
@@ -391,30 +245,16 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
 
             {/* Config Type Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
                 <TabsTrigger value="blocked">Datas Bloqueadas</TabsTrigger>
-                <TabsTrigger value="links">Links de Reunião</TabsTrigger>
               </TabsList>
 
               <TabsContent value="availability" className="mt-4">
-                {/* Lead Type Tabs */}
-                <Tabs value={selectedLeadType} onValueChange={(v) => setSelectedLeadType(v as LeadType)} className="mb-4">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="A" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white">
-                      Lead A
-                    </TabsTrigger>
-                    <TabsTrigger value="B" className="data-[state=active]:bg-purple-500 data-[state=active]:text-white">
-                      Lead B
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-
                 {currentCloser && (
                   <CloserAvailabilityForm 
-                    key={`${currentCloser.id}-${selectedLeadType}`} 
+                    key={currentCloser.id} 
                     closer={currentCloser} 
-                    leadType={selectedLeadType} 
                   />
                 )}
               </TabsContent>
@@ -422,12 +262,6 @@ export function CloserAvailabilityConfig({ open, onOpenChange, closers, isLoadin
               <TabsContent value="blocked" className="mt-4">
                 {currentCloserId && (
                   <BlockedDatesConfig closerId={currentCloserId} />
-                )}
-              </TabsContent>
-
-              <TabsContent value="links" className="mt-4">
-                {currentCloserId && (
-                  <MeetingLinksForm closerId={currentCloserId} />
                 )}
               </TabsContent>
             </Tabs>
