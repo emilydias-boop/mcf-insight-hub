@@ -239,9 +239,9 @@ export function QuickScheduleModal({
   };
 
   const timeSlots = useMemo(() => {
-    return Array.from({ length: 22 }, (_, i) => {
-      const hour = Math.floor(i / 2) + 8;
-      const minute = (i % 2) * 30;
+    return Array.from({ length: 44 }, (_, i) => {
+      const hour = Math.floor(i / 4) + 8;
+      const minute = (i % 4) * 15;
       return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
     });
   }, []);

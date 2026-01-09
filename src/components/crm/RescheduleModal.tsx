@@ -54,9 +54,9 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
     });
   };
 
-  const timeSlots = Array.from({ length: 20 }, (_, i) => {
-    const hour = Math.floor(i / 2) + 8;
-    const minute = (i % 2) * 30;
+  const timeSlots = Array.from({ length: 40 }, (_, i) => {
+    const hour = Math.floor(i / 4) + 8;
+    const minute = (i % 4) * 15;
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
   });
 
