@@ -692,12 +692,6 @@ export function AgendaCalendar({
                                             })()}
                                           </div>
 
-                                          {/* Duração */}
-                                          {slotsNeeded > 1 && (
-                                            <div className="text-[8px] text-muted-foreground mt-0.5">
-                                              {group.duration}min
-                                            </div>
-                                          )}
                                         </button>
                                       </TooltipTrigger>
                                         <TooltipContent side="right" className="max-w-[320px]">
