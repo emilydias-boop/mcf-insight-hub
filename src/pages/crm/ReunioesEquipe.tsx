@@ -254,6 +254,9 @@ export default function ReunioesEquipe() {
         </div>
       </div>
 
+      {/* Goals Panel - FIRST */}
+      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} />
+
       {/* Filters */}
       <Card className="bg-card border-border">
         <CardContent className="p-4">
@@ -344,9 +347,6 @@ export default function ReunioesEquipe() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Goals Panel */}
-      <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} />
 
       {/* KPI Cards */}
       <TeamKPICards kpis={teamKPIs} isLoading={isLoading} />
