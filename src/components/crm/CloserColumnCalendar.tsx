@@ -192,23 +192,53 @@ export function CloserColumnCalendar({
                                 STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled
                               )}
                             >
-                              <div className="font-medium truncate">
-                                {meeting.attendees?.length 
-                                  ? meeting.attendees.length > 1
-                                    ? `${meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead'} +${meeting.attendees.length - 1}`
-                                    : meeting.attendees[0].attendee_name || meeting.attendees[0].contact?.name || 'Lead'
-                                  : meeting.deal?.contact?.name || meeting.deal?.name || 'Lead'}
+                              <div className="space-y-0.5">
+                                {meeting.attendees?.length ? (
+                                  meeting.attendees.slice(0, 3).map((att, i) => (
+                                    <div key={att.id} className="flex items-center justify-between gap-1">
+                                      <span className="truncate font-medium">
+                                        {att.attendee_name || att.contact?.name || 'Lead'}
+                                      </span>
+                                      <Badge 
+                                        variant="outline" 
+                                        className={cn(
+                                          "text-[9px] px-1 py-0 border-white/30",
+                                          att.status === 'no_show' ? 'bg-red-600/80' : 'bg-white/20'
+                                        )}
+                                      >
+                                        {att.status === 'no_show' ? 'NS' : 'OK'}
+                                      </Badge>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="font-medium truncate">
+                                    {meeting.deal?.contact?.name || meeting.deal?.name || 'Lead'}
+                                  </div>
+                                )}
+                                {meeting.attendees && meeting.attendees.length > 3 && (
+                                  <div className="text-[10px] opacity-80">
+                                    +{meeting.attendees.length - 3} mais
+                                  </div>
+                                )}
                               </div>
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent side="right">
+                          <TooltipContent side="right" className="max-w-xs">
                             <div className="space-y-1">
                               <div className="font-semibold text-xs mb-1">Participantes:</div>
                               {meeting.attendees?.length ? (
                                 meeting.attendees.map(att => (
-                                  <div key={att.id} className="text-xs flex items-center gap-1">
-                                    <span>• {att.attendee_name || att.contact?.name || 'Lead'}</span>
-                                    {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
+                                  <div key={att.id} className="text-xs flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1">
+                                      <span>• {att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                      {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
+                                    </div>
+                                    <Badge 
+                                      variant={att.status === 'no_show' ? 'destructive' : 'default'}
+                                      className="text-[9px] px-1 py-0"
+                                    >
+                                      {att.status === 'no_show' ? 'No-show' : 'OK'}
+                                    </Badge>
                                   </div>
                                 ))
                               ) : (
