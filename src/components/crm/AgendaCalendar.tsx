@@ -101,10 +101,10 @@ export function AgendaCalendar({
       maxHour = DEFAULT_END_HOUR;
     }
 
-    const totalSlots = (maxHour - minHour) * 2;
+    const totalSlots = (maxHour - minHour) * 4;
     return Array.from({ length: totalSlots }, (_, i) => ({
-      hour: Math.floor(i / 2) + minHour,
-      minute: (i % 2) * 30,
+      hour: Math.floor(i / 4) + minHour,
+      minute: (i % 4) * 15,
       index: i,
     }));
   }, [closers, selectedDate, viewMode, weekStart]);
@@ -116,12 +116,13 @@ export function AgendaCalendar({
     const hour = currentTime.getHours();
     const minute = currentTime.getMinutes();
     const minHour = timeSlots[0].hour;
-    const maxHour = timeSlots[timeSlots.length - 1].hour + (timeSlots[timeSlots.length - 1].minute === 30 ? 1 : 0.5);
+    const lastSlot = timeSlots[timeSlots.length - 1];
+    const maxHour = lastSlot.hour + ((lastSlot.minute + 15) / 60);
     
     if (hour < minHour || hour >= maxHour) return null;
     
-    // Cada slot = 40px, calcular offset
-    const slotsFromStart = (hour - minHour) * 2 + (minute / 30);
+    // Cada slot = 40px, calcular offset (4 slots por hora com intervalo de 15min)
+    const slotsFromStart = (hour - minHour) * 4 + (minute / 15);
     return slotsFromStart * SLOT_HEIGHT;
   }, [currentTime, timeSlots]);
   
@@ -276,7 +277,7 @@ export function AgendaCalendar({
     const now = new Date();
     if (!isSameDay(day, now)) return false;
     const slotStart = setMinutes(setHours(day, hour), minute);
-    const slotEnd = setMinutes(setHours(day, hour), minute + 30);
+    const slotEnd = setMinutes(setHours(day, hour), minute + 15);
     return isWithinInterval(now, { start: slotStart, end: slotEnd });
   };
 
@@ -543,7 +544,7 @@ export function AgendaCalendar({
                   <div 
                     className={cn(
                       'min-w-[60px] w-[60px] flex-shrink-0 h-[40px] flex items-center justify-center text-xs border-r bg-muted/30',
-                      minute === 30 && 'text-muted-foreground/60',
+                      (minute === 15 || minute === 45) && 'text-muted-foreground/60',
                       anyDayFull ? 'line-through text-muted-foreground/40' : 'text-muted-foreground',
                       onEditHours && 'cursor-pointer hover:bg-muted/50 hover:text-foreground transition-colors'
                     )}
