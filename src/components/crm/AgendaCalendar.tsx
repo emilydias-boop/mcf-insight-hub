@@ -652,9 +652,12 @@ export function AgendaCalendar({
                                           {/* Lista de participantes com SDR individual */}
                                           <div className="space-y-0.5">
                                             {(() => {
-                                              // Flatten meetings com seus attendees, mantendo referência ao meeting para pegar o SDR
+                                              // Flatten meetings com seus attendees - usar o SDR do attendee individual, com fallback para o SDR do meeting
                                               const attendeesWithMeeting = meetings.flatMap(m => 
-                                                (m.attendees || []).map(att => ({ ...att, meetingSdr: m.booked_by_profile?.full_name }))
+                                                (m.attendees || []).map(att => ({ 
+                                                  ...att, 
+                                                  meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
+                                                }))
                                               );
                                               const displayAttendees = attendeesWithMeeting.slice(0, 3);
                                               const remaining = attendeesWithMeeting.length - 3;
