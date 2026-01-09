@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfWeek, endOfWeek, format, addDays, isSameDay, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 
 export interface MeetingAttendee {
@@ -1066,7 +1067,28 @@ export function useRescheduleMeeting() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ meetingId, newDate, closerId }: { meetingId: string; newDate: Date; closerId?: string }) => {
+    mutationFn: async ({ 
+      meetingId, 
+      newDate, 
+      closerId,
+      rescheduleNote 
+    }: { 
+      meetingId: string; 
+      newDate: Date; 
+      closerId?: string;
+      rescheduleNote?: string;
+    }) => {
+      // 1. Buscar dados originais do meeting e attendees
+      const { data: meeting } = await supabase
+        .from('meeting_slots')
+        .select(`
+          scheduled_at, 
+          attendees:meeting_slot_attendees(id, notes)
+        `)
+        .eq('id', meetingId)
+        .single();
+
+      // 2. Atualizar o meeting_slot
       const updateData: Record<string, unknown> = {
         scheduled_at: newDate.toISOString(),
         status: 'rescheduled',
@@ -1082,6 +1104,21 @@ export function useRescheduleMeeting() {
         .eq('id', meetingId);
 
       if (error) throw error;
+
+      // 3. Para cada attendee, atualizar a nota preservando histórico
+      if (meeting?.attendees && rescheduleNote) {
+        const oldDate = format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm", { locale: ptBR });
+        const newDateFormatted = format(newDate, "dd/MM 'às' HH:mm", { locale: ptBR });
+        const historyEntry = `\n\n--- Reagendado em ${format(new Date(), 'dd/MM/yyyy HH:mm', { locale: ptBR })} ---\nDe: ${oldDate} → Para: ${newDateFormatted}\nMotivo: ${rescheduleNote}`;
+        
+        for (const attendee of meeting.attendees) {
+          const updatedNote = (attendee.notes || '') + historyEntry;
+          await supabase
+            .from('meeting_slot_attendees')
+            .update({ notes: updatedNote })
+            .eq('id', attendee.id);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
