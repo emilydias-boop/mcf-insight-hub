@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, User } from 'lucide-react';
+import { Calendar, Clock, User, StickyNote } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -33,10 +34,14 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
   const [selectedCloser, setSelectedCloser] = useState(meeting?.closer_id || '');
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('09:00');
+  const [rescheduleNote, setRescheduleNote] = useState('');
 
   const rescheduleMeeting = useRescheduleMeeting();
 
   if (!meeting) return null;
+
+  // Get the original note from the first attendee
+  const originalNote = meeting.attendees?.[0]?.notes;
 
   const handleSubmit = () => {
     if (!selectedDate) return;
@@ -49,8 +54,12 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
       meetingId: meeting.id,
       newDate,
       closerId: selectedCloser !== meeting.closer_id ? selectedCloser : undefined,
+      rescheduleNote: rescheduleNote.trim() || undefined,
     }, {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        setRescheduleNote('');
+        onOpenChange(false);
+      },
     });
   };
 
@@ -80,6 +89,19 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
               Atual: {format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm", { locale: ptBR })} com {meeting.closer?.name}
             </div>
           </div>
+
+          {/* Original Note */}
+          {originalNote && (
+            <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+                <StickyNote className="h-4 w-4" />
+                Nota do Agendamento Original
+              </div>
+              <p className="text-sm whitespace-pre-wrap text-muted-foreground max-h-24 overflow-y-auto">
+                {originalNote}
+              </p>
+            </div>
+          )}
 
           {/* New Closer */}
           <div className="space-y-2">
@@ -145,6 +167,17 @@ export function RescheduleModal({ meeting, open, onOpenChange, closers }: Resche
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Reschedule Note */}
+          <div className="space-y-2">
+            <Label>Motivo do Reagendamento</Label>
+            <Textarea
+              value={rescheduleNote}
+              onChange={(e) => setRescheduleNote(e.target.value)}
+              placeholder="Ex: Cliente pediu para remarcar, não atendeu, etc..."
+              rows={2}
+            />
           </div>
 
           {/* Submit */}
