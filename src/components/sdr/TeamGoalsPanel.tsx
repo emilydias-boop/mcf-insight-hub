@@ -8,31 +8,24 @@ import { useSdrTeamTargets, SDR_TARGET_CONFIGS, SdrTargetType } from "@/hooks/us
 import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface TeamGoalsPanelProps {
-  // Current values from TeamKPIs
-  dayValues: {
-    agendamento: number;
-    r1Agendada: number;
-    r1Realizada: number;
-    noShow: number;
-    contrato: number;
-    r2Agendada: number;
-    r2Realizada: number;
-    vendaRealizada: number;
-  };
-  weekValues: {
-    agendamento: number;
-    r1Agendada: number;
-    r1Realizada: number;
-    noShow: number;
-    contrato: number;
-    r2Agendada: number;
-    r2Realizada: number;
-    vendaRealizada: number;
-  };
+interface MetricValues {
+  agendamento: number;
+  r1Agendada: number;
+  r1Realizada: number;
+  noShow: number;
+  contrato: number;
+  r2Agendada: number;
+  r2Realizada: number;
+  vendaRealizada: number;
 }
 
-export function TeamGoalsPanel({ dayValues, weekValues }: TeamGoalsPanelProps) {
+interface TeamGoalsPanelProps {
+  dayValues: MetricValues;
+  weekValues: MetricValues;
+  monthValues: MetricValues;
+}
+
+export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoalsPanelProps) {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const { role } = useAuth();
   const { data: targets, isLoading } = useSdrTeamTargets();
@@ -70,12 +63,24 @@ export function TeamGoalsPanel({ dayValues, weekValues }: TeamGoalsPanelProps) {
     { titulo: 'Vendas Realizadas', valor: weekValues.vendaRealizada, meta: getTargetValue('sdr_venda_realizada_semana') },
   ], [weekValues, targets]);
 
+  // Month gauges configuration
+  const monthGauges = useMemo(() => [
+    { titulo: 'Agendamento', valor: monthValues.agendamento, meta: getTargetValue('sdr_agendamento_mes') },
+    { titulo: 'R1 Agendada', valor: monthValues.r1Agendada, meta: getTargetValue('sdr_r1_agendada_mes') },
+    { titulo: 'R1 Realizada', valor: monthValues.r1Realizada, meta: getTargetValue('sdr_r1_realizada_mes') },
+    { titulo: 'No-Show', valor: monthValues.noShow, meta: getTargetValue('sdr_noshow_mes') },
+    { titulo: 'Contrato Pago', valor: monthValues.contrato, meta: getTargetValue('sdr_contrato_mes') },
+    { titulo: 'R2 Agendada', valor: monthValues.r2Agendada, meta: getTargetValue('sdr_r2_agendada_mes') },
+    { titulo: 'R2 Realizada', valor: monthValues.r2Realizada, meta: getTargetValue('sdr_r2_realizada_mes') },
+    { titulo: 'Vendas Realizadas', valor: monthValues.vendaRealizada, meta: getTargetValue('sdr_venda_realizada_mes') },
+  ], [monthValues, targets]);
+
   if (isLoading) {
     return (
       <Card className="bg-card border-border">
         <CardContent className="p-6">
-          <div className="grid grid-cols-5 gap-4">
-            {[...Array(10)].map((_, i) => (
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+            {[...Array(16)].map((_, i) => (
               <Skeleton key={i} className="h-32 w-full" />
             ))}
           </div>
@@ -129,6 +134,21 @@ export function TeamGoalsPanel({ dayValues, weekValues }: TeamGoalsPanelProps) {
               {weekGauges.map((gauge, index) => (
                 <GaugeSemicircle
                   key={`week-${index}`}
+                  titulo={gauge.titulo}
+                  valor={gauge.valor}
+                  meta={gauge.meta}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Month section */}
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Mês</h3>
+            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+              {monthGauges.map((gauge, index) => (
+                <GaugeSemicircle
+                  key={`month-${index}`}
                   titulo={gauge.titulo}
                   valor={gauge.valor}
                   meta={gauge.meta}

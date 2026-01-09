@@ -21,7 +21,15 @@ export type SdrTargetType =
   | 'sdr_contrato_semana'
   | 'sdr_r2_agendada_semana'
   | 'sdr_r2_realizada_semana'
-  | 'sdr_venda_realizada_semana';
+  | 'sdr_venda_realizada_semana'
+  | 'sdr_agendamento_mes'
+  | 'sdr_r1_agendada_mes'
+  | 'sdr_r1_realizada_mes'
+  | 'sdr_noshow_mes'
+  | 'sdr_contrato_mes'
+  | 'sdr_r2_agendada_mes'
+  | 'sdr_r2_realizada_mes'
+  | 'sdr_venda_realizada_mes';
 
 export interface SdrTarget {
   id: string;
@@ -36,7 +44,7 @@ export interface SdrTarget {
 export interface SdrTargetConfig {
   type: SdrTargetType;
   label: string;
-  period: 'day' | 'week';
+  period: 'day' | 'week' | 'month';
 }
 
 export const SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
@@ -56,6 +64,14 @@ export const SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
   { type: 'sdr_r2_agendada_semana', label: 'R2 Agendada', period: 'week' },
   { type: 'sdr_r2_realizada_semana', label: 'R2 Realizada', period: 'week' },
   { type: 'sdr_venda_realizada_semana', label: 'Vendas Realizadas', period: 'week' },
+  { type: 'sdr_agendamento_mes', label: 'Agendamento', period: 'month' },
+  { type: 'sdr_r1_agendada_mes', label: 'R1 Agendada', period: 'month' },
+  { type: 'sdr_r1_realizada_mes', label: 'R1 Realizada', period: 'month' },
+  { type: 'sdr_noshow_mes', label: 'No-Show', period: 'month' },
+  { type: 'sdr_contrato_mes', label: 'Contrato Pago', period: 'month' },
+  { type: 'sdr_r2_agendada_mes', label: 'R2 Agendada', period: 'month' },
+  { type: 'sdr_r2_realizada_mes', label: 'R2 Realizada', period: 'month' },
+  { type: 'sdr_venda_realizada_mes', label: 'Vendas Realizadas', period: 'month' },
 ];
 
 // Fetch SDR team targets for current day/week
