@@ -140,53 +140,34 @@ export function MoveAttendeeModal({
     return existingMeetings.filter(m => m.closer?.id === selectedCloser);
   }, [existingMeetings, selectedCloser]);
 
-  // Mutation to create new slot and move attendee
-  const createSlotAndMove = useMutation({
+  // Mutation para atualizar o slot existente (remanejamento mesmo dia - NÃO cria novo agendamento)
+  const updateExistingSlot = useMutation({
     mutationFn: async ({ slot }: { slot: AvailableSlot }) => {
-      if (!attendee) throw new Error('No attendee selected');
+      if (!currentMeetingId) throw new Error('No meeting ID');
 
-      // Create new meeting slot
-      const { data: newSlot, error: slotError } = await supabase
+      // Atualiza o slot existente com novo horário/closer (não cria registro novo)
+      const { error } = await supabase
         .from('meeting_slots')
-        .insert({
+        .update({
           closer_id: slot.closerId,
           scheduled_at: slot.datetime.toISOString(),
           duration_minutes: slot.duration,
-          status: 'scheduled',
         })
-        .select()
-        .single();
+        .eq('id', currentMeetingId);
 
-      if (slotError) throw slotError;
-
-      // Move attendee to new slot
-      const { error: moveError } = await supabase
-        .from('meeting_slot_attendees')
-        .update({ meeting_slot_id: newSlot.id })
-        .eq('id', attendee.id);
-
-      if (moveError) throw moveError;
-
-      // Move partners too
-      const { error: partnersError } = await supabase
-        .from('meeting_slot_attendees')
-        .update({ meeting_slot_id: newSlot.id })
-        .eq('parent_attendee_id', attendee.id);
-
-      if (partnersError) throw partnersError;
-
-      return newSlot;
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['meeting_slots'] });
-      toast.success('Participante movido para novo horário');
+      queryClient.invalidateQueries({ queryKey: ['booked-slots'] });
+      toast.success('Reunião remanejada com sucesso');
       onOpenChange(false);
       setSelectedDate(null);
     },
     onError: () => {
-      toast.error('Erro ao mover participante');
+      toast.error('Erro ao remanejar reunião');
     },
   });
 
@@ -205,7 +186,8 @@ export function MoveAttendeeModal({
   };
 
   const handleMoveToNewSlot = (slot: AvailableSlot) => {
-    createSlotAndMove.mutate({ slot });
+    // Remanejamento no mesmo dia: atualiza slot existente (não conta como novo agendamento)
+    updateExistingSlot.mutate({ slot });
   };
 
   const handleClose = () => {
@@ -214,7 +196,7 @@ export function MoveAttendeeModal({
     setSelectedCloser(null);
   };
 
-  const isLoading = meetingsLoading || createSlotAndMove.isPending || moveAttendee.isPending;
+  const isLoading = meetingsLoading || updateExistingSlot.isPending || moveAttendee.isPending;
 
   if (!attendee) return null;
 
