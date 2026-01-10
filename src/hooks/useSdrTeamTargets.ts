@@ -75,23 +75,21 @@ export const SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
   { type: 'sdr_venda_realizada_mes', label: 'Vendas Realizadas', period: 'month' },
 ];
 
-// Fetch SDR team targets for current day/week
+// Fetch SDR team targets for current month (targets are saved with week_start = first day of month)
 export const useSdrTeamTargets = () => {
   const today = new Date();
-  const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
-  const weekEnd = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
-  const dayStart = startOfDay(today);
-  const dayEnd = endOfDay(today);
+  const monthStart = startOfMonth(today);
+  const monthStartStr = format(monthStart, 'yyyy-MM-dd');
 
   return useQuery({
-    queryKey: ['sdr-team-targets', format(weekStart, 'yyyy-MM-dd')],
+    queryKey: ['sdr-team-targets', monthStartStr],
     queryFn: async () => {
-      // Fetch all SDR targets for this week
+      // Fetch all SDR targets for this month
       const { data, error } = await supabase
         .from('team_targets')
         .select('*')
         .like('target_type', 'sdr_%')
-        .eq('week_start', format(weekStart, 'yyyy-MM-dd'));
+        .eq('week_start', monthStartStr);
 
       if (error) throw error;
       
