@@ -151,3 +151,17 @@ export function getDiasUteisMesAtual(): number {
   const monthEnd = endOfMonth(today);
   return contarDiasUteis(monthStart, monthEnd);
 }
+
+// Dias úteis de um mês específico (qualquer mês/ano)
+export function getDiasUteisMes(month: Date): number {
+  const monthStart = startOfMonth(month);
+  const monthEnd = endOfMonth(month);
+  return contarDiasUteis(monthStart, monthEnd);
+}
+
+// Dias úteis de uma semana específica
+export function getDiasUteisSemana(weekDate: Date): number {
+  const weekStart = startOfWeek(weekDate, { weekStartsOn: 0 });
+  const weekEnd = endOfWeek(weekDate, { weekStartsOn: 0 });
+  return contarDiasUteis(weekStart, weekEnd);
+}
