@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { startOfWeek, endOfWeek, startOfDay, endOfDay, format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { WEEK_STARTS_ON } from '@/lib/businessDays';
 
 // Types for SDR targets
 export type SdrTargetType = 
@@ -77,8 +78,8 @@ export const SDR_TARGET_CONFIGS: SdrTargetConfig[] = [
 // Fetch SDR team targets for current day/week
 export const useSdrTeamTargets = () => {
   const today = new Date();
-  const weekStart = startOfWeek(today, { locale: ptBR });
-  const weekEnd = endOfWeek(today, { locale: ptBR });
+  const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
   const dayStart = startOfDay(today);
   const dayEnd = endOfDay(today);
 
@@ -143,8 +144,8 @@ export const useSdrTeamTargetsForYear = (year: number) => {
 export const useUpsertSdrTargets = () => {
   const queryClient = useQueryClient();
   const today = new Date();
-  const weekStart = startOfWeek(today, { locale: ptBR });
-  const weekEnd = endOfWeek(today, { locale: ptBR });
+  const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
 
   return useMutation({
     mutationFn: async ({ 

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { startOfWeek, endOfWeek, format, addDays, isSameDay, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { WEEK_STARTS_ON } from '@/lib/businessDays';
 
 export interface MeetingAttendee {
   id: string;
@@ -205,8 +206,8 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
 }
 
 export function useAgendaStats(date: Date) {
-  const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(date, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(date, { weekStartsOn: WEEK_STARTS_ON });
   const todayStart = new Date(date);
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(date);
@@ -312,8 +313,8 @@ export function useClosersWithAvailability() {
 }
 
 export function useCloserMetrics(date: Date) {
-  const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(date, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(date, { weekStartsOn: WEEK_STARTS_ON });
   const todayStart = new Date(date);
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(date);
@@ -733,8 +734,8 @@ export function useSearchWeeklyMeetingLeads(statusFilter?: string) {
     queryKey: ['weekly-meeting-leads', statusFilter],
     queryFn: async () => {
       const now = new Date();
-      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-      const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+      const weekStart = startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
+      const weekEnd = endOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
       
       let query = supabase
         .from('meeting_slot_attendees')

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { ArrowLeft, BarChart3, Users, CheckCircle, XCircle, AlertTriangle, Percent, TrendingUp, MousePointer, Webhook, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,8 +17,8 @@ export default function AgendaMetricas() {
   const navigate = useNavigate();
   const [selectedDate] = useState(new Date());
   
-  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
 

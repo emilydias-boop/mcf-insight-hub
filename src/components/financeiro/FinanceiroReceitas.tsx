@@ -11,6 +11,7 @@ import { Download, Filter, X, Calendar } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, subMonths, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -57,7 +58,7 @@ export const FinanceiroReceitas = () => {
         setFilters({ ...filters, dataInicial: now, dataFinal: now });
         break;
       case 'week':
-        setFilters({ ...filters, dataInicial: startOfWeek(now, { locale: ptBR }), dataFinal: endOfWeek(now, { locale: ptBR }) });
+        setFilters({ ...filters, dataInicial: startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON }), dataFinal: endOfWeek(now, { weekStartsOn: WEEK_STARTS_ON }) });
         break;
       case 'month':
         setFilters({ ...filters, dataInicial: startOfMonth(now), dataFinal: endOfMonth(now) });

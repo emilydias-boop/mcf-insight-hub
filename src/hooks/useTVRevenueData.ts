@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfWeek, startOfMonth, endOfWeek, endOfMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { WEEK_STARTS_ON } from "@/lib/businessDays";
 
 interface RevenueData {
   atual: number;
@@ -27,8 +28,8 @@ const formatDateForBrazil = (date: Date, isEndOfDay: boolean = false): string =>
 };
 
 export function useTVRevenueData(viewDate: Date = new Date()): TVRevenueData {
-  const weekStart = startOfWeek(viewDate, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(viewDate, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(viewDate, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(viewDate, { weekStartsOn: WEEK_STARTS_ON });
   const monthStart = startOfMonth(viewDate);
   const monthEnd = endOfMonth(viewDate);
 
