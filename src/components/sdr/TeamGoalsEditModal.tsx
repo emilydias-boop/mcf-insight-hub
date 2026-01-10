@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,10 +9,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, RefreshCcw, Info } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, RefreshCcw, Info, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { toast } from "sonner";
-import { SdrTargetType, SDR_TARGET_CONFIGS, SdrTarget, useUpsertSdrTargets } from "@/hooks/useSdrTeamTargets";
-import { getDiasUteisSemanaAtual, getDiasUteisMesAtual } from "@/lib/businessDays";
+import { format, addMonths, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { 
+  SdrTargetType, 
+  SDR_TARGET_CONFIGS, 
+  SdrTarget, 
+  useUpsertSdrTargets,
+  useSdrTeamTargetsByMonth,
+  useSdrTeamTargetsForYear 
+} from "@/hooks/useSdrTeamTargets";
+import { getDiasUteisMes, getDiasUteisSemana } from "@/lib/businessDays";
 
 interface TeamGoalsEditModalProps {
   open: boolean;
@@ -79,19 +89,58 @@ const calculateDayCascade = (agendamento: number): Record<string, number> => {
 
 export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: TeamGoalsEditModalProps) {
   const [values, setValues] = useState<Record<SdrTargetType, number>>({} as Record<SdrTargetType, number>);
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
   const upsertMutation = useUpsertSdrTargets();
+  
+  const selectedYear = selectedMonth.getFullYear();
 
-  // Calcular dias úteis
-  const diasUteisSemana = getDiasUteisSemanaAtual();
-  const diasUteisMes = getDiasUteisMesAtual();
+  // Fetch targets for selected month
+  const { data: monthTargets, isLoading: isLoadingMonth } = useSdrTeamTargetsByMonth(selectedMonth);
+  
+  // Fetch all targets for the year (for annual sum)
+  const { data: yearTargets } = useSdrTeamTargetsForYear(selectedYear);
 
-  // Initialize values from existing targets and auto-recalculate if needed
+  // Calculate business days for selected month
+  const diasUteisSemana = getDiasUteisSemana(selectedMonth);
+  const diasUteisMes = getDiasUteisMes(selectedMonth);
+
+  // Calculate annual sum of agendamento_mes targets
+  const annualAgendamentoTotal = useMemo(() => {
+    if (!yearTargets) return 0;
+    return yearTargets
+      .filter(t => t.target_type === 'sdr_agendamento_mes')
+      .reduce((sum, t) => sum + (t.target_value || 0), 0);
+  }, [yearTargets]);
+
+  // Calculate annual sum for each metric
+  const annualTotals = useMemo(() => {
+    if (!yearTargets) return {} as Record<string, number>;
+    
+    const totals: Record<string, number> = {};
+    const monthTypes = SDR_TARGET_CONFIGS.filter(c => c.period === 'month');
+    
+    monthTypes.forEach(config => {
+      totals[config.type] = yearTargets
+        .filter(t => t.target_type === config.type)
+        .reduce((sum, t) => sum + (t.target_value || 0), 0);
+    });
+    
+    return totals;
+  }, [yearTargets]);
+
+  // Month navigation
+  const goToPreviousMonth = () => setSelectedMonth(prev => subMonths(prev, 1));
+  const goToNextMonth = () => setSelectedMonth(prev => addMonths(prev, 1));
+
+  // Initialize values from month targets
   useEffect(() => {
     if (!open) return;
     
+    const targetsToUse = monthTargets || existingTargets;
     const initial: Record<string, number> = {};
+    
     SDR_TARGET_CONFIGS.forEach(config => {
-      const existing = existingTargets.find(t => t.target_type === config.type);
+      const existing = targetsToUse.find(t => t.target_type === config.type);
       initial[config.type] = existing?.target_value ?? 0;
     });
     
@@ -123,7 +172,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
     }
     
     setValues(initial as Record<SdrTargetType, number>);
-  }, [existingTargets, open, diasUteisSemana, diasUteisMes]);
+  }, [monthTargets, existingTargets, open, diasUteisSemana, diasUteisMes]);
 
   // Handler para campos de semana e mês (edição manual)
   const handleChange = (type: SdrTargetType, value: string) => {
@@ -208,7 +257,10 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
   };
 
   const handleSave = async () => {
-    await upsertMutation.mutateAsync(values);
+    await upsertMutation.mutateAsync({ 
+      targets: values,
+      targetMonth: selectedMonth
+    });
     onOpenChange(false);
   };
 
@@ -218,7 +270,7 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>Editar Metas da Equipe</DialogTitle>
@@ -234,82 +286,141 @@ export function TeamGoalsEditModal({ open, onOpenChange, existingTargets }: Team
           </div>
         </DialogHeader>
 
+        {/* Navegador de mês */}
+        <div className="flex items-center justify-center gap-4 py-3 bg-muted/30 rounded-lg">
+          <Button variant="ghost" size="icon" onClick={goToPreviousMonth}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-lg font-medium min-w-[180px] text-center capitalize">
+            {format(selectedMonth, "MMMM yyyy", { locale: ptBR })}
+          </span>
+          <Button variant="ghost" size="icon" onClick={goToNextMonth}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
         {/* Info de dias úteis */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
           <Info className="h-4 w-4" />
           <span>Semana: <strong>{diasUteisSemana}</strong> dias úteis | Mês: <strong>{diasUteisMes}</strong> dias úteis</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-6 py-4">
-          {/* Day targets */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-              Metas do Dia
-            </h3>
-            <p className="text-xs text-muted-foreground -mt-2">Entrada manual</p>
-            {dayConfigs.map(config => (
-              <div key={config.type} className="space-y-1">
-                <Label htmlFor={config.type} className="text-sm">
-                  {config.label}
-                </Label>
-                <Input
-                  id={config.type}
-                  type="number"
-                  min={0}
-                  value={values[config.type] ?? 0}
-                  onChange={(e) => handleDayChange(config.type, e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            ))}
+        {isLoadingMonth ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin" />
           </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-6 py-4">
+            {/* Day targets */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                Metas do Dia
+              </h3>
+              <p className="text-xs text-muted-foreground -mt-2">Entrada manual</p>
+              {dayConfigs.map(config => (
+                <div key={config.type} className="space-y-1">
+                  <Label htmlFor={config.type} className="text-sm">
+                    {config.label}
+                  </Label>
+                  <Input
+                    id={config.type}
+                    type="number"
+                    min={0}
+                    value={values[config.type] ?? 0}
+                    onChange={(e) => handleDayChange(config.type, e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              ))}
+            </div>
 
-          {/* Week targets */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-              Metas da Semana
-            </h3>
-            <p className="text-xs text-muted-foreground -mt-2">Dia × {diasUteisSemana} dias</p>
-            {weekConfigs.map(config => (
-              <div key={config.type} className="space-y-1">
-                <Label htmlFor={config.type} className="text-sm">
-                  {config.label}
-                </Label>
-                <Input
-                  id={config.type}
-                  type="number"
-                  min={0}
-                  value={values[config.type] ?? 0}
-                  onChange={(e) => handleChange(config.type, e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            ))}
-          </div>
+            {/* Week targets */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                Metas da Semana
+              </h3>
+              <p className="text-xs text-muted-foreground -mt-2">Dia × {diasUteisSemana} dias</p>
+              {weekConfigs.map(config => (
+                <div key={config.type} className="space-y-1">
+                  <Label htmlFor={config.type} className="text-sm">
+                    {config.label}
+                  </Label>
+                  <Input
+                    id={config.type}
+                    type="number"
+                    min={0}
+                    value={values[config.type] ?? 0}
+                    onChange={(e) => handleChange(config.type, e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              ))}
+            </div>
 
-          {/* Month targets */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-              Metas do Mês
-            </h3>
-            <p className="text-xs text-muted-foreground -mt-2">Dia × {diasUteisMes} dias</p>
-            {monthConfigs.map(config => (
-              <div key={config.type} className="space-y-1">
-                <Label htmlFor={config.type} className="text-sm">
-                  {config.label}
-                </Label>
-                <Input
-                  id={config.type}
-                  type="number"
-                  min={0}
-                  value={values[config.type] ?? 0}
-                  onChange={(e) => handleChange(config.type, e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            ))}
+            {/* Month targets */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                Metas do Mês
+              </h3>
+              <p className="text-xs text-muted-foreground -mt-2">Dia × {diasUteisMes} dias</p>
+              {monthConfigs.map(config => (
+                <div key={config.type} className="space-y-1">
+                  <Label htmlFor={config.type} className="text-sm">
+                    {config.label}
+                  </Label>
+                  <Input
+                    id={config.type}
+                    type="number"
+                    min={0}
+                    value={values[config.type] ?? 0}
+                    onChange={(e) => handleChange(config.type, e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Card da Meta Anual */}
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                <span className="font-medium">Meta Anual {selectedYear}</span>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-primary">
+                  {annualAgendamentoTotal.toLocaleString('pt-BR')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  agendamentos (soma de todos os meses)
+                </p>
+              </div>
+            </div>
+            
+            {/* Detalhes anuais de outras métricas */}
+            <div className="mt-3 pt-3 border-t border-primary/10 grid grid-cols-4 gap-2 text-xs">
+              <div className="text-center">
+                <p className="font-semibold text-foreground">{(annualTotals['sdr_r1_realizada_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="text-muted-foreground">R1 Realizadas</p>
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground">{(annualTotals['sdr_contrato_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="text-muted-foreground">Contratos</p>
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground">{(annualTotals['sdr_r2_realizada_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="text-muted-foreground">R2 Realizadas</p>
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground">{(annualTotals['sdr_venda_realizada_mes'] || 0).toLocaleString('pt-BR')}</p>
+                <p className="text-muted-foreground">Vendas</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

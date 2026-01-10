@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { startOfWeek, endOfWeek, startOfDay, endOfDay, format } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfDay, endOfDay, format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // Types for SDR targets
@@ -99,6 +99,46 @@ export const useSdrTeamTargets = () => {
   });
 };
 
+// Fetch SDR team targets for a specific month
+export const useSdrTeamTargetsByMonth = (month: Date) => {
+  const monthStart = startOfMonth(month);
+  const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+
+  return useQuery({
+    queryKey: ['sdr-team-targets-month', monthStartStr],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('team_targets')
+        .select('*')
+        .like('target_type', 'sdr_%')
+        .eq('week_start', monthStartStr);
+
+      if (error) throw error;
+      
+      return (data || []) as SdrTarget[];
+    },
+  });
+};
+
+// Fetch SDR team targets for all months in a year (for annual sum)
+export const useSdrTeamTargetsForYear = (year: number) => {
+  return useQuery({
+    queryKey: ['sdr-team-targets-year', year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('team_targets')
+        .select('*')
+        .like('target_type', 'sdr_%')
+        .gte('week_start', `${year}-01-01`)
+        .lte('week_start', `${year}-12-31`);
+
+      if (error) throw error;
+      
+      return (data || []) as SdrTarget[];
+    },
+  });
+};
+
 // Upsert (create or update) SDR targets
 export const useUpsertSdrTargets = () => {
   const queryClient = useQueryClient();
@@ -107,9 +147,23 @@ export const useUpsertSdrTargets = () => {
   const weekEnd = endOfWeek(today, { locale: ptBR });
 
   return useMutation({
-    mutationFn: async (targets: Record<SdrTargetType, number>) => {
-      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-      const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    mutationFn: async ({ 
+      targets, 
+      targetMonth 
+    }: { 
+      targets: Record<SdrTargetType, number>;
+      targetMonth?: Date;
+    }) => {
+      // If targetMonth is provided, use month boundaries; otherwise use week boundaries
+      const periodStart = targetMonth 
+        ? startOfMonth(targetMonth) 
+        : weekStart;
+      const periodEnd = targetMonth 
+        ? endOfMonth(targetMonth) 
+        : weekEnd;
+      
+      const periodStartStr = format(periodStart, 'yyyy-MM-dd');
+      const periodEndStr = format(periodEnd, 'yyyy-MM-dd');
 
       // For each target type, upsert the value
       const upsertPromises = Object.entries(targets).map(async ([type, value]) => {
@@ -121,7 +175,7 @@ export const useUpsertSdrTargets = () => {
           .from('team_targets')
           .select('id')
           .eq('target_type', type)
-          .eq('week_start', weekStartStr)
+          .eq('week_start', periodStartStr)
           .maybeSingle();
 
         if (selectError) {
@@ -147,8 +201,8 @@ export const useUpsertSdrTargets = () => {
             .insert({
               target_type: type,
               target_name: config.label,
-              week_start: weekStartStr,
-              week_end: weekEndStr,
+              week_start: periodStartStr,
+              week_end: periodEndStr,
               target_value: value,
               current_value: 0,
             });
@@ -168,8 +222,14 @@ export const useUpsertSdrTargets = () => {
         throw new Error(`Falha ao salvar ${failed.length} metas`);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sdr-team-targets'] });
+      if (variables.targetMonth) {
+        const monthStartStr = format(startOfMonth(variables.targetMonth), 'yyyy-MM-dd');
+        const year = variables.targetMonth.getFullYear();
+        queryClient.invalidateQueries({ queryKey: ['sdr-team-targets-month', monthStartStr] });
+        queryClient.invalidateQueries({ queryKey: ['sdr-team-targets-year', year] });
+      }
       toast.success('Metas atualizadas com sucesso!');
     },
     onError: (error: Error) => {
