@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { WEEK_STARTS_ON } from "@/lib/businessDays";
 import { Calendar, Users, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,7 +81,7 @@ export default function ReunioesEquipe() {
       case "today":
         return { start: startOfDay(today), end: endOfDay(today) };
       case "week":
-        return { start: startOfWeek(today, { locale: ptBR }), end: endOfWeek(today, { locale: ptBR }) };
+        return { start: startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }), end: endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }) };
       case "month":
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
       case "custom":
@@ -103,9 +104,9 @@ export default function ReunioesEquipe() {
   const dayStart = startOfDay(today);
   const dayEnd = endOfDay(today);
   
-  // Week dates for week metrics
-  const weekStartDate = startOfWeek(today, { locale: ptBR });
-  const weekEndDate = endOfWeek(today, { locale: ptBR });
+  // Week dates for week metrics (sábado a sexta)
+  const weekStartDate = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEndDate = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
 
   // Month dates for month metrics
   const monthStartDate = startOfMonth(today);

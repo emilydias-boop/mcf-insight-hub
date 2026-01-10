@@ -1,5 +1,8 @@
 import { addDays, getDay, format, parse, isWeekend, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 
+// Constante global: semana começa no sábado (6) e termina na sexta-feira
+export const WEEK_STARTS_ON = 6;
+
 // Feriados nacionais fixos (MM-DD)
 const FERIADOS_FIXOS = [
   '01-01', // Ano Novo
@@ -136,11 +139,11 @@ export function contarDiasUteis(startDate: Date, endDate: Date): number {
   return days.filter(day => isDiaUtil(day)).length;
 }
 
-// Dias úteis da semana atual
+// Dias úteis da semana atual (sábado a sexta)
 export function getDiasUteisSemanaAtual(): number {
   const today = new Date();
-  const weekStart = startOfWeek(today, { weekStartsOn: 0 }); // Domingo
-  const weekEnd = endOfWeek(today, { weekStartsOn: 0 }); // Sábado
+  const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
   return contarDiasUteis(weekStart, weekEnd);
 }
 
@@ -159,9 +162,9 @@ export function getDiasUteisMes(month: Date): number {
   return contarDiasUteis(monthStart, monthEnd);
 }
 
-// Dias úteis de uma semana específica
+// Dias úteis de uma semana específica (sábado a sexta)
 export function getDiasUteisSemana(weekDate: Date): number {
-  const weekStart = startOfWeek(weekDate, { weekStartsOn: 0 });
-  const weekEnd = endOfWeek(weekDate, { weekStartsOn: 0 });
+  const weekStart = startOfWeek(weekDate, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(weekDate, { weekStartsOn: WEEK_STARTS_ON });
   return contarDiasUteis(weekStart, weekEnd);
 }

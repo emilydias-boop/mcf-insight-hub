@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { WEEK_STARTS_ON } from '@/lib/businessDays';
 
 export interface A010Sale {
   id: string;
@@ -47,9 +48,9 @@ export const useA010Sales = ({
           end = endDate;
         } else {
           const now = new Date();
-          if (period === 'semana') {
-            start = startOfWeek(now, { weekStartsOn: 1 });
-            end = endOfWeek(now, { weekStartsOn: 1 });
+        if (period === 'semana') {
+            start = startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
+            end = endOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
           } else {
             start = startOfMonth(now);
             end = endOfMonth(now);
@@ -102,8 +103,8 @@ export const useA010Summary = ({
         } else {
           const now = new Date();
           if (period === 'semana') {
-            start = startOfWeek(now, { weekStartsOn: 1 });
-            end = endOfWeek(now, { weekStartsOn: 1 });
+            start = startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
+            end = endOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
           } else {
             start = startOfMonth(now);
             end = endOfMonth(now);

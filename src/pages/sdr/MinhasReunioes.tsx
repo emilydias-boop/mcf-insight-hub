@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { WEEK_STARTS_ON } from "@/lib/businessDays";
 import { Calendar, AlertCircle, Filter, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,7 +48,7 @@ export default function MinhasReunioes() {
       case 'today':
         return { startDate: startOfDay(now), endDate: endOfDay(now) };
       case 'week':
-        return { startDate: startOfWeek(now, { locale: ptBR }), endDate: endOfWeek(now, { locale: ptBR }) };
+        return { startDate: startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON }), endDate: endOfWeek(now, { weekStartsOn: WEEK_STARTS_ON }) };
       case 'month':
         const [year, month] = selectedMonth.split('-').map(Number);
         const monthDate = new Date(year, month - 1);

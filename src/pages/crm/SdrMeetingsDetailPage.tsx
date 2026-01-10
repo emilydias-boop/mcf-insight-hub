@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { WEEK_STARTS_ON } from "@/lib/businessDays";
 import { RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,7 +40,7 @@ export default function SdrMeetingsDetailPage() {
       return { startDate: startOfDay(today), endDate: endOfDay(today) };
     }
     if (preset === "week") {
-      return { startDate: startOfWeek(today, { locale: ptBR }), endDate: endOfWeek(today, { locale: ptBR }) };
+      return { startDate: startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }), endDate: endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }) };
     }
     if (preset === "custom") {
       const start = searchParams.get("start");

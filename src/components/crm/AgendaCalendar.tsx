@@ -1,6 +1,7 @@
 import { useMemo, useCallback, useState, useEffect } from 'react';
 import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -55,7 +56,7 @@ export function AgendaCalendar({
   onEditHours,
   viewMode = 'week'
 }: AgendaCalendarProps) {
-  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
+  const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const updateSchedule = useUpdateMeetingSchedule();
   
   // Estado para horário atual (linha vermelha)
@@ -343,7 +344,7 @@ export function AgendaCalendar({
   if (viewMode === 'month') {
     const monthStart = startOfMonth(selectedDate);
     const monthEnd = endOfMonth(selectedDate);
-    const startDay = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const startDay = startOfWeek(monthStart, { weekStartsOn: WEEK_STARTS_ON });
     const weeks: Date[][] = [];
     let currentWeek: Date[] = [];
     let day = startDay;
