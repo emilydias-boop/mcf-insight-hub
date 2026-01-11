@@ -1,25 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfYear, endOfYear, startOfMonth, format } from "date-fns";
-import { Building2, Zap, CreditCard, FolderKanban, Gavel, LucideIcon } from "lucide-react";
+import { Building2, TrendingUp, CreditCard, FolderKanban, Gavel, LucideIcon } from "lucide-react";
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
+import { formatDateForDB } from "@/lib/dateHelpers";
+import { ptBR } from "date-fns/locale";
 
 export interface SetorData {
   id: 'incorporador' | 'efeito_alavanca' | 'credito' | 'projetos' | 'leilao';
   nome: string;
   icone: LucideIcon;
-  apuradoPeriodo: number;
+  // Semana
+  apuradoSemanal: number;
+  metaSemanal: number;
+  // Mês
+  apuradoMensal: number;
   metaMensal: number;
+  // Ano
   apuradoAnual: number;
   metaAnual: number;
 }
 
-// Categorias de produtos por setor
+// Maps sector ID to hubla_transactions product_category values
 const SETOR_CATEGORIES: Record<string, string[]> = {
-  incorporador: [
-    'incorporador', 'a010', 'contrato', 'parceria', 'ob_vitalicio', 
-    'ob_construir', 'ob_evento', 'ob_construir_alugar', 'imersao', 
-    'imersao_socios', 'p2', 'renovacao', 'viver_aluguel'
-  ],
+  incorporador: ['incorporador'],
   efeito_alavanca: ['efeito_alavanca'],
   projetos: ['projetos'],
   leilao: ['clube_arremate'],
@@ -27,120 +30,149 @@ const SETOR_CATEGORIES: Record<string, string[]> = {
 
 const SETOR_CONFIG: { id: SetorData['id']; nome: string; icone: LucideIcon }[] = [
   { id: 'incorporador', nome: 'MCF Incorporador', icone: Building2 },
-  { id: 'efeito_alavanca', nome: 'Efeito Alavanca', icone: Zap },
+  { id: 'efeito_alavanca', nome: 'Efeito Alavanca', icone: TrendingUp },
   { id: 'credito', nome: 'MCF Crédito', icone: CreditCard },
   { id: 'projetos', nome: 'MCF Projetos', icone: FolderKanban },
   { id: 'leilao', nome: 'MCF Leilão', icone: Gavel },
 ];
 
-export function useSetoresDashboard(
-  periodoInicio: Date,
-  periodoFim: Date
-) {
+// Week starts on Saturday (6)
+const WEEK_STARTS_ON = 6;
+
+export function useSetoresDashboard() {
+  const today = new Date();
+  
+  // Calculate period boundaries
+  const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEnd = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  const monthStart = startOfMonth(today);
+  const monthEnd = endOfMonth(today);
+  const yearStart = startOfYear(today);
+  const yearEnd = endOfYear(today);
+
+  const weekStartStr = formatDateForDB(weekStart);
+  const weekEndStr = formatDateForDB(weekEnd);
+  const monthStartStr = formatDateForDB(monthStart);
+  const monthEndStr = formatDateForDB(monthEnd);
+  const yearStartStr = formatDateForDB(yearStart);
+  const yearEndStr = formatDateForDB(yearEnd);
+
+  const mesNome = format(today, 'MMMM', { locale: ptBR });
+  const semanaLabel = `Semana ${format(weekStart, 'dd/MM')} - ${format(weekEnd, 'dd/MM')}`;
+  const mesLabel = `Mês ${mesNome.charAt(0).toUpperCase() + mesNome.slice(1)}`;
+
   return useQuery({
-    queryKey: ['setores-dashboard', format(periodoInicio, 'yyyy-MM-dd'), format(periodoFim, 'yyyy-MM-dd')],
-    queryFn: async (): Promise<SetorData[]> => {
-      const today = new Date();
-      const yearStart = startOfYear(today);
-      const yearEnd = endOfYear(today);
-      const monthStart = startOfMonth(today);
+    queryKey: ['setores-dashboard', weekStartStr, monthStartStr, yearStartStr],
+    queryFn: async (): Promise<{ setores: SetorData[]; semanaLabel: string; mesLabel: string }> => {
+      // Fetch all transaction data in parallel
+      const [
+        hublaWeekly,
+        hublaMonthly,
+        hublaAnnual,
+        consortiumWeekly,
+        consortiumMonthly,
+        consortiumAnnual,
+        targets,
+      ] = await Promise.all([
+        // Hubla transactions - Weekly
+        supabase
+          .from('hubla_transactions')
+          .select('product_category, net_value')
+          .gte('created_at', weekStartStr)
+          .lte('created_at', weekEndStr + 'T23:59:59'),
+        // Hubla transactions - Monthly
+        supabase
+          .from('hubla_transactions')
+          .select('product_category, net_value')
+          .gte('created_at', monthStartStr)
+          .lte('created_at', monthEndStr + 'T23:59:59'),
+        // Hubla transactions - Annual
+        supabase
+          .from('hubla_transactions')
+          .select('product_category, net_value')
+          .gte('created_at', yearStartStr)
+          .lte('created_at', yearEndStr + 'T23:59:59'),
+        // Consortium payments - Weekly (for credito sector)
+        supabase
+          .from('consortium_payments')
+          .select('valor_comissao, data_interface')
+          .gte('data_interface', weekStartStr)
+          .lte('data_interface', weekEndStr),
+        // Consortium payments - Monthly
+        supabase
+          .from('consortium_payments')
+          .select('valor_comissao, data_interface')
+          .gte('data_interface', monthStartStr)
+          .lte('data_interface', monthEndStr),
+        // Consortium payments - Annual
+        supabase
+          .from('consortium_payments')
+          .select('valor_comissao, data_interface')
+          .gte('data_interface', yearStartStr)
+          .lte('data_interface', yearEndStr),
+        // All setor targets
+        supabase
+          .from('team_targets')
+          .select('target_type, target_value')
+          .like('target_type', 'setor_%'),
+      ]);
 
-      // Fetch hubla_transactions para o período filtrado
-      const { data: periodTransactions, error: periodError } = await supabase
-        .from('hubla_transactions')
-        .select('net_value, product_category')
-        .gte('sale_date', format(periodoInicio, 'yyyy-MM-dd'))
-        .lte('sale_date', format(periodoFim, 'yyyy-MM-dd'));
-
-      if (periodError) throw periodError;
-
-      // Fetch hubla_transactions para o ano inteiro
-      const { data: yearTransactions, error: yearError } = await supabase
-        .from('hubla_transactions')
-        .select('net_value, product_category')
-        .gte('sale_date', format(yearStart, 'yyyy-MM-dd'))
-        .lte('sale_date', format(yearEnd, 'yyyy-MM-dd'));
-
-      if (yearError) throw yearError;
-
-      // Fetch consortium_payments para o período filtrado (MCF Crédito)
-      const { data: periodConsorcio, error: consorcioError } = await supabase
-        .from('consortium_payments')
-        .select('valor_comissao')
-        .gte('data_interface', format(periodoInicio, 'yyyy-MM-dd'))
-        .lte('data_interface', format(periodoFim, 'yyyy-MM-dd'));
-
-      if (consorcioError) throw consorcioError;
-
-      // Fetch consortium_payments para o ano inteiro
-      const { data: yearConsorcio, error: yearConsorcioError } = await supabase
-        .from('consortium_payments')
-        .select('valor_comissao')
-        .gte('data_interface', format(yearStart, 'yyyy-MM-dd'))
-        .lte('data_interface', format(yearEnd, 'yyyy-MM-dd'));
-
-      if (yearConsorcioError) throw yearConsorcioError;
-
-      // Fetch metas da tabela team_targets
-      const { data: targets } = await supabase
-        .from('team_targets')
-        .select('target_type, target_value')
-        .gte('week_start', format(monthStart, 'yyyy-MM-dd'))
-        .in('target_type', [
-          'setor_incorporador_mes', 'setor_incorporador_ano',
-          'setor_efeito_alavanca_mes', 'setor_efeito_alavanca_ano',
-          'setor_credito_mes', 'setor_credito_ano',
-          'setor_projetos_mes', 'setor_projetos_ano',
-          'setor_leilao_mes', 'setor_leilao_ano',
-        ]);
-
-      // Função para calcular total de um setor por categorias
-      const calculateSetorTotal = (transactions: typeof periodTransactions, categories: string[]): number => {
-        if (!transactions) return 0;
-        return transactions
-          .filter(t => t.product_category && categories.includes(t.product_category.toLowerCase()))
+      // Helper to calculate total for a sector from hubla data
+      const calculateSetorTotal = (
+        data: { product_category: string | null; net_value: number | null }[] | null,
+        categories: string[]
+      ): number => {
+        if (!data) return 0;
+        return data
+          .filter(t => t.product_category && categories.includes(t.product_category))
           .reduce((sum, t) => sum + (t.net_value || 0), 0);
       };
 
-      // Função para obter meta
-      const getTarget = (type: string): number => {
-        const target = targets?.find(t => t.target_type === type);
+      // Helper to calculate consortium total
+      const calculateConsortiumTotal = (
+        data: { valor_comissao: number | null }[] | null
+      ): number => {
+        if (!data) return 0;
+        return data.reduce((sum, p) => sum + (p.valor_comissao || 0), 0);
+      };
+
+      // Helper to get target value
+      const getTarget = (targetType: string): number => {
+        const target = targets.data?.find(t => t.target_type === targetType);
         return target?.target_value || 0;
       };
 
-      // Calcular valores para cada setor
-      const setoresData: SetorData[] = SETOR_CONFIG.map(config => {
+      // Build sector data
+      const setores: SetorData[] = SETOR_CONFIG.map(config => {
         if (config.id === 'credito') {
-          // MCF Crédito usa consortium_payments
-          const apuradoPeriodo = periodConsorcio?.reduce((sum, c) => sum + (c.valor_comissao || 0), 0) || 0;
-          const apuradoAnual = yearConsorcio?.reduce((sum, c) => sum + (c.valor_comissao || 0), 0) || 0;
-
+          // Credito uses consortium_payments
           return {
             ...config,
-            apuradoPeriodo,
+            apuradoSemanal: calculateConsortiumTotal(consortiumWeekly.data),
+            metaSemanal: getTarget('setor_credito_semana'),
+            apuradoMensal: calculateConsortiumTotal(consortiumMonthly.data),
             metaMensal: getTarget('setor_credito_mes'),
-            apuradoAnual,
+            apuradoAnual: calculateConsortiumTotal(consortiumAnnual.data),
             metaAnual: getTarget('setor_credito_ano'),
           };
         }
 
-        // Outros setores usam hubla_transactions
+        // All other sectors use hubla_transactions
         const categories = SETOR_CATEGORIES[config.id] || [];
-        const apuradoPeriodo = calculateSetorTotal(periodTransactions, categories);
-        const apuradoAnual = calculateSetorTotal(yearTransactions, categories);
-
         return {
           ...config,
-          apuradoPeriodo,
+          apuradoSemanal: calculateSetorTotal(hublaWeekly.data, categories),
+          metaSemanal: getTarget(`setor_${config.id}_semana`),
+          apuradoMensal: calculateSetorTotal(hublaMonthly.data, categories),
           metaMensal: getTarget(`setor_${config.id}_mes`),
-          apuradoAnual,
+          apuradoAnual: calculateSetorTotal(hublaAnnual.data, categories),
           metaAnual: getTarget(`setor_${config.id}_ano`),
         };
       });
 
-      return setoresData;
+      return { setores, semanaLabel, mesLabel };
     },
-    staleTime: 30000, // 30 segundos
-    refetchInterval: 30000, // Refresh a cada 30 segundos
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    refetchInterval: 1000 * 30, // 30 seconds
   });
 }
