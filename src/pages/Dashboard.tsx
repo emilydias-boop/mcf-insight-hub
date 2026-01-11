@@ -1,74 +1,55 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
-import { FunilDuplo } from "@/components/dashboard/FunilDuplo";
 import { TargetsConfigDialog } from "@/components/dashboard/TargetsConfigDialog";
 import { PeriodSelector } from "@/components/dashboard/PeriodSelector";
-import { TrendChart } from "@/components/dashboard/TrendChart";
 import { PeriodComparison } from "@/components/dashboard/PeriodComparison";
 import { DashboardCustomizer } from "@/components/dashboard/DashboardCustomizer";
-import { DirectorKPIRow } from "@/components/dashboard/DirectorKPIRow";
-import { MetasProgress } from "@/components/dashboard/MetasProgress";
 import { PendingMetricsAlert } from "@/components/dashboard/PendingMetricsAlert";
 import { MetricsApprovalDialog } from "@/components/dashboard/MetricsApprovalDialog";
 import { NotificationBadge } from "@/components/dashboard/NotificationBadge";
+import { SetorCard } from "@/components/dashboard/SetorCard";
 import { exportDashboardData } from "@/lib/exportHelpers";
 import { useToast } from "@/hooks/use-toast";
 import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
-import { useClintFunnel } from "@/hooks/useClintFunnel";
-import { useEvolutionData } from "@/hooks/useEvolutionData";
-import { useDirectorKPIs } from "@/hooks/useDirectorKPIs";
-import { useDirectorKPIsFromMetrics } from "@/hooks/useDirectorKPIsFromMetrics";
-import { useTeamTargets } from "@/hooks/useTeamTargets";
+import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { formatCurrency } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
-import { useDashboardPreferences } from "@/hooks/useDashboardPreferences";
-import { isSameDay } from "date-fns";
-import type { DashboardWidget } from "@/types/dashboard";
+import { format, isSameMonth, startOfMonth, endOfMonth } from "date-fns";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { preferences } = useDashboardPreferences();
   const [periodo, setPeriodo] = useState({
     tipo: 'semana' as 'semana' | 'mes',
     inicio: getCustomWeekStart(new Date()),
     fim: getCustomWeekEnd(new Date()),
   });
   const [canal, setCanal] = useState('todos');
-  const [sdrIa, setSdrIa] = useState(0); // Estado para SDR IA manual
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
 
-  // Detectar se é a semana atual
-  const isCurrentWeek = isSameDay(periodo.inicio, getCustomWeekStart(new Date()));
-
-  // Hooks de dados - TEMPO REAL para semana atual
-  const { data: directorKPIsRealtime, isLoading: loadingKPIsRealtime, error: errorKPIs } = useDirectorKPIs(periodo.inicio, periodo.fim);
-  
-  // Hook para dados históricos (weekly_metrics) - para semanas passadas
-  const { data: directorKPIsFromDB, isLoading: loadingKPIsFromDB } = useDirectorKPIsFromMetrics(periodo.inicio, periodo.fim);
-  
-  // Estratégia híbrida: usar planilha para semanas passadas, tempo real para atual e para mês
-  // SEMPRE usar tempo real para período "mês" (weekly_metrics só tem dados semanais)
-  const shouldUseRealtimeData = isCurrentWeek || periodo.tipo === 'mes';
-  const directorKPIs = (!shouldUseRealtimeData && directorKPIsFromDB && directorKPIsFromDB.faturamentoTotal.value > 0) 
-    ? directorKPIsFromDB 
-    : directorKPIsRealtime;
-  const loadingKPIs = shouldUseRealtimeData ? loadingKPIsRealtime : (loadingKPIsFromDB || loadingKPIsRealtime);
-
-  const { data: evolutionData, isLoading: loadingEvolution, error: errorEvolution } = useEvolutionData(canal, 52);
-  const PIPELINE_INSIDE_SALES_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
-  const { data: a010Funnel, isLoading: loadingA010, error: errorA010 } = useClintFunnel(
-    PIPELINE_INSIDE_SALES_ID,
+  // Hook para dados dos setores
+  const { data: setoresData, isLoading: loadingSetores, error: errorSetores } = useSetoresDashboard(
     periodo.inicio,
-    periodo.fim,
-    false
+    periodo.fim
   );
-  
-  // Buscar metas dinâmicas da tabela team_targets
-  const { data: teamTargets } = useTeamTargets(periodo.inicio, periodo.fim);
+
+  // Determinar label do período para os cards
+  const getPeriodoLabel = (): string => {
+    const today = new Date();
+    const isCurrentMonth = isSameMonth(periodo.inicio, today) && 
+                           periodo.inicio.getDate() === 1 && 
+                           periodo.fim.getDate() === endOfMonth(today).getDate();
+    
+    if (isCurrentMonth) {
+      return "Mês Atual";
+    }
+    
+    // Se é um range customizado ou semana
+    return `${format(periodo.inicio, 'dd/MM')} - ${format(periodo.fim, 'dd/MM')}`;
+  };
 
   // Realtime listeners para atualização automática
   useEffect(() => {
@@ -80,17 +61,10 @@ export default function Dashboard() {
         { event: 'INSERT', schema: 'public', table: 'hubla_transactions' },
         async (payload) => {
           console.log('💰 Nova venda Hubla:', payload);
-          // Invalida E força refetch imediato
           await queryClient.invalidateQueries({ 
-            queryKey: ['director-kpis'],
+            queryKey: ['setores-dashboard'],
             refetchType: 'all'
           });
-          await queryClient.refetchQueries({ 
-            queryKey: ['director-kpis'],
-            type: 'all'
-          });
-          queryClient.invalidateQueries({ queryKey: ['a010-novo-lead'], refetchType: 'all' });
-          queryClient.invalidateQueries({ queryKey: ['evolution-data'], refetchType: 'all' });
           toast({
             title: "💰 Nova venda registrada",
             description: `${(payload.new as any)?.customer_name || 'Cliente'} - Dados atualizados!`,
@@ -99,20 +73,16 @@ export default function Dashboard() {
       )
       .subscribe();
 
-    // Listener para daily_costs (gastos ads)
-    const costsChannel = supabase
-      .channel('costs-realtime')
+    // Listener para consortium_payments
+    const consorcioChannel = supabase
+      .channel('consorcio-realtime')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'daily_costs' },
+        { event: '*', schema: 'public', table: 'consortium_payments' },
         async () => {
           await queryClient.invalidateQueries({ 
-            queryKey: ['director-kpis'],
+            queryKey: ['setores-dashboard'],
             refetchType: 'all'
-          });
-          await queryClient.refetchQueries({ 
-            queryKey: ['director-kpis'],
-            type: 'all'
           });
         }
       )
@@ -120,21 +90,14 @@ export default function Dashboard() {
 
     return () => {
       supabase.removeChannel(hublaChannel);
-      supabase.removeChannel(costsChannel);
+      supabase.removeChannel(consorcioChannel);
     };
   }, [queryClient, toast]);
-
-  const isWidgetVisible = (widgetId: DashboardWidget) => {
-    if (!preferences?.visible_widgets) return true;
-    return preferences.visible_widgets.includes(widgetId);
-  };
 
   const handleApplyFilters = (filters: { periodo: { tipo: 'semana' | 'mes'; inicio: Date; fim: Date }; canal: string }) => {
     setPeriodo(filters.periodo);
     setCanal(filters.canal);
-    queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
-    queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
-    queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
+    queryClient.invalidateQueries({ queryKey: ['setores-dashboard'] });
     toast({
       title: "Filtros aplicados",
       description: "Os dados do dashboard foram atualizados.",
@@ -148,9 +111,7 @@ export default function Dashboard() {
       fim: getCustomWeekEnd(new Date()),
     });
     setCanal('todos');
-    queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
-    queryClient.invalidateQueries({ queryKey: ['evolution-data'] });
-    queryClient.invalidateQueries({ queryKey: ['funnel-data'] });
+    queryClient.invalidateQueries({ queryKey: ['setores-dashboard'] });
     toast({
       title: "Filtros limpos",
       description: "Os filtros foram resetados para a semana atual.",
@@ -159,11 +120,14 @@ export default function Dashboard() {
 
   const handleExport = () => {
     exportDashboardData({
-      kpis: directorKPIs ? [
-        { id: '1', title: 'Faturamento Total', value: formatCurrency(directorKPIs.faturamentoTotal.value), change: directorKPIs.faturamentoTotal.change, variant: 'success' },
-        { id: '2', title: 'Gastos Ads', value: formatCurrency(directorKPIs.gastosAds.value), change: directorKPIs.gastosAds.change, variant: 'danger' },
-      ] : [],
-      funis: [{ titulo: 'Funil A010', etapas: a010Funnel || [] }],
+      kpis: setoresData?.map(setor => ({
+        id: setor.id,
+        title: setor.nome,
+        value: formatCurrency(setor.apuradoPeriodo),
+        change: 0,
+        variant: 'success' as const,
+      })) || [],
+      funis: [],
       semanas: [],
       periodo,
       canal,
@@ -173,14 +137,6 @@ export default function Dashboard() {
       description: "O arquivo CSV foi baixado com sucesso.",
     });
   };
-
-  // Metas dinâmicas (busca da tabela team_targets, com fallback para valores padrão)
-  const metas = useMemo(() => ({
-    ultrametaClint: teamTargets?.find(t => t.target_type === 'ultrameta_clint')?.target_value || 337680,
-    faturamentoClint: teamTargets?.find(t => t.target_type === 'faturamento_clint')?.target_value || 198377,
-    ultrametaLiquido: teamTargets?.find(t => t.target_type === 'ultrameta_liquido')?.target_value || 281400,
-    faturamentoLiquido: teamTargets?.find(t => t.target_type === 'faturamento_liquido')?.target_value || 159276,
-  }), [teamTargets]);
 
   return (
     <ResourceGuard resource="dashboard">
@@ -216,85 +172,54 @@ export default function Dashboard() {
         />
 
         {/* Erros */}
-        {(errorKPIs || errorEvolution || errorA010) && (
+        {errorSetores && (
           <Card className="bg-destructive/10 border-destructive">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 text-destructive">
                 <AlertTriangle className="h-5 w-5" />
                 <div>
                   <p className="font-semibold">Erro ao carregar dados</p>
-                  <p className="text-sm">
-                    {errorKPIs && 'KPIs: ' + (errorKPIs as Error).message}
-                    {errorEvolution && ' | Evolução: ' + (errorEvolution as Error).message}
-                    {errorA010 && ' | Funil: ' + (errorA010 as Error).message}
-                  </p>
+                  <p className="text-sm">{(errorSetores as Error).message}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Linha 1: 7 KPIs principais */}
-        {isWidgetVisible('kpis') && directorKPIs && (
-          <DirectorKPIRow
-            faturamentoTotal={directorKPIs.faturamentoTotal}
-            gastosAds={directorKPIs.gastosAds}
-            cpl={directorKPIs.cpl}
-            custoTotal={directorKPIs.custoTotal}
-            lucro={directorKPIs.lucro}
-            roi={directorKPIs.roi}
-            roas={directorKPIs.roas}
-            isLoading={loadingKPIs}
-          />
-        )}
-
-        {/* Linha 2: Metas (esquerda) + Funil (direita) */}
-        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
-          {/* Coluna Esquerda - Metas com SDR IA (agora usando dados pré-calculados) */}
-          {isWidgetVisible('ultrameta') && directorKPIs && (
-            <MetasProgress
-              ultrametaClint={directorKPIs.ultrametaClint + (sdrIa * 1400)}
-              metaUltrametaClint={metas.ultrametaClint}
-              faturamentoClintBruto={directorKPIs.faturamentoClint}
-              metaFaturamentoClint={metas.faturamentoClint}
-              ultrametaLiquido={directorKPIs.ultrametaLiquido}
-              metaUltrametaLiquido={metas.ultrametaLiquido}
-              faturamentoLiquido={directorKPIs.faturamentoLiquido}
-              metaFaturamentoLiquido={metas.faturamentoLiquido}
-              sdrIa={sdrIa}
-              onSdrIaChange={setSdrIa}
-              vendasA010={directorKPIs.vendasA010}
-              isLoading={loadingKPIs}
+        {/* Grid de 5 Setores */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {setoresData?.map(setor => (
+            <SetorCard
+              key={setor.id}
+              titulo={setor.nome}
+              icone={setor.icone}
+              metaMensal={setor.metaMensal}
+              apuradoMensal={setor.apuradoPeriodo}
+              metaAnual={setor.metaAnual}
+              apuradoAnual={setor.apuradoAnual}
+              periodoLabel={getPeriodoLabel()}
+              isLoading={loadingSetores}
             />
-          )}
-
-          {/* Coluna Direita - Funil */}
-          {isWidgetVisible('funil-a010') && (
-            <FunilDuplo
-              originId="e3c04f21-ba2c-4c66-84f8-b4341c826b1c"
-              weekStart={periodo.inicio}
-              weekEnd={periodo.fim}
-              showCurrentState={false}
-            />
+          ))}
+          
+          {/* Skeletons enquanto carrega */}
+          {loadingSetores && !setoresData && (
+            <>
+              {[1, 2, 3, 4, 5].map(i => (
+                <SetorCard
+                  key={i}
+                  titulo=""
+                  icone={AlertTriangle}
+                  metaMensal={0}
+                  apuradoMensal={0}
+                  metaAnual={0}
+                  apuradoAnual={0}
+                  isLoading={true}
+                />
+              ))}
+            </>
           )}
         </div>
-
-        {/* Linha 3: Evolução Temporal */}
-        {isWidgetVisible('grafico-evolucao') && (
-          <>
-            {loadingEvolution ? (
-              <div className="h-96 bg-card animate-pulse rounded-lg border border-border" />
-            ) : evolutionData && evolutionData.length > 0 ? (
-              <TrendChart data={evolutionData} />
-            ) : (
-              <Card className="bg-card border-border">
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  Nenhum dado de evolução disponível
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
       </div>
     </ResourceGuard>
   );
