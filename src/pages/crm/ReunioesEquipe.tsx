@@ -80,8 +80,10 @@ export default function ReunioesEquipe() {
     switch (datePreset) {
       case "today":
         return { start: startOfDay(today), end: endOfDay(today) };
-      case "week":
-        return { start: startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }), end: endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }) };
+      case "week": {
+        const todayNormalized = startOfDay(today);
+        return { start: startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }), end: endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON }) };
+      }
       case "month":
         return { start: startOfMonth(selectedMonth), end: endOfMonth(selectedMonth) };
       case "custom":
@@ -105,8 +107,9 @@ export default function ReunioesEquipe() {
   const dayEnd = endOfDay(today);
   
   // Week dates for week metrics (sábado a sexta)
-  const weekStartDate = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
-  const weekEndDate = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
+  const todayNormalized = startOfDay(today);
+  const weekStartDate = startOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
+  const weekEndDate = endOfWeek(todayNormalized, { weekStartsOn: WEEK_STARTS_ON });
 
   // Month dates for month metrics
   const monthStartDate = startOfMonth(today);
