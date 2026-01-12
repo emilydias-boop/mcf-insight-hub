@@ -6,6 +6,7 @@ export interface IncorporadorTransactionFilters {
   endDate?: Date;
   search?: string;
   onlyCountInDashboard?: boolean;
+  selectedProducts?: string[];
 }
 
 export interface IncorporadorTransaction {
@@ -30,7 +31,14 @@ export interface IncorporadorTransaction {
 
 export const useIncorporadorTransactions = (filters: IncorporadorTransactionFilters) => {
   return useQuery({
-    queryKey: ['incorporador-transactions', filters.search, filters.startDate?.toISOString(), filters.endDate?.toISOString(), filters.onlyCountInDashboard],
+    queryKey: [
+      'incorporador-transactions', 
+      filters.search, 
+      filters.startDate?.toISOString(), 
+      filters.endDate?.toISOString(), 
+      filters.onlyCountInDashboard,
+      filters.selectedProducts,
+    ],
     queryFn: async (): Promise<IncorporadorTransaction[]> => {
       // Formatar datas em formato local para evitar problemas de timezone
       const formatLocalDate = (date: Date, endOfDay = false) => {
@@ -47,6 +55,7 @@ export const useIncorporadorTransactions = (filters: IncorporadorTransactionFilt
         p_search: filters.search || null,
         p_start_date: filters.startDate ? formatLocalDate(filters.startDate) : null,
         p_end_date: filters.endDate ? formatLocalDate(filters.endDate, true) : null,
+        p_products: filters.selectedProducts?.length ? filters.selectedProducts : null,
         p_limit: 10000
       });
 
