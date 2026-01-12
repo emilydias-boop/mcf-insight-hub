@@ -114,7 +114,7 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
       const deal = dealWithMeeting || deals?.[0];
       if (!deal) return null;
 
-      // 4. Buscar reuniões do deal COM dados do SDR que agendou (booked_by)
+      // 4. Buscar reuniões do deal (sem relação profiles que não existe)
       const { data: meetings } = await supabase
         .from('meeting_slots')
         .select(`
@@ -124,19 +124,27 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
           lead_type,
           closer_id,
           booked_by,
-          closers (name),
-          profiles!meeting_slots_booked_by_fkey (full_name, email)
+          closers (name)
         `)
         .eq('deal_id', deal.id)
         .order('scheduled_at', { ascending: true });
 
-      // 5. Extrair SDR: priorizar booked_by da reunião, depois custom_fields, depois deal_activities
-      const customFields = deal.custom_fields as Record<string, any> | null;
+      // 5. Buscar perfil do SDR separadamente se tiver booked_by
       const firstMeeting = meetings?.[0];
-      const bookedByProfile = firstMeeting?.profiles as { full_name?: string; email?: string } | null;
-      
-      let sdrName = bookedByProfile?.full_name || customFields?.user_name || null;
-      let sdrEmail = bookedByProfile?.email || customFields?.user_email || null;
+      let sdrProfile: { full_name?: string; email?: string } | null = null;
+      if (firstMeeting?.booked_by) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, email')
+          .eq('id', firstMeeting.booked_by)
+          .maybeSingle();
+        sdrProfile = profile;
+      }
+
+      // 6. Extrair SDR: priorizar booked_by da reunião, depois custom_fields, depois deal_activities
+      const customFields = deal.custom_fields as Record<string, any> | null;
+      let sdrName = sdrProfile?.full_name || customFields?.user_name || null;
+      let sdrEmail = sdrProfile?.email || customFields?.user_email || null;
 
       // 6. Fallback: buscar SDR na deal_activities se ainda não encontrou
       if (!sdrName && !sdrEmail) {
