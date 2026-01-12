@@ -9,11 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { 
-  useHublaTransactionsFiltered, 
   useUpdateTransactionDashboardFlag, 
   useUpdateTransactionSaleDate,
   useUpdateMultipleTransactionsDashboardFlag 
 } from "@/hooks/useHublaTransactions";
+import { useIncorporadorTransactions } from "@/hooks/useIncorporadorTransactions";
 import { IncorporadorTransactionDrawer } from "@/components/incorporador/IncorporadorTransactionDrawer";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare } from "lucide-react";
@@ -64,13 +64,12 @@ export default function TransacoesIncorp() {
   const [sortField, setSortField] = useState<SortField>('sale_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  // Filtro fixo para Incorporador 50k
-  const { data: transactions, isLoading, refetch } = useHublaTransactionsFiltered({
+  // Filtro para produtos Incorporador 50k
+  const { data: transactions, isLoading, refetch } = useIncorporadorTransactions({
     startDate,
     endDate,
     search: searchTerm,
     onlyCountInDashboard: showOnlyCountable,
-    productCategory: "incorporador_50k", // Filtro fixo
   });
 
   const updateFlag = useUpdateTransactionDashboardFlag();
