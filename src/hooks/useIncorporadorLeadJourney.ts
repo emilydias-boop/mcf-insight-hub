@@ -43,6 +43,56 @@ const getPhoneSuffix = (phone: string | null): string => {
   return normalized.slice(-9);
 };
 
+// Helper: encontrar contato que tem reunião agendada
+const findContactWithMeetings = async (contacts: { id: string; name: string }[]) => {
+  for (const contact of contacts) {
+    const { data: deals } = await supabase
+      .from('crm_deals')
+      .select('id, meeting_slots(id)')
+      .eq('contact_id', contact.id)
+      .limit(5);
+    
+    const dealWithMeeting = deals?.find(d => (d.meeting_slots as any[])?.length > 0);
+    if (dealWithMeeting) {
+      return contact;
+    }
+  }
+  return null;
+};
+
+// Helper: encontrar contato que tem qualquer deal
+const findContactWithAnyDeal = async (contacts: { id: string; name: string }[]) => {
+  for (const contact of contacts) {
+    const { count } = await supabase
+      .from('crm_deals')
+      .select('id', { count: 'exact', head: true })
+      .eq('contact_id', contact.id);
+    
+    if (count && count > 0) {
+      return contact;
+    }
+  }
+  return null;
+};
+
+// Helper: buscar contato priorizando os que têm deals com reuniões
+const findBestContact = async (
+  contacts: { id: string; name: string }[]
+): Promise<{ id: string; name: string } | null> => {
+  if (!contacts || contacts.length === 0) return null;
+  
+  // 1. Priorizar contato que tem deal COM reunião
+  const contactWithMeeting = await findContactWithMeetings(contacts);
+  if (contactWithMeeting) return contactWithMeeting;
+  
+  // 2. Fallback: contato que tem qualquer deal
+  const contactWithDeal = await findContactWithAnyDeal(contacts);
+  if (contactWithDeal) return contactWithDeal;
+  
+  // 3. Fallback final: primeiro contato
+  return contacts[0];
+};
+
 export const useIncorporadorLeadJourney = (email: string | null, phone: string | null) => {
   return useQuery({
     queryKey: ['incorporador-lead-journey', email, phone],
@@ -52,18 +102,16 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
       let contact: { id: string; name: string } | null = null;
       let matchMethod: 'email' | 'phone' | 'email_prefix' | null = null;
 
-      // 1. Tentar buscar por email exato
+      // 1. Tentar buscar por email exato (buscar TODOS, não apenas 1)
       if (email) {
-        const { data } = await supabase
+        const { data: contacts } = await supabase
           .from('crm_contacts')
           .select('id, name')
-          .ilike('email', email)
-          .limit(1)
-          .maybeSingle();
+          .ilike('email', email);
         
-        if (data) {
-          contact = data;
-          matchMethod = 'email';
+        if (contacts && contacts.length > 0) {
+          contact = await findBestContact(contacts);
+          if (contact) matchMethod = 'email';
         }
       }
 
@@ -72,17 +120,14 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
         const phoneSuffix = getPhoneSuffix(phone);
         
         if (phoneSuffix.length >= 8) {
-          // Buscar por telefone que termina com os últimos 8-9 dígitos
-          const { data } = await supabase
+          const { data: contacts } = await supabase
             .from('crm_contacts')
             .select('id, name')
-            .ilike('phone', `%${phoneSuffix}`)
-            .limit(1)
-            .maybeSingle();
+            .ilike('phone', `%${phoneSuffix}`);
           
-          if (data) {
-            contact = data;
-            matchMethod = 'phone';
+          if (contacts && contacts.length > 0) {
+            contact = await findBestContact(contacts);
+            if (contact) matchMethod = 'phone';
           }
         }
       }
@@ -91,16 +136,14 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
       if (!contact && email) {
         const emailPrefix = email.split('@')[0];
         if (emailPrefix && emailPrefix.length >= 3) {
-          const { data } = await supabase
+          const { data: contacts } = await supabase
             .from('crm_contacts')
             .select('id, name')
-            .ilike('email', `${emailPrefix}@%`)
-            .limit(1)
-            .maybeSingle();
+            .ilike('email', `${emailPrefix}@%`);
           
-          if (data) {
-            contact = data;
-            matchMethod = 'email_prefix';
+          if (contacts && contacts.length > 0) {
+            contact = await findBestContact(contacts);
+            if (contact) matchMethod = 'email_prefix';
           }
         }
       }
