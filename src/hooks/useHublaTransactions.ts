@@ -139,6 +139,96 @@ export const useUpdateTransactionSaleDate = () => {
   });
 };
 
+// Interfaces para criar/atualizar transações
+export interface CreateTransactionData {
+  product_name: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  sale_date: string;
+  product_price: number;
+  net_value: number;
+  installment_number?: number;
+  total_installments?: number;
+  count_in_dashboard?: boolean;
+}
+
+export interface UpdateTransactionData extends CreateTransactionData {
+  id: string;
+}
+
+// Criar transação manual
+export const useCreateTransaction = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateTransactionData) => {
+      const { error, data: result } = await supabase
+        .from('hubla_transactions')
+        .insert({
+          hubla_id: `manual-${Date.now()}`,
+          event_type: 'manual_entry',
+          product_name: data.product_name,
+          product_price: data.product_price,
+          net_value: data.net_value,
+          customer_name: data.customer_name,
+          customer_email: data.customer_email,
+          customer_phone: data.customer_phone || null,
+          sale_date: data.sale_date,
+          sale_status: 'completed',
+          installment_number: data.installment_number || 1,
+          total_installments: data.total_installments || 1,
+          count_in_dashboard: data.count_in_dashboard ?? true,
+          source: 'manual',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hubla-transactions-filtered'] });
+      queryClient.invalidateQueries({ queryKey: ['incorporador-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    },
+  });
+};
+
+// Atualizar transação completa
+export const useUpdateTransaction = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: UpdateTransactionData) => {
+      const { error } = await supabase
+        .from('hubla_transactions')
+        .update({
+          product_name: data.product_name,
+          product_price: data.product_price,
+          net_value: data.net_value,
+          customer_name: data.customer_name,
+          customer_email: data.customer_email,
+          customer_phone: data.customer_phone || null,
+          sale_date: data.sale_date,
+          installment_number: data.installment_number || 1,
+          total_installments: data.total_installments || 1,
+          count_in_dashboard: data.count_in_dashboard ?? true,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hubla-transactions-filtered'] });
+      queryClient.invalidateQueries({ queryKey: ['incorporador-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    },
+  });
+};
+
 export const useHublaTransactions = (limit: number = 50) => {
   return useQuery({
     queryKey: ['hubla-transactions', limit],

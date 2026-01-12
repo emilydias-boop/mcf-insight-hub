@@ -33,10 +33,16 @@ export const normalizeProductForDedup = (productName: string): string => {
 // Obtém preço de referência ou usa valor do banco (para A005/P2 e outros sem valor fixo)
 export const getPrecoReferencia = (productName: string, productPriceFromDB: number): number => {
   const normalizado = normalizeProductForDedup(productName);
+  
+  // A005/P2 sempre retorna 0 (não conta no bruto)
+  if (normalizado === 'A005') {
+    return 0;
+  }
+  
   // Se tem preço de referência, usar ele
   if (PRECO_REFERENCIA[normalizado]) {
     return PRECO_REFERENCIA[normalizado];
   }
-  // Caso contrário (A005/P2, etc), usar valor do banco
+  // Caso contrário, usar valor do banco
   return productPriceFromDB;
 };
