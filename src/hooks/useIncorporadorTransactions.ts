@@ -54,14 +54,18 @@ export const useIncorporadorTransactions = (filters: IncorporadorTransactionFilt
         .eq('sale_status', 'completed')
         .order('sale_date', { ascending: false });
 
-      // Filtros de data
+      // Filtros de data - usar formato sem timezone para evitar corte de transações
       if (filters.startDate) {
-        query = query.gte('sale_date', filters.startDate.toISOString());
+        const year = filters.startDate.getFullYear();
+        const month = String(filters.startDate.getMonth() + 1).padStart(2, '0');
+        const day = String(filters.startDate.getDate()).padStart(2, '0');
+        query = query.gte('sale_date', `${year}-${month}-${day}T00:00:00`);
       }
       if (filters.endDate) {
-        const endOfDay = new Date(filters.endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        query = query.lte('sale_date', endOfDay.toISOString());
+        const year = filters.endDate.getFullYear();
+        const month = String(filters.endDate.getMonth() + 1).padStart(2, '0');
+        const day = String(filters.endDate.getDate()).padStart(2, '0');
+        query = query.lte('sale_date', `${year}-${month}-${day}T23:59:59`);
       }
 
       if (filters.onlyCountInDashboard) {
