@@ -14,7 +14,7 @@ import {
   useUpdateTransactionSaleDate,
   useUpdateMultipleTransactionsDashboardFlag 
 } from "@/hooks/useHublaTransactions";
-import { TransactionDetailsDrawer } from "@/components/receita/TransactionDetailsDrawer";
+import { IncorporadorTransactionDrawer } from "@/components/incorporador/IncorporadorTransactionDrawer";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -593,7 +593,7 @@ export default function TransacoesIncorp() {
         </CardContent>
       </Card>
 
-      <TransactionDetailsDrawer
+      <IncorporadorTransactionDrawer
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         transaction={selectedTransaction}
