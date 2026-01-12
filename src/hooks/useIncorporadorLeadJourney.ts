@@ -43,114 +43,52 @@ const getPhoneSuffix = (phone: string | null): string => {
   return normalized.slice(-9);
 };
 
-// Helper: encontrar contato que tem reunião agendada
-const findContactWithMeetings = async (contacts: { id: string; name: string }[]) => {
-  for (const contact of contacts) {
-    const { data: deals } = await supabase
-      .from('crm_deals')
-      .select('id, meeting_slots(id)')
-      .eq('contact_id', contact.id)
-      .limit(5);
-    
-    const dealWithMeeting = deals?.find(d => (d.meeting_slots as any[])?.length > 0);
-    if (dealWithMeeting) {
-      return contact;
-    }
-  }
-  return null;
-};
-
-// Helper: encontrar contato que tem qualquer deal
-const findContactWithAnyDeal = async (contacts: { id: string; name: string }[]) => {
-  for (const contact of contacts) {
-    const { count } = await supabase
-      .from('crm_deals')
-      .select('id', { count: 'exact', head: true })
-      .eq('contact_id', contact.id);
-    
-    if (count && count > 0) {
-      return contact;
-    }
-  }
-  return null;
-};
-
-// Helper: buscar contato priorizando os que têm deals com reuniões
-const findBestContact = async (
-  contacts: { id: string; name: string }[]
-): Promise<{ id: string; name: string } | null> => {
-  if (!contacts || contacts.length === 0) return null;
-  
-  // 1. Priorizar contato que tem deal COM reunião
-  const contactWithMeeting = await findContactWithMeetings(contacts);
-  if (contactWithMeeting) return contactWithMeeting;
-  
-  // 2. Fallback: contato que tem qualquer deal
-  const contactWithDeal = await findContactWithAnyDeal(contacts);
-  if (contactWithDeal) return contactWithDeal;
-  
-  // 3. Fallback final: primeiro contato
-  return contacts[0];
-};
-
 export const useIncorporadorLeadJourney = (email: string | null, phone: string | null) => {
   return useQuery({
     queryKey: ['incorporador-lead-journey', email, phone],
     queryFn: async (): Promise<IncorporadorLeadJourney | null> => {
       if (!email && !phone) return null;
 
-      let contact: { id: string; name: string } | null = null;
+      let contactId: string | null = null;
       let matchMethod: 'email' | 'phone' | 'email_prefix' | null = null;
+      const phoneSuffix = getPhoneSuffix(phone);
 
-      // 1. Tentar buscar por email exato (buscar TODOS, não apenas 1)
-      if (email) {
-        const { data: contacts } = await supabase
-          .from('crm_contacts')
-          .select('id, name')
-          .ilike('email', email);
-        
-        if (contacts && contacts.length > 0) {
-          contact = await findBestContact(contacts);
-          if (contact) matchMethod = 'email';
+      // 1. Usar RPC otimizada para buscar contato com mais reuniões/deals
+      const { data: rpcResult } = await supabase.rpc('get_contact_with_meetings', {
+        p_email: email || null,
+        p_phone_suffix: phoneSuffix.length >= 8 ? phoneSuffix : null
+      });
+
+      if (rpcResult && rpcResult.length > 0) {
+        contactId = rpcResult[0].contact_id;
+        // Determinar método de match baseado nos parâmetros
+        if (email) {
+          matchMethod = 'email';
+        } else if (phoneSuffix.length >= 8) {
+          matchMethod = 'phone';
         }
       }
 
-      // 2. Se não encontrou, tentar por telefone
-      if (!contact && phone) {
-        const phoneSuffix = getPhoneSuffix(phone);
-        
-        if (phoneSuffix.length >= 8) {
-          const { data: contacts } = await supabase
-            .from('crm_contacts')
-            .select('id, name')
-            .ilike('phone', `%${phoneSuffix}`);
-          
-          if (contacts && contacts.length > 0) {
-            contact = await findBestContact(contacts);
-            if (contact) matchMethod = 'phone';
-          }
-        }
-      }
-
-      // 3. Se não encontrou, tentar por prefixo do email (antes do @)
-      if (!contact && email) {
+      // 2. Fallback: tentar busca por prefixo do email se não encontrou
+      if (!contactId && email) {
         const emailPrefix = email.split('@')[0];
         if (emailPrefix && emailPrefix.length >= 3) {
           const { data: contacts } = await supabase
             .from('crm_contacts')
-            .select('id, name')
-            .ilike('email', `${emailPrefix}@%`);
+            .select('id')
+            .ilike('email', `${emailPrefix}@%`)
+            .limit(1);
           
           if (contacts && contacts.length > 0) {
-            contact = await findBestContact(contacts);
-            if (contact) matchMethod = 'email_prefix';
+            contactId = contacts[0].id;
+            matchMethod = 'email_prefix';
           }
         }
       }
 
-      if (!contact) return null;
+      if (!contactId) return null;
 
-      // 2. Buscar deals do contato (pegamos o mais recente, priorizando os com reuniões)
+      // 3. Buscar deals do contato (pegamos o mais recente, priorizando os com reuniões)
       const { data: deals } = await supabase
         .from('crm_deals')
         .select(`
@@ -168,7 +106,7 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
           ),
           meeting_slots (id)
         `)
-        .eq('contact_id', contact.id)
+        .eq('contact_id', contactId)
         .order('created_at', { ascending: false });
 
       // Priorizar deal que TEM reunião agendada
@@ -176,7 +114,7 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
       const deal = dealWithMeeting || deals?.[0];
       if (!deal) return null;
 
-      // 3. Buscar reuniões do deal COM dados do SDR que agendou (booked_by)
+      // 4. Buscar reuniões do deal COM dados do SDR que agendou (booked_by)
       const { data: meetings } = await supabase
         .from('meeting_slots')
         .select(`
@@ -192,7 +130,7 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
         .eq('deal_id', deal.id)
         .order('scheduled_at', { ascending: true });
 
-      // 4. Extrair SDR: priorizar booked_by da reunião, depois custom_fields, depois deal_activities
+      // 5. Extrair SDR: priorizar booked_by da reunião, depois custom_fields, depois deal_activities
       const customFields = deal.custom_fields as Record<string, any> | null;
       const firstMeeting = meetings?.[0];
       const bookedByProfile = firstMeeting?.profiles as { full_name?: string; email?: string } | null;
@@ -200,7 +138,7 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
       let sdrName = bookedByProfile?.full_name || customFields?.user_name || null;
       let sdrEmail = bookedByProfile?.email || customFields?.user_email || null;
 
-      // 5. Fallback: buscar SDR na deal_activities se ainda não encontrou
+      // 6. Fallback: buscar SDR na deal_activities se ainda não encontrou
       if (!sdrName && !sdrEmail) {
         const { data: activity } = await supabase
           .from('deal_activities')
@@ -215,7 +153,7 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
         sdrEmail = metadata?.deal_user || metadata?.owner_email || null;
       }
 
-      // 5. Separar Reunião 01 e R2
+      // 7. Separar Reunião 01 e R2
       const meeting01Data = meetings?.find(m => m.lead_type !== 'R2');
       const meeting02Data = meetings?.find(m => m.lead_type === 'R2');
 
