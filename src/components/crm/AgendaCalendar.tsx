@@ -718,7 +718,13 @@ export function AgendaCalendar({
                                                           ({att.meetingSdr?.split(' ')[0] || 'N/A'})
                                                         </span>
                                                       </div>
-                                                      <div className="flex-shrink-0">
+                                                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                                                        {att.already_builds === true && (
+                                                          <Badge className="text-[6px] px-0.5 py-0 h-2.5 bg-blue-600">C</Badge>
+                                                        )}
+                                                        {att.already_builds === false && (
+                                                          <Badge variant="outline" className="text-[6px] px-0.5 py-0 h-2.5 border-orange-500 text-orange-600">NC</Badge>
+                                                        )}
                                                         {att.status === 'no_show' && <Badge variant="destructive" className="text-[7px] px-1 py-0 h-3">No-show</Badge>}
                                                         {att.status === 'completed' && <Badge className="text-[7px] px-1 py-0 h-3 bg-green-600">OK</Badge>}
                                                         {att.status === 'invited' && <Badge variant="secondary" className="text-[7px] px-1 py-0 h-3">Agendado</Badge>}
@@ -762,6 +768,7 @@ export function AgendaCalendar({
                                                 attendee_name: string;
                                                 status: string;
                                                 is_partner: boolean;
+                                                already_builds: boolean | null;
                                                 contact?: { id: string; name: string; phone: string; email: string } | null;
                                                 sdrName: string;
                                                 sdrId: string;
@@ -772,9 +779,10 @@ export function AgendaCalendar({
                                                 (m.attendees && m.attendees.length > 0) 
                                                   ? m.attendees.map(att => ({
                                                       id: att.id,
-                                                      attendee_name: att.attendee_name,
+                                                      attendee_name: att.attendee_name || '',
                                                       status: att.status,
                                                       is_partner: att.is_partner,
+                                                      already_builds: att.already_builds,
                                                       contact: att.contact,
                                                       sdrName: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name || 'N/A',
                                                       sdrId: att.booked_by || m.booked_by || 'unknown'
@@ -784,6 +792,7 @@ export function AgendaCalendar({
                                                       attendee_name: m.deal?.contact?.name || m.deal?.name || 'Lead',
                                                       status: m.status,
                                                       is_partner: false,
+                                                      already_builds: null,
                                                       contact: m.deal?.contact,
                                                       sdrName: m.booked_by_profile?.full_name || 'N/A',
                                                       sdrId: m.booked_by || 'unknown'
@@ -811,6 +820,12 @@ export function AgendaCalendar({
                                                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
                                                         <span>{att.attendee_name || att.contact?.name || 'Lead'}</span>
                                                         {att.is_partner && <Badge variant="outline" className="text-[8px] px-1 py-0">Sócio</Badge>}
+                                                        {att.already_builds === true && (
+                                                          <Badge className="text-[8px] px-1 py-0 bg-blue-600">Constrói</Badge>
+                                                        )}
+                                                        {att.already_builds === false && (
+                                                          <Badge variant="outline" className="text-[8px] px-1 py-0 border-orange-500 text-orange-600">Não Constrói</Badge>
+                                                        )}
                                                       </div>
                                                       <div>
                                                         {att.status === 'no_show' && <Badge variant="destructive" className="text-[8px]">No-show</Badge>}

@@ -18,6 +18,7 @@ export interface MeetingAttendee {
   notes: string | null;
   closer_notes: string | null;
   parent_attendee_id?: string | null;
+  already_builds: boolean | null;
   contact?: {
     id: string;
     name: string;
@@ -157,6 +158,7 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
             notes,
             closer_notes,
             parent_attendee_id,
+            already_builds,
             contact:crm_contacts(id, name, phone, email),
             deal:crm_deals(id, name)
           )
@@ -808,6 +810,7 @@ export function useCreateMeeting() {
       leadType,
       sendNotification = true,
       sdrEmail,
+      alreadyBuilds,
     }: {
       closerId: string;
       dealId: string;
@@ -818,6 +821,7 @@ export function useCreateMeeting() {
       leadType?: LeadType;
       sendNotification?: boolean;
       sdrEmail?: string;
+      alreadyBuilds?: boolean | null;
     }) => {
       // Chamar a edge function que cria o evento no Google Calendar com Meet
       const { data, error } = await supabase.functions.invoke('calendly-create-event', {
@@ -830,6 +834,7 @@ export function useCreateMeeting() {
           notes,
           leadType,
           sdrEmail,
+          alreadyBuilds,
         },
       });
 
@@ -1013,7 +1018,6 @@ export function useCheckSlotAvailability(
       if (!closerId || !scheduledAt) return null;
 
       const dayOfWeek = scheduledAt.getDay() === 0 ? 7 : scheduledAt.getDay();
-      const hour = scheduledAt.getHours();
 
       // Get the max slots config for this closer/day/lead_type
       const { data: availability } = await supabase
@@ -1044,22 +1048,23 @@ export function useCheckSlotAvailability(
         .lte('scheduled_at', hourEnd.toISOString())
         .neq('status', 'canceled');
 
-      // Count attendees in those meetings
+      // Get attendees in those meetings (including already_builds field)
       const ids = (meetingIds || []).map(m => m.id);
-      let currentCount = 0;
+      let attendees: { id: string; already_builds: boolean | null; attendee_name: string | null }[] = [];
       
       if (ids.length > 0) {
-        const { count } = await supabase
+        const { data } = await supabase
           .from('meeting_slot_attendees')
-          .select('*', { count: 'exact', head: true })
+          .select('id, already_builds, attendee_name')
           .in('meeting_slot_id', ids);
-        currentCount = count || 0;
+        attendees = data || [];
       }
 
       return {
-        available: currentCount < maxSlots,
-        currentCount,
+        available: attendees.length < maxSlots,
+        currentCount: attendees.length,
         maxSlots,
+        attendees,
       };
     },
     enabled: !!closerId && !!scheduledAt,

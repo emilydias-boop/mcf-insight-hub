@@ -2783,6 +2783,7 @@ export type Database = {
       }
       meeting_slot_attendees: {
         Row: {
+          already_builds: boolean | null
           attendee_name: string | null
           attendee_phone: string | null
           booked_by: string | null
@@ -2800,6 +2801,7 @@ export type Database = {
           status: string | null
         }
         Insert: {
+          already_builds?: boolean | null
           attendee_name?: string | null
           attendee_phone?: string | null
           booked_by?: string | null
@@ -2817,6 +2819,7 @@ export type Database = {
           status?: string | null
         }
         Update: {
+          already_builds?: boolean | null
           attendee_name?: string | null
           attendee_phone?: string | null
           booked_by?: string | null
