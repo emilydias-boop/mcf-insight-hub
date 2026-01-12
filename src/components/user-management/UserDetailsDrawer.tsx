@@ -348,12 +348,23 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Squad / Equipe (opcional)</Label>
-                  <Input
-                    value={generalData.squad}
-                    onChange={(e) => setGeneralData({ ...generalData, squad: e.target.value })}
-                    placeholder="Ex: Inside Sales - Crédito"
-                  />
+                  <Label>Business Unit (BU)</Label>
+                  <Select 
+                    value={generalData.squad || ""} 
+                    onValueChange={(value) => setGeneralData({ ...generalData, squad: value || "" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a BU" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Nenhuma</SelectItem>
+                      <SelectItem value="incorporador">BU - Incorporador MCF</SelectItem>
+                      <SelectItem value="consorcio">BU - Consórcio</SelectItem>
+                      <SelectItem value="credito">BU - Crédito</SelectItem>
+                      <SelectItem value="projetos">BU - Projetos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Define qual BU o usuário pode visualizar no menu</p>
                 </div>
 
                 <Button 

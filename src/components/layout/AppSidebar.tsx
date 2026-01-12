@@ -33,6 +33,7 @@ import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyPermissions } from "@/hooks/useMyPermissions";
 import { useMyProducts } from "@/hooks/useMyProducts";
+import { useMyBU, BusinessUnit } from "@/hooks/useMyBU";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,7 @@ interface MenuItem {
   icon: any;
   requiredRoles?: AppRole[];
   requiredProducts?: string[];
+  requiredBU?: BusinessUnit[]; // BUs que podem ver este item
   resource?: ResourceType;
   items?: { title: string; url: string; requiredRoles?: AppRole[]; }[];
   separator?: boolean;
@@ -208,6 +210,16 @@ const menuItems: MenuItem[] = [
     separator: true,
   },
   
+  // Metas da Equipe (SDRs da BU Incorporador)
+  { 
+    title: "Metas da Equipe", 
+    url: "/crm/reunioes-equipe", 
+    icon: BarChart3, 
+    resource: "crm", 
+    requiredRoles: ['sdr'],
+    requiredBU: ['incorporador'],
+  },
+  
   // ===== CONFIGURAÇÕES =====
   
   { 
@@ -249,6 +261,7 @@ export function AppSidebar() {
   const { user, role, signOut } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { data: myProducts = [] } = useMyProducts();
+  const { data: myBU } = useMyBU();
   const { state, toggleSidebar } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
@@ -282,6 +295,15 @@ export function AppSidebar() {
       }
       return false;
     }
+    
+    // Verificação de BU para SDRs
+    if (item.requiredBU && item.requiredBU.length > 0) {
+      // Se o usuário não tem BU definida ou a BU não está na lista, não mostra
+      if (!myBU || !item.requiredBU.includes(myBU)) {
+        return false;
+      }
+    }
+    
     if (isAdmin) return true;
     if (item.resource && !canAccessResource(item.resource)) {
       return false;
