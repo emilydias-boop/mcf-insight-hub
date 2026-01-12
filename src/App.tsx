@@ -51,9 +51,6 @@ import Agenda from "./pages/crm/Agenda";
 import DealsOrfaos from "./pages/crm/DealsOrfaos";
 import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
 import AgendaMetricas from "./pages/crm/AgendaMetricas";
-import TVSdrPerformance from "./pages/TVSdrPerformance";
-import TVSdrFullscreen from "./pages/TVSdrFullscreen";
-import TVSdrCelebrationDemo from "./pages/TVSdrCelebrationDemo";
 import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
 import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
@@ -125,7 +122,7 @@ const App = () => (
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
-              <Route path="tv-sdr" element={<ResourceGuard resource="tv_sdr"><TVSdrPerformance /></ResourceGuard>} />
+              
               <Route path="fechamento-sdr" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard>} />
               <Route path="fechamento-sdr/configuracoes" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard>} />
               <Route path="fechamento-sdr/:payoutId" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRDetail /></ResourceGuard>} />
@@ -164,9 +161,6 @@ const App = () => (
               </Route>
             </Route>
             
-            {/* Public fullscreen TV route - no auth required */}
-            <Route path="/tv-sdr/fullscreen" element={<TVSdrFullscreen />} />
-            <Route path="/tv-sdr/demo-celebration" element={<TVSdrCelebrationDemo />} />
             
             <Route path="*" element={<NotFound />} />
             </Routes>

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Target, Settings2 } from "lucide-react";
-import { GaugeSemicircle } from "@/components/tv/GaugeSemicircle";
+import { GaugeSemicircle } from "./GaugeSemicircle";
 import { TeamGoalsEditModal } from "./TeamGoalsEditModal";
 import { useSdrTeamTargets, SDR_TARGET_CONFIGS, SdrTargetType } from "@/hooks/useSdrTeamTargets";
 import { useAuth } from "@/contexts/AuthContext";

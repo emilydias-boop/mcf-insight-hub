@@ -30,7 +30,6 @@ const RESOURCES: ResourceType[] = [
   'alertas',
   'crm',
   'fechamento_sdr',
-  'tv_sdr',
   'usuarios',
   'financeiro',
   'projetos',
