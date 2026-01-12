@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
 import { useIncorporadorTransactions } from "@/hooks/useIncorporadorTransactions";
 import { IncorporadorTransactionDrawer } from "@/components/incorporador/IncorporadorTransactionDrawer";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare } from "lucide-react";
+import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -63,6 +63,8 @@ export default function TransacoesIncorp() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>('sale_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
 
   // Filtro para produtos Incorporador 50k
   const { data: transactions, isLoading, refetch } = useIncorporadorTransactions({
@@ -135,10 +137,17 @@ export default function TransacoesIncorp() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === displayTransactions.length) {
-      setSelectedIds(new Set());
+    const pageIds = paginatedTransactions.map(tx => tx.id);
+    const allSelected = pageIds.every(id => selectedIds.has(id));
+    
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const newSet = new Set(prev);
+        pageIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
     } else {
-      setSelectedIds(new Set(displayTransactions.map(tx => tx.id)));
+      setSelectedIds(prev => new Set([...prev, ...pageIds]));
     }
   };
 
@@ -228,6 +237,19 @@ export default function TransacoesIncorp() {
     
     return filtered;
   }, [transactions, hideDuplicates, sortField, sortDirection]);
+
+  // Paginação
+  const totalPages = Math.ceil(displayTransactions.length / ITEMS_PER_PAGE);
+
+  const paginatedTransactions = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return displayTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [displayTransactions, currentPage, ITEMS_PER_PAGE]);
+
+  // Reset página quando filtros mudam
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, startDate, endDate, showOnlyCountable, hideDuplicates]);
 
   const totals = useMemo(() => {
     if (!displayTransactions) return { bruto: 0, liquido: 0, count: 0, countable: 0 };
@@ -455,7 +477,7 @@ export default function TransacoesIncorp() {
               <TableRow>
                 <TableHead className="w-10">
                   <Checkbox 
-                    checked={displayTransactions.length > 0 && selectedIds.size === displayTransactions.length}
+                    checked={paginatedTransactions.length > 0 && paginatedTransactions.every(tx => selectedIds.has(tx.id))}
                     onCheckedChange={toggleSelectAll}
                   />
                 </TableHead>
@@ -505,7 +527,7 @@ export default function TransacoesIncorp() {
                   </TableCell>
                 </TableRow>
               ) : (
-                displayTransactions.map((tx) => (
+                paginatedTransactions.map((tx) => (
                   <TableRow key={tx.id} className={cn(
                     tx.count_in_dashboard === false && "opacity-50"
                   )}>
@@ -589,6 +611,57 @@ export default function TransacoesIncorp() {
               )}
             </TableBody>
           </Table>
+          
+          {/* Paginação */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">
+                Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} a{' '}
+                {Math.min(currentPage * ITEMS_PER_PAGE, displayTransactions.length)} de{' '}
+                {displayTransactions.length} transações
+              </span>
+              
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                
+                <span className="text-sm px-3">
+                  Página {currentPage} de {totalPages}
+                </span>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
