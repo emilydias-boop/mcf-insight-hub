@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { useIncorporadorLeadJourney } from '@/hooks/useIncorporadorLeadJourney';
-import { useCustomerTransactions } from '@/hooks/useCustomerTransactions';
+import { useCustomerTransactions, CustomerTransaction } from '@/hooks/useCustomerTransactions';
 import { 
   Phone, 
   Mail, 
@@ -26,7 +26,8 @@ import {
   Receipt,
   ChevronLeft,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Package
 } from 'lucide-react';
 
 interface IncorporadorTransactionDrawerProps {
@@ -44,6 +45,14 @@ interface IncorporadorTransactionDrawerProps {
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface GroupedTransaction {
+  id: string;
+  main: CustomerTransaction;
+  orderBumps: CustomerTransaction[];
+  totalGross: number;
+  totalNet: number;
 }
 
 const formatCurrency = (value: number | null) => {
@@ -81,6 +90,40 @@ const getMeetingStatusBadge = (status: string | null) => {
     default:
       return status ? <Badge variant="outline">{status}</Badge> : null;
   }
+};
+
+const groupTransactionsByPurchase = (transactions: CustomerTransaction[]): GroupedTransaction[] => {
+  const groups = new Map<string, GroupedTransaction>();
+
+  transactions.forEach(tx => {
+    // Extract base ID (remove -offer-X suffixes)
+    const baseId = tx.hubla_id?.replace(/-offer-\d+$/, '') || tx.id;
+    const isOrderBump = tx.hubla_id?.includes('-offer-');
+
+    if (!groups.has(baseId)) {
+      groups.set(baseId, {
+        id: baseId,
+        main: tx,
+        orderBumps: [],
+        totalGross: 0,
+        totalNet: 0
+      });
+    }
+
+    const group = groups.get(baseId)!;
+
+    if (isOrderBump) {
+      group.orderBumps.push(tx);
+    } else {
+      group.main = tx;
+    }
+
+    group.totalGross += tx.product_price || 0;
+    group.totalNet += tx.net_value || 0;
+  });
+
+  return Array.from(groups.values())
+    .sort((a, b) => new Date(b.main.sale_date).getTime() - new Date(a.main.sale_date).getTime());
 };
 
 interface JourneyStepProps {
@@ -157,10 +200,16 @@ export const IncorporadorTransactionDrawer = ({
   const meeting02Completed = journey?.meeting02?.status?.toLowerCase() === 'completed' || 
                              journey?.meeting02?.status?.toLowerCase() === 'realizada';
 
-  // Pagination calculations
-  const totalTransactions = allTransactions?.length || 0;
-  const totalPages = Math.ceil(totalTransactions / ITEMS_PER_PAGE);
-  const paginatedTransactions = allTransactions?.slice(
+  // Group transactions by purchase
+  const groupedTransactions = useMemo(() => {
+    if (!allTransactions) return [];
+    return groupTransactionsByPurchase(allTransactions);
+  }, [allTransactions]);
+
+  // Pagination calculations (by group)
+  const totalGroups = groupedTransactions.length;
+  const totalPages = Math.ceil(totalGroups / ITEMS_PER_PAGE);
+  const paginatedGroups = groupedTransactions.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
@@ -340,7 +389,7 @@ export const IncorporadorTransactionDrawer = ({
               <h4 className="font-medium flex items-center gap-2 justify-between">
                 <span className="flex items-center gap-2">
                   <Receipt className="h-4 w-4" />
-                  Transações do Cliente ({totalTransactions})
+                  Compras do Cliente ({totalGroups})
                 </span>
                 {totalPages > 1 && (
                   <span className="text-xs text-muted-foreground font-normal">
@@ -355,64 +404,102 @@ export const IncorporadorTransactionDrawer = ({
                   <Skeleton className="h-16 w-full" />
                   <Skeleton className="h-16 w-full" />
                 </div>
-              ) : paginatedTransactions && paginatedTransactions.length > 0 ? (
+              ) : paginatedGroups && paginatedGroups.length > 0 ? (
                 <>
                   <div className="space-y-2">
-                    {paginatedTransactions.map((tx) => (
+                    {paginatedGroups.map((group) => (
                       <div 
-                        key={tx.id} 
+                        key={group.id} 
                         className={`bg-muted/30 rounded-lg p-3 text-sm border cursor-pointer transition-colors hover:bg-muted/50 ${
-                          tx.id === transaction.id ? 'border-primary/50 bg-primary/5' : 'border-transparent'
+                          group.main.id === transaction.id ? 'border-primary/50 bg-primary/5' : 'border-transparent'
                         }`}
-                        onClick={() => setExpandedTxId(expandedTxId === tx.id ? null : tx.id)}
+                        onClick={() => setExpandedTxId(expandedTxId === group.id ? null : group.id)}
                       >
                         <div className="flex justify-between items-start gap-2">
                           <div className="flex items-start gap-2 min-w-0 flex-1">
                             <ChevronDown className={`h-4 w-4 mt-0.5 text-muted-foreground transition-transform flex-shrink-0 ${
-                              expandedTxId === tx.id ? 'rotate-180' : ''
+                              expandedTxId === group.id ? 'rotate-180' : ''
                             }`} />
                             <div className="min-w-0 flex-1">
-                              <p className="font-medium truncate" title={tx.product_name}>
-                                {tx.product_name}
+                              <p className="font-medium truncate" title={group.main.product_name}>
+                                {group.main.product_name}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {formatDate(tx.sale_date)}
+                                {formatDate(group.main.sale_date)}
+                                {group.orderBumps.length > 0 && (
+                                  <span className="ml-2 inline-flex items-center gap-1">
+                                    <Package className="h-3 w-3" />
+                                    +{group.orderBumps.length} order bump{group.orderBumps.length > 1 ? 's' : ''}
+                                  </span>
+                                )}
                               </p>
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
                             <p className="font-medium text-green-600">
-                              {formatCurrency(tx.net_value)}
+                              {formatCurrency(group.totalNet)}
                             </p>
-                            {tx.total_installments && tx.total_installments > 1 && (
+                            {group.main.total_installments && group.main.total_installments > 1 && (
                               <p className="text-xs text-muted-foreground">
-                                Parcela {tx.installment_number}/{tx.total_installments}
+                                Parcela {group.main.installment_number}/{group.main.total_installments}
                               </p>
                             )}
                           </div>
                         </div>
 
-                        {/* Expanded Transaction Details */}
-                        {expandedTxId === tx.id && (
-                          <div className="mt-3 pt-3 border-t border-border space-y-2">
-                            <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              Resumo da Transação
-                            </h5>
-                            <div className="grid grid-cols-2 gap-y-2 text-sm">
-                              <span className="text-muted-foreground">Produto</span>
-                              <span className="text-right font-medium">{tx.product_name}</span>
-                              
-                              <span className="text-muted-foreground">Data da Venda</span>
-                              <span className="text-right">{formatDate(tx.sale_date)}</span>
-                              
-                              <span className="text-muted-foreground">Parcela</span>
-                              <span className="text-right">{tx.installment_number || 1}/{tx.total_installments || 1}</span>
-                              
-                              <span className="text-muted-foreground">Valor Bruto</span>
-                              <span className="text-right">{formatCurrency(tx.product_price)}</span>
-                              
-                              <span className="text-muted-foreground">Valor Líquido</span>
-                              <span className="text-right text-green-600 font-medium">{formatCurrency(tx.net_value)}</span>
+                        {/* Expanded Purchase Details */}
+                        {expandedTxId === group.id && (
+                          <div className="mt-3 pt-3 border-t border-border space-y-3">
+                            {/* Main Product */}
+                            <div>
+                              <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                                Produto Principal
+                              </h5>
+                              <div className="grid grid-cols-2 gap-y-1 text-sm">
+                                <span className="text-muted-foreground">Produto</span>
+                                <span className="text-right font-medium truncate" title={group.main.product_name}>
+                                  {group.main.product_name}
+                                </span>
+                                
+                                <span className="text-muted-foreground">Valor Bruto</span>
+                                <span className="text-right">{formatCurrency(group.main.product_price)}</span>
+                                
+                                <span className="text-muted-foreground">Valor Líquido</span>
+                                <span className="text-right text-green-600">{formatCurrency(group.main.net_value)}</span>
+                              </div>
+                            </div>
+
+                            {/* Order Bumps */}
+                            {group.orderBumps.length > 0 && (
+                              <div>
+                                <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                                  Order Bumps ({group.orderBumps.length})
+                                </h5>
+                                <div className="space-y-2">
+                                  {group.orderBumps.map((ob) => (
+                                    <div key={ob.id} className="flex justify-between items-center text-sm bg-muted/30 rounded px-2 py-1.5">
+                                      <span className="truncate flex-1 mr-2" title={ob.product_name}>
+                                        • {ob.product_name}
+                                      </span>
+                                      <span className="flex-shrink-0 text-muted-foreground">
+                                        {formatCurrency(ob.product_price)} → <span className="text-green-600">{formatCurrency(ob.net_value)}</span>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Total */}
+                            <div className="pt-2 border-t border-border">
+                              <div className="flex justify-between items-center font-medium">
+                                <span>Total da Compra</span>
+                                <span className="text-green-600">{formatCurrency(group.totalNet)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
+                                <span>Valor Bruto Total</span>
+                                <span>{formatCurrency(group.totalGross)}</span>
+                              </div>
                             </div>
                           </div>
                         )}
