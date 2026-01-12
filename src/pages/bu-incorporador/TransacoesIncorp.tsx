@@ -16,7 +16,7 @@ import {
 } from "@/hooks/useHublaTransactions";
 import { TransactionDetailsDrawer } from "@/components/receita/TransactionDetailsDrawer";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, Building2 } from "lucide-react";
+import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -283,19 +283,21 @@ export default function TransacoesIncorp() {
 
   const isSomeSelected = selectedIds.size > 0;
 
+  const setLastWeek = () => {
+    const lastWeekStart = subWeeks(startOfWeek(now, { weekStartsOn: 6 }), 1);
+    const lastWeekEnd = subWeeks(endOfWeek(now, { weekStartsOn: 6 }), 1);
+    setStartDate(lastWeekStart);
+    setEndDate(lastWeekEnd);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Building2 className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">Transações Incorporador</h2>
-            <p className="text-muted-foreground mt-1">
-              Transações filtradas para produtos Incorporador 50k
-            </p>
-          </div>
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Transações Incorporador</h2>
+          <p className="text-muted-foreground mt-1">
+            Gerencie quais transações contam no Dashboard (Incorporador 50k)
+          </p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" size="sm" onClick={() => refetch()}>
@@ -438,6 +440,10 @@ export default function TransacoesIncorp() {
                 Ocultar duplicatas
               </label>
             </div>
+
+            <Button variant="outline" size="sm" onClick={setLastWeek}>
+              Semana Anterior
+            </Button>
           </div>
         </CardContent>
       </Card>
