@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   ChevronRight,
   UserCircle,
-  Tv,
   FolderOpen,
   BookOpen,
   Building2,
@@ -115,9 +114,6 @@ const menuItems: MenuItem[] = [
   { title: "CRM", url: "/crm", icon: UserCircle, resource: "crm", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   { title: "Minhas Reuniões", url: "/sdr/minhas-reunioes", icon: Calendar, resource: "crm", requiredRoles: ['sdr'] },
   { title: "Reuniões da Equipe", url: "/crm/reunioes-equipe", icon: Users, resource: "crm", requiredRoles: ['admin', 'manager', 'coordenador'] },
-  
-  // TV SDR
-  { title: "TV SDR", url: "/tv-sdr", icon: Tv, resource: "tv_sdr", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
   
   // Produtos (Master view)
   { title: "Produtos", url: "/produtos", icon: Package, requiredRoles: ['admin', 'manager', 'coordenador'] },
