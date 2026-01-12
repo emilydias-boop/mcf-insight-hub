@@ -10,6 +10,7 @@ export interface CustomerTransaction {
   installment_number: number | null;
   total_installments: number | null;
   count_in_dashboard: boolean | null;
+  source: string | null;
 }
 
 export const useCustomerTransactions = (customerEmail: string | null) => {
@@ -20,9 +21,10 @@ export const useCustomerTransactions = (customerEmail: string | null) => {
       
       const { data, error } = await supabase
         .from('hubla_transactions')
-        .select('id, product_name, sale_date, product_price, net_value, installment_number, total_installments, count_in_dashboard')
+        .select('id, product_name, sale_date, product_price, net_value, installment_number, total_installments, count_in_dashboard, source')
         .eq('customer_email', customerEmail)
         .eq('sale_status', 'completed')
+        .eq('source', 'hubla')
         .order('sale_date', { ascending: false });
       
       if (error) {
