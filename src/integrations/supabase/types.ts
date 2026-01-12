@@ -5248,6 +5248,15 @@ export type Database = {
     }
     Functions: {
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
+      get_contact_with_meetings: {
+        Args: { p_email?: string; p_phone_suffix?: string }
+        Returns: {
+          contact_id: string
+          contact_name: string
+          deals_count: number
+          meetings_count: number
+        }[]
+      }
       get_duplicate_contact_emails: {
         Args: { limit_count?: number }
         Returns: {
