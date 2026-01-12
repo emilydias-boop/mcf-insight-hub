@@ -186,6 +186,20 @@ export const IncorporadorTransactionDrawer = ({
     }
   }, [open, transaction?.id]);
 
+  // Group transactions by purchase (must be before early return)
+  const groupedTransactions = useMemo(() => {
+    if (!allTransactions) return [];
+    return groupTransactionsByPurchase(allTransactions);
+  }, [allTransactions]);
+
+  // Pagination calculations (by group)
+  const totalGroups = groupedTransactions.length;
+  const totalPages = Math.ceil(totalGroups / ITEMS_PER_PAGE);
+  const paginatedGroups = groupedTransactions.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   if (!transaction) return null;
 
   const whatsappLink = transaction.customer_phone 
@@ -199,20 +213,6 @@ export const IncorporadorTransactionDrawer = ({
   const hasMeeting02 = !!journey?.meeting02;
   const meeting02Completed = journey?.meeting02?.status?.toLowerCase() === 'completed' || 
                              journey?.meeting02?.status?.toLowerCase() === 'realizada';
-
-  // Group transactions by purchase
-  const groupedTransactions = useMemo(() => {
-    if (!allTransactions) return [];
-    return groupTransactionsByPurchase(allTransactions);
-  }, [allTransactions]);
-
-  // Pagination calculations (by group)
-  const totalGroups = groupedTransactions.length;
-  const totalPages = Math.ceil(totalGroups / ITEMS_PER_PAGE);
-  const paginatedGroups = groupedTransactions.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
