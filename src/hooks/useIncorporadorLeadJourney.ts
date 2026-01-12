@@ -88,7 +88,17 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
 
       if (!contactId) return null;
 
-      // 3. Buscar deals do contato (pegamos o mais recente, priorizando os com reuniões)
+      // 3. Buscar lista de closers para filtrar SDRs
+      const { data: closers } = await supabase
+        .from('closers')
+        .select('email')
+        .eq('is_active', true);
+
+      const closerEmails = new Set(
+        closers?.map(c => c.email?.toLowerCase()).filter(Boolean) || []
+      );
+
+      // 4. Buscar deals do contato (pegamos o mais recente, priorizando os com reuniões)
       const { data: deals } = await supabase
         .from('crm_deals')
         .select(`
@@ -141,24 +151,49 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
         sdrProfile = profile;
       }
 
-      // 6. Extrair SDR: priorizar booked_by da reunião, depois custom_fields, depois deal_activities
-      const customFields = deal.custom_fields as Record<string, any> | null;
-      let sdrName = sdrProfile?.full_name || customFields?.user_name || null;
-      let sdrEmail = sdrProfile?.email || customFields?.user_email || null;
+      // 6. Extrair SDR com lógica de prioridade e filtro de closers
+      let sdrName: string | null = null;
+      let sdrEmail: string | null = null;
 
-      // 6. Fallback: buscar SDR na deal_activities se ainda não encontrou
-      if (!sdrName && !sdrEmail) {
-        const { data: activity } = await supabase
+      // Prioridade 1: booked_by da primeira reunião (quem agendou)
+      if (sdrProfile?.email) {
+        // Verificar se não é um closer
+        if (!closerEmails.has(sdrProfile.email.toLowerCase())) {
+          sdrName = sdrProfile.full_name || null;
+          sdrEmail = sdrProfile.email;
+        }
+      }
+
+      // Prioridade 2: Buscar nas deal_activities quem moveu para R1 Agendada
+      if (!sdrEmail) {
+        const { data: r1Activity } = await supabase
           .from('deal_activities')
           .select('metadata')
           .eq('deal_id', deal.id)
-          .order('created_at', { ascending: false })
+          .or('to_stage.ilike.%Reunião 01 Agendada%,to_stage.ilike.%R1 Agendada%')
+          .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle();
         
-        const metadata = activity?.metadata as Record<string, any> | null;
-        sdrName = metadata?.deal_user_name || null;
-        sdrEmail = metadata?.deal_user || metadata?.owner_email || null;
+        const r1Meta = r1Activity?.metadata as Record<string, any> | null;
+        const activityOwnerEmail = r1Meta?.owner_email || r1Meta?.deal_user;
+        
+        // Só usar se NÃO for closer
+        if (activityOwnerEmail && !closerEmails.has(activityOwnerEmail.toLowerCase())) {
+          sdrEmail = activityOwnerEmail;
+          sdrName = r1Meta?.deal_user_name || null;
+        }
+      }
+
+      // Prioridade 3: custom_fields apenas se NÃO for closer
+      if (!sdrEmail) {
+        const customFields = deal.custom_fields as Record<string, any> | null;
+        const ownerEmail = customFields?.user_email;
+        
+        if (ownerEmail && !closerEmails.has(ownerEmail.toLowerCase())) {
+          sdrEmail = ownerEmail;
+          sdrName = customFields?.user_name || null;
+        }
       }
 
       // 7. Separar Reunião 01 e R2
