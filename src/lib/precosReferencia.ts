@@ -2,6 +2,7 @@
 // Usado para Faturamento Clint Bruto - ignora juros do cartão
 // A005/P2 NÃO tem valor fixo - usa product_price do banco
 export const PRECO_REFERENCIA: Record<string, number> = {
+  'A010': 47,     // A010 - Consultoria Construa para Vender
   'A009': 19500,  // MCF INCORPORADOR COMPLETO + THE CLUB
   'A001': 14500,  // MCF INCORPORADOR COMPLETO
   'A003': 7503,   // MCF Plano Anticrise Completo
@@ -16,6 +17,7 @@ export const PRECO_REFERENCIA: Record<string, number> = {
 // Normaliza nome do produto para chave de deduplicação (email+produto)
 export const normalizeProductForDedup = (productName: string): string => {
   const upper = productName.toUpperCase();
+  if (upper.includes('A010')) return 'A010';
   if (upper.includes('A009')) return 'A009';
   if (upper.includes('A008')) return 'A008';
   if (upper.includes('A005') || upper.includes('P2')) return 'A005';
