@@ -25,7 +25,8 @@ import {
   Building2,
   Receipt,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronDown
 } from 'lucide-react';
 
 interface IncorporadorTransactionDrawerProps {
@@ -123,6 +124,7 @@ export const IncorporadorTransactionDrawer = ({
   onOpenChange 
 }: IncorporadorTransactionDrawerProps) => {
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
 
   const { data: journey, isLoading } = useIncorporadorLeadJourney(
     transaction?.customer_email || null,
@@ -133,10 +135,11 @@ export const IncorporadorTransactionDrawer = ({
     transaction?.customer_email || null
   );
 
-  // Reset page when drawer opens with new transaction
+  // Reset page and expanded state when drawer opens with new transaction
   useEffect(() => {
     if (open) {
       setCurrentPage(1);
+      setExpandedTxId(null);
     }
   }, [open, transaction?.id]);
 
@@ -358,18 +361,24 @@ export const IncorporadorTransactionDrawer = ({
                     {paginatedTransactions.map((tx) => (
                       <div 
                         key={tx.id} 
-                        className={`bg-muted/30 rounded-lg p-3 text-sm border ${
+                        className={`bg-muted/30 rounded-lg p-3 text-sm border cursor-pointer transition-colors hover:bg-muted/50 ${
                           tx.id === transaction.id ? 'border-primary/50 bg-primary/5' : 'border-transparent'
                         }`}
+                        onClick={() => setExpandedTxId(expandedTxId === tx.id ? null : tx.id)}
                       >
                         <div className="flex justify-between items-start gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium truncate" title={tx.product_name}>
-                              {tx.product_name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDate(tx.sale_date)}
-                            </p>
+                          <div className="flex items-start gap-2 min-w-0 flex-1">
+                            <ChevronDown className={`h-4 w-4 mt-0.5 text-muted-foreground transition-transform flex-shrink-0 ${
+                              expandedTxId === tx.id ? 'rotate-180' : ''
+                            }`} />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate" title={tx.product_name}>
+                                {tx.product_name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDate(tx.sale_date)}
+                              </p>
+                            </div>
                           </div>
                           <div className="text-right flex-shrink-0">
                             <p className="font-medium text-green-600">
@@ -382,6 +391,31 @@ export const IncorporadorTransactionDrawer = ({
                             )}
                           </div>
                         </div>
+
+                        {/* Expanded Transaction Details */}
+                        {expandedTxId === tx.id && (
+                          <div className="mt-3 pt-3 border-t border-border space-y-2">
+                            <h5 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              Resumo da Transação
+                            </h5>
+                            <div className="grid grid-cols-2 gap-y-2 text-sm">
+                              <span className="text-muted-foreground">Produto</span>
+                              <span className="text-right font-medium">{tx.product_name}</span>
+                              
+                              <span className="text-muted-foreground">Data da Venda</span>
+                              <span className="text-right">{formatDate(tx.sale_date)}</span>
+                              
+                              <span className="text-muted-foreground">Parcela</span>
+                              <span className="text-right">{tx.installment_number || 1}/{tx.total_installments || 1}</span>
+                              
+                              <span className="text-muted-foreground">Valor Bruto</span>
+                              <span className="text-right">{formatCurrency(tx.product_price)}</span>
+                              
+                              <span className="text-muted-foreground">Valor Líquido</span>
+                              <span className="text-right text-green-600 font-medium">{formatCurrency(tx.net_value)}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
