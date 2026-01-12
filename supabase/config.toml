@@ -212,3 +212,15 @@ verify_jwt = false
 
 [functions.fix-reprocessed-activities]
 verify_jwt = false
+
+[functions.webhook-consorcio]
+verify_jwt = false
+
+[functions.webhook-credito]
+verify_jwt = false
+
+[functions.webhook-projetos]
+verify_jwt = false
+
+[functions.webhook-leilao]
+verify_jwt = false
