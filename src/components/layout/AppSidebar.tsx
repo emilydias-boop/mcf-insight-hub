@@ -120,7 +120,7 @@ const menuItems: MenuItem[] = [
     requiredProducts: ['consorcio'],
     items: [
       { title: "Painel Consórcio", url: "/consorcio" },
-      { title: "Importar", url: "/produtos/consorcio/importar" },
+      { title: "Importar", url: "/consorcio/importar" },
     ]
   },
   
