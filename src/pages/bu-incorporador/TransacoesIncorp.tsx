@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -19,7 +18,7 @@ import { TransactionFormDialog } from "@/components/incorporador/TransactionForm
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { startOfMonth, startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { normalizeProductForDedup, getPrecoReferencia } from "@/lib/precosReferencia";
@@ -49,12 +48,6 @@ type SortField = 'sale_date' | 'net_value' | 'product_price' | 'customer_name';
 type SortDirection = 'asc' | 'desc';
 
 export default function TransacoesIncorp() {
-  const now = new Date();
-  const defaultStart = startOfMonth(now);
-  const defaultEnd = now;
-  
-  const [startDate, setStartDate] = useState<Date | undefined>(defaultStart);
-  const [endDate, setEndDate] = useState<Date | undefined>(defaultEnd);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -71,10 +64,10 @@ export default function TransacoesIncorp() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
-  // Filtro para produtos Incorporador 50k
+  // Sem filtro de data - busca todas as transações
   const { data: transactions, isLoading, refetch } = useIncorporadorTransactions({
-    startDate,
-    endDate,
+    startDate: undefined,
+    endDate: undefined,
     search: searchTerm,
     onlyCountInDashboard: false,
   });
@@ -255,7 +248,7 @@ export default function TransacoesIncorp() {
   // Reset página quando filtros mudam
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, startDate, endDate]);
+  }, [searchTerm]);
 
   // Mapa para identificar duplicatas por email+produto (para mostrar na tabela)
   const duplicateMap = useMemo(() => {
@@ -344,7 +337,7 @@ export default function TransacoesIncorp() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `transacoes-incorporador-${startDate?.toISOString().split("T")[0]}-${endDate?.toISOString().split("T")[0]}.csv`;
+    a.download = `transacoes-incorporador-todas.csv`;
     a.click();
 
     toast({ title: "Exportado", description: "Arquivo CSV gerado com sucesso" });
@@ -352,12 +345,6 @@ export default function TransacoesIncorp() {
 
   const isSomeSelected = selectedIds.size > 0;
 
-  const setLastWeek = () => {
-    const lastWeekStart = subWeeks(startOfWeek(now, { weekStartsOn: 6 }), 1);
-    const lastWeekEnd = subWeeks(endOfWeek(now, { weekStartsOn: 6 }), 1);
-    setStartDate(lastWeekStart);
-    setEndDate(lastWeekEnd);
-  };
 
   return (
     <div className="space-y-6">
@@ -430,29 +417,6 @@ export default function TransacoesIncorp() {
               </div>
             </div>
             
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Data Início</label>
-              <DatePickerCustom 
-                mode="single" 
-                selected={startDate}
-                onSelect={(date) => setStartDate(date as Date | undefined)}
-                placeholder="Início" 
-              />
-            </div>
-            
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Data Fim</label>
-              <DatePickerCustom 
-                mode="single" 
-                selected={endDate}
-                onSelect={(date) => setEndDate(date as Date | undefined)}
-                placeholder="Fim" 
-              />
-            </div>
-
-            <Button variant="outline" size="sm" onClick={setLastWeek}>
-              Semana Anterior
-            </Button>
           </div>
         </CardContent>
       </Card>
