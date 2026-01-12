@@ -69,12 +69,13 @@ export function AgendaCalendar({
   }, []);
 
   // Get days of week that will be displayed in this view
+  // Semana customizada: Sáb(6), Seg(1), Ter(2), Qua(3), Qui(4), Sex(5) - sem Domingo(0)
   const daysOfWeekInView = useMemo(() => {
     const days = viewMode === 'day' 
       ? [selectedDate.getDay()]
       : viewMode === 'month'
         ? [0, 1, 2, 3, 4, 5, 6] // All days for month view
-        : Array.from({ length: 6 }, (_, i) => ((i + 1) % 7)); // Mon-Sat (1,2,3,4,5,6)
+        : [6, 1, 2, 3, 4, 5]; // Sáb=6, Seg=1, Ter=2, Qua=3, Qui=4, Sex=5 (sem Dom=0)
     return days;
   }, [selectedDate, viewMode]);
 
@@ -142,8 +143,16 @@ export function AgendaCalendar({
       const monthEnd = endOfMonth(selectedDate);
       return eachDayOfInterval({ start: monthStart, end: monthEnd });
     }
-    // week view - include Saturday (6 days: Mon-Sat)
-    return Array.from({ length: 6 }, (_, i) => addDays(weekStart, i));
+    // Semana de trabalho: Sáb, Seg, Ter, Qua, Qui, Sex (pular Domingo)
+    // weekStart = Sábado (dia 0 da semana customizada)
+    return [
+      addDays(weekStart, 0), // Sábado
+      addDays(weekStart, 2), // Segunda (pular domingo que seria dia 1)
+      addDays(weekStart, 3), // Terça
+      addDays(weekStart, 4), // Quarta
+      addDays(weekStart, 5), // Quinta
+      addDays(weekStart, 6), // Sexta
+    ];
   }, [selectedDate, viewMode, weekStart]);
 
   const filteredMeetings = useMemo(() => {
