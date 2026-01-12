@@ -2,8 +2,9 @@ import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import * as XLSX from "xlsx";
 import { WEEK_STARTS_ON } from "@/lib/businessDays";
-import { Calendar, Users, RefreshCw } from "lucide-react";
+import { Calendar, Users, RefreshCw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -119,6 +120,7 @@ export default function ReunioesEquipe() {
   const {
     teamKPIs,
     bySDR,
+    allMeetings,
     isLoading,
     refetch,
   } = useTeamMeetingsData({
@@ -268,6 +270,49 @@ export default function ReunioesEquipe() {
     updateUrlParams("custom", selectedMonth, customStartDate, date);
   };
 
+  // Export to Excel function
+  const handleExportExcel = () => {
+    // Aba 1: Resumo por SDR
+    const resumoData = filteredBySDR.map(sdr => ({
+      "SDR": sdr.sdrName,
+      "1º Agendamento": sdr.primeiroAgendamento,
+      "Reagendamento": sdr.reagendamento,
+      "Total Agendamentos": sdr.totalAgendamentos,
+      "Realizadas": sdr.realizadas,
+      "No-Show": sdr.noShows,
+      "Contratos": sdr.contratos,
+      "Taxa Conversão (%)": sdr.taxaConversao.toFixed(1),
+      "Taxa No-Show (%)": sdr.taxaNoShow.toFixed(1),
+    }));
+
+    // Aba 2: Leads detalhados (filtrados pelos SDRs selecionados)
+    const leadsData = allMeetings
+      .filter(m => sdrFilter === "all" || m.intermediador === sdrFilter)
+      .map(m => ({
+        "SDR": m.intermediador || "",
+        "Data/Hora": m.data_agendamento ? format(new Date(m.data_agendamento), "dd/MM/yyyy HH:mm") : "",
+        "Lead": m.contact_name || "",
+        "Email": m.contact_email || "",
+        "Telefone": m.contact_phone || "",
+        "Tipo": m.tipo || "",
+        "Status": m.status_atual || "",
+        "Origem": m.origin_name || "",
+        "Closer": m.closer || "",
+        "Probabilidade": m.probability ? `${m.probability}%` : "",
+      }));
+
+    // Criar workbook com 2 abas
+    const wb = XLSX.utils.book_new();
+    const wsResumo = XLSX.utils.json_to_sheet(resumoData);
+    const wsLeads = XLSX.utils.json_to_sheet(leadsData);
+    
+    XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo SDR");
+    XLSX.utils.book_append_sheet(wb, wsLeads, "Leads Detalhados");
+    
+    // Download
+    XLSX.writeFile(wb, `painel_sdr_${format(start, "yyyyMMdd")}_${format(end, "yyyyMMdd")}.xlsx`);
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Ghost Appointments Alert */}
@@ -286,6 +331,15 @@ export default function ReunioesEquipe() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Exportar Excel
+          </Button>
           <Button
             variant="outline"
             size="sm"
