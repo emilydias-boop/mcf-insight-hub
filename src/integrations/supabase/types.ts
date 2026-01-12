@@ -5723,6 +5723,34 @@ export type Database = {
               total_installments: number
             }[]
           }
+        | {
+            Args: {
+              p_end_date?: string
+              p_limit?: number
+              p_products?: string[]
+              p_search?: string
+              p_start_date?: string
+            }
+            Returns: {
+              count_in_dashboard: boolean
+              customer_email: string
+              customer_name: string
+              customer_phone: string
+              hubla_id: string
+              id: string
+              installment_number: number
+              is_offer: boolean
+              net_value: number
+              product_category: string
+              product_name: string
+              product_price: number
+              raw_data: Json
+              sale_date: string
+              sale_status: string
+              source: string
+              total_installments: number
+            }[]
+          }
       get_novo_lead_count:
         | { Args: { target_date: string }; Returns: Json }
         | {
