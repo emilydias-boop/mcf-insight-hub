@@ -262,10 +262,10 @@ export default function ImportarConsorcioPage() {
   };
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/produtos/consorcio')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/consorcio')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -468,20 +468,20 @@ export default function ImportarConsorcioPage() {
       {step === 'preview' && (
         <Card>
           <CardHeader>
-            <CardTitle>Revisão dos Dados</CardTitle>
+            <CardTitle>Prévia dos Dados</CardTitle>
             <CardDescription>
-              Confira os primeiros 10 registros antes de importar. Total: {rawData.length} registros.
+              Confirme os primeiros 10 registros antes de importar
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
+          <CardContent className="space-y-4">
+            <div className="rounded-md border overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Consorciado</TableHead>
                     <TableHead>Contrato</TableHead>
                     <TableHead>Parcela</TableHead>
-                    <TableHead>Valor</TableHead>
+                    <TableHead>Valor Comissão</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Vendedor</TableHead>
                     <TableHead>Status</TableHead>
@@ -490,14 +490,13 @@ export default function ImportarConsorcioPage() {
                 <TableBody>
                   {previewData.map((row, i) => (
                     <TableRow key={i}>
-                      <TableCell className="font-medium">{row.consorciado}</TableCell>
+                      <TableCell>{row.consorciado}</TableCell>
                       <TableCell>{row.contrato || '-'}</TableCell>
                       <TableCell>{row.parcela || '-'}</TableCell>
                       <TableCell>
                         {row.valor_comissao 
-                          ? `R$ ${row.valor_comissao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                          : '-'
-                        }
+                          ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.valor_comissao) 
+                          : '-'}
                       </TableCell>
                       <TableCell>{row.data_interface || '-'}</TableCell>
                       <TableCell>{row.vendedor_name || '-'}</TableCell>
@@ -508,13 +507,19 @@ export default function ImportarConsorcioPage() {
               </Table>
             </div>
             
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-sm text-muted-foreground">
+                <AlertCircle className="h-4 w-4 inline mr-2" />
+                Total de registros a importar: <strong>{rawData.length}</strong>
+              </p>
+            </div>
+            
             {importing && (
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Importando...</span>
-                </div>
+              <div className="space-y-2">
                 <Progress value={progress} />
+                <p className="text-sm text-center text-muted-foreground">
+                  Importando... {Math.round(progress)}%
+                </p>
               </div>
             )}
             
@@ -529,10 +534,7 @@ export default function ImportarConsorcioPage() {
                     Importando...
                   </>
                 ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar {rawData.length} registros
-                  </>
+                  'Importar Dados'
                 )}
               </Button>
             </div>
@@ -543,11 +545,11 @@ export default function ImportarConsorcioPage() {
       {/* Step 4: Complete */}
       {step === 'complete' && (
         <Card>
-          <CardContent className="pt-12 pb-12 text-center">
+          <CardContent className="py-12 text-center">
             <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
-            <h2 className="text-2xl font-bold text-foreground mb-2">Importação Concluída!</h2>
+            <h2 className="text-2xl font-bold mb-2">Importação Concluída!</h2>
             <p className="text-muted-foreground mb-6">
-              Os dados foram importados com sucesso.
+              Os dados foram importados com sucesso para o sistema.
             </p>
             <div className="flex justify-center gap-4">
               <Button variant="outline" onClick={() => {
@@ -556,11 +558,12 @@ export default function ImportarConsorcioPage() {
                 setHeaders([]);
                 setRawData([]);
                 setPreviewData([]);
+                setProgress(0);
               }}>
-                Importar Mais
+                Nova Importação
               </Button>
-              <Button onClick={() => navigate('/produtos/consorcio')}>
-                Ver Consórcio
+              <Button onClick={() => navigate('/consorcio')}>
+                Ver Consórcios
               </Button>
             </div>
           </CardContent>

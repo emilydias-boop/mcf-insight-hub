@@ -69,9 +69,9 @@ import NotFound from "./pages/NotFound";
 import DashboardSemanas from "./pages/dashboard/Semanas";
 import ProdutosIndex from "./pages/produtos/Index";
 import ProdutosInside from "./pages/produtos/Inside";
-import ProdutosConsorcio from "./pages/produtos/Consorcio";
-import ImportarConsorcio from "./pages/produtos/ImportarConsorcio";
 import SetorGenerico from "./pages/produtos/SetorGenerico";
+import ConsorcioIndex from "./pages/bu-consorcio/Index";
+import ConsorcioImportar from "./pages/bu-consorcio/Importar";
 import AdminPermissoes from "./pages/admin/Permissoes";
 
 const queryClient = new QueryClient();
@@ -117,7 +117,8 @@ const App = () => (
               <Route path="relatorios" element={<ResourceGuard resource="relatorios"><Relatorios /></ResourceGuard>} />
               <Route path="relatorios/leads-sem-tag" element={<ResourceGuard resource="relatorios"><LeadsSemTag /></ResourceGuard>} />
               <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
-              <Route path="consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'sdr', 'closer', 'coordenador']}><ProdutosConsorcio /></RoleGuard>} />
+              <Route path="consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'sdr', 'closer', 'coordenador']}><ConsorcioIndex /></RoleGuard>} />
+              <Route path="consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioImportar /></RoleGuard>} />
               <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
               <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
@@ -143,8 +144,6 @@ const App = () => (
               <Route path="crm/configurar-closers" element={<ResourceGuard resource="configuracoes"><ConfigurarClosers /></ResourceGuard>} />
               <Route path="produtos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosIndex /></RoleGuard>} />
               <Route path="produtos/inside" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosInside /></RoleGuard>} />
-              <Route path="produtos/consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosConsorcio /></RoleGuard>} />
-              <Route path="produtos/consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ImportarConsorcio /></RoleGuard>} />
               <Route path="produtos/:setor" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SetorGenerico /></RoleGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
