@@ -56,8 +56,6 @@ export default function TransacoesIncorp() {
   const [startDate, setStartDate] = useState<Date | undefined>(defaultStart);
   const [endDate, setEndDate] = useState<Date | undefined>(defaultEnd);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showOnlyCountable, setShowOnlyCountable] = useState(false);
-  const [hideDuplicates, setHideDuplicates] = useState(true);
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
@@ -78,7 +76,7 @@ export default function TransacoesIncorp() {
     startDate,
     endDate,
     search: searchTerm,
-    onlyCountInDashboard: showOnlyCountable,
+    onlyCountInDashboard: false,
   });
 
   const updateFlag = useUpdateTransactionDashboardFlag();
@@ -222,20 +220,6 @@ export default function TransacoesIncorp() {
       return true;
     });
     
-    if (hideDuplicates) {
-      const seen = new Map<string, typeof filtered[0]>();
-      filtered.forEach(tx => {
-        const key = `${tx.customer_email?.toLowerCase() || ''}-${tx.sale_date?.split('T')[0] || ''}-${Math.round(tx.net_value || 0)}`;
-        const existing = seen.get(key);
-        if (!existing || 
-            (tx.source === 'hubla' && existing.source === 'make') ||
-            (tx.count_in_dashboard && !existing.count_in_dashboard)) {
-          seen.set(key, tx);
-        }
-      });
-      filtered = Array.from(seen.values());
-    }
-    
     filtered.sort((a, b) => {
       let comparison = 0;
       
@@ -258,7 +242,7 @@ export default function TransacoesIncorp() {
     });
     
     return filtered;
-  }, [transactions, hideDuplicates, sortField, sortDirection]);
+  }, [transactions, sortField, sortDirection]);
 
   // Paginação
   const totalPages = Math.ceil(displayTransactions.length / ITEMS_PER_PAGE);
@@ -271,7 +255,7 @@ export default function TransacoesIncorp() {
   // Reset página quando filtros mudam
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, startDate, endDate, showOnlyCountable, hideDuplicates]);
+  }, [searchTerm, startDate, endDate]);
 
   // Mapa para identificar duplicatas por email+produto (para mostrar na tabela)
   const duplicateMap = useMemo(() => {
@@ -506,28 +490,6 @@ export default function TransacoesIncorp() {
                 onSelect={(date) => setEndDate(date as Date | undefined)}
                 placeholder="Fim" 
               />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox 
-                id="onlyCountable"
-                checked={showOnlyCountable}
-                onCheckedChange={(checked) => setShowOnlyCountable(!!checked)}
-              />
-              <label htmlFor="onlyCountable" className="text-sm cursor-pointer">
-                Só contando no Dash
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox 
-                id="hideDuplicates"
-                checked={hideDuplicates}
-                onCheckedChange={(checked) => setHideDuplicates(!!checked)}
-              />
-              <label htmlFor="hideDuplicates" className="text-sm cursor-pointer">
-                Ocultar duplicatas
-              </label>
             </div>
 
             <Button variant="outline" size="sm" onClick={setLastWeek}>
