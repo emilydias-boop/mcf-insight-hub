@@ -15,6 +15,7 @@ interface CreateEventRequest {
   leadType?: string;
   notes?: string;
   sdrEmail?: string;
+  alreadyBuilds?: boolean | null;
 }
 
 // Google Calendar JWT authentication
@@ -579,6 +580,7 @@ serve(async (req) => {
         booked_by: bookedBy,
         attendee_name: contactInfo.name || deal?.name || null,
         attendee_phone: contactInfo.phone || null,
+        already_builds: body.alreadyBuilds ?? null,
       })
       .select('id')
       .single();

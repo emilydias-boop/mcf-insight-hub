@@ -126,6 +126,7 @@ export function QuickScheduleModal({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
   const [notes, setNotes] = useState('');
+  const [alreadyBuilds, setAlreadyBuilds] = useState<boolean | null>(null);
   const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
   
   // State to store weekly lead data for reschedule note concatenation
@@ -271,6 +272,7 @@ export function QuickScheduleModal({
       leadType: detectedLeadType,
       sendNotification: autoSendWhatsApp,
       sdrEmail: selectedSdr || undefined,
+      alreadyBuilds,
     }, {
       onSuccess: (data) => {
         // Send WhatsApp notification if enabled
@@ -301,6 +303,7 @@ export function QuickScheduleModal({
     setNotes('');
     setAutoSendWhatsApp(true);
     setWeeklyLeadData(null);
+    setAlreadyBuilds(null);
   };
 
   // Get day of week for selected date (0=Sunday, 1=Monday, etc.)
@@ -715,6 +718,42 @@ export function QuickScheduleModal({
             </Select>
           </div>
 
+          {/* Já Constrói Toggle */}
+          <div className="space-y-2">
+            <Label>Já constrói?</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={alreadyBuilds === true ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setAlreadyBuilds(alreadyBuilds === true ? null : true)}
+                className={cn(
+                  "flex-1",
+                  alreadyBuilds === true && "bg-blue-600 hover:bg-blue-700"
+                )}
+              >
+                <Check className="h-4 w-4 mr-1" />
+                Sim, já constrói
+              </Button>
+              <Button
+                type="button"
+                variant={alreadyBuilds === false ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setAlreadyBuilds(alreadyBuilds === false ? null : false)}
+                className={cn(
+                  "flex-1",
+                  alreadyBuilds === false && "bg-orange-600 hover:bg-orange-700"
+                )}
+              >
+                <X className="h-4 w-4 mr-1" />
+                Não constrói
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Agrupar leads que constroem juntos e os que não constroem separados
+            </p>
+          </div>
+
           {/* Date and Time */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -853,18 +892,48 @@ export function QuickScheduleModal({
             </div>
           </div>
 
-          {/* Slot availability indicator */}
+          {/* Slot availability indicator with already_builds breakdown */}
           {selectedCloser && selectedDate && slotAvailability && (
-            <div className="flex items-center justify-between p-2 rounded-md text-sm bg-muted">
-              <span>
-                Lead {detectedLeadType} às {selectedTime}
-              </span>
-              <span className="font-medium">
-                {slotAvailability.currentCount === 0 
-                  ? 'Ainda não possui agendamento'
-                  : `Já possui ${slotAvailability.currentCount} agendamento${slotAvailability.currentCount !== 1 ? 's' : ''}`
-                }
-              </span>
+            <div className="p-2 rounded-md text-sm bg-muted space-y-1">
+              <div className="flex items-center justify-between">
+                <span>
+                  Lead {detectedLeadType} às {selectedTime}
+                </span>
+                <span className="font-medium">
+                  {slotAvailability.currentCount === 0 
+                    ? 'Ainda não possui agendamento'
+                    : `Já possui ${slotAvailability.currentCount} agendamento${slotAvailability.currentCount !== 1 ? 's' : ''}`
+                  }
+                </span>
+              </div>
+              {slotAvailability.currentCount > 0 && slotAvailability.attendees && (
+                <div className="flex gap-2 text-xs">
+                  {(() => {
+                    const buildsCount = slotAvailability.attendees.filter((a: any) => a.already_builds === true).length;
+                    const notBuildsCount = slotAvailability.attendees.filter((a: any) => a.already_builds === false).length;
+                    const unknownCount = slotAvailability.attendees.filter((a: any) => a.already_builds === null).length;
+                    return (
+                      <>
+                        {buildsCount > 0 && (
+                          <Badge className="bg-blue-600 text-white text-[10px] px-1.5 py-0">
+                            {buildsCount} já constrói
+                          </Badge>
+                        )}
+                        {notBuildsCount > 0 && (
+                          <Badge className="bg-orange-600 text-white text-[10px] px-1.5 py-0">
+                            {notBuildsCount} não constrói
+                          </Badge>
+                        )}
+                        {unknownCount > 0 && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {unknownCount} sem info
+                          </Badge>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           )}
 
