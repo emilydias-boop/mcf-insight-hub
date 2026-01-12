@@ -192,6 +192,11 @@ export const IncorporadorTransactionDrawer = ({
     return groupTransactionsByPurchase(allTransactions);
   }, [allTransactions]);
 
+  // Calculate total paid by customer
+  const totalPaid = useMemo(() => {
+    return groupedTransactions.reduce((sum, group) => sum + group.totalNet, 0);
+  }, [groupedTransactions]);
+
   // Pagination calculations (by group)
   const totalGroups = groupedTransactions.length;
   const totalPages = Math.ceil(totalGroups / ITEMS_PER_PAGE);
@@ -216,7 +221,7 @@ export const IncorporadorTransactionDrawer = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl">
+      <SheetContent className="w-full sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
@@ -386,17 +391,24 @@ export const IncorporadorTransactionDrawer = ({
 
             {/* Todas as Transações do Cliente */}
             <div className="space-y-3">
-              <h4 className="font-medium flex items-center gap-2 justify-between">
-                <span className="flex items-center gap-2">
-                  <Receipt className="h-4 w-4" />
-                  Compras do Cliente ({totalGroups})
-                </span>
-                {totalPages > 1 && (
-                  <span className="text-xs text-muted-foreground font-normal">
-                    Página {currentPage} de {totalPages}
+              <div>
+                <h4 className="font-medium flex items-center gap-2 justify-between">
+                  <span className="flex items-center gap-2">
+                    <Receipt className="h-4 w-4" />
+                    Compras do Cliente ({totalGroups})
                   </span>
+                  {totalPages > 1 && (
+                    <span className="text-xs text-muted-foreground font-normal">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                  )}
+                </h4>
+                {totalGroups > 0 && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Total pago até o momento: <span className="font-semibold text-green-600">{formatCurrency(totalPaid)}</span>
+                  </p>
                 )}
-              </h4>
+              </div>
 
               {isLoadingTransactions ? (
                 <div className="space-y-2">
