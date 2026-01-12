@@ -15,8 +15,9 @@ import {
 import { useIncorporadorTransactions } from "@/hooks/useIncorporadorTransactions";
 import { IncorporadorTransactionDrawer } from "@/components/incorporador/IncorporadorTransactionDrawer";
 import { TransactionFormDialog } from "@/components/incorporador/TransactionFormDialog";
+import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil } from "lucide-react";
+import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -49,6 +50,8 @@ type SortDirection = 'asc' | 'desc';
 
 export default function TransacoesIncorp() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
@@ -64,10 +67,10 @@ export default function TransacoesIncorp() {
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
-  // Sem filtro de data - busca todas as transações
+  // Filtros de data e busca
   const { data: transactions, isLoading, refetch } = useIncorporadorTransactions({
-    startDate: undefined,
-    endDate: undefined,
+    startDate,
+    endDate,
     search: searchTerm,
     onlyCountInDashboard: false,
   });
@@ -248,7 +251,7 @@ export default function TransacoesIncorp() {
   // Reset página quando filtros mudam
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, startDate, endDate]);
 
   // Mapa para identificar duplicatas por email+produto (para mostrar na tabela)
   const duplicateMap = useMemo(() => {
@@ -371,30 +374,7 @@ export default function TransacoesIncorp() {
         </div>
       </div>
 
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">Total Transações</p>
-            <p className="text-2xl font-bold">{totals.count}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">Bruto Total</p>
-            <p className="text-2xl font-bold">{formatCurrency(totals.bruto)}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">Líquido Total</p>
-            <p className="text-2xl font-bold text-success">{formatCurrency(totals.liquido)}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
+      {/* Filters FIRST */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -417,9 +397,66 @@ export default function TransacoesIncorp() {
               </div>
             </div>
             
+            <div className="min-w-[160px]">
+              <label className="text-sm text-muted-foreground mb-1 block">Data Inicial</label>
+              <DatePickerCustom
+                selected={startDate}
+                onSelect={(date) => setStartDate(date as Date | undefined)}
+                mode="single"
+                placeholder="Selecionar..."
+              />
+            </div>
+            
+            <div className="min-w-[160px]">
+              <label className="text-sm text-muted-foreground mb-1 block">Data Final</label>
+              <DatePickerCustom
+                selected={endDate}
+                onSelect={(date) => setEndDate(date as Date | undefined)}
+                mode="single"
+                placeholder="Selecionar..."
+              />
+            </div>
+            
+            {(startDate || endDate || searchTerm) && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  setStartDate(undefined);
+                  setEndDate(undefined);
+                  setSearchTerm("");
+                }}
+                className="h-10"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Limpar
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Summary Cards AFTER filters */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="bg-card border-border">
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Total Transações</p>
+            <p className="text-2xl font-bold">{totals.count}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Bruto Total</p>
+            <p className="text-2xl font-bold">{formatCurrency(totals.bruto)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">Líquido Total</p>
+            <p className="text-2xl font-bold text-success">{formatCurrency(totals.liquido)}</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Transactions Table */}
       <Card className="bg-card border-border">
