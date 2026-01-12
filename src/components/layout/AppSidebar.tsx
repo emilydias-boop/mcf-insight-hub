@@ -198,7 +198,7 @@ const menuItems: MenuItem[] = [
     ]
   },
   
-  // ===== ITENS AVULSOS PARA SDR =====
+  // ===== ITENS AVULSOS PARA SDR/CLOSER =====
   
   // Minhas Reuniões (apenas SDR)
   { 
@@ -208,6 +208,15 @@ const menuItems: MenuItem[] = [
     resource: "crm", 
     requiredRoles: ['sdr'],
     separator: true,
+  },
+  
+  // Agenda (SDR e Closer)
+  { 
+    title: "Agenda", 
+    url: "/crm/agenda", 
+    icon: Calendar, 
+    resource: "crm", 
+    requiredRoles: ['sdr', 'closer'],
   },
   
   // Metas da Equipe (SDRs da BU Incorporador)
