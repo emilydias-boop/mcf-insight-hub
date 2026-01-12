@@ -15,8 +15,9 @@ import {
 } from "@/hooks/useHublaTransactions";
 import { useIncorporadorTransactions } from "@/hooks/useIncorporadorTransactions";
 import { IncorporadorTransactionDrawer } from "@/components/incorporador/IncorporadorTransactionDrawer";
+import { TransactionFormDialog } from "@/components/incorporador/TransactionFormDialog";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { startOfMonth, startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -60,6 +61,11 @@ export default function TransacoesIncorp() {
   const [selectedTransaction, setSelectedTransaction] = useState<SelectedTransaction | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  
+  // Estados para modal de criar/editar
+  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [editingTransaction, setEditingTransaction] = useState<SelectedTransaction | null>(null);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>('sale_date');
@@ -123,6 +129,21 @@ export default function TransacoesIncorp() {
   const handleOpenDetails = (tx: SelectedTransaction) => {
     setSelectedTransaction(tx);
     setDrawerOpen(true);
+  };
+
+  const handleOpenCreate = () => {
+    setFormMode("create");
+    setEditingTransaction(null);
+    setFormDialogOpen(true);
+  };
+
+  const handleOpenEdit = (tx: SelectedTransaction & { count_in_dashboard?: boolean | null }) => {
+    setFormMode("edit");
+    setEditingTransaction({
+      ...tx,
+      count_in_dashboard: tx.count_in_dashboard,
+    } as any);
+    setFormDialogOpen(true);
   };
 
   const toggleSelection = (id: string) => {
@@ -372,6 +393,10 @@ export default function TransacoesIncorp() {
             <Download className="h-4 w-4 mr-2" />
             Exportar
           </Button>
+          <Button size="sm" onClick={handleOpenCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Transação
+          </Button>
         </div>
       </div>
 
@@ -551,7 +576,7 @@ export default function TransacoesIncorp() {
                   Líquido <SortIcon field="net_value" />
                 </TableHead>
                 <TableHead className="text-center">No Dash</TableHead>
-                <TableHead className="w-10"></TableHead>
+                <TableHead className="w-20">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -649,24 +674,47 @@ export default function TransacoesIncorp() {
                       />
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenDetails({
-                          id: tx.id,
-                          customer_name: tx.customer_name,
-                          customer_email: tx.customer_email,
-                          customer_phone: tx.customer_phone,
-                          product_name: tx.product_name,
-                          sale_date: tx.sale_date,
-                          product_price: tx.product_price,
-                          net_value: tx.net_value,
-                          installment_number: tx.installment_number,
-                          total_installments: tx.total_installments,
-                        })}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit({
+                            id: tx.id,
+                            customer_name: tx.customer_name,
+                            customer_email: tx.customer_email,
+                            customer_phone: tx.customer_phone,
+                            product_name: tx.product_name,
+                            sale_date: tx.sale_date,
+                            product_price: tx.product_price,
+                            net_value: tx.net_value,
+                            installment_number: tx.installment_number,
+                            total_installments: tx.total_installments,
+                            count_in_dashboard: tx.count_in_dashboard,
+                          } as any)}
+                          title="Editar transação"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDetails({
+                            id: tx.id,
+                            customer_name: tx.customer_name,
+                            customer_email: tx.customer_email,
+                            customer_phone: tx.customer_phone,
+                            product_name: tx.product_name,
+                            sale_date: tx.sale_date,
+                            product_price: tx.product_price,
+                            net_value: tx.net_value,
+                            installment_number: tx.installment_number,
+                            total_installments: tx.total_installments,
+                          })}
+                          title="Ver detalhes"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -731,6 +779,14 @@ export default function TransacoesIncorp() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         transaction={selectedTransaction}
+      />
+
+      <TransactionFormDialog
+        open={formDialogOpen}
+        onOpenChange={setFormDialogOpen}
+        mode={formMode}
+        transaction={editingTransaction as any}
+        onSuccess={() => refetch()}
       />
     </div>
   );
