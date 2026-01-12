@@ -334,15 +334,6 @@ export default function ReunioesEquipe() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportExcel}
-            disabled={isLoading}
-          >
-            <Download className="h-4 w-4 mr-1" />
-            Exportar Excel
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
             onClick={() => refetch()}
             disabled={isLoading}
           >
@@ -437,6 +428,16 @@ export default function ReunioesEquipe() {
                 ))}
               </SelectContent>
             </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
+              disabled={isLoading}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Exportar Excel
+            </Button>
           </div>
 
           {/* Active period display */}
