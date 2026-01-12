@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -7,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { useIncorporadorLeadJourney } from '@/hooks/useIncorporadorLeadJourney';
+import { useCustomerTransactions } from '@/hooks/useCustomerTransactions';
 import { 
   Phone, 
   Mail, 
@@ -20,7 +22,10 @@ import {
   UserCheck,
   Video,
   Target,
-  Building2
+  Building2,
+  Receipt,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface IncorporadorTransactionDrawerProps {
@@ -110,15 +115,30 @@ const JourneyStep = ({ completed, inProgress, title, icon, children }: JourneySt
   );
 };
 
+const ITEMS_PER_PAGE = 5;
+
 export const IncorporadorTransactionDrawer = ({ 
   transaction, 
   open, 
   onOpenChange 
 }: IncorporadorTransactionDrawerProps) => {
+  const [currentPage, setCurrentPage] = useState(1);
+
   const { data: journey, isLoading } = useIncorporadorLeadJourney(
     transaction?.customer_email || null,
     transaction?.customer_phone || null
   );
+
+  const { data: allTransactions, isLoading: isLoadingTransactions } = useCustomerTransactions(
+    transaction?.customer_email || null
+  );
+
+  // Reset page when drawer opens with new transaction
+  useEffect(() => {
+    if (open) {
+      setCurrentPage(1);
+    }
+  }, [open, transaction?.id]);
 
   if (!transaction) return null;
 
@@ -133,6 +153,14 @@ export const IncorporadorTransactionDrawer = ({
   const hasMeeting02 = !!journey?.meeting02;
   const meeting02Completed = journey?.meeting02?.status?.toLowerCase() === 'completed' || 
                              journey?.meeting02?.status?.toLowerCase() === 'realizada';
+
+  // Pagination calculations
+  const totalTransactions = allTransactions?.length || 0;
+  const totalPages = Math.ceil(totalTransactions / ITEMS_PER_PAGE);
+  const paginatedTransactions = allTransactions?.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -304,41 +332,92 @@ export const IncorporadorTransactionDrawer = ({
 
             <Separator />
 
-            {/* Resumo da Transação */}
+            {/* Todas as Transações do Cliente */}
             <div className="space-y-3">
-              <h4 className="font-medium flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                Resumo da Transação
+              <h4 className="font-medium flex items-center gap-2 justify-between">
+                <span className="flex items-center gap-2">
+                  <Receipt className="h-4 w-4" />
+                  Transações do Cliente ({totalTransactions})
+                </span>
+                {totalPages > 1 && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                )}
               </h4>
-              <div className="bg-muted/30 rounded-lg p-4 space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Produto</span>
-                  <span className="font-medium text-right max-w-[200px] truncate">
-                    {transaction.product_name}
-                  </span>
+
+              {isLoadingTransactions ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Data da Venda</span>
-                  <span className="font-medium">{formatDate(transaction.sale_date)}</span>
+              ) : paginatedTransactions && paginatedTransactions.length > 0 ? (
+                <>
+                  <div className="space-y-2">
+                    {paginatedTransactions.map((tx) => (
+                      <div 
+                        key={tx.id} 
+                        className={`bg-muted/30 rounded-lg p-3 text-sm border ${
+                          tx.id === transaction.id ? 'border-primary/50 bg-primary/5' : 'border-transparent'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate" title={tx.product_name}>
+                              {tx.product_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(tx.sale_date)}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="font-medium text-green-600">
+                              {formatCurrency(tx.net_value)}
+                            </p>
+                            {tx.total_installments && tx.total_installments > 1 && (
+                              <p className="text-xs text-muted-foreground">
+                                Parcela {tx.installment_number}/{tx.total_installments}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-2 pt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm text-muted-foreground min-w-[60px] text-center">
+                        {currentPage} / {totalPages}
+                      </span>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  Nenhuma transação encontrada
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Parcela</span>
-                  <span className="font-medium">
-                    {transaction.installment_number && transaction.total_installments
-                      ? `${transaction.installment_number}/${transaction.total_installments}`
-                      : '1/1'}
-                  </span>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Valor Bruto</span>
-                  <span className="font-medium">{formatCurrency(transaction.product_price)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Valor Líquido</span>
-                  <span className="font-bold text-green-600">{formatCurrency(transaction.net_value)}</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </ScrollArea>
