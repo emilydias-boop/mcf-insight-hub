@@ -350,14 +350,14 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 <div className="space-y-2">
                   <Label>Business Unit (BU)</Label>
                   <Select 
-                    value={generalData.squad || ""} 
-                    onValueChange={(value) => setGeneralData({ ...generalData, squad: value || "" })}
+                    value={generalData.squad || "none"} 
+                    onValueChange={(value) => setGeneralData({ ...generalData, squad: value === "none" ? "" : value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione a BU" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
+                      <SelectItem value="none">Nenhuma</SelectItem>
                       <SelectItem value="incorporador">BU - Incorporador MCF</SelectItem>
                       <SelectItem value="consorcio">BU - Consórcio</SelectItem>
                       <SelectItem value="credito">BU - Crédito</SelectItem>
