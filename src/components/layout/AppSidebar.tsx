@@ -21,7 +21,7 @@ import {
   Calendar,
   Receipt,
   ChevronUp,
-  Package,
+  
   Shield,
   BarChart3,
   Wallet,
@@ -173,16 +173,6 @@ const menuItems: MenuItem[] = [
     ]
   },
   
-  // PRODUTOS (visão master consolidada)
-  { 
-    title: "Produtos", 
-    icon: Package,
-    requiredRoles: ['admin', 'manager', 'coordenador'],
-    items: [
-      { title: "Painel de Produtos", url: "/produtos" },
-      { title: "Inside Sales", url: "/produtos/inside" },
-    ]
-  },
   
   // RELATÓRIOS
   { 
