@@ -384,45 +384,9 @@ export default function TransacoesIncorp() {
         </div>
       </div>
 
-      {isSomeSelected && (
-        <Card className="bg-primary/10 border-primary/30">
-          <CardContent className="py-3 flex items-center justify-between">
-            <span className="text-sm font-medium">
-              📋 {selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}
-            </span>
-            <div className="flex gap-2">
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => handleBatchMark(true)}
-                disabled={updateMultipleFlags.isPending}
-              >
-                <CheckSquare className="h-4 w-4 mr-2" />
-                Marcar no Dash
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => handleBatchMark(false)}
-                disabled={updateMultipleFlags.isPending}
-              >
-                <XSquare className="h-4 w-4 mr-2" />
-                Desmarcar
-              </Button>
-              <Button 
-                size="sm" 
-                variant="ghost"
-                onClick={() => setSelectedIds(new Set())}
-              >
-                Limpar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">Total Transações</p>
@@ -431,19 +395,13 @@ export default function TransacoesIncorp() {
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">Contando no Dash</p>
-            <p className="text-2xl font-bold text-green-500">{totals.countable}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">Bruto (Contando)</p>
+            <p className="text-sm text-muted-foreground">Bruto Total</p>
             <p className="text-2xl font-bold">{formatCurrency(totals.bruto)}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground">Líquido (Contando)</p>
+            <p className="text-sm text-muted-foreground">Líquido Total</p>
             <p className="text-2xl font-bold text-success">{formatCurrency(totals.liquido)}</p>
           </CardContent>
         </Card>
@@ -537,7 +495,6 @@ export default function TransacoesIncorp() {
                 >
                   Líquido <SortIcon field="net_value" />
                 </TableHead>
-                <TableHead className="text-center">No Dash</TableHead>
                 <TableHead className="w-20">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -558,9 +515,7 @@ export default function TransacoesIncorp() {
                 </TableRow>
               ) : (
                 paginatedTransactions.map((tx) => (
-                  <TableRow key={tx.id} className={cn(
-                    tx.count_in_dashboard === false && "opacity-50"
-                  )}>
+                  <TableRow key={tx.id}>
                     <TableCell>
                       <Checkbox 
                         checked={selectedIds.has(tx.id)}
@@ -628,12 +583,6 @@ export default function TransacoesIncorp() {
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(tx.net_value || 0)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Checkbox
-                        checked={tx.count_in_dashboard !== false}
-                        onCheckedChange={() => handleToggleCountInDashboard(tx.id, tx.count_in_dashboard)}
-                      />
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
