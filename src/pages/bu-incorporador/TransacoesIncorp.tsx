@@ -15,9 +15,10 @@ import {
 import { useIncorporadorTransactions } from "@/hooks/useIncorporadorTransactions";
 import { IncorporadorTransactionDrawer } from "@/components/incorporador/IncorporadorTransactionDrawer";
 import { TransactionFormDialog } from "@/components/incorporador/TransactionFormDialog";
+import { ProductFilterSheet } from "@/components/incorporador/ProductFilterSheet";
 import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, X } from "lucide-react";
+import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, X, Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -66,12 +67,17 @@ export default function TransacoesIncorp() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
+  
+  // Estado para filtro de produtos
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [productSheetOpen, setProductSheetOpen] = useState(false);
 
-  // Filtros de data e busca
+  // Filtros de data, busca e produtos
   const { data: transactions, isLoading, refetch } = useIncorporadorTransactions({
     startDate,
     endDate,
     search: searchTerm,
+    selectedProducts,
     onlyCountInDashboard: false,
   });
 
@@ -251,7 +257,7 @@ export default function TransacoesIncorp() {
   // Reset página quando filtros mudam
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, startDate, endDate]);
+  }, [searchTerm, startDate, endDate, selectedProducts]);
 
   // Mapa para identificar duplicatas por email+produto (para mostrar na tabela)
   const duplicateMap = useMemo(() => {
@@ -417,7 +423,18 @@ export default function TransacoesIncorp() {
               />
             </div>
             
-            {(startDate || endDate || searchTerm) && (
+            {/* Botão de configuração de produtos */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setProductSheetOpen(true)}
+              className="h-10"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Produtos {selectedProducts.length > 0 ? `(${selectedProducts.length})` : '(Todos)'}
+            </Button>
+            
+            {(startDate || endDate || searchTerm || selectedProducts.length > 0) && (
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -425,6 +442,7 @@ export default function TransacoesIncorp() {
                   setStartDate(undefined);
                   setEndDate(undefined);
                   setSearchTerm("");
+                  setSelectedProducts([]);
                 }}
                 className="h-10"
               >
@@ -435,6 +453,14 @@ export default function TransacoesIncorp() {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Sheet de configuração de produtos */}
+      <ProductFilterSheet
+        open={productSheetOpen}
+        onOpenChange={setProductSheetOpen}
+        selectedProducts={selectedProducts}
+        onApply={setSelectedProducts}
+      />
 
       {/* Summary Cards AFTER filters */}
       <div className="grid grid-cols-3 gap-4">
