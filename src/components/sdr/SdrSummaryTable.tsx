@@ -18,9 +18,10 @@ interface SdrSummaryTableProps {
   data: SdrSummaryRow[];
   isLoading?: boolean;
   ghostCountBySdr?: Record<string, GhostCountBySdr>;
+  disableNavigation?: boolean;
 }
 
-export function SdrSummaryTable({ data, isLoading, ghostCountBySdr }: SdrSummaryTableProps) {
+export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavigation = false }: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -65,7 +66,7 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr }: SdrSummary
               <TableHead className="text-muted-foreground text-center font-medium">
                 <Ghost className="h-4 w-4 inline" />
               </TableHead>
-              <TableHead className="text-muted-foreground w-10"></TableHead>
+              {!disableNavigation && <TableHead className="text-muted-foreground w-10"></TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -78,8 +79,8 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr }: SdrSummary
               return (
                 <TableRow
                   key={row.sdrEmail}
-                  className="cursor-pointer transition-colors hover:bg-muted/30"
-                  onClick={() => handleRowClick(row.sdrEmail)}
+                  className={disableNavigation ? "transition-colors" : "cursor-pointer transition-colors hover:bg-muted/30"}
+                  onClick={disableNavigation ? undefined : () => handleRowClick(row.sdrEmail)}
                 >
                   <TableCell className="font-medium">
                     <div className="flex flex-col">
@@ -163,9 +164,11 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr }: SdrSummary
                       <span className="text-muted-foreground/50">-</span>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </TableCell>
+                  {!disableNavigation && (
+                    <TableCell>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </TableCell>
+                  )}
                 </TableRow>
               );
             })}

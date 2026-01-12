@@ -23,11 +23,14 @@ import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
+import { useAuth } from "@/contexts/AuthContext";
 import { SDR_LIST } from "@/constants/team";
 
 type DatePreset = "today" | "week" | "month" | "custom";
 
 export default function ReunioesEquipe() {
+  const { role } = useAuth();
+  const isSdr = role === 'sdr';
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Initialize state from URL params
@@ -468,6 +471,7 @@ export default function ReunioesEquipe() {
             data={filteredBySDR}
             isLoading={isLoading}
             ghostCountBySdr={ghostCountBySdr}
+            disableNavigation={isSdr}
           />
         </CardContent>
       </Card>
