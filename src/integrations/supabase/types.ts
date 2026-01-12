@@ -5638,6 +5638,28 @@ export type Database = {
           phone_suffix: string
         }[]
       }
+      get_incorporador_transactions: {
+        Args: { p_limit?: number; p_search?: string }
+        Returns: {
+          count_in_dashboard: boolean
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          hubla_id: string
+          id: string
+          installment_number: number
+          is_offer: boolean
+          net_value: number
+          product_category: string
+          product_name: string
+          product_price: number
+          raw_data: Json
+          sale_date: string
+          sale_status: string
+          source: string
+          total_installments: number
+        }[]
+      }
       get_novo_lead_count:
         | { Args: { target_date: string }; Returns: Json }
         | {
