@@ -107,7 +107,7 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
 
       if (!contact) return null;
 
-      // 2. Buscar deals do contato (pegamos o mais recente para incorporador)
+      // 2. Buscar deals do contato (pegamos o mais recente, priorizando os com reuniões)
       const { data: deals } = await supabase
         .from('crm_deals')
         .select(`
@@ -122,21 +122,18 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
           ),
           crm_origins!crm_deals_origin_id_fkey (
             name
-          )
+          ),
+          meeting_slots (id)
         `)
         .eq('contact_id', contact.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
 
-      const deal = deals?.[0];
+      // Priorizar deal que TEM reunião agendada
+      const dealWithMeeting = deals?.find(d => (d.meeting_slots as any[])?.length > 0);
+      const deal = dealWithMeeting || deals?.[0];
       if (!deal) return null;
 
-      // 3. Extrair SDR do custom_fields
-      const customFields = deal.custom_fields as Record<string, any> | null;
-      const sdrEmail = customFields?.user_email || null;
-      const sdrName = customFields?.user_name || null;
-
-      // 4. Buscar reuniões do deal
+      // 3. Buscar reuniões do deal COM dados do SDR que agendou (booked_by)
       const { data: meetings } = await supabase
         .from('meeting_slots')
         .select(`
@@ -145,10 +142,35 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
           status,
           lead_type,
           closer_id,
-          closers (name)
+          booked_by,
+          closers (name),
+          profiles!meeting_slots_booked_by_fkey (full_name, email)
         `)
         .eq('deal_id', deal.id)
         .order('scheduled_at', { ascending: true });
+
+      // 4. Extrair SDR: priorizar booked_by da reunião, depois custom_fields, depois deal_activities
+      const customFields = deal.custom_fields as Record<string, any> | null;
+      const firstMeeting = meetings?.[0];
+      const bookedByProfile = firstMeeting?.profiles as { full_name?: string; email?: string } | null;
+      
+      let sdrName = bookedByProfile?.full_name || customFields?.user_name || null;
+      let sdrEmail = bookedByProfile?.email || customFields?.user_email || null;
+
+      // 5. Fallback: buscar SDR na deal_activities se ainda não encontrou
+      if (!sdrName && !sdrEmail) {
+        const { data: activity } = await supabase
+          .from('deal_activities')
+          .select('metadata')
+          .eq('deal_id', deal.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        const metadata = activity?.metadata as Record<string, any> | null;
+        sdrName = metadata?.deal_user_name || null;
+        sdrEmail = metadata?.deal_user || metadata?.owner_email || null;
+      }
 
       // 5. Separar Reunião 01 e R2
       const meeting01Data = meetings?.find(m => m.lead_type !== 'R2');
