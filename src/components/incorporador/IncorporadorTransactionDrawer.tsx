@@ -115,7 +115,10 @@ export const IncorporadorTransactionDrawer = ({
   open, 
   onOpenChange 
 }: IncorporadorTransactionDrawerProps) => {
-  const { data: journey, isLoading } = useIncorporadorLeadJourney(transaction?.customer_email || null);
+  const { data: journey, isLoading } = useIncorporadorLeadJourney(
+    transaction?.customer_email || null,
+    transaction?.customer_phone || null
+  );
 
   if (!transaction) return null;
 

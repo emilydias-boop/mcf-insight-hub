@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 // Produtos que ENTRAM no Incorporador 50k
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A009'];
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A008', 'A009'];
 
 // Produtos EXCLUÍDOS
 const EXCLUDED_PRODUCT_NAMES = [
