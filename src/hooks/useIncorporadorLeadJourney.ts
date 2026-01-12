@@ -26,20 +26,84 @@ export interface IncorporadorLeadJourney {
   dealStageColor: string | null;
   originName: string | null;
   createdAt: string | null;
+  
+  // Método de busca usado
+  matchMethod: 'email' | 'phone' | 'email_prefix' | null;
 }
 
-export const useIncorporadorLeadJourney = (email: string | null) => {
-  return useQuery({
-    queryKey: ['incorporador-lead-journey', email],
-    queryFn: async (): Promise<IncorporadorLeadJourney | null> => {
-      if (!email) return null;
+// Normaliza telefone para comparação
+const normalizePhone = (phone: string | null): string => {
+  if (!phone) return '';
+  return phone.replace(/\D/g, '');
+};
 
-      // 1. Buscar contato pelo email
-      const { data: contact } = await supabase
-        .from('crm_contacts')
-        .select('id, name')
-        .ilike('email', email)
-        .maybeSingle();
+// Extrai os últimos 9 dígitos do telefone (número sem DDD do país)
+const getPhoneSuffix = (phone: string | null): string => {
+  const normalized = normalizePhone(phone);
+  return normalized.slice(-9);
+};
+
+export const useIncorporadorLeadJourney = (email: string | null, phone: string | null) => {
+  return useQuery({
+    queryKey: ['incorporador-lead-journey', email, phone],
+    queryFn: async (): Promise<IncorporadorLeadJourney | null> => {
+      if (!email && !phone) return null;
+
+      let contact: { id: string; name: string } | null = null;
+      let matchMethod: 'email' | 'phone' | 'email_prefix' | null = null;
+
+      // 1. Tentar buscar por email exato
+      if (email) {
+        const { data } = await supabase
+          .from('crm_contacts')
+          .select('id, name')
+          .ilike('email', email)
+          .limit(1)
+          .maybeSingle();
+        
+        if (data) {
+          contact = data;
+          matchMethod = 'email';
+        }
+      }
+
+      // 2. Se não encontrou, tentar por telefone
+      if (!contact && phone) {
+        const phoneSuffix = getPhoneSuffix(phone);
+        
+        if (phoneSuffix.length >= 8) {
+          // Buscar por telefone que termina com os últimos 8-9 dígitos
+          const { data } = await supabase
+            .from('crm_contacts')
+            .select('id, name')
+            .ilike('phone', `%${phoneSuffix}`)
+            .limit(1)
+            .maybeSingle();
+          
+          if (data) {
+            contact = data;
+            matchMethod = 'phone';
+          }
+        }
+      }
+
+      // 3. Se não encontrou, tentar por prefixo do email (antes do @)
+      if (!contact && email) {
+        const emailPrefix = email.split('@')[0];
+        if (emailPrefix && emailPrefix.length >= 3) {
+          const { data } = await supabase
+            .from('crm_contacts')
+            .select('id, name')
+            .ilike('email', `${emailPrefix}@%`)
+            .limit(1)
+            .maybeSingle();
+          
+          if (data) {
+            contact = data;
+            matchMethod = 'email_prefix';
+          }
+        }
+      }
 
       if (!contact) return null;
 
@@ -128,8 +192,9 @@ export const useIncorporadorLeadJourney = (email: string | null) => {
         dealStageColor: stage?.color || null,
         originName: origin?.name || null,
         createdAt: deal.created_at,
+        matchMethod,
       };
     },
-    enabled: !!email,
+    enabled: !!(email || phone),
   });
 };

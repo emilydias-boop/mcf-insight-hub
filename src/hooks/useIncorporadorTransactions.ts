@@ -9,7 +9,7 @@ export interface IncorporadorTransactionFilters {
 }
 
 // Produtos que ENTRAM no Incorporador 50k
-const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A009'];
+const INCORPORADOR_PRODUCTS = ['A000', 'A001', 'A003', 'A005', 'A008', 'A009'];
 
 // Padrões EXCLUÍDOS
 const EXCLUDED_PATTERNS = [
