@@ -382,6 +382,42 @@ export type Database = {
         }
         Relationships: []
       }
+      bu_webhook_logs: {
+        Row: {
+          bu_type: string
+          created_at: string | null
+          error_message: string | null
+          event_type: string | null
+          id: string
+          payload: Json
+          processed_at: string | null
+          record_id: string | null
+          status: string | null
+        }
+        Insert: {
+          bu_type: string
+          created_at?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          payload: Json
+          processed_at?: string | null
+          record_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          bu_type?: string
+          created_at?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          record_id?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       calls: {
         Row: {
           contact_id: string | null
