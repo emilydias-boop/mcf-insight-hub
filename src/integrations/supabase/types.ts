@@ -5255,6 +5255,13 @@ export type Database = {
           email: string
         }[]
       }
+      get_duplicate_contact_phones: {
+        Args: { limit_count?: number }
+        Returns: {
+          contact_count: number
+          phone_suffix: string
+        }[]
+      }
       get_novo_lead_count:
         | { Args: { target_date: string }; Returns: Json }
         | {
