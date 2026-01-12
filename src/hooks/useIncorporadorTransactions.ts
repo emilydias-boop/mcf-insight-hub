@@ -30,11 +30,23 @@ export interface IncorporadorTransaction {
 
 export const useIncorporadorTransactions = (filters: IncorporadorTransactionFilters) => {
   return useQuery({
-    queryKey: ['incorporador-transactions', filters.search, filters.onlyCountInDashboard],
+    queryKey: ['incorporador-transactions', filters.search, filters.startDate?.toISOString(), filters.endDate?.toISOString(), filters.onlyCountInDashboard],
     queryFn: async (): Promise<IncorporadorTransaction[]> => {
+      // Formatar datas em formato local para evitar problemas de timezone
+      const formatLocalDate = (date: Date, endOfDay = false) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return endOfDay 
+          ? `${year}-${month}-${day}T23:59:59`
+          : `${year}-${month}-${day}T00:00:00`;
+      };
+
       // Usar função RPC que filtra no servidor (bypassa limite de 1000 linhas)
       const { data, error } = await supabase.rpc('get_incorporador_transactions', {
         p_search: filters.search || null,
+        p_start_date: filters.startDate ? formatLocalDate(filters.startDate) : null,
+        p_end_date: filters.endDate ? formatLocalDate(filters.endDate, true) : null,
         p_limit: 10000
       });
 
