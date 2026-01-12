@@ -70,6 +70,11 @@ import DashboardSemanas from "./pages/dashboard/Semanas";
 import ConsorcioIndex from "./pages/bu-consorcio/Index";
 import ConsorcioImportar from "./pages/bu-consorcio/Importar";
 import AdminPermissoes from "./pages/admin/Permissoes";
+import BUCreditoIndex from "./pages/bu-credito/Index";
+import CreditoOverview from "./pages/bu-credito/Overview";
+import CreditoDeals from "./pages/bu-credito/Deals";
+import CreditoSocios from "./pages/bu-credito/Socios";
+import CreditoClientes from "./pages/bu-credito/Clientes";
 
 const queryClient = new QueryClient();
 
@@ -118,6 +123,16 @@ const App = () => (
               <Route path="consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioImportar /></RoleGuard>} />
               <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
               <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />
+              
+              {/* BU Crédito Routes */}
+              <Route path="bu-credito" element={<BUCreditoIndex />}>
+                <Route index element={<CreditoOverview />} />
+                <Route path="overview" element={<CreditoOverview />} />
+                <Route path="deals" element={<CreditoDeals />} />
+                <Route path="socios" element={<CreditoSocios />} />
+                <Route path="clientes" element={<CreditoClientes />} />
+              </Route>
+              
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
               <Route path="configuracoes" element={<ResourceGuard resource="configuracoes"><Configuracoes /></ResourceGuard>} />
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />

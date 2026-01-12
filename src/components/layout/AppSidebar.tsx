@@ -133,7 +133,11 @@ const menuItems: MenuItem[] = [
     resource: "credito",
     requiredRoles: ['admin', 'manager'],
     items: [
-      { title: "Gestão de Crédito", url: "/credito" },
+      { title: "Overview", url: "/bu-credito" },
+      { title: "Negócios", url: "/bu-credito/deals" },
+      { title: "Sócios", url: "/bu-credito/socios" },
+      { title: "Clientes", url: "/bu-credito/clientes" },
+      { title: "Gestão Legado", url: "/credito" },
     ]
   },
   

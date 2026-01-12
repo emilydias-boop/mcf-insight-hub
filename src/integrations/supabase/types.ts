@@ -1199,6 +1199,162 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_deal_activities: {
+        Row: {
+          activity_type: string
+          created_at: string | null
+          deal_id: string
+          description: string | null
+          from_stage_id: string | null
+          id: string
+          metadata: Json | null
+          to_stage_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string | null
+          deal_id: string
+          description?: string | null
+          from_stage_id?: string | null
+          id?: string
+          metadata?: Json | null
+          to_stage_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string | null
+          deal_id?: string
+          description?: string | null
+          from_stage_id?: string | null
+          id?: string
+          metadata?: Json | null
+          to_stage_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_deal_activities_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "credit_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_deal_activities_from_stage_id_fkey"
+            columns: ["from_stage_id"]
+            isOneToOne: false
+            referencedRelation: "credit_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_deal_activities_to_stage_id_fkey"
+            columns: ["to_stage_id"]
+            isOneToOne: false
+            referencedRelation: "credit_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_deals: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          custom_fields: Json | null
+          data_aprovacao: string | null
+          data_liberacao: string | null
+          data_quitacao: string | null
+          data_solicitacao: string | null
+          garantia: string | null
+          id: string
+          observacoes: string | null
+          owner_id: string | null
+          partner_id: string | null
+          prazo_meses: number | null
+          product_id: string
+          stage_id: string
+          taxa_juros: number | null
+          titulo: string
+          updated_at: string | null
+          valor_aprovado: number | null
+          valor_solicitado: number | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          custom_fields?: Json | null
+          data_aprovacao?: string | null
+          data_liberacao?: string | null
+          data_quitacao?: string | null
+          data_solicitacao?: string | null
+          garantia?: string | null
+          id?: string
+          observacoes?: string | null
+          owner_id?: string | null
+          partner_id?: string | null
+          prazo_meses?: number | null
+          product_id: string
+          stage_id: string
+          taxa_juros?: number | null
+          titulo: string
+          updated_at?: string | null
+          valor_aprovado?: number | null
+          valor_solicitado?: number | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          custom_fields?: Json | null
+          data_aprovacao?: string | null
+          data_liberacao?: string | null
+          data_quitacao?: string | null
+          data_solicitacao?: string | null
+          garantia?: string | null
+          id?: string
+          observacoes?: string | null
+          owner_id?: string | null
+          partner_id?: string | null
+          prazo_meses?: number | null
+          product_id?: string
+          stage_id?: string
+          taxa_juros?: number | null
+          titulo?: string
+          updated_at?: string | null
+          valor_aprovado?: number | null
+          valor_solicitado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_deals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "credit_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_deals_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "credit_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_deals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "credit_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_deals_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "credit_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       credit_history: {
         Row: {
           amount: number
@@ -1233,6 +1389,181 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "credit_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_partner_deals: {
+        Row: {
+          comissao_pct: number | null
+          created_at: string | null
+          deal_id: string
+          id: string
+          partner_id: string
+          valor_comissao: number | null
+        }
+        Insert: {
+          comissao_pct?: number | null
+          created_at?: string | null
+          deal_id: string
+          id?: string
+          partner_id: string
+          valor_comissao?: number | null
+        }
+        Update: {
+          comissao_pct?: number | null
+          created_at?: string | null
+          deal_id?: string
+          id?: string
+          partner_id?: string
+          valor_comissao?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_partner_deals_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "credit_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_partner_deals_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "credit_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_partners: {
+        Row: {
+          consorcio_card_id: string | null
+          cpf_cnpj: string
+          created_at: string | null
+          data_entrada: string | null
+          email: string | null
+          full_name: string
+          id: string
+          observacoes: string | null
+          phone: string | null
+          status: string | null
+          tipo: string
+          updated_at: string | null
+          valor_aportado: number | null
+        }
+        Insert: {
+          consorcio_card_id?: string | null
+          cpf_cnpj: string
+          created_at?: string | null
+          data_entrada?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          observacoes?: string | null
+          phone?: string | null
+          status?: string | null
+          tipo: string
+          updated_at?: string | null
+          valor_aportado?: number | null
+        }
+        Update: {
+          consorcio_card_id?: string | null
+          cpf_cnpj?: string
+          created_at?: string | null
+          data_entrada?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          observacoes?: string | null
+          phone?: string | null
+          status?: string | null
+          tipo?: string
+          updated_at?: string | null
+          valor_aportado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_partners_consorcio_card_id_fkey"
+            columns: ["consorcio_card_id"]
+            isOneToOne: false
+            referencedRelation: "consortium_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_products: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      credit_stages: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          is_final: boolean | null
+          is_won: boolean | null
+          name: string
+          product_id: string
+          stage_order: number
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_final?: boolean | null
+          is_won?: boolean | null
+          name: string
+          product_id: string
+          stage_order?: number
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          is_final?: boolean | null
+          is_won?: boolean | null
+          name?: string
+          product_id?: string
+          stage_order?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_stages_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "credit_products"
             referencedColumns: ["id"]
           },
         ]
