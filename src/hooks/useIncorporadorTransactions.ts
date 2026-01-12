@@ -68,7 +68,7 @@ export const useIncorporadorTransactions = (filters: IncorporadorTransactionFilt
         query = query.eq('count_in_dashboard', true);
       }
 
-      const { data, error } = await query.limit(1000);
+      const { data, error } = await query.limit(5000);
       if (error) throw error;
 
       // Filtrar por produtos Incorporador 50k
