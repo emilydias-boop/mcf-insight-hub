@@ -67,9 +67,6 @@ import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
 import Webhooks from "./pages/crm/Webhooks";
 import NotFound from "./pages/NotFound";
 import DashboardSemanas from "./pages/dashboard/Semanas";
-import ProdutosIndex from "./pages/produtos/Index";
-import ProdutosInside from "./pages/produtos/Inside";
-import SetorGenerico from "./pages/produtos/SetorGenerico";
 import ConsorcioIndex from "./pages/bu-consorcio/Index";
 import ConsorcioImportar from "./pages/bu-consorcio/Importar";
 import AdminPermissoes from "./pages/admin/Permissoes";
@@ -142,9 +139,6 @@ const App = () => (
               <Route path="crm/reunioes-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ReunioesEquipe /></RoleGuard>} />
               <Route path="crm/reunioes-equipe/:sdrEmail" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SdrMeetingsDetailPage /></RoleGuard>} />
               <Route path="crm/configurar-closers" element={<ResourceGuard resource="configuracoes"><ConfigurarClosers /></ResourceGuard>} />
-              <Route path="produtos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosIndex /></RoleGuard>} />
-              <Route path="produtos/inside" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProdutosInside /></RoleGuard>} />
-              <Route path="produtos/:setor" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SetorGenerico /></RoleGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
                 <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Contatos /></RoleGuard>} />
