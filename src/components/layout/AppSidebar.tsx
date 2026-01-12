@@ -21,7 +21,12 @@ import {
   Calendar,
   Receipt,
   ChevronUp,
-  Package
+  Package,
+  Shield,
+  BarChart3,
+  Wallet,
+  ClipboardList,
+  Home
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -37,6 +42,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -70,10 +76,15 @@ interface MenuItem {
   requiredProducts?: string[];
   resource?: ResourceType;
   items?: { title: string; url: string; requiredRoles?: AppRole[]; }[];
+  separator?: boolean;
 }
 
-// Menu reorganizado e consolidado
+// ============================
+// ESTRUTURA REORGANIZADA POR BUs
+// ============================
+
 const menuItems: MenuItem[] = [
+  // ===== DASHBOARD =====
   { 
     title: "Dashboard", 
     icon: LayoutDashboard, 
@@ -84,22 +95,96 @@ const menuItems: MenuItem[] = [
     ]
   },
   
-  // Financeiro consolidado (Receita + Custos + Fechamento SDR + Financeiro operacional)
+  // ===== BUSINESS UNITS =====
+  
+  // BU - INCORPORADOR MCF
+  { 
+    title: "BU - Incorporador MCF", 
+    icon: Building2,
+    requiredRoles: ['admin', 'manager', 'coordenador'],
+    separator: true,
+    items: [
+      { title: "Painel SDR", url: "/crm/reunioes-equipe" },
+      { title: "Fechamento Equipe", url: "/fechamento-sdr" },
+      { title: "Transações Incorp", url: "/bu-incorporador/transacoes" },
+      { title: "Relatório SDR", url: "/bu-incorporador/relatorio-sdr" },
+      { title: "CRM", url: "/crm" },
+    ]
+  },
+  
+  // BU - CONSÓRCIO
+  { 
+    title: "BU - Consórcio", 
+    icon: Handshake,
+    requiredRoles: ['admin', 'manager', 'coordenador'],
+    requiredProducts: ['consorcio'],
+    items: [
+      { title: "Painel Consórcio", url: "/consorcio" },
+      { title: "Importar", url: "/produtos/consorcio/importar" },
+    ]
+  },
+  
+  // BU - CRÉDITO
+  { 
+    title: "BU - Crédito", 
+    icon: CreditCard,
+    resource: "credito",
+    requiredRoles: ['admin', 'manager'],
+    items: [
+      { title: "Gestão de Crédito", url: "/credito" },
+    ]
+  },
+  
+  // BU - PROJETOS
+  { 
+    title: "BU - Projetos", 
+    icon: FolderKanban,
+    resource: "projetos",
+    items: [
+      { title: "Gestão de Projetos", url: "/projetos" },
+    ]
+  },
+  
+  // LEILÃO
+  { 
+    title: "Leilão", 
+    icon: Gavel,
+    resource: "leilao",
+    requiredRoles: ['admin', 'manager'],
+    items: [
+      { title: "Leilões Imobiliários", url: "/leilao" },
+    ]
+  },
+  
+  // ===== OPERACIONAL =====
+  
+  // FINANCEIRO
   { 
     title: "Financeiro", 
     icon: DollarSign,
     resource: "financeiro",
+    separator: true,
     items: [
       { title: "Receita", url: "/receita" },
       { title: "Transações", url: "/receita/transacoes" },
       { title: "Custos", url: "/custos" },
       { title: "Despesas", url: "/custos/despesas" },
-      { title: "Fechamento SDR", url: "/fechamento-sdr", requiredRoles: ['admin', 'coordenador'] },
       { title: "Pagamentos", url: "/financeiro", requiredRoles: ['admin', 'financeiro'] },
     ]
   },
   
-  // Relatórios
+  // PRODUTOS (visão master consolidada)
+  { 
+    title: "Produtos", 
+    icon: Package,
+    requiredRoles: ['admin', 'manager', 'coordenador'],
+    items: [
+      { title: "Painel de Produtos", url: "/produtos" },
+      { title: "Inside Sales", url: "/produtos/inside" },
+    ]
+  },
+  
+  // RELATÓRIOS
   { 
     title: "Relatórios", 
     icon: FileText,
@@ -110,34 +195,42 @@ const menuItems: MenuItem[] = [
     ]
   },
   
-  // CRM e reuniões
-  { title: "CRM", url: "/crm", icon: UserCircle, resource: "crm", requiredRoles: ['admin', 'manager', 'sdr', 'closer', 'coordenador'] },
-  { title: "Minhas Reuniões", url: "/sdr/minhas-reunioes", icon: Calendar, resource: "crm", requiredRoles: ['sdr'] },
-  { title: "Reuniões da Equipe", url: "/crm/reunioes-equipe", icon: Users, resource: "crm", requiredRoles: ['admin', 'manager', 'coordenador'] },
+  // RH
+  { 
+    title: "RH", 
+    icon: Users,
+    resource: "rh" as any,
+    requiredRoles: ['admin', 'rh'],
+    items: [
+      { title: "Colaboradores", url: "/rh/colaboradores" },
+    ]
+  },
   
-  // Produtos (Master view)
-  { title: "Produtos", url: "/produtos", icon: Package, requiredRoles: ['admin', 'manager', 'coordenador'] },
+  // ===== ITENS AVULSOS PARA SDR =====
   
-  // RH (para admin/rh)
-  { title: "RH", url: "/rh/colaboradores", icon: Building2, resource: "rh" as any, requiredRoles: ['admin', 'rh'] },
+  // Minhas Reuniões (apenas SDR)
+  { 
+    title: "Minhas Reuniões", 
+    url: "/sdr/minhas-reunioes", 
+    icon: Calendar, 
+    resource: "crm", 
+    requiredRoles: ['sdr'],
+    separator: true,
+  },
   
-  // Produtos separados
-  { title: "Consórcio", url: "/consorcio", icon: Handshake, requiredRoles: ['admin', 'manager', 'coordenador'], requiredProducts: ['consorcio'] },
-  { title: "Projetos", url: "/projetos", icon: FolderKanban, resource: "projetos" },
-  { title: "Crédito", url: "/credito", icon: CreditCard, resource: "credito", requiredRoles: ['admin', 'manager'] },
-  { title: "Leilão", url: "/leilao", icon: Gavel, resource: "leilao", requiredRoles: ['admin', 'manager'] },
+  // ===== CONFIGURAÇÕES =====
   
-  // Configurações pessoais (todos os usuários)
   { 
     title: "Configurações", 
     url: "/configuracoes",
     icon: Settings, 
   },
   
-  // Administração (apenas admin)
+  // ===== ADMINISTRAÇÃO =====
+  
   { 
     title: "Administração", 
-    icon: Users, 
+    icon: Shield, 
     requiredRoles: ['admin'],
     items: [
       { title: "Usuários", url: "/usuarios" },
@@ -271,65 +364,57 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {filteredMenuItems.map((item) => {
+              {filteredMenuItems.map((item, index) => {
                 const isActive = isRouteActive(item);
+                const showSeparator = item.separator && index > 0;
                 
-                if (item.items) {
-                  const filteredSubItems = getFilteredSubItems(item.items);
-                  
-                  // Se não há sub-items após filtro, não mostra o grupo
-                  if (filteredSubItems.length === 0) return null;
-                  
-                  return (
-                    <Collapsible
-                      key={item.title}
-                      asChild
-                      defaultOpen={isActive}
-                      className="group/collapsible"
-                    >
-                      <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                          <SidebarMenuButton
-                            tooltip={item.title}
-                            className={isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}
-                            onClick={() => {
-                              if (isCollapsed) {
-                                toggleSidebar();
-                              }
-                            }}
-                          >
-                            <item.icon className="h-5 w-5" />
-                            {!isCollapsed && (
-                              <>
-                                <span>{item.title}</span>
-                                <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                              </>
-                            )}
-                          </SidebarMenuButton>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <SidebarMenuSub>
-                            {filteredSubItems.map((subItem) => (
-                              <SidebarMenuSubItem key={subItem.url}>
-                                <SidebarMenuSubButton asChild>
-                                  <NavLink
-                                    to={subItem.url}
-                                    className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                                    activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                  >
-                                    <span>{subItem.title}</span>
-                                  </NavLink>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            ))}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      </SidebarMenuItem>
-                    </Collapsible>
-                  );
-                }
-
-                return (
+                const menuElement = item.items ? (
+                  <Collapsible
+                    key={item.title}
+                    asChild
+                    defaultOpen={isActive}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip={item.title}
+                          className={isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}
+                          onClick={() => {
+                            if (isCollapsed) {
+                              toggleSidebar();
+                            }
+                          }}
+                        >
+                          <item.icon className="h-5 w-5" />
+                          {!isCollapsed && (
+                            <>
+                              <span>{item.title}</span>
+                              <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                            </>
+                          )}
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {getFilteredSubItems(item.items).map((subItem) => (
+                            <SidebarMenuSubItem key={subItem.url}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink
+                                  to={subItem.url}
+                                  className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                  activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                >
+                                  <span>{subItem.title}</span>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                ) : (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild tooltip={item.title}>
                       <NavLink
@@ -343,6 +428,21 @@ export function AppSidebar() {
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                );
+
+                // Se não há sub-items após filtro, não mostra o grupo
+                if (item.items) {
+                  const filteredSubItems = getFilteredSubItems(item.items);
+                  if (filteredSubItems.length === 0) return null;
+                }
+
+                return (
+                  <div key={item.title}>
+                    {showSeparator && !isCollapsed && (
+                      <div className="my-2 mx-3 border-t border-sidebar-border" />
+                    )}
+                    {menuElement}
+                  </div>
                 );
               })}
             </SidebarMenu>
