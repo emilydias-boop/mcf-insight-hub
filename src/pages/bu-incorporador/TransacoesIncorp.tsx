@@ -18,9 +18,10 @@ import { IncorporadorTransactionDrawer } from "@/components/incorporador/Incorpo
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { Download, Search, RefreshCw, Filter, CalendarIcon, Eye, ArrowUp, ArrowDown, CheckSquare, XSquare, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
+import { startOfMonth, startOfWeek, endOfWeek, subWeeks, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { normalizeProductForDedup, getPrecoReferencia } from "@/lib/precosReferencia";
 import {
   Table,
   TableBody,
@@ -48,8 +49,8 @@ type SortDirection = 'asc' | 'desc';
 
 export default function TransacoesIncorp() {
   const now = new Date();
-  const defaultStart = startOfWeek(now, { weekStartsOn: 6 });
-  const defaultEnd = endOfWeek(now, { weekStartsOn: 6 });
+  const defaultStart = startOfMonth(now);
+  const defaultEnd = now;
   
   const [startDate, setStartDate] = useState<Date | undefined>(defaultStart);
   const [endDate, setEndDate] = useState<Date | undefined>(defaultEnd);
@@ -251,16 +252,58 @@ export default function TransacoesIncorp() {
     setCurrentPage(1);
   }, [searchTerm, startDate, endDate, showOnlyCountable, hideDuplicates]);
 
+  // Mapa para identificar duplicatas por email+produto (para mostrar na tabela)
+  const duplicateMap = useMemo(() => {
+    const map = new Map<string, string>(); // id -> 'original' | 'duplicate'
+    const seen = new Map<string, string>(); // key -> first transaction id
+    
+    displayTransactions.forEach(tx => {
+      if ((tx.installment_number || 1) !== 1) return;
+      
+      const email = tx.customer_email?.toLowerCase() || '';
+      const prodNorm = normalizeProductForDedup(tx.product_name);
+      const key = `${email}-${prodNorm}`;
+      
+      if (!seen.has(key)) {
+        seen.set(key, tx.id);
+        map.set(tx.id, 'original');
+      } else {
+        map.set(tx.id, 'duplicate');
+      }
+    });
+    
+    return map;
+  }, [displayTransactions]);
+
   const totals = useMemo(() => {
     if (!displayTransactions) return { bruto: 0, liquido: 0, count: 0, countable: 0 };
     
     const countable = displayTransactions.filter(tx => tx.count_in_dashboard !== false);
-    const isP2 = (name: string) => name?.toLowerCase().includes('p2');
     
-    const bruto = countable
-      .filter(tx => (tx.installment_number || 1) === 1 && !isP2(tx.product_name))
-      .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+    // Deduplicar por email+produto para cálculo do bruto
+    const uniqueByEmailProduct = new Map<string, typeof countable[0]>();
     
+    countable.forEach(tx => {
+      if ((tx.installment_number || 1) !== 1) return; // Só primeira parcela
+      
+      const email = tx.customer_email?.toLowerCase() || '';
+      const prodNorm = normalizeProductForDedup(tx.product_name);
+      const key = `${email}-${prodNorm}`;
+      
+      // Manter apenas a primeira ocorrência com maior valor
+      const existing = uniqueByEmailProduct.get(key);
+      if (!existing || (tx.product_price || 0) > (existing.product_price || 0)) {
+        uniqueByEmailProduct.set(key, tx);
+      }
+    });
+    
+    // Calcular bruto usando preços de referência fixos
+    let bruto = 0;
+    uniqueByEmailProduct.forEach(tx => {
+      bruto += getPrecoReferencia(tx.product_name, tx.product_price || 0);
+    });
+    
+    // Líquido soma tudo
     const liquido = countable.reduce((sum, tx) => sum + (tx.net_value || 0), 0);
     
     return {
@@ -575,7 +618,26 @@ export default function TransacoesIncorp() {
                         : "1/1"}
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatCurrency(tx.product_price || 0)}
+                      {(() => {
+                        const isDuplicate = duplicateMap.get(tx.id) === 'duplicate';
+                        const isFirstInstallment = (tx.installment_number || 1) === 1;
+                        
+                        if (!isFirstInstallment || isDuplicate) {
+                          return (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-muted-foreground">R$ 0,00</span>
+                              {isDuplicate && (
+                                <Badge variant="outline" className="text-xs text-orange-500 border-orange-500">
+                                  Dup
+                                </Badge>
+                              )}
+                            </div>
+                          );
+                        }
+                        
+                        const precoRef = getPrecoReferencia(tx.product_name, tx.product_price || 0);
+                        return formatCurrency(precoRef);
+                      })()}
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(tx.net_value || 0)}
