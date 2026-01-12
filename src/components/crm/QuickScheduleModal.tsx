@@ -60,6 +60,10 @@ interface DealOption {
     phone: string | null;
     email: string | null;
   } | null;
+  stage?: {
+    id: string;
+    stage_name: string;
+  } | null;
 }
 
 type LeadType = 'A' | 'B';
@@ -483,6 +487,7 @@ export function QuickScheduleModal({
                   ) : (
                     searchResults.map(deal => {
                       const contact = deal.contact;
+                      const stageName = (deal as any).stage?.stage_name;
                       return (
                         <button
                           key={deal.id}
@@ -493,8 +498,13 @@ export function QuickScheduleModal({
                             <div className="font-medium text-sm truncate">
                               {contact?.name || deal.name}
                             </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {contact?.email || '(sem email)'}
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="truncate">{contact?.email || '(sem email)'}</span>
+                              {stageName && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
+                                  {stageName}
+                                </Badge>
+                              )}
                             </div>
                           </div>
                           {contact?.phone && (
@@ -555,30 +565,36 @@ export function QuickScheduleModal({
                       Nenhum lead encontrado com esse email
                     </p>
                   ) : (
-                    emailSearchResults.map(deal => (
-                      <button
-                        key={deal.id}
-                        onClick={() => handleSelectDeal(deal as DealOption)}
-                        className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">
-                            {deal.contact?.name || deal.name}
+                    emailSearchResults.map(deal => {
+                      const stageName = (deal as any).stage?.stage_name;
+                      return (
+                        <button
+                          key={deal.id}
+                          onClick={() => handleSelectDeal(deal as DealOption)}
+                          className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {deal.contact?.name || deal.name}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="truncate">{deal.contact?.email || '(sem email)'}</span>
+                              {stageName && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
+                                  {stageName}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          {deal.contact?.email && (
-                            <div className="text-xs text-muted-foreground truncate">
-                              {deal.contact.email}
+                          {deal.contact?.phone && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                              <Phone className="h-3 w-3" />
+                              <span>{formatPhoneDisplay(deal.contact.phone)}</span>
                             </div>
                           )}
-                        </div>
-                        {deal.contact?.phone && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
-                            <Phone className="h-3 w-3" />
-                            <span>{formatPhoneDisplay(deal.contact.phone)}</span>
-                          </div>
-                        )}
-                      </button>
-                    ))
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}
@@ -628,25 +644,33 @@ export function QuickScheduleModal({
                       Nenhum lead encontrado com esse telefone
                     </p>
                   ) : (
-                    phoneSearchResults.map(deal => (
-                      <button
-                        key={deal.id}
-                        onClick={() => handleSelectDeal(deal as DealOption)}
-                        className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">
-                            {deal.contact?.name || deal.name}
+                    phoneSearchResults.map(deal => {
+                      const stageName = (deal as any).stage?.stage_name;
+                      return (
+                        <button
+                          key={deal.id}
+                          onClick={() => handleSelectDeal(deal as DealOption)}
+                          className="w-full text-left px-3 py-2.5 hover:bg-accent border-b last:border-b-0 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {deal.contact?.name || deal.name}
+                            </div>
+                            {stageName && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 bg-muted/50">
+                                {stageName}
+                              </Badge>
+                            )}
                           </div>
-                        </div>
-                        {deal.contact?.phone && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
-                            <Phone className="h-3 w-3" />
-                            <span>{formatPhoneDisplay(deal.contact.phone)}</span>
-                          </div>
-                        )}
-                      </button>
-                    ))
+                          {deal.contact?.phone && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 bg-muted px-2 py-1 rounded">
+                              <Phone className="h-3 w-3" />
+                              <span>{formatPhoneDisplay(deal.contact.phone)}</span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}

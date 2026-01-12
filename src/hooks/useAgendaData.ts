@@ -631,14 +631,15 @@ export function useSearchDealsByPhone(phoneQuery: string) {
       // Buscar deals dos contatos encontrados
       const { data: deals } = await supabase
         .from('crm_deals')
-        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
+        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
         .in('contact_id', contacts.map(c => c.id))
         .limit(10);
 
-      // Normalizar contact (pode vir como array)
+      // Normalizar contact e stage (podem vir como array)
       return (deals || []).map(deal => ({
         ...deal,
-        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
+        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact,
+        stage: Array.isArray(deal.stage) ? deal.stage[0] : deal.stage
       }));
     },
     enabled: phoneQuery.replace(/\D/g, '').length >= 6,
@@ -663,14 +664,15 @@ export function useSearchDealsByEmail(emailQuery: string) {
       // Buscar deals dos contatos encontrados
       const { data: deals } = await supabase
         .from('crm_deals')
-        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
+        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
         .in('contact_id', contacts.map(c => c.id))
         .limit(10);
 
-      // Normalizar contact (pode vir como array)
+      // Normalizar contact e stage (podem vir como array)
       return (deals || []).map(deal => ({
         ...deal,
-        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
+        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact,
+        stage: Array.isArray(deal.stage) ? deal.stage[0] : deal.stage
       }));
     },
     enabled: emailQuery.length >= 3,
@@ -686,7 +688,7 @@ export function useSearchDealsForSchedule(query: string) {
       // 1. Buscar deals pelo nome do deal (case-insensitive)
       const { data: dealsByName } = await supabase
         .from('crm_deals')
-        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
+        .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
         .ilike('name', `%${query}%`)
         .limit(10);
 
@@ -706,7 +708,7 @@ export function useSearchDealsForSchedule(query: string) {
         const contactIds = contacts.map(c => c.id);
         const { data } = await supabase
           .from('crm_deals')
-          .select(`id, name, tags, contact:crm_contacts(id, name, phone, email)`)
+          .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
           .in('contact_id', contactIds)
           .limit(10);
         dealsByContact = data || [];
@@ -718,10 +720,11 @@ export function useSearchDealsForSchedule(query: string) {
         index === self.findIndex(d => d.id === deal.id)
       );
 
-      // 5. Normalizar contact (pode vir como array do Supabase)
+      // 5. Normalizar contact e stage (podem vir como array do Supabase)
       const normalizedDeals = uniqueDeals.map(deal => ({
         ...deal,
-        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact
+        contact: Array.isArray(deal.contact) ? deal.contact[0] : deal.contact,
+        stage: Array.isArray(deal.stage) ? deal.stage[0] : deal.stage
       }));
 
       return normalizedDeals.slice(0, 10);
