@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -45,7 +44,6 @@ const formSchema = z.object({
   net_value: z.number().min(0, "Valor líquido é obrigatório"),
   installment_number: z.number().min(1).default(1),
   total_installments: z.number().min(1).default(1),
-  count_in_dashboard: z.boolean().default(true),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -65,7 +63,6 @@ interface TransactionFormDialogProps {
     net_value: number | null;
     installment_number: number | null;
     total_installments: number | null;
-    count_in_dashboard: boolean | null;
   } | null;
   onSuccess?: () => void;
 }
@@ -100,7 +97,6 @@ export function TransactionFormDialog({
       net_value: 0,
       installment_number: 1,
       total_installments: 1,
-      count_in_dashboard: true,
     },
   });
 
@@ -133,7 +129,6 @@ export function TransactionFormDialog({
         net_value: transaction.net_value || 0,
         installment_number: transaction.installment_number || 1,
         total_installments: transaction.total_installments || 1,
-        count_in_dashboard: transaction.count_in_dashboard !== false,
       });
     } else if (mode === "create" && open) {
       reset({
@@ -146,7 +141,6 @@ export function TransactionFormDialog({
         net_value: 0,
         installment_number: 1,
         total_installments: 1,
-        count_in_dashboard: true,
       });
     }
   }, [mode, transaction, open, reset]);
@@ -167,7 +161,6 @@ export function TransactionFormDialog({
           net_value: data.net_value,
           installment_number: data.installment_number,
           total_installments: data.total_installments,
-          count_in_dashboard: data.count_in_dashboard,
         });
         toast({ title: "Sucesso", description: "Transação criada com sucesso" });
       } else if (transaction) {
@@ -182,7 +175,6 @@ export function TransactionFormDialog({
           net_value: data.net_value,
           installment_number: data.installment_number,
           total_installments: data.total_installments,
-          count_in_dashboard: data.count_in_dashboard,
         });
         toast({ title: "Sucesso", description: "Transação atualizada com sucesso" });
       }
@@ -320,23 +312,6 @@ export function TransactionFormDialog({
                 {...register("total_installments", { valueAsNumber: true })}
               />
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Controller
-              name="count_in_dashboard"
-              control={control}
-              render={({ field }) => (
-                <Checkbox
-                  id="count_in_dashboard"
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              )}
-            />
-            <Label htmlFor="count_in_dashboard" className="cursor-pointer">
-              Contar no Dashboard
-            </Label>
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
