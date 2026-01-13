@@ -857,21 +857,29 @@ export function useCreateMeeting() {
         throw new Error(data.error);
       }
       
-      // Handle FunctionsHttpError - try to parse response body for slot full error
+      // Handle non-2xx responses (FunctionsHttpError). In this case, `data` is null and
+      // `error.context` is the actual Response object, so we must parse its JSON.
       if (error) {
-        // Try to extract error details from the response
-        try {
-          const errorContext = (error as any)?.context;
-          if (errorContext?.error === 'Slot is full') {
-            const slotFullError = new Error(`SLOT_FULL:${errorContext.currentAttendees || 3}:${errorContext.maxAttendees || 3}`);
-            (slotFullError as any).isSlotFull = true;
-            (slotFullError as any).currentAttendees = errorContext.currentAttendees;
-            (slotFullError as any).maxAttendees = errorContext.maxAttendees;
-            throw slotFullError;
+        const maybeResponse = (error as any)?.context;
+
+        if (maybeResponse && typeof maybeResponse?.clone === 'function') {
+          try {
+            const body = await maybeResponse.clone().json();
+            if (body?.error === 'Slot is full') {
+              const slotFullError = new Error(`SLOT_FULL:${body.currentAttendees || 3}:${body.maxAttendees || 3}`);
+              (slotFullError as any).isSlotFull = true;
+              (slotFullError as any).currentAttendees = body.currentAttendees;
+              (slotFullError as any).maxAttendees = body.maxAttendees;
+              throw slotFullError;
+            }
+            if (body?.error) {
+              throw new Error(body.error);
+            }
+          } catch {
+            // ignore parse errors; fall back to original error
           }
-        } catch (parseError) {
-          // If parsing fails, re-throw original error
         }
+
         throw error;
       }
 
