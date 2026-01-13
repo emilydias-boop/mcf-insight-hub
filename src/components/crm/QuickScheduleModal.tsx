@@ -308,6 +308,7 @@ export function QuickScheduleModal({
         resetForm();
       },
       onError: (error: any) => {
+        console.log('🚨 Create meeting error:', error, error?.isSlotFull, error?.message);
         // Check if this is a "slot full" error - show encaixe form instead of just error toast
         if (error?.isSlotFull || error?.message?.startsWith('SLOT_FULL:')) {
           toast.info('Este horário está cheio. Você pode adicionar o lead à fila de encaixe.');

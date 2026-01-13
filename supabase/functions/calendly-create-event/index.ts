@@ -521,6 +521,8 @@ serve(async (req) => {
       const currentAttendees = count || 0;
       const maxAttendees = existingSlot.max_attendees || 3;
 
+      console.log('📊 Slot check:', { slotId: existingSlot.id, currentAttendees, maxAttendees, isFull: currentAttendees >= maxAttendees });
+
       if (currentAttendees >= maxAttendees) {
         // IMPORTANT: return 200 with success=false so the client can handle this gracefully
         // without Supabase throwing a FunctionsHttpError (non-2xx).
