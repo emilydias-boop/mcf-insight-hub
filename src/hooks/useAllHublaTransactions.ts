@@ -19,6 +19,7 @@ export interface HublaTransaction {
   is_offer: boolean | null;
   count_in_dashboard: boolean | null;
   source: string | null;
+  gross_winner: boolean | null;
 }
 
 export interface TransactionFilters {

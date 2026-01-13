@@ -96,50 +96,18 @@ export default function TransacoesIncorp() {
     });
   }, [allTransactions]);
 
-  // Deduplicação: combina regra de parcela + email+produto
-  // 1. Se installment_number > 1 => bruto = 0
-  // 2. Para primeira parcela: apenas 1 transação por email+produto tem bruto
-  // IMPORTANTE: usa allTransactions (histórico completo) para determinar o vencedor
-  const idsWithGross = useMemo(() => {
-    const firstInstallmentOnly = allTransactions.filter(t => {
-      const installment = t.installment_number || 1;
-      return installment === 1;
-    });
-
-    // Agrupa por email+produto normalizado e seleciona a mais antiga
-    const keyToWinner = new Map<string, { id: string; date: string }>();
-    
-    for (const t of firstInstallmentOnly) {
-      const email = (t.customer_email || '').toLowerCase().trim();
-      const productKey = normalizeProductKey(t.product_name);
-      const key = `${email}|${productKey}`;
-      const currentDate = t.sale_date || '';
-      
-      const existing = keyToWinner.get(key);
-      if (!existing) {
-        keyToWinner.set(key, { id: t.id, date: currentDate });
-      } else {
-        // Mantém a transação mais antiga
-        if (currentDate < existing.date) {
-          keyToWinner.set(key, { id: t.id, date: currentDate });
-        }
-      }
-    }
-
-    return new Set(Array.from(keyToWinner.values()).map(v => v.id));
-  }, [allTransactions]);
-
-  // Função para obter bruto considerando parcela + deduplicação email+produto
+  // Função para obter bruto: agora usa gross_winner do banco
+  // O banco determina a transação vencedora considerando TODO o histórico
   const getDeduplicatedGross = (transaction: typeof filteredTransactions[0]): number => {
     const installment = transaction.installment_number || 1;
     
-    // Regra 1: Parcela > 1 sempre tem bruto zerado
+    // Regra 1: Parcela > 1 sempre tem bruto zerado (fallback de segurança)
     if (installment > 1) {
       return 0;
     }
     
-    // Regra 2: Apenas a transação "vencedora" por email+produto tem bruto
-    if (!idsWithGross.has(transaction.id)) {
+    // Regra 2: Apenas a transação marcada como gross_winner pelo banco tem bruto
+    if (transaction.gross_winner !== true) {
       return 0;
     }
     
@@ -161,8 +129,7 @@ export default function TransacoesIncorp() {
     const bruto = transactions.reduce((sum, t) => sum + getDeduplicatedGross(t), 0);
     const liquido = transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
     return { count: transactions.length, bruto, liquido };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, idsWithGross]);
+  }, [transactions]);
 
   // Handlers
   const handleRefresh = async () => {
