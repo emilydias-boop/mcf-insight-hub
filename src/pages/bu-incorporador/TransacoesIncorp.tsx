@@ -222,11 +222,13 @@ export default function TransacoesIncorp() {
     if (selectedTransaction) {
       try {
         await deleteMutation.mutateAsync(selectedTransaction.id);
-        toast.success('Transação excluída!');
         setDeleteDialogOpen(false);
         setSelectedTransaction(null);
-        refetch();
+        toast.success('Transação excluída!');
+        // Aguarda um tick para garantir que o cache foi invalidado
+        await refetch();
       } catch (error) {
+        console.error('Erro ao excluir:', error);
         toast.error('Erro ao excluir transação');
       }
     }
