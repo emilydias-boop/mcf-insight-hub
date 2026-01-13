@@ -104,7 +104,11 @@ export function CloserColumnCalendar({
     if (isBlocked) return false;
 
     // Verificar se o closer tem este horário configurado
-    return isSlotConfigured(closerId, slotTime);
+    if (!isSlotConfigured(closerId, slotTime)) return false;
+
+    // Verificar se já existe reunião nesse slot para este closer
+    const hasMeeting = getMeetingForSlot(closerId, slotTime);
+    return !hasMeeting;
   };
 
   const getMeetingForSlot = (closerId: string, slotTime: Date) => {
