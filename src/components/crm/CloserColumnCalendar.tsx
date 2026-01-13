@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { format, parseISO, isSameDay, setHours, setMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Settings } from 'lucide-react';
+import { Settings, Plus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from '@/hooks/useAgendaData';
@@ -279,10 +279,12 @@ export function CloserColumnCalendar({
                     ) : available ? (
                       <button
                         onClick={() => onSelectSlot(closer.id, slot)}
-                        className="w-full h-full rounded hover:bg-accent/50 transition-colors"
-                      />
+                        className="w-full h-full rounded bg-white/90 dark:bg-white/10 border border-dashed border-green-500/40 hover:bg-green-500/15 hover:border-green-500/60 transition-all flex items-center justify-center group"
+                      >
+                        <Plus className="h-3.5 w-3.5 text-green-500/40 group-hover:text-green-500/70 transition-colors" />
+                      </button>
                     ) : (
-                      <div className="w-full h-full bg-muted/20" />
+                      <div className="w-full h-full bg-muted/10" />
                     )}
                   </div>
                 );

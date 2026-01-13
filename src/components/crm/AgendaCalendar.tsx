@@ -45,7 +45,7 @@ const STATUS_STYLES: Record<string, string> = {
 const SLOT_HEIGHT = 40; // px per 30-min slot
 const MAX_MEETINGS_PER_SLOT = 3; // Default max meetings per slot
 
-import { Settings } from 'lucide-react';
+import { Settings, Plus } from 'lucide-react';
 
 export function AgendaCalendar({ 
   meetings, 
@@ -275,6 +275,27 @@ export function AgendaCalendar({
     // Check if any closer has reached max
     return Object.values(countByCloser).some(count => count >= MAX_MEETINGS_PER_SLOT);
   }, [filteredMeetings]);
+
+  // Check if slot is configured (has available closer hours) for at least one closer
+  const isSlotConfigured = useCallback((day: Date, hour: number, minute: number) => {
+    const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+    const slots = meetingLinkSlots?.[dayOfWeek] || [];
+    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    return slots.some(s => s.time === timeStr);
+  }, [meetingLinkSlots]);
+
+  // Check if slot is available (configured and no meetings)
+  const isSlotAvailable = useCallback((day: Date, hour: number, minute: number) => {
+    if (!isSlotConfigured(day, hour, minute)) return false;
+    const slotMeetings = filteredMeetings.filter(meeting => {
+      const meetingDate = parseISO(meeting.scheduled_at);
+      return isSameDay(meetingDate, day) &&
+        meetingDate.getHours() === hour &&
+        meetingDate.getMinutes() >= minute &&
+        meetingDate.getMinutes() < minute + 15;
+    });
+    return slotMeetings.length === 0;
+  }, [isSlotConfigured, filteredMeetings]);
 
   const getMeetingsForDay = (day: Date) => {
     return filteredMeetings.filter(meeting => {
@@ -631,9 +652,17 @@ export function AgendaCalendar({
                             isCurrent && 'bg-primary/15 ring-1 ring-primary/30',
                             snapshot.isDraggingOver && !isSlotFull && 'bg-primary/20',
                             isOccupied && 'cursor-pointer',
-                            isSlotFull && 'bg-muted/40'
+                            isSlotFull && 'bg-muted/40',
+                            // Highlight available slots (configured but no meetings)
+                            isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && 'bg-white/80 dark:bg-white/5'
                           )}
                         >
+                          {/* Available slot indicator */}
+                          {isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && (
+                            <div className="absolute inset-0.5 rounded border border-dashed border-green-500/30 flex items-center justify-center">
+                              <Plus className="h-3 w-3 text-green-500/30" />
+                            </div>
+                          )}
                           {groupedSlots.map((group, groupIndex) => {
                             const closerColor = getCloserColor(group.closerId, group.closer?.name);
                             const slotsNeeded = getSlotsNeeded(group.duration);
