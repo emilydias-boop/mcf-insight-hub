@@ -2511,6 +2511,92 @@ export type Database = {
           },
         ]
       }
+      encaixe_queue: {
+        Row: {
+          closer_id: string
+          contact_id: string | null
+          created_at: string | null
+          created_by: string | null
+          deal_id: string
+          id: string
+          lead_type: string
+          notes: string | null
+          notified_at: string | null
+          preferred_date: string
+          preferred_time_end: string | null
+          preferred_time_start: string | null
+          priority: number | null
+          scheduled_meeting_id: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          closer_id: string
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id: string
+          id?: string
+          lead_type?: string
+          notes?: string | null
+          notified_at?: string | null
+          preferred_date: string
+          preferred_time_end?: string | null
+          preferred_time_start?: string | null
+          priority?: number | null
+          scheduled_meeting_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          closer_id?: string
+          contact_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          deal_id?: string
+          id?: string
+          lead_type?: string
+          notes?: string | null
+          notified_at?: string | null
+          preferred_date?: string
+          preferred_time_end?: string | null
+          preferred_time_start?: string | null
+          priority?: number | null
+          scheduled_meeting_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encaixe_queue_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encaixe_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encaixe_queue_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encaixe_queue_scheduled_meeting_id_fkey"
+            columns: ["scheduled_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fechamento_componentes_realizado: {
         Row: {
           created_at: string

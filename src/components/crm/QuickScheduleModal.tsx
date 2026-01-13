@@ -38,6 +38,8 @@ import {
   useAvailableSlotsCountByDate,
 } from '@/hooks/useAgendaData';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
+import { useCloserDayCapacity } from '@/hooks/useEncaixeQueue';
+import { EncaixeQueueForm } from '@/components/crm/EncaixeQueueForm';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { SDR_LIST } from '@/constants/team';
@@ -153,12 +155,18 @@ export function QuickScheduleModal({
     closerName?: string;
   } | null>(null);
 
+  // State for encaixe mode
+  const [showEncaixeForm, setShowEncaixeForm] = useState(false);
+
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
   const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
   const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
   const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
+
+  // Check if closer's day is full
+  const { data: dayCapacity } = useCloserDayCapacity(selectedCloser, selectedDate);
 
   // Detect lead type from selected deal
   const detectedLeadType = useMemo(() => {
@@ -321,6 +329,7 @@ export function QuickScheduleModal({
     setAutoSendWhatsApp(true);
     setWeeklyLeadData(null);
     setAlreadyBuilds(null);
+    setShowEncaixeForm(false);
   };
 
   // Get day of week for selected date (0=Sunday, 1=Monday, etc.)
@@ -359,16 +368,44 @@ export function QuickScheduleModal({
 
   const isSelected = !!selectedDeal;
 
+  // Handler to show encaixe form when day is full
+  const handleShowEncaixeForm = useCallback(() => {
+    setShowEncaixeForm(true);
+  }, []);
+
+  // Get closer name for encaixe form
+  const selectedCloserData = useMemo(() => {
+    return closers.find(c => c.id === selectedCloser);
+  }, [closers, selectedCloser]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Agendar Reunião
+            {showEncaixeForm ? 'Fila de Encaixe' : 'Agendar Reunião'}
           </DialogTitle>
         </DialogHeader>
 
+        {/* Show Encaixe Form when day is full and user wants to queue */}
+        {showEncaixeForm && selectedDeal && selectedCloser && selectedDate ? (
+          <EncaixeQueueForm
+            dealId={selectedDeal.id}
+            dealName={selectedDeal.name}
+            contactId={selectedDeal.contact?.id}
+            contactName={selectedDeal.contact?.name}
+            closerId={selectedCloser}
+            closerName={selectedCloserData?.name || 'Closer'}
+            preferredDate={selectedDate}
+            leadType={detectedLeadType}
+            onSuccess={() => {
+              onOpenChange(false);
+              resetForm();
+            }}
+            onCancel={() => setShowEncaixeForm(false)}
+          />
+        ) : (
         <div className="space-y-4">
           {/* Search Mode Toggle */}
           <div className="flex gap-2">
@@ -974,6 +1011,24 @@ export function QuickScheduleModal({
             </div>
           )}
 
+          {/* Day Full Alert with Encaixe Option */}
+          {selectedDeal && selectedCloser && selectedDate && dayCapacity?.isFull && (
+            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 space-y-2">
+              <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+                ⚠️ Agenda cheia para este dia ({dayCapacity.bookedCount}/{dayCapacity.totalSlotsAvailable} slots)
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleShowEncaixeForm}
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Adicionar à Fila de Encaixe
+              </Button>
+            </div>
+          )}
+
           {/* Original Booking Info (when coming from weekly no-show) */}
           {weeklyLeadData && (
             <div className="space-y-3">
@@ -1039,6 +1094,7 @@ export function QuickScheduleModal({
             {createMeeting.isPending ? 'Agendando...' : 'Agendar Reunião'}
           </Button>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );
