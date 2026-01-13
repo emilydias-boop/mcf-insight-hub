@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FinanceiroPagamentos } from '@/components/financeiro/FinanceiroPagamentos';
 import { FinanceiroReceitas } from '@/components/financeiro/FinanceiroReceitas';
+import { FinanceiroTransacoes } from '@/components/financeiro/FinanceiroTransacoes';
 
 const Financeiro = () => {
   const { role } = useAuth();
@@ -23,13 +24,18 @@ const Financeiro = () => {
       </div>
 
       <Tabs defaultValue="pagamentos" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
           <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          <TabsTrigger value="transacoes">Transações</TabsTrigger>
           <TabsTrigger value="receitas">Receitas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="pagamentos" className="mt-6">
           <FinanceiroPagamentos />
+        </TabsContent>
+
+        <TabsContent value="transacoes" className="mt-6">
+          <FinanceiroTransacoes />
         </TabsContent>
 
         <TabsContent value="receitas" className="mt-6">
