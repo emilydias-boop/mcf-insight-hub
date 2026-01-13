@@ -18,10 +18,8 @@ import { AgendaMeetingDrawer } from '@/components/crm/AgendaMeetingDrawer';
 import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 import { RescheduleModal } from '@/components/crm/RescheduleModal';
 import { UpcomingMeetingsPanel } from '@/components/crm/UpcomingMeetingsPanel';
-import { EncaixeQueueDropdown } from '@/components/crm/EncaixeQueueDropdown';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
-import { EncaixeQueueItem } from '@/hooks/useEncaixeQueue';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyCloser } from '@/hooks/useMyCloser';
@@ -184,24 +182,6 @@ export default function Agenda() {
     }
   };
 
-  // Handle scheduling from encaixe queue
-  const handleScheduleFromQueue = useCallback((item: EncaixeQueueItem) => {
-    // Pre-fill the quick schedule modal with queue item data
-    setPreselectedCloserId(item.closer_id);
-    if (item.preferred_date) {
-      const prefDate = new Date(item.preferred_date);
-      // If preferred time is set, add it to the date
-      if (item.preferred_time_start && item.preferred_time_start !== 'any') {
-        const [hours, minutes] = item.preferred_time_start.split(':').map(Number);
-        prefDate.setHours(hours, minutes, 0, 0);
-      }
-      setPreselectedDate(prefDate);
-    } else {
-      setPreselectedDate(selectedDate);
-    }
-    setQuickScheduleOpen(true);
-  }, [selectedDate]);
-
   // Format date range label based on viewMode
   const dateRangeLabel = useMemo(() => {
     if (viewMode === 'day') {
@@ -343,13 +323,6 @@ export default function Agenda() {
               <SelectItem value="contract_paid">Contrato Pago</SelectItem>
             </SelectContent>
           </Select>
-
-          {/* Encaixe Queue Dropdown */}
-          <EncaixeQueueDropdown
-            closers={isCloser && myCloser ? [{ id: myCloser.id, name: myCloser.name, color: null }] : filteredClosers}
-            selectedDate={selectedDate}
-            onScheduleFromQueue={handleScheduleFromQueue}
-          />
         </div>
       </div>
 

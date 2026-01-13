@@ -846,7 +846,7 @@ export function useCreateMeeting() {
       // Edge function may return success=false (200) for business-rule errors (e.g., slot full)
       if (data && (data.error || data.success === false)) {
         if (data.error === 'Slot is full') {
-          const slotFullError = new Error(`SLOT_FULL:${data.currentAttendees || 3}:${data.maxAttendees || 3}`);
+          const slotFullError = new Error(`SLOT_FULL:${data.currentAttendees || 4}:${data.maxAttendees || 4}`);
           (slotFullError as any).isSlotFull = true;
           (slotFullError as any).currentAttendees = data.currentAttendees;
           (slotFullError as any).maxAttendees = data.maxAttendees;
@@ -867,7 +867,7 @@ export function useCreateMeeting() {
           try {
             const body = await maybeResponse.clone().json();
             if (body?.error === 'Slot is full') {
-              const slotFullError = new Error(`SLOT_FULL:${body.currentAttendees || 3}:${body.maxAttendees || 3}`);
+              const slotFullError = new Error(`SLOT_FULL:${body.currentAttendees || 4}:${body.maxAttendees || 4}`);
               (slotFullError as any).isSlotFull = true;
               (slotFullError as any).currentAttendees = body.currentAttendees;
               (slotFullError as any).maxAttendees = body.maxAttendees;
