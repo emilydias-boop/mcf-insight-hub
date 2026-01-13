@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useEncaixeQueue, EncaixeQueueItem } from '@/hooks/useEncaixeQueue';
+import { useAllClosersEncaixeQueue, EncaixeQueueItem } from '@/hooks/useEncaixeQueue';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -31,29 +31,15 @@ const priorityConfig = {
 
 interface CloserQueueSectionProps {
   closer: CloserInfo;
-  date: Date;
+  items: EncaixeQueueItem[];
   onScheduleFromQueue: (item: EncaixeQueueItem) => void;
   defaultOpen?: boolean;
 }
 
-function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = false }: CloserQueueSectionProps) {
-  const { data: queueItems = [], isLoading } = useEncaixeQueue(closer.id, date);
+function CloserQueueSection({ closer, items, onScheduleFromQueue, defaultOpen = false }: CloserQueueSectionProps) {
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
 
-  const activeItems = useMemo(() => 
-    queueItems.filter(item => item.status === 'waiting' || item.status === 'notified'),
-    [queueItems]
-  );
-
-  if (isLoading) {
-    return (
-      <div className="py-2 px-3">
-        <Skeleton className="h-8 w-full" />
-      </div>
-    );
-  }
-
-  if (activeItems.length === 0) {
+  if (items.length === 0) {
     return null;
   }
 
@@ -69,14 +55,14 @@ function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = f
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-xs">
-            {activeItems.length}
+            {items.length}
           </Badge>
           <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
       </CollapsibleTrigger>
       
       <CollapsibleContent className="px-3 pb-2 space-y-2">
-        {activeItems.map((item) => {
+        {items.map((item) => {
           const contact = item.deal?.contact;
           const priority = priorityConfig[item.priority as 1 | 2 | 3] || priorityConfig[2];
           
@@ -142,16 +128,23 @@ function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = f
 export function EncaixeQueueDropdown({ closers, selectedDate, onScheduleFromQueue }: EncaixeQueueDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Get total count across all closers
-  const closerQueues = closers.map(closer => {
-    const { data: items = [] } = useEncaixeQueue(closer.id, selectedDate);
-    return {
-      closer,
-      count: items.filter(item => item.status === 'waiting' || item.status === 'notified').length,
-    };
-  });
+  // Single hook call for all closers - avoids hooks in loops
+  const closerIds = useMemo(() => closers.map(c => c.id), [closers]);
+  const { data: allQueueItems = [], isLoading } = useAllClosersEncaixeQueue(closerIds, selectedDate);
 
-  const totalCount = closerQueues.reduce((sum, q) => sum + q.count, 0);
+  // Group items by closer
+  const queueByCloser = useMemo(() => {
+    const grouped: Record<string, EncaixeQueueItem[]> = {};
+    closers.forEach(c => { grouped[c.id] = []; });
+    allQueueItems.forEach(item => {
+      if (grouped[item.closer_id]) {
+        grouped[item.closer_id].push(item);
+      }
+    });
+    return grouped;
+  }, [allQueueItems, closers]);
+
+  const totalCount = allQueueItems.length;
 
   const handleSchedule = (item: EncaixeQueueItem) => {
     onScheduleFromQueue(item);
@@ -183,7 +176,12 @@ export function EncaixeQueueDropdown({ closers, selectedDate, onScheduleFromQueu
           </p>
         </div>
         
-        {totalCount === 0 ? (
+        {isLoading ? (
+          <div className="p-4 space-y-2">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        ) : totalCount === 0 ? (
           <div className="p-6 text-center">
             <p className="text-sm text-muted-foreground">
               Nenhum lead aguardando encaixe para esta data
@@ -196,7 +194,7 @@ export function EncaixeQueueDropdown({ closers, selectedDate, onScheduleFromQueu
                 <CloserQueueSection
                   key={closer.id}
                   closer={closer}
-                  date={selectedDate}
+                  items={queueByCloser[closer.id] || []}
                   onScheduleFromQueue={handleSchedule}
                   defaultOpen={index === 0}
                 />

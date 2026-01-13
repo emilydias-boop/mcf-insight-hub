@@ -78,6 +78,37 @@ export function useEncaixeQueue(closerId?: string, date?: Date) {
   });
 }
 
+// Fetch encaixe queue for multiple closers at once (avoids hooks in loops)
+export function useAllClosersEncaixeQueue(closerIds: string[], date?: Date) {
+  return useQuery({
+    queryKey: ['encaixe-queue-all', closerIds.sort().join(','), date?.toISOString()],
+    queryFn: async () => {
+      if (closerIds.length === 0) return [];
+
+      let query = supabase
+        .from('encaixe_queue')
+        .select(`
+          *,
+          deal:crm_deals(id, name, contact:crm_contacts(id, name, email, phone)),
+          closer:closers(id, name)
+        `)
+        .in('closer_id', closerIds)
+        .in('status', ['waiting', 'notified'])
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (date) {
+        query = query.eq('preferred_date', format(date, 'yyyy-MM-dd'));
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as EncaixeQueueItem[];
+    },
+    enabled: closerIds.length > 0,
+  });
+}
+
 // Check if a closer's day is full
 export function useCloserDayCapacity(closerId?: string, date?: Date) {
   return useQuery({
