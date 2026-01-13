@@ -367,8 +367,8 @@ export default function Agenda() {
         />
       )}
 
-      {/* Main Content with optional side panel */}
-      <div className={`flex gap-4 ${!isCloser ? 'flex-col lg:flex-row' : ''}`}>
+      {/* Main Content with side panel */}
+      <div className="flex gap-4 flex-col lg:flex-row">
         {/* Main Content Tabs */}
         <Tabs defaultValue="calendar" className="flex-1">
           <TabsList>
@@ -433,16 +433,14 @@ export default function Agenda() {
           </TabsContent>
         </Tabs>
 
-        {/* Encaixe Queue Panel - Only for non-closers */}
-        {!isCloser && (
-          <div className="w-full lg:w-80 flex-shrink-0">
-            <AgendaEncaixePanel
-              closers={filteredClosers}
-              selectedDate={selectedDate}
-              onScheduleFromQueue={handleScheduleFromQueue}
-            />
-          </div>
-        )}
+        {/* Encaixe Queue Panel - Available for all users */}
+        <div className="w-full lg:w-80 flex-shrink-0">
+          <AgendaEncaixePanel
+            closers={isCloser && myCloser ? [{ id: myCloser.id, name: myCloser.name, color: null }] : filteredClosers}
+            selectedDate={selectedDate}
+            onScheduleFromQueue={handleScheduleFromQueue}
+          />
+        </div>
       </div>
 
       {/* Config Dialog */}

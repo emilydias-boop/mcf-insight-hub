@@ -139,6 +139,8 @@ function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = f
 }
 
 export function AgendaEncaixePanel({ closers, selectedDate, onScheduleFromQueue }: AgendaEncaixePanelProps) {
+  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
+
   // Get total count across all closers
   const closerQueues = closers.map(closer => {
     const { data: items = [] } = useEncaixeQueue(closer.id, selectedDate);
@@ -149,54 +151,53 @@ export function AgendaEncaixePanel({ closers, selectedDate, onScheduleFromQueue 
   });
 
   const totalCount = closerQueues.reduce((sum, q) => sum + q.count, 0);
-  const closersWithQueue = closerQueues.filter(q => q.count > 0);
-
-  if (closersWithQueue.length === 0) {
-    return (
-      <Card className="h-fit">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Fila de Encaixe
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-xs text-muted-foreground text-center py-4">
-            Nenhum lead aguardando encaixe para esta data
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
-    <Card className="h-fit">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Fila de Encaixe
-          </span>
-          <Badge variant="default" className="text-xs">
-            {totalCount} aguardando
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-3 pt-0">
-        <ScrollArea className="max-h-[400px]">
-          <div className="space-y-1">
-            {closers.map((closer, index) => (
-              <CloserQueueSection
-                key={closer.id}
-                closer={closer}
-                date={selectedDate}
-                onScheduleFromQueue={onScheduleFromQueue}
-                defaultOpen={index === 0}
-              />
-            ))}
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+    <Collapsible open={isPanelOpen} onOpenChange={setIsPanelOpen}>
+      <Card className="h-fit">
+        <CollapsibleTrigger asChild>
+          <CardHeader className="pb-3 cursor-pointer hover:bg-accent/50 transition-colors rounded-t-lg">
+            <CardTitle className="text-sm flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Fila de Encaixe
+              </span>
+              <div className="flex items-center gap-2">
+                {totalCount > 0 && (
+                  <Badge variant="default" className="text-xs">
+                    {totalCount} aguardando
+                  </Badge>
+                )}
+                <ChevronDown className={`h-4 w-4 transition-transform ${isPanelOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </CardTitle>
+          </CardHeader>
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent>
+          <CardContent className="p-3 pt-0">
+            {totalCount === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Nenhum lead aguardando encaixe para esta data
+              </p>
+            ) : (
+              <ScrollArea className="max-h-[400px]">
+                <div className="space-y-1">
+                  {closers.map((closer, index) => (
+                    <CloserQueueSection
+                      key={closer.id}
+                      closer={closer}
+                      date={selectedDate}
+                      onScheduleFromQueue={onScheduleFromQueue}
+                      defaultOpen={index === 0}
+                    />
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
