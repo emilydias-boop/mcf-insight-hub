@@ -845,7 +845,11 @@ export function useCreateMeeting() {
       // This is needed because edge function returns 400 status but includes error details in body
       if (data?.error) {
         if (data.error === 'Slot is full') {
-          throw new Error(`Este horário já está cheio (${data.currentAttendees || 3}/${data.maxAttendees || 3} participantes)`);
+          const slotFullError = new Error(`SLOT_FULL:${data.currentAttendees || 3}:${data.maxAttendees || 3}`);
+          (slotFullError as any).isSlotFull = true;
+          (slotFullError as any).currentAttendees = data.currentAttendees;
+          (slotFullError as any).maxAttendees = data.maxAttendees;
+          throw slotFullError;
         }
         if (data.error === 'Closer not found') {
           throw new Error('Closer não encontrado');
@@ -853,8 +857,23 @@ export function useCreateMeeting() {
         throw new Error(data.error);
       }
       
-      // Then check for generic HTTP error
-      if (error) throw error;
+      // Handle FunctionsHttpError - try to parse response body for slot full error
+      if (error) {
+        // Try to extract error details from the response
+        try {
+          const errorContext = (error as any)?.context;
+          if (errorContext?.error === 'Slot is full') {
+            const slotFullError = new Error(`SLOT_FULL:${errorContext.currentAttendees || 3}:${errorContext.maxAttendees || 3}`);
+            (slotFullError as any).isSlotFull = true;
+            (slotFullError as any).currentAttendees = errorContext.currentAttendees;
+            (slotFullError as any).maxAttendees = errorContext.maxAttendees;
+            throw slotFullError;
+          }
+        } catch (parseError) {
+          // If parsing fails, re-throw original error
+        }
+        throw error;
+      }
 
       return { ...data, sendNotification };
     },
@@ -869,6 +888,10 @@ export function useCreateMeeting() {
     },
     onError: (error: any) => {
       console.error('Error creating meeting:', error);
+      // Don't show toast for slot-full errors - the UI will handle showing encaixe form
+      if (error?.isSlotFull || error?.message?.startsWith('SLOT_FULL:')) {
+        return;
+      }
       toast.error(error?.message || 'Erro ao agendar reunião');
     },
   });

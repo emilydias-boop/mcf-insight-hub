@@ -307,6 +307,14 @@ export function QuickScheduleModal({
         onOpenChange(false);
         resetForm();
       },
+      onError: (error: any) => {
+        // Check if this is a "slot full" error - show encaixe form instead of just error toast
+        if (error?.isSlotFull || error?.message?.startsWith('SLOT_FULL:')) {
+          toast.info('Este horário está cheio. Você pode adicionar o lead à fila de encaixe.');
+          setShowEncaixeForm(true);
+        }
+        // Other errors are handled by the hook's onError
+      },
     });
   };
 
