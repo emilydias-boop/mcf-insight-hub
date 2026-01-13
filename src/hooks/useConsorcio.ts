@@ -214,13 +214,44 @@ export function useUpdateConsorcioCard() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: Partial<ConsorcioCard> & { id: string }) => {
-      const { error } = await supabase
+    mutationFn: async ({ id, partners, ...cardData }: Partial<ConsorcioCard> & { 
+      id: string; 
+      partners?: Array<{ nome: string; cpf: string; renda?: number }> 
+    }) => {
+      // 1. Update the card (without partners field)
+      const { error: cardError } = await supabase
         .from('consortium_cards')
-        .update(data)
+        .update(cardData)
         .eq('id', id);
 
-      if (error) throw error;
+      if (cardError) throw cardError;
+
+      // 2. Update partners if provided (for PJ cards)
+      if (partners !== undefined) {
+        // Delete existing partners
+        const { error: deleteError } = await supabase
+          .from('consortium_pj_partners')
+          .delete()
+          .eq('card_id', id);
+
+        if (deleteError) throw deleteError;
+
+        // Insert new partners
+        if (partners && partners.length > 0) {
+          const partnersData = partners.map(p => ({
+            card_id: id,
+            nome: p.nome,
+            cpf: p.cpf,
+            renda: p.renda,
+          }));
+
+          const { error: insertError } = await supabase
+            .from('consortium_pj_partners')
+            .insert(partnersData);
+
+          if (insertError) throw insertError;
+        }
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
