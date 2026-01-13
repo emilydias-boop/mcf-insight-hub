@@ -3,6 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
+import { formatDateForDB } from '@/lib/dateHelpers';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon, Plus, Trash2, Loader2, Upload, FileText, X, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import {
@@ -515,14 +516,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       tipo_produto: data.tipo_produto,
       tipo_contrato: data.tipo_contrato,
       parcelas_pagas_empresa: data.parcelas_pagas_empresa,
-      data_contratacao: format(data.data_contratacao, 'yyyy-MM-dd'),
+      data_contratacao: formatDateForDB(data.data_contratacao),
       dia_vencimento: data.dia_vencimento,
       origem: data.origem,
       origem_detalhe: data.origem_detalhe,
       vendedor_id: data.vendedor_id,
       vendedor_name: data.vendedor_name,
       nome_completo: data.nome_completo,
-      data_nascimento: data.data_nascimento ? format(data.data_nascimento, 'yyyy-MM-dd') : undefined,
+      data_nascimento: data.data_nascimento ? formatDateForDB(data.data_nascimento) : undefined,
       cpf: data.cpf,
       rg: data.rg,
       estado_civil: data.estado_civil || undefined,
@@ -545,7 +546,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       cnpj: data.cnpj,
       natureza_juridica: data.natureza_juridica,
       inscricao_estadual: data.inscricao_estadual,
-      data_fundacao: data.data_fundacao ? format(data.data_fundacao, 'yyyy-MM-dd') : undefined,
+      data_fundacao: data.data_fundacao ? formatDateForDB(data.data_fundacao) : undefined,
       endereco_comercial_cep: data.endereco_comercial_cep,
       endereco_comercial_rua: data.endereco_comercial_rua,
       endereco_comercial_numero: data.endereco_comercial_numero,

@@ -168,8 +168,9 @@ export function useCreateConsorcioCard() {
         if (partnersError) throw partnersError;
       }
 
-      // 3. Generate installments
-      const dataContratacao = new Date(input.data_contratacao);
+      // 3. Generate installments - Parse date without timezone issues
+      const [year, month, day] = input.data_contratacao.split('-').map(Number);
+      const dataContratacao = new Date(year, month - 1, day);
       const installments: Omit<ConsorcioInstallment, 'id' | 'created_at' | 'updated_at'>[] = [];
 
       for (let i = 1; i <= input.prazo_meses; i++) {
