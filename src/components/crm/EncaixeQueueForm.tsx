@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Clock, AlertCircle, UserPlus } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAddToEncaixeQueue, useCloserDayCapacity } from '@/hooks/useEncaixeQueue';
+import { useCloserMeetingLinksList } from '@/hooks/useCloserMeetingLinks';
 import { useAuth } from '@/contexts/AuthContext';
-import { format } from 'date-fns';
+import { format, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface EncaixeQueueFormProps {
@@ -44,6 +45,26 @@ export function EncaixeQueueForm({
   const addToQueue = useAddToEncaixeQueue();
   const { data: dayCapacity } = useCloserDayCapacity(closerId, preferredDate);
 
+  // Get day of week (0=Sunday, 1=Monday, etc)
+  const dayOfWeek = getDay(preferredDate);
+
+  // Fetch configured time slots for this closer on this day
+  const { data: closerLinks = [], isLoading: isLoadingSlots } = useCloserMeetingLinksList(closerId, dayOfWeek);
+
+  // Extract unique sorted time slots from closer's configured availability
+  const timeSlots = useMemo(() => {
+    if (!closerLinks || closerLinks.length === 0) {
+      return [];
+    }
+    
+    const times = closerLinks
+      .map(link => link.start_time.substring(0, 5)) // "09:00:00" → "09:00"
+      .filter((time, index, self) => self.indexOf(time) === index) // unique
+      .sort();
+    
+    return times;
+  }, [closerLinks]);
+
   const handleSubmit = () => {
     addToQueue.mutate(
       {
@@ -65,13 +86,6 @@ export function EncaixeQueueForm({
       }
     );
   };
-
-  const timeSlots = [
-    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
-    '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
-    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
-    '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
-  ];
 
   return (
     <div className="space-y-4">
@@ -119,11 +133,17 @@ export function EncaixeQueueForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="any">Qualquer horário</SelectItem>
-              {timeSlots.map((time) => (
-                <SelectItem key={time} value={time}>
-                  {time}
-                </SelectItem>
-              ))}
+              {isLoadingSlots ? (
+                <SelectItem value="_loading" disabled>Carregando...</SelectItem>
+              ) : timeSlots.length === 0 ? (
+                <SelectItem value="_empty" disabled>Nenhum horário configurado</SelectItem>
+              ) : (
+                timeSlots.map((time) => (
+                  <SelectItem key={time} value={time}>
+                    {time}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -136,11 +156,17 @@ export function EncaixeQueueForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="any">Qualquer horário</SelectItem>
-              {timeSlots.map((time) => (
-                <SelectItem key={time} value={time}>
-                  {time}
-                </SelectItem>
-              ))}
+              {isLoadingSlots ? (
+                <SelectItem value="_loading" disabled>Carregando...</SelectItem>
+              ) : timeSlots.length === 0 ? (
+                <SelectItem value="_empty" disabled>Nenhum horário configurado</SelectItem>
+              ) : (
+                timeSlots.map((time) => (
+                  <SelectItem key={time} value={time}>
+                    {time}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         </div>
