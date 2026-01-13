@@ -44,6 +44,12 @@ export const useAllHublaTransactions = (filters: TransactionFilters) => {
       if (error) throw error;
       return (data || []) as HublaTransaction[];
     },
-    refetchInterval: 30000,
+    retry: 1,
+    refetchInterval: (query) => {
+      // Don't refetch if there was an error
+      if (query.state.error) return false;
+      return 30000;
+    },
+    staleTime: 10000,
   });
 };
