@@ -4,6 +4,7 @@ import { Building2, TrendingUp, CreditCard, FolderKanban, Gavel, LucideIcon } fr
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
 import { formatDateForDB } from "@/lib/dateHelpers";
 import { ptBR } from "date-fns/locale";
+import { useIncorporadorGrossMetrics } from "./useIncorporadorGrossMetrics";
 
 export interface SetorData {
   id: 'incorporador' | 'efeito_alavanca' | 'credito' | 'projetos' | 'leilao';
@@ -42,6 +43,9 @@ const WEEK_STARTS_ON = 6;
 export function useSetoresDashboard() {
   const today = new Date();
   
+  // Fetch Incorporador gross metrics using the dedicated hook (uses same deduplication logic as Vendas page)
+  const incorporadorMetrics = useIncorporadorGrossMetrics();
+  
   // Calculate period boundaries
   const weekStart = startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
   const weekEnd = endOfWeek(today, { weekStartsOn: WEEK_STARTS_ON });
@@ -61,7 +65,7 @@ export function useSetoresDashboard() {
   const semanaLabel = `Semana ${format(weekStart, 'dd/MM')} - ${format(weekEnd, 'dd/MM')}`;
   const mesLabel = `Mês ${mesNome.charAt(0).toUpperCase() + mesNome.slice(1)}`;
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['setores-dashboard', weekStartStr, monthStartStr, yearStartStr],
     queryFn: async (): Promise<{ setores: SetorData[]; semanaLabel: string; mesLabel: string }> => {
       // Fetch all transaction data in parallel
@@ -157,7 +161,7 @@ export function useSetoresDashboard() {
           };
         }
 
-        // All other sectors use hubla_transactions
+        // All other sectors use hubla_transactions with net_value
         const categories = SETOR_CATEGORIES[config.id] || [];
         return {
           ...config,
@@ -175,4 +179,24 @@ export function useSetoresDashboard() {
     staleTime: 1000 * 60 * 2, // 2 minutes
     refetchInterval: 1000 * 30, // 30 seconds
   });
+
+  // Override Incorporador sector values with gross metrics from dedicated hook
+  const data = query.data;
+  if (data) {
+    const incorporadorIndex = data.setores.findIndex(s => s.id === 'incorporador');
+    if (incorporadorIndex !== -1) {
+      data.setores[incorporadorIndex] = {
+        ...data.setores[incorporadorIndex],
+        apuradoSemanal: incorporadorMetrics.brutoSemanal,
+        apuradoMensal: incorporadorMetrics.brutoMensal,
+        apuradoAnual: incorporadorMetrics.brutoAnual,
+      };
+    }
+  }
+
+  return {
+    ...query,
+    isLoading: query.isLoading || incorporadorMetrics.isLoading,
+    error: query.error || incorporadorMetrics.error,
+  };
 }

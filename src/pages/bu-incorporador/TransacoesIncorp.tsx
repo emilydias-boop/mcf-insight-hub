@@ -25,64 +25,9 @@ import {
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
+import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
 
 const ITEMS_PER_PAGE = 20;
-
-// Produtos excluídos da listagem de Vendas Incorporador
-const EXCLUDED_PRODUCTS = [
-  'efeito alavanca + assessoria',
-  'construir para alugar',
-  'a006 - renovação parceiro mcf',
-  'mcf projetos',
-  'sócio mcf',
-  'viver de aluguel',
-  'contrato - efeito alavanca',
-  'como arrematar imóveis de leilão da caixa',
-  'clube do arremate',
-];
-
-// Preços brutos fixos por produto (match parcial, case-insensitive)
-const FIXED_GROSS_PRICES: { pattern: string; price: number }[] = [
-  { pattern: 'a005 - mcf p2', price: 0 },
-  { pattern: 'a009 - mcf incorporador completo + the club', price: 19500 },
-  { pattern: 'a001 - mcf incorporador completo', price: 14500 },
-  { pattern: 'a000 - contrato', price: 497 },
-  { pattern: 'a010', price: 47 },
-  { pattern: 'plano construtor básico', price: 997 },
-  { pattern: 'a004 - mcf plano anticrise básico', price: 5500 },
-  { pattern: 'a003 - mcf plano anticrise completo', price: 7500 },
-];
-
-// Função para obter preço bruto fixo ou original
-const getFixedGrossPrice = (productName: string | null, originalPrice: number): number => {
-  if (!productName) return originalPrice;
-  const normalizedName = productName.toLowerCase().trim();
-  
-  for (const { pattern, price } of FIXED_GROSS_PRICES) {
-    if (normalizedName.includes(pattern)) {
-      return price;
-    }
-  }
-  return originalPrice;
-};
-
-// Normaliza o nome do produto para chave de deduplicação
-const normalizeProductKey = (productName: string | null): string => {
-  if (!productName) return 'unknown';
-  const upper = productName.toUpperCase().trim();
-  
-  if (upper.includes('A009')) return 'A009';
-  if (upper.includes('A005')) return 'A005';
-  if (upper.includes('A004')) return 'A004';
-  if (upper.includes('A003')) return 'A003';
-  if (upper.includes('A001')) return 'A001';
-  if (upper.includes('A010')) return 'A010';
-  if (upper.includes('A000') || upper.includes('CONTRATO')) return 'A000';
-  if (upper.includes('PLANO CONSTRUTOR')) return 'PLANO_CONSTRUTOR';
-  
-  // Fallback: primeiros 40 chars
-  return upper.substring(0, 40);
-};
 
 export default function TransacoesIncorp() {
   // Filtros - inicia com o mês atual para evitar carregar toda a base
@@ -107,28 +52,7 @@ export default function TransacoesIncorp() {
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
 
   // Produtos já são filtrados no RPC - usar diretamente
-  const filteredTransactions = allTransactions;
-
-  // Função para obter bruto: agora usa gross_winner do banco
-  // O banco determina a transação vencedora considerando TODO o histórico
-  const getDeduplicatedGross = (transaction: typeof filteredTransactions[0]): number => {
-    const installment = transaction.installment_number || 1;
-    
-    // Regra 1: Parcela > 1 sempre tem bruto zerado (fallback de segurança)
-    if (installment > 1) {
-      return 0;
-    }
-    
-    // Regra 2: Apenas a transação marcada como gross_winner pelo banco tem bruto
-    if (transaction.gross_winner !== true) {
-      return 0;
-    }
-    
-    return getFixedGrossPrice(transaction.product_name, transaction.product_price || 0);
-  };
-
-  // Transações com bruto ajustado (para uso em totais e exibição)
-  const transactions = filteredTransactions;
+  const transactions = allTransactions;
 
   // Paginação
   const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
