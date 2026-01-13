@@ -230,6 +230,41 @@ export type Database = {
         }
         Relationships: []
       }
+      attendee_notes: {
+        Row: {
+          attendee_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          note: string
+          note_type: string | null
+        }
+        Insert: {
+          attendee_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          note: string
+          note_type?: string | null
+        }
+        Update: {
+          attendee_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          note?: string
+          note_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendee_notes_attendee_id_fkey"
+            columns: ["attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       auction_bids: {
         Row: {
           auction_id: string
