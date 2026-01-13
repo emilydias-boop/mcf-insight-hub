@@ -78,26 +78,16 @@ export default function TransacoesIncorp() {
     });
   }, [allTransactions]);
 
-  // Deduplicação: para mesmo email+produto, apenas a primeira venda tem bruto, demais zeradas
-  // Cria um Map com chave email+produto e retorna Set de IDs que devem manter o bruto
-  const idsWithGross = useMemo(() => {
-    const seenKeys = new Map<string, string>(); // key -> primeiro id
-    for (const t of filteredTransactions) {
-      const email = (t.customer_email || '').toLowerCase().trim();
-      const product = (t.product_name || '').toLowerCase().trim();
-      const key = `${email}|${product}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.set(key, t.id);
-      }
-    }
-    return new Set(seenKeys.values());
-  }, [filteredTransactions]);
-
-  // Função para obter bruto considerando deduplicação
+  // Função para obter bruto considerando parcela
+  // Apenas primeira parcela (installment_number === 1 ou undefined) tem valor bruto
   const getDeduplicatedGross = (transaction: typeof filteredTransactions[0]): number => {
-    if (!idsWithGross.has(transaction.id)) {
-      return 0; // Duplicata - zera bruto
+    const installment = transaction.installment_number || 1;
+    
+    // Apenas primeira parcela tem valor bruto
+    if (installment > 1) {
+      return 0;
     }
+    
     return getFixedGrossPrice(transaction.product_name, transaction.product_price || 0);
   };
 
@@ -116,7 +106,7 @@ export default function TransacoesIncorp() {
     const bruto = transactions.reduce((sum, t) => sum + getDeduplicatedGross(t), 0);
     const liquido = transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
     return { count: transactions.length, bruto, liquido };
-  }, [transactions, idsWithGross]);
+  }, [transactions]);
 
   // Handlers
   const handleRefresh = async () => {
