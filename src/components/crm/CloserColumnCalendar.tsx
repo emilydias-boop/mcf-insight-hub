@@ -315,9 +315,10 @@ export function CloserColumnCalendar({
                     ) : available ? (
                       <button
                         onClick={() => onSelectSlot(closer.id, slot)}
-                        className="w-full h-full rounded bg-green-50 dark:bg-green-900/50 border-2 border-dashed border-green-400 hover:bg-green-100 dark:hover:bg-green-800/60 hover:border-green-500 transition-all flex items-center justify-center group shadow-md"
+                        className="absolute inset-0.5 flex items-center justify-center rounded bg-green-100 dark:bg-green-500/20 border-2 border-dashed border-green-500/80 ring-1 ring-inset ring-green-400/40 hover:bg-green-200 dark:hover:bg-green-500/30 transition-all group shadow-md"
                       >
-                        <Plus className="h-4 w-4 text-green-600 dark:text-green-400 group-hover:text-green-700 dark:group-hover:text-green-300 transition-colors" />
+                        <Plus className="h-5 w-5 text-green-700 dark:text-green-300 group-hover:text-green-800 dark:group-hover:text-green-200 transition-colors" />
+                        <span className="text-[10px] font-medium text-green-700 dark:text-green-300 ml-0.5">Livre</span>
                       </button>
                     ) : (
                       <div className="w-full h-full" />
