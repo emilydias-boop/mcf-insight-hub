@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, endOfDay } from 'date-fns';
+import { format, addDays, addWeeks, subWeeks, addMonths, subMonths, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { CalendarDays, ChevronLeft, ChevronRight, Settings, Users, RefreshCw, Plus, Columns3, BarChart3 } from 'lucide-react';
@@ -47,7 +47,8 @@ export default function Agenda() {
   // Calculate date range based on viewMode
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (viewMode === 'day') {
-      return { rangeStart: selectedDate, rangeEnd: endOfDay(selectedDate) };
+      // Usar startOfDay para garantir que todas as reuniões do dia sejam buscadas
+      return { rangeStart: startOfDay(selectedDate), rangeEnd: endOfDay(selectedDate) };
     } else if (viewMode === 'month') {
       return { rangeStart: startOfMonth(selectedDate), rangeEnd: endOfMonth(selectedDate) };
     }
