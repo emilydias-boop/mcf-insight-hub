@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Plus, Trash2, Loader2, Upload, FileText, X } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, Loader2, Upload, FileText, X, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,37 @@ import {
   TipoDocumento,
   ConsorcioCardWithDetails,
 } from '@/types/consorcio';
+
+// === Formatting functions for input masks ===
+function formatCpf(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function formatCnpj(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+}
+
+function formatCep(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
 
 const formSchema = z.object({
   tipo_pessoa: z.enum(['pf', 'pj']),
@@ -208,6 +239,46 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const tipoPessoa = form.watch('tipo_pessoa');
   const estadoCivil = form.watch('estado_civil');
   const profissao = form.watch('profissao');
+
+  // === Tab navigation logic ===
+  const tabOrder = useMemo(() => {
+    return tipoPessoa === 'pj' 
+      ? ['dados', 'endereco', 'documentos', 'cota', 'socios']
+      : ['dados', 'endereco', 'documentos', 'cota'];
+  }, [tipoPessoa]);
+
+  const currentTabIndex = tabOrder.indexOf(activeTab);
+
+  const handleNextTab = () => {
+    if (currentTabIndex < tabOrder.length - 1) {
+      setActiveTab(tabOrder[currentTabIndex + 1]);
+    }
+  };
+
+  const handlePreviousTab = () => {
+    if (currentTabIndex > 0) {
+      setActiveTab(tabOrder[currentTabIndex - 1]);
+    }
+  };
+
+  // === Tab error checking for validation indicators ===
+  const tabFieldsMap = useMemo(() => ({
+    dados: tipoPessoa === 'pf' 
+      ? ['nome_completo', 'cpf', 'telefone', 'email', 'data_nascimento', 'estado_civil', 'renda', 'patrimonio', 'pix', 'profissao', 'tipo_servidor', 'rg', 'cpf_conjuge']
+      : ['razao_social', 'cnpj', 'telefone_comercial', 'email_comercial', 'natureza_juridica', 'inscricao_estadual', 'data_fundacao', 'faturamento_mensal', 'num_funcionarios'],
+    endereco: tipoPessoa === 'pf'
+      ? ['endereco_cep', 'endereco_rua', 'endereco_numero', 'endereco_bairro', 'endereco_cidade', 'endereco_estado']
+      : ['endereco_comercial_cep', 'endereco_comercial_rua', 'endereco_comercial_numero', 'endereco_comercial_bairro', 'endereco_comercial_cidade', 'endereco_comercial_estado'],
+    documentos: [],
+    cota: ['grupo', 'cota', 'valor_credito', 'prazo_meses', 'data_contratacao', 'dia_vencimento', 'origem'],
+    socios: ['partners'],
+  }), [tipoPessoa]);
+
+  const getTabHasErrors = (tabKey: string) => {
+    const fields = tabFieldsMap[tabKey as keyof typeof tabFieldsMap] || [];
+    const errors = form.formState.errors;
+    return fields.some(field => field in errors);
+  };
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -479,14 +550,37 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className={cn("grid w-full", tipoPessoa === 'pj' ? "grid-cols-5" : "grid-cols-4")}>
-                <TabsTrigger value="dados">
+                <TabsTrigger value="dados" className="relative">
                   {tipoPessoa === 'pf' ? 'Dados Pessoais' : 'Dados da Empresa'}
+                  {getTabHasErrors('dados') && (
+                    <AlertCircle className="absolute -top-1 -right-1 h-3.5 w-3.5 text-destructive" />
+                  )}
                 </TabsTrigger>
-                <TabsTrigger value="endereco">Endereço</TabsTrigger>
-                <TabsTrigger value="documentos">Documentos</TabsTrigger>
-                <TabsTrigger value="cota">Dados da Cota</TabsTrigger>
+                <TabsTrigger value="endereco" className="relative">
+                  Endereço
+                  {getTabHasErrors('endereco') && (
+                    <AlertCircle className="absolute -top-1 -right-1 h-3.5 w-3.5 text-destructive" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="documentos" className="relative">
+                  Documentos
+                  {getTabHasErrors('documentos') && (
+                    <AlertCircle className="absolute -top-1 -right-1 h-3.5 w-3.5 text-destructive" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="cota" className="relative">
+                  Dados da Cota
+                  {getTabHasErrors('cota') && (
+                    <AlertCircle className="absolute -top-1 -right-1 h-3.5 w-3.5 text-destructive" />
+                  )}
+                </TabsTrigger>
                 {tipoPessoa === 'pj' && (
-                  <TabsTrigger value="socios">Sócios</TabsTrigger>
+                  <TabsTrigger value="socios" className="relative">
+                    Sócios
+                    {getTabHasErrors('socios') && (
+                      <AlertCircle className="absolute -top-1 -right-1 h-3.5 w-3.5 text-destructive" />
+                    )}
+                  </TabsTrigger>
                 )}
               </TabsList>
 
@@ -750,6 +844,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     </FormItem>
                   )}
                 />
+
+                {/* Navigation buttons */}
+                <div className="flex justify-between pt-4 border-t mt-6">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handlePreviousTab}
+                    disabled={currentTabIndex === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    Anterior
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={handleNextTab}
+                    disabled={currentTabIndex === tabOrder.length - 1}
+                  >
+                    Próximo
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
               </TabsContent>
 
               {/* Tab: Dados Pessoais (PF) */}
@@ -777,7 +892,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                         <FormItem>
                           <FormLabel>CPF *</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="000.000.000-00" />
+                            <Input 
+                              {...field} 
+                              value={formatCpf(field.value || '')}
+                              onChange={(e) => field.onChange(formatCpf(e.target.value))}
+                              placeholder="000.000.000-00" 
+                            />
                           </FormControl>
                         </FormItem>
                       )}
@@ -867,7 +987,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                         <FormItem>
                           <FormLabel>CPF do Cônjuge</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="000.000.000-00" />
+                            <Input 
+                              {...field} 
+                              value={formatCpf(field.value || '')}
+                              onChange={(e) => field.onChange(formatCpf(e.target.value))}
+                              placeholder="000.000.000-00" 
+                            />
                           </FormControl>
                         </FormItem>
                       )}
@@ -882,7 +1007,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                         <FormItem>
                           <FormLabel>Telefone *</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="(11) 99999-9999" />
+                            <Input 
+                              {...field} 
+                              value={formatPhone(field.value || '')}
+                              onChange={(e) => field.onChange(formatPhone(e.target.value))}
+                              placeholder="(11) 99999-9999" 
+                            />
                           </FormControl>
                         </FormItem>
                       )}
@@ -989,6 +1119,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       )}
                     />
                   </div>
+
+                  {/* Navigation buttons */}
+                  <div className="flex justify-between pt-4 border-t mt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handlePreviousTab}
+                      disabled={currentTabIndex === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-2" />
+                      Anterior
+                    </Button>
+                    <Button 
+                      type="button" 
+                      onClick={handleNextTab}
+                      disabled={currentTabIndex === tabOrder.length - 1}
+                    >
+                      Próximo
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
                 </TabsContent>
               )}
 
@@ -1016,7 +1167,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                         <FormItem>
                           <FormLabel>CNPJ *</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="00.000.000/0000-00" />
+                            <Input 
+                              {...field} 
+                              value={formatCnpj(field.value || '')}
+                              onChange={(e) => field.onChange(formatCnpj(e.target.value))}
+                              placeholder="00.000.000/0000-00" 
+                            />
                           </FormControl>
                         </FormItem>
                       )}
@@ -1095,7 +1251,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                         <FormItem>
                           <FormLabel>Telefone Comercial</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="(11) 3333-3333" />
+                            <Input 
+                              {...field} 
+                              value={formatPhone(field.value || '')}
+                              onChange={(e) => field.onChange(formatPhone(e.target.value))}
+                              placeholder="(11) 3333-3333" 
+                            />
                           </FormControl>
                         </FormItem>
                       )}
@@ -1150,6 +1311,26 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       )}
                     />
                   </div>
+                  {/* Navigation buttons */}
+                  <div className="flex justify-between pt-4 border-t mt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handlePreviousTab}
+                      disabled={currentTabIndex === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-2" />
+                      Anterior
+                    </Button>
+                    <Button 
+                      type="button" 
+                      onClick={handleNextTab}
+                      disabled={currentTabIndex === tabOrder.length - 1}
+                    >
+                      Próximo
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
                 </TabsContent>
               )}
 
@@ -1203,7 +1384,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                             <FormItem>
                               <FormLabel>CPF *</FormLabel>
                               <FormControl>
-                                <Input {...field} placeholder="000.000.000-00" />
+                                <Input 
+                                  {...field} 
+                                  value={formatCpf(field.value || '')}
+                                  onChange={(e) => field.onChange(formatCpf(e.target.value))}
+                                  placeholder="000.000.000-00" 
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -1235,6 +1421,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       Nenhum sócio adicionado. Clique em "Adicionar Sócio" para incluir.
                     </p>
                   )}
+
+                  {/* Navigation buttons */}
+                  <div className="flex justify-between pt-4 border-t mt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handlePreviousTab}
+                      disabled={currentTabIndex === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-2" />
+                      Anterior
+                    </Button>
+                    <Button 
+                      type="button" 
+                      onClick={handleNextTab}
+                      disabled={currentTabIndex === tabOrder.length - 1}
+                    >
+                      Próximo
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
                 </TabsContent>
               )}
 
@@ -1252,6 +1459,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                             <FormControl>
                               <Input
                                 {...field}
+                                value={formatCep(field.value || '')}
+                                onChange={(e) => field.onChange(formatCep(e.target.value))}
                                 placeholder="00000-000"
                                 onBlur={(e) => {
                                   field.onBlur();
@@ -1359,6 +1568,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                             <FormControl>
                               <Input
                                 {...field}
+                                value={formatCep(field.value || '')}
+                                onChange={(e) => field.onChange(formatCep(e.target.value))}
                                 placeholder="00000-000"
                                 onBlur={(e) => {
                                   field.onBlur();
@@ -1454,6 +1665,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     </div>
                   </>
                 )}
+
+                {/* Navigation buttons */}
+                <div className="flex justify-between pt-4 border-t mt-6">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handlePreviousTab}
+                    disabled={currentTabIndex === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    Anterior
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={handleNextTab}
+                    disabled={currentTabIndex === tabOrder.length - 1}
+                  >
+                    Próximo
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
               </TabsContent>
 
               {/* Tab: Documentos */}
@@ -1524,6 +1756,27 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       <p className="text-xs mt-1">Selecione o tipo e clique em "Selecionar Arquivo"</p>
                     </div>
                   )}
+                </div>
+
+                {/* Navigation buttons */}
+                <div className="flex justify-between pt-4 border-t mt-6">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={handlePreviousTab}
+                    disabled={currentTabIndex === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    Anterior
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={handleNextTab}
+                    disabled={currentTabIndex === tabOrder.length - 1}
+                  >
+                    Próximo
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
                 </div>
               </TabsContent>
             </Tabs>
