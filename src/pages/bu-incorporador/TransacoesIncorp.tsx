@@ -68,12 +68,38 @@ export default function TransacoesIncorp() {
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
 
   // Filtrar produtos excluídos
-  const transactions = useMemo(() => {
+  const filteredTransactions = useMemo(() => {
     return allTransactions.filter(t => {
       const productName = (t.product_name || '').toLowerCase().trim();
       return !EXCLUDED_PRODUCTS.some(excluded => productName.includes(excluded));
     });
   }, [allTransactions]);
+
+  // Deduplicação: para mesmo email+produto, apenas a primeira venda tem bruto, demais zeradas
+  // Cria um Map com chave email+produto e retorna Set de IDs que devem manter o bruto
+  const idsWithGross = useMemo(() => {
+    const seenKeys = new Map<string, string>(); // key -> primeiro id
+    for (const t of filteredTransactions) {
+      const email = (t.customer_email || '').toLowerCase().trim();
+      const product = (t.product_name || '').toLowerCase().trim();
+      const key = `${email}|${product}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.set(key, t.id);
+      }
+    }
+    return new Set(seenKeys.values());
+  }, [filteredTransactions]);
+
+  // Função para obter bruto considerando deduplicação
+  const getDeduplicatedGross = (transaction: typeof filteredTransactions[0]): number => {
+    if (!idsWithGross.has(transaction.id)) {
+      return 0; // Duplicata - zera bruto
+    }
+    return getFixedGrossPrice(transaction.product_name, transaction.product_price || 0);
+  };
+
+  // Transações com bruto ajustado (para uso em totais e exibição)
+  const transactions = filteredTransactions;
 
   // Paginação
   const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
@@ -84,10 +110,10 @@ export default function TransacoesIncorp() {
 
   // Totais
   const totals = useMemo(() => {
-    const bruto = transactions.reduce((sum, t) => sum + getFixedGrossPrice(t.product_name, t.product_price || 0), 0);
+    const bruto = transactions.reduce((sum, t) => sum + getDeduplicatedGross(t), 0);
     const liquido = transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
     return { count: transactions.length, bruto, liquido };
-  }, [transactions]);
+  }, [transactions, idsWithGross]);
 
   // Handlers
   const handleRefresh = async () => {
@@ -116,7 +142,7 @@ export default function TransacoesIncorp() {
       t.customer_email || '',
       t.customer_phone || '',
       t.installment_number && t.total_installments ? `${t.installment_number}/${t.total_installments}` : '1/1',
-      getFixedGrossPrice(t.product_name, t.product_price || 0).toFixed(2),
+      getDeduplicatedGross(t).toFixed(2),
       t.net_value?.toFixed(2) || '0',
       t.source || '',
     ]);
@@ -289,7 +315,7 @@ export default function TransacoesIncorp() {
                             : '1/1'}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatCurrency(getFixedGrossPrice(t.product_name, t.product_price || 0))}
+                          {formatCurrency(getDeduplicatedGross(t))}
                         </TableCell>
                         <TableCell className="text-right text-green-600 font-medium">
                           {formatCurrency(t.net_value || 0)}
