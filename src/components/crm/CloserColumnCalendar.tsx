@@ -116,6 +116,35 @@ export function CloserColumnCalendar({
     });
   };
 
+  // Contador de slots disponíveis por closer
+  const availableSlotsCount = useMemo(() => {
+    const counts: Record<string, { available: number; total: number }> = {};
+    
+    closers.forEach(closer => {
+      const closerConfiguredSlots = daySlots.filter(s => s.closer_id === closer.id);
+      const isBlocked = blockedDates.some(
+        bd => bd.closer_id === closer.id && isSameDay(parseISO(bd.blocked_date), selectedDate)
+      );
+      
+      if (isBlocked) {
+        counts[closer.id] = { available: 0, total: closerConfiguredSlots.length };
+        return;
+      }
+      
+      let available = 0;
+      closerConfiguredSlots.forEach(slot => {
+        const [hour, minute] = slot.start_time.split(':').map(Number);
+        const slotTime = setMinutes(setHours(selectedDate, hour), minute);
+        const hasMeeting = getMeetingForSlot(closer.id, slotTime);
+        if (!hasMeeting) available++;
+      });
+      
+      counts[closer.id] = { available, total: closerConfiguredSlots.length };
+    });
+    
+    return counts;
+  }, [closers, daySlots, meetings, blockedDates, selectedDate]);
+
   const now = new Date();
   const isToday = isSameDay(selectedDate, now);
 
@@ -138,20 +167,27 @@ export function CloserColumnCalendar({
             </button>
           )}
         </div>
-        {closers.map(closer => (
-          <div 
-            key={closer.id}
-            className="p-3 text-center border-l"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: closer.color }}
-              />
-              <span className="font-medium text-sm">{closer.name}</span>
+        {closers.map(closer => {
+          const counts = availableSlotsCount[closer.id] || { available: 0, total: 0 };
+          return (
+            <div 
+              key={closer.id}
+              className="p-2 text-center border-l"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <div 
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: closer.color }}
+                />
+                <span className="font-medium text-sm">{closer.name}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                <span className="text-green-500 font-medium">{counts.available}</span>
+                <span> / {counts.total} livres</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Time slots grid */}
@@ -279,12 +315,12 @@ export function CloserColumnCalendar({
                     ) : available ? (
                       <button
                         onClick={() => onSelectSlot(closer.id, slot)}
-                        className="w-full h-full rounded bg-white/90 dark:bg-white/10 border border-dashed border-green-500/40 hover:bg-green-500/15 hover:border-green-500/60 transition-all flex items-center justify-center group"
+                        className="w-full h-full rounded bg-white dark:bg-slate-700 border-2 border-dashed border-green-500/60 hover:bg-green-100 dark:hover:bg-green-900/40 hover:border-green-500 transition-all flex items-center justify-center group shadow-sm"
                       >
-                        <Plus className="h-3.5 w-3.5 text-green-500/40 group-hover:text-green-500/70 transition-colors" />
+                        <Plus className="h-4 w-4 text-green-500/70 group-hover:text-green-600 transition-colors" />
                       </button>
                     ) : (
-                      <div className="w-full h-full bg-muted/10" />
+                      <div className="w-full h-full" />
                     )}
                   </div>
                 );
