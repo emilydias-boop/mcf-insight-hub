@@ -1,3 +1,4 @@
+// Dashboard - Director Panel with sector metrics
 import { useState, useEffect } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { supabase } from "@/integrations/supabase/client";
