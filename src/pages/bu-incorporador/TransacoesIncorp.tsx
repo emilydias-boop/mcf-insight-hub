@@ -106,13 +106,8 @@ export default function TransacoesIncorp() {
 
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
 
-  // Filtrar produtos excluídos
-  const filteredTransactions = useMemo(() => {
-    return allTransactions.filter(t => {
-      const productName = (t.product_name || '').toLowerCase().trim();
-      return !EXCLUDED_PRODUCTS.some(excluded => productName.includes(excluded));
-    });
-  }, [allTransactions]);
+  // Produtos já são filtrados no RPC - usar diretamente
+  const filteredTransactions = allTransactions;
 
   // Função para obter bruto: agora usa gross_winner do banco
   // O banco determina a transação vencedora considerando TODO o histórico
@@ -168,13 +163,12 @@ export default function TransacoesIncorp() {
       return;
     }
 
-    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Telefone', 'Parcela', 'Bruto', 'Líquido', 'Fonte'];
+    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte'];
     const rows = transactions.map(t => [
       t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
       t.product_name || '',
       t.customer_name || '',
       t.customer_email || '',
-      t.customer_phone || '',
       t.installment_number && t.total_installments ? `${t.installment_number}/${t.total_installments}` : '1/1',
       getDeduplicatedGross(t).toFixed(2),
       t.net_value?.toFixed(2) || '0',

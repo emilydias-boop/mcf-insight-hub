@@ -65,13 +65,12 @@ export function FinanceiroTransacoes() {
       return;
     }
 
-    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Telefone', 'Parcela', 'Bruto', 'Líquido', 'Fonte'];
+    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte'];
     const rows = transactions.map(t => [
       t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
       t.product_name || '',
       t.customer_name || '',
       t.customer_email || '',
-      t.customer_phone || '',
       t.installment_number && t.total_installments ? `${t.installment_number}/${t.total_installments}` : '1/1',
       t.product_price?.toFixed(2) || '0',
       t.net_value?.toFixed(2) || '0',
