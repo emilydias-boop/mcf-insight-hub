@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
+import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
 
 import { useAllHublaTransactions, TransactionFilters } from '@/hooks/useAllHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
@@ -77,6 +78,7 @@ export default function TransacoesIncorp() {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Query com filtros
@@ -199,6 +201,10 @@ export default function TransacoesIncorp() {
             <p className="text-muted-foreground">Todas as vendas da plataforma Hubla</p>
           </div>
           <div className="flex gap-2">
+            <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova Transação
+            </Button>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isFetching}>
               <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
               Atualizar
@@ -395,6 +401,13 @@ export default function TransacoesIncorp() {
             )}
           </CardContent>
         </Card>
+
+        <TransactionFormDialog
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          mode="create"
+          onSuccess={() => refetch()}
+        />
     </div>
   );
 }
