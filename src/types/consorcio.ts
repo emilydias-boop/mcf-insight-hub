@@ -206,6 +206,7 @@ export const ORIGEM_OPTIONS = [
   { value: 'socio', label: 'Sócio' },
   { value: 'gr', label: 'GR' },
   { value: 'indicacao', label: 'Indicação' },
+  { value: 'clube_arremate', label: 'Clube do Arremate' },
   { value: 'outros', label: 'Outros' },
 ] as const;
 
