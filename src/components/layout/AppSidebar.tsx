@@ -172,7 +172,7 @@ const menuItems: MenuItem[] = [
     separator: true,
     items: [
       { title: "Receita", url: "/receita" },
-      { title: "Transações", url: "/receita/transacoes" },
+      { title: "Transações", url: "/financeiro?tab=transacoes" },
       { title: "Custos", url: "/custos" },
       { title: "Despesas", url: "/custos/despesas" },
       { title: "Pagamentos", url: "/financeiro", requiredRoles: ['admin', 'financeiro'] },
