@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Palette, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Palette, Plus, Trash2, Copy, Loader2, Users } from 'lucide-react';
 import { CloserWithAvailability, useUpdateCloserColor } from '@/hooks/useAgendaData';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,29 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+
+// Hook to update max_slots_per_hour for a closer
+function useUpdateCloserMaxSlots() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ closerId, maxSlots }: { closerId: string; maxSlots: number }) => {
+      const { error } = await supabase
+        .from('closer_availability')
+        .update({ max_slots_per_hour: maxSlots })
+        .eq('closer_id', closerId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['closers-with-availability'] });
+      toast.success('Limite de leads atualizado!');
+    },
+    onError: () => {
+      toast.error('Erro ao atualizar limite de leads');
+    },
+  });
+}
 
 interface CloserAvailabilityConfigProps {
   open: boolean;
@@ -42,9 +66,14 @@ const PRESET_COLORS = [
 function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) {
   const queryClient = useQueryClient();
   const updateColor = useUpdateCloserColor();
+  const updateMaxSlots = useUpdateCloserMaxSlots();
   const { data: links, isLoading } = useCloserMeetingLinksList(closer.id);
   const createLink = useCreateCloserMeetingLink();
   const deleteLink = useDeleteCloserMeetingLink();
+  
+  // Get current max slots from availability (use first one or default to 4)
+  const currentMaxSlots = closer.availability?.[0]?.max_slots_per_hour || 4;
+  const [maxSlotsValue, setMaxSlotsValue] = useState(currentMaxSlots);
   
   const [selectedColor, setSelectedColor] = useState(closer.color || '#3B82F6');
   const [addingDay, setAddingDay] = useState<number | null>(null);
@@ -152,8 +181,42 @@ function CloserAvailabilityForm({ closer }: { closer: CloserWithAvailability }) 
       .sort((a, b) => a.start_time.localeCompare(b.start_time))
   }));
 
+  const handleMaxSlotsChange = (value: number[]) => {
+    const newValue = value[0];
+    setMaxSlotsValue(newValue);
+    updateMaxSlots.mutate({ closerId: closer.id, maxSlots: newValue });
+  };
+
   return (
     <div className="space-y-6">
+      {/* Max Leads per Meeting Config */}
+      <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
+        <Label className="flex items-center gap-2 font-medium">
+          <Users className="h-4 w-4" />
+          Leads por Reunião
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          Máximo de leads que podem ser agendados no mesmo horário
+        </p>
+        <div className="flex items-center gap-4">
+          <Slider
+            value={[maxSlotsValue]}
+            onValueChange={handleMaxSlotsChange}
+            min={1}
+            max={6}
+            step={1}
+            className="flex-1"
+          />
+          <span className="text-lg font-bold min-w-[2rem] text-center bg-primary text-primary-foreground rounded-md px-2 py-1">
+            {maxSlotsValue}
+          </span>
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>1 lead</span>
+          <span>6 leads</span>
+        </div>
+      </div>
+
       {/* Color Picker */}
       <div className="space-y-2">
         <Label className="flex items-center gap-2">
