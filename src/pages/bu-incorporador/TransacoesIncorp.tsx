@@ -36,6 +36,9 @@ const FIXED_GROSS_PRICES: { pattern: string; price: number }[] = [
   { pattern: 'a001 - mcf incorporador completo', price: 14500 },
   { pattern: 'a000 - contrato', price: 497 },
   { pattern: 'a010', price: 47 },
+  { pattern: 'plano construtor básico', price: 997 },
+  { pattern: 'a004 - mcf plano anticrise básico', price: 5500 },
+  { pattern: 'a003 - mcf plano anticrise completo', price: 7500 },
 ];
 
 // Função para obter preço bruto fixo ou original
