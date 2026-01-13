@@ -25,6 +25,8 @@ const EXCLUDED_PRODUCTS = [
   'sócio mcf',
   'viver de aluguel',
   'contrato - efeito alavanca',
+  'como arrematar imóveis de leilão da caixa',
+  'clube do arremate',
 ];
 
 export default function TransacoesIncorp() {
