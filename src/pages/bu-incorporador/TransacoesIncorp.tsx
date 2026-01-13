@@ -16,6 +16,17 @@ import { formatCurrency } from '@/lib/formatters';
 
 const ITEMS_PER_PAGE = 20;
 
+// Produtos excluídos da listagem de Vendas Incorporador
+const EXCLUDED_PRODUCTS = [
+  'efeito alavanca + assessoria',
+  'construir para alugar',
+  'a006 - renovação parceiro mcf',
+  'mcf projetos',
+  'sócio mcf',
+  'viver de aluguel',
+  'contrato - efeito alavanca',
+];
+
 export default function TransacoesIncorp() {
   // Filtros - inicia com o mês atual para evitar carregar toda a base
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,7 +41,15 @@ export default function TransacoesIncorp() {
     endDate,
   };
 
-  const { data: transactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
+  const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
+
+  // Filtrar produtos excluídos
+  const transactions = useMemo(() => {
+    return allTransactions.filter(t => {
+      const productName = (t.product_name || '').toLowerCase().trim();
+      return !EXCLUDED_PRODUCTS.some(excluded => productName.includes(excluded));
+    });
+  }, [allTransactions]);
 
   // Paginação
   const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
