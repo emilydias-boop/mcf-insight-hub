@@ -21,12 +21,11 @@ import {
   Calendar,
   Receipt,
   ChevronUp,
-  
   Shield,
   BarChart3,
-  Wallet,
-  ClipboardList,
-  Home
+  Calculator,
+  Users2,
+  ShoppingCart,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -43,7 +42,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -69,15 +67,31 @@ import { ResourceType } from "@/types/user-management";
 
 type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'rh' | 'financeiro';
 
+// Sub-sub-item (3º nível)
+interface SubSubItem {
+  title: string;
+  url: string;
+  requiredRoles?: AppRole[];
+}
+
+// Sub-item (2º nível) - pode ter URL direta ou sub-subitens
+interface SubMenuItem {
+  title: string;
+  url?: string;
+  requiredRoles?: AppRole[];
+  items?: SubSubItem[];
+}
+
+// Menu item principal (1º nível)
 interface MenuItem {
   title: string;
   url?: string;
   icon: any;
   requiredRoles?: AppRole[];
   requiredProducts?: string[];
-  requiredBU?: BusinessUnit[]; // BUs que podem ver este item
+  requiredBU?: BusinessUnit[];
   resource?: ResourceType;
-  items?: { title: string; url: string; requiredRoles?: AppRole[]; }[];
+  items?: SubMenuItem[];
   separator?: boolean;
 }
 
@@ -114,13 +128,35 @@ const menuItems: MenuItem[] = [
     ]
   },
   
-  // BU - CONSÓRCIO
+  // BU - CONSÓRCIO (com submenus Inside e Life)
   { 
     title: "BU - Consórcio", 
     icon: Handshake,
     requiredRoles: ['admin', 'manager', 'coordenador'],
     requiredProducts: ['consorcio'],
     items: [
+      { 
+        title: "Inside Consórcio",
+        items: [
+          { title: "Dashboard", url: "/consorcio/inside/dashboard" },
+          { title: "Fechamento", url: "/consorcio/inside/fechamento" },
+          { title: "Relatório", url: "/consorcio/inside/relatorio" },
+          { title: "CRM", url: "/consorcio/inside/crm" },
+          { title: "Painel Equipe", url: "/consorcio/inside/painel-equipe" },
+          { title: "Vendas", url: "/consorcio/inside/vendas" },
+        ]
+      },
+      { 
+        title: "Life Consórcio",
+        items: [
+          { title: "Dashboard", url: "/consorcio/life/dashboard" },
+          { title: "Fechamento", url: "/consorcio/life/fechamento" },
+          { title: "Relatório", url: "/consorcio/life/relatorio" },
+          { title: "CRM", url: "/consorcio/life/crm" },
+          { title: "Painel Equipe", url: "/consorcio/life/painel-equipe" },
+          { title: "Vendas", url: "/consorcio/life/vendas" },
+        ]
+      },
       { title: "Painel Consórcio", url: "/consorcio" },
       { title: "Importar", url: "/consorcio/importar" },
     ]
@@ -324,8 +360,17 @@ export function AppSidebar() {
     return true;
   });
 
-  // Filtragem de sub-items baseado em roles
-  const getFilteredSubItems = (items: { title: string; url: string; requiredRoles?: AppRole[]; }[]) => {
+  // Filtragem de sub-items baseado em roles (1º nível de subitens)
+  const getFilteredSubItems = (items: SubMenuItem[]) => {
+    return items.filter(subItem => {
+      if (!subItem.requiredRoles) return true;
+      if (isAdmin) return true;
+      return role && subItem.requiredRoles.includes(role);
+    });
+  };
+
+  // Filtragem de sub-sub-items (2º nível de subitens)
+  const getFilteredSubSubItems = (items: SubSubItem[]) => {
     return items.filter(subItem => {
       if (!subItem.requiredRoles) return true;
       if (isAdmin) return true;
@@ -340,12 +385,36 @@ export function AppSidebar() {
     return role && item.requiredRoles.includes(role);
   });
 
+  // Verifica se uma rota está ativa (suporta 3 níveis)
   const isRouteActive = (item: MenuItem) => {
     if (item.url) return location.pathname === item.url;
     if (item.items) {
-      return item.items.some(sub => 
-        location.pathname === sub.url || 
-        (sub.url !== '/' && location.pathname.startsWith(sub.url + '/'))
+      return item.items.some(sub => {
+        if (sub.url) {
+          return location.pathname === sub.url || 
+            (sub.url !== '/' && location.pathname.startsWith(sub.url + '/'));
+        }
+        if (sub.items) {
+          return sub.items.some(subSub => 
+            location.pathname === subSub.url ||
+            (subSub.url !== '/' && location.pathname.startsWith(subSub.url + '/'))
+          );
+        }
+        return false;
+      });
+    }
+    return false;
+  };
+
+  // Verifica se submenu está ativo
+  const isSubMenuActive = (subItem: SubMenuItem) => {
+    if (subItem.url) {
+      return location.pathname === subItem.url;
+    }
+    if (subItem.items) {
+      return subItem.items.some(item => 
+        location.pathname === item.url ||
+        (item.url !== '/' && location.pathname.startsWith(item.url + '/'))
       );
     }
     return false;
@@ -423,17 +492,56 @@ export function AppSidebar() {
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           {getFilteredSubItems(item.items).map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.url}>
-                              <SidebarMenuSubButton asChild>
-                                <NavLink
-                                  to={subItem.url}
-                                  className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                                  activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                >
-                                  <span>{subItem.title}</span>
-                                </NavLink>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
+                            // Se o subItem tem items próprios, renderiza um Collapsible aninhado (3º nível)
+                            subItem.items ? (
+                              <Collapsible
+                                key={subItem.title}
+                                asChild
+                                defaultOpen={isSubMenuActive(subItem)}
+                                className="group/nested"
+                              >
+                                <SidebarMenuSubItem>
+                                  <CollapsibleTrigger asChild>
+                                    <SidebarMenuSubButton
+                                      className={`justify-between cursor-pointer ${isSubMenuActive(subItem) ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}`}
+                                    >
+                                      <span>{subItem.title}</span>
+                                      <ChevronDown className="h-3 w-3 transition-transform duration-200 group-data-[state=open]/nested:rotate-180" />
+                                    </SidebarMenuSubButton>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent>
+                                    <SidebarMenuSub className="ml-2 border-l border-sidebar-border">
+                                      {getFilteredSubSubItems(subItem.items).map((subSubItem) => (
+                                        <SidebarMenuSubItem key={subSubItem.url}>
+                                          <SidebarMenuSubButton asChild>
+                                            <NavLink
+                                              to={subSubItem.url}
+                                              className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sm"
+                                              activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                            >
+                                              <span>{subSubItem.title}</span>
+                                            </NavLink>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                    </SidebarMenuSub>
+                                  </CollapsibleContent>
+                                </SidebarMenuSubItem>
+                              </Collapsible>
+                            ) : (
+                              // Item simples (sem sub-subitens)
+                              <SidebarMenuSubItem key={subItem.url}>
+                                <SidebarMenuSubButton asChild>
+                                  <NavLink
+                                    to={subItem.url!}
+                                    className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                    activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                  >
+                                    <span>{subItem.title}</span>
+                                  </NavLink>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )
                           ))}
                         </SidebarMenuSub>
                       </CollapsibleContent>
