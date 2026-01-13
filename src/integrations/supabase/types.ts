@@ -5615,33 +5615,61 @@ export type Database = {
     }
     Functions: {
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
-      get_all_hubla_transactions: {
-        Args: {
-          p_end_date?: string
-          p_limit?: number
-          p_search?: string
-          p_start_date?: string
-        }
-        Returns: {
-          count_in_dashboard: boolean
-          customer_email: string
-          customer_name: string
-          customer_phone: string
-          gross_winner: boolean
-          hubla_id: string
-          id: string
-          installment_number: number
-          is_offer: boolean
-          net_value: number
-          product_category: string
-          product_name: string
-          product_price: number
-          sale_date: string
-          sale_status: string
-          source: string
-          total_installments: number
-        }[]
-      }
+      get_all_hubla_transactions:
+        | {
+            Args: {
+              p_end_date?: string
+              p_limit?: number
+              p_search?: string
+              p_start_date?: string
+            }
+            Returns: {
+              count_in_dashboard: boolean
+              customer_email: string
+              customer_name: string
+              customer_phone: string
+              gross_winner: boolean
+              hubla_id: string
+              id: string
+              installment_number: number
+              is_offer: boolean
+              net_value: number
+              product_category: string
+              product_name: string
+              product_price: number
+              sale_date: string
+              sale_status: string
+              source: string
+              total_installments: number
+            }[]
+          }
+        | {
+            Args: {
+              p_end_date?: string
+              p_limit?: number
+              p_search?: string
+              p_start_date?: string
+            }
+            Returns: {
+              count_in_dashboard: boolean
+              customer_email: string
+              customer_name: string
+              customer_phone: string
+              gross_winner: boolean
+              hubla_id: string
+              id: string
+              installment_number: number
+              is_offer: boolean
+              net_value: number
+              product_category: string
+              product_name: string
+              product_price: number
+              sale_date: string
+              sale_status: string
+              source: string
+              total_installments: number
+            }[]
+          }
       get_contact_with_meetings: {
         Args: { p_email?: string; p_phone_suffix?: string }
         Returns: {
