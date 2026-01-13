@@ -35,8 +35,8 @@ export function EncaixeQueueForm({
   onSuccess,
   onCancel,
 }: EncaixeQueueFormProps) {
-  const [preferredTimeStart, setPreferredTimeStart] = useState<string>('');
-  const [preferredTimeEnd, setPreferredTimeEnd] = useState<string>('');
+  const [preferredTimeStart, setPreferredTimeStart] = useState<string>('any');
+  const [preferredTimeEnd, setPreferredTimeEnd] = useState<string>('any');
   const [priority, setPriority] = useState<string>('1');
   const [notes, setNotes] = useState('');
 
@@ -51,8 +51,8 @@ export function EncaixeQueueForm({
         contactId,
         closerId,
         preferredDate,
-        preferredTimeStart: preferredTimeStart || undefined,
-        preferredTimeEnd: preferredTimeEnd || undefined,
+        preferredTimeStart: preferredTimeStart === 'any' ? undefined : preferredTimeStart,
+        preferredTimeEnd: preferredTimeEnd === 'any' ? undefined : preferredTimeEnd,
         leadType,
         priority: parseInt(priority),
         notes: notes || undefined,
@@ -118,7 +118,7 @@ export function EncaixeQueueForm({
               <SelectValue placeholder="Qualquer" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Qualquer horário</SelectItem>
+              <SelectItem value="any">Qualquer horário</SelectItem>
               {timeSlots.map((time) => (
                 <SelectItem key={time} value={time}>
                   {time}
@@ -135,7 +135,7 @@ export function EncaixeQueueForm({
               <SelectValue placeholder="Qualquer" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Qualquer horário</SelectItem>
+              <SelectItem value="any">Qualquer horário</SelectItem>
               {timeSlots.map((time) => (
                 <SelectItem key={time} value={time}>
                   {time}
