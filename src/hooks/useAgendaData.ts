@@ -841,6 +841,8 @@ export function useCreateMeeting() {
         },
       });
 
+      console.log('📅 Create meeting response:', { data, error });
+
       // Edge function may return success=false (200) for business-rule errors (e.g., slot full)
       if (data && (data.error || data.success === false)) {
         if (data.error === 'Slot is full') {
