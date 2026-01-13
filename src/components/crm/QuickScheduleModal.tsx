@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, getDay } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DayContentProps } from 'react-day-picker';
@@ -130,6 +130,19 @@ export function QuickScheduleModal({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
   const [notes, setNotes] = useState('');
+
+  // Sync internal state when preselected values change and modal opens
+  useEffect(() => {
+    if (open) {
+      if (preselectedCloserId) {
+        setSelectedCloser(preselectedCloserId);
+      }
+      if (preselectedDate) {
+        setSelectedDate(preselectedDate);
+        setSelectedTime(format(preselectedDate, 'HH:mm'));
+      }
+    }
+  }, [open, preselectedCloserId, preselectedDate]);
   const [alreadyBuilds, setAlreadyBuilds] = useState<boolean | null>(null);
   const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
   
