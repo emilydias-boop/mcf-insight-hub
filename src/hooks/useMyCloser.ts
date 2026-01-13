@@ -10,19 +10,33 @@ export function useMyCloser() {
     queryFn: async () => {
       if (!user?.id) return null;
 
-      // Primeiro: tentar buscar closer pelo employee_id (vínculo direto)
-      const { data: closerByEmployee } = await supabase
+      // Opção 1: buscar closer via employees.user_id → closers.employee_id
+      const { data: closerViaEmployee } = await supabase
         .from('closers')
-        .select('id, name, email, is_active')
-        .eq('employee_id', user.id)
+        .select(`
+          id, name, email, is_active,
+          employees!closers_employee_id_fkey (
+            user_id
+          )
+        `)
         .eq('is_active', true)
-        .maybeSingle();
+        .not('employee_id', 'is', null);
 
-      if (closerByEmployee) {
-        return closerByEmployee;
+      // Verificar se algum closer tem employee com user_id = auth.uid()
+      const matchedCloser = closerViaEmployee?.find(
+        (c: any) => c.employees?.user_id === user.id
+      );
+      
+      if (matchedCloser) {
+        return {
+          id: matchedCloser.id,
+          name: matchedCloser.name,
+          email: matchedCloser.email,
+          is_active: matchedCloser.is_active,
+        };
       }
 
-      // Fallback: buscar pelo email do perfil
+      // Opção 2 (fallback): buscar pelo email do perfil
       const { data: profile } = await supabase
         .from('profiles')
         .select('email')
