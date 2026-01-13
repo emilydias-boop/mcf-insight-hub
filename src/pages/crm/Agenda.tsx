@@ -62,6 +62,14 @@ export default function Agenda() {
   const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability();
   const { data: blockedDates = [] } = useBlockedDates();
 
+  // Filtrar closers: closer só vê sua própria coluna
+  const filteredClosers = useMemo(() => {
+    if (isCloser && myCloser?.id) {
+      return closers.filter(c => c.id === myCloser.id);
+    }
+    return closers;
+  }, [closers, isCloser, myCloser?.id]);
+
   const filteredMeetings = useMemo(() => {
     let result = meetings;
     
@@ -331,7 +339,7 @@ export default function Agenda() {
               selectedDate={selectedDate}
               onSelectMeeting={setSelectedMeeting}
               closerFilter={closerFilter}
-              closers={closers}
+              closers={filteredClosers}
               viewMode={viewMode}
               onEditHours={() => setConfigOpen(true)}
               onSelectSlot={(day, hour, minute, closerId) => {
@@ -353,7 +361,7 @@ export default function Agenda() {
           ) : (
             <CloserColumnCalendar
               meetings={filteredMeetings}
-              closers={closers}
+              closers={filteredClosers}
               blockedDates={blockedDates}
               selectedDate={selectedDate}
               onSelectMeeting={setSelectedMeeting}
