@@ -19,7 +19,7 @@ interface AgendaCalendarProps {
   closers?: CloserWithAvailability[];
   viewMode?: ViewMode;
   onEditHours?: () => void;
-  onSelectSlot?: (day: Date, hour: number, minute: number) => void;
+  onSelectSlot?: (day: Date, hour: number, minute: number, closerId?: string) => void;
 }
 
 // Default fallback values
@@ -298,6 +298,37 @@ export function AgendaCalendar({
     });
     return slotMeetings.length === 0;
   }, [isSlotConfigured, filteredMeetings]);
+
+  // Get available closers for a specific slot (configured and without meetings at that time)
+  const getAvailableClosersForSlot = useCallback((day: Date, hour: number, minute: number) => {
+    const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+    const slots = meetingLinkSlots?.[dayOfWeek] || [];
+    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    
+    // Find closerIds configured for this time
+    const configuredSlot = slots.find(s => s.time === timeStr);
+    const configuredCloserIds = configuredSlot?.closerIds || [];
+    
+    // Filter out closers that already have a meeting at this exact time
+    return configuredCloserIds.filter(closerId => {
+      const slotTime = setMinutes(setHours(new Date(day), hour), minute);
+      
+      // Check if this closer has any meeting covering this slot
+      const hasMeeting = filteredMeetings.some(meeting => {
+        if (meeting.closer_id !== closerId) return false;
+        
+        const meetingStart = parseISO(meeting.scheduled_at);
+        if (!isSameDay(meetingStart, day)) return false;
+        
+        const duration = meeting.duration_minutes || 30;
+        const meetingEnd = new Date(meetingStart.getTime() + duration * 60 * 1000);
+        
+        return slotTime >= meetingStart && slotTime < meetingEnd;
+      });
+      
+      return !hasMeeting;
+    });
+  }, [meetingLinkSlots, filteredMeetings]);
 
   const getMeetingsForDay = (day: Date) => {
     return filteredMeetings.filter(meeting => {
@@ -659,19 +690,40 @@ export function AgendaCalendar({
                             isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && 'bg-white/80 dark:bg-white/5'
                           )}
                         >
-                          {/* Available slot indicator - clickable button */}
-                          {isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && onSelectSlot && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSelectSlot(day, hour, minute);
-                              }}
-                              className="absolute inset-0.5 rounded bg-green-100 dark:bg-green-500/20 border-2 border-dashed border-green-500 flex items-center justify-center gap-0.5 hover:bg-green-200 dark:hover:bg-green-500/30 transition-all group"
-                            >
-                              <Plus className="h-4 w-4 text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform" />
-                              <span className="text-[10px] font-medium text-green-700 dark:text-green-300">Livre</span>
-                            </button>
-                          )}
+                          {/* Available slot indicators - one button per available closer */}
+                          {!isOccupied && groupedSlots.length === 0 && onSelectSlot && (() => {
+                            const availableClosers = getAvailableClosersForSlot(day, hour, minute);
+                            if (availableClosers.length === 0) return null;
+                            
+                            return (
+                              <div className="absolute inset-0.5 flex flex-wrap gap-0.5 p-0.5 overflow-hidden">
+                                {availableClosers.map(closerId => {
+                                  const closer = closers.find(c => c.id === closerId);
+                                  const closerColor = getCloserColor(closerId, closer?.name);
+                                  const firstName = closer?.name?.split(' ')[0] || 'Closer';
+                                  
+                                  return (
+                                    <button
+                                      key={closerId}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onSelectSlot(day, hour, minute, closerId);
+                                      }}
+                                      className="flex-1 min-w-[45%] rounded text-[9px] font-medium flex items-center justify-center gap-0.5 border border-dashed hover:opacity-80 transition-all"
+                                      style={{ 
+                                        backgroundColor: `${closerColor}15`,
+                                        borderColor: closerColor,
+                                        color: closerColor
+                                      }}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                      {firstName}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                           {groupedSlots.map((group, groupIndex) => {
                             const closerColor = getCloserColor(group.closerId, group.closer?.name);
                             const slotsNeeded = getSlotsNeeded(group.duration);
