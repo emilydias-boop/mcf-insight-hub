@@ -43,6 +43,7 @@ import {
   TIPO_SERVIDOR_OPTIONS,
   ORIGEM_OPTIONS,
   TIPO_DOCUMENTO_OPTIONS,
+  CATEGORIA_OPTIONS,
   CreateConsorcioCardInput,
   TipoDocumento,
   ConsorcioCardWithDetails,
@@ -81,6 +82,7 @@ function formatPhone(value: string): string {
 
 const formSchema = z.object({
   tipo_pessoa: z.enum(['pf', 'pj']),
+  categoria: z.enum(['inside', 'life']),
   
   // Cota
   grupo: z.string().min(1, 'Grupo é obrigatório'),
@@ -183,6 +185,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
     resolver: zodResolver(formSchema),
     defaultValues: card ? {
       tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
+      categoria: (card.categoria as 'inside' | 'life') || 'inside',
       tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
       tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado',
       parcelas_pagas_empresa: card.parcelas_pagas_empresa,
@@ -237,6 +240,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       partners: card.partners?.map(p => ({ nome: p.nome, cpf: p.cpf, renda: p.renda ? Number(p.renda) : undefined })) || [],
     } : {
       tipo_pessoa: 'pf',
+      categoria: 'inside',
       tipo_produto: 'select',
       tipo_contrato: 'normal',
       parcelas_pagas_empresa: 0,
@@ -305,6 +309,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
         // Edit mode - load card data
         form.reset({
           tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
+          categoria: (card.categoria as 'inside' | 'life') || 'inside',
           tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
           tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado',
           parcelas_pagas_empresa: card.parcelas_pagas_empresa,
@@ -360,6 +365,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
         // Create mode - reset to empty values
         form.reset({
           tipo_pessoa: 'pf',
+          categoria: 'inside',
           tipo_produto: 'select',
           tipo_contrato: 'normal',
           parcelas_pagas_empresa: 0,
@@ -501,6 +507,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const onSubmit = async (data: FormData) => {
     const input: CreateConsorcioCardInput = {
       tipo_pessoa: data.tipo_pessoa,
+      categoria: data.categoria,
       grupo: data.grupo,
       cota: data.cota,
       valor_credito: data.valor_credito,
@@ -641,6 +648,29 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
 
               {/* Tab: Dados da Cota */}
               <TabsContent value="cota" className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="categoria"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Categoria *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a categoria" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CATEGORIA_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
