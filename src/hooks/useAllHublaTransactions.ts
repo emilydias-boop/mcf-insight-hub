@@ -4,20 +4,16 @@ import { format } from 'date-fns';
 
 export interface HublaTransaction {
   id: string;
-  hubla_id: string | null;
   product_name: string | null;
   product_category: string | null;
   product_price: number | null;
   net_value: number | null;
   customer_name: string | null;
   customer_email: string | null;
-  customer_phone: string | null;
   sale_date: string | null;
   sale_status: string | null;
   installment_number: number | null;
   total_installments: number | null;
-  is_offer: boolean | null;
-  count_in_dashboard: boolean | null;
   source: string | null;
   gross_winner: boolean | null;
 }
@@ -31,8 +27,6 @@ export interface TransactionFilters {
 // Ajusta para timezone de Brasília (UTC-3)
 const formatDateWithBrazilTimezone = (date: Date, endOfDay = false): string => {
   const formatted = format(date, 'yyyy-MM-dd');
-  // Adiciona 3 horas para compensar o offset UTC-3 do Brasil
-  // Isso garante que 01/01/2026 00:00 no Brasil = 01/01/2026 03:00 UTC
   return endOfDay ? `${formatted}T23:59:59-03:00` : `${formatted}T00:00:00-03:00`;
 };
 

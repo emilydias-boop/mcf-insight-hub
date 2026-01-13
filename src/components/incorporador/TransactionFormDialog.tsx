@@ -54,11 +54,10 @@ interface TransactionFormDialogProps {
   mode: "create" | "edit";
   transaction?: {
     id: string;
-    product_name: string;
+    product_name: string | null;
     customer_name: string | null;
     customer_email: string | null;
-    customer_phone: string | null;
-    sale_date: string;
+    sale_date: string | null;
     product_price: number | null;
     net_value: number | null;
     installment_number: number | null;
@@ -123,7 +122,7 @@ export function TransactionFormDialog({
         product_code: productCode,
         customer_name: transaction.customer_name || "",
         customer_email: transaction.customer_email || "",
-        customer_phone: transaction.customer_phone || "",
+        customer_phone: "",
         sale_date: transaction.sale_date ? new Date(transaction.sale_date) : new Date(),
         product_price: transaction.product_price || 0,
         net_value: transaction.net_value || 0,
