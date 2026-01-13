@@ -99,8 +99,9 @@ export default function TransacoesIncorp() {
   // Deduplicação: combina regra de parcela + email+produto
   // 1. Se installment_number > 1 => bruto = 0
   // 2. Para primeira parcela: apenas 1 transação por email+produto tem bruto
+  // IMPORTANTE: usa allTransactions (histórico completo) para determinar o vencedor
   const idsWithGross = useMemo(() => {
-    const firstInstallmentOnly = filteredTransactions.filter(t => {
+    const firstInstallmentOnly = allTransactions.filter(t => {
       const installment = t.installment_number || 1;
       return installment === 1;
     });
@@ -126,7 +127,7 @@ export default function TransacoesIncorp() {
     }
 
     return new Set(Array.from(keyToWinner.values()).map(v => v.id));
-  }, [filteredTransactions]);
+  }, [allTransactions]);
 
   // Função para obter bruto considerando parcela + deduplicação email+produto
   const getDeduplicatedGross = (transaction: typeof filteredTransactions[0]): number => {
