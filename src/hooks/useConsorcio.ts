@@ -20,6 +20,7 @@ interface ConsorcioFilters {
   status?: string;
   tipoProduto?: string;
   vendedorId?: string;
+  categoria?: 'inside' | 'life';
 }
 
 export function useConsorcioCards(filters: ConsorcioFilters = {}) {
@@ -45,6 +46,9 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}) {
       }
       if (filters.vendedorId) {
         query = query.eq('vendedor_id', filters.vendedorId);
+      }
+      if (filters.categoria) {
+        query = query.eq('categoria', filters.categoria);
       }
 
       const { data, error } = await query;
@@ -92,6 +96,9 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
       }
       if (filters.endDate) {
         query = query.lte('data_contratacao', filters.endDate.toISOString().split('T')[0]);
+      }
+      if (filters.categoria) {
+        query = query.eq('categoria', filters.categoria);
       }
 
       const { data: cards, error: cardsError } = await query;

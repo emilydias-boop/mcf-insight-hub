@@ -8,13 +8,14 @@ export type TipoServidor = 'estadual' | 'federal' | 'municipal';
 export type TipoDocumento = 'cnh' | 'rg' | 'contrato_social' | 'cartao_cnpj' | 'comprovante_residencia' | 'outro';
 export type TipoParcela = 'cliente' | 'empresa';
 export type StatusParcela = 'pendente' | 'pago' | 'atrasado';
-
+export type CategoriaConsorcio = 'inside' | 'life';
 export interface ConsorcioCard {
   id: string;
   created_at: string;
   updated_at: string;
   tipo_pessoa: TipoPessoa;
   status: ConsorcioStatus;
+  categoria: CategoriaConsorcio;
   
   // Dados da cota
   grupo: string;
@@ -128,6 +129,7 @@ export interface ConsorcioSummary {
 
 export interface CreateConsorcioCardInput {
   tipo_pessoa: TipoPessoa;
+  categoria: CategoriaConsorcio;
   grupo: string;
   cota: string;
   valor_credito: number;
@@ -221,4 +223,9 @@ export const TIPO_DOCUMENTO_OPTIONS = [
   { value: 'cartao_cnpj', label: 'Cartão CNPJ' },
   { value: 'comprovante_residencia', label: 'Comprovante de Residência' },
   { value: 'outro', label: 'Outro' },
+] as const;
+
+export const CATEGORIA_OPTIONS = [
+  { value: 'inside', label: 'Inside Consórcio', color: 'bg-blue-500' },
+  { value: 'life', label: 'Life Consórcio', color: 'bg-purple-500' },
 ] as const;

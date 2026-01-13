@@ -804,6 +804,7 @@ export type Database = {
       }
       consortium_cards: {
         Row: {
+          categoria: string
           cnpj: string | null
           cota: string
           cpf: string | null
@@ -860,6 +861,7 @@ export type Database = {
           vendedor_name: string | null
         }
         Insert: {
+          categoria?: string
           cnpj?: string | null
           cota: string
           cpf?: string | null
@@ -916,6 +918,7 @@ export type Database = {
           vendedor_name?: string | null
         }
         Update: {
+          categoria?: string
           cnpj?: string | null
           cota?: string
           cpf?: string | null
