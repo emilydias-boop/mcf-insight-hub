@@ -18,7 +18,7 @@ import { AgendaMeetingDrawer } from '@/components/crm/AgendaMeetingDrawer';
 import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 import { RescheduleModal } from '@/components/crm/RescheduleModal';
 import { UpcomingMeetingsPanel } from '@/components/crm/UpcomingMeetingsPanel';
-import { AgendaEncaixePanel } from '@/components/crm/AgendaEncaixePanel';
+import { EncaixeQueueDropdown } from '@/components/crm/EncaixeQueueDropdown';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
 import { EncaixeQueueItem } from '@/hooks/useEncaixeQueue';
@@ -343,6 +343,13 @@ export default function Agenda() {
               <SelectItem value="contract_paid">Contrato Pago</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Encaixe Queue Dropdown */}
+          <EncaixeQueueDropdown
+            closers={isCloser && myCloser ? [{ id: myCloser.id, name: myCloser.name, color: null }] : filteredClosers}
+            selectedDate={selectedDate}
+            onScheduleFromQueue={handleScheduleFromQueue}
+          />
         </div>
       </div>
 
@@ -367,81 +374,69 @@ export default function Agenda() {
         />
       )}
 
-      {/* Main Content with side panel */}
-      <div className="flex gap-4 flex-col lg:flex-row">
-        {/* Main Content Tabs */}
-        <Tabs defaultValue="calendar" className="flex-1">
-          <TabsList>
-            <TabsTrigger value="calendar" className="flex items-center gap-1.5">
-              <CalendarDays className="h-4 w-4" />
-              Calendário
-            </TabsTrigger>
-            <TabsTrigger value="closers" className="flex items-center gap-1.5">
-              <Columns3 className="h-4 w-4" />
-              Por Closer
-            </TabsTrigger>
-            <TabsTrigger value="list">Lista</TabsTrigger>
-          </TabsList>
+      {/* Main Content - Full width */}
+      <Tabs defaultValue="calendar" className="w-full">
+        <TabsList>
+          <TabsTrigger value="calendar" className="flex items-center gap-1.5">
+            <CalendarDays className="h-4 w-4" />
+            Calendário
+          </TabsTrigger>
+          <TabsTrigger value="closers" className="flex items-center gap-1.5">
+            <Columns3 className="h-4 w-4" />
+            Por Closer
+          </TabsTrigger>
+          <TabsTrigger value="list">Lista</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="calendar" className="mt-4">
-            {meetingsLoading ? (
-              <Skeleton className="h-[600px] w-full" />
-            ) : (
-              <AgendaCalendar
-                meetings={filteredMeetings}
-                selectedDate={selectedDate}
-                onSelectMeeting={setSelectedMeeting}
-                closerFilter={closerFilter}
-                closers={filteredClosers}
-                viewMode={viewMode}
-                onEditHours={() => setConfigOpen(true)}
-                onSelectSlot={(day, hour, minute, closerId) => {
-                  const selectedDateTime = new Date(day);
-                  selectedDateTime.setHours(hour, minute, 0, 0);
-                  setPreselectedDate(selectedDateTime);
-                  if (closerId) {
-                    setPreselectedCloserId(closerId);
-                  }
-                  setQuickScheduleOpen(true);
-                }}
-              />
-            )}
-          </TabsContent>
-
-          <TabsContent value="closers" className="mt-4">
-            {meetingsLoading || closersLoading ? (
-              <Skeleton className="h-[600px] w-full" />
-            ) : (
-              <CloserColumnCalendar
-                meetings={filteredMeetings}
-                closers={filteredClosers}
-                blockedDates={blockedDates}
-                selectedDate={selectedDate}
-                onSelectMeeting={setSelectedMeeting}
-                onSelectSlot={handleSelectSlot}
-                onEditHours={() => setConfigOpen(true)}
-              />
-            )}
-          </TabsContent>
-
-          <TabsContent value="list" className="mt-4">
-            <MeetingsList
+        <TabsContent value="calendar" className="mt-4">
+          {meetingsLoading ? (
+            <Skeleton className="h-[600px] w-full" />
+          ) : (
+            <AgendaCalendar
               meetings={filteredMeetings}
-              isLoading={meetingsLoading}
-              onViewDeal={handleViewDeal}
+              selectedDate={selectedDate}
+              onSelectMeeting={setSelectedMeeting}
+              closerFilter={closerFilter}
+              closers={filteredClosers}
+              viewMode={viewMode}
+              onEditHours={() => setConfigOpen(true)}
+              onSelectSlot={(day, hour, minute, closerId) => {
+                const selectedDateTime = new Date(day);
+                selectedDateTime.setHours(hour, minute, 0, 0);
+                setPreselectedDate(selectedDateTime);
+                if (closerId) {
+                  setPreselectedCloserId(closerId);
+                }
+                setQuickScheduleOpen(true);
+              }}
             />
-          </TabsContent>
-        </Tabs>
+          )}
+        </TabsContent>
 
-        {/* Encaixe Queue Panel - Available for all users */}
-        <div className="w-full lg:w-80 flex-shrink-0">
-          <AgendaEncaixePanel
-            closers={isCloser && myCloser ? [{ id: myCloser.id, name: myCloser.name, color: null }] : filteredClosers}
-            selectedDate={selectedDate}
-            onScheduleFromQueue={handleScheduleFromQueue}
+        <TabsContent value="closers" className="mt-4">
+          {meetingsLoading || closersLoading ? (
+            <Skeleton className="h-[600px] w-full" />
+          ) : (
+            <CloserColumnCalendar
+              meetings={filteredMeetings}
+              closers={filteredClosers}
+              blockedDates={blockedDates}
+              selectedDate={selectedDate}
+              onSelectMeeting={setSelectedMeeting}
+              onSelectSlot={handleSelectSlot}
+              onEditHours={() => setConfigOpen(true)}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="list" className="mt-4">
+          <MeetingsList
+            meetings={filteredMeetings}
+            isLoading={meetingsLoading}
+            onViewDeal={handleViewDeal}
           />
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Config Dialog */}
       <CloserAvailabilityConfig
