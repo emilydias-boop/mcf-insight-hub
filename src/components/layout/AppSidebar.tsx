@@ -108,7 +108,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Painel SDR", url: "/crm/reunioes-equipe" },
       { title: "Fechamento Equipe", url: "/fechamento-sdr" },
-      { title: "Transações Incorp", url: "/bu-incorporador/transacoes" },
+      { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "Relatório SDR", url: "/bu-incorporador/relatorio-sdr" },
       { title: "CRM", url: "/crm" },
     ]
