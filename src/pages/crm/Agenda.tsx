@@ -18,8 +18,10 @@ import { AgendaMeetingDrawer } from '@/components/crm/AgendaMeetingDrawer';
 import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 import { RescheduleModal } from '@/components/crm/RescheduleModal';
 import { UpcomingMeetingsPanel } from '@/components/crm/UpcomingMeetingsPanel';
+import { AgendaEncaixePanel } from '@/components/crm/AgendaEncaixePanel';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
+import { EncaixeQueueItem } from '@/hooks/useEncaixeQueue';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyCloser } from '@/hooks/useMyCloser';
@@ -181,6 +183,24 @@ export default function Agenda() {
       refetch();
     }
   };
+
+  // Handle scheduling from encaixe queue
+  const handleScheduleFromQueue = useCallback((item: EncaixeQueueItem) => {
+    // Pre-fill the quick schedule modal with queue item data
+    setPreselectedCloserId(item.closer_id);
+    if (item.preferred_date) {
+      const prefDate = new Date(item.preferred_date);
+      // If preferred time is set, add it to the date
+      if (item.preferred_time_start && item.preferred_time_start !== 'any') {
+        const [hours, minutes] = item.preferred_time_start.split(':').map(Number);
+        prefDate.setHours(hours, minutes, 0, 0);
+      }
+      setPreselectedDate(prefDate);
+    } else {
+      setPreselectedDate(selectedDate);
+    }
+    setQuickScheduleOpen(true);
+  }, [selectedDate]);
 
   // Format date range label based on viewMode
   const dateRangeLabel = useMemo(() => {
@@ -347,69 +367,83 @@ export default function Agenda() {
         />
       )}
 
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="calendar" className="w-full">
-        <TabsList>
-          <TabsTrigger value="calendar" className="flex items-center gap-1.5">
-            <CalendarDays className="h-4 w-4" />
-            Calendário
-          </TabsTrigger>
-          <TabsTrigger value="closers" className="flex items-center gap-1.5">
-            <Columns3 className="h-4 w-4" />
-            Por Closer
-          </TabsTrigger>
-          <TabsTrigger value="list">Lista</TabsTrigger>
-        </TabsList>
+      {/* Main Content with optional side panel */}
+      <div className={`flex gap-4 ${!isCloser ? 'flex-col lg:flex-row' : ''}`}>
+        {/* Main Content Tabs */}
+        <Tabs defaultValue="calendar" className="flex-1">
+          <TabsList>
+            <TabsTrigger value="calendar" className="flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4" />
+              Calendário
+            </TabsTrigger>
+            <TabsTrigger value="closers" className="flex items-center gap-1.5">
+              <Columns3 className="h-4 w-4" />
+              Por Closer
+            </TabsTrigger>
+            <TabsTrigger value="list">Lista</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="calendar" className="mt-4">
-          {meetingsLoading ? (
-            <Skeleton className="h-[600px] w-full" />
-          ) : (
-            <AgendaCalendar
+          <TabsContent value="calendar" className="mt-4">
+            {meetingsLoading ? (
+              <Skeleton className="h-[600px] w-full" />
+            ) : (
+              <AgendaCalendar
+                meetings={filteredMeetings}
+                selectedDate={selectedDate}
+                onSelectMeeting={setSelectedMeeting}
+                closerFilter={closerFilter}
+                closers={filteredClosers}
+                viewMode={viewMode}
+                onEditHours={() => setConfigOpen(true)}
+                onSelectSlot={(day, hour, minute, closerId) => {
+                  const selectedDateTime = new Date(day);
+                  selectedDateTime.setHours(hour, minute, 0, 0);
+                  setPreselectedDate(selectedDateTime);
+                  if (closerId) {
+                    setPreselectedCloserId(closerId);
+                  }
+                  setQuickScheduleOpen(true);
+                }}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="closers" className="mt-4">
+            {meetingsLoading || closersLoading ? (
+              <Skeleton className="h-[600px] w-full" />
+            ) : (
+              <CloserColumnCalendar
+                meetings={filteredMeetings}
+                closers={filteredClosers}
+                blockedDates={blockedDates}
+                selectedDate={selectedDate}
+                onSelectMeeting={setSelectedMeeting}
+                onSelectSlot={handleSelectSlot}
+                onEditHours={() => setConfigOpen(true)}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="list" className="mt-4">
+            <MeetingsList
               meetings={filteredMeetings}
-              selectedDate={selectedDate}
-              onSelectMeeting={setSelectedMeeting}
-              closerFilter={closerFilter}
-              closers={filteredClosers}
-              viewMode={viewMode}
-              onEditHours={() => setConfigOpen(true)}
-              onSelectSlot={(day, hour, minute, closerId) => {
-                const selectedDateTime = new Date(day);
-                selectedDateTime.setHours(hour, minute, 0, 0);
-                setPreselectedDate(selectedDateTime);
-                if (closerId) {
-                  setPreselectedCloserId(closerId);
-                }
-                setQuickScheduleOpen(true);
-              }}
+              isLoading={meetingsLoading}
+              onViewDeal={handleViewDeal}
             />
-          )}
-        </TabsContent>
+          </TabsContent>
+        </Tabs>
 
-        <TabsContent value="closers" className="mt-4">
-          {meetingsLoading || closersLoading ? (
-            <Skeleton className="h-[600px] w-full" />
-          ) : (
-            <CloserColumnCalendar
-              meetings={filteredMeetings}
+        {/* Encaixe Queue Panel - Only for non-closers */}
+        {!isCloser && (
+          <div className="w-full lg:w-80 flex-shrink-0">
+            <AgendaEncaixePanel
               closers={filteredClosers}
-              blockedDates={blockedDates}
               selectedDate={selectedDate}
-              onSelectMeeting={setSelectedMeeting}
-              onSelectSlot={handleSelectSlot}
-              onEditHours={() => setConfigOpen(true)}
+              onScheduleFromQueue={handleScheduleFromQueue}
             />
-          )}
-        </TabsContent>
-
-        <TabsContent value="list" className="mt-4">
-          <MeetingsList
-            meetings={filteredMeetings}
-            isLoading={meetingsLoading}
-            onViewDeal={handleViewDeal}
-          />
-        </TabsContent>
-      </Tabs>
+          </div>
+        )}
+      </div>
 
       {/* Config Dialog */}
       <CloserAvailabilityConfig
