@@ -33,6 +33,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cepUtils';
+import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
+import { toast } from 'sonner';
 import { useCreateConsorcioCard, useUpdateConsorcioCard } from '@/hooks/useConsorcio';
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -98,10 +100,16 @@ const formSchema = z.object({
   // PF
   nome_completo: z.string().optional(),
   data_nascimento: z.date().optional().nullable(),
-  cpf: z.string().optional(),
+  cpf: z.string().optional().refine(
+    (val) => !val || val.replace(/\D/g, '').length === 0 || validateCpf(val),
+    { message: 'CPF inválido' }
+  ),
   rg: z.string().optional(),
   estado_civil: z.enum(['solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_estavel']).optional().nullable(),
-  cpf_conjuge: z.string().optional(),
+  cpf_conjuge: z.string().optional().refine(
+    (val) => !val || val.replace(/\D/g, '').length === 0 || validateCpf(val),
+    { message: 'CPF do cônjuge inválido' }
+  ),
   endereco_cep: z.string().optional(),
   endereco_rua: z.string().optional(),
   endereco_numero: z.string().optional(),
@@ -119,7 +127,10 @@ const formSchema = z.object({
   
   // PJ
   razao_social: z.string().optional(),
-  cnpj: z.string().optional(),
+  cnpj: z.string().optional().refine(
+    (val) => !val || val.replace(/\D/g, '').length === 0 || validateCnpj(val),
+    { message: 'CNPJ inválido' }
+  ),
   natureza_juridica: z.string().optional(),
   inscricao_estadual: z.string().optional(),
   data_fundacao: z.date().optional().nullable(),
@@ -138,7 +149,10 @@ const formSchema = z.object({
   // Partners
   partners: z.array(z.object({
     nome: z.string(),
-    cpf: z.string(),
+    cpf: z.string().refine(
+      (val) => !val || val.replace(/\D/g, '').length === 0 || validateCpf(val),
+      { message: 'CPF inválido' }
+    ),
     renda: z.number().optional(),
   })).optional(),
 });
@@ -155,6 +169,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const [activeTab, setActiveTab] = useState('dados');
   const [loadingCep, setLoadingCep] = useState(false);
   const [loadingCepComercial, setLoadingCepComercial] = useState(false);
+  const [loadingCnpj, setLoadingCnpj] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
   const [selectedDocType, setSelectedDocType] = useState<TipoDocumento>('cnh');
   
@@ -428,6 +443,46 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       form.setValue('endereco_comercial_bairro', endereco.bairro);
       form.setValue('endereco_comercial_cidade', endereco.cidade);
       form.setValue('endereco_comercial_estado', endereco.estado);
+    }
+  };
+
+  // Handle CNPJ lookup and auto-fill company data
+  const handleCnpjChange = async (value: string, fieldOnChange: (v: string) => void) => {
+    const formatted = formatCnpj(value);
+    fieldOnChange(formatted);
+    
+    const digits = formatted.replace(/\D/g, '');
+    
+    // Auto-fetch when CNPJ is complete (14 digits) and valid
+    if (digits.length === 14 && validateCnpj(formatted)) {
+      setLoadingCnpj(true);
+      const dados = await buscarCnpj(formatted);
+      setLoadingCnpj(false);
+      
+      if (dados) {
+        // Fill form fields with company data
+        form.setValue('razao_social', dados.razao_social);
+        if (dados.natureza_juridica) form.setValue('natureza_juridica', dados.natureza_juridica);
+        if (dados.telefone) form.setValue('telefone_comercial', formatPhone(dados.telefone));
+        if (dados.email) form.setValue('email_comercial', dados.email.toLowerCase());
+        if (dados.cep) form.setValue('endereco_comercial_cep', formatCep(dados.cep));
+        if (dados.logradouro) form.setValue('endereco_comercial_rua', dados.logradouro);
+        if (dados.numero) form.setValue('endereco_comercial_numero', dados.numero);
+        if (dados.complemento) form.setValue('endereco_comercial_complemento', dados.complemento);
+        if (dados.bairro) form.setValue('endereco_comercial_bairro', dados.bairro);
+        if (dados.municipio) form.setValue('endereco_comercial_cidade', dados.municipio);
+        if (dados.uf) form.setValue('endereco_comercial_estado', dados.uf);
+        
+        // Convert foundation date if available
+        if (dados.data_fundacao) {
+          const [year, month, day] = dados.data_fundacao.split('-').map(Number);
+          if (year && month && day) {
+            form.setValue('data_fundacao', new Date(year, month - 1, day));
+          }
+        }
+        
+        toast.success('Dados da empresa preenchidos automaticamente!');
+      }
     }
   };
 
@@ -1166,14 +1221,21 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>CNPJ *</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              value={formatCnpj(field.value || '')}
-                              onChange={(e) => field.onChange(formatCnpj(e.target.value))}
-                              placeholder="00.000.000/0000-00" 
-                            />
-                          </FormControl>
+                          <div className="relative">
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                value={formatCnpj(field.value || '')}
+                                onChange={(e) => handleCnpjChange(e.target.value, field.onChange)}
+                                placeholder="00.000.000/0000-00"
+                                disabled={loadingCnpj}
+                              />
+                            </FormControl>
+                            {loadingCnpj && (
+                              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                            )}
+                          </div>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
