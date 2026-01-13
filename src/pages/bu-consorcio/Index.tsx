@@ -36,7 +36,7 @@ import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '
 import { useEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
-import { STATUS_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -352,6 +352,7 @@ export default function ConsorcioPage() {
                 <TableHead className="text-right">Valor Crédito</TableHead>
                 <TableHead>Data Contratação</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Categoria</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Vendedor</TableHead>
                 <TableHead className="w-20">Ação</TableHead>
@@ -361,7 +362,7 @@ export default function ConsorcioPage() {
               {cardsLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={9}>
+                    <TableCell colSpan={10}>
                       <Skeleton className="h-12 w-full" />
                     </TableCell>
                   </TableRow>
@@ -396,6 +397,18 @@ export default function ConsorcioPage() {
                         <Badge variant="outline" className="capitalize">
                           {card.tipo_produto}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const categoriaConfig = CATEGORIA_OPTIONS.find(c => c.value === card.categoria);
+                          return categoriaConfig ? (
+                            <Badge className={`${categoriaConfig.color} text-white`}>
+                              {card.categoria === 'inside' ? 'Inside' : 'Life'}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         {statusConfig && (
@@ -458,7 +471,7 @@ export default function ConsorcioPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
                     Nenhuma carta encontrada para o período selecionado
                   </TableCell>
                 </TableRow>
