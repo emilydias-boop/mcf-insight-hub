@@ -29,6 +29,28 @@ const EXCLUDED_PRODUCTS = [
   'clube do arremate',
 ];
 
+// Preços brutos fixos por produto (match parcial, case-insensitive)
+const FIXED_GROSS_PRICES: { pattern: string; price: number }[] = [
+  { pattern: 'a005 - mcf p2', price: 0 },
+  { pattern: 'a009 - mcf incorporador completo + the club', price: 19500 },
+  { pattern: 'a001 - mcf incorporador completo', price: 14500 },
+  { pattern: 'a000 - contrato', price: 497 },
+  { pattern: 'a010', price: 47 },
+];
+
+// Função para obter preço bruto fixo ou original
+const getFixedGrossPrice = (productName: string | null, originalPrice: number): number => {
+  if (!productName) return originalPrice;
+  const normalizedName = productName.toLowerCase().trim();
+  
+  for (const { pattern, price } of FIXED_GROSS_PRICES) {
+    if (normalizedName.includes(pattern)) {
+      return price;
+    }
+  }
+  return originalPrice;
+};
+
 export default function TransacoesIncorp() {
   // Filtros - inicia com o mês atual para evitar carregar toda a base
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,7 +84,7 @@ export default function TransacoesIncorp() {
 
   // Totais
   const totals = useMemo(() => {
-    const bruto = transactions.reduce((sum, t) => sum + (t.product_price || 0), 0);
+    const bruto = transactions.reduce((sum, t) => sum + getFixedGrossPrice(t.product_name, t.product_price || 0), 0);
     const liquido = transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
     return { count: transactions.length, bruto, liquido };
   }, [transactions]);
@@ -94,7 +116,7 @@ export default function TransacoesIncorp() {
       t.customer_email || '',
       t.customer_phone || '',
       t.installment_number && t.total_installments ? `${t.installment_number}/${t.total_installments}` : '1/1',
-      t.product_price?.toFixed(2) || '0',
+      getFixedGrossPrice(t.product_name, t.product_price || 0).toFixed(2),
       t.net_value?.toFixed(2) || '0',
       t.source || '',
     ]);
@@ -267,7 +289,7 @@ export default function TransacoesIncorp() {
                             : '1/1'}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatCurrency(t.product_price || 0)}
+                          {formatCurrency(getFixedGrossPrice(t.product_name, t.product_price || 0))}
                         </TableCell>
                         <TableCell className="text-right text-green-600 font-medium">
                           {formatCurrency(t.net_value || 0)}
