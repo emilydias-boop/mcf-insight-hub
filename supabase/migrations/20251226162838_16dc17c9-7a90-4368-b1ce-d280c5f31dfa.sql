@@ -17,7 +17,7 @@ CREATE INDEX idx_meeting_slot_attendees_deal ON public.meeting_slot_attendees(de
 
 -- Adicionar colunas à meeting_slots
 ALTER TABLE public.meeting_slots 
-  ADD COLUMN IF NOT EXISTS max_attendees INTEGER DEFAULT 3,
+  ADD COLUMN IF NOT EXISTS max_attendees INTEGER DEFAULT 4,
   ADD COLUMN IF NOT EXISTS calendly_event_type_uri TEXT;
 
 -- Adicionar event_type_uri aos closers
