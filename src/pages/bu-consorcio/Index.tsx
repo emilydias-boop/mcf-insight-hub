@@ -36,7 +36,7 @@ import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '
 import { useEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
-import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -353,6 +353,7 @@ export default function ConsorcioPage() {
                 <TableHead>Data Contratação</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Categoria</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Vendedor</TableHead>
                 <TableHead className="w-20">Ação</TableHead>
@@ -362,7 +363,7 @@ export default function ConsorcioPage() {
               {cardsLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={10}>
+                    <TableCell colSpan={11}>
                       <Skeleton className="h-12 w-full" />
                     </TableCell>
                   </TableRow>
@@ -405,6 +406,16 @@ export default function ConsorcioPage() {
                             <Badge className={`${categoriaConfig.color} text-white`}>
                               {card.categoria === 'inside' ? 'Inside' : 'Life'}
                             </Badge>
+                          ) : (
+                          <span className="text-muted-foreground">-</span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const origemConfig = ORIGEM_OPTIONS.find(o => o.value === card.origem);
+                          return origemConfig ? (
+                            <span className="text-sm">{origemConfig.label}</span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           );
@@ -471,7 +482,7 @@ export default function ConsorcioPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                     Nenhuma carta encontrada para o período selecionado
                   </TableCell>
                 </TableRow>
