@@ -27,9 +27,12 @@ export interface TransactionFilters {
   endDate?: Date;
 }
 
-const formatLocalDate = (date: Date, endOfDay = false): string => {
+// Ajusta para timezone de Brasília (UTC-3)
+const formatDateWithBrazilTimezone = (date: Date, endOfDay = false): string => {
   const formatted = format(date, 'yyyy-MM-dd');
-  return endOfDay ? `${formatted}T23:59:59` : `${formatted}T00:00:00`;
+  // Adiciona 3 horas para compensar o offset UTC-3 do Brasil
+  // Isso garante que 01/01/2026 00:00 no Brasil = 01/01/2026 03:00 UTC
+  return endOfDay ? `${formatted}T23:59:59-03:00` : `${formatted}T00:00:00-03:00`;
 };
 
 export const useAllHublaTransactions = (filters: TransactionFilters) => {
@@ -38,8 +41,8 @@ export const useAllHublaTransactions = (filters: TransactionFilters) => {
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_all_hubla_transactions', {
         p_search: filters.search || null,
-        p_start_date: filters.startDate ? formatLocalDate(filters.startDate) : null,
-        p_end_date: filters.endDate ? formatLocalDate(filters.endDate, true) : null,
+        p_start_date: filters.startDate ? formatDateWithBrazilTimezone(filters.startDate) : null,
+        p_end_date: filters.endDate ? formatDateWithBrazilTimezone(filters.endDate, true) : null,
         p_limit: 5000
       });
       
