@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,10 +17,10 @@ import { formatCurrency } from '@/lib/formatters';
 const ITEMS_PER_PAGE = 20;
 
 export default function TransacoesIncorp() {
-  // Filtros
+  // Filtros - inicia com o mês atual para evitar carregar toda a base
   const [searchTerm, setSearchTerm] = useState('');
-  const [startDate, setStartDate] = useState<Date | undefined>();
-  const [endDate, setEndDate] = useState<Date | undefined>();
+  const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
+  const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [currentPage, setCurrentPage] = useState(1);
 
   // Query com filtros
