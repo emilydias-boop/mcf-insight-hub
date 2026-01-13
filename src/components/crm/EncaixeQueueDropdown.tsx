@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useEncaixeQueue, EncaixeQueueItem } from '@/hooks/useEncaixeQueue';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Clock, User, Phone, ChevronDown, CalendarPlus, Users } from 'lucide-react';
@@ -15,17 +17,10 @@ interface CloserInfo {
   color?: string | null;
 }
 
-interface AgendaEncaixePanelProps {
+interface EncaixeQueueDropdownProps {
   closers: CloserInfo[];
   selectedDate: Date;
   onScheduleFromQueue: (item: EncaixeQueueItem) => void;
-}
-
-interface CloserQueueSectionProps {
-  closer: CloserInfo;
-  date: Date;
-  onScheduleFromQueue: (item: EncaixeQueueItem) => void;
-  defaultOpen?: boolean;
 }
 
 const priorityConfig = {
@@ -34,11 +29,17 @@ const priorityConfig = {
   3: { label: 'Baixa', color: 'bg-green-100 text-green-700 border-green-200' },
 };
 
+interface CloserQueueSectionProps {
+  closer: CloserInfo;
+  date: Date;
+  onScheduleFromQueue: (item: EncaixeQueueItem) => void;
+  defaultOpen?: boolean;
+}
+
 function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = false }: CloserQueueSectionProps) {
   const { data: queueItems = [], isLoading } = useEncaixeQueue(closer.id, date);
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
 
-  // Only show active items (waiting or notified)
   const activeItems = useMemo(() => 
     queueItems.filter(item => item.status === 'waiting' || item.status === 'notified'),
     [queueItems]
@@ -46,19 +47,19 @@ function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = f
 
   if (isLoading) {
     return (
-      <div className="py-2">
-        <Skeleton className="h-10 w-full" />
+      <div className="py-2 px-3">
+        <Skeleton className="h-8 w-full" />
       </div>
     );
   }
 
   if (activeItems.length === 0) {
-    return null; // Don't show closers with empty queue
+    return null;
   }
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-accent rounded-md transition-colors">
+      <CollapsibleTrigger className="flex items-center justify-between w-full p-2 px-3 hover:bg-accent transition-colors">
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-full flex-shrink-0"
@@ -74,7 +75,7 @@ function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = f
         </div>
       </CollapsibleTrigger>
       
-      <CollapsibleContent className="pt-2 space-y-2">
+      <CollapsibleContent className="px-3 pb-2 space-y-2">
         {activeItems.map((item) => {
           const contact = item.deal?.contact;
           const priority = priorityConfig[item.priority as 1 | 2 | 3] || priorityConfig[2];
@@ -138,8 +139,8 @@ function CloserQueueSection({ closer, date, onScheduleFromQueue, defaultOpen = f
   );
 }
 
-export function AgendaEncaixePanel({ closers, selectedDate, onScheduleFromQueue }: AgendaEncaixePanelProps) {
-  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
+export function EncaixeQueueDropdown({ closers, selectedDate, onScheduleFromQueue }: EncaixeQueueDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
 
   // Get total count across all closers
   const closerQueues = closers.map(closer => {
@@ -152,52 +153,58 @@ export function AgendaEncaixePanel({ closers, selectedDate, onScheduleFromQueue 
 
   const totalCount = closerQueues.reduce((sum, q) => sum + q.count, 0);
 
+  const handleSchedule = (item: EncaixeQueueItem) => {
+    onScheduleFromQueue(item);
+    setIsOpen(false);
+  };
+
   return (
-    <Collapsible open={isPanelOpen} onOpenChange={setIsPanelOpen}>
-      <Card className="h-fit">
-        <CollapsibleTrigger asChild>
-          <CardHeader className="pb-3 cursor-pointer hover:bg-accent/50 transition-colors rounded-t-lg">
-            <CardTitle className="text-sm flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Fila de Encaixe
-              </span>
-              <div className="flex items-center gap-2">
-                {totalCount > 0 && (
-                  <Badge variant="default" className="text-xs">
-                    {totalCount} aguardando
-                  </Badge>
-                )}
-                <ChevronDown className={`h-4 w-4 transition-transform ${isPanelOpen ? 'rotate-180' : ''}`} />
-              </div>
-            </CardTitle>
-          </CardHeader>
-        </CollapsibleTrigger>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="relative gap-2">
+          <Users className="h-4 w-4" />
+          <span className="hidden sm:inline">Fila de Encaixe</span>
+          {totalCount > 0 && (
+            <Badge variant="default" className="h-5 px-1.5 text-xs min-w-[20px]">
+              {totalCount}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      
+      <PopoverContent className="w-80 p-0" align="end">
+        <div className="p-3 border-b bg-muted/30">
+          <h4 className="font-semibold text-sm flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Fila de Encaixe
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+          </p>
+        </div>
         
-        <CollapsibleContent>
-          <CardContent className="p-3 pt-0">
-            {totalCount === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">
-                Nenhum lead aguardando encaixe para esta data
-              </p>
-            ) : (
-              <ScrollArea className="max-h-[400px]">
-                <div className="space-y-1">
-                  {closers.map((closer, index) => (
-                    <CloserQueueSection
-                      key={closer.id}
-                      closer={closer}
-                      date={selectedDate}
-                      onScheduleFromQueue={onScheduleFromQueue}
-                      defaultOpen={index === 0}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
+        {totalCount === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              Nenhum lead aguardando encaixe para esta data
+            </p>
+          </div>
+        ) : (
+          <ScrollArea className="max-h-[400px]">
+            <div className="py-1">
+              {closers.map((closer, index) => (
+                <CloserQueueSection
+                  key={closer.id}
+                  closer={closer}
+                  date={selectedDate}
+                  onScheduleFromQueue={handleSchedule}
+                  defaultOpen={index === 0}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
