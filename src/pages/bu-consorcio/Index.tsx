@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -121,6 +121,29 @@ export default function ConsorcioPage() {
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate });
   const deleteCard = useDeleteConsorcioCard();
+
+  // Sort cards: Date (desc) → Name (asc) → Group (numeric asc) → Quota (numeric asc)
+  const sortedCards = useMemo(() => {
+    if (!cards) return [];
+    return [...cards].sort((a, b) => {
+      // 1. Data de contratação (mais recente primeiro)
+      const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
+      if (dateCompare !== 0) return dateCompare;
+
+      // 2. Nome (A-Z)
+      const nameA = (a.nome_completo || a.razao_social || '').toLowerCase();
+      const nameB = (b.nome_completo || b.razao_social || '').toLowerCase();
+      const nameCompare = nameA.localeCompare(nameB, 'pt-BR');
+      if (nameCompare !== 0) return nameCompare;
+
+      // 3. Grupo (numérico crescente)
+      const grupoCompare = Number(a.grupo) - Number(b.grupo);
+      if (grupoCompare !== 0) return grupoCompare;
+
+      // 4. Cota (numérico crescente)
+      return Number(a.cota) - Number(b.cota);
+    });
+  }, [cards]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -368,8 +391,8 @@ export default function ConsorcioPage() {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : cards && cards.length > 0 ? (
-                cards.map((card) => {
+              ) : sortedCards && sortedCards.length > 0 ? (
+                sortedCards.map((card) => {
                   const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                   const statusConfig = STATUS_OPTIONS.find(s => s.value === card.status);
 
