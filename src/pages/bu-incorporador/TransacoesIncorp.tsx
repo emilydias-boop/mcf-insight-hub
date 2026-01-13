@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-import { useAllHublaTransactions, TransactionFilters } from '@/hooks/useAllHublaTransactions';
+import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
+import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
 
 const ITEMS_PER_PAGE = 20;
@@ -79,7 +90,12 @@ export default function TransacoesIncorp() {
   const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<HublaTransaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+
+  const deleteMutation = useDeleteTransaction();
 
   // Query com filtros
   const filters: TransactionFilters = {
@@ -192,6 +208,30 @@ export default function TransacoesIncorp() {
     setCurrentPage(1);
   };
 
+  const handleEdit = (transaction: HublaTransaction) => {
+    setSelectedTransaction(transaction);
+    setEditDialogOpen(true);
+  };
+
+  const handleDelete = (transaction: HublaTransaction) => {
+    setSelectedTransaction(transaction);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (selectedTransaction) {
+      try {
+        await deleteMutation.mutateAsync(selectedTransaction.id);
+        toast.success('Transação excluída!');
+        setDeleteDialogOpen(false);
+        setSelectedTransaction(null);
+        refetch();
+      } catch (error) {
+        toast.error('Erro ao excluir transação');
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
         {/* Header */}
@@ -291,6 +331,7 @@ export default function TransacoesIncorp() {
                     <TableHead className="w-28 text-right">Bruto</TableHead>
                     <TableHead className="w-28 text-right">Líquido</TableHead>
                     <TableHead className="w-24">Fonte</TableHead>
+                    <TableHead className="w-20">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -304,11 +345,12 @@ export default function TransacoesIncorp() {
                         <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                       </TableRow>
                     ))
                   ) : paginatedTransactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                         Nenhuma transação encontrada
                       </TableCell>
                     </TableRow>
@@ -346,6 +388,18 @@ export default function TransacoesIncorp() {
                           <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-muted">
                             {t.source || 'hubla'}
                           </span>
+                        </TableCell>
+                        <TableCell>
+                          {t.source === 'manual' && (
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(t)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(t)}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -408,6 +462,38 @@ export default function TransacoesIncorp() {
           mode="create"
           onSuccess={() => refetch()}
         />
+
+        <TransactionFormDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          mode="edit"
+          transaction={selectedTransaction}
+          onSuccess={() => {
+            refetch();
+            setSelectedTransaction(null);
+          }}
+        />
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir transação?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Essa ação não pode ser desfeita. A transação de {selectedTransaction?.customer_name} será permanentemente removida.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDelete} 
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? 'Excluindo...' : 'Excluir'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }

@@ -229,6 +229,29 @@ export const useUpdateTransaction = () => {
   });
 };
 
+// Excluir transação
+export const useDeleteTransaction = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('hubla_transactions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['hubla-transactions-filtered'] });
+      queryClient.invalidateQueries({ queryKey: ['incorporador-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['all-hubla-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['director-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['ultrameta'] });
+    },
+  });
+};
+
 export const useHublaTransactions = (limit: number = 50) => {
   return useQuery({
     queryKey: ['hubla-transactions', limit],
