@@ -54,6 +54,24 @@ const getFixedGrossPrice = (productName: string | null, originalPrice: number): 
   return originalPrice;
 };
 
+// Normaliza o nome do produto para chave de deduplicação
+const normalizeProductKey = (productName: string | null): string => {
+  if (!productName) return 'unknown';
+  const upper = productName.toUpperCase().trim();
+  
+  if (upper.includes('A009')) return 'A009';
+  if (upper.includes('A005')) return 'A005';
+  if (upper.includes('A004')) return 'A004';
+  if (upper.includes('A003')) return 'A003';
+  if (upper.includes('A001')) return 'A001';
+  if (upper.includes('A010')) return 'A010';
+  if (upper.includes('A000') || upper.includes('CONTRATO')) return 'A000';
+  if (upper.includes('PLANO CONSTRUTOR')) return 'PLANO_CONSTRUTOR';
+  
+  // Fallback: primeiros 40 chars
+  return upper.substring(0, 40);
+};
+
 export default function TransacoesIncorp() {
   // Filtros - inicia com o mês atual para evitar carregar toda a base
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,13 +96,49 @@ export default function TransacoesIncorp() {
     });
   }, [allTransactions]);
 
-  // Função para obter bruto considerando parcela
-  // Apenas primeira parcela (installment_number === 1 ou undefined) tem valor bruto
+  // Deduplicação: combina regra de parcela + email+produto
+  // 1. Se installment_number > 1 => bruto = 0
+  // 2. Para primeira parcela: apenas 1 transação por email+produto tem bruto
+  const idsWithGross = useMemo(() => {
+    const firstInstallmentOnly = filteredTransactions.filter(t => {
+      const installment = t.installment_number || 1;
+      return installment === 1;
+    });
+
+    // Agrupa por email+produto normalizado e seleciona a mais antiga
+    const keyToWinner = new Map<string, { id: string; date: string }>();
+    
+    for (const t of firstInstallmentOnly) {
+      const email = (t.customer_email || '').toLowerCase().trim();
+      const productKey = normalizeProductKey(t.product_name);
+      const key = `${email}|${productKey}`;
+      const currentDate = t.sale_date || '';
+      
+      const existing = keyToWinner.get(key);
+      if (!existing) {
+        keyToWinner.set(key, { id: t.id, date: currentDate });
+      } else {
+        // Mantém a transação mais antiga
+        if (currentDate < existing.date) {
+          keyToWinner.set(key, { id: t.id, date: currentDate });
+        }
+      }
+    }
+
+    return new Set(Array.from(keyToWinner.values()).map(v => v.id));
+  }, [filteredTransactions]);
+
+  // Função para obter bruto considerando parcela + deduplicação email+produto
   const getDeduplicatedGross = (transaction: typeof filteredTransactions[0]): number => {
     const installment = transaction.installment_number || 1;
     
-    // Apenas primeira parcela tem valor bruto
+    // Regra 1: Parcela > 1 sempre tem bruto zerado
     if (installment > 1) {
+      return 0;
+    }
+    
+    // Regra 2: Apenas a transação "vencedora" por email+produto tem bruto
+    if (!idsWithGross.has(transaction.id)) {
       return 0;
     }
     
@@ -106,7 +160,8 @@ export default function TransacoesIncorp() {
     const bruto = transactions.reduce((sum, t) => sum + getDeduplicatedGross(t), 0);
     const liquido = transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
     return { count: transactions.length, bruto, liquido };
-  }, [transactions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, idsWithGross]);
 
   // Handlers
   const handleRefresh = async () => {
