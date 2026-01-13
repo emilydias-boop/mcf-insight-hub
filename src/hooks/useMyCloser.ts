@@ -10,7 +10,19 @@ export function useMyCloser() {
     queryFn: async () => {
       if (!user?.id) return null;
 
-      // Buscar email do usuário
+      // Primeiro: tentar buscar closer pelo employee_id (vínculo direto)
+      const { data: closerByEmployee } = await supabase
+        .from('closers')
+        .select('id, name, email, is_active')
+        .eq('employee_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (closerByEmployee) {
+        return closerByEmployee;
+      }
+
+      // Fallback: buscar pelo email do perfil
       const { data: profile } = await supabase
         .from('profiles')
         .select('email')
@@ -19,8 +31,7 @@ export function useMyCloser() {
 
       if (!profile?.email) return null;
 
-      // Buscar closer pelo email
-      const { data: closer, error } = await supabase
+      const { data: closerByEmail, error } = await supabase
         .from('closers')
         .select('id, name, email, is_active')
         .ilike('email', profile.email)
@@ -28,7 +39,7 @@ export function useMyCloser() {
         .maybeSingle();
 
       if (error) throw error;
-      return closer;
+      return closerByEmail;
     },
     enabled: !!user?.id,
   });
