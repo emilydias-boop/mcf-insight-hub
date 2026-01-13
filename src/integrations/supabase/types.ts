@@ -5627,7 +5627,6 @@ export type Database = {
           customer_email: string
           customer_name: string
           customer_phone: string
-          gross_winner: boolean
           hubla_id: string
           id: string
           installment_number: number
