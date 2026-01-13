@@ -91,8 +91,9 @@ export function CloserColumnCalendar({
   
   // Verificar se um closer tem horário configurado para este slot
   const isSlotConfigured = (closerId: string, slotTime: Date) => {
-    const timeStr = format(slotTime, 'HH:mm:ss');
-    return daySlots.some(s => s.closer_id === closerId && s.start_time === timeStr);
+    // Normalize to HH:mm for comparison (start_time comes as HH:mm:ss from DB)
+    const timeStr = format(slotTime, 'HH:mm');
+    return daySlots.some(s => s.closer_id === closerId && s.start_time.slice(0, 5) === timeStr);
   };
 
   const isSlotAvailable = (closerId: string, slotTime: Date) => {

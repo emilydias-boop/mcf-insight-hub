@@ -76,7 +76,7 @@ export function useUniqueSlotsForDays(daysOfWeek: number[]) {
 
       if (error) throw error;
       
-      // Agrupar por dia
+      // Agrupar por dia - normalize time to HH:mm format for consistent comparison
       const byDay: Record<number, { time: string; closerIds: string[] }[]> = {};
       
       for (const row of data || []) {
@@ -84,13 +84,16 @@ export function useUniqueSlotsForDays(daysOfWeek: number[]) {
           byDay[row.day_of_week] = [];
         }
         
-        const existing = byDay[row.day_of_week]?.find(s => s.time === row.start_time);
+        // Normalize start_time from HH:mm:ss to HH:mm
+        const normalizedTime = row.start_time.slice(0, 5);
+        
+        const existing = byDay[row.day_of_week]?.find(s => s.time === normalizedTime);
         if (existing) {
           if (!existing.closerIds.includes(row.closer_id)) {
             existing.closerIds.push(row.closer_id);
           }
         } else {
-          byDay[row.day_of_week].push({ time: row.start_time, closerIds: [row.closer_id] });
+          byDay[row.day_of_week].push({ time: normalizedTime, closerIds: [row.closer_id] });
         }
       }
       
