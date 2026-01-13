@@ -841,14 +841,20 @@ export function useCreateMeeting() {
         },
       });
 
-      if (error) throw error;
+      // Check for specific error responses in data first (even with HTTP error)
+      // This is needed because edge function returns 400 status but includes error details in body
       if (data?.error) {
-        // Handle specific error cases with user-friendly messages
         if (data.error === 'Slot is full') {
-          throw new Error(`Este horário já está cheio (${data.currentAttendees}/${data.maxAttendees} participantes)`);
+          throw new Error(`Este horário já está cheio (${data.currentAttendees || 3}/${data.maxAttendees || 3} participantes)`);
+        }
+        if (data.error === 'Closer not found') {
+          throw new Error('Closer não encontrado');
         }
         throw new Error(data.error);
       }
+      
+      // Then check for generic HTTP error
+      if (error) throw error;
 
       return { ...data, sendNotification };
     },
