@@ -145,25 +145,44 @@ export function MoveAttendeeModal({
     mutationFn: async ({ slot }: { slot: AvailableSlot }) => {
       if (!attendee) throw new Error('No attendee');
 
-      // 1. Criar novo meeting_slot para o horário destino
-      const { data: newSlot, error: createError } = await supabase
+      const scheduledAt = slot.datetime.toISOString();
+
+      // 1. Verificar se já existe um slot para este closer/horário
+      const { data: existingSlot } = await supabase
         .from('meeting_slots')
-        .insert({
-          closer_id: slot.closerId,
-          scheduled_at: slot.datetime.toISOString(),
-          duration_minutes: slot.duration,
-          status: 'scheduled',
-          lead_type: 'A',
-        })
-        .select()
-        .single();
+        .select('id')
+        .eq('closer_id', slot.closerId)
+        .eq('scheduled_at', scheduledAt)
+        .in('status', ['scheduled', 'rescheduled'])
+        .maybeSingle();
 
-      if (createError) throw createError;
+      let targetSlotId: string;
 
-      // 2. Mover o attendee para o novo slot
+      if (existingSlot) {
+        // Reutilizar slot existente
+        targetSlotId = existingSlot.id;
+      } else {
+        // Criar novo slot apenas se não existir
+        const { data: newSlot, error: createError } = await supabase
+          .from('meeting_slots')
+          .insert({
+            closer_id: slot.closerId,
+            scheduled_at: scheduledAt,
+            duration_minutes: slot.duration,
+            status: 'scheduled',
+            lead_type: 'A',
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        targetSlotId = newSlot.id;
+      }
+
+      // 2. Mover o attendee para o slot (existente ou novo)
       const { error: moveError } = await supabase
         .from('meeting_slot_attendees')
-        .update({ meeting_slot_id: newSlot.id })
+        .update({ meeting_slot_id: targetSlotId })
         .eq('id', attendee.id);
 
       if (moveError) throw moveError;
@@ -171,10 +190,23 @@ export function MoveAttendeeModal({
       // 3. Mover partners vinculados (se houver)
       await supabase
         .from('meeting_slot_attendees')
-        .update({ meeting_slot_id: newSlot.id })
+        .update({ meeting_slot_id: targetSlotId })
         .eq('parent_attendee_id', attendee.id);
 
-      return newSlot;
+      // 4. Limpar slot antigo se ficou órfão
+      const { count } = await supabase
+        .from('meeting_slot_attendees')
+        .select('*', { count: 'exact', head: true })
+        .eq('meeting_slot_id', currentMeetingId);
+
+      if (count === 0) {
+        await supabase
+          .from('meeting_slots')
+          .update({ status: 'canceled' })
+          .eq('id', currentMeetingId);
+      }
+
+      return { id: targetSlotId };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
