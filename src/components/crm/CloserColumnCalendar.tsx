@@ -121,34 +121,21 @@ export function CloserColumnCalendar({
     });
   };
 
-  // Contador de slots disponíveis por closer
-  const availableSlotsCount = useMemo(() => {
-    const counts: Record<string, { available: number; total: number }> = {};
+  // Meta de leads por closer por dia
+  const CLOSER_META = 18;
+
+  // Contador de leads (attendees) agendados por closer no dia
+  const dailyLeadCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
     
-    closers.forEach(closer => {
-      const closerConfiguredSlots = daySlots.filter(s => s.closer_id === closer.id);
-      const isBlocked = blockedDates.some(
-        bd => bd.closer_id === closer.id && isSameDay(parseISO(bd.blocked_date), selectedDate)
-      );
-      
-      if (isBlocked) {
-        counts[closer.id] = { available: 0, total: closerConfiguredSlots.length };
-        return;
-      }
-      
-      let available = 0;
-      closerConfiguredSlots.forEach(slot => {
-        const [hour, minute] = slot.start_time.split(':').map(Number);
-        const slotTime = setMinutes(setHours(selectedDate, hour), minute);
-        const hasMeeting = getMeetingForSlot(closer.id, slotTime);
-        if (!hasMeeting) available++;
-      });
-      
-      counts[closer.id] = { available, total: closerConfiguredSlots.length };
+    meetings.forEach(meeting => {
+      const closerId = meeting.closer_id;
+      const attendeesCount = meeting.attendees?.length || 0;
+      counts[closerId] = (counts[closerId] || 0) + attendeesCount;
     });
     
     return counts;
-  }, [closers, daySlots, meetings, blockedDates, selectedDate]);
+  }, [meetings]);
 
   const now = new Date();
   const isToday = isSameDay(selectedDate, now);
@@ -173,7 +160,7 @@ export function CloserColumnCalendar({
           )}
         </div>
         {closers.map(closer => {
-          const counts = availableSlotsCount[closer.id] || { available: 0, total: 0 };
+          const leadCount = dailyLeadCounts[closer.id] || 0;
           return (
             <div 
               key={closer.id}
@@ -187,8 +174,13 @@ export function CloserColumnCalendar({
                 <span className="font-medium text-sm">{closer.name}</span>
               </div>
               <div className="text-[10px] text-muted-foreground mt-0.5">
-                <span className="text-green-500 font-medium">{counts.available}</span>
-                <span> / {counts.total} livres</span>
+                <span className={cn(
+                  "font-medium",
+                  leadCount >= CLOSER_META ? "text-green-500" : "text-yellow-500"
+                )}>
+                  {leadCount}
+                </span>
+                <span> / {CLOSER_META} leads</span>
               </div>
             </div>
           );
