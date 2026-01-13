@@ -138,7 +138,6 @@ const menuItems: MenuItem[] = [
       { 
         title: "Inside Consórcio",
         items: [
-          { title: "Dashboard", url: "/consorcio/inside/dashboard" },
           { title: "Fechamento", url: "/consorcio/inside/fechamento" },
           { title: "Relatório", url: "/consorcio/inside/relatorio" },
           { title: "CRM", url: "/consorcio/inside/crm" },
@@ -149,7 +148,6 @@ const menuItems: MenuItem[] = [
       { 
         title: "Life Consórcio",
         items: [
-          { title: "Dashboard", url: "/consorcio/life/dashboard" },
           { title: "Fechamento", url: "/consorcio/life/fechamento" },
           { title: "Relatório", url: "/consorcio/life/relatorio" },
           { title: "CRM", url: "/consorcio/life/crm" },
