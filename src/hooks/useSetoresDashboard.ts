@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Building2, TrendingUp, CreditCard, FolderKanban, Gavel, LucideIcon } from "lucide-react";
@@ -180,22 +181,31 @@ export function useSetoresDashboard() {
     refetchInterval: 1000 * 30, // 30 seconds
   });
 
-  // Override Incorporador sector values with gross metrics from dedicated hook
-  const data = query.data;
-  if (data) {
-    const incorporadorIndex = data.setores.findIndex(s => s.id === 'incorporador');
-    if (incorporadorIndex !== -1) {
-      data.setores[incorporadorIndex] = {
-        ...data.setores[incorporadorIndex],
-        apuradoSemanal: incorporadorMetrics.brutoSemanal,
-        apuradoMensal: incorporadorMetrics.brutoMensal,
-        apuradoAnual: incorporadorMetrics.brutoAnual,
-      };
-    }
-  }
+  // Create modified data with Incorporador gross metrics (without mutating original)
+  const modifiedData = useMemo(() => {
+    if (!query.data) return undefined;
+    
+    const setores = query.data.setores.map(setor => {
+      if (setor.id === 'incorporador') {
+        return {
+          ...setor,
+          apuradoSemanal: incorporadorMetrics.brutoSemanal,
+          apuradoMensal: incorporadorMetrics.brutoMensal,
+          apuradoAnual: incorporadorMetrics.brutoAnual,
+        };
+      }
+      return setor;
+    });
+
+    return {
+      ...query.data,
+      setores,
+    };
+  }, [query.data, incorporadorMetrics.brutoSemanal, incorporadorMetrics.brutoMensal, incorporadorMetrics.brutoAnual]);
 
   return {
     ...query,
+    data: modifiedData,
     isLoading: query.isLoading || incorporadorMetrics.isLoading,
     error: query.error || incorporadorMetrics.error,
   };
