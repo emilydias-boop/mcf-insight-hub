@@ -333,6 +333,12 @@ export default function Agenda() {
               closers={closers}
               viewMode={viewMode}
               onEditHours={() => setConfigOpen(true)}
+              onSelectSlot={(day, hour, minute) => {
+                const selectedDateTime = new Date(day);
+                selectedDateTime.setHours(hour, minute, 0, 0);
+                setPreselectedDate(selectedDateTime);
+                setQuickScheduleOpen(true);
+              }}
             />
           )}
         </TabsContent>

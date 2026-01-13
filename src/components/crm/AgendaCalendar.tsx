@@ -19,6 +19,7 @@ interface AgendaCalendarProps {
   closers?: CloserWithAvailability[];
   viewMode?: ViewMode;
   onEditHours?: () => void;
+  onSelectSlot?: (day: Date, hour: number, minute: number) => void;
 }
 
 // Default fallback values
@@ -54,7 +55,8 @@ export function AgendaCalendar({
   closerFilter, 
   closers = [],
   onEditHours,
-  viewMode = 'week'
+  viewMode = 'week',
+  onSelectSlot
 }: AgendaCalendarProps) {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const updateSchedule = useUpdateMeetingSchedule();
@@ -657,11 +659,18 @@ export function AgendaCalendar({
                             isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && 'bg-white/80 dark:bg-white/5'
                           )}
                         >
-                          {/* Available slot indicator */}
-                          {isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && (
-                            <div className="absolute inset-0.5 rounded border border-dashed border-green-500/30 flex items-center justify-center">
-                              <Plus className="h-3 w-3 text-green-500/30" />
-                            </div>
+                          {/* Available slot indicator - clickable button */}
+                          {isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && onSelectSlot && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectSlot(day, hour, minute);
+                              }}
+                              className="absolute inset-0.5 rounded bg-green-100 dark:bg-green-500/20 border-2 border-dashed border-green-500 flex items-center justify-center gap-0.5 hover:bg-green-200 dark:hover:bg-green-500/30 transition-all group"
+                            >
+                              <Plus className="h-4 w-4 text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform" />
+                              <span className="text-[10px] font-medium text-green-700 dark:text-green-300">Livre</span>
+                            </button>
                           )}
                           {groupedSlots.map((group, groupIndex) => {
                             const closerColor = getCloserColor(group.closerId, group.closer?.name);
