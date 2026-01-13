@@ -145,9 +145,10 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   // Handler to update participant status - uses combined mutation to prevent race condition
-  // Syncs meeting_slots.status when the principal participant changes to completed/no_show/contract_paid
+  // Syncs meeting_slots.status when the principal participant changes to completed/contract_paid
+  // Note: no_show is individual per participant - should NOT sync to slot to avoid affecting other leads
   const handleParticipantStatusChange = (participantId: string, newStatus: string) => {
-    const statusesToSync = ['completed', 'no_show', 'contract_paid'];
+    const statusesToSync = ['completed', 'contract_paid'];
     const attendee = activeMeeting?.attendees?.find(a => a.id === participantId);
     const isPrincipal = attendee && !attendee.is_partner && !attendee.parent_attendee_id;
     const shouldSyncSlot = statusesToSync.includes(newStatus) && isPrincipal;
