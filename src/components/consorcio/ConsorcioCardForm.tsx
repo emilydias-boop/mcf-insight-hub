@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -121,7 +121,7 @@ interface ConsorcioCardFormProps {
 }
 
 export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFormProps) {
-  const [activeTab, setActiveTab] = useState('cota');
+  const [activeTab, setActiveTab] = useState('dados');
   const [loadingCep, setLoadingCep] = useState(false);
   const [loadingCepComercial, setLoadingCepComercial] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<Array<{ file: File; tipo: TipoDocumento }>>([]);
@@ -208,6 +208,125 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const tipoPessoa = form.watch('tipo_pessoa');
   const estadoCivil = form.watch('estado_civil');
   const profissao = form.watch('profissao');
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (open) {
+      setActiveTab('dados');
+      setPendingDocuments([]);
+      
+      if (card) {
+        // Edit mode - load card data
+        form.reset({
+          tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
+          tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
+          tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado',
+          parcelas_pagas_empresa: card.parcelas_pagas_empresa,
+          dia_vencimento: card.dia_vencimento,
+          origem: card.origem as 'socio' | 'gr' | 'indicacao' | 'outros',
+          origem_detalhe: card.origem_detalhe || undefined,
+          grupo: card.grupo,
+          cota: card.cota,
+          valor_credito: Number(card.valor_credito),
+          prazo_meses: card.prazo_meses,
+          data_contratacao: new Date(card.data_contratacao),
+          vendedor_id: card.vendedor_id || undefined,
+          vendedor_name: card.vendedor_name || undefined,
+          nome_completo: card.nome_completo || undefined,
+          data_nascimento: card.data_nascimento ? new Date(card.data_nascimento) : undefined,
+          cpf: card.cpf || undefined,
+          rg: card.rg || undefined,
+          estado_civil: card.estado_civil as any || undefined,
+          cpf_conjuge: card.cpf_conjuge || undefined,
+          endereco_cep: card.endereco_cep || undefined,
+          endereco_rua: card.endereco_rua || undefined,
+          endereco_numero: card.endereco_numero || undefined,
+          endereco_complemento: card.endereco_complemento || undefined,
+          endereco_bairro: card.endereco_bairro || undefined,
+          endereco_cidade: card.endereco_cidade || undefined,
+          endereco_estado: card.endereco_estado || undefined,
+          telefone: card.telefone || undefined,
+          email: card.email || undefined,
+          profissao: card.profissao || undefined,
+          tipo_servidor: card.tipo_servidor as any || undefined,
+          renda: card.renda ? Number(card.renda) : undefined,
+          patrimonio: card.patrimonio ? Number(card.patrimonio) : undefined,
+          pix: card.pix || undefined,
+          razao_social: card.razao_social || undefined,
+          cnpj: card.cnpj || undefined,
+          natureza_juridica: card.natureza_juridica || undefined,
+          inscricao_estadual: card.inscricao_estadual || undefined,
+          data_fundacao: card.data_fundacao ? new Date(card.data_fundacao) : undefined,
+          endereco_comercial_cep: card.endereco_comercial_cep || undefined,
+          endereco_comercial_rua: card.endereco_comercial_rua || undefined,
+          endereco_comercial_numero: card.endereco_comercial_numero || undefined,
+          endereco_comercial_complemento: card.endereco_comercial_complemento || undefined,
+          endereco_comercial_bairro: card.endereco_comercial_bairro || undefined,
+          endereco_comercial_cidade: card.endereco_comercial_cidade || undefined,
+          endereco_comercial_estado: card.endereco_comercial_estado || undefined,
+          telefone_comercial: card.telefone_comercial || undefined,
+          email_comercial: card.email_comercial || undefined,
+          faturamento_mensal: card.faturamento_mensal ? Number(card.faturamento_mensal) : undefined,
+          num_funcionarios: card.num_funcionarios ? Number(card.num_funcionarios) : undefined,
+          partners: card.partners?.map(p => ({ nome: p.nome, cpf: p.cpf, renda: p.renda ? Number(p.renda) : undefined })) || [],
+        });
+      } else {
+        // Create mode - reset to empty values
+        form.reset({
+          tipo_pessoa: 'pf',
+          tipo_produto: 'select',
+          tipo_contrato: 'normal',
+          parcelas_pagas_empresa: 0,
+          dia_vencimento: 10,
+          origem: 'socio',
+          partners: [],
+          grupo: '',
+          cota: '',
+          valor_credito: 0,
+          prazo_meses: 0,
+          nome_completo: '',
+          data_nascimento: undefined,
+          cpf: '',
+          rg: '',
+          estado_civil: undefined,
+          cpf_conjuge: '',
+          endereco_cep: '',
+          endereco_rua: '',
+          endereco_numero: '',
+          endereco_complemento: '',
+          endereco_bairro: '',
+          endereco_cidade: '',
+          endereco_estado: '',
+          telefone: '',
+          email: '',
+          profissao: '',
+          tipo_servidor: undefined,
+          renda: undefined,
+          patrimonio: undefined,
+          pix: '',
+          razao_social: '',
+          cnpj: '',
+          natureza_juridica: '',
+          inscricao_estadual: '',
+          data_fundacao: undefined,
+          endereco_comercial_cep: '',
+          endereco_comercial_rua: '',
+          endereco_comercial_numero: '',
+          endereco_comercial_complemento: '',
+          endereco_comercial_bairro: '',
+          endereco_comercial_cidade: '',
+          endereco_comercial_estado: '',
+          telefone_comercial: '',
+          email_comercial: '',
+          faturamento_mensal: undefined,
+          num_funcionarios: undefined,
+          origem_detalhe: '',
+          vendedor_id: undefined,
+          vendedor_name: undefined,
+        });
+      }
+    }
+  }, [open, card, form]);
 
   // Handle CEP lookup for PF
   const handleCepBlur = async (cep: string) => {
@@ -360,15 +479,15 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className={cn("grid w-full", tipoPessoa === 'pj' ? "grid-cols-5" : "grid-cols-4")}>
-                <TabsTrigger value="cota">Dados da Cota</TabsTrigger>
                 <TabsTrigger value="dados">
                   {tipoPessoa === 'pf' ? 'Dados Pessoais' : 'Dados da Empresa'}
                 </TabsTrigger>
+                <TabsTrigger value="endereco">Endereço</TabsTrigger>
+                <TabsTrigger value="documentos">Documentos</TabsTrigger>
+                <TabsTrigger value="cota">Dados da Cota</TabsTrigger>
                 {tipoPessoa === 'pj' && (
                   <TabsTrigger value="socios">Sócios</TabsTrigger>
                 )}
-                <TabsTrigger value="endereco">Endereço</TabsTrigger>
-                <TabsTrigger value="documentos">Documentos</TabsTrigger>
               </TabsList>
 
               {/* Tab: Dados da Cota */}
