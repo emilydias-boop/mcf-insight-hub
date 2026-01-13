@@ -522,9 +522,11 @@ serve(async (req) => {
       const maxAttendees = existingSlot.max_attendees || 3;
 
       if (currentAttendees >= maxAttendees) {
+        // IMPORTANT: return 200 with success=false so the client can handle this gracefully
+        // without Supabase throwing a FunctionsHttpError (non-2xx).
         return new Response(
-          JSON.stringify({ error: 'Slot is full', maxAttendees, currentAttendees }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: false, error: 'Slot is full', maxAttendees, currentAttendees }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 

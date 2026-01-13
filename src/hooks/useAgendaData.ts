@@ -841,9 +841,8 @@ export function useCreateMeeting() {
         },
       });
 
-      // Check for specific error responses in data first (even with HTTP error)
-      // This is needed because edge function returns 400 status but includes error details in body
-      if (data?.error) {
+      // Edge function may return success=false (200) for business-rule errors (e.g., slot full)
+      if (data && (data.error || data.success === false)) {
         if (data.error === 'Slot is full') {
           const slotFullError = new Error(`SLOT_FULL:${data.currentAttendees || 3}:${data.maxAttendees || 3}`);
           (slotFullError as any).isSlotFull = true;
@@ -854,7 +853,7 @@ export function useCreateMeeting() {
         if (data.error === 'Closer not found') {
           throw new Error('Closer não encontrado');
         }
-        throw new Error(data.error);
+        throw new Error(data.error || 'Erro ao agendar reunião');
       }
       
       // Handle non-2xx responses (FunctionsHttpError). In this case, `data` is null and
