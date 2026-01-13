@@ -62,15 +62,24 @@ export default function Agenda() {
   const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability();
   const { data: blockedDates = [] } = useBlockedDates();
 
+  // Fail-closed: se é closer mas não tem vínculo, não mostra nada
+  const closerHasNoLink = isCloser && !myCloser?.id;
+
   // Filtrar closers: closer só vê sua própria coluna
   const filteredClosers = useMemo(() => {
-    if (isCloser && myCloser?.id) {
+    if (isCloser) {
+      if (!myCloser?.id) return []; // Fail-closed
       return closers.filter(c => c.id === myCloser.id);
     }
     return closers;
   }, [closers, isCloser, myCloser?.id]);
 
   const filteredMeetings = useMemo(() => {
+    // Fail-closed: closer sem vínculo não vê nenhuma reunião
+    if (isCloser && !myCloser?.id) {
+      return [];
+    }
+    
     let result = meetings;
     
     // Closer só vê suas próprias reuniões
@@ -316,6 +325,18 @@ export default function Agenda() {
         </div>
       </div>
 
+      {/* Aviso se closer não tem vínculo */}
+      {closerHasNoLink && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
+          <p className="text-destructive font-medium">
+            Seu usuário não está vinculado a um closer.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Fale com o administrador para corrigir seu cadastro.
+          </p>
+        </div>
+      )}
+
       {/* Main Content Tabs */}
       <Tabs defaultValue="calendar" className="w-full">
         <TabsList>
@@ -405,7 +426,7 @@ export default function Agenda() {
       <QuickScheduleModal
         open={quickScheduleOpen}
         onOpenChange={handleQuickScheduleClose}
-        closers={closers}
+        closers={filteredClosers}
         preselectedCloserId={preselectedCloserId}
         preselectedDate={preselectedDate}
       />
@@ -422,7 +443,7 @@ export default function Agenda() {
               refetch();
             }
           }}
-          closers={closers}
+          closers={filteredClosers}
         />
       )}
     </div>
