@@ -305,7 +305,7 @@ export function useClosersWithAvailability() {
           slot_duration_minutes: a.slot_duration_minutes,
           is_active: a.is_active,
           lead_type: (a.lead_type || 'A') as LeadType,
-          max_slots_per_hour: a.max_slots_per_hour || 3,
+          max_slots_per_hour: a.max_slots_per_hour || 4,
         })),
       }));
 
@@ -1071,7 +1071,7 @@ export function useCheckSlotAvailability(
         .limit(1)
         .single();
 
-      const maxSlots = availability?.max_slots_per_hour || 3;
+      const maxSlots = availability?.max_slots_per_hour || 4;
 
       // Count existing attendees in meetings for this hour and lead type
       const hourStart = new Date(scheduledAt);
@@ -1479,7 +1479,7 @@ export function useAvailableSlotsCountByDate(
           const startHour = parseInt(slot.start_time.split(':')[0]);
           const endHour = parseInt(slot.end_time.split(':')[0]);
           const hoursInSlot = endHour - startHour;
-          const maxPerHour = slot.max_slots_per_hour || 3;
+          const maxPerHour = slot.max_slots_per_hour || 4;
           totalSlots += hoursInSlot * maxPerHour;
         }
         
