@@ -17,6 +17,7 @@ import { CloserColumnCalendar } from '@/components/crm/CloserColumnCalendar';
 import { AgendaMeetingDrawer } from '@/components/crm/AgendaMeetingDrawer';
 import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 import { RescheduleModal } from '@/components/crm/RescheduleModal';
+import { UpcomingMeetingsPanel } from '@/components/crm/UpcomingMeetingsPanel';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
 import { useNavigate } from 'react-router-dom';
@@ -335,6 +336,15 @@ export default function Agenda() {
             Fale com o administrador para corrigir seu cadastro.
           </p>
         </div>
+      )}
+
+      {/* Quick access panel for closers - show upcoming meetings */}
+      {isCloser && myCloser?.id && (
+        <UpcomingMeetingsPanel
+          meetings={filteredMeetings}
+          onSelectMeeting={setSelectedMeeting}
+          maxItems={5}
+        />
       )}
 
       {/* Main Content Tabs */}

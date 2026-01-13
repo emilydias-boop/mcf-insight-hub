@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { format, parseISO, isSameDay, setHours, setMinutes } from 'date-fns';
+import { useMemo, useRef, useEffect } from 'react';
+import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Settings, Plus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -139,6 +139,44 @@ export function CloserColumnCalendar({
 
   const now = new Date();
   const isToday = isSameDay(selectedDate, now);
+  
+  // Ref for scroll container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Auto-scroll to first meeting or current time
+  useEffect(() => {
+    if (!scrollContainerRef.current || timeSlots.length === 0) return;
+    
+    // Find first upcoming meeting for today, or first meeting for other days
+    const targetMeeting = meetings
+      .filter(m => {
+        const meetingDate = parseISO(m.scheduled_at);
+        if (!isSameDay(meetingDate, selectedDate)) return false;
+        // For today, only consider future meetings
+        if (isToday) return isAfter(meetingDate, now);
+        return true;
+      })
+      .sort((a, b) => parseISO(a.scheduled_at).getTime() - parseISO(b.scheduled_at).getTime())[0];
+    
+    let targetSlotIndex = -1;
+    
+    if (targetMeeting) {
+      // Scroll to first meeting
+      const meetingTime = parseISO(targetMeeting.scheduled_at);
+      const meetingTimeStr = format(meetingTime, 'HH:mm');
+      targetSlotIndex = timeSlots.findIndex(slot => format(slot, 'HH:mm') === meetingTimeStr);
+    } else if (isToday) {
+      // For today without upcoming meetings, scroll to current time
+      const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${(Math.floor(now.getMinutes() / 30) * 30).toString().padStart(2, '0')}`;
+      targetSlotIndex = timeSlots.findIndex(slot => format(slot, 'HH:mm') >= currentTimeStr);
+    }
+    
+    if (targetSlotIndex > 0) {
+      // Scroll with some margin (2 slots above)
+      const scrollPosition = Math.max(0, (targetSlotIndex - 2) * 40);
+      scrollContainerRef.current.scrollTop = scrollPosition;
+    }
+  }, [meetings, timeSlots, selectedDate, isToday]);
 
   return (
     <div className="border rounded-lg overflow-hidden bg-card">
@@ -188,7 +226,7 @@ export function CloserColumnCalendar({
       </div>
 
       {/* Time slots grid */}
-      <div className="max-h-[500px] overflow-y-auto">
+      <div ref={scrollContainerRef} className="max-h-[500px] overflow-y-auto">
         {timeSlots.map((slot, idx) => {
           const timeStr = format(slot, 'HH:mm');
           const isCurrentSlot = isToday && 

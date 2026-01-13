@@ -1,5 +1,5 @@
-import { useMemo, useCallback, useState, useEffect } from 'react';
-import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval } from 'date-fns';
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { format, isSameDay, parseISO, addDays, startOfWeek, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes, eachDayOfInterval, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
@@ -573,12 +573,59 @@ export function AgendaCalendar({
   // Day or Week view rendering with drag-and-drop
   const gridCols = viewMode === 'day' ? 'grid-cols-[60px_1fr]' : 'grid-cols-[60px_repeat(6,1fr)]';
   const currentTimePos = getCurrentTimePosition();
+  
+  // Ref for scroll container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Auto-scroll to first meeting or current time
+  useEffect(() => {
+    if (!scrollContainerRef.current || timeSlots.length === 0) return;
+    
+    const now = new Date();
+    const isToday = viewDays.some(d => isSameDay(d, now));
+    
+    // Find first upcoming meeting
+    const targetMeeting = filteredMeetings
+      .filter(m => {
+        const meetingDate = parseISO(m.scheduled_at);
+        // For today, only consider future meetings
+        if (isSameDay(meetingDate, now)) return isAfter(meetingDate, now);
+        // For other days, include all
+        return viewDays.some(d => isSameDay(d, meetingDate));
+      })
+      .sort((a, b) => parseISO(a.scheduled_at).getTime() - parseISO(b.scheduled_at).getTime())[0];
+    
+    let targetSlotIndex = -1;
+    
+    if (targetMeeting) {
+      // Scroll to first meeting
+      const meetingTime = parseISO(targetMeeting.scheduled_at);
+      const meetingHour = meetingTime.getHours();
+      const meetingMinute = Math.floor(meetingTime.getMinutes() / 15) * 15;
+      targetSlotIndex = timeSlots.findIndex(
+        slot => slot.hour === meetingHour && slot.minute === meetingMinute
+      );
+    } else if (isToday) {
+      // For today without upcoming meetings, scroll to current time
+      const currentHour = now.getHours();
+      const currentMinute = Math.floor(now.getMinutes() / 15) * 15;
+      targetSlotIndex = timeSlots.findIndex(
+        slot => slot.hour >= currentHour && (slot.hour > currentHour || slot.minute >= currentMinute)
+      );
+    }
+    
+    if (targetSlotIndex > 0) {
+      // Scroll with some margin (3 slots above) and account for sticky header (52px)
+      const scrollPosition = Math.max(0, (targetSlotIndex - 3) * SLOT_HEIGHT);
+      scrollContainerRef.current.scrollTop = scrollPosition;
+    }
+  }, [filteredMeetings, timeSlots, viewDays]);
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="border rounded-lg overflow-hidden bg-card">
         {/* Time slots grid - 30min intervals with sticky header */}
-        <div className="max-h-[600px] overflow-y-auto relative">
+        <div ref={scrollContainerRef} className="max-h-[600px] overflow-y-auto relative">
           {/* Header with days - sticky inside scroll container */}
           <div className={cn('grid border-b bg-muted/50 sticky top-0 z-20', gridCols)}>
             <div className="min-w-[60px] w-[60px] flex-shrink-0 h-[52px] flex flex-col items-center justify-center text-xs font-medium text-muted-foreground border-r bg-muted/30 gap-0.5">
