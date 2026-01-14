@@ -47,8 +47,8 @@ const STATUS_STYLES: Record<string, string> = {
 const SLOT_HEIGHT = 40; // px per 30-min slot
 const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
-import { Settings, Plus, ArrowRightLeft } from 'lucide-react';
-
+import { Settings, Plus, ArrowRightLeft, DollarSign } from 'lucide-react';
+import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
 export function AgendaCalendar({ 
   meetings, 
   selectedDate, 
@@ -157,6 +157,20 @@ export function AgendaCalendar({
       addDays(weekStart, 6), // Sexta
     ];
   }, [selectedDate, viewMode, weekStart]);
+
+  // Collect all attendees for batch Outside detection
+  const attendeesForOutsideCheck = useMemo(() => {
+    return meetings.flatMap(m => 
+      m.attendees?.map(att => ({
+        id: att.id,
+        email: att.contact?.email || null,
+        meetingDate: m.scheduled_at
+      })) || []
+    );
+  }, [meetings]);
+
+  // Hook to detect Outside leads (purchased contract before meeting)
+  const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
 
   const filteredMeetings = useMemo(() => {
     if (!closerFilter) return meetings;
@@ -852,6 +866,7 @@ export function AgendaCalendar({
                                                           {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                         </span>
                                                         {att.is_partner && <span className="text-[7px] text-muted-foreground">(S)</span>}
+                                                        {outsideData[att.id]?.isOutside && <DollarSign className="h-2 w-2 text-yellow-500" />}
                                                         {!att.is_partner && att.parent_attendee_id && <ArrowRightLeft className="h-2 w-2 text-orange-500" />}
                                                         <span className="text-[7px] text-muted-foreground truncate">
                                                           ({att.meetingSdr?.split(' ')[0] || 'N/A'})
@@ -964,6 +979,12 @@ export function AgendaCalendar({
                                                         )}
                                                         {att.already_builds === false && (
                                                           <Badge variant="outline" className="text-[8px] px-1 py-0 border-orange-500 text-orange-600">Não Constrói</Badge>
+                                                        )}
+                                                        {outsideData[att.id]?.isOutside && (
+                                                          <Badge variant="outline" className="text-[8px] px-1 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-0.5">
+                                                            <DollarSign className="h-2.5 w-2.5" />
+                                                            Outside
+                                                          </Badge>
                                                         )}
                                                       </div>
                                                       <div>

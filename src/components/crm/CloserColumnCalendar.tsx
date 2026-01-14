@@ -1,12 +1,13 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Settings, Plus, ArrowRightLeft } from "lucide-react";
+import { Settings, Plus, ArrowRightLeft, DollarSign } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from "@/hooks/useAgendaData";
 import { cn } from "@/lib/utils";
 import { useCloserDaySlots } from "@/hooks/useCloserMeetingLinks";
+import { useOutsideDetectionBatch } from "@/hooks/useOutsideDetection";
 
 interface CloserColumnCalendarProps {
   meetings: MeetingSlot[];
@@ -81,6 +82,20 @@ export function CloserColumnCalendar({
 
   // Buscar horários reais configurados em closer_meeting_links
   const { data: daySlots = [] } = useCloserDaySlots(dayOfWeek);
+
+  // Coletar todos os attendees para detecção batch de Outside
+  const attendeesForOutsideCheck = useMemo(() => {
+    return meetings.flatMap(m => 
+      m.attendees?.map(att => ({
+        id: att.id,
+        email: att.contact?.email || null,
+        meetingDate: m.scheduled_at
+      })) || []
+    );
+  }, [meetings]);
+
+  // Hook para detectar leads Outside (compraram contrato antes da reunião)
+  const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
 
   // Gerar slots únicos baseado nos horários reais
   const timeSlots = useMemo(() => {
@@ -277,6 +292,11 @@ export function CloserColumnCalendar({
                                         <span className="truncate font-medium">
                                           {att.attendee_name || att.contact?.name || "Lead"}
                                         </span>
+                                        {outsideData[att.id]?.isOutside && (
+                                          <span className="flex items-center bg-yellow-500/40 rounded px-0.5">
+                                            <DollarSign className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                          </span>
+                                        )}
                                         {!att.is_partner && att.parent_attendee_id && (
                                           <span className="flex items-center bg-orange-500/40 rounded px-0.5">
                                             <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
@@ -316,6 +336,12 @@ export function CloserColumnCalendar({
                                       {att.is_partner && (
                                         <Badge variant="outline" className="text-[9px] px-1 py-0">
                                           Sócio
+                                        </Badge>
+                                      )}
+                                      {outsideData[att.id]?.isOutside && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-yellow-100 text-yellow-700 border-yellow-300 gap-0.5">
+                                          <DollarSign className="h-2.5 w-2.5" />
+                                          Outside
                                         </Badge>
                                       )}
                                       {!att.is_partner && att.parent_attendee_id && (

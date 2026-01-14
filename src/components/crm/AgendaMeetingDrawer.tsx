@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -9,6 +9,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
 import { supabase } from '@/integrations/supabase/client';
+import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
 import {
   Sheet,
   SheetContent,
@@ -418,6 +419,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   const participants = getParticipantsList();
   
+  // Collect attendees for Outside detection
+  const attendeesForOutsideCheck = useMemo(() => {
+    return (activeMeeting?.attendees || []).map(att => ({
+      id: att.id,
+      email: att.contact?.email || null,
+      meetingDate: activeMeeting.scheduled_at
+    }));
+  }, [activeMeeting?.attendees, activeMeeting?.scheduled_at]);
+
+  // Hook to detect Outside leads (purchased contract before meeting)
+  const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
+  
   // Selected participant (default to first/main)
   const selectedParticipant = participants.find(p => p.id === selectedParticipantId) || participants[0];
   
@@ -579,6 +592,12 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                             <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300 gap-1">
                               <ArrowRightLeft className="h-3 w-3" />
                               Remanejado
+                            </Badge>
+                          )}
+                          {outsideData[p.id]?.isOutside && (
+                            <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-700 border-yellow-300 gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              Outside {outsideData[p.id]?.contractDate && `- ${format(parseISO(outsideData[p.id].contractDate!), 'dd/MM')}`}
                             </Badge>
                           )}
                           {/* Individual Status Badge */}
