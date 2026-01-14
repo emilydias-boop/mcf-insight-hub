@@ -36,7 +36,7 @@ const ATTENDEE_STATUS_CONFIG: Record<string, {
   invited: { 
     label: 'Agendado', 
     shortLabel: 'Agend.', 
-    bgClass: 'bg-blue-600/80',
+    bgClass: 'bg-slate-600/90',
     variant: 'outline'
   },
   completed: { 
@@ -278,10 +278,17 @@ export function CloserColumnCalendar({
                             >
                               <div className="space-y-0.5">
                                 {meeting.attendees?.length ? (
-                                  meeting.attendees.slice(0, 3).map((att, i) => (
+                                  meeting.attendees.slice(0, 3).map((att, i) => {
+                                    const sdrName = att.booked_by_profile?.full_name || meeting.booked_by_profile?.full_name;
+                                    return (
                                     <div key={att.id} className="flex items-center justify-between gap-1">
                                       <span className="truncate font-medium">
                                         {att.attendee_name || att.contact?.name || 'Lead'}
+                                        {sdrName && (
+                                          <span className="text-[9px] opacity-80 ml-1">
+                                            ({sdrName.split(' ')[0]})
+                                          </span>
+                                        )}
                                       </span>
                                       <Badge 
                                         variant="outline" 
@@ -293,7 +300,8 @@ export function CloserColumnCalendar({
                                         {ATTENDEE_STATUS_CONFIG[att.status]?.shortLabel || att.status}
                                       </Badge>
                                     </div>
-                                  ))
+                                    );
+                                  })
                                 ) : (
                                   <div className="font-medium truncate">
                                     {meeting.deal?.contact?.name || meeting.deal?.name || 'Lead'}
