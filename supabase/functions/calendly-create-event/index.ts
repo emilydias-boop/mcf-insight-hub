@@ -16,6 +16,7 @@ interface CreateEventRequest {
   notes?: string;
   sdrEmail?: string;
   alreadyBuilds?: boolean | null;
+  parentAttendeeId?: string;
 }
 
 // Google Calendar JWT authentication
@@ -540,6 +541,7 @@ serve(async (req) => {
 
     // Add attendee record with the same notes as the slot
     // Include attendee_name and attendee_phone even without contact_id for display purposes
+    // Include parent_attendee_id if this is a reschedule/remanejamento
     const { data: attendee, error: attendeeError } = await supabase
       .from("meeting_slot_attendees")
       .insert({
@@ -552,6 +554,7 @@ serve(async (req) => {
         attendee_name: contactInfo.name || deal?.name || null,
         attendee_phone: contactInfo.phone || null,
         already_builds: body.alreadyBuilds ?? null,
+        parent_attendee_id: body.parentAttendeeId || null,
       })
       .select("id")
       .single();
@@ -559,7 +562,7 @@ serve(async (req) => {
     if (attendeeError) {
       console.error("⚠️ Error creating attendee:", attendeeError);
     } else {
-      console.log("✅ Added attendee to slot");
+      console.log("✅ Added attendee to slot", body.parentAttendeeId ? `(parent: ${body.parentAttendeeId})` : '');
     }
 
     // NOTE: Stage update and activity creation removed intentionally.

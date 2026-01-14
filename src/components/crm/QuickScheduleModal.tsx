@@ -64,6 +64,10 @@ interface DealOption {
     id: string;
     stage_name: string;
   } | null;
+  lastAttendee?: {
+    id: string;
+    status: string;
+  } | null;
 }
 
 type LeadType = 'A' | 'B';
@@ -243,6 +247,8 @@ export function QuickScheduleModal({
       name: item.deal.name,
       tags: item.deal.tags,
       contact: item.deal.contact,
+      // Usar o ID do attendee atual como parent para o novo agendamento
+      lastAttendee: { id: item.id, status: item.status },
     });
     setNameQuery(item.deal.contact?.name || item.deal.name);
     setSelectedEmail(item.deal.contact?.email || '');
@@ -280,6 +286,10 @@ export function QuickScheduleModal({
         : historyEntry;
     }
 
+    // Determinar parentAttendeeId se for reagendamento/remanejamento
+    // Usa o lastAttendee do deal se existir (com status no_show, invited ou scheduled)
+    const parentAttendeeId = selectedDeal.lastAttendee?.id || undefined;
+
     createMeeting.mutate({
       closerId: selectedCloser,
       dealId: selectedDeal.id,
@@ -290,6 +300,7 @@ export function QuickScheduleModal({
       sendNotification: autoSendWhatsApp,
       sdrEmail: selectedSdr || undefined,
       alreadyBuilds,
+      parentAttendeeId,
     }, {
       onSuccess: (data) => {
         // Send WhatsApp notification if enabled
