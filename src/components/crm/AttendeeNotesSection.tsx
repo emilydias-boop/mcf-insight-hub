@@ -76,7 +76,9 @@ function NoteItem({
         )}
       </div>
       
-      <p className="text-sm whitespace-pre-wrap">{note.note}</p>
+      <ScrollArea className="max-h-[200px]">
+        <p className="text-sm whitespace-pre-wrap pr-2">{note.note}</p>
+      </ScrollArea>
       
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
