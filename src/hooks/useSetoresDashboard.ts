@@ -20,6 +20,10 @@ export interface SetorData {
   // Ano
   apuradoAnual: number;
   metaAnual: number;
+  // Efeito Alavanca specific metrics (Total em Cartas = apurado*, Comissão = secondary)
+  comissaoSemanal?: number;
+  comissaoMensal?: number;
+  comissaoAnual?: number;
 }
 
 // Maps sector ID to hubla_transactions product_category values
@@ -77,6 +81,12 @@ export function useSetoresDashboard() {
         consortiumWeekly,
         consortiumMonthly,
         consortiumAnnual,
+        insideCardsWeekly,
+        insideCardsMontly,
+        insideCardsAnnual,
+        insideInstallmentsWeekly,
+        insideInstallmentsMonthly,
+        insideInstallmentsAnnual,
         targets,
       ] = await Promise.all([
         // Hubla transactions - Weekly
@@ -115,6 +125,48 @@ export function useSetoresDashboard() {
           .select('valor_comissao, data_interface')
           .gte('data_interface', yearStartStr)
           .lte('data_interface', yearEndStr),
+        // Inside consortium cards - Weekly (for Efeito Alavanca)
+        supabase
+          .from('consortium_cards')
+          .select('id, valor_credito')
+          .eq('categoria', 'inside')
+          .gte('data_contratacao', weekStartStr)
+          .lte('data_contratacao', weekEndStr),
+        // Inside consortium cards - Monthly
+        supabase
+          .from('consortium_cards')
+          .select('id, valor_credito')
+          .eq('categoria', 'inside')
+          .gte('data_contratacao', monthStartStr)
+          .lte('data_contratacao', monthEndStr),
+        // Inside consortium cards - Annual
+        supabase
+          .from('consortium_cards')
+          .select('id, valor_credito')
+          .eq('categoria', 'inside')
+          .gte('data_contratacao', yearStartStr)
+          .lte('data_contratacao', yearEndStr),
+        // Inside installments - Weekly (sum valor_comissao from cards' installments)
+        supabase
+          .from('consortium_installments')
+          .select('valor_comissao, consortium_cards!inner(categoria, data_contratacao)')
+          .eq('consortium_cards.categoria', 'inside')
+          .gte('consortium_cards.data_contratacao', weekStartStr)
+          .lte('consortium_cards.data_contratacao', weekEndStr),
+        // Inside installments - Monthly
+        supabase
+          .from('consortium_installments')
+          .select('valor_comissao, consortium_cards!inner(categoria, data_contratacao)')
+          .eq('consortium_cards.categoria', 'inside')
+          .gte('consortium_cards.data_contratacao', monthStartStr)
+          .lte('consortium_cards.data_contratacao', monthEndStr),
+        // Inside installments - Annual
+        supabase
+          .from('consortium_installments')
+          .select('valor_comissao, consortium_cards!inner(categoria, data_contratacao)')
+          .eq('consortium_cards.categoria', 'inside')
+          .gte('consortium_cards.data_contratacao', yearStartStr)
+          .lte('consortium_cards.data_contratacao', yearEndStr),
         // All setor targets
         supabase
           .from('team_targets')
@@ -141,6 +193,14 @@ export function useSetoresDashboard() {
         return data.reduce((sum, p) => sum + (p.valor_comissao || 0), 0);
       };
 
+      // Helper to calculate total cartas (valor_credito) for Inside cards
+      const calculateTotalCartas = (
+        data: { valor_credito: number | null }[] | null
+      ): number => {
+        if (!data) return 0;
+        return data.reduce((sum, c) => sum + (c.valor_credito || 0), 0);
+      };
+
       // Helper to get target value
       const getTarget = (targetType: string): number => {
         const target = targets.data?.find(t => t.target_type === targetType);
@@ -159,6 +219,24 @@ export function useSetoresDashboard() {
             metaMensal: getTarget('setor_credito_mes'),
             apuradoAnual: calculateConsortiumTotal(consortiumAnnual.data),
             metaAnual: getTarget('setor_credito_ano'),
+          };
+        }
+
+        if (config.id === 'efeito_alavanca') {
+          // Efeito Alavanca uses consortium_cards (categoria = 'inside')
+          return {
+            ...config,
+            // Total em Cartas = SUM(valor_credito)
+            apuradoSemanal: calculateTotalCartas(insideCardsWeekly.data),
+            metaSemanal: getTarget('setor_efeito_alavanca_semana'),
+            apuradoMensal: calculateTotalCartas(insideCardsMontly.data),
+            metaMensal: getTarget('setor_efeito_alavanca_mes'),
+            apuradoAnual: calculateTotalCartas(insideCardsAnnual.data),
+            metaAnual: getTarget('setor_efeito_alavanca_ano'),
+            // Comissão Total = SUM(valor_comissao) from installments
+            comissaoSemanal: calculateConsortiumTotal(insideInstallmentsWeekly.data),
+            comissaoMensal: calculateConsortiumTotal(insideInstallmentsMonthly.data),
+            comissaoAnual: calculateConsortiumTotal(insideInstallmentsAnnual.data),
           };
         }
 

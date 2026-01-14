@@ -7,6 +7,7 @@ import { AlertTriangle } from "lucide-react";
 import { PendingMetricsAlert } from "@/components/dashboard/PendingMetricsAlert";
 import { MetricsApprovalDialog } from "@/components/dashboard/MetricsApprovalDialog";
 import { SetorRow } from "@/components/dashboard/SetorRow";
+import { EfeitoAlavancaRow } from "@/components/dashboard/EfeitoAlavancaRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -31,6 +32,13 @@ export default function Dashboard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'consortium_payments' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['setores-dashboard'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'consortium_cards' },
         () => {
           queryClient.invalidateQueries({ queryKey: ['setores-dashboard'] });
         }
@@ -100,21 +108,35 @@ export default function Dashboard() {
               />
             ))
           ) : (
-            data?.setores.map(setor => (
-              <SetorRow
-                key={setor.id}
-                titulo={setor.nome}
-                icone={setor.icone}
-                metaSemanal={setor.metaSemanal}
-                apuradoSemanal={setor.apuradoSemanal}
-                semanaLabel={data.semanaLabel}
-                metaMensal={setor.metaMensal}
-                apuradoMensal={setor.apuradoMensal}
-                mesLabel={data.mesLabel}
-                metaAnual={setor.metaAnual}
-                apuradoAnual={setor.apuradoAnual}
-              />
-            ))
+            data?.setores.map(setor => 
+              setor.id === 'efeito_alavanca' ? (
+                <EfeitoAlavancaRow
+                  key={setor.id}
+                  semanaLabel={data.semanaLabel}
+                  mesLabel={data.mesLabel}
+                  totalCartasSemanal={setor.apuradoSemanal}
+                  comissaoSemanal={setor.comissaoSemanal || 0}
+                  totalCartasMensal={setor.apuradoMensal}
+                  comissaoMensal={setor.comissaoMensal || 0}
+                  totalCartasAnual={setor.apuradoAnual}
+                  comissaoAnual={setor.comissaoAnual || 0}
+                />
+              ) : (
+                <SetorRow
+                  key={setor.id}
+                  titulo={setor.nome}
+                  icone={setor.icone}
+                  metaSemanal={setor.metaSemanal}
+                  apuradoSemanal={setor.apuradoSemanal}
+                  semanaLabel={data.semanaLabel}
+                  metaMensal={setor.metaMensal}
+                  apuradoMensal={setor.apuradoMensal}
+                  mesLabel={data.mesLabel}
+                  metaAnual={setor.metaAnual}
+                  apuradoAnual={setor.apuradoAnual}
+                />
+              )
+            )
           )}
         </div>
       </div>
