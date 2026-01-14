@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { useSdrMetricsV2, useSdrMeetingsV2, SdrMetricsV2, MeetingV2 } from "./useSdrMetricsV2";
+import { useSdrMeetingsV2, MeetingV2 } from "./useSdrMetricsV2";
+import { useSdrMetricsFromAgenda, SdrAgendaMetrics } from "./useSdrMetricsFromAgenda";
 import { SDR_LIST } from "@/constants/team";
 
 export interface TeamKPIs {
@@ -33,8 +34,8 @@ interface TeamMeetingsParams {
 }
 
 export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: TeamMeetingsParams) {
-  // Fetch metrics for all SDRs (no email filter) or specific SDR
-  const metricsQuery = useSdrMetricsV2(startDate, endDate, sdrEmailFilter);
+  // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
+  const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter);
   const meetingsQuery = useSdrMeetingsV2(startDate, endDate, sdrEmailFilter);
 
   // Create Set of valid SDR emails from SDR_LIST
@@ -56,11 +57,13 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
     const metrics = metricsQuery.data?.metrics || [];
 
     return metrics
-      .filter((m: SdrMetricsV2) => 
+      .filter((m: SdrAgendaMetrics) => 
         validSdrEmails.has(m.sdr_email?.toLowerCase() || '')
       )
-      .map((m: SdrMetricsV2) => {
-        const sdrName = sdrNameMap.get(m.sdr_email?.toLowerCase() || '') || m.sdr_name || m.sdr_email?.split('@')[0] || 'Desconhecido';
+      .map((m: SdrAgendaMetrics) => {
+        const sdrName = sdrNameMap.get(m.sdr_email?.toLowerCase() || '') 
+          || m.sdr_email?.split('@')[0] 
+          || 'Desconhecido';
         
         return {
           sdrEmail: m.sdr_email,
