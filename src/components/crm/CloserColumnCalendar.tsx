@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Settings, Plus } from 'lucide-react';
+import { Settings, Plus, ArrowRightLeft } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from '@/hooks/useAgendaData';
@@ -282,10 +282,13 @@ export function CloserColumnCalendar({
                                     const sdrName = att.booked_by_profile?.full_name || meeting.booked_by_profile?.full_name;
                                     return (
                                     <div key={att.id} className="flex items-center justify-between gap-1">
-                                      <span className="truncate font-medium">
+                                      <span className="truncate font-medium flex items-center gap-1">
                                         {att.attendee_name || att.contact?.name || 'Lead'}
+                                        {!att.is_partner && att.parent_attendee_id && (
+                                          <ArrowRightLeft className="h-3 w-3 text-orange-400 flex-shrink-0" />
+                                        )}
                                         {sdrName && (
-                                          <span className="text-[9px] opacity-80 ml-1">
+                                          <span className="text-[9px] opacity-80">
                                             ({sdrName.split(' ')[0]})
                                           </span>
                                         )}
@@ -320,17 +323,34 @@ export function CloserColumnCalendar({
                               <div className="font-semibold text-xs mb-1">Participantes:</div>
                               {meeting.attendees?.length ? (
                                 meeting.attendees.map(att => (
-                                  <div key={att.id} className="text-xs flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-1">
-                                      <span>• {att.attendee_name || att.contact?.name || 'Lead'}</span>
-                                      {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
+                                  <div key={att.id} className="text-xs">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1">
+                                        <span>• {att.attendee_name || att.contact?.name || 'Lead'}</span>
+                                        {att.is_partner && <Badge variant="outline" className="text-[9px] px-1 py-0">Sócio</Badge>}
+                                        {!att.is_partner && att.parent_attendee_id && (
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300">
+                                            Remanejado
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <Badge 
+                                        variant={ATTENDEE_STATUS_CONFIG[att.status]?.variant || 'outline'}
+                                        className="text-[9px] px-1 py-0"
+                                      >
+                                        {ATTENDEE_STATUS_CONFIG[att.status]?.label || att.status}
+                                      </Badge>
                                     </div>
-                                    <Badge 
-                                      variant={ATTENDEE_STATUS_CONFIG[att.status]?.variant || 'outline'}
-                                      className="text-[9px] px-1 py-0"
-                                    >
-                                      {ATTENDEE_STATUS_CONFIG[att.status]?.label || att.status}
-                                    </Badge>
+                                    {/* Histórico do remanejamento */}
+                                    {!att.is_partner && (att as any).parent_attendee && (
+                                      <div className="ml-3 mt-0.5 text-[10px] text-orange-500 italic">
+                                        ↳ Veio de: {(att as any).parent_attendee.meeting_slot?.closer?.name || 'Closer anterior'} 
+                                        {(att as any).parent_attendee.meeting_slot?.scheduled_at && (
+                                          <> às {format(parseISO((att as any).parent_attendee.meeting_slot.scheduled_at), 'HH:mm')}</>
+                                        )}
+                                        {' '}({ATTENDEE_STATUS_CONFIG[(att as any).parent_attendee.status]?.label || (att as any).parent_attendee.status})
+                                      </div>
+                                    )}
                                   </div>
                                 ))
                               ) : (

@@ -160,7 +160,16 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
             parent_attendee_id,
             already_builds,
             contact:crm_contacts(id, name, phone, email),
-            deal:crm_deals(id, name)
+            deal:crm_deals(id, name),
+            parent_attendee:meeting_slot_attendees!parent_attendee_id(
+              id,
+              attendee_name,
+              status,
+              meeting_slot:meeting_slots(
+                scheduled_at,
+                closer:closers(id, name)
+              )
+            )
           )
         `)
         .gte('scheduled_at', startDate.toISOString())
