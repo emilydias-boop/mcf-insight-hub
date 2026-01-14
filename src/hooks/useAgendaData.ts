@@ -1025,21 +1025,6 @@ export function useCheckSlotAvailability(
     queryFn: async () => {
       if (!closerId || !scheduledAt) return null;
 
-      const dayOfWeek = scheduledAt.getDay() === 0 ? 7 : scheduledAt.getDay();
-
-      // Get the max slots config for this closer/day/lead_type
-      const { data: availability } = await supabase
-        .from('closer_availability')
-        .select('max_slots_per_hour')
-        .eq('closer_id', closerId)
-        .eq('day_of_week', dayOfWeek)
-        .eq('lead_type', leadType)
-        .eq('is_active', true)
-        .limit(1)
-        .single();
-
-      const maxSlots = availability?.max_slots_per_hour || 4;
-
       // Count existing attendees in meetings for this hour and lead type
       const hourStart = new Date(scheduledAt);
       hourStart.setMinutes(0, 0, 0);
@@ -1068,10 +1053,10 @@ export function useCheckSlotAvailability(
         attendees = data || [];
       }
 
+      // Always available - no limit on attendees
       return {
-        available: attendees.length < maxSlots,
+        available: true,
         currentCount: attendees.length,
-        maxSlots,
         attendees,
       };
     },
