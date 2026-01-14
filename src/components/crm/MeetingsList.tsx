@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Eye, MoreHorizontal, CheckCircle, XCircle, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Eye, MoreHorizontal, CheckCircle, XCircle, AlertTriangle, ExternalLink, ArrowRightLeft } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,6 +91,12 @@ export function MeetingsList({ meetings, isLoading, onViewDeal }: MeetingsListPr
                             </span>
                             {att.is_partner && (
                               <Badge variant="outline" className="text-[10px] px-1 py-0">Sócio</Badge>
+                            )}
+                            {!att.is_partner && att.parent_attendee_id && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
+                                <ArrowRightLeft className="h-2.5 w-2.5" />
+                                Remanej.
+                              </Badge>
                             )}
                           </div>
                         ))}

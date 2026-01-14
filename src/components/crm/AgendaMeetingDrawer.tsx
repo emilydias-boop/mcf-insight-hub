@@ -575,6 +575,12 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                               {p.parentAttendeeName ? `Sócio de ${p.parentAttendeeName.split(' ')[0]}` : 'Sócio'}
                             </Badge>
                           )}
+                          {!p.isPartner && p.parentAttendeeId && (
+                            <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300 gap-1">
+                              <ArrowRightLeft className="h-3 w-3" />
+                              Remanejado
+                            </Badge>
+                          )}
                           {/* Individual Status Badge */}
                           {p.status && p.status !== 'scheduled' && (
                             <Badge className={cn('text-xs text-white', STATUS_LABELS[p.status]?.color || 'bg-muted')}>
