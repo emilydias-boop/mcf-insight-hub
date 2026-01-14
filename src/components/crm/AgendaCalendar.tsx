@@ -44,7 +44,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const SLOT_HEIGHT = 40; // px per 30-min slot
-const MAX_MEETINGS_PER_SLOT = 3; // Default max meetings per slot
+const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
 import { Settings, Plus } from 'lucide-react';
 
