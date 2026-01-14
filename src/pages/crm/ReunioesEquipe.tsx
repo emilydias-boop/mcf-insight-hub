@@ -352,31 +352,6 @@ export default function ReunioesEquipe() {
       {/* MCF Incorporador - Métricas Monetárias - PRIMEIRO */}
       <IncorporadorMetricsCard />
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" />
-            Reuniões da Equipe
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Visão consolidada das reuniões de todos os SDRs
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
-        </div>
-      </div>
-
       {/* Goals Panel */}
       <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
 
