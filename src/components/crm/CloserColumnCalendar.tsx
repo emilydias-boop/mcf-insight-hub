@@ -19,7 +19,7 @@ interface CloserColumnCalendarProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  scheduled: 'bg-primary/90 hover:bg-primary',
+  scheduled: 'bg-primary/70 hover:bg-primary/80',
   rescheduled: 'bg-yellow-500/90 hover:bg-yellow-500',
   completed: 'bg-green-500/80 hover:bg-green-500',
   no_show: 'bg-red-500/80 hover:bg-red-500',
