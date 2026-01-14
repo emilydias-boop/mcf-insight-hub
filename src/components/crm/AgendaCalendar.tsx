@@ -9,6 +9,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@/hooks/useAgendaData';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useUniqueSlotsForDays } from '@/hooks/useCloserMeetingLinks';
+
 export type ViewMode = 'day' | 'week' | 'month';
 
 interface AgendaCalendarProps {
@@ -46,7 +47,7 @@ const STATUS_STYLES: Record<string, string> = {
 const SLOT_HEIGHT = 40; // px per 30-min slot
 const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
-import { Settings, Plus } from 'lucide-react';
+import { Settings, Plus, ArrowRightLeft } from 'lucide-react';
 
 export function AgendaCalendar({ 
   meetings, 
@@ -851,6 +852,7 @@ export function AgendaCalendar({
                                                           {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                         </span>
                                                         {att.is_partner && <span className="text-[7px] text-muted-foreground">(S)</span>}
+                                                        {!att.is_partner && att.parent_attendee_id && <ArrowRightLeft className="h-2 w-2 text-orange-500" />}
                                                         <span className="text-[7px] text-muted-foreground truncate">
                                                           ({att.meetingSdr?.split(' ')[0] || 'N/A'})
                                                         </span>
