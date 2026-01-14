@@ -285,7 +285,9 @@ export function CloserColumnCalendar({
                                       <span className="truncate font-medium flex items-center gap-1">
                                         {att.attendee_name || att.contact?.name || 'Lead'}
                                         {!att.is_partner && att.parent_attendee_id && (
-                                          <ArrowRightLeft className="h-3 w-3 text-orange-400 flex-shrink-0" />
+                                          <span className="flex items-center bg-orange-500/40 rounded px-0.5">
+                                            <ArrowRightLeft className="h-3 w-3 text-white flex-shrink-0" />
+                                          </span>
                                         )}
                                         {sdrName && (
                                           <span className="text-[9px] opacity-80">
@@ -342,7 +344,7 @@ export function CloserColumnCalendar({
                                       </Badge>
                                     </div>
                                     {/* Histórico do remanejamento */}
-                                    {!att.is_partner && (att as any).parent_attendee && (
+                                    {!att.is_partner && att.parent_attendee_id && (att as any).parent_attendee?.id && (
                                       <div className="ml-3 mt-0.5 text-[10px] text-orange-500 italic">
                                         ↳ Veio de: {(att as any).parent_attendee.meeting_slot?.closer?.name || 'Closer anterior'} 
                                         {(att as any).parent_attendee.meeting_slot?.scheduled_at && (
