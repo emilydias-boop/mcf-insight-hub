@@ -727,7 +727,35 @@ export function useSearchDealsForSchedule(query: string) {
         stage: Array.isArray(deal.stage) ? deal.stage[0] : deal.stage
       }));
 
-      return normalizedDeals.slice(0, 10);
+      // 6. Buscar o último attendee de cada deal para vincular reagendamentos
+      const dealIds = normalizedDeals.map(d => d.id);
+      let lastAttendeeMap: Record<string, { id: string; status: string }> = {};
+      
+      if (dealIds.length > 0) {
+        const { data: lastAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, deal_id, status')
+          .in('deal_id', dealIds)
+          .in('status', ['no_show', 'invited', 'scheduled'])
+          .order('created_at', { ascending: false });
+        
+        // Pegar apenas o mais recente de cada deal
+        if (lastAttendees) {
+          lastAttendees.forEach(att => {
+            if (att.deal_id && !lastAttendeeMap[att.deal_id]) {
+              lastAttendeeMap[att.deal_id] = { id: att.id, status: att.status };
+            }
+          });
+        }
+      }
+
+      // 7. Adicionar informação do último attendee aos deals
+      const dealsWithLastAttendee = normalizedDeals.map(deal => ({
+        ...deal,
+        lastAttendee: lastAttendeeMap[deal.id] || null
+      }));
+
+      return dealsWithLastAttendee.slice(0, 10);
     },
     enabled: query.length >= 2,
   });
@@ -814,6 +842,7 @@ export function useCreateMeeting() {
       sendNotification = true,
       sdrEmail,
       alreadyBuilds,
+      parentAttendeeId,
     }: {
       closerId: string;
       dealId: string;
@@ -825,6 +854,7 @@ export function useCreateMeeting() {
       sendNotification?: boolean;
       sdrEmail?: string;
       alreadyBuilds?: boolean | null;
+      parentAttendeeId?: string;
     }) => {
       // Chamar a edge function que cria o evento no Google Calendar com Meet
       const { data, error } = await supabase.functions.invoke('calendly-create-event', {
@@ -838,6 +868,7 @@ export function useCreateMeeting() {
           leadType,
           sdrEmail,
           alreadyBuilds,
+          parentAttendeeId,
         },
       });
 
