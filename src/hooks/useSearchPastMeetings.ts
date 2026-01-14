@@ -32,6 +32,7 @@ export function useSearchPastMeetings(query: string, closerId?: string, daysBack
       const phoneDigits = query.replace(/\D/g, '');
 
       // Build the query for attendees with their meeting slots
+      // Filter by ATTENDEE status (not meeting status) to find those not yet marked as paid
       let attendeeQuery = supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -49,7 +50,10 @@ export function useSearchPastMeetings(query: string, closerId?: string, daysBack
           )
         `)
         .gte('meeting_slot.scheduled_at', startDate)
-        .in('meeting_slot.status', ['completed', 'no_show'])
+        // Include all relevant meeting statuses (including contract_paid to find other attendees)
+        .in('meeting_slot.status', ['completed', 'no_show', 'contract_paid'])
+        // Filter by ATTENDEE status - only those not yet marked as paid
+        .in('status', ['completed', 'no_show'])
         .order('meeting_slot(scheduled_at)', { ascending: false })
         .limit(20);
 

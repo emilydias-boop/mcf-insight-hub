@@ -625,15 +625,8 @@ export function useMarkContractPaid() {
 
   return useMutation({
     mutationFn: async ({ meetingId, attendeeId }: { meetingId: string; attendeeId?: string }) => {
-      // Update meeting_slots status
-      const { error: meetingError } = await supabase
-        .from('meeting_slots')
-        .update({ status: 'contract_paid' })
-        .eq('id', meetingId);
-
-      if (meetingError) throw meetingError;
-
-      // Update attendee status if provided
+      // Update only the attendee status (not the meeting slot)
+      // This allows other attendees in the same meeting to still appear in search
       if (attendeeId) {
         const { error: attendeeError } = await supabase
           .from('meeting_slot_attendees')
@@ -641,6 +634,32 @@ export function useMarkContractPaid() {
           .eq('id', attendeeId);
 
         if (attendeeError) throw attendeeError;
+
+        // Check if ALL attendees in this meeting are now paid
+        const { data: attendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('status')
+          .eq('meeting_slot_id', meetingId);
+
+        const allPaid = attendees?.every(a => a.status === 'contract_paid');
+
+        // Only update meeting status if all attendees are paid
+        if (allPaid) {
+          const { error: meetingError } = await supabase
+            .from('meeting_slots')
+            .update({ status: 'contract_paid' })
+            .eq('id', meetingId);
+
+          if (meetingError) throw meetingError;
+        }
+      } else {
+        // Fallback: update meeting status directly if no attendeeId provided
+        const { error: meetingError } = await supabase
+          .from('meeting_slots')
+          .update({ status: 'contract_paid' })
+          .eq('id', meetingId);
+
+        if (meetingError) throw meetingError;
       }
     },
     onSuccess: () => {
