@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Settings, Plus } from "lucide-react";
+import { Settings, Plus, ArrowRightLeft } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from "@/hooks/useAgendaData";
@@ -273,9 +273,16 @@ export function CloserColumnCalendar({
                                 {meeting.attendees?.length ? (
                                   meeting.attendees.slice(0, 3).map((att, i) => (
                                     <div key={att.id} className="flex items-center justify-between gap-1">
-                                      <span className="truncate font-medium">
-                                        {att.attendee_name || att.contact?.name || "Lead"}
-                                      </span>
+                                      <div className="flex items-center gap-1 truncate">
+                                        <span className="truncate font-medium">
+                                          {att.attendee_name || att.contact?.name || "Lead"}
+                                        </span>
+                                        {!att.is_partner && att.parent_attendee_id && (
+                                          <span className="flex items-center bg-orange-500/40 rounded px-0.5">
+                                            <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                          </span>
+                                        )}
+                                      </div>
                                       <Badge
                                         variant="outline"
                                         className={cn(
@@ -304,11 +311,17 @@ export function CloserColumnCalendar({
                               {meeting.attendees?.length ? (
                                 meeting.attendees.map((att) => (
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1 flex-wrap">
                                       <span>• {att.attendee_name || att.contact?.name || "Lead"}</span>
                                       {att.is_partner && (
                                         <Badge variant="outline" className="text-[9px] px-1 py-0">
                                           Sócio
+                                        </Badge>
+                                      )}
+                                      {!att.is_partner && att.parent_attendee_id && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
+                                          <ArrowRightLeft className="h-2.5 w-2.5" />
+                                          Remanejado
                                         </Badge>
                                       )}
                                     </div>
