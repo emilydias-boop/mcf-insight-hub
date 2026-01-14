@@ -25,6 +25,7 @@ import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
+import { useAgendamentosCreatedToday } from "@/hooks/useAgendamentosCreatedToday";
 import { useAuth } from "@/contexts/AuthContext";
 import { SDR_LIST } from "@/constants/team";
 
@@ -202,6 +203,11 @@ export default function ReunioesEquipe() {
   // Fetch R2 and Vendas KPIs for the month
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
+  // Fetch agendamentos CRIADOS (ação de agendar) - por data de criação
+  const { data: dayAgendamentosCriados } = useAgendamentosCreatedToday(dayStart, dayEnd);
+  const { data: weekAgendamentosCriados } = useAgendamentosCreatedToday(weekStartDate, weekEndDate);
+  const { data: monthAgendamentosCriados } = useAgendamentosCreatedToday(monthStartDate, monthEndDate);
+
   // Create base dataset with all SDRs (zeros) for "today" preset
   const allSdrsWithZeros = useMemo(() => {
     return SDR_LIST.map(sdr => ({
@@ -247,38 +253,40 @@ export default function ReunioesEquipe() {
   }, [datePreset, mergedBySDR, bySDR, sdrFilter]);
 
   // Values for goals panel - using meeting_slots for R1 metrics
+  // AGENDAMENTO: conta por data de CRIAÇÃO (ação de agendar)
+  // R1 AGENDADA: conta por data da REUNIÃO (scheduled_at)
   const dayValues = useMemo(() => ({
-    agendamento: dayKPIs.totalAgendamentos, // Kept: deal_activities-based
-    r1Agendada: dayAgendaKPIs?.totalAgendadas || 0, // NEW: meeting_slots for today
+    agendamento: dayAgendamentosCriados?.totalAgendamentos || 0, // CRIADOS hoje
+    r1Agendada: dayAgendaKPIs?.totalAgendadas || 0, // MARCADAS para hoje
     r1Realizada: dayAgendaKPIs?.totalRealizadas || 0,
     noShow: dayAgendaKPIs?.totalNoShows || 0,
     contrato: dayKPIs.totalContratos,
     r2Agendada: dayR2VendasKPIs?.r2Agendadas || 0,
     r2Realizada: dayR2VendasKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayAgendaKPIs, dayR2VendasKPIs]);
+  }), [dayKPIs, dayAgendaKPIs, dayAgendamentosCriados, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
-    agendamento: weekKPIs.totalAgendamentos, // Kept: deal_activities-based
-    r1Agendada: weekAgendaKPIs?.totalAgendadas || 0, // NEW: meeting_slots for the week
+    agendamento: weekAgendamentosCriados?.totalAgendamentos || 0, // CRIADOS na semana
+    r1Agendada: weekAgendaKPIs?.totalAgendadas || 0, // MARCADAS para a semana
     r1Realizada: weekAgendaKPIs?.totalRealizadas || 0,
     noShow: weekAgendaKPIs?.totalNoShows || 0,
     contrato: weekKPIs.totalContratos,
     r2Agendada: weekR2VendasKPIs?.r2Agendadas || 0,
     r2Realizada: weekR2VendasKPIs?.r2Realizadas || 0,
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [weekKPIs, weekAgendaKPIs, weekR2VendasKPIs]);
+  }), [weekKPIs, weekAgendaKPIs, weekAgendamentosCriados, weekR2VendasKPIs]);
 
   const monthValues = useMemo(() => ({
-    agendamento: monthKPIs.totalAgendamentos,
-    r1Agendada: monthAgendaKPIs?.totalAgendadas || 0,
+    agendamento: monthAgendamentosCriados?.totalAgendamentos || 0, // CRIADOS no mês
+    r1Agendada: monthAgendaKPIs?.totalAgendadas || 0, // MARCADAS para o mês
     r1Realizada: monthAgendaKPIs?.totalRealizadas || 0,
     noShow: monthAgendaKPIs?.totalNoShows || 0,
     contrato: monthKPIs.totalContratos,
     r2Agendada: monthR2VendasKPIs?.r2Agendadas || 0,
     r2Realizada: monthR2VendasKPIs?.r2Realizadas || 0,
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthAgendaKPIs, monthR2VendasKPIs]);
+  }), [monthKPIs, monthAgendaKPIs, monthAgendamentosCriados, monthR2VendasKPIs]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
