@@ -37,6 +37,25 @@ const PRODUCT_MAPPING: Record<string, string> = {
   'Construir Para Alugar': 'ob_construir',
 };
 
+/**
+ * Converte data da Kiwify (Brasília sem timezone) para UTC ISO string
+ * Kiwify envia: "2026-01-14 15:40" (horário de Brasília)
+ * Devemos salvar: "2026-01-14T18:40:00.000Z" (UTC)
+ */
+function convertKiwifyDateToUTC(dateStr: string): string {
+  if (!dateStr) return new Date().toISOString();
+  
+  // Se já tem timezone (termina em Z ou +/-), retornar como está
+  if (dateStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr)) {
+    return new Date(dateStr).toISOString();
+  }
+  
+  // Kiwify envia horário de Brasília (UTC-3)
+  // Adicionar o offset -03:00 antes de converter para UTC
+  const dateWithTz = `${dateStr.replace(' ', 'T')}-03:00`;
+  return new Date(dateWithTz).toISOString();
+}
+
 function mapProductCategory(productName: string, productCode?: string): string {
   if (!productName) return 'outros';
   const upperName = productName.toUpperCase();
@@ -169,7 +188,8 @@ serve(async (req) => {
       const customerEmail = customer.email || '';
       const customerPhone = customer.mobile || customer.phone || '';
       
-      const saleDate = body.approved_date || body.created_at || new Date().toISOString();
+      const rawSaleDate = body.approved_date || body.created_at;
+      const saleDate = convertKiwifyDateToUTC(rawSaleDate);
 
       console.log(`[Kiwify Webhook] Processing sale: ${kiwifyId}, product: ${productName}, category: ${productCategory}, gross: ${grossValue}, net: ${netValue}`);
 
