@@ -4,7 +4,9 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, e
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { WEEK_STARTS_ON } from "@/lib/businessDays";
-import { Calendar, Users, RefreshCw, Download } from "lucide-react";
+import { Calendar, Users, RefreshCw, Download, Building2 } from "lucide-react";
+import { SetorRow } from "@/components/dashboard/SetorRow";
+import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -27,6 +29,35 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SDR_LIST } from "@/constants/team";
 
 type DatePreset = "today" | "week" | "month" | "custom";
+
+function IncorporadorMetricsCard() {
+  const { data: setoresData, isLoading: setoresLoading } = useSetoresDashboard();
+  const incorporadorSetor = setoresData?.setores.find(s => s.id === 'incorporador');
+
+  if (!incorporadorSetor && !setoresLoading) return null;
+
+  return (
+    <div className="relative group">
+      {/* Animated glow border */}
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-primary via-primary/60 to-primary rounded-xl blur opacity-30 group-hover:opacity-50 transition-opacity duration-300" />
+      <div className="relative">
+        <SetorRow
+          titulo="MCF Incorporador"
+          icone={Building2}
+          semanaLabel={setoresData?.semanaLabel || 'Semana'}
+          mesLabel={setoresData?.mesLabel || 'Mês'}
+          apuradoSemanal={incorporadorSetor?.apuradoSemanal || 0}
+          metaSemanal={incorporadorSetor?.metaSemanal || 0}
+          apuradoMensal={incorporadorSetor?.apuradoMensal || 0}
+          metaMensal={incorporadorSetor?.metaMensal || 0}
+          apuradoAnual={incorporadorSetor?.apuradoAnual || 0}
+          metaAnual={incorporadorSetor?.metaAnual || 0}
+          isLoading={setoresLoading}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function ReunioesEquipe() {
   const { role } = useAuth();
@@ -348,6 +379,9 @@ export default function ReunioesEquipe() {
 
       {/* Goals Panel - FIRST */}
       <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
+
+      {/* MCF Incorporador - Métricas Monetárias */}
+      <IncorporadorMetricsCard />
 
       {/* Filters */}
       <Card className="bg-card border-border">
