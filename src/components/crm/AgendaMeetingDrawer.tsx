@@ -250,6 +250,18 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     activeMeeting?.scheduled_at
   );
 
+  // Collect attendees for Outside detection - MUST be before any conditional return
+  const attendeesForOutsideCheck = useMemo(() => {
+    return (activeMeeting?.attendees || []).map(att => ({
+      id: att.id,
+      email: att.contact?.email || null,
+      meetingDate: activeMeeting?.scheduled_at || ''
+    }));
+  }, [activeMeeting?.attendees, activeMeeting?.scheduled_at]);
+
+  // Hook to detect Outside leads (purchased contract before meeting) - MUST be before any conditional return
+  const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
+
   if (!meeting || !activeMeeting) return null;
 
   const contact = activeMeeting.deal?.contact;
@@ -418,18 +430,6 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   };
 
   const participants = getParticipantsList();
-  
-  // Collect attendees for Outside detection
-  const attendeesForOutsideCheck = useMemo(() => {
-    return (activeMeeting?.attendees || []).map(att => ({
-      id: att.id,
-      email: att.contact?.email || null,
-      meetingDate: activeMeeting.scheduled_at
-    }));
-  }, [activeMeeting?.attendees, activeMeeting?.scheduled_at]);
-
-  // Hook to detect Outside leads (purchased contract before meeting)
-  const { data: outsideData = {} } = useOutsideDetectionBatch(attendeesForOutsideCheck);
   
   // Selected participant (default to first/main)
   const selectedParticipant = participants.find(p => p.id === selectedParticipantId) || participants[0];
