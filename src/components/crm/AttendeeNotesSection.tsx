@@ -210,18 +210,16 @@ export function AttendeeNotesSection({
           Nenhuma nota registrada
         </div>
       ) : (
-        <ScrollArea className="max-h-[300px]">
-          <div className="space-y-2">
-            {notes.map((note) => (
-              <NoteItem
-                key={note.id}
-                note={note}
-                canDelete={note.created_by === user?.id}
-                onDelete={() => handleDeleteNote(note.id)}
-              />
-            ))}
-          </div>
-        </ScrollArea>
+        <div className="max-h-[300px] overflow-y-auto space-y-2">
+          {notes.map((note) => (
+            <NoteItem
+              key={note.id}
+              note={note}
+              canDelete={note.created_by === user?.id}
+              onDelete={() => handleDeleteNote(note.id)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

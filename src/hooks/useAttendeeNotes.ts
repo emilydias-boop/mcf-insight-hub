@@ -101,7 +101,7 @@ export function useAddAttendeeNote() {
       return data;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['attendee-notes', variables.attendeeId] });
+      queryClient.refetchQueries({ queryKey: ['attendee-notes', variables.attendeeId] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
     },
   });
