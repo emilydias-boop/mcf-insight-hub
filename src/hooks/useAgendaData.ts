@@ -618,6 +618,45 @@ export function useUpdateMeetingNotes() {
   });
 }
 
+// ============ Mark Contract Paid Hook ============
+
+export function useMarkContractPaid() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ meetingId, attendeeId }: { meetingId: string; attendeeId?: string }) => {
+      // Update meeting_slots status
+      const { error: meetingError } = await supabase
+        .from('meeting_slots')
+        .update({ status: 'contract_paid' })
+        .eq('id', meetingId);
+
+      if (meetingError) throw meetingError;
+
+      // Update attendee status if provided
+      if (attendeeId) {
+        const { error: attendeeError } = await supabase
+          .from('meeting_slot_attendees')
+          .update({ status: 'contract_paid' })
+          .eq('id', attendeeId);
+
+        if (attendeeError) throw attendeeError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['search-past-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      toast.success('Contrato marcado como pago!');
+    },
+    onError: () => {
+      toast.error('Erro ao marcar contrato como pago');
+    },
+  });
+}
+
 // ============ Quick Schedule Hooks ============
 
 // Search deals by phone number directly

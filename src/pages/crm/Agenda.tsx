@@ -18,6 +18,7 @@ import { AgendaMeetingDrawer } from '@/components/crm/AgendaMeetingDrawer';
 import { QuickScheduleModal } from '@/components/crm/QuickScheduleModal';
 import { RescheduleModal } from '@/components/crm/RescheduleModal';
 import { UpcomingMeetingsPanel } from '@/components/crm/UpcomingMeetingsPanel';
+import { MeetingSearchPanel } from '@/components/crm/MeetingSearchPanel';
 import { useAgendaMeetings, useClosersWithAvailability, useBlockedDates, MeetingSlot } from '@/hooks/useAgendaData';
 import { useMeetingReminders } from '@/hooks/useMeetingReminders';
 import { useNavigate } from 'react-router-dom';
@@ -338,13 +339,19 @@ export default function Agenda() {
         </div>
       )}
 
-      {/* Quick access panel for closers - show upcoming meetings */}
+      {/* Quick access panels for closers */}
       {isCloser && myCloser?.id && (
-        <UpcomingMeetingsPanel
-          meetings={filteredMeetings}
-          onSelectMeeting={setSelectedMeeting}
-          maxItems={5}
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <UpcomingMeetingsPanel
+            meetings={filteredMeetings}
+            onSelectMeeting={setSelectedMeeting}
+            maxItems={5}
+          />
+          <MeetingSearchPanel
+            closerId={myCloser.id}
+            onSelectMeeting={setSelectedMeeting}
+          />
+        </div>
       )}
 
       {/* Main Content - Full width */}
