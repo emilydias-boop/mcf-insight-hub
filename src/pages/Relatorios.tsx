@@ -7,8 +7,6 @@ import { Download, FileText, Mail } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SdrReportSection } from "@/components/relatorios/SdrReportSection";
 
 const relatorioData = [
   { mes: "Jan", receita: 180000, custo: 120000, lucro: 60000 },
@@ -25,13 +23,7 @@ export default function Relatorios() {
           <p className="text-muted-foreground mt-1">Relatórios consolidados e exportação de dados</p>
         </div>
 
-        <Tabs defaultValue="geral" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="geral">Relatório Geral</TabsTrigger>
-            <TabsTrigger value="sdr">Relatório SDR</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="geral" className="space-y-6">
+        <div className="space-y-6">
             <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-foreground">Configurar Relatório</CardTitle>
@@ -110,16 +102,11 @@ export default function Relatorios() {
                     <Bar dataKey="receita" fill="hsl(var(--success))" name="Receita" />
                     <Bar dataKey="custo" fill="hsl(var(--destructive))" name="Custo" />
                     <Bar dataKey="lucro" fill="hsl(var(--primary))" name="Lucro" />
-                  </BarChart>
+              </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-          </TabsContent>
-          
-          <TabsContent value="sdr">
-            <SdrReportSection />
-          </TabsContent>
-        </Tabs>
+        </div>
       </div>
     </ResourceGuard>
   );
