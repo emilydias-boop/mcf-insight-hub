@@ -843,44 +843,15 @@ export function useCreateMeeting() {
 
       console.log('📅 Create meeting response:', { data, error });
 
-      // Edge function may return success=false (200) for business-rule errors (e.g., slot full)
+      // Handle errors
       if (data && (data.error || data.success === false)) {
-        if (data.error === 'Slot is full') {
-          const slotFullError = new Error(`SLOT_FULL:${data.currentAttendees || 4}:${data.maxAttendees || 4}`);
-          (slotFullError as any).isSlotFull = true;
-          (slotFullError as any).currentAttendees = data.currentAttendees;
-          (slotFullError as any).maxAttendees = data.maxAttendees;
-          throw slotFullError;
-        }
         if (data.error === 'Closer not found') {
           throw new Error('Closer não encontrado');
         }
         throw new Error(data.error || 'Erro ao agendar reunião');
       }
       
-      // Handle non-2xx responses (FunctionsHttpError). In this case, `data` is null and
-      // `error.context` is the actual Response object, so we must parse its JSON.
       if (error) {
-        const maybeResponse = (error as any)?.context;
-
-        if (maybeResponse && typeof maybeResponse?.clone === 'function') {
-          try {
-            const body = await maybeResponse.clone().json();
-            if (body?.error === 'Slot is full') {
-              const slotFullError = new Error(`SLOT_FULL:${body.currentAttendees || 4}:${body.maxAttendees || 4}`);
-              (slotFullError as any).isSlotFull = true;
-              (slotFullError as any).currentAttendees = body.currentAttendees;
-              (slotFullError as any).maxAttendees = body.maxAttendees;
-              throw slotFullError;
-            }
-            if (body?.error) {
-              throw new Error(body.error);
-            }
-          } catch {
-            // ignore parse errors; fall back to original error
-          }
-        }
-
         throw error;
       }
 
@@ -897,10 +868,6 @@ export function useCreateMeeting() {
     },
     onError: (error: any) => {
       console.error('Error creating meeting:', error);
-      // Don't show toast for slot-full errors - the UI will handle showing encaixe form
-      if (error?.isSlotFull || error?.message?.startsWith('SLOT_FULL:')) {
-        return;
-      }
       toast.error(error?.message || 'Erro ao agendar reunião');
     },
   });
