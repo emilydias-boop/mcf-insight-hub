@@ -20,7 +20,7 @@ import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
-import { GhostAppointmentsAlert } from "@/components/sdr/GhostAppointmentsAlert";
+
 import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
@@ -349,8 +349,8 @@ export default function ReunioesEquipe() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Ghost Appointments Alert */}
-      <GhostAppointmentsAlert />
+      {/* MCF Incorporador - Métricas Monetárias - PRIMEIRO */}
+      <IncorporadorMetricsCard />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -377,11 +377,8 @@ export default function ReunioesEquipe() {
         </div>
       </div>
 
-      {/* Goals Panel - FIRST */}
+      {/* Goals Panel */}
       <TeamGoalsPanel dayValues={dayValues} weekValues={weekValues} monthValues={monthValues} />
-
-      {/* MCF Incorporador - Métricas Monetárias */}
-      <IncorporadorMetricsCard />
 
       {/* Filters */}
       <Card className="bg-card border-border">
