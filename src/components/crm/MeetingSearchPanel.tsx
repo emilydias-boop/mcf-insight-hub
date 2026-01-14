@@ -144,16 +144,22 @@ export function MeetingSearchPanel({ closerId, onSelectMeeting }: MeetingSearchP
                       </div>
                     </div>
                     <div className="flex items-center gap-1 ml-2">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="h-8 w-8 p-0 bg-amber-500 hover:bg-amber-600"
-                        onClick={() => handleMarkPaid(result)}
-                        disabled={markContractPaid.isPending}
-                        title="Marcar Contrato Pago"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                      </Button>
+                      {result.attendeeStatus === 'contract_paid' ? (
+                        <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
+                          ✅ Pago
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-8 w-8 p-0 bg-amber-500 hover:bg-amber-600"
+                          onClick={() => handleMarkPaid(result)}
+                          disabled={markContractPaid.isPending}
+                          title="Marcar Contrato Pago"
+                        >
+                          <DollarSign className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
