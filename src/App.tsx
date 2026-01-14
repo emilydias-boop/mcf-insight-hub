@@ -51,6 +51,8 @@ import Agenda from "./pages/crm/Agenda";
 import DealsOrfaos from "./pages/crm/DealsOrfaos";
 import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
 import AgendaMetricas from "./pages/crm/AgendaMetricas";
+import AgendaR2 from "./pages/crm/AgendaR2";
+import ConfigurarClosersR2 from "./pages/crm/ConfigurarClosersR2";
 import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
 import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
@@ -196,6 +198,8 @@ const App = () => (
                 <Route path="atendimentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Atendimentos /></RoleGuard>} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
+                <Route path="agenda-r2" element={<AgendaR2 />} />
+                <Route path="configurar-closers-r2" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfigurarClosersR2 /></RoleGuard>} />
                 <Route path="origens" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Origens /></RoleGuard>} />
                 <Route path="grupos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Grupos /></RoleGuard>} />
                 <Route path="tags" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Tags /></RoleGuard>} />
