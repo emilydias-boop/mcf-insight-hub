@@ -796,6 +796,7 @@ export type Database = {
           google_calendar_id: string | null
           id: string
           is_active: boolean | null
+          meeting_type: string | null
           name: string
           updated_at: string | null
         }
@@ -810,6 +811,7 @@ export type Database = {
           google_calendar_id?: string | null
           id?: string
           is_active?: boolean | null
+          meeting_type?: string | null
           name: string
           updated_at?: string | null
         }
@@ -824,6 +826,7 @@ export type Database = {
           google_calendar_id?: string | null
           id?: string
           is_active?: boolean | null
+          meeting_type?: string | null
           name?: string
           updated_at?: string | null
         }
@@ -3389,6 +3392,7 @@ export type Database = {
           lead_type: string | null
           max_attendees: number | null
           meeting_link: string | null
+          meeting_type: string | null
           notes: string | null
           scheduled_at: string
           source: string | null
@@ -3412,6 +3416,7 @@ export type Database = {
           lead_type?: string | null
           max_attendees?: number | null
           meeting_link?: string | null
+          meeting_type?: string | null
           notes?: string | null
           scheduled_at: string
           source?: string | null
@@ -3435,6 +3440,7 @@ export type Database = {
           lead_type?: string | null
           max_attendees?: number | null
           meeting_link?: string | null
+          meeting_type?: string | null
           notes?: string | null
           scheduled_at?: string
           source?: string | null
