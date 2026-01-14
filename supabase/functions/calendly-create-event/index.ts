@@ -499,22 +499,7 @@ serve(async (req) => {
     let slotId: string;
 
     if (existingSlot) {
-      // Check attendees count
-      const { count } = await supabase
-        .from("meeting_slot_attendees")
-        .select("id", { count: "exact", head: true })
-        .eq("meeting_slot_id", existingSlot.id);
-
-      const currentAttendees = count || 0;
-      const maxAttendees = existingSlot.max_attendees || 4;
-
-      if (currentAttendees >= maxAttendees) {
-        return new Response(JSON.stringify({ error: "Slot is full", maxAttendees, currentAttendees }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
+      // No limit on attendees - just add to existing slot
       slotId = existingSlot.id;
       console.log("📍 Adding to existing slot:", slotId);
     } else {
@@ -534,7 +519,6 @@ serve(async (req) => {
           google_event_id: googleEventId,
           booked_by: bookedBy,
           notes: notes || `Agendado via CRM\nLead Type: ${leadType}`,
-          max_attendees: 4,
         })
         .select("id")
         .single();

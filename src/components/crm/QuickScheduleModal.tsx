@@ -300,12 +300,8 @@ export function QuickScheduleModal({
         resetForm();
       },
       onError: (error: any) => {
-        console.log('🚨 Create meeting error:', error, error?.isSlotFull, error?.message);
-        // Check if this is a "slot full" error
-        if (error?.isSlotFull || error?.message?.startsWith('SLOT_FULL:')) {
-          toast.error('Este horário está cheio. Escolha outro horário ou data.');
-        }
-        // Other errors are handled by the hook's onError
+        console.log('🚨 Create meeting error:', error);
+        // Errors are handled by the hook's onError
       },
     });
   };

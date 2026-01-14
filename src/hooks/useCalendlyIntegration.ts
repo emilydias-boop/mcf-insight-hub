@@ -68,29 +68,7 @@ export function useAddLeadToMeeting() {
       dealId: string;
       contactId?: string;
     }) => {
-      // Check current attendees count
-      const { count, error: countError } = await supabase
-        .from("meeting_slot_attendees")
-        .select("id", { count: "exact", head: true })
-        .eq("meeting_slot_id", meetingSlotId);
-
-      if (countError) throw countError;
-
-      // Get slot max attendees
-      const { data: slot } = await supabase
-        .from("meeting_slots")
-        .select("max_attendees")
-        .eq("id", meetingSlotId)
-        .single();
-
-      const maxAttendees = slot?.max_attendees || 4;
-      const currentCount = count || 0;
-
-      if (currentCount >= maxAttendees) {
-        throw new Error(`Slot já tem o máximo de ${maxAttendees} participantes`);
-      }
-
-      // Add attendee
+      // Add attendee directly - no limit on attendees
       const { data: attendee, error: insertError } = await supabase
         .from("meeting_slot_attendees")
         .insert({
@@ -170,7 +148,6 @@ export function useMeetingSlotsWithAttendees(startDate: Date, endDate: Date) {
           return {
             ...slot,
             attendeesCount: count || 0,
-            hasSpace: (count || 0) < (slot.max_attendees || 4),
           };
         }),
       );
