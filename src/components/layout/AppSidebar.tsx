@@ -119,7 +119,6 @@ const menuItems: MenuItem[] = [
       { title: "Painel SDR", url: "/crm/reunioes-equipe" },
       { title: "Fechamento Equipe", url: "/fechamento-sdr" },
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
-      { title: "Relatório SDR", url: "/bu-incorporador/relatorio-sdr" },
       { title: "CRM", url: "/crm" },
     ],
   },

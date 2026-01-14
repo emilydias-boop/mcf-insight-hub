@@ -57,7 +57,7 @@ import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
 import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
 import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import TransacoesIncorp from "./pages/bu-incorporador/TransacoesIncorp";
-import RelatorioSdrIncorp from "./pages/bu-incorporador/RelatorioSdr";
+
 import RHColaboradores from "./pages/rh/Colaboradores";
 import Financeiro from "./pages/Financeiro";
 import MeuRH from "./pages/MeuRH";
@@ -180,7 +180,7 @@ const App = () => (
               
               {/* BU Incorporador Routes */}
               <Route path="bu-incorporador/transacoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><TransacoesIncorp /></RoleGuard>} />
-              <Route path="bu-incorporador/relatorio-sdr" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><RelatorioSdrIncorp /></RoleGuard>} />
+              
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
