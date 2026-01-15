@@ -27,12 +27,24 @@ import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2Agend
 import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
 import { cn } from '@/lib/utils';
 
+interface DealForSchedule {
+  id: string;
+  name: string;
+  contact?: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+  } | null;
+}
+
 interface R2QuickScheduleModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   closers: R2CloserWithAvailability[];
   preselectedCloserId?: string;
   preselectedDate?: Date;
+  preselectedDeal?: DealForSchedule;
 }
 
 interface DealOption {
@@ -58,7 +70,8 @@ export function R2QuickScheduleModal({
   onOpenChange, 
   closers,
   preselectedCloserId,
-  preselectedDate 
+  preselectedDate,
+  preselectedDeal
 }: R2QuickScheduleModalProps) {
   const [nameQuery, setNameQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
@@ -77,6 +90,11 @@ export function R2QuickScheduleModal({
       if (preselectedDate) {
         setSelectedDate(preselectedDate);
         setSelectedTime(format(preselectedDate, 'HH:mm'));
+      }
+      // Pre-fill with preselectedDeal if provided
+      if (preselectedDeal) {
+        setSelectedDeal(preselectedDeal);
+        setNameQuery(preselectedDeal.contact?.name || preselectedDeal.name);
       }
     }
   }, [open, preselectedCloserId, preselectedDate]);

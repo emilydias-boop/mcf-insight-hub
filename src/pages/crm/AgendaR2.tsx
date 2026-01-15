@@ -9,7 +9,8 @@ import {
   Plus,
   Settings,
   List,
-  LayoutGrid
+  LayoutGrid,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +26,9 @@ import { MeetingSlot, CloserWithAvailability } from '@/hooks/useAgendaData';
 import { R2MeetingDrawer } from '@/components/crm/R2MeetingDrawer';
 import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
 import { R2CloserAvailabilityConfig } from '@/components/crm/R2CloserAvailabilityConfig';
+import { R2PendingLeadsPanel } from '@/components/crm/R2PendingLeadsPanel';
 import { useR2ClosersList } from '@/hooks/useR2Closers';
+import { useR2PendingLeadsCount } from '@/hooks/useR2PendingLeads';
 import { R2RescheduleModal } from '@/components/crm/R2RescheduleModal';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
@@ -73,6 +76,7 @@ export default function AgendaR2() {
   const { data: closers = [], isLoading: isLoadingClosers } = useActiveR2Closers();
   const { data: allClosers = [], isLoading: isLoadingAllClosers } = useR2ClosersList();
   const { data: meetings = [], isLoading: isLoadingMeetings, refetch: refetchMeetings } = useR2AgendaMeetings(rangeStart, rangeEnd);
+  const pendingCount = useR2PendingLeadsCount();
 
   // Filter meetings by closer and status
   const filteredMeetings = useMemo(() => {
@@ -349,6 +353,15 @@ export default function AgendaR2() {
           <Tabs defaultValue="calendar">
             <div className="flex items-center justify-between mb-4">
               <TabsList>
+                <TabsTrigger value="pending" className="gap-2">
+                  <Clock className="h-4 w-4" />
+                  Pendentes
+                  {pendingCount > 0 && (
+                    <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-xs">
+                      {pendingCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="calendar" className="gap-2">
                   <CalendarIcon className="h-4 w-4" />
                   Calendário
@@ -367,6 +380,11 @@ export default function AgendaR2() {
               </div>
             </div>
 
+
+            {/* Pending Leads Tab */}
+            <TabsContent value="pending" className="mt-0">
+              <R2PendingLeadsPanel closers={closersWithAvailability} />
+            </TabsContent>
 
             {/* Calendar View */}
             <TabsContent value="calendar" className="mt-0">
