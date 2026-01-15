@@ -9,6 +9,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@/hooks/useAgendaData';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useUniqueSlotsForDays } from '@/hooks/useCloserMeetingLinks';
+import { useR2DailySlotsForView, getConfiguredSlotsForDate } from '@/hooks/useR2DailySlotsForView';
 
 export type ViewMode = 'day' | 'week' | 'month';
 
@@ -21,6 +22,7 @@ interface AgendaCalendarProps {
   viewMode?: ViewMode;
   onEditHours?: () => void;
   onSelectSlot?: (day: Date, hour: number, minute: number, closerId?: string) => void;
+  meetingType?: 'r1' | 'r2';
 }
 
 // Default fallback values
@@ -66,7 +68,8 @@ export function AgendaCalendar({
   closers = [],
   onEditHours,
   viewMode = 'week',
-  onSelectSlot
+  onSelectSlot,
+  meetingType = 'r1'
 }: AgendaCalendarProps) {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const updateSchedule = useUpdateMeetingSchedule();
@@ -94,16 +97,49 @@ export function AgendaCalendar({
     return days;
   }, [selectedDate, viewMode]);
 
-  // Fetch actual meeting link slots from closer_meeting_links table (apenas R1)
+  // Fetch actual meeting link slots from closer_meeting_links table (R1 only)
   const { data: meetingLinkSlots } = useUniqueSlotsForDays(daysOfWeekInView, 'r1');
 
-  // Calculate dynamic time slots based on closer_meeting_links data
+  // Calculate view date range for R2 daily slots
+  const viewDateRange = useMemo(() => {
+    if (viewMode === 'day') {
+      return { start: selectedDate, end: selectedDate };
+    } else if (viewMode === 'month') {
+      return { start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) };
+    }
+    // Week view
+    const start = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
+    return { start, end: addDays(start, 6) };
+  }, [selectedDate, viewMode]);
+
+  // Fetch R2 daily slots for the view range
+  const { data: r2DailySlotsMap } = useR2DailySlotsForView(
+    meetingType === 'r2' ? viewDateRange.start : undefined,
+    meetingType === 'r2' ? viewDateRange.end : undefined,
+    closers.map(c => c.id)
+  );
+
+  // Calculate dynamic time slots based on configured slots
   const timeSlots = useMemo(() => {
     let minHour = DEFAULT_END_HOUR;
     let maxHour = DEFAULT_START_HOUR;
 
-    // Use real time slots from closer_meeting_links
-    if (meetingLinkSlots) {
+    if (meetingType === 'r2' && r2DailySlotsMap) {
+      // For R2, use daily slots map
+      for (const dateStr of Object.keys(r2DailySlotsMap)) {
+        const dateSlots = r2DailySlotsMap[dateStr];
+        for (const time of Object.keys(dateSlots)) {
+          const [hourStr, minuteStr] = time.split(':');
+          const hour = parseInt(hourStr);
+          const minute = parseInt(minuteStr);
+          minHour = Math.min(minHour, hour);
+          const slotEndMinutes = hour * 60 + minute + 30;
+          const slotEndHour = Math.ceil(slotEndMinutes / 60);
+          maxHour = Math.max(maxHour, slotEndHour);
+        }
+      }
+    } else if (meetingLinkSlots) {
+      // For R1, use weekday-based slots
       for (const dayOfWeek of Object.keys(meetingLinkSlots)) {
         const slots = meetingLinkSlots[Number(dayOfWeek)];
         for (const slot of slots || []) {
@@ -111,7 +147,6 @@ export function AgendaCalendar({
           const hour = parseInt(hourStr);
           const minute = parseInt(minuteStr);
           minHour = Math.min(minHour, hour);
-          // Add 30 min for the slot duration, then round up to next hour for display
           const slotEndMinutes = hour * 60 + minute + 30;
           const slotEndHour = Math.ceil(slotEndMinutes / 60);
           maxHour = Math.max(maxHour, slotEndHour);
@@ -131,7 +166,7 @@ export function AgendaCalendar({
       minute: (i % 4) * 15,
       index: i,
     }));
-  }, [meetingLinkSlots]);
+  }, [meetingLinkSlots, r2DailySlotsMap, meetingType]);
   
   // Calcular posição da linha vermelha em pixels (depends on timeSlots)
   const getCurrentTimePosition = useCallback(() => {
@@ -331,11 +366,20 @@ export function AgendaCalendar({
 
   // Check if slot is configured (has available closer hours) for at least one closer
   const isSlotConfigured = useCallback((day: Date, hour: number, minute: number) => {
+    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    
+    if (meetingType === 'r2' && r2DailySlotsMap) {
+      // For R2, check daily slots map
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dateSlots = r2DailySlotsMap[dateStr];
+      return dateSlots && dateSlots[timeStr] && dateSlots[timeStr].closerIds.length > 0;
+    }
+    
+    // For R1, use weekday-based slots
     const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
     const slots = meetingLinkSlots?.[dayOfWeek] || [];
-    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
     return slots.some(s => s.time === timeStr);
-  }, [meetingLinkSlots]);
+  }, [meetingLinkSlots, r2DailySlotsMap, meetingType]);
 
   // Check if slot is available (configured and no meetings)
   const isSlotAvailable = useCallback((day: Date, hour: number, minute: number) => {
@@ -352,13 +396,22 @@ export function AgendaCalendar({
 
   // Get available closers for a specific slot (configured and without meetings at that time)
   const getAvailableClosersForSlot = useCallback((day: Date, hour: number, minute: number) => {
-    const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
-    const slots = meetingLinkSlots?.[dayOfWeek] || [];
     const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    let configuredCloserIds: string[] = [];
     
-    // Find closerIds configured for this time
-    const configuredSlot = slots.find(s => s.time === timeStr);
-    const configuredCloserIds = configuredSlot?.closerIds || [];
+    if (meetingType === 'r2' && r2DailySlotsMap) {
+      // For R2, get closers from daily slots map
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dateSlots = r2DailySlotsMap[dateStr];
+      const slotInfo = dateSlots?.[timeStr];
+      configuredCloserIds = slotInfo?.closerIds || [];
+    } else {
+      // For R1, use weekday-based slots
+      const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+      const slots = meetingLinkSlots?.[dayOfWeek] || [];
+      const configuredSlot = slots.find(s => s.time === timeStr);
+      configuredCloserIds = configuredSlot?.closerIds || [];
+    }
     
     // Filter out closers that already have a meeting at this exact time
     return configuredCloserIds.filter(closerId => {
@@ -379,7 +432,7 @@ export function AgendaCalendar({
       
       return !hasMeeting;
     });
-  }, [meetingLinkSlots, filteredMeetings]);
+  }, [meetingLinkSlots, r2DailySlotsMap, meetingType, filteredMeetings]);
 
   const getMeetingsForDay = (day: Date) => {
     return filteredMeetings.filter(meeting => {
