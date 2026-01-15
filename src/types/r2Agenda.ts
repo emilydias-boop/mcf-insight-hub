@@ -73,6 +73,7 @@ export interface R2MeetingRow {
   r1_closer?: {
     id: string;
     name: string;
+    scheduled_at: string | null;
   } | null;
   booked_by?: {
     id: string;
