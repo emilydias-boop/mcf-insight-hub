@@ -19,9 +19,18 @@ interface SdrSummaryTableProps {
   isLoading?: boolean;
   ghostCountBySdr?: Record<string, GhostCountBySdr>;
   disableNavigation?: boolean;
+  sdrMetaMap?: Map<string, number>;
+  diasUteisNoPeriodo?: number;
 }
 
-export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavigation = false }: SdrSummaryTableProps) {
+export function SdrSummaryTable({ 
+  data, 
+  isLoading, 
+  ghostCountBySdr, 
+  disableNavigation = false,
+  sdrMetaMap,
+  diasUteisNoPeriodo 
+}: SdrSummaryTableProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -55,11 +64,13 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavig
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">SDR</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Meta</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Agendamento</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato PAGO</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">
                 <Ghost className="h-4 w-4 inline" />
               </TableHead>
@@ -73,6 +84,24 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavig
               const hasCritical = ghostData?.critical_count && ghostData.critical_count > 0;
               const hasHigh = ghostData?.high_count && ghostData.high_count > 0;
 
+              // Calculate meta for this SDR
+              const metaDiaria = sdrMetaMap?.get(row.sdrEmail.toLowerCase()) || 10;
+              const metaPeriodo = metaDiaria * (diasUteisNoPeriodo || 1);
+              const bateuMeta = row.agendamentos >= metaPeriodo;
+
+              // Calculate taxa de conversão (R1 Realizada / R1 Agendada)
+              const taxaConversao = row.r1Agendada > 0 
+                ? ((row.r1Realizada / row.r1Agendada) * 100)
+                : 0;
+              const taxaConversaoFormatted = taxaConversao.toFixed(1);
+
+              // Taxa color: green >= 70%, amber >= 40%, red < 40%
+              const taxaColorClass = taxaConversao >= 70 
+                ? 'text-green-400' 
+                : taxaConversao >= 40 
+                  ? 'text-amber-400' 
+                  : 'text-red-400';
+
               return (
                 <TableRow
                   key={row.sdrEmail}
@@ -84,6 +113,11 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavig
                       <span className="text-foreground">{row.sdrName}</span>
                       <span className="text-xs text-muted-foreground">{row.sdrEmail.split('@')[0]}</span>
                     </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-medium ${bateuMeta ? 'text-green-400' : 'text-amber-400'}`}>
+                      {metaPeriodo}
+                    </span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
@@ -103,6 +137,9 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavig
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contratos}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
                   </TableCell>
                   <TableCell className="text-center">
                     {hasGhostCases ? (
