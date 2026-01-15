@@ -869,77 +869,109 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </div>
             </div>
 
-            {/* Quick Actions - Per Participant */}
-            {selectedParticipant && !['no_show', 'completed', 'contract_paid', 'cancelled', 'canceled'].includes(selectedParticipant.status || '') && (
+            {/* Quick Actions - Per Participant - ALWAYS VISIBLE */}
+            {selectedParticipant && (
               <>
                 <Separator />
                 <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-muted-foreground">
-                    Ações para: {selectedParticipant.name.split(' ')[0]}
-                  </h4>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm text-muted-foreground">
+                      Alterar status de: {selectedParticipant.name.split(' ')[0]}
+                    </h4>
+                    <Badge className={cn(
+                      'text-xs',
+                      STATUS_LABELS[selectedParticipant.status || 'scheduled']?.color || 'bg-muted',
+                      'text-white'
+                    )}>
+                      {STATUS_LABELS[selectedParticipant.status || 'scheduled']?.label || 'Agendada'}
+                    </Badge>
+                  </div>
+                  
+                  {/* Status Flow Buttons - Bidirectional */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Agendada/Voltar */}
+                    {selectedParticipant.status !== 'scheduled' && selectedParticipant.status !== 'contract_paid' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "flex-col h-14 gap-1",
+                          selectedParticipant.status === 'scheduled' 
+                            ? "bg-primary/10 border-primary text-primary" 
+                            : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+                        )}
+                        onClick={() => handleParticipantStatusChange(selectedParticipant.id, 'scheduled')}
+                        disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'scheduled'}
+                      >
+                        <Calendar className="h-4 w-4" />
+                        <span className="text-xs">Voltar p/ Agendada</span>
+                      </Button>
+                    )}
+                    
+                    {/* No-Show */}
+                    {selectedParticipant.status !== 'contract_paid' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "flex-col h-14 gap-1",
+                          selectedParticipant.status === 'no_show' 
+                            ? "bg-red-500/10 border-red-500 text-red-600" 
+                            : "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
+                        )}
+                        onClick={() => selectedParticipant.status !== 'no_show' && setShowNoShowConfirm(true)}
+                        disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'no_show'}
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="text-xs">{selectedParticipant.status === 'no_show' ? 'No-Show ✓' : 'No-Show'}</span>
+                      </Button>
+                    )}
+                    
+                    {/* Realizada */}
+                    {selectedParticipant.status !== 'contract_paid' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "flex-col h-14 gap-1",
+                          selectedParticipant.status === 'completed' 
+                            ? "bg-green-500/10 border-green-500 text-green-600" 
+                            : "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/20"
+                        )}
+                        onClick={handleCompleted}
+                        disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'completed'}
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-xs">{selectedParticipant.status === 'completed' ? 'Realizada ✓' : 'Realizada'}</span>
+                      </Button>
+                    )}
+                    
+                    {/* Contrato Pago */}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-col h-16 gap-1 text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-950/20"
-                      onClick={() => setShowNoShowConfirm(true)}
-                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
+                      className={cn(
+                        "flex-col h-14 gap-1",
+                        selectedParticipant.status === 'contract_paid' 
+                          ? "bg-emerald-500/10 border-emerald-500 text-emerald-600" 
+                          : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                      )}
+                      onClick={handleContractPaid}
+                      disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'contract_paid'}
                     >
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="text-xs">No-Show</span>
+                      <DollarSign className="h-4 w-4" />
+                      <span className="text-xs">{selectedParticipant.status === 'contract_paid' ? 'Contrato Pago ✓' : 'Contrato Pago'}</span>
                     </Button>
+                    
+                    {/* Mover para outra reunião */}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-col h-16 gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                      className="flex-col h-14 gap-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/20"
                       onClick={() => setShowMoveModal(true)}
                     >
                       <ArrowRightLeft className="h-4 w-4" />
                       <span className="text-xs">Mover</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-col h-16 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/20"
-                      onClick={handleCompleted}
-                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="text-xs">Realizada</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-col h-16 gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
-                      onClick={handleContractPaid}
-                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
-                    >
-                      <DollarSign className="h-4 w-4" />
-                      <span className="text-xs">Contrato</span>
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Botão Contrato Pago para status "completed" (reunião realizada, falta pagar) */}
-            {selectedParticipant && selectedParticipant.status === 'completed' && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-muted-foreground">
-                    Ações para: {selectedParticipant.name.split(' ')[0]}
-                  </h4>
-                  <div className="grid grid-cols-1 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-row h-12 gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
-                      onClick={handleContractPaid}
-                      disabled={updateStatus.isPending || updateAttendeeAndSlotStatus.isPending}
-                    >
-                      <DollarSign className="h-4 w-4" />
-                      <span className="text-sm">Marcar Contrato Pago</span>
                     </Button>
                   </div>
                 </div>
