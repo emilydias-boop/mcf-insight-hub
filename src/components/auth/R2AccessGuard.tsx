@@ -9,7 +9,9 @@ const R2_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador'];
 // IDs de usuários específicos que podem acessar R2 (independente do role)
 export const R2_AUTHORIZED_USERS = [
   '04bb4045-701d-443c-b2c9-aee74e7f58d9', // Yanca Tavares
-  // Adicionar outros user_ids conforme necessário
+  'c8fd2b83-2aee-41a4-9154-e812f492bc5f', // Cristiane Gomes (Closer R1)
+  'dd76c153-a4a5-432e-ab4c-0b48f6141659', // Julio Caetano (Closer R1)
+  '6bb81a27-fd8f-4af8-bce0-377f3576124f', // Thaynar Tavares (Closer R1)
 ];
 
 interface R2AccessGuardProps {
