@@ -185,10 +185,15 @@ export function MoveAttendeeModal({
         targetSlotId = newSlot.id;
       }
 
-      // 2. Mover o attendee para o slot (existente ou novo)
+      // 2. Mover o attendee para o slot (existente ou novo) e marcar como rescheduled
       const { error: moveError } = await supabase
         .from('meeting_slot_attendees')
-        .update({ meeting_slot_id: targetSlotId })
+        .update({ 
+          meeting_slot_id: targetSlotId,
+          status: 'rescheduled',
+          is_reschedule: true,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', attendee.id);
 
       if (moveError) throw moveError;
@@ -219,6 +224,10 @@ export function MoveAttendeeModal({
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['meeting_slots'] });
       queryClient.invalidateQueries({ queryKey: ['booked-slots'] });
+      // Invalidar queries do SDR
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-v2'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-v2'] });
       toast.success('Participante movido com sucesso');
       onOpenChange(false);
       setSelectedDate(null);
