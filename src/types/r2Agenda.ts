@@ -19,12 +19,13 @@ export interface R2ThermometerOption {
 
 export interface R2AttendeeExtended {
   id: string;
+  attendee_name?: string | null;
+  attendee_phone?: string | null;
   name: string | null;
   email: string | null;
   phone: string | null;
   status: string;
   deal_id: string | null;
-  lead_type: string | null;
   already_builds: boolean | null;
   // R2-specific fields
   partner_name: string | null;

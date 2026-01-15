@@ -24,8 +24,8 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           ),
           attendees:meeting_slot_attendees(
             id,
-            name:attendee_name,
-            phone:attendee_phone,
+            attendee_name,
+            attendee_phone,
             status,
             deal_id,
             lead_type,
@@ -81,7 +81,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         return acc;
       }, {} as Record<string, R2ThermometerOption>);
 
-      // Enrich attendees with status and thermometer objects
+      // Enrich attendees with status and thermometer objects, and map column names
       return (meetings || []).map(meeting => {
         const meetingObj = meeting as Record<string, unknown>;
         const attendeesArr = (meetingObj.attendees || []) as Array<Record<string, unknown>>;
@@ -94,6 +94,10 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             
             return {
               ...att,
+              // Map database column names to expected property names
+              name: att.attendee_name as string | null,
+              phone: att.attendee_phone as string | null,
+              email: null, // email doesn't exist in meeting_slot_attendees
               thermometer_ids: thermIds,
               r2_status: statusId ? statusMap[statusId] : null,
               thermometers: thermIds
