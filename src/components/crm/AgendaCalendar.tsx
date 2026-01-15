@@ -71,6 +71,9 @@ export function AgendaCalendar({
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const updateSchedule = useUpdateMeetingSchedule();
   
+  // Ref for scroll container - MUST be before any conditional returns
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
   // Estado para horário atual (linha vermelha)
   const [currentTime, setCurrentTime] = useState(new Date());
   
@@ -641,8 +644,6 @@ export function AgendaCalendar({
   const gridCols = viewMode === 'day' ? 'grid-cols-[60px_1fr]' : 'grid-cols-[60px_repeat(6,1fr)]';
   const currentTimePos = getCurrentTimePosition();
   
-  // Ref for scroll container
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Auto-scroll to first meeting or current time
   useEffect(() => {
