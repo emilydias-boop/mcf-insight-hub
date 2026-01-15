@@ -16,12 +16,12 @@ export interface R2Meeting {
   } | null;
   attendees: Array<{
     id: string;
-    name: string;
+    name: string | null;
     email: string | null;
     phone: string | null;
     status: string;
     deal_id: string | null;
-    lead_type: string | null;
+    lead_profile: string | null;
     already_builds: boolean | null;
     deal?: {
       id: string;
@@ -56,12 +56,12 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
           ),
           attendees:meeting_slot_attendees(
             id,
-            name:attendee_name,
-            phone:attendee_phone,
+            attendee_name,
+            attendee_phone,
             status,
             deal_id,
-            lead_type,
             already_builds,
+            lead_profile,
             deal:crm_deals(
               id,
               name,
@@ -80,7 +80,17 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
         .order('scheduled_at', { ascending: true });
 
       if (error) throw error;
-      return data as unknown as R2Meeting[];
+      
+      // Map database column names to expected property names
+      return (data || []).map(meeting => ({
+        ...meeting,
+        attendees: (meeting.attendees || []).map((att: Record<string, unknown>) => ({
+          ...att,
+          name: att.attendee_name as string | null,
+          phone: att.attendee_phone as string | null,
+          email: null,
+        })),
+      })) as unknown as R2Meeting[];
     }
   });
 }
@@ -105,12 +115,12 @@ export function useR2MeetingsByCloser(closerId: string, startDate: Date, endDate
           ),
           attendees:meeting_slot_attendees(
             id,
-            name:attendee_name,
-            phone:attendee_phone,
+            attendee_name,
+            attendee_phone,
             status,
             deal_id,
-            lead_type,
-            already_builds
+            already_builds,
+            lead_profile
           )
         `)
         .eq('meeting_type', 'r2')
@@ -120,7 +130,17 @@ export function useR2MeetingsByCloser(closerId: string, startDate: Date, endDate
         .order('scheduled_at', { ascending: true });
 
       if (error) throw error;
-      return data as unknown as R2Meeting[];
+      
+      // Map database column names to expected property names
+      return (data || []).map(meeting => ({
+        ...meeting,
+        attendees: (meeting.attendees || []).map((att: Record<string, unknown>) => ({
+          ...att,
+          name: att.attendee_name as string | null,
+          phone: att.attendee_phone as string | null,
+          email: null,
+        })),
+      })) as unknown as R2Meeting[];
     },
     enabled: !!closerId
   });
