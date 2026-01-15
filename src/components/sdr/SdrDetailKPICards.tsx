@@ -75,17 +75,23 @@ export function SdrDetailKPICards({ metrics, teamAverages, isLoading }: SdrDetai
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       <KPICard
-        title="Reuniões Agendadas"
-        value={metrics.totalAgendamentos}
+        title="Agendamentos"
+        value={metrics.agendamentos}
         teamAverage={teamAverages.avgAgendamentos}
         icon={<Calendar className="h-4 w-4" />}
       />
       <KPICard
-        title="Reuniões Realizadas"
-        value={metrics.realizadas}
-        teamAverage={teamAverages.avgRealizadas}
+        title="R1 Agendada"
+        value={metrics.r1Agendada}
+        teamAverage={teamAverages.avgR1Agendada}
+        icon={<Calendar className="h-4 w-4" />}
+      />
+      <KPICard
+        title="R1 Realizada"
+        value={metrics.r1Realizada}
+        teamAverage={teamAverages.avgR1Realizada}
         icon={<CheckCircle className="h-4 w-4" />}
       />
       <KPICard
@@ -100,21 +106,6 @@ export function SdrDetailKPICards({ metrics, teamAverages, isLoading }: SdrDetai
         value={metrics.contratos}
         teamAverage={teamAverages.avgContratos}
         icon={<FileCheck className="h-4 w-4" />}
-      />
-      <KPICard
-        title="Taxa de Conversão"
-        value={metrics.taxaConversao}
-        teamAverage={teamAverages.avgTaxaConversao}
-        icon={<TrendingUp className="h-4 w-4" />}
-        format="percent"
-      />
-      <KPICard
-        title="Taxa No-Show"
-        value={metrics.taxaNoShow}
-        teamAverage={teamAverages.avgTaxaNoShow}
-        icon={<TrendingDown className="h-4 w-4" />}
-        format="percent"
-        invertComparison={true}
       />
     </div>
   );

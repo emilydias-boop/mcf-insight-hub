@@ -16,14 +16,11 @@ export interface TeamKPIs {
 export interface SdrSummaryRow {
   sdrEmail: string;
   sdrName: string;
-  primeiroAgendamento: number;
-  reagendamento: number;
-  totalAgendamentos: number;
-  realizadas: number;
-  noShows: number;
-  contratos: number;
-  taxaConversao: number;
-  taxaNoShow: number;
+  agendamentos: number;      // Criados no período (created_at)
+  r1Agendada: number;        // Reuniões PARA o período (scheduled_at)
+  r1Realizada: number;       // Realizadas no período
+  noShows: number;           // No-shows no período
+  contratos: number;         // Contratos pagos no período
 }
 
 interface TeamMeetingsParams {
@@ -68,24 +65,21 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
         return {
           sdrEmail: m.sdr_email,
           sdrName,
-          primeiroAgendamento: m.primeiro_agendamento,
-          reagendamento: m.reagendamento,
-          totalAgendamentos: m.total_agendamentos,
-          realizadas: m.realizadas,
+          agendamentos: m.agendamentos,
+          r1Agendada: m.r1_agendada,
+          r1Realizada: m.r1_realizada,
           noShows: m.no_shows,
           contratos: m.contratos,
-          taxaConversao: m.taxa_conversao,
-          taxaNoShow: m.taxa_no_show,
         };
       })
-      .sort((a, b) => b.totalAgendamentos - a.totalAgendamentos);
+      .sort((a, b) => b.agendamentos - a.agendamentos);
   }, [metricsQuery.data, validSdrEmails, sdrNameMap]);
 
   // Calculate team KPIs from FILTERED SDRs only
   const teamKPIs = useMemo((): TeamKPIs => {
     // Sum up from filtered bySDR data
-    const totalAgendamentos = bySDR.reduce((sum, s) => sum + s.totalAgendamentos, 0);
-    const totalRealizadas = bySDR.reduce((sum, s) => sum + s.realizadas, 0);
+    const totalAgendamentos = bySDR.reduce((sum, s) => sum + s.agendamentos, 0);
+    const totalRealizadas = bySDR.reduce((sum, s) => sum + s.r1Realizada, 0);
     const totalNoShows = bySDR.reduce((sum, s) => sum + s.noShows, 0);
     const totalContratos = bySDR.reduce((sum, s) => sum + s.contratos, 0);
 

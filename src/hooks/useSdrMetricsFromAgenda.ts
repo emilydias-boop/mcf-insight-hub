@@ -5,14 +5,11 @@ import { format, startOfDay, endOfDay } from "date-fns";
 export interface SdrAgendaMetrics {
   sdr_email: string;
   sdr_name: string;
-  primeiro_agendamento: number;
-  reagendamento: number;
-  total_agendamentos: number;
-  realizadas: number;
-  no_shows: number;
-  contratos: number;
-  taxa_conversao: number;
-  taxa_no_show: number;
+  agendamentos: number;      // Criados no período (created_at)
+  r1_agendada: number;       // Reuniões PARA o período (scheduled_at)
+  r1_realizada: number;      // Realizadas no período
+  no_shows: number;          // No-shows no período
+  contratos: number;         // Contratos pagos no período
 }
 
 interface MetricsResponse {

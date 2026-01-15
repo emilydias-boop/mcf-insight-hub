@@ -21,7 +21,7 @@ import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
 
-import { useTeamMeetingsData } from "@/hooks/useTeamMeetingsData";
+import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
@@ -209,23 +209,20 @@ export default function ReunioesEquipe() {
   const { data: monthAgendamentosCriados } = useAgendamentosCreatedToday(monthStartDate, monthEndDate);
 
   // Create base dataset with all SDRs (zeros) for "today" preset
-  const allSdrsWithZeros = useMemo(() => {
+  const allSdrsWithZeros = useMemo((): SdrSummaryRow[] => {
     return SDR_LIST.map(sdr => ({
       sdrEmail: sdr.email,
       sdrName: sdr.nome,
-      primeiroAgendamento: 0,
-      reagendamento: 0,
-      totalAgendamentos: 0,
-      realizadas: 0,
+      agendamentos: 0,
+      r1Agendada: 0,
+      r1Realizada: 0,
       noShows: 0,
       contratos: 0,
-      taxaConversao: 0,
-      taxaNoShow: 0,
     }));
   }, []);
 
   // Merge real data with base dataset for "today" preset
-  const mergedBySDR = useMemo(() => {
+  const mergedBySDR = useMemo((): SdrSummaryRow[] => {
     const dataMap = new Map(allSdrsWithZeros.map(s => [s.sdrEmail, { ...s }]));
     
     // Overwrite with real data where it exists
@@ -235,10 +232,10 @@ export default function ReunioesEquipe() {
       }
     });
 
-    // Sort: totalAgendamentos desc, realizadas desc, sdrName asc
+    // Sort: agendamentos desc, r1Realizada desc, sdrName asc
     return Array.from(dataMap.values()).sort((a, b) => {
-      if (b.totalAgendamentos !== a.totalAgendamentos) return b.totalAgendamentos - a.totalAgendamentos;
-      if (b.realizadas !== a.realizadas) return b.realizadas - a.realizadas;
+      if (b.agendamentos !== a.agendamentos) return b.agendamentos - a.agendamentos;
+      if (b.r1Realizada !== a.r1Realizada) return b.r1Realizada - a.r1Realizada;
       return a.sdrName.localeCompare(b.sdrName);
     });
   }, [allSdrsWithZeros, bySDR]);
@@ -317,14 +314,11 @@ export default function ReunioesEquipe() {
     // Aba 1: Resumo por SDR
     const resumoData = filteredBySDR.map(sdr => ({
       "SDR": sdr.sdrName,
-      "1º Agendamento": sdr.primeiroAgendamento,
-      "Reagendamento": sdr.reagendamento,
-      "Total Agendamentos": sdr.totalAgendamentos,
-      "Realizadas": sdr.realizadas,
+      "Agendamento": sdr.agendamentos,
+      "R1 Agendada": sdr.r1Agendada,
+      "R1 Realizada": sdr.r1Realizada,
       "No-Show": sdr.noShows,
-      "Contratos": sdr.contratos,
-      "Taxa Conversão (%)": sdr.taxaConversao.toFixed(1),
-      "Taxa No-Show (%)": sdr.taxaNoShow.toFixed(1),
+      "Contrato PAGO": sdr.contratos,
     }));
 
     // Aba 2: Leads detalhados (filtrados pelos SDRs selecionados)
