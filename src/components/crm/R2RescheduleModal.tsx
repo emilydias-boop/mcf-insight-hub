@@ -157,16 +157,16 @@ export function R2RescheduleModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+<DialogContent className="max-w-md flex flex-col max-h-[90vh]">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-purple-600" />
             Reagendar Reunião R2
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-4">
+        <ScrollArea className="flex-1 h-[calc(90vh-120px)]">
+          <div className="space-y-4 pr-4 pb-4">
             {/* Current Info */}
             <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-3 text-sm">
               <div className="font-medium">
