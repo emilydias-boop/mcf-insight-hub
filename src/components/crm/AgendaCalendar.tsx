@@ -36,15 +36,24 @@ const DEFAULT_COLORS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  scheduled: 'border-l-2 border-l-primary',
-  rescheduled: 'border-l-2 border-l-yellow-500',
-  completed: 'border-l-2 border-l-green-500 opacity-75',
-  no_show: 'border-l-2 border-l-red-500 opacity-75',
-  canceled: 'border-l-2 border-l-muted opacity-50 line-through',
-  contract_paid: 'border-l-2 border-l-emerald-600 opacity-75',
+  scheduled: 'border-l-4 border-l-primary bg-primary/5',
+  rescheduled: 'border-l-4 border-l-yellow-500 bg-yellow-50/50 dark:bg-yellow-900/10',
+  completed: 'border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-900/10',
+  no_show: 'border-l-4 border-l-red-500 bg-red-50/50 dark:bg-red-900/10',
+  canceled: 'border-l-4 border-l-muted bg-muted/20 opacity-60',
+  contract_paid: 'border-l-4 border-l-emerald-600 bg-emerald-50/50 dark:bg-emerald-900/10',
 };
 
-const SLOT_HEIGHT = 40; // px per 30-min slot
+const STATUS_BADGE_STYLES: Record<string, { label: string; className: string }> = {
+  scheduled: { label: 'Agendada', className: 'bg-primary text-primary-foreground' },
+  rescheduled: { label: 'Reagendada', className: 'bg-yellow-500 text-white' },
+  completed: { label: 'Realizada', className: 'bg-green-500 text-white' },
+  no_show: { label: 'No-show', className: 'bg-red-500 text-white' },
+  canceled: { label: 'Cancelada', className: 'bg-muted text-muted-foreground' },
+  contract_paid: { label: 'Contrato Pago', className: 'bg-emerald-600 text-white' },
+};
+
+const SLOT_HEIGHT = 52; // px per 15-min slot (increased for better readability)
 const MAX_MEETINGS_PER_SLOT = 999; // No limit on meetings per slot
 
 import { Settings, Plus, ArrowRightLeft, DollarSign } from 'lucide-react';
@@ -820,86 +829,93 @@ export function AgendaCalendar({
                                           {...dragProvided.dragHandleProps}
                                           onClick={() => onSelectMeeting(firstMeeting)}
                                           className={cn(
-                                            'absolute top-0.5 text-left p-1 rounded text-xs bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10',
+                                            'absolute top-0.5 text-left p-1.5 rounded-md bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10',
                                             STATUS_STYLES[firstMeeting.status] || '',
                                             dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                           )}
                                           style={{ 
                                             height: `${cardHeight}px`,
-                                            borderLeftColor: closerColor,
                                             left: totalClosers > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
                                             right: totalClosers > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
-                                          {/* Header: Apenas Horário */}
-                                          <div className="flex items-center gap-1 mb-0.5">
-                                            <div
-                                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                              style={{ backgroundColor: closerColor }}
-                                            />
-                                            <span className="font-medium text-[10px]">
-                                              {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
-                                            </span>
+                                          {/* Header: Horário + Closer + Status Badge */}
+                                          <div className="flex items-center justify-between gap-1 mb-1">
+                                            <div className="flex items-center gap-1.5">
+                                              <div
+                                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                                style={{ backgroundColor: closerColor }}
+                                              />
+                                              <span className="font-semibold text-xs">
+                                                {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                              </span>
+                                              <span className="text-[10px] text-muted-foreground font-medium">
+                                                {group.closer?.name?.split(' ')[0]}
+                                              </span>
+                                            </div>
+                                            <Badge className={cn(
+                                              'text-[9px] px-1.5 py-0 h-4 font-medium',
+                                              STATUS_BADGE_STYLES[firstMeeting.status]?.className || 'bg-muted'
+                                            )}>
+                                              {STATUS_BADGE_STYLES[firstMeeting.status]?.label || firstMeeting.status}
+                                            </Badge>
                                           </div>
 
-                                          {/* Lista de participantes com SDR individual */}
+                                          {/* Lista de participantes - mais limpa */}
                                           <div className="space-y-0.5">
                                             {(() => {
-                                              // Flatten meetings com seus attendees - usar o SDR do attendee individual, com fallback para o SDR do meeting
                                               const attendeesWithMeeting = meetings.flatMap(m => 
                                                 (m.attendees || []).map(att => ({ 
                                                   ...att, 
                                                   meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
                                                 }))
                                               );
-                                              const displayAttendees = attendeesWithMeeting.slice(0, 3);
-                                              const remaining = attendeesWithMeeting.length - 3;
+                                              const displayAttendees = attendeesWithMeeting.slice(0, 2);
+                                              const remaining = attendeesWithMeeting.length - 2;
                                               
                                               return (
                                                 <>
-                                                  {displayAttendees.map(att => (
-                                                    <div key={att.id} className="flex items-center justify-between gap-1">
-                                                      <div className="flex items-center gap-1 min-w-0">
-                                                        <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: closerColor }} />
-                                                        <span className="text-[9px] truncate">
-                                                          {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
-                                                        </span>
-                                                        {att.is_partner && <span className="text-[7px] text-muted-foreground">(S)</span>}
-                                                        {outsideData[att.id]?.isOutside && <DollarSign className="h-2 w-2 text-yellow-500" />}
-                                                        {!att.is_partner && att.parent_attendee_id && <ArrowRightLeft className="h-2 w-2 text-orange-500" />}
-                                                        <span className="text-[7px] text-muted-foreground truncate">
-                                                          ({att.meetingSdr?.split(' ')[0] || 'N/A'})
-                                                        </span>
+                                                  {displayAttendees.map(att => {
+                                                    const attendeeStatus = att.status || 'scheduled';
+                                                    const statusBadge = STATUS_BADGE_STYLES[attendeeStatus];
+                                                    
+                                                    return (
+                                                      <div key={att.id} className="flex items-center justify-between gap-1">
+                                                        <div className="flex items-center gap-1 min-w-0 flex-1">
+                                                          <span className="text-[11px] font-medium truncate">
+                                                            {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
+                                                          </span>
+                                                          {att.is_partner && <span className="text-[9px] text-muted-foreground">(Sócio)</span>}
+                                                          {outsideData[att.id]?.isOutside && (
+                                                            <DollarSign className="h-3 w-3 text-yellow-500 flex-shrink-0" />
+                                                          )}
+                                                        </div>
+                                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                                          {att.already_builds === true && (
+                                                            <Badge className="text-[8px] px-1 py-0 h-3.5 bg-blue-600">Constrói</Badge>
+                                                          )}
+                                                          {attendeeStatus !== 'scheduled' && attendeeStatus !== 'invited' && statusBadge && (
+                                                            <Badge className={cn(
+                                                              'text-[8px] px-1 py-0 h-3.5',
+                                                              statusBadge.className
+                                                            )}>
+                                                              {statusBadge.label}
+                                                            </Badge>
+                                                          )}
+                                                        </div>
                                                       </div>
-                                                      <div className="flex items-center gap-0.5 flex-shrink-0">
-                                                        {att.already_builds === true && (
-                                                          <Badge className="text-[6px] px-0.5 py-0 h-2.5 bg-blue-600">C</Badge>
-                                                        )}
-                                                        {att.already_builds === false && (
-                                                          <Badge variant="outline" className="text-[6px] px-0.5 py-0 h-2.5 border-orange-500 text-orange-600">NC</Badge>
-                                                        )}
-                                                        {att.status === 'no_show' && <Badge variant="destructive" className="text-[7px] px-1 py-0 h-3">No-show</Badge>}
-                                                        {att.status === 'completed' && <Badge className="text-[7px] px-1 py-0 h-3 bg-green-600">OK</Badge>}
-                                                        {att.status === 'invited' && <Badge variant="secondary" className="text-[7px] px-1 py-0 h-3">Agendado</Badge>}
-                                                        {att.status === 'confirmed' && <Badge variant="outline" className="text-[7px] px-1 py-0 h-3">Confirmado</Badge>}
-                                                      </div>
-                                                    </div>
-                                                  ))}
+                                                    );
+                                                  })}
                                                   {remaining > 0 && (
-                                                    <span className="text-[8px] text-muted-foreground">+{remaining} mais</span>
+                                                    <span className="text-[10px] text-muted-foreground font-medium">
+                                                      +{remaining} participante{remaining > 1 ? 's' : ''}
+                                                    </span>
                                                   )}
                                                 </>
                                               );
                                             })()}
                                           </div>
-
-                                          {/* Duração */}
-                                          {slotsNeeded > 1 && (
-                                            <div className="text-[8px] text-muted-foreground mt-0.5">
-                                              {group.duration}min
-                                            </div>
-                                          )}
                                         </button>
                                       </TooltipTrigger>
                                         <TooltipContent side="right" className="max-w-[320px]">
