@@ -12,6 +12,7 @@ export interface R2Closer {
   calendly_default_link: string | null;
   employee_id: string | null;
   meeting_type: string | null;
+  priority: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -24,6 +25,7 @@ export interface R2CloserFormData {
   calendly_event_type_uri?: string;
   calendly_default_link?: string;
   employee_id?: string;
+  priority?: number;
 }
 
 export function useR2ClosersList() {
@@ -34,6 +36,7 @@ export function useR2ClosersList() {
         .from('closers')
         .select('*')
         .eq('meeting_type', 'r2')
+        .order('priority', { ascending: true, nullsFirst: false })
         .order('name');
       
       if (error) throw error;
@@ -51,6 +54,7 @@ export function useActiveR2Closers() {
         .select('*')
         .eq('meeting_type', 'r2')
         .eq('is_active', true)
+        .order('priority', { ascending: true, nullsFirst: false })
         .order('name');
       
       if (error) throw error;
@@ -93,6 +97,7 @@ export function useCreateR2Closer() {
           calendly_default_link: data.calendly_default_link || null,
           employee_id: data.employee_id || null,
           meeting_type: 'r2',
+          priority: data.priority ?? 99,
         })
         .select()
         .single();

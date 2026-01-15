@@ -36,15 +36,18 @@ export default function ConfigurarClosersR2() {
     email: '',
     color: COLORS[0],
     is_active: true,
+    priority: 99,
   });
 
   const handleAdd = () => {
     setSelectedCloser(null);
+    const nextPriority = (closers?.length || 0) + 1;
     setFormData({
       name: '',
       email: '',
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
       is_active: true,
+      priority: nextPriority,
     });
     setFormOpen(true);
   };
@@ -56,6 +59,7 @@ export default function ConfigurarClosersR2() {
       email: closer.email,
       color: closer.color || COLORS[0],
       is_active: closer.is_active ?? true,
+      priority: closer.priority ?? 99,
     });
     setFormOpen(true);
   };
@@ -172,6 +176,7 @@ export default function ConfigurarClosersR2() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[60px] text-center">Prioridade</TableHead>
                   <TableHead className="w-[50px]">Cor</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Email</TableHead>
@@ -182,6 +187,11 @@ export default function ConfigurarClosersR2() {
               <TableBody>
                 {closers?.map((closer) => (
                   <TableRow key={closer.id}>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="font-mono">
+                        {closer.priority ?? 99}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <div 
                         className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
@@ -230,14 +240,27 @@ export default function ConfigurarClosersR2() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Nome do closer"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Nome do closer"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="priority">Prioridade</Label>
+                <Input
+                  id="priority"
+                  type="number"
+                  min={1}
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 99 })}
+                  placeholder="1 = maior prioridade"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
