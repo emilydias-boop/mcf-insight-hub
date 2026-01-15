@@ -126,30 +126,36 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         }).filter(Boolean) as string[];
       });
 
-      // Fetch profiles for booked_by users
+      // Fetch profiles for booked_by users (by UUID)
       let profilesById: Record<string, { id: string; name: string | null }> = {};
       if (bookedByIds.length > 0) {
-        const { data: profiles } = await supabase
+        const { data: bookedByProfiles, error: bookedByError } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', bookedByIds);
-        (profiles || []).forEach(p => {
-          profilesById[p.id] = { id: p.id, name: p.full_name };
-        });
+        
+        if (!bookedByError && bookedByProfiles) {
+          bookedByProfiles.forEach(p => {
+            profilesById[p.id] = { id: p.id, name: p.full_name };
+          });
+        }
       }
 
-      // Fetch profiles for SDRs by email
+      // Fetch profiles for SDRs by email (owner_id is email)
       let profilesByEmail: Record<string, { email: string; name: string | null }> = {};
       if (sdrEmails.length > 0) {
-        const { data: profiles } = await supabase
+        const { data: sdrProfiles, error: sdrError } = await supabase
           .from('profiles')
           .select('id, full_name, email')
           .in('email', sdrEmails);
-        (profiles || []).forEach(p => {
-          if (p.email) {
-            profilesByEmail[p.email] = { email: p.email, name: p.full_name };
-          }
-        });
+        
+        if (!sdrError && sdrProfiles) {
+          sdrProfiles.forEach(p => {
+            if (p.email) {
+              profilesByEmail[p.email] = { email: p.email, name: p.full_name };
+            }
+          });
+        }
       }
 
       // Enrich attendees with status and thermometer objects, and map column names
