@@ -4,11 +4,12 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, e
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
-import { Calendar, Users, RefreshCw, Download, Building2 } from "lucide-react";
+import { Calendar, Users, RefreshCw, Download, Building2, Briefcase } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -20,11 +21,13 @@ import { DatePickerCustom } from "@/components/ui/DatePickerCustom";
 import { TeamKPICards } from "@/components/sdr/TeamKPICards";
 import { TeamGoalsPanel } from "@/components/sdr/TeamGoalsPanel";
 import { SdrSummaryTable } from "@/components/sdr/SdrSummaryTable";
+import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
+import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
@@ -83,6 +86,7 @@ export default function ReunioesEquipe() {
   const [customStartDate, setCustomStartDate] = useState<Date | null>(initialStart);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(initialEnd || initialStart);
   const [sdrFilter, setSdrFilter] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"sdrs" | "closers">("sdrs");
 
   // Sync state changes to URL
   const updateUrlParams = (
@@ -224,6 +228,9 @@ export default function ReunioesEquipe() {
 
   // Fetch R2 and Vendas KPIs for the month
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
+
+  // Fetch Closer metrics for the selected period
+  const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end);
 
 
   // Create base dataset with all SDRs (zeros) for "today" preset
@@ -479,28 +486,44 @@ export default function ReunioesEquipe() {
       {/* KPI Cards */}
       <TeamKPICards kpis={teamKPIs} isLoading={isLoading} />
 
-      {/* SDR Summary Table */}
+      {/* SDR / Closer Summary Table with Tabs */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Resumo por SDR
-            {filteredBySDR.length > 0 && (
-              <span className="text-sm font-normal text-muted-foreground">
-                ({filteredBySDR.length} SDRs)
-              </span>
-            )}
-          </CardTitle>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "sdrs" | "closers")}>
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="sdrs" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                SDRs
+                <span className="text-xs text-muted-foreground">
+                  ({filteredBySDR.length})
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="closers" className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                Closers
+                <span className="text-xs text-muted-foreground">
+                  ({closerMetrics?.length || 0})
+                </span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </CardHeader>
         <CardContent className="pt-0">
-          <SdrSummaryTable
-            data={filteredBySDR}
-            isLoading={isLoading}
-            ghostCountBySdr={ghostCountBySdr}
-            disableNavigation={isSdr}
-            sdrMetaMap={sdrMetaMap}
-            diasUteisNoPeriodo={diasUteisNoPeriodo}
-          />
+          {activeTab === "sdrs" ? (
+            <SdrSummaryTable
+              data={filteredBySDR}
+              isLoading={isLoading}
+              ghostCountBySdr={ghostCountBySdr}
+              disableNavigation={isSdr}
+              sdrMetaMap={sdrMetaMap}
+              diasUteisNoPeriodo={diasUteisNoPeriodo}
+            />
+          ) : (
+            <CloserSummaryTable
+              data={closerMetrics}
+              isLoading={closerLoading}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
