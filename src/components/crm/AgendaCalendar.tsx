@@ -852,6 +852,28 @@ export function AgendaCalendar({
                               return m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead';
                             }).join(', ');
 
+                            // Status border colors for clean visual hierarchy
+                            const STATUS_BORDER_COLORS: Record<string, string> = {
+                              scheduled: 'border-l-green-500',
+                              invited: 'border-l-green-500',
+                              completed: 'border-l-blue-500',
+                              no_show: 'border-l-red-500',
+                              contract_paid: 'border-l-emerald-600',
+                              cancelled: 'border-l-gray-400',
+                              canceled: 'border-l-gray-400',
+                              rescheduled: 'border-l-yellow-500',
+                            };
+
+                            // Get all attendees for display
+                            const allAttendees = meetings.flatMap(m => 
+                              (m.attendees || []).map(att => ({ 
+                                ...att, 
+                                meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
+                              }))
+                            );
+                            const displayAttendees = allAttendees.slice(0, 3);
+                            const remaining = allAttendees.length - 3;
+
                             return (
                               <Draggable 
                                 key={firstMeeting.id} 
@@ -868,8 +890,8 @@ export function AgendaCalendar({
                                           {...dragProvided.dragHandleProps}
                                           onClick={() => onSelectMeeting(firstMeeting)}
                                           className={cn(
-                                            'absolute top-0.5 text-left p-1.5 rounded-md bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10',
-                                            STATUS_STYLES[firstMeeting.status] || '',
+                                            'absolute top-0.5 text-left p-1.5 rounded-md bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
+                                            STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
                                             dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                           )}
                                           style={{ 
@@ -879,19 +901,42 @@ export function AgendaCalendar({
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
-                                          {/* Header: Horário + Closer + Status Badge */}
-                                          <div className="flex items-center justify-between gap-1 mb-1">
-                                            <div className="flex items-center gap-1.5">
+                                          {/* Header simplificado: Bolinha do closer + Horário */}
+                                          <div className="flex items-center gap-1.5 mb-0.5">
+                                            <div
+                                              className="w-2 h-2 rounded-full flex-shrink-0"
+                                              style={{ backgroundColor: closerColor }}
+                                            />
+                                            <span className="font-semibold text-xs">
+                                              {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
+                                            </span>
+                                          </div>
+
+                                          {/* Lista de leads - apenas nomes, sem badges */}
+                                          <div className="space-y-0">
+                                            {displayAttendees.map(att => (
+                                              <div key={att.id} className="text-[11px] font-medium truncate leading-tight">
+                                                {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
+                                              </div>
+                                            ))}
+                                            {remaining > 0 && (
+                                              <span className="text-[10px] text-muted-foreground">
+                                                +{remaining}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </button>
+                                      </TooltipTrigger>
+                                        <TooltipContent side="right" className="max-w-[320px]">
+                                        <div className="space-y-2">
+                                          {/* Header com Closer e Status */}
+                                          <div className="flex items-center justify-between text-xs border-b pb-1.5 mb-1.5">
+                                            <div className="flex items-center gap-2">
                                               <div
-                                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                                className="w-3 h-3 rounded-full flex-shrink-0"
                                                 style={{ backgroundColor: closerColor }}
                                               />
-                                              <span className="font-semibold text-xs">
-                                                {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
-                                              </span>
-                                              <span className="text-[10px] text-muted-foreground font-medium">
-                                                {group.closer?.name?.split(' ')[0]}
-                                              </span>
+                                              <span className="font-semibold">{group.closer?.name || 'N/A'}</span>
                                             </div>
                                             <Badge className={cn(
                                               'text-[9px] px-1.5 py-0 h-4 font-medium',
@@ -900,73 +945,9 @@ export function AgendaCalendar({
                                               {STATUS_BADGE_STYLES[firstMeeting.status]?.label || firstMeeting.status}
                                             </Badge>
                                           </div>
-
-                                          {/* Lista de participantes - mais limpa */}
-                                          <div className="space-y-0.5">
-                                            {(() => {
-                                              const attendeesWithMeeting = meetings.flatMap(m => 
-                                                (m.attendees || []).map(att => ({ 
-                                                  ...att, 
-                                                  meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
-                                                }))
-                                              );
-                                              const displayAttendees = attendeesWithMeeting.slice(0, 2);
-                                              const remaining = attendeesWithMeeting.length - 2;
-                                              
-                                              return (
-                                                <>
-                                                  {displayAttendees.map(att => {
-                                                    const attendeeStatus = att.status || 'scheduled';
-                                                    const statusBadge = STATUS_BADGE_STYLES[attendeeStatus];
-                                                    
-                                                    return (
-                                                      <div key={att.id} className="flex items-center justify-between gap-1">
-                                                        <div className="flex items-center gap-1 min-w-0 flex-1">
-                                                          <span className="text-[11px] font-medium truncate">
-                                                            {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
-                                                          </span>
-                                                          {att.is_partner && <span className="text-[9px] text-muted-foreground">(Sócio)</span>}
-                                                          {outsideData[att.id]?.isOutside && (
-                                                            <DollarSign className="h-3 w-3 text-yellow-500 flex-shrink-0" />
-                                                          )}
-                                                        </div>
-                                                        <div className="flex items-center gap-1 flex-shrink-0">
-                                                          {att.already_builds === true && (
-                                                            <Badge className="text-[8px] px-1 py-0 h-3.5 bg-blue-600">Constrói</Badge>
-                                                          )}
-                                                          {attendeeStatus !== 'scheduled' && attendeeStatus !== 'invited' && statusBadge && (
-                                                            <Badge className={cn(
-                                                              'text-[8px] px-1 py-0 h-3.5',
-                                                              statusBadge.className
-                                                            )}>
-                                                              {statusBadge.label}
-                                                            </Badge>
-                                                          )}
-                                                        </div>
-                                                      </div>
-                                                    );
-                                                  })}
-                                                  {remaining > 0 && (
-                                                    <span className="text-[10px] text-muted-foreground font-medium">
-                                                      +{remaining} participante{remaining > 1 ? 's' : ''}
-                                                    </span>
-                                                  )}
-                                                </>
-                                              );
-                                            })()}
-                                          </div>
-                                        </button>
-                                      </TooltipTrigger>
-                                        <TooltipContent side="right" className="max-w-[320px]">
-                                        <div className="space-y-2">
-                                          {/* Header com Closer */}
-                                          <div className="flex justify-between text-xs border-b pb-1.5 mb-1.5">
-                                            <span>Closer: <strong>{group.closer?.name || 'N/A'}</strong></span>
-                                            <span>{meetings.length} reunião(ões)</span>
-                                          </div>
                                           
-                                          <div className="font-medium">
-                                            {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')} - {group.duration}min
+                                          <div className="font-medium text-xs">
+                                            {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')} - {group.duration}min • {allAttendees.length} participante{allAttendees.length > 1 ? 's' : ''}
                                           </div>
                                           
                                           {/* Participantes agrupados por SDR */}
