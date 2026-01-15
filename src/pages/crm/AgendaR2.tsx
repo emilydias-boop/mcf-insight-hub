@@ -433,6 +433,7 @@ export default function AgendaR2() {
                   closers={closersWithAvailability}
                   closerFilter={closerFilter === 'all' ? null : closerFilter}
                   viewMode={viewMode}
+                  meetingType="r2"
                   onSelectMeeting={(meeting) => {
                     const originalMeeting = meetings.find(m => m.id === meeting.id);
                     if (originalMeeting) handleSelectMeeting(originalMeeting);
