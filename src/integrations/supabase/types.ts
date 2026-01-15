@@ -3875,6 +3875,44 @@ export type Database = {
         }
         Relationships: []
       }
+      r2_daily_slots: {
+        Row: {
+          closer_id: string
+          created_at: string | null
+          created_by: string | null
+          google_meet_link: string | null
+          id: string
+          slot_date: string
+          start_time: string
+        }
+        Insert: {
+          closer_id: string
+          created_at?: string | null
+          created_by?: string | null
+          google_meet_link?: string | null
+          id?: string
+          slot_date: string
+          start_time: string
+        }
+        Update: {
+          closer_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          google_meet_link?: string | null
+          id?: string
+          slot_date?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "r2_daily_slots_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       r2_status_options: {
         Row: {
           color: string

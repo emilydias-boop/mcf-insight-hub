@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, getDay, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import { format, getDay, startOfMonth, endOfMonth } from 'date-fns';
 
 interface ConfiguredSlot {
   start_time: string;
@@ -17,22 +17,43 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
   return useQuery({
     queryKey: ['r2-closer-slots', closerId, date ? format(date, 'yyyy-MM-dd') : null],
     queryFn: async () => {
-      if (!closerId || !date) return { configuredSlots: [], bookedTimes: [], availableSlots: [] };
+      if (!closerId || !date) return { configuredSlots: [], bookedTimes: [], availableSlots: [], source: 'none' };
 
       const dayOfWeek = getDay(date); // 0=Sunday, 1=Monday, etc.
       const dateStr = format(date, 'yyyy-MM-dd');
 
-      // 1. Fetch configured slots for this closer on this day of week
-      const { data: configuredSlots, error: slotsError } = await supabase
-        .from('closer_meeting_links')
+      // 1. First, try to fetch daily slots for this specific date
+      const { data: dailySlots, error: dailyError } = await supabase
+        .from('r2_daily_slots')
         .select('start_time, google_meet_link')
         .eq('closer_id', closerId)
-        .eq('day_of_week', dayOfWeek)
+        .eq('slot_date', dateStr)
         .order('start_time');
 
-      if (slotsError) throw slotsError;
+      if (dailyError) throw dailyError;
 
-      // 2. Fetch already booked meetings for this closer on this specific date
+      let configuredSlots: ConfiguredSlot[] = [];
+      let source: 'daily' | 'weekday' | 'none' = 'none';
+
+      // 2. If daily slots exist, use them; otherwise fallback to weekday slots
+      if (dailySlots && dailySlots.length > 0) {
+        configuredSlots = dailySlots;
+        source = 'daily';
+      } else {
+        // Fallback: Fetch configured slots for this closer on this day of week
+        const { data: weekdaySlots, error: weekdayError } = await supabase
+          .from('closer_meeting_links')
+          .select('start_time, google_meet_link')
+          .eq('closer_id', closerId)
+          .eq('day_of_week', dayOfWeek)
+          .order('start_time');
+
+        if (weekdayError) throw weekdayError;
+        configuredSlots = weekdaySlots || [];
+        source = 'weekday';
+      }
+
+      // 3. Fetch already booked meetings for this closer on this specific date
       const startOfDayStr = `${dateStr}T00:00:00`;
       const endOfDayStr = `${dateStr}T23:59:59`;
 
@@ -51,8 +72,8 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
         return format(d, 'HH:mm');
       });
 
-      // 3. Build available slots list
-      const availableSlots: AvailableSlot[] = (configuredSlots || []).map((slot: ConfiguredSlot) => {
+      // 4. Build available slots list
+      const availableSlots: AvailableSlot[] = configuredSlots.map((slot: ConfiguredSlot) => {
         const time = slot.start_time.substring(0, 5); // "HH:mm"
         return {
           time,
@@ -62,9 +83,10 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
       });
 
       return {
-        configuredSlots: configuredSlots || [],
+        configuredSlots,
         bookedTimes,
         availableSlots,
+        source,
       };
     },
     enabled: !!closerId && !!date,
