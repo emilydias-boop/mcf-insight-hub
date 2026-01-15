@@ -417,6 +417,16 @@ export function AgendaCalendar({
     return '#6B7280';
   };
 
+  // Generate initials from full name: "Caroline Correa" → "CC"
+  const getInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   const isCurrentTimeSlot = (day: Date, hour: number, minute: number) => {
     const now = new Date();
     if (!isSameDay(day, now)) return false;
@@ -901,7 +911,7 @@ export function AgendaCalendar({
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
-                                          {/* Header simplificado: Bolinha do closer + Horário */}
+                                          {/* Header: Bolinha do closer + Horário + Nome do Closer */}
                                           <div className="flex items-center gap-1.5 mb-0.5">
                                             <div
                                               className="w-2 h-2 rounded-full flex-shrink-0"
@@ -910,13 +920,27 @@ export function AgendaCalendar({
                                             <span className="font-semibold text-xs">
                                               {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
                                             </span>
+                                            <span className="text-[10px] text-muted-foreground">•</span>
+                                            <span className="text-[10px] font-medium text-foreground truncate">
+                                              {group.closer?.name || 'N/A'}
+                                            </span>
                                           </div>
 
-                                          {/* Lista de leads - apenas nomes, sem badges */}
+                                          {/* Lista de leads com sigla do SDR */}
                                           <div className="space-y-0">
                                             {displayAttendees.map(att => (
-                                              <div key={att.id} className="text-[11px] font-medium truncate leading-tight">
-                                                {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
+                                              <div key={att.id} className="text-[11px] font-medium truncate leading-tight flex items-center gap-1">
+                                                {att.meetingSdr && (
+                                                  <>
+                                                    <span className="text-muted-foreground font-semibold">
+                                                      {getInitials(att.meetingSdr)}
+                                                    </span>
+                                                    <span className="text-muted-foreground">•</span>
+                                                  </>
+                                                )}
+                                                <span className="truncate">
+                                                  {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
+                                                </span>
                                               </div>
                                             ))}
                                             {remaining > 0 && (
