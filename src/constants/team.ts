@@ -41,6 +41,14 @@ export const CONFETTI_EXCLUDE_PRODUCTS = [
   "Efeito Alavanca",    // Não é parceria
 ];
 
+// Lista de responsáveis por preencher R2
+export const R2_BOOKERS_LIST = [
+  { id: '04bb4045-701d-443c-b2c9-aee74e7f58d9', nome: 'Yanca Oliveira' },
+  { id: 'dd76c153-a4a5-432e-ab4c-0b48f6141659', nome: 'Julio Caetano' },
+  { id: 'c8fd2b83-2aee-41a4-9154-e812f492bc5f', nome: 'Cristiane Gomes' },
+  { id: '6bb81a27-fd8f-4af8-bce0-377f3576124f', nome: 'Thaynar Tavares' },
+];
+
 // ID da origem PIPELINE INSIDE SALES
 export const INSIDE_SALES_ORIGIN_ID = "e3c04f21-ba2c-4c66-84f8-b4341c826b1c";
 

@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, Link2, FileText, Tag, UserCheck } from 'lucide-react';
+import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, Link2, FileText, Tag, UserCheck, Mail, Phone, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -26,8 +26,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
-import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
+import { useSearchDealsForSchedule, useSearchDealsByPhone, useSearchDealsByEmail } from '@/hooks/useAgendaData';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
+import { R2_BOOKERS_LIST } from '@/constants/team';
 import { 
   R2StatusOption, 
   R2ThermometerOption, 
@@ -90,6 +91,18 @@ export function R2QuickScheduleModal({
   const [selectedTime, setSelectedTime] = useState('');
   const [calendarMonth, setCalendarMonth] = useState<Date>(preselectedDate || new Date());
 
+  // Phone search state
+  const [phoneQuery, setPhoneQuery] = useState('');
+  const [showPhoneResults, setShowPhoneResults] = useState(false);
+
+  // Email search state
+  const [emailQuery, setEmailQuery] = useState('');
+  const [showEmailResults, setShowEmailResults] = useState(false);
+
+  // Selected contact fields (auto-filled after selection)
+  const [selectedEmail, setSelectedEmail] = useState('');
+  const [selectedPhone, setSelectedPhone] = useState('');
+
   // R2-specific fields
   const [leadProfile, setLeadProfile] = useState<string>('');
   const [attendanceStatus, setAttendanceStatus] = useState<string>('invited');
@@ -101,6 +114,8 @@ export function R2QuickScheduleModal({
   const [r2Observations, setR2Observations] = useState<string>('');
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
+  const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
+  const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
   const createMeeting = useCreateR2Meeting();
 
   // Fetch available slots for selected closer + date
@@ -150,13 +165,25 @@ export function R2QuickScheduleModal({
   const handleSelectDeal = useCallback((deal: DealOption) => {
     setSelectedDeal(deal);
     setNameQuery(deal.contact?.name || deal.name);
+    setSelectedEmail(deal.contact?.email || '');
+    setSelectedPhone(deal.contact?.phone || '');
+    setPhoneQuery('');
+    setEmailQuery('');
     setShowResults(false);
+    setShowPhoneResults(false);
+    setShowEmailResults(false);
   }, []);
 
   const handleClearSelection = useCallback(() => {
     setSelectedDeal(null);
     setNameQuery('');
+    setSelectedEmail('');
+    setSelectedPhone('');
+    setPhoneQuery('');
+    setEmailQuery('');
     setShowResults(false);
+    setShowPhoneResults(false);
+    setShowEmailResults(false);
   }, []);
 
   const toggleThermometer = (id: string) => {
@@ -206,6 +233,13 @@ export function R2QuickScheduleModal({
     setSelectedDate(undefined);
     setSelectedTime('');
     setCalendarMonth(new Date());
+    // Reset phone/email search
+    setPhoneQuery('');
+    setEmailQuery('');
+    setSelectedEmail('');
+    setSelectedPhone('');
+    setShowPhoneResults(false);
+    setShowEmailResults(false);
     // Reset R2-specific fields
     setLeadProfile('');
     setAttendanceStatus('invited');
@@ -241,62 +275,153 @@ export function R2QuickScheduleModal({
 
         <ScrollArea className="flex-1 h-[calc(90vh-120px)]">
           <div className="space-y-4 pr-4 pb-4">
-            {/* Search Section */}
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Buscar Lead</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Digite o nome do lead..."
-                  value={nameQuery}
-                  onChange={(e) => {
-                    setNameQuery(e.target.value);
-                    if (selectedDeal) {
-                      setSelectedDeal(null);
-                    }
-                    setShowResults(e.target.value.length >= 2);
-                  }}
-                  className={cn("pl-9", isSelected && "bg-muted border-purple-500/50")}
-                  readOnly={isSelected}
-                />
-                {isSelected && (
-                  <button
-                    onClick={handleClearSelection}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    ×
-                  </button>
+            {/* Search Section - 3 Fields like R1 */}
+            <div className="space-y-3">
+              {/* Name Search */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Nome</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome..."
+                    value={nameQuery}
+                    onChange={(e) => {
+                      setNameQuery(e.target.value);
+                      if (selectedDeal) {
+                        setSelectedDeal(null);
+                        setSelectedEmail('');
+                        setSelectedPhone('');
+                      }
+                      setShowResults(e.target.value.length >= 2);
+                    }}
+                    className={cn("pl-9 h-9", isSelected && "bg-green-50 border-green-500 dark:bg-green-950/30")}
+                    readOnly={isSelected}
+                  />
+                  {isSelected && (
+                    <button
+                      onClick={handleClearSelection}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {showResults && !isSelected && (
+                  <div className="border rounded-md max-h-40 overflow-y-auto bg-popover">
+                    {searching ? (
+                      <div className="p-2 space-y-2">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <p className="p-3 text-sm text-muted-foreground text-center">
+                        Nenhum resultado
+                      </p>
+                    ) : (
+                      searchResults.slice(0, 8).map(deal => (
+                        <button
+                          key={deal.id}
+                          onClick={() => handleSelectDeal(deal)}
+                          className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0"
+                        >
+                          <div className="font-medium text-sm">{deal.contact?.name || deal.name}</div>
+                          {deal.contact?.phone && (
+                            <div className="text-xs text-muted-foreground">{deal.contact.phone}</div>
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* Search Results */}
-              {showResults && !isSelected && (
-                <div className="border rounded-md max-h-48 overflow-y-auto bg-popover">
-                  {searching ? (
-                    <div className="p-2 space-y-2">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ) : searchResults.length === 0 ? (
-                    <p className="p-3 text-sm text-muted-foreground text-center">
-                      Nenhum resultado encontrado
-                    </p>
-                  ) : (
-                    searchResults.slice(0, 10).map(deal => (
-                      <button
-                        key={deal.id}
-                        onClick={() => handleSelectDeal(deal)}
-                        className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0"
-                      >
-                        <div className="font-medium text-sm">{deal.contact?.name || deal.name}</div>
-                        {deal.contact?.phone && (
-                          <div className="text-xs text-muted-foreground">{deal.contact.phone}</div>
-                        )}
-                      </button>
-                    ))
-                  )}
+              {/* Email Search */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por email..."
+                    value={isSelected ? selectedEmail : emailQuery}
+                    onChange={(e) => {
+                      if (!isSelected) {
+                        setEmailQuery(e.target.value);
+                        setShowEmailResults(e.target.value.length >= 3);
+                      }
+                    }}
+                    className={cn("pl-9 h-9", isSelected && "bg-green-50 border-green-500 dark:bg-green-950/30")}
+                    readOnly={isSelected}
+                  />
                 </div>
-              )}
+                {showEmailResults && !isSelected && (
+                  <div className="border rounded-md max-h-40 overflow-y-auto bg-popover">
+                    {searchingEmail ? (
+                      <div className="p-2 space-y-2">
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : emailSearchResults.length === 0 ? (
+                      <p className="p-3 text-sm text-muted-foreground text-center">
+                        Nenhum resultado
+                      </p>
+                    ) : (
+                      emailSearchResults.slice(0, 8).map(deal => (
+                        <button
+                          key={deal.id}
+                          onClick={() => handleSelectDeal(deal)}
+                          className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0"
+                        >
+                          <div className="font-medium text-sm">{deal.contact?.name || deal.name}</div>
+                          <div className="text-xs text-muted-foreground">{deal.contact?.email}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Phone Search */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Telefone</Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por telefone..."
+                    value={isSelected ? selectedPhone : phoneQuery}
+                    onChange={(e) => {
+                      if (!isSelected) {
+                        setPhoneQuery(e.target.value);
+                        setShowPhoneResults(e.target.value.length >= 4);
+                      }
+                    }}
+                    className={cn("pl-9 h-9", isSelected && "bg-green-50 border-green-500 dark:bg-green-950/30")}
+                    readOnly={isSelected}
+                  />
+                </div>
+                {showPhoneResults && !isSelected && (
+                  <div className="border rounded-md max-h-40 overflow-y-auto bg-popover">
+                    {searchingPhone ? (
+                      <div className="p-2 space-y-2">
+                        <Skeleton className="h-10 w-full" />
+                      </div>
+                    ) : phoneSearchResults.length === 0 ? (
+                      <p className="p-3 text-sm text-muted-foreground text-center">
+                        Nenhum resultado
+                      </p>
+                    ) : (
+                      phoneSearchResults.slice(0, 8).map(deal => (
+                        <button
+                          key={deal.id}
+                          onClick={() => handleSelectDeal(deal)}
+                          className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0"
+                        >
+                          <div className="font-medium text-sm">{deal.contact?.name || deal.name}</div>
+                          <div className="text-xs text-muted-foreground">{deal.contact?.phone}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Closer R2 */}
@@ -326,9 +451,9 @@ export function R2QuickScheduleModal({
                   <SelectValue placeholder="Selecione quem agendou" />
                 </SelectTrigger>
                 <SelectContent>
-                  {closers.map(closer => (
-                    <SelectItem key={closer.id} value={closer.id}>
-                      {closer.name}
+                  {R2_BOOKERS_LIST.map(booker => (
+                    <SelectItem key={booker.id} value={booker.id}>
+                      {booker.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
