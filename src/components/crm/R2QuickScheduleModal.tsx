@@ -389,36 +389,36 @@ export function R2QuickScheduleModal({
               </div>
             </div>
 
-            {/* Closer R2 */}
+            {/* Responsável pelo agendamento (booked_by) */}
             <div className="space-y-2">
-              <Label className="text-xs">Closer R2</Label>
-              <Select value={selectedCloser} onValueChange={setSelectedCloser}>
+              <Label className="text-xs">Responsável pelo agendamento</Label>
+              <Select value={bookedBy} onValueChange={setBookedBy}>
                 <SelectTrigger className="h-9">
-                  <User className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Selecione um closer" />
+                  <UserCheck className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Selecione responsável" />
                 </SelectTrigger>
                 <SelectContent>
-                  {closers.map(closer => (
-                    <SelectItem key={closer.id} value={closer.id}>
-                      {closer.name}
+                  {R2_BOOKERS_LIST.map(booker => (
+                    <SelectItem key={booker.id} value={booker.id}>
+                      {booker.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Quem Agendou (booked_by) */}
+            {/* Sócio */}
             <div className="space-y-2">
-              <Label className="text-xs">Quem Agendou</Label>
-              <Select value={bookedBy} onValueChange={setBookedBy}>
+              <Label className="text-xs">Sócio</Label>
+              <Select value={selectedCloser} onValueChange={setSelectedCloser}>
                 <SelectTrigger className="h-9">
-                  <UserCheck className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Selecione quem agendou" />
+                  <User className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Selecione um sócio" />
                 </SelectTrigger>
                 <SelectContent>
-                  {R2_BOOKERS_LIST.map(booker => (
-                    <SelectItem key={booker.id} value={booker.id}>
-                      {booker.nome}
+                  {closers.map(closer => (
+                    <SelectItem key={closer.id} value={closer.id}>
+                      {closer.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
