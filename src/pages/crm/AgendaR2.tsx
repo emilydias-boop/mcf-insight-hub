@@ -65,8 +65,8 @@ export default function AgendaR2() {
         return { rangeStart: selectedDate, rangeEnd: selectedDate };
       case 'week':
         return {
-          rangeStart: startOfWeek(selectedDate, { locale: ptBR, weekStartsOn: 1 }),
-          rangeEnd: endOfWeek(selectedDate, { locale: ptBR, weekStartsOn: 1 })
+          rangeStart: startOfWeek(selectedDate, { weekStartsOn: 0 }),
+          rangeEnd: endOfWeek(selectedDate, { weekStartsOn: 0 })
         };
       case 'month':
         return {
