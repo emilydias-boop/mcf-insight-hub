@@ -19,6 +19,7 @@ import {
   useClearR2DailySlotsForDate,
 } from '@/hooks/useR2DailySlots';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const WEEKDAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
@@ -48,6 +49,13 @@ export function R2DailySlotConfig({ closer }: R2DailySlotConfigProps) {
 
   const handleAddSlot = () => {
     if (!selectedDate || !newSlotTime) return;
+
+    // Validate 15-minute intervals
+    const [hours, minutes] = newSlotTime.split(':').map(Number);
+    if (minutes % 15 !== 0) {
+      toast.error('Use horários em intervalos de 15 minutos (ex: 10:00, 10:15, 10:30, 10:45)');
+      return;
+    }
 
     createSlot.mutate({
       closerId: closer.id,
@@ -215,6 +223,7 @@ export function R2DailySlotConfig({ closer }: R2DailySlotConfigProps) {
               <div className="flex gap-2">
                 <Input
                   type="time"
+                  step={900}
                   value={newSlotTime}
                   onChange={(e) => setNewSlotTime(e.target.value)}
                   className="w-28"

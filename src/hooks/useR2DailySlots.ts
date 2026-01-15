@@ -95,6 +95,7 @@ export function useCreateR2DailySlot() {
       queryClient.invalidateQueries({ queryKey: ['r2-daily-slots', variables.closerId, dateStr] });
       queryClient.invalidateQueries({ queryKey: ['r2-days-with-slots', variables.closerId] });
       queryClient.invalidateQueries({ queryKey: ['r2-closer-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-daily-slots-view'] });
       toast.success('Horário adicionado!');
     },
     onError: (error: any) => {
@@ -124,6 +125,7 @@ export function useDeleteR2DailySlot() {
       queryClient.invalidateQueries({ queryKey: ['r2-daily-slots'] });
       queryClient.invalidateQueries({ queryKey: ['r2-days-with-slots'] });
       queryClient.invalidateQueries({ queryKey: ['r2-closer-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-daily-slots-view'] });
       toast.success('Horário removido!');
     },
     onError: (error: any) => {
@@ -148,6 +150,7 @@ export function useUpdateR2DailySlot() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-daily-slots'] });
       queryClient.invalidateQueries({ queryKey: ['r2-closer-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-daily-slots-view'] });
       toast.success('Link atualizado!');
     },
     onError: (error: any) => {
@@ -209,6 +212,7 @@ export function useCopyWeekdaySlotsToDate() {
       queryClient.invalidateQueries({ queryKey: ['r2-daily-slots', variables.closerId, dateStr] });
       queryClient.invalidateQueries({ queryKey: ['r2-days-with-slots', variables.closerId] });
       queryClient.invalidateQueries({ queryKey: ['r2-closer-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-daily-slots-view'] });
       toast.success(`${count} horários copiados!`);
     },
     onError: (error: any) => {
@@ -238,6 +242,7 @@ export function useClearR2DailySlotsForDate() {
       queryClient.invalidateQueries({ queryKey: ['r2-daily-slots', variables.closerId, dateStr] });
       queryClient.invalidateQueries({ queryKey: ['r2-days-with-slots', variables.closerId] });
       queryClient.invalidateQueries({ queryKey: ['r2-closer-slots'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-daily-slots-view'] });
       toast.success('Horários limpos!');
     },
     onError: (error: any) => {
