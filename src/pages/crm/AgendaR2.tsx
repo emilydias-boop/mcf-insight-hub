@@ -10,27 +10,31 @@ import {
   Settings,
   List,
   LayoutGrid,
-  Clock
+  Clock,
+  Sliders
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useR2AgendaMeetings, R2Meeting } from '@/hooks/useR2AgendaMeetings';
-import { useActiveR2Closers } from '@/hooks/useR2Closers';
+import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
+import { useActiveR2Closers, useR2ClosersList } from '@/hooks/useR2Closers';
+import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { R2CloserColumnCalendar } from '@/components/crm/R2CloserColumnCalendar';
 import { AgendaCalendar } from '@/components/crm/AgendaCalendar';
 import { MeetingSlot, CloserWithAvailability } from '@/hooks/useAgendaData';
-import { R2MeetingDrawer } from '@/components/crm/R2MeetingDrawer';
+import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
 import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
 import { R2CloserAvailabilityConfig } from '@/components/crm/R2CloserAvailabilityConfig';
 import { R2PendingLeadsPanel } from '@/components/crm/R2PendingLeadsPanel';
-import { useR2ClosersList } from '@/hooks/useR2Closers';
+import { R2ListViewTable } from '@/components/crm/R2ListViewTable';
+import { R2StatusConfigModal } from '@/components/crm/R2StatusConfigModal';
 import { useR2PendingLeadsCount } from '@/hooks/useR2PendingLeads';
 import { R2RescheduleModal } from '@/components/crm/R2RescheduleModal';
-import { useNavigate } from 'react-router-dom';
+import { R2MeetingRow } from '@/types/r2Agenda';
+import { R2Meeting } from '@/hooks/useR2AgendaMeetings';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -38,21 +42,21 @@ import { cn } from '@/lib/utils';
 type ViewMode = 'day' | 'week' | 'month';
 
 export default function AgendaR2() {
-  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [closerFilter, setCloserFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
   // Modal/Drawer states
-  const [selectedMeeting, setSelectedMeeting] = useState<R2Meeting | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<R2MeetingRow | null>(null);
   const [meetingDrawerOpen, setMeetingDrawerOpen] = useState(false);
   const [quickScheduleOpen, setQuickScheduleOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
-  const [meetingToReschedule, setMeetingToReschedule] = useState<R2Meeting | null>(null);
+  const [meetingToReschedule, setMeetingToReschedule] = useState<R2MeetingRow | null>(null);
   const [preselectedCloserId, setPreselectedCloserId] = useState<string | undefined>();
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
+  const [statusConfigOpen, setStatusConfigOpen] = useState(false);
 
   // Calculate date range based on view mode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -75,7 +79,9 @@ export default function AgendaR2() {
   // Fetch data
   const { data: closers = [], isLoading: isLoadingClosers } = useActiveR2Closers();
   const { data: allClosers = [], isLoading: isLoadingAllClosers } = useR2ClosersList();
-  const { data: meetings = [], isLoading: isLoadingMeetings, refetch: refetchMeetings } = useR2AgendaMeetings(rangeStart, rangeEnd);
+  const { data: meetings = [], isLoading: isLoadingMeetings, refetch: refetchMeetings } = useR2MeetingsExtended(rangeStart, rangeEnd);
+  const { data: statusOptions = [] } = useR2StatusOptions();
+  const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const pendingCount = useR2PendingLeadsCount();
 
   // Filter meetings by closer and status
@@ -196,7 +202,7 @@ export default function AgendaR2() {
   };
 
   // Meeting handlers
-  const handleSelectMeeting = (meeting: R2Meeting) => {
+  const handleSelectMeeting = (meeting: R2MeetingRow) => {
     setSelectedMeeting(meeting);
     setMeetingDrawerOpen(true);
   };
@@ -207,11 +213,22 @@ export default function AgendaR2() {
     setQuickScheduleOpen(true);
   };
 
-  const handleReschedule = (meeting: R2Meeting) => {
+  const handleReschedule = (meeting: R2MeetingRow) => {
     setMeetingToReschedule(meeting);
     setMeetingDrawerOpen(false);
     setRescheduleModalOpen(true);
   };
+
+  // Convert R2MeetingRow to R2Meeting for child components
+  const meetingsAsR2Meeting = useMemo(() => {
+    return meetings.map(m => ({
+      ...m,
+      attendees: m.attendees.map(a => ({
+        ...a,
+        deal: a.deal ? { ...a.deal } : null
+      }))
+    })) as unknown as R2Meeting[];
+  }, [meetings]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -252,9 +269,13 @@ export default function AgendaR2() {
           </Badge>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setStatusConfigOpen(true)}>
+            <Sliders className="h-4 w-4 mr-2" />
+            Status/Tags
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
             <Settings className="h-4 w-4 mr-2" />
-            Configurar Closers
+            Closers
           </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -353,14 +374,9 @@ export default function AgendaR2() {
           <Tabs defaultValue="calendar">
             <div className="flex items-center justify-between mb-4">
               <TabsList>
-                <TabsTrigger value="pending" className="gap-2">
-                  <Clock className="h-4 w-4" />
-                  Pendentes
-                  {pendingCount > 0 && (
-                    <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-xs">
-                      {pendingCount}
-                    </Badge>
-                  )}
+                <TabsTrigger value="list" className="gap-2">
+                  <List className="h-4 w-4" />
+                  Lista
                 </TabsTrigger>
                 <TabsTrigger value="calendar" className="gap-2">
                   <CalendarIcon className="h-4 w-4" />
@@ -370,15 +386,31 @@ export default function AgendaR2() {
                   <LayoutGrid className="h-4 w-4" />
                   Por Closer
                 </TabsTrigger>
-                <TabsTrigger value="list" className="gap-2">
-                  <List className="h-4 w-4" />
-                  Lista
+                <TabsTrigger value="pending" className="gap-2">
+                  <Clock className="h-4 w-4" />
+                  Pendentes
+                  {pendingCount > 0 && (
+                    <Badge variant="destructive" className="h-5 min-w-[20px] px-1.5 text-xs">
+                      {pendingCount}
+                    </Badge>
+                  )}
                 </TabsTrigger>
               </TabsList>
               <div className="text-sm text-muted-foreground">
-                {filteredMeetings.length} reunião(ões)
+                {meetings.length} reunião(ões)
               </div>
             </div>
+
+            {/* List View - Primary */}
+            <TabsContent value="list" className="mt-0">
+              <R2ListViewTable
+                meetings={meetings}
+                statusOptions={statusOptions}
+                thermometerOptions={thermometerOptions}
+                onSelectMeeting={handleSelectMeeting}
+                isLoading={isLoadingMeetings}
+              />
+            </TabsContent>
 
 
             {/* Pending Leads Tab */}
@@ -402,7 +434,7 @@ export default function AgendaR2() {
                   closerFilter={closerFilter === 'all' ? null : closerFilter}
                   viewMode={viewMode}
                   onSelectMeeting={(meeting) => {
-                    const originalMeeting = filteredMeetings.find(m => m.id === meeting.id);
+                    const originalMeeting = meetings.find(m => m.id === meeting.id);
                     if (originalMeeting) handleSelectMeeting(originalMeeting);
                   }}
                   onSelectSlot={(day, hour, minute, closerId) => {
@@ -430,10 +462,13 @@ export default function AgendaR2() {
                 </div>
               ) : (
                 <R2CloserColumnCalendar
-                  meetings={filteredMeetings}
+                  meetings={meetingsAsR2Meeting}
                   closers={displayClosers}
                   selectedDate={selectedDate}
-                  onSelectMeeting={handleSelectMeeting}
+                  onSelectMeeting={(m) => {
+                    const meeting = meetings.find(mt => mt.id === m.id);
+                    if (meeting) handleSelectMeeting(meeting);
+                  }}
                   onSelectSlot={handleSelectSlot}
                 />
               )}
@@ -508,9 +543,11 @@ export default function AgendaR2() {
         </CardContent>
       </Card>
 
-      {/* Meeting Drawer */}
-      <R2MeetingDrawer
+      {/* Meeting Detail Drawer */}
+      <R2MeetingDetailDrawer
         meeting={selectedMeeting}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
         open={meetingDrawerOpen}
         onOpenChange={setMeetingDrawerOpen}
         onReschedule={handleReschedule}
@@ -533,7 +570,7 @@ export default function AgendaR2() {
 
       {/* Reschedule Modal */}
       <R2RescheduleModal
-        meeting={meetingToReschedule}
+        meeting={meetingToReschedule as unknown as R2Meeting}
         open={rescheduleModalOpen}
         onOpenChange={setRescheduleModalOpen}
         closers={closers}
@@ -545,6 +582,12 @@ export default function AgendaR2() {
         onOpenChange={setAvailabilityConfigOpen}
         closers={allClosers}
         isLoading={isLoadingAllClosers}
+      />
+
+      {/* Status Config Modal */}
+      <R2StatusConfigModal
+        open={statusConfigOpen}
+        onOpenChange={setStatusConfigOpen}
       />
     </div>
   );

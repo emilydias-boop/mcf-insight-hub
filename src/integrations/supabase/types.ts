@@ -3291,11 +3291,21 @@ export type Database = {
           deal_id: string | null
           id: string
           is_partner: boolean | null
+          lead_profile: string | null
+          meeting_link: string | null
           meeting_slot_id: string
           notes: string | null
           notified_at: string | null
           parent_attendee_id: string | null
+          partner_name: string | null
+          r2_confirmation: string | null
+          r2_observations: string | null
+          r2_status_id: string | null
           status: string | null
+          thermometer_ids: string[] | null
+          updated_at: string | null
+          updated_by: string | null
+          video_status: string | null
         }
         Insert: {
           already_builds?: boolean | null
@@ -3309,11 +3319,21 @@ export type Database = {
           deal_id?: string | null
           id?: string
           is_partner?: boolean | null
+          lead_profile?: string | null
+          meeting_link?: string | null
           meeting_slot_id: string
           notes?: string | null
           notified_at?: string | null
           parent_attendee_id?: string | null
+          partner_name?: string | null
+          r2_confirmation?: string | null
+          r2_observations?: string | null
+          r2_status_id?: string | null
           status?: string | null
+          thermometer_ids?: string[] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          video_status?: string | null
         }
         Update: {
           already_builds?: boolean | null
@@ -3327,11 +3347,21 @@ export type Database = {
           deal_id?: string | null
           id?: string
           is_partner?: boolean | null
+          lead_profile?: string | null
+          meeting_link?: string | null
           meeting_slot_id?: string
           notes?: string | null
           notified_at?: string | null
           parent_attendee_id?: string | null
+          partner_name?: string | null
+          r2_confirmation?: string | null
+          r2_observations?: string | null
+          r2_status_id?: string | null
           status?: string | null
+          thermometer_ids?: string[] | null
+          updated_at?: string | null
+          updated_by?: string | null
+          video_status?: string | null
         }
         Relationships: [
           {
@@ -3374,6 +3404,13 @@ export type Database = {
             columns: ["parent_attendee_id"]
             isOneToOne: false
             referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_slot_attendees_r2_status_id_fkey"
+            columns: ["r2_status_id"]
+            isOneToOne: false
+            referencedRelation: "r2_status_options"
             referencedColumns: ["id"]
           },
         ]
@@ -3835,6 +3872,57 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      r2_status_options: {
+        Row: {
+          color: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
+      }
+      r2_thermometer_options: {
+        Row: {
+          color: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
         }
         Relationships: []
       }
