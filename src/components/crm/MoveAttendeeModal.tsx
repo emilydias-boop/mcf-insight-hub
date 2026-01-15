@@ -38,6 +38,7 @@ interface MoveAttendeeModalProps {
   } | null;
   currentMeetingId: string | null;
   currentMeetingDate?: Date; // Data atual da reunião para validação
+  currentAttendeeStatus?: string; // Status do participante (para permitir mover no_show para outro dia)
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -54,6 +55,7 @@ export function MoveAttendeeModal({
   attendee, 
   currentMeetingId,
   currentMeetingDate,
+  currentAttendeeStatus,
   open, 
   onOpenChange 
 }: MoveAttendeeModalProps) {
@@ -128,6 +130,10 @@ export function MoveAttendeeModal({
     if (!selectedDate || !currentMeetingDate) return false;
     return !isSameDay(selectedDate, currentMeetingDate);
   }, [selectedDate, currentMeetingDate]);
+
+  // Permitir mover para outro dia se o participante está como no_show
+  const isNoShow = currentAttendeeStatus === 'no_show';
+  const blockDifferentDay = isDifferentDay && !isNoShow;
 
   // Apply closer filter
   const filteredSlots = useMemo(() => {
@@ -324,8 +330,8 @@ export function MoveAttendeeModal({
             </div>
           )}
 
-          {/* Alerta para dias diferentes */}
-          {selectedDate && isDifferentDay && (
+          {/* Alerta para dias diferentes (bloqueado se não for no_show) */}
+          {selectedDate && blockDifferentDay && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -335,8 +341,18 @@ export function MoveAttendeeModal({
             </Alert>
           )}
 
+          {/* Aviso informativo quando no_show é movido para outro dia */}
+          {selectedDate && isDifferentDay && isNoShow && (
+            <Alert className="border-amber-500 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertDescription className="text-amber-600">
+                Lead em <strong>No-Show</strong>: permitido mover para outro dia.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Available Slots & Meetings */}
-          {selectedDate && !isDifferentDay && (
+          {selectedDate && !blockDifferentDay && (
             <ScrollArea className="h-[300px]">
               <div className="space-y-4 pr-4">
                 {/* Available Slots Section */}
