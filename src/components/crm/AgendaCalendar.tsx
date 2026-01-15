@@ -427,6 +427,15 @@ export function AgendaCalendar({
       .slice(0, 2);
   };
 
+  // Status config with short labels and colors
+  const ATTENDEE_STATUS_CONFIG: Record<string, { shortLabel: string; colorClass: string }> = {
+    invited: { shortLabel: 'AG', colorClass: 'text-blue-400' },
+    completed: { shortLabel: 'OK', colorClass: 'text-green-500' },
+    no_show: { shortLabel: 'NS', colorClass: 'text-red-500' },
+    contract_paid: { shortLabel: 'CP', colorClass: 'text-emerald-500' },
+    rescheduled: { shortLabel: 'RE', colorClass: 'text-yellow-500' },
+  };
+
   const isCurrentTimeSlot = (day: Date, hour: number, minute: number) => {
     const now = new Date();
     if (!isSameDay(day, now)) return false;
@@ -938,9 +947,17 @@ export function AgendaCalendar({
                                                     <span className="text-muted-foreground">•</span>
                                                   </>
                                                 )}
-                                                <span className="truncate">
+                                                <span className="truncate flex-1">
                                                   {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
                                                 </span>
+                                                {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
+                                                  <span className={cn(
+                                                    "text-[9px] font-bold",
+                                                    ATTENDEE_STATUS_CONFIG[att.status].colorClass
+                                                  )}>
+                                                    {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
+                                                  </span>
+                                                )}
                                               </div>
                                             ))}
                                             {remaining > 0 && (
