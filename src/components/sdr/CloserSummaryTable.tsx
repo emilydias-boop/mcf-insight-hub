@@ -93,15 +93,7 @@ export function CloserSummaryTable({
                   onClick={onCloserClick ? () => onCloserClick(row.closer_id) : undefined}
                 >
                   <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      {row.closer_color && (
-                        <div 
-                          className="w-3 h-3 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: row.closer_color }}
-                        />
-                      )}
-                      <span className="text-foreground">{row.closer_name}</span>
-                    </div>
+                    <span className="text-foreground">{row.closer_name}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
