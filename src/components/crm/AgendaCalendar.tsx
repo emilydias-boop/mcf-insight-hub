@@ -241,12 +241,16 @@ export function AgendaCalendar({
   }, [filteredMeetings]);
 
   // Get the meeting that covers a specific slot (for clicks on occupied slots)
-  const getMeetingCoveringSlot = useCallback((day: Date, hour: number, minute: number): MeetingSlot | null => {
+  // Now accepts optional closerId to handle overlapping meetings from different closers
+  const getMeetingCoveringSlot = useCallback((day: Date, hour: number, minute: number, closerId?: string): MeetingSlot | null => {
     const slotTime = setMinutes(setHours(new Date(day), hour), minute);
     
     for (const meeting of filteredMeetings) {
       const meetingStart = parseISO(meeting.scheduled_at);
       if (!isSameDay(meetingStart, day)) continue;
+      
+      // If closerId was specified, filter by it
+      if (closerId && meeting.closer_id !== closerId) continue;
       
       const duration = meeting.duration_minutes || 30;
       const meetingEnd = new Date(meetingStart.getTime() + duration * 60 * 1000);
@@ -257,6 +261,26 @@ export function AgendaCalendar({
       }
     }
     return null;
+  }, [filteredMeetings]);
+
+  // Get all active closers that have meetings covering a specific slot
+  const getActiveClosersInSlot = useCallback((day: Date, hour: number, minute: number): string[] => {
+    const slotTime = setMinutes(setHours(new Date(day), hour), minute);
+    const closerIds = new Set<string>();
+    
+    for (const meeting of filteredMeetings) {
+      const meetingStart = parseISO(meeting.scheduled_at);
+      if (!isSameDay(meetingStart, day)) continue;
+      
+      const duration = meeting.duration_minutes || 30;
+      const meetingEnd = new Date(meetingStart.getTime() + duration * 60 * 1000);
+      
+      if (slotTime >= meetingStart && slotTime < meetingEnd && meeting.closer_id) {
+        closerIds.add(meeting.closer_id);
+      }
+    }
+    
+    return [...closerIds].sort();
   }, [filteredMeetings]);
 
   // Calculate slot occupancy - how many meetings per closer per time slot
@@ -741,10 +765,25 @@ export function AgendaCalendar({
                         <div
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          onClick={() => {
+                          onClick={(e) => {
                             // If slot is occupied by an earlier meeting, open that meeting
                             if (isOccupied) {
-                              const coveringMeeting = getMeetingCoveringSlot(day, hour, minute);
+                              // Determine which closer column was clicked based on X position
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const clickX = e.clientX - rect.left;
+                              const activeClosersInSlot = getActiveClosersInSlot(day, hour, minute);
+                              
+                              let clickedCloserId: string | undefined;
+                              if (activeClosersInSlot.length > 1) {
+                                const widthPerCloser = rect.width / activeClosersInSlot.length;
+                                const clickedCloserIndex = Math.min(
+                                  Math.floor(clickX / widthPerCloser),
+                                  activeClosersInSlot.length - 1
+                                );
+                                clickedCloserId = activeClosersInSlot[clickedCloserIndex];
+                              }
+                              
+                              const coveringMeeting = getMeetingCoveringSlot(day, hour, minute, clickedCloserId);
                               if (coveringMeeting) {
                                 onSelectMeeting(coveringMeeting);
                               }
