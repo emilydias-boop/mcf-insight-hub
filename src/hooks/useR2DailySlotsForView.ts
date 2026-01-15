@@ -42,15 +42,21 @@ export function useR2DailySlotsForView(
 
       if (dailyError) throw dailyError;
 
-      // Group daily slots by date
+      // Group daily slots by date - normalize to yyyy-MM-dd format
       const dailySlotsByDate: Record<string, typeof dailySlots> = {};
       for (const slot of dailySlots || []) {
-        const dateStr = slot.slot_date;
+        // Normalize slot_date to yyyy-MM-dd (handle both string and Date)
+        const dateStr = typeof slot.slot_date === 'string' 
+          ? slot.slot_date.slice(0, 10) 
+          : format(new Date(slot.slot_date), 'yyyy-MM-dd');
         if (!dailySlotsByDate[dateStr]) {
           dailySlotsByDate[dateStr] = [];
         }
         dailySlotsByDate[dateStr].push(slot);
       }
+      
+      // Debug log - remove after confirming fix
+      console.log('[R2 Daily Slots] dailySlots count:', dailySlots?.length, 'keys:', Object.keys(dailySlotsByDate));
 
       // Fetch weekday-based slots for fallback (only for R2 closers)
       const weekdayQuery = supabase
