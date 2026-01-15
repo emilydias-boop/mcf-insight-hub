@@ -89,25 +89,27 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
       });
 
       // Fetch R1 meetings for those deals to get R1 closers
-      let r1CloserMap: Record<string, { id: string; name: string }> = {};
+      let r1CloserMap: Record<string, { id: string; name: string; scheduled_at: string | null }> = {};
       if (dealIds.length > 0) {
         const { data: r1Meetings } = await supabase
           .from('meeting_slots')
           .select(`
             id,
+            scheduled_at,
             closer:closers!meeting_slots_closer_id_fkey(id, name),
             attendees:meeting_slot_attendees(deal_id)
           `)
           .eq('meeting_type', 'r1')
           .limit(500);
 
-        // Map deal_id -> R1 closer
+        // Map deal_id -> R1 closer with scheduled_at
         (r1Meetings || []).forEach((r1: Record<string, unknown>) => {
           const r1Closer = r1.closer as { id: string; name: string } | null;
+          const r1ScheduledAt = r1.scheduled_at as string | null;
           const r1Attendees = (r1.attendees || []) as Array<{ deal_id: string | null }>;
           r1Attendees.forEach(att => {
             if (att.deal_id && r1Closer && dealIds.includes(att.deal_id)) {
-              r1CloserMap[att.deal_id] = r1Closer;
+              r1CloserMap[att.deal_id] = { ...r1Closer, scheduled_at: r1ScheduledAt };
             }
           });
         });
@@ -166,7 +168,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
 
         // Find SDR from first attendee's deal
         let sdr: { email: string; name: string | null } | null = null;
-        let r1Closer: { id: string; name: string } | null = null;
+        let r1Closer: { id: string; name: string; scheduled_at: string | null } | null = null;
 
         if (attendeesArr.length > 0) {
           const firstAtt = attendeesArr[0];

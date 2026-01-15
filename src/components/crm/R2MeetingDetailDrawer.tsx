@@ -151,7 +151,16 @@ export function R2MeetingDetailDrawer({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Closer R1:</span>
                   <span className="font-medium">
-                    {meeting.r1_closer?.name || '—'}
+                    {meeting.r1_closer ? (
+                      <>
+                        {meeting.r1_closer.name}
+                        {meeting.r1_closer.scheduled_at && (
+                          <span className="text-muted-foreground ml-1">
+                            ({format(parseISO(meeting.r1_closer.scheduled_at), "dd/MM 'às' HH:mm")})
+                          </span>
+                        )}
+                      </>
+                    ) : '—'}
                   </span>
                 </div>
                 <div className="flex justify-between">
