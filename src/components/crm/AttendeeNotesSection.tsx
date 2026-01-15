@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Tag, ArrowRightLeft, MessageCircle, Plus, Send, Trash2 } from 'lucide-react';
+import { Tag, ArrowRightLeft, MessageCircle, Plus, Send, Trash2, StickyNote } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   useAttendeeNotes, 
   useAddAttendeeNote, 
@@ -24,10 +25,10 @@ interface AttendeeNotesSectionProps {
 
 const NOTE_TYPE_CONFIG: Record<NoteType, { icon: typeof Tag; label: string; bgColor: string; textColor: string }> = {
   initial: { 
-    icon: Tag, 
+    icon: StickyNote, 
     label: 'Nota do Agendamento', 
-    bgColor: 'bg-blue-500/10',
-    textColor: 'text-blue-600 dark:text-blue-400'
+    bgColor: 'bg-amber-500/10',
+    textColor: 'text-amber-600 dark:text-amber-400'
   },
   reschedule: { 
     icon: ArrowRightLeft, 
@@ -105,6 +106,59 @@ export function AttendeeNotesSection({
   const addNote = useAddAttendeeNote();
   const deleteNote = useDeleteAttendeeNote();
 
+  // Fetch the original scheduling note from meeting_slot_attendees.notes
+  const { data: schedulingNote, isLoading: isLoadingSchedulingNote } = useQuery({
+    queryKey: ['attendee-scheduling-note', attendeeId],
+    queryFn: async () => {
+      if (!attendeeId) return null;
+      
+      const { data, error } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          notes,
+          booked_by,
+          created_at,
+          booked_by_profile:profiles!meeting_slot_attendees_booked_by_fkey(id, full_name, email)
+        `)
+        .eq('id', attendeeId)
+        .single();
+      
+      if (error) return null;
+      return data;
+    },
+    enabled: !!attendeeId,
+  });
+
+  // Combine scheduling note with attendee_notes
+  const allNotes = useMemo(() => {
+    const combined: AttendeeNote[] = [];
+    
+    // Add scheduling note as first note (type initial) if exists
+    if (schedulingNote?.notes && schedulingNote.notes.trim()) {
+      const profile = schedulingNote.booked_by_profile;
+      combined.push({
+        id: 'scheduling-note-' + attendeeId,
+        attendee_id: attendeeId || '',
+        note: schedulingNote.notes,
+        note_type: 'initial' as NoteType,
+        created_by: schedulingNote.booked_by,
+        created_at: schedulingNote.created_at || new Date().toISOString(),
+        created_by_profile: profile ? {
+          id: profile.id,
+          full_name: profile.full_name,
+          email: profile.email,
+        } : null,
+      });
+    }
+    
+    // Add notes from attendee_notes table
+    if (notes && notes.length > 0) {
+      combined.push(...notes);
+    }
+    
+    return combined;
+  }, [schedulingNote, notes, attendeeId]);
+
   const handleAddNote = () => {
     if (!newNote.trim() || !attendeeId) {
       toast.error('Digite uma nota');
@@ -129,6 +183,12 @@ export function AttendeeNotesSection({
   const handleDeleteNote = (noteId: string) => {
     if (!attendeeId) return;
     
+    // Don't allow deleting the scheduling note (it's virtual)
+    if (noteId.startsWith('scheduling-note-')) {
+      toast.error('A nota de agendamento não pode ser removida');
+      return;
+    }
+    
     deleteNote.mutate(
       { noteId, attendeeId },
       {
@@ -145,6 +205,7 @@ export function AttendeeNotesSection({
   if (!attendeeId) return null;
 
   const firstName = participantName?.split(' ')[0] || 'Participante';
+  const isLoadingAll = isLoading || isLoadingSchedulingNote;
 
   return (
     <div className="space-y-3">
@@ -201,21 +262,21 @@ export function AttendeeNotesSection({
       )}
 
       {/* Notes list */}
-      {isLoading ? (
+      {isLoadingAll ? (
         <div className="text-center text-sm text-muted-foreground py-4">
           Carregando notas...
         </div>
-      ) : notes.length === 0 ? (
+      ) : allNotes.length === 0 ? (
         <div className="text-center text-sm text-muted-foreground py-4 bg-muted/20 rounded-lg">
           Nenhuma nota registrada
         </div>
       ) : (
         <div className="max-h-[300px] overflow-y-auto space-y-2">
-          {notes.map((note) => (
+          {allNotes.map((note) => (
             <NoteItem
               key={note.id}
               note={note}
-              canDelete={note.created_by === user?.id}
+              canDelete={note.created_by === user?.id && !note.id.startsWith('scheduling-note-')}
               onDelete={() => handleDeleteNote(note.id)}
             />
           ))}
