@@ -246,8 +246,8 @@ export function R2ListViewTable({
                 {/* Status Final */}
                 <TableCell onClick={e => e.stopPropagation()}>
                   <Select
-                    value={attendee.r2_status_id || ''}
-                    onValueChange={(value) => handleQuickUpdate(attendee.id, 'r2_status_id', value || null)}
+                    value={attendee.r2_status_id || '__none__'}
+                    onValueChange={(value) => handleQuickUpdate(attendee.id, 'r2_status_id', value === '__none__' ? null : value)}
                   >
                     <SelectTrigger 
                       className="h-7 text-xs border-0"
@@ -259,7 +259,7 @@ export function R2ListViewTable({
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— Sem status —</SelectItem>
+                      <SelectItem value="__none__">— Sem status —</SelectItem>
                       {statusOptions.map(opt => (
                         <SelectItem key={opt.id} value={opt.id}>
                           <div className="flex items-center gap-2">
