@@ -52,11 +52,18 @@ export function useR2DailySlotsForView(
         dailySlotsByDate[dateStr].push(slot);
       }
 
-      // Fetch weekday-based slots for fallback
-      const { data: weekdaySlots, error: weekdayError } = await supabase
+      // Fetch weekday-based slots for fallback (only for R2 closers)
+      const weekdayQuery = supabase
         .from('closer_meeting_links')
         .select('closer_id, day_of_week, start_time, google_meet_link')
         .order('start_time');
+      
+      // Filter by closerIds if provided
+      if (closerIds.length > 0) {
+        weekdayQuery.in('closer_id', closerIds);
+      }
+      
+      const { data: weekdaySlots, error: weekdayError } = await weekdayQuery;
 
       if (weekdayError) throw weekdayError;
 
