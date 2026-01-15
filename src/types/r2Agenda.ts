@@ -65,6 +65,19 @@ export interface R2MeetingRow {
     color: string | null;
   } | null;
   attendees: R2AttendeeExtended[];
+  // Histórico do funil
+  sdr?: {
+    email: string;
+    name: string | null;
+  } | null;
+  r1_closer?: {
+    id: string;
+    name: string;
+  } | null;
+  booked_by?: {
+    id: string;
+    name: string | null;
+  } | null;
 }
 
 export interface R2AuditLog {

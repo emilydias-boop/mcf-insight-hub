@@ -17,6 +17,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           created_at,
           meeting_type,
           notes,
+          booked_by,
           closer:closers!meeting_slots_closer_id_fkey(
             id,
             name,
@@ -31,7 +32,6 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             already_builds,
             lead_profile,
             partner_name,
-            lead_profile,
             video_status,
             r2_status_id,
             thermometer_ids,
@@ -43,6 +43,7 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             deal:crm_deals(
               id,
               name,
+              owner_id,
               contact:crm_contacts(
                 name,
                 email,
@@ -81,13 +82,103 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         return acc;
       }, {} as Record<string, R2ThermometerOption>);
 
+      // Collect all deal_ids from R2 meetings to find R1 closers
+      const dealIds = (meetings || []).flatMap(m => {
+        const attendeesArr = ((m as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
+        return attendeesArr.map(a => a.deal_id as string).filter(Boolean);
+      });
+
+      // Fetch R1 meetings for those deals to get R1 closers
+      let r1CloserMap: Record<string, { id: string; name: string }> = {};
+      if (dealIds.length > 0) {
+        const { data: r1Meetings } = await supabase
+          .from('meeting_slots')
+          .select(`
+            id,
+            closer:closers!meeting_slots_closer_id_fkey(id, name),
+            attendees:meeting_slot_attendees(deal_id)
+          `)
+          .eq('meeting_type', 'r1')
+          .limit(500);
+
+        // Map deal_id -> R1 closer
+        (r1Meetings || []).forEach((r1: Record<string, unknown>) => {
+          const r1Closer = r1.closer as { id: string; name: string } | null;
+          const r1Attendees = (r1.attendees || []) as Array<{ deal_id: string | null }>;
+          r1Attendees.forEach(att => {
+            if (att.deal_id && r1Closer && dealIds.includes(att.deal_id)) {
+              r1CloserMap[att.deal_id] = r1Closer;
+            }
+          });
+        });
+      }
+
+      // Collect all booked_by IDs and SDR emails
+      const bookedByIds = (meetings || [])
+        .map(m => (m as Record<string, unknown>).booked_by as string)
+        .filter(Boolean);
+      
+      const sdrEmails = (meetings || []).flatMap(m => {
+        const attendeesArr = ((m as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
+        return attendeesArr.map(a => {
+          const deal = a.deal as { owner_id?: string } | null;
+          return deal?.owner_id;
+        }).filter(Boolean) as string[];
+      });
+
+      // Fetch profiles for booked_by users
+      let profilesById: Record<string, { id: string; name: string | null }> = {};
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', bookedByIds);
+        (profiles || []).forEach(p => {
+          profilesById[p.id] = { id: p.id, name: p.full_name };
+        });
+      }
+
+      // Fetch profiles for SDRs by email
+      let profilesByEmail: Record<string, { email: string; name: string | null }> = {};
+      if (sdrEmails.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('email', sdrEmails);
+        (profiles || []).forEach(p => {
+          if (p.email) {
+            profilesByEmail[p.email] = { email: p.email, name: p.full_name };
+          }
+        });
+      }
+
       // Enrich attendees with status and thermometer objects, and map column names
       return (meetings || []).map(meeting => {
         const meetingObj = meeting as Record<string, unknown>;
         const attendeesArr = (meetingObj.attendees || []) as Array<Record<string, unknown>>;
-        
+        const bookedById = meetingObj.booked_by as string | null;
+
+        // Find SDR from first attendee's deal
+        let sdr: { email: string; name: string | null } | null = null;
+        let r1Closer: { id: string; name: string } | null = null;
+
+        if (attendeesArr.length > 0) {
+          const firstAtt = attendeesArr[0];
+          const deal = firstAtt.deal as { owner_id?: string } | null;
+          if (deal?.owner_id) {
+            sdr = profilesByEmail[deal.owner_id] || { email: deal.owner_id, name: null };
+          }
+          const dealId = firstAtt.deal_id as string | null;
+          if (dealId && r1CloserMap[dealId]) {
+            r1Closer = r1CloserMap[dealId];
+          }
+        }
+
         return {
           ...meetingObj,
+          sdr,
+          r1_closer: r1Closer,
+          booked_by: bookedById ? profilesById[bookedById] || { id: bookedById, name: null } : null,
           attendees: attendeesArr.map(att => {
             const thermIds = (att.thermometer_ids as string[]) || [];
             const statusId = att.r2_status_id as string | null;
