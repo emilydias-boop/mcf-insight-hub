@@ -754,7 +754,7 @@ export type Database = {
           closer_id: string
           created_at: string | null
           day_of_week: number
-          google_meet_link: string
+          google_meet_link: string | null
           id: string
           start_time: string
         }
@@ -762,7 +762,7 @@ export type Database = {
           closer_id: string
           created_at?: string | null
           day_of_week: number
-          google_meet_link: string
+          google_meet_link?: string | null
           id?: string
           start_time: string
         }
@@ -770,7 +770,7 @@ export type Database = {
           closer_id?: string
           created_at?: string | null
           day_of_week?: number
-          google_meet_link?: string
+          google_meet_link?: string | null
           id?: string
           start_time?: string
         }
