@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Palette, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
+import { R2DailySlotConfig } from './R2DailySlotConfig';
 import { cn } from '@/lib/utils';
 import { 
   useCloserMeetingLinksList, 
@@ -352,7 +353,7 @@ function R2CloserAvailabilityForm({ closer }: { closer: R2Closer }) {
 
 export function R2CloserAvailabilityConfig({ open, onOpenChange, closers, isLoading }: R2CloserAvailabilityConfigProps) {
   const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('availability');
+  const [activeTab, setActiveTab] = useState('daily');
 
   const currentCloserId = selectedCloser || closers[0]?.id;
   const currentCloser = closers.find(c => c.id === currentCloserId);
@@ -396,16 +397,26 @@ export function R2CloserAvailabilityConfig({ open, onOpenChange, closers, isLoad
 
             {/* Config Type Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="availability">Disponibilidade</TabsTrigger>
-                <TabsTrigger value="blocked">Datas Bloqueadas</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="fixed">Horários Fixos</TabsTrigger>
+                <TabsTrigger value="daily">Por Data</TabsTrigger>
+                <TabsTrigger value="blocked">Bloqueados</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="availability" className="mt-4">
+              <TabsContent value="fixed" className="mt-4">
                 {currentCloser && (
                   <R2CloserAvailabilityForm 
                     key={currentCloser.id} 
                     closer={currentCloser} 
+                  />
+                )}
+              </TabsContent>
+
+              <TabsContent value="daily" className="mt-4">
+                {currentCloser && (
+                  <R2DailySlotConfig
+                    key={`daily-${currentCloser.id}`}
+                    closer={currentCloser}
                   />
                 )}
               </TabsContent>
