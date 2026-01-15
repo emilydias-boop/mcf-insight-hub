@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, Link2, FileText, Tag, UserCheck, Mail, Phone, X } from 'lucide-react';
+import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2, UserCheck, Mail, Phone, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -22,20 +22,13 @@ import {
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule, useSearchDealsByPhone, useSearchDealsByEmail } from '@/hooks/useAgendaData';
 import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { R2_BOOKERS_LIST } from '@/constants/team';
-import { 
-  R2StatusOption, 
-  R2ThermometerOption, 
-  LEAD_PROFILE_OPTIONS, 
-  ATTENDANCE_STATUS_OPTIONS,
-  VIDEO_STATUS_OPTIONS 
-} from '@/types/r2Agenda';
+import { R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
 import { cn } from '@/lib/utils';
 
 interface DealForSchedule {
@@ -104,13 +97,6 @@ export function R2QuickScheduleModal({
   const [selectedPhone, setSelectedPhone] = useState('');
 
   // R2-specific fields
-  const [leadProfile, setLeadProfile] = useState<string>('');
-  const [attendanceStatus, setAttendanceStatus] = useState<string>('invited');
-  const [videoStatus, setVideoStatus] = useState<string>('pendente');
-  const [r2StatusId, setR2StatusId] = useState<string>('');
-  const [thermometerIds, setThermometerIds] = useState<string[]>([]);
-  const [meetingLink, setMeetingLink] = useState<string>('');
-  const [r2Confirmation, setR2Confirmation] = useState<string>('');
   const [r2Observations, setR2Observations] = useState<string>('');
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
@@ -186,12 +172,6 @@ export function R2QuickScheduleModal({
     setShowEmailResults(false);
   }, []);
 
-  const toggleThermometer = (id: string) => {
-    setThermometerIds(prev => 
-      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
-    );
-  };
-
   const handleSubmit = () => {
     if (!selectedDeal || !selectedCloser || !selectedDate || !selectedTime) return;
 
@@ -206,14 +186,6 @@ export function R2QuickScheduleModal({
       scheduledAt,
       attendeeName: selectedDeal.contact?.name || selectedDeal.name,
       attendeePhone: selectedDeal.contact?.phone || undefined,
-      // R2-specific fields
-      leadProfile: leadProfile || undefined,
-      attendanceStatus: attendanceStatus || 'invited',
-      videoStatus: (videoStatus as 'ok' | 'pendente') || 'pendente',
-      r2StatusId: r2StatusId || undefined,
-      thermometerIds: thermometerIds.length > 0 ? thermometerIds : undefined,
-      meetingLink: meetingLink || undefined,
-      r2Confirmation: r2Confirmation || undefined,
       r2Observations: r2Observations || undefined,
       bookedBy: bookedBy || undefined,
     }, {
@@ -241,13 +213,6 @@ export function R2QuickScheduleModal({
     setShowPhoneResults(false);
     setShowEmailResults(false);
     // Reset R2-specific fields
-    setLeadProfile('');
-    setAttendanceStatus('invited');
-    setVideoStatus('pendente');
-    setR2StatusId('');
-    setThermometerIds([]);
-    setMeetingLink('');
-    setR2Confirmation('');
     setR2Observations('');
   };
 
@@ -552,134 +517,18 @@ export function R2QuickScheduleModal({
             {/* Separator */}
             <Separator className="my-2" />
 
-            {/* R2-Specific Fields */}
-            <div className="space-y-3">
-              {/* Row: Lead Profile + Video Status */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label className="text-xs">Perfil do Lead</Label>
-                  <Select value={leadProfile} onValueChange={setLeadProfile}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LEAD_PROFILE_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs">Status do Vídeo</Label>
-                  <Select value={videoStatus} onValueChange={setVideoStatus}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VIDEO_STATUS_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Status Final */}
-              <div className="space-y-2">
-                <Label className="text-xs">Status Final</Label>
-                <Select value={r2StatusId} onValueChange={setR2StatusId}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="— Sem status —" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.filter(s => s.is_active).map(status => (
-                      <SelectItem key={status.id} value={status.id}>
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-2 h-2 rounded-full" 
-                            style={{ backgroundColor: status.color }}
-                          />
-                          {status.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Thermometer Tags */}
-              {thermometerOptions.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs flex items-center gap-1">
-                    <Tag className="h-3 w-3" />
-                    Termômetro / Tags
-                  </Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {thermometerOptions.filter(t => t.is_active).map(therm => (
-                      <Badge
-                        key={therm.id}
-                        variant={thermometerIds.includes(therm.id) ? "default" : "outline"}
-                        className="cursor-pointer transition-all text-xs"
-                        style={{
-                          backgroundColor: thermometerIds.includes(therm.id) ? therm.color : 'transparent',
-                          borderColor: therm.color,
-                          color: thermometerIds.includes(therm.id) ? '#fff' : therm.color,
-                        }}
-                        onClick={() => toggleThermometer(therm.id)}
-                      >
-                        {therm.name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Meeting Link */}
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <Link2 className="h-3 w-3" />
-                  Link da Reunião
-                </Label>
-                <Input
-                  value={meetingLink}
-                  onChange={(e) => setMeetingLink(e.target.value)}
-                  placeholder="https://meet.google.com/..."
-                  className="h-9"
-                />
-              </div>
-
-              {/* R2 Confirmation */}
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <FileText className="h-3 w-3" />
-                  Confirmação R2
-                </Label>
-                <Input
-                  value={r2Confirmation}
-                  onChange={(e) => setR2Confirmation(e.target.value)}
-                  placeholder="Confirmado p/ R2, etc."
-                  className="h-9"
-                />
-              </div>
-
-              {/* R2 Observations */}
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <StickyNote className="h-3 w-3" />
-                  Observações R2
-                </Label>
-                <Textarea
-                  value={r2Observations}
-                  onChange={(e) => setR2Observations(e.target.value)}
-                  placeholder="Anotações sobre a reunião..."
-                  rows={2}
-                />
-              </div>
+            {/* R2 Observations */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <StickyNote className="h-3 w-3" />
+                Observações R2
+              </Label>
+              <Textarea
+                value={r2Observations}
+                onChange={(e) => setR2Observations(e.target.value)}
+                placeholder="Anotações sobre a reunião..."
+                rows={2}
+              />
             </div>
 
             {/* Submit */}
