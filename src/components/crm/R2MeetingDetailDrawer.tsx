@@ -259,14 +259,14 @@ export function R2MeetingDetailDrawer({
                   <div className="space-y-1.5">
                     <Label className="text-xs">Status Final</Label>
                     <Select
-                      value={attendee.r2_status_id || ''}
-                      onValueChange={(v) => handleAttendeeUpdate('r2_status_id', v || null)}
+                      value={attendee.r2_status_id || '__none__'}
+                      onValueChange={(v) => handleAttendeeUpdate('r2_status_id', v === '__none__' ? null : v)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">— Sem status —</SelectItem>
+                        <SelectItem value="__none__">— Sem status —</SelectItem>
                         {statusOptions.map(opt => (
                           <SelectItem key={opt.id} value={opt.id}>
                             <div className="flex items-center gap-2">
