@@ -56,9 +56,8 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
           ),
           attendees:meeting_slot_attendees(
             id,
-            name,
-            email,
-            phone,
+            name:attendee_name,
+            phone:attendee_phone,
             status,
             deal_id,
             lead_type,
@@ -106,9 +105,8 @@ export function useR2MeetingsByCloser(closerId: string, startDate: Date, endDate
           ),
           attendees:meeting_slot_attendees(
             id,
-            name,
-            email,
-            phone,
+            name:attendee_name,
+            phone:attendee_phone,
             status,
             deal_id,
             lead_type,
