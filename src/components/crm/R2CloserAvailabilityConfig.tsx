@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
 import { 
   useCloserMeetingLinksList, 
   useCreateCloserMeetingLink, 
-  useDeleteCloserMeetingLink 
+  useDeleteCloserMeetingLink,
+  useUpdateCloserMeetingLink 
 } from '@/hooks/useCloserMeetingLinks';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -45,6 +46,7 @@ function R2CloserAvailabilityForm({ closer }: { closer: R2Closer }) {
   const { data: links, isLoading } = useCloserMeetingLinksList(closer.id);
   const createLink = useCreateCloserMeetingLink();
   const deleteLink = useDeleteCloserMeetingLink();
+  const updateLink = useUpdateCloserMeetingLink();
   
   const [selectedColor, setSelectedColor] = useState(closer.color || '#3B82F6');
   const [addingDay, setAddingDay] = useState<number | null>(null);
@@ -52,6 +54,7 @@ function R2CloserAvailabilityForm({ closer }: { closer: R2Closer }) {
   const [newLink, setNewLink] = useState('');
   const [copyFromDay, setCopyFromDay] = useState<number | null>(null);
   const [showCopyDialog, setShowCopyDialog] = useState<number | null>(null);
+  const [editedLinks, setEditedLinks] = useState<Record<string, string>>({});
 
   // Count links per day for copy dialog
   const linksPerDay = useMemo(() => {
@@ -298,25 +301,44 @@ function R2CloserAvailabilityForm({ closer }: { closer: R2Closer }) {
                 <p className="text-sm text-muted-foreground">Nenhum horário configurado</p>
               ) : (
                 <div className="space-y-2">
-                  {day.links.map(link => (
-                    <div key={link.id} className="flex items-center gap-2">
-                      <span className="font-mono text-sm w-14">{formatTime(link.start_time)}</span>
-                      <Input
-                        value={link.google_meet_link}
-                        readOnly
-                        className="flex-1 text-xs bg-muted"
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => deleteLink.mutate(link.id)}
-                        disabled={deleteLink.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                  {day.links.map(link => {
+                    const currentValue = editedLinks[link.id] ?? link.google_meet_link ?? '';
+                    const isEditing = editedLinks[link.id] !== undefined;
+                    const isEmpty = !currentValue;
+                    
+                    return (
+                      <div key={link.id} className="flex items-center gap-2">
+                        <span className="font-mono text-sm w-14">{formatTime(link.start_time)}</span>
+                        <Input
+                          value={currentValue}
+                          onChange={(e) => setEditedLinks(prev => ({ ...prev, [link.id]: e.target.value }))}
+                          onBlur={() => {
+                            if (isEditing && editedLinks[link.id] !== (link.google_meet_link ?? '')) {
+                              updateLink.mutate({ id: link.id, google_meet_link: editedLinks[link.id] });
+                            }
+                            setEditedLinks(prev => {
+                              const { [link.id]: _, ...rest } = prev;
+                              return rest;
+                            });
+                          }}
+                          placeholder="https://meet.google.com/..."
+                          className={cn(
+                            "flex-1 text-xs",
+                            isEmpty && "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20"
+                          )}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => deleteLink.mutate(link.id)}
+                          disabled={deleteLink.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
