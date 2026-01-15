@@ -47,14 +47,29 @@ export function useCloserMeetingLinksList(closerId?: string, dayOfWeek?: number)
   });
 }
 
-export function useCloserDaySlots(dayOfWeek: number) {
+export function useCloserDaySlots(dayOfWeek: number, meetingType: 'r1' | 'r2' = 'r1') {
   return useQuery({
-    queryKey: ['closer-day-slots', dayOfWeek],
+    queryKey: ['closer-day-slots', dayOfWeek, meetingType],
     queryFn: async () => {
+      // First get closer IDs of the correct meeting_type
+      const { data: closerIds, error: closersError } = await supabase
+        .from('closers')
+        .select('id')
+        .eq('is_active', true)
+        .or(meetingType === 'r1' 
+          ? 'meeting_type.is.null,meeting_type.eq.r1' 
+          : 'meeting_type.eq.r2');
+
+      if (closersError) throw closersError;
+      
+      const ids = closerIds?.map(c => c.id) || [];
+      if (ids.length === 0) return [];
+
       const { data, error } = await supabase
         .from('closer_meeting_links')
         .select('closer_id, start_time')
         .eq('day_of_week', dayOfWeek)
+        .in('closer_id', ids)
         .order('start_time');
 
       if (error) throw error;
@@ -64,14 +79,29 @@ export function useCloserDaySlots(dayOfWeek: number) {
 }
 
 // Retorna horários únicos para um conjunto de dias da semana
-export function useUniqueSlotsForDays(daysOfWeek: number[]) {
+export function useUniqueSlotsForDays(daysOfWeek: number[], meetingType: 'r1' | 'r2' = 'r1') {
   return useQuery({
-    queryKey: ['unique-slots-for-days', daysOfWeek],
+    queryKey: ['unique-slots-for-days', daysOfWeek, meetingType],
     queryFn: async () => {
+      // First get closer IDs of the correct meeting_type
+      const { data: closerIds, error: closersError } = await supabase
+        .from('closers')
+        .select('id')
+        .eq('is_active', true)
+        .or(meetingType === 'r1' 
+          ? 'meeting_type.is.null,meeting_type.eq.r1' 
+          : 'meeting_type.eq.r2');
+
+      if (closersError) throw closersError;
+      
+      const ids = closerIds?.map(c => c.id) || [];
+      if (ids.length === 0) return {};
+
       const { data, error } = await supabase
         .from('closer_meeting_links')
         .select('day_of_week, start_time, closer_id')
         .in('day_of_week', daysOfWeek)
+        .in('closer_id', ids)
         .order('start_time');
 
       if (error) throw error;

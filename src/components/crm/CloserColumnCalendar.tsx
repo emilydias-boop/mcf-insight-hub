@@ -80,8 +80,8 @@ export function CloserColumnCalendar({
 }: CloserColumnCalendarProps) {
   const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
 
-  // Buscar horários reais configurados em closer_meeting_links
-  const { data: daySlots = [] } = useCloserDaySlots(dayOfWeek);
+  // Buscar horários reais configurados em closer_meeting_links (apenas R1)
+  const { data: daySlots = [] } = useCloserDaySlots(dayOfWeek, 'r1');
 
   // Coletar todos os attendees para detecção batch de Outside
   const attendeesForOutsideCheck = useMemo(() => {

@@ -91,8 +91,8 @@ export function AgendaCalendar({
     return days;
   }, [selectedDate, viewMode]);
 
-  // Fetch actual meeting link slots from closer_meeting_links table
-  const { data: meetingLinkSlots } = useUniqueSlotsForDays(daysOfWeekInView);
+  // Fetch actual meeting link slots from closer_meeting_links table (apenas R1)
+  const { data: meetingLinkSlots } = useUniqueSlotsForDays(daysOfWeekInView, 'r1');
 
   // Calculate dynamic time slots based on closer_meeting_links data
   const timeSlots = useMemo(() => {
