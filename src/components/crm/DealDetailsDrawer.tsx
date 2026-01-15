@@ -12,6 +12,7 @@ import { SdrSummaryBlock } from './SdrSummaryBlock';
 import { NextActionBlockCompact } from './NextActionBlockCompact';
 import { A010JourneyCollapsible } from './A010JourneyCollapsible';
 import { QuickActionsBlock } from './QuickActionsBlock';
+import { LeadJourneyCard } from './LeadJourneyCard';
 import { Phone, History, StickyNote, CheckSquare } from 'lucide-react';
 
 interface DealDetailsDrawerProps {
@@ -69,7 +70,10 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
                 onSaved={() => refetchDeal()}
               />
               
-              {/* ===== 4. RESUMO (contato + negócio unificado) ===== */}
+              {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
+              <LeadJourneyCard dealId={dealId} />
+              
+              {/* ===== 5. RESUMO (contato + negócio unificado) ===== */}
               <SdrSummaryBlock deal={deal} contact={contact} />
               
               {/* ===== 5. ABAS (com scroll) ===== */}
