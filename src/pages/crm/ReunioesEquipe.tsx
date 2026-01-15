@@ -26,6 +26,7 @@ import { CloserSummaryTable } from "@/components/sdr/CloserSummaryTable";
 import { useTeamMeetingsData, SdrSummaryRow } from "@/hooks/useTeamMeetingsData";
 import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
+import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
 
@@ -211,10 +212,16 @@ export default function ReunioesEquipe() {
   // Fetch meeting_slots KPIs for the week (agenda-based)
   const { data: weekAgendaKPIs } = useMeetingSlotsKPIs(weekStartDate, weekEndDate);
 
-  // Fetch R2 and Vendas KPIs for today
+  // Fetch R2 agenda KPIs for today (from meeting_slots where meeting_type='r2')
+  const { data: dayR2AgendaKPIs } = useR2MeetingSlotsKPIs(dayStart, dayEnd);
+
+  // Fetch R2 agenda KPIs for the week
+  const { data: weekR2AgendaKPIs } = useR2MeetingSlotsKPIs(weekStartDate, weekEndDate);
+
+  // Fetch Vendas KPIs for today
   const { data: dayR2VendasKPIs } = useR2VendasKPIs(dayStart, dayEnd);
 
-  // Fetch R2 and Vendas KPIs for the week
+  // Fetch Vendas KPIs for the week
   const { data: weekR2VendasKPIs } = useR2VendasKPIs(weekStartDate, weekEndDate);
 
   // Fetch month data for goals panel
@@ -226,7 +233,10 @@ export default function ReunioesEquipe() {
   // Fetch meeting_slots KPIs for the month (agenda-based)
   const { data: monthAgendaKPIs } = useMeetingSlotsKPIs(monthStartDate, monthEndDate);
 
-  // Fetch R2 and Vendas KPIs for the month
+  // Fetch R2 agenda KPIs for the month
+  const { data: monthR2AgendaKPIs } = useR2MeetingSlotsKPIs(monthStartDate, monthEndDate);
+
+  // Fetch Vendas KPIs for the month
   const { data: monthR2VendasKPIs } = useR2VendasKPIs(monthStartDate, monthEndDate);
 
   // Fetch Closer metrics for the selected period
@@ -283,10 +293,10 @@ export default function ReunioesEquipe() {
     r1Realizada: dayAgendaKPIs?.totalRealizadas || 0,
     noShow: dayAgendaKPIs?.totalNoShows || 0,
     contrato: dayKPIs.totalContratos,
-    r2Agendada: dayR2VendasKPIs?.r2Agendadas || 0,
-    r2Realizada: dayR2VendasKPIs?.r2Realizadas || 0,
+    r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0, // From meeting_slots (R2 agenda)
+    r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0, // From meeting_slots (R2 agenda)
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayAgendaKPIs, dayR2VendasKPIs]);
+  }), [dayKPIs, dayAgendaKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
     agendamento: weekKPIs?.totalAgendamentos || 0, // Mesmo dado do card/tabela
@@ -294,10 +304,10 @@ export default function ReunioesEquipe() {
     r1Realizada: weekAgendaKPIs?.totalRealizadas || 0,
     noShow: weekAgendaKPIs?.totalNoShows || 0,
     contrato: weekKPIs.totalContratos,
-    r2Agendada: weekR2VendasKPIs?.r2Agendadas || 0,
-    r2Realizada: weekR2VendasKPIs?.r2Realizadas || 0,
+    r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0, // From meeting_slots (R2 agenda)
+    r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0, // From meeting_slots (R2 agenda)
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [weekKPIs, weekAgendaKPIs, weekR2VendasKPIs]);
+  }), [weekKPIs, weekAgendaKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
 
   const monthValues = useMemo(() => ({
     agendamento: monthKPIs?.totalAgendamentos || 0, // Mesmo dado do card/tabela
@@ -305,10 +315,10 @@ export default function ReunioesEquipe() {
     r1Realizada: monthAgendaKPIs?.totalRealizadas || 0,
     noShow: monthAgendaKPIs?.totalNoShows || 0,
     contrato: monthKPIs.totalContratos,
-    r2Agendada: monthR2VendasKPIs?.r2Agendadas || 0,
-    r2Realizada: monthR2VendasKPIs?.r2Realizadas || 0,
+    r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0, // From meeting_slots (R2 agenda)
+    r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0, // From meeting_slots (R2 agenda)
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthAgendaKPIs, monthR2VendasKPIs]);
+  }), [monthKPIs, monthAgendaKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
