@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, isSameDay } from 'date-fns';
+import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { ptBR } from 'date-fns/locale';
 import { 
   Calendar as CalendarIcon, 
@@ -65,8 +66,8 @@ export default function AgendaR2() {
         return { rangeStart: selectedDate, rangeEnd: selectedDate };
       case 'week':
         return {
-          rangeStart: startOfWeek(selectedDate, { weekStartsOn: 0 }),
-          rangeEnd: endOfWeek(selectedDate, { weekStartsOn: 0 })
+          rangeStart: startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON }),
+          rangeEnd: endOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON })
         };
       case 'month':
         return {
