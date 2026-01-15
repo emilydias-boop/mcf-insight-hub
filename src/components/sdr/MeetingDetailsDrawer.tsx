@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Meeting, useDealTimeline } from "@/hooks/useSdrMeetings";
 import { MeetingTimeline } from "./MeetingTimeline";
+import { MovementHistorySection } from "./MovementHistorySection";
 
 interface MeetingDetailsDrawerProps {
-  meeting: Meeting | null;
+  meeting: (Meeting & { attendee_id?: string }) | null;
   onClose: () => void;
 }
 
@@ -151,6 +152,11 @@ export function MeetingDetailsDrawer({ meeting, onClose }: MeetingDetailsDrawerP
               </h3>
               <MeetingTimeline timeline={timeline || []} isLoading={timelineLoading} />
             </div>
+
+            {/* Movement History */}
+            {meeting.attendee_id && (
+              <MovementHistorySection attendeeId={meeting.attendee_id} />
+            )}
             
             {/* Probability */}
             <div>

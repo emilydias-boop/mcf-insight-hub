@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -37,8 +38,10 @@ interface MoveAttendeeModalProps {
     isPartner: boolean;
   } | null;
   currentMeetingId: string | null;
-  currentMeetingDate?: Date; // Data atual da reunião para validação
-  currentAttendeeStatus?: string; // Status do participante (para permitir mover no_show para outro dia)
+  currentMeetingDate?: Date;
+  currentAttendeeStatus?: string;
+  currentCloserId?: string;
+  currentCloserName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -56,12 +59,15 @@ export function MoveAttendeeModal({
   currentMeetingId,
   currentMeetingDate,
   currentAttendeeStatus,
+  currentCloserId,
+  currentCloserName,
   open, 
   onOpenChange 
 }: MoveAttendeeModalProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
+  const [moveReason, setMoveReason] = useState('');
   const queryClient = useQueryClient();
   
   const { data: closers } = useClosers();
@@ -148,7 +154,7 @@ export function MoveAttendeeModal({
 
   // Mutation para mover attendee para um novo slot
   const moveToNewSlot = useMutation({
-    mutationFn: async ({ slot }: { slot: AvailableSlot }) => {
+    mutationFn: async ({ slot, reason }: { slot: AvailableSlot; reason: string }) => {
       if (!attendee) throw new Error('No attendee');
 
       const scheduledAt = slot.datetime.toISOString();
@@ -165,10 +171,8 @@ export function MoveAttendeeModal({
       let targetSlotId: string;
 
       if (existingSlot) {
-        // Reutilizar slot existente
         targetSlotId = existingSlot.id;
       } else {
-        // Criar novo slot apenas se não existir
         const { data: newSlot, error: createError } = await supabase
           .from('meeting_slots')
           .insert({
@@ -185,7 +189,7 @@ export function MoveAttendeeModal({
         targetSlotId = newSlot.id;
       }
 
-      // 2. Mover o attendee para o slot (existente ou novo) e marcar como rescheduled
+      // 2. Mover o attendee para o slot e marcar como rescheduled
       const { error: moveError } = await supabase
         .from('meeting_slot_attendees')
         .update({ 
@@ -198,7 +202,7 @@ export function MoveAttendeeModal({
 
       if (moveError) throw moveError;
 
-      // 3. Mover partners vinculados (se houver)
+      // 3. Mover partners vinculados
       await supabase
         .from('meeting_slot_attendees')
         .update({ meeting_slot_id: targetSlotId })
@@ -217,6 +221,37 @@ export function MoveAttendeeModal({
           .eq('id', currentMeetingId);
       }
 
+      // 5. Registrar log de movimentação
+      const { data: authData } = await supabase.auth.getUser();
+      let movedByName = null;
+      
+      if (authData?.user?.id) {
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', authData.user.id)
+          .single();
+        movedByName = userProfile?.full_name;
+      }
+
+      await supabase.from('attendee_movement_logs').insert({
+        attendee_id: attendee.id,
+        from_slot_id: currentMeetingId,
+        to_slot_id: targetSlotId,
+        from_scheduled_at: currentMeetingDate?.toISOString() || null,
+        to_scheduled_at: scheduledAt,
+        from_closer_id: currentCloserId || null,
+        from_closer_name: currentCloserName || null,
+        to_closer_id: slot.closerId,
+        to_closer_name: slot.closerName,
+        previous_status: currentAttendeeStatus || null,
+        reason: reason || null,
+        movement_type: isNoShow ? 'no_show_reschedule' : 'same_day_reschedule',
+        moved_by: authData?.user?.id || null,
+        moved_by_name: movedByName,
+        moved_by_role: null
+      });
+
       return { id: targetSlotId };
     },
     onSuccess: () => {
@@ -224,13 +259,14 @@ export function MoveAttendeeModal({
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['meeting_slots'] });
       queryClient.invalidateQueries({ queryKey: ['booked-slots'] });
-      // Invalidar queries do SDR
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-meetings-v2'] });
       queryClient.invalidateQueries({ queryKey: ['sdr-metrics-v2'] });
+      queryClient.invalidateQueries({ queryKey: ['attendee-movement-history'] });
       toast.success('Participante movido com sucesso');
       onOpenChange(false);
       setSelectedDate(null);
+      setMoveReason('');
     },
     onError: () => {
       toast.error('Erro ao mover participante');
@@ -252,13 +288,19 @@ export function MoveAttendeeModal({
   };
 
   const handleMoveToNewSlot = (slot: AvailableSlot) => {
-    moveToNewSlot.mutate({ slot });
+    // Validar observação obrigatória para no_show em outro dia
+    if (isNoShow && isDifferentDay && (!moveReason || moveReason.trim().length < 10)) {
+      toast.error('Informe o motivo do reagendamento (mínimo 10 caracteres)');
+      return;
+    }
+    moveToNewSlot.mutate({ slot, reason: moveReason.trim() });
   };
 
   const handleClose = () => {
     onOpenChange(false);
     setSelectedDate(null);
     setSelectedCloser(null);
+    setMoveReason('');
   };
 
   const isLoading = meetingsLoading || moveToNewSlot.isPending || moveAttendee.isPending;
@@ -358,6 +400,26 @@ export function MoveAttendeeModal({
                 Lead em <strong>No-Show</strong>: permitido mover para outro dia.
               </AlertDescription>
             </Alert>
+          )}
+
+          {/* Campo de observação - obrigatório para no_show em outro dia */}
+          {selectedDate && isDifferentDay && isNoShow && !blockDifferentDay && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Motivo do Reagendamento <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                placeholder="Explique o motivo do reagendamento após no-show..."
+                value={moveReason}
+                onChange={(e) => setMoveReason(e.target.value)}
+                className="min-h-[80px]"
+              />
+              {moveReason.trim().length > 0 && moveReason.trim().length < 10 && (
+                <p className="text-xs text-destructive">
+                  Mínimo de 10 caracteres obrigatório
+                </p>
+              )}
+            </div>
           )}
 
           {/* Available Slots & Meetings */}

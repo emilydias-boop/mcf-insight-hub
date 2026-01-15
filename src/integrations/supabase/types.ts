@@ -230,6 +230,102 @@ export type Database = {
         }
         Relationships: []
       }
+      attendee_movement_logs: {
+        Row: {
+          attendee_id: string
+          created_at: string | null
+          from_closer_id: string | null
+          from_closer_name: string | null
+          from_scheduled_at: string | null
+          from_slot_id: string | null
+          id: string
+          moved_by: string | null
+          moved_by_name: string | null
+          moved_by_role: string | null
+          movement_type: string
+          previous_status: string | null
+          reason: string | null
+          to_closer_id: string | null
+          to_closer_name: string | null
+          to_scheduled_at: string
+          to_slot_id: string
+        }
+        Insert: {
+          attendee_id: string
+          created_at?: string | null
+          from_closer_id?: string | null
+          from_closer_name?: string | null
+          from_scheduled_at?: string | null
+          from_slot_id?: string | null
+          id?: string
+          moved_by?: string | null
+          moved_by_name?: string | null
+          moved_by_role?: string | null
+          movement_type: string
+          previous_status?: string | null
+          reason?: string | null
+          to_closer_id?: string | null
+          to_closer_name?: string | null
+          to_scheduled_at: string
+          to_slot_id: string
+        }
+        Update: {
+          attendee_id?: string
+          created_at?: string | null
+          from_closer_id?: string | null
+          from_closer_name?: string | null
+          from_scheduled_at?: string | null
+          from_slot_id?: string | null
+          id?: string
+          moved_by?: string | null
+          moved_by_name?: string | null
+          moved_by_role?: string | null
+          movement_type?: string
+          previous_status?: string | null
+          reason?: string | null
+          to_closer_id?: string | null
+          to_closer_name?: string | null
+          to_scheduled_at?: string
+          to_slot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendee_movement_logs_attendee_id_fkey"
+            columns: ["attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendee_movement_logs_from_slot_id_fkey"
+            columns: ["from_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendee_movement_logs_moved_by_fkey"
+            columns: ["moved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendee_movement_logs_moved_by_fkey"
+            columns: ["moved_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "attendee_movement_logs_to_slot_id_fkey"
+            columns: ["to_slot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendee_notes: {
         Row: {
           attendee_id: string
@@ -3291,6 +3387,7 @@ export type Database = {
           deal_id: string | null
           id: string
           is_partner: boolean | null
+          is_reschedule: boolean | null
           lead_profile: string | null
           meeting_link: string | null
           meeting_slot_id: string
@@ -3319,6 +3416,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           is_partner?: boolean | null
+          is_reschedule?: boolean | null
           lead_profile?: string | null
           meeting_link?: string | null
           meeting_slot_id: string
@@ -3347,6 +3445,7 @@ export type Database = {
           deal_id?: string | null
           id?: string
           is_partner?: boolean | null
+          is_reschedule?: boolean | null
           lead_profile?: string | null
           meeting_link?: string | null
           meeting_slot_id?: string
