@@ -293,6 +293,7 @@ export function useClosersWithAvailability() {
         .from('closers')
         .select('*')
         .eq('is_active', true)
+        .or('meeting_type.is.null,meeting_type.eq.r1')
         .order('name');
 
       if (closersError) throw closersError;
