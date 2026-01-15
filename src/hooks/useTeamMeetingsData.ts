@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import { useSdrMeetingsV2, MeetingV2 } from "./useSdrMetricsV2";
+import { MeetingV2 } from "./useSdrMetricsV2";
 import { useSdrMetricsFromAgenda, SdrAgendaMetrics } from "./useSdrMetricsFromAgenda";
+import { useSdrMeetingsFromAgenda } from "./useSdrMeetingsFromAgenda";
 import { SDR_LIST } from "@/constants/team";
 
 export interface TeamKPIs {
@@ -33,7 +34,8 @@ interface TeamMeetingsParams {
 export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: TeamMeetingsParams) {
   // Fetch metrics from agenda (meeting_slot_attendees) instead of deal_activities
   const metricsQuery = useSdrMetricsFromAgenda(startDate, endDate, sdrEmailFilter);
-  const meetingsQuery = useSdrMeetingsV2(startDate, endDate, sdrEmailFilter);
+  // Use meetings from agenda (same source as metrics) for consistency
+  const meetingsQuery = useSdrMeetingsFromAgenda({ startDate, endDate, sdrEmailFilter });
 
   // Create Set of valid SDR emails from SDR_LIST
   const validSdrEmails = useMemo(() => {
