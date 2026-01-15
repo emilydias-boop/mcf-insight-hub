@@ -135,6 +135,36 @@ export function R2MeetingDetailDrawer({
 
             <Separator />
 
+            {/* Histórico do Funil */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                <History className="h-3 w-3" />
+                Histórico do Funil
+              </Label>
+              <div className="bg-muted/30 rounded-lg p-3 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">SDR:</span>
+                  <span className="font-medium">
+                    {meeting.sdr?.name || meeting.sdr?.email || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Closer R1:</span>
+                  <span className="font-medium">
+                    {meeting.r1_closer?.name || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Agendou R2:</span>
+                  <span className="font-medium">
+                    {meeting.booked_by?.name || '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
             {/* Participant Selection (if multiple) */}
             {meeting.attendees && meeting.attendees.length > 1 && (
               <div className="space-y-2">
