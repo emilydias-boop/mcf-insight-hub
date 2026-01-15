@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ArrowLeft, Settings, Users, Mail, Trash2, Edit, Check, X } from 'lucide-react';
+import { Plus, ArrowLeft, Settings, Users, Mail, Trash2, Edit, Check, X, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useR2ClosersList, useCreateR2Closer, useUpdateR2Closer, useDeleteR2Closer, R2Closer, R2CloserFormData } from '@/hooks/useR2Closers';
+import { R2CloserAvailabilityConfig } from '@/components/crm/R2CloserAvailabilityConfig';
 
 const COLORS = [
   '#8B5CF6', '#F97316', '#10B981', '#3B82F6', '#EC4899', 
@@ -24,6 +25,7 @@ export default function ConfigurarClosersR2() {
   const [selectedCloser, setSelectedCloser] = useState<R2Closer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [closerToDelete, setCloserToDelete] = useState<R2Closer | null>(null);
+  const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
 
   const { data: closers, isLoading, error } = useR2ClosersList();
   const createMutation = useCreateR2Closer();
@@ -88,6 +90,7 @@ export default function ConfigurarClosersR2() {
 
   const activeClosers = closers?.filter(c => c.is_active) || [];
   const inactiveClosers = closers?.filter(c => !c.is_active) || [];
+  const closersWithAvailability = activeClosers.filter(c => c.calendly_default_link || c.calendly_event_type_uri);
 
   return (
     <div className="space-y-4">
@@ -104,10 +107,16 @@ export default function ConfigurarClosersR2() {
             </p>
           </div>
         </div>
-        <Button onClick={handleAdd}>
-          <Plus className="h-4 w-4 mr-2" />
-          Adicionar Closer R2
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setAvailabilityConfigOpen(true)}>
+            <Calendar className="h-4 w-4 mr-2" />
+            Disponibilidade
+          </Button>
+          <Button onClick={handleAdd}>
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar Closer R2
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -227,6 +236,14 @@ export default function ConfigurarClosersR2() {
           )}
         </CardContent>
       </Card>
+
+      {/* R2 Closer Availability Config Modal */}
+      <R2CloserAvailabilityConfig
+        open={availabilityConfigOpen}
+        onOpenChange={setAvailabilityConfigOpen}
+        closers={activeClosers}
+        isLoading={isLoading}
+      />
 
       {/* Add/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

@@ -24,6 +24,8 @@ import { AgendaCalendar } from '@/components/crm/AgendaCalendar';
 import { MeetingSlot, CloserWithAvailability } from '@/hooks/useAgendaData';
 import { R2MeetingDrawer } from '@/components/crm/R2MeetingDrawer';
 import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
+import { R2CloserAvailabilityConfig } from '@/components/crm/R2CloserAvailabilityConfig';
+import { useR2ClosersList } from '@/hooks/useR2Closers';
 import { R2RescheduleModal } from '@/components/crm/R2RescheduleModal';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +49,7 @@ export default function AgendaR2() {
   const [meetingToReschedule, setMeetingToReschedule] = useState<R2Meeting | null>(null);
   const [preselectedCloserId, setPreselectedCloserId] = useState<string | undefined>();
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
+  const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
 
   // Calculate date range based on view mode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -68,6 +71,7 @@ export default function AgendaR2() {
 
   // Fetch data
   const { data: closers = [], isLoading: isLoadingClosers } = useActiveR2Closers();
+  const { data: allClosers = [], isLoading: isLoadingAllClosers } = useR2ClosersList();
   const { data: meetings = [], isLoading: isLoadingMeetings, refetch: refetchMeetings } = useR2AgendaMeetings(rangeStart, rangeEnd);
 
   // Filter meetings by closer and status
@@ -244,7 +248,7 @@ export default function AgendaR2() {
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/crm/configurar-closers-r2')}>
+          <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
             <Settings className="h-4 w-4 mr-2" />
             Configurar Closers
           </Button>
@@ -515,6 +519,14 @@ export default function AgendaR2() {
         open={rescheduleModalOpen}
         onOpenChange={setRescheduleModalOpen}
         closers={closers}
+      />
+
+      {/* R2 Closer Availability Config Modal */}
+      <R2CloserAvailabilityConfig
+        open={availabilityConfigOpen}
+        onOpenChange={setAvailabilityConfigOpen}
+        closers={allClosers}
+        isLoading={isLoadingAllClosers}
       />
     </div>
   );
