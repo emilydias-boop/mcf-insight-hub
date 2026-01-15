@@ -1424,15 +1424,40 @@ export function useMoveAttendeeToMeeting() {
   return useMutation({
     mutationFn: async ({ 
       attendeeId, 
-      targetMeetingSlotId 
+      targetMeetingSlotId,
+      currentMeetingId,
+      currentMeetingDate,
+      currentAttendeeStatus,
+      currentCloserId,
+      currentCloserName,
+      targetCloserId,
+      targetCloserName,
+      targetScheduledAt,
+      reason,
+      isNoShow
     }: { 
       attendeeId: string; 
       targetMeetingSlotId: string;
+      currentMeetingId?: string;
+      currentMeetingDate?: string;
+      currentAttendeeStatus?: string;
+      currentCloserId?: string;
+      currentCloserName?: string;
+      targetCloserId?: string;
+      targetCloserName?: string;
+      targetScheduledAt?: string;
+      reason?: string;
+      isNoShow?: boolean;
     }) => {
-      // Move the main attendee
+      // Move the main attendee and update status to rescheduled
       const { error: mainError } = await supabase
         .from('meeting_slot_attendees')
-        .update({ meeting_slot_id: targetMeetingSlotId })
+        .update({ 
+          meeting_slot_id: targetMeetingSlotId,
+          status: 'rescheduled',
+          is_reschedule: true,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', attendeeId);
 
       if (mainError) throw mainError;
@@ -1444,10 +1469,44 @@ export function useMoveAttendeeToMeeting() {
         .eq('parent_attendee_id', attendeeId);
 
       if (partnersError) throw partnersError;
+
+      // Log the movement
+      const { data: authData } = await supabase.auth.getUser();
+      let movedByName = null;
+      
+      if (authData?.user?.id) {
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', authData.user.id)
+          .single();
+        movedByName = userProfile?.full_name;
+      }
+
+      await supabase.from('attendee_movement_logs').insert({
+        attendee_id: attendeeId,
+        from_slot_id: currentMeetingId || null,
+        to_slot_id: targetMeetingSlotId,
+        from_scheduled_at: currentMeetingDate || null,
+        to_scheduled_at: targetScheduledAt || new Date().toISOString(),
+        from_closer_id: currentCloserId || null,
+        from_closer_name: currentCloserName || null,
+        to_closer_id: targetCloserId || null,
+        to_closer_name: targetCloserName || null,
+        previous_status: currentAttendeeStatus || null,
+        reason: reason || null,
+        movement_type: isNoShow ? 'no_show_reschedule' : 'same_day_reschedule',
+        moved_by: authData?.user?.id || null,
+        moved_by_name: movedByName
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['attendee-movement-history'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-from-agenda'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-meetings-v2'] });
+      queryClient.invalidateQueries({ queryKey: ['sdr-metrics-v2'] });
       toast.success('Participante movido para outra reunião');
     },
     onError: () => {

@@ -273,15 +273,35 @@ export function MoveAttendeeModal({
     },
   });
 
-  const handleMoveToExisting = (targetMeetingId: string) => {
+  const handleMoveToExisting = (targetMeeting: any) => {
     if (!attendee) return;
     
+    // Validar observação obrigatória para no_show em outro dia
+    if (isNoShow && isDifferentDay && (!moveReason || moveReason.trim().length < 10)) {
+      toast.error('Informe o motivo do reagendamento (mínimo 10 caracteres)');
+      return;
+    }
+    
     moveAttendee.mutate(
-      { attendeeId: attendee.id, targetMeetingSlotId: targetMeetingId },
+      { 
+        attendeeId: attendee.id, 
+        targetMeetingSlotId: targetMeeting.id,
+        currentMeetingId: currentMeetingId || undefined,
+        currentMeetingDate: currentMeetingDate?.toISOString(),
+        currentAttendeeStatus: currentAttendeeStatus,
+        currentCloserId: currentCloserId,
+        currentCloserName: currentCloserName,
+        targetCloserId: targetMeeting.closer?.id,
+        targetCloserName: targetMeeting.closer?.name,
+        targetScheduledAt: targetMeeting.scheduled_at,
+        reason: moveReason.trim() || undefined,
+        isNoShow: isNoShow
+      },
       {
         onSuccess: () => {
           onOpenChange(false);
           setSelectedDate(null);
+          setMoveReason('');
         }
       }
     );
@@ -521,7 +541,7 @@ export function MoveAttendeeModal({
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleMoveToExisting(meeting.id)}
+                                  onClick={() => handleMoveToExisting(meeting)}
                                   disabled={isLoading}
                                 >
                                   Encaixar
