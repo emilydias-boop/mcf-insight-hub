@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { MeetingTimeline } from "./MeetingTimeline";
+import { MovementHistorySection } from "./MovementHistorySection";
 import { useDealTimeline } from "@/hooks/useSdrMeetings";
 import { useUpdateAttendeeStatus } from "@/hooks/useAgendaData";
 import { MoveAttendeeModal } from "@/components/crm/MoveAttendeeModal";
@@ -264,6 +265,11 @@ export function SdrMeetingActionsDrawer({ meeting, onClose, onRefresh }: SdrMeet
               </h3>
               <MeetingTimeline timeline={timeline || []} isLoading={timelineLoading} />
             </div>
+
+            {/* Movement History */}
+            {hasAttendeeId && (
+              <MovementHistorySection attendeeId={meeting.attendee_id} />
+            )}
             
             {/* Probability */}
             <div>
