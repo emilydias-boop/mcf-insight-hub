@@ -106,6 +106,15 @@ export function useCreateR2Meeting() {
       notes,
       attendeeName,
       attendeePhone,
+      // New R2-specific fields
+      leadProfile,
+      attendanceStatus,
+      videoStatus,
+      r2StatusId,
+      thermometerIds,
+      meetingLink,
+      r2Confirmation,
+      r2Observations,
     }: {
       closerId: string;
       dealId?: string;
@@ -114,6 +123,15 @@ export function useCreateR2Meeting() {
       notes?: string;
       attendeeName?: string;
       attendeePhone?: string;
+      // New R2-specific fields
+      leadProfile?: string;
+      attendanceStatus?: string;
+      videoStatus?: 'ok' | 'pendente';
+      r2StatusId?: string;
+      thermometerIds?: string[];
+      meetingLink?: string;
+      r2Confirmation?: string;
+      r2Observations?: string;
     }) => {
       const { data: slot, error: slotError } = await supabase
         .from('meeting_slots')
@@ -140,7 +158,14 @@ export function useCreateR2Meeting() {
           contact_id: contactId || null,
           attendee_name: attendeeName || null,
           attendee_phone: attendeePhone || null,
-          status: 'invited',
+          status: attendanceStatus || 'invited',
+          lead_profile: leadProfile || null,
+          video_status: videoStatus || 'pendente',
+          r2_status_id: r2StatusId || null,
+          thermometer_ids: thermometerIds || [],
+          meeting_link: meetingLink || null,
+          r2_confirmation: r2Confirmation || null,
+          r2_observations: r2Observations || null,
           notes: notes || null,
         });
 
