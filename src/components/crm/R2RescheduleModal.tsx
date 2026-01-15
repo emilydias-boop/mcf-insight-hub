@@ -38,7 +38,7 @@ const TIME_SLOTS = Array.from({ length: 19 }, (_, i) => {
 });
 
 export function R2RescheduleModal({ meeting, open, onOpenChange, closers }: R2RescheduleModalProps) {
-  const [selectedCloser, setSelectedCloser] = useState(meeting?.closer_id || '');
+  const [selectedCloser, setSelectedCloser] = useState(meeting?.closer?.id || '');
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [rescheduleNote, setRescheduleNote] = useState('');
@@ -47,7 +47,7 @@ export function R2RescheduleModal({ meeting, open, onOpenChange, closers }: R2Re
 
   if (!meeting) return null;
 
-  const originalNote = meeting.attendees?.[0]?.notes;
+  const originalNote = meeting.notes;
 
   const handleSubmit = () => {
     if (!selectedDate) return;
@@ -59,7 +59,7 @@ export function R2RescheduleModal({ meeting, open, onOpenChange, closers }: R2Re
     rescheduleMeeting.mutate({
       meetingId: meeting.id,
       newDate,
-      closerId: selectedCloser !== meeting.closer_id ? selectedCloser : undefined,
+      closerId: selectedCloser !== meeting.closer?.id ? selectedCloser : undefined,
       rescheduleNote: rescheduleNote.trim() || undefined,
     }, {
       onSuccess: () => {
@@ -83,7 +83,7 @@ export function R2RescheduleModal({ meeting, open, onOpenChange, closers }: R2Re
           {/* Current Info */}
           <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-3 text-sm">
             <div className="font-medium">
-              {meeting.deal?.contact?.name || meeting.deal?.name || 'Lead'}
+              {meeting.attendees?.[0]?.name || meeting.attendees?.[0]?.deal?.contact?.name || meeting.attendees?.[0]?.deal?.name || 'Lead'}
             </div>
             <div className="text-muted-foreground">
               Atual: {format(new Date(meeting.scheduled_at), "dd/MM 'às' HH:mm", { locale: ptBR })} com {meeting.closer?.name}
