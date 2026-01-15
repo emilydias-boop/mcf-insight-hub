@@ -20,6 +20,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useR2AgendaMeetings, R2Meeting } from '@/hooks/useR2AgendaMeetings';
 import { useActiveR2Closers } from '@/hooks/useR2Closers';
 import { R2CloserColumnCalendar } from '@/components/crm/R2CloserColumnCalendar';
+import { AgendaCalendar } from '@/components/crm/AgendaCalendar';
+import { MeetingSlot, CloserWithAvailability } from '@/hooks/useAgendaData';
 import { R2MeetingDrawer } from '@/components/crm/R2MeetingDrawer';
 import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
 import { R2RescheduleModal } from '@/components/crm/R2RescheduleModal';
@@ -85,6 +87,68 @@ export default function AgendaR2() {
     if (closerFilter === 'all') return closers;
     return closers.filter(c => c.id === closerFilter);
   }, [closers, closerFilter]);
+
+  // Convert R2Meeting to MeetingSlot for AgendaCalendar compatibility
+  const meetingsAsMeetingSlots: MeetingSlot[] = useMemo(() => {
+    return filteredMeetings.map((m): MeetingSlot => ({
+      id: m.id,
+      closer_id: m.closer?.id || '',
+      deal_id: m.attendees?.[0]?.deal_id || null,
+      contact_id: null,
+      scheduled_at: m.scheduled_at,
+      duration_minutes: 40,
+      status: m.status,
+      booked_by: null,
+      notes: m.notes,
+      closer_notes: null,
+      meeting_link: null,
+      video_conference_link: null,
+      google_event_id: null,
+      created_at: m.created_at || '',
+      closer: m.closer ? {
+        id: m.closer.id,
+        name: m.closer.name,
+        email: '',
+        color: m.closer.color || undefined,
+      } : undefined,
+      deal: m.attendees?.[0]?.deal ? {
+        id: m.attendees[0].deal.id,
+        name: m.attendees[0].deal.name || '',
+        contact: m.attendees[0].deal.contact ? {
+          id: '',
+          name: m.attendees[0].deal.contact.name,
+          phone: m.attendees[0].deal.contact.phone || null,
+          email: m.attendees[0].deal.contact.email || null,
+        } : undefined,
+      } : undefined,
+      attendees: m.attendees?.map(a => ({
+        id: a.id,
+        deal_id: a.deal_id || null,
+        contact_id: null,
+        attendee_name: a.name,
+        attendee_phone: a.phone || null,
+        is_partner: false,
+        status: a.status,
+        notified_at: null,
+        booked_by: null,
+        notes: null,
+        closer_notes: null,
+        already_builds: a.already_builds,
+      })),
+    }));
+  }, [filteredMeetings]);
+
+  // Convert R2Closer to CloserWithAvailability for AgendaCalendar
+  const closersWithAvailability: CloserWithAvailability[] = useMemo(() => {
+    return displayClosers.map(c => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      color: c.color || '#8B5CF6',
+      is_active: c.is_active ?? true,
+      availability: [],
+    }));
+  }, [displayClosers]);
 
   // Navigation handlers
   const handlePrev = () => {
@@ -278,9 +342,13 @@ export default function AgendaR2() {
       {/* Main Content with Tabs */}
       <Card>
         <CardContent className="pt-4">
-          <Tabs defaultValue="closer">
+          <Tabs defaultValue="calendar">
             <div className="flex items-center justify-between mb-4">
               <TabsList>
+                <TabsTrigger value="calendar" className="gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  Calendário
+                </TabsTrigger>
                 <TabsTrigger value="closer" className="gap-2">
                   <LayoutGrid className="h-4 w-4" />
                   Por Closer
@@ -294,6 +362,37 @@ export default function AgendaR2() {
                 {filteredMeetings.length} reunião(ões)
               </div>
             </div>
+
+
+            {/* Calendar View */}
+            <TabsContent value="calendar" className="mt-0">
+              {isLoadingMeetings || isLoadingClosers ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <AgendaCalendar
+                  meetings={meetingsAsMeetingSlots}
+                  selectedDate={selectedDate}
+                  closers={closersWithAvailability}
+                  closerFilter={closerFilter === 'all' ? null : closerFilter}
+                  viewMode={viewMode}
+                  onSelectMeeting={(meeting) => {
+                    const originalMeeting = filteredMeetings.find(m => m.id === meeting.id);
+                    if (originalMeeting) handleSelectMeeting(originalMeeting);
+                  }}
+                  onSelectSlot={(day, hour, minute, closerId) => {
+                    const selectedDateTime = new Date(day);
+                    selectedDateTime.setHours(hour, minute, 0, 0);
+                    setPreselectedDate(selectedDateTime);
+                    if (closerId) setPreselectedCloserId(closerId);
+                    setQuickScheduleOpen(true);
+                  }}
+                />
+              )}
+            </TabsContent>
 
             {/* By Closer View */}
             <TabsContent value="closer" className="mt-0">
