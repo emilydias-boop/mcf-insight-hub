@@ -7,9 +7,7 @@ import {
   ChevronRight, 
   RefreshCw, 
   Plus,
-  Users,
   Settings,
-  BarChart3,
   List,
   LayoutGrid
 } from 'lucide-react';
@@ -19,10 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useR2CloserMetrics } from '@/hooks/useR2CloserMetrics';
 import { useR2AgendaMeetings, R2Meeting } from '@/hooks/useR2AgendaMeetings';
 import { useActiveR2Closers } from '@/hooks/useR2Closers';
-import { R2CloserSummaryTable } from '@/components/crm/R2CloserSummaryTable';
 import { R2CloserColumnCalendar } from '@/components/crm/R2CloserColumnCalendar';
 import { R2MeetingDrawer } from '@/components/crm/R2MeetingDrawer';
 import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
@@ -70,7 +66,6 @@ export default function AgendaR2() {
 
   // Fetch data
   const { data: closers = [], isLoading: isLoadingClosers } = useActiveR2Closers();
-  const { data: metrics, isLoading: isLoadingMetrics, refetch: refetchMetrics } = useR2CloserMetrics(rangeStart, rangeEnd);
   const { data: meetings = [], isLoading: isLoadingMeetings, refetch: refetchMeetings } = useR2AgendaMeetings(rangeStart, rangeEnd);
 
   // Filter meetings by closer and status
@@ -125,7 +120,6 @@ export default function AgendaR2() {
   };
 
   const handleRefresh = () => {
-    refetchMetrics();
     refetchMeetings();
   };
 
@@ -174,19 +168,6 @@ export default function AgendaR2() {
     }
   }, [selectedDate, viewMode, rangeStart, rangeEnd]);
 
-  // Calculate summary stats
-  const summaryStats = useMemo(() => {
-    if (!metrics) return { total: 0, realizadas: 0, noshow: 0, contratos: 0 };
-    return metrics.reduce(
-      (acc, m) => ({
-        total: acc.total + m.r2_agendada,
-        realizadas: acc.realizadas + m.r1_realizada,
-        noshow: acc.noshow + m.noshow,
-        contratos: acc.contratos + m.contrato_pago
-      }),
-      { total: 0, realizadas: 0, noshow: 0, contratos: 0 }
-    );
-  }, [metrics]);
 
   return (
     <div className="space-y-4">
@@ -292,62 +273,6 @@ export default function AgendaR2() {
             </SelectContent>
           </Select>
         </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">R2 Agendadas</p>
-                <p className="text-2xl font-bold">{summaryStats.total}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center">
-                <CalendarIcon className="h-5 w-5 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Realizadas</p>
-                <p className="text-2xl font-bold">{summaryStats.realizadas}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                <Users className="h-5 w-5 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">No-show</p>
-                <p className="text-2xl font-bold">{summaryStats.noshow}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                <Users className="h-5 w-5 text-red-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Contratos Pagos</p>
-                <p className="text-2xl font-bold">{summaryStats.contratos}</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                <BarChart3 className="h-5 w-5 text-emerald-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Main Content with Tabs */}
@@ -459,20 +384,6 @@ export default function AgendaR2() {
               )}
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Metrics Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Performance por Closer R2</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <R2CloserSummaryTable 
-            data={metrics} 
-            isLoading={isLoadingMetrics}
-            onCloserClick={(closerId) => setCloserFilter(closerId)}
-          />
         </CardContent>
       </Card>
 
