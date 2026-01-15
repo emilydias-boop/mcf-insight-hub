@@ -1121,6 +1121,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           } : null}
           currentMeetingId={activeMeeting?.id || null}
           currentMeetingDate={activeMeeting?.scheduled_at ? new Date(activeMeeting.scheduled_at) : undefined}
+          currentAttendeeStatus={selectedParticipant?.status}
           open={showMoveModal}
           onOpenChange={setShowMoveModal}
         />
