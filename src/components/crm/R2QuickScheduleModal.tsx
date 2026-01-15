@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, Calendar, Clock, User, StickyNote } from 'lucide-react';
+import { Search, Calendar, Clock, User, StickyNote, ExternalLink, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -21,10 +20,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { R2CloserWithAvailability, useCreateR2Meeting } from '@/hooks/useR2AgendaData';
 import { useSearchDealsForSchedule } from '@/hooks/useAgendaData';
+import { useR2CloserAvailableSlots, useR2MonthMeetings } from '@/hooks/useR2CloserAvailableSlots';
 import { cn } from '@/lib/utils';
 
 interface DealForSchedule {
@@ -58,13 +57,6 @@ interface DealOption {
   } | null;
 }
 
-// Fixed time slots for R2 (9:00 to 18:00, 30-min intervals)
-const TIME_SLOTS = Array.from({ length: 19 }, (_, i) => {
-  const hour = Math.floor(i / 2) + 9;
-  const minute = (i % 2) * 30;
-  return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-});
-
 export function R2QuickScheduleModal({ 
   open, 
   onOpenChange, 
@@ -78,26 +70,56 @@ export function R2QuickScheduleModal({
   const [selectedDeal, setSelectedDeal] = useState<DealOption | null>(null);
   const [selectedCloser, setSelectedCloser] = useState(preselectedCloserId || '');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
-  const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
+  const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
+  const [calendarMonth, setCalendarMonth] = useState<Date>(preselectedDate || new Date());
 
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
   const createMeeting = useCreateR2Meeting();
+
+  // Fetch available slots for selected closer + date
+  const { data: closerSlots, isLoading: loadingSlots } = useR2CloserAvailableSlots(
+    selectedCloser || undefined,
+    selectedDate
+  );
+
+  // Fetch month meetings for calendar indicators
+  const { data: monthMeetingDates = [] } = useR2MonthMeetings(
+    selectedCloser || undefined,
+    calendarMonth
+  );
+
+  // Available time slots based on closer configuration
+  const availableTimeSlots = useMemo(() => {
+    if (!closerSlots) return [];
+    return closerSlots.availableSlots.filter(s => s.isAvailable);
+  }, [closerSlots]);
+
+  // All configured slots (for showing occupied ones too)
+  const allConfiguredSlots = useMemo(() => {
+    if (!closerSlots) return [];
+    return closerSlots.availableSlots;
+  }, [closerSlots]);
 
   useEffect(() => {
     if (open) {
       if (preselectedCloserId) setSelectedCloser(preselectedCloserId);
       if (preselectedDate) {
         setSelectedDate(preselectedDate);
+        setCalendarMonth(startOfMonth(preselectedDate));
         setSelectedTime(format(preselectedDate, 'HH:mm'));
       }
-      // Pre-fill with preselectedDeal if provided
       if (preselectedDeal) {
         setSelectedDeal(preselectedDeal);
         setNameQuery(preselectedDeal.contact?.name || preselectedDeal.name);
       }
     }
-  }, [open, preselectedCloserId, preselectedDate]);
+  }, [open, preselectedCloserId, preselectedDate, preselectedDeal]);
+
+  // Reset time when closer or date changes
+  useEffect(() => {
+    setSelectedTime('');
+  }, [selectedCloser, selectedDate]);
 
   const handleSelectDeal = useCallback((deal: DealOption) => {
     setSelectedDeal(deal);
@@ -112,7 +134,7 @@ export function R2QuickScheduleModal({
   }, []);
 
   const handleSubmit = () => {
-    if (!selectedDeal || !selectedCloser || !selectedDate) return;
+    if (!selectedDeal || !selectedCloser || !selectedDate || !selectedTime) return;
 
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const scheduledAt = new Date(selectedDate);
@@ -140,15 +162,26 @@ export function R2QuickScheduleModal({
     setShowResults(false);
     setSelectedCloser(preselectedCloserId || '');
     setSelectedDate(undefined);
-    setSelectedTime('09:00');
+    setSelectedTime('');
     setNotes('');
+    setCalendarMonth(new Date());
   };
 
   const isSelected = !!selectedDeal;
 
+  // Get placeholder text for time select
+  const getTimePlaceholder = () => {
+    if (!selectedCloser) return 'Selecione closer primeiro';
+    if (!selectedDate) return 'Selecione data primeiro';
+    if (loadingSlots) return 'Carregando...';
+    if (allConfiguredSlots.length === 0) return 'Sem horários configurados';
+    if (availableTimeSlots.length === 0) return 'Todos ocupados';
+    return 'Selecione horário';
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5 text-purple-600" />
@@ -233,47 +266,76 @@ export function R2QuickScheduleModal({
             </Select>
           </div>
 
-          {/* Date and Time */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Data</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className={cn('w-full justify-start text-left', !selectedDate && 'text-muted-foreground')}
-                  >
-                    {selectedDate ? format(selectedDate, 'dd/MM/yyyy') : 'Selecione'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
+          {/* Calendar - Full Month View */}
+          <div className="space-y-2">
+            <Label>Data</Label>
+            <div className="border rounded-md p-3">
+              <CalendarComponent
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
+                locale={ptBR}
+                showOutsideDays={true}
+                disabled={!selectedCloser}
+                modifiers={{
+                  hasBookings: monthMeetingDates,
+                }}
+                modifiersStyles={{
+                  hasBookings: {
+                    backgroundColor: 'hsl(var(--primary) / 0.2)',
+                    fontWeight: 'bold',
+                  },
+                }}
+                className="w-full"
+              />
+              {selectedCloser && monthMeetingDates.length > 0 && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="w-3 h-3 rounded bg-primary/20" />
+                  <span>Dias com reuniões agendadas</span>
+                </div>
+              )}
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label>Horário</Label>
-              <Select value={selectedTime} onValueChange={setSelectedTime}>
-                <SelectTrigger>
-                  <Clock className="h-4 w-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_SLOTS.map(time => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Time Selection - Dynamic based on closer config */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Horário
+              {loadingSlots && <Loader2 className="h-3 w-3 animate-spin" />}
+            </Label>
+            <Select 
+              value={selectedTime} 
+              onValueChange={setSelectedTime}
+              disabled={!selectedCloser || !selectedDate || loadingSlots || availableTimeSlots.length === 0}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={getTimePlaceholder()} />
+              </SelectTrigger>
+              <SelectContent>
+                {allConfiguredSlots.map(slot => (
+                  <SelectItem 
+                    key={slot.time} 
+                    value={slot.time}
+                    disabled={!slot.isAvailable}
+                    className={cn(!slot.isAvailable && "opacity-50")}
+                  >
+                    <span className="flex items-center gap-2">
+                      {slot.time}
+                      {slot.link && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
+                      {!slot.isAvailable && <span className="text-xs text-destructive">(ocupado)</span>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedCloser && selectedDate && !loadingSlots && allConfiguredSlots.length === 0 && (
+              <p className="text-xs text-amber-600">
+                Este closer não tem horários configurados para {format(selectedDate, 'EEEE', { locale: ptBR })}.
+              </p>
+            )}
           </div>
 
           {/* Notes */}
@@ -294,7 +356,7 @@ export function R2QuickScheduleModal({
           <Button 
             className="w-full bg-purple-600 hover:bg-purple-700" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || !selectedTime || createMeeting.isPending}
           >
             {createMeeting.isPending ? 'Agendando...' : 'Agendar R2'}
           </Button>
