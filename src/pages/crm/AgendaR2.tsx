@@ -564,6 +564,8 @@ export default function AgendaR2() {
           }
         }}
         closers={closers}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
         preselectedCloserId={preselectedCloserId}
         preselectedDate={preselectedDate}
       />
@@ -574,6 +576,8 @@ export default function AgendaR2() {
         open={rescheduleModalOpen}
         onOpenChange={setRescheduleModalOpen}
         closers={closers}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
       />
 
       {/* R2 Closer Availability Config Modal */}

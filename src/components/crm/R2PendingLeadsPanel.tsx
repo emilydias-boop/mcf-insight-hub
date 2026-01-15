@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useR2PendingLeads, R2PendingLead } from '@/hooks/useR2PendingLeads';
 import { R2QuickScheduleModal } from './R2QuickScheduleModal';
 import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
+import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { cn } from '@/lib/utils';
 
 interface R2PendingLeadsPanelProps {
@@ -26,6 +27,8 @@ interface R2PendingLeadsPanelProps {
 
 export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const { data: pendingLeads = [], isLoading, error } = useR2PendingLeads();
+  const { data: statusOptions = [] } = useR2StatusOptions();
+  const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<R2PendingLead | null>(null);
 
@@ -168,6 +171,8 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
           if (!open) setSelectedLead(null);
         }}
         closers={closers}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
         preselectedDeal={selectedLead ? {
           id: selectedLead.deal?.id || '',
           name: selectedLead.deal?.name || selectedLead.attendee_name || 'Lead',
