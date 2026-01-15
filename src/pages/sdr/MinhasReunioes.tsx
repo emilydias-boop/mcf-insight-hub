@@ -21,7 +21,7 @@ import { useSdrOriginsAndStages } from "@/hooks/useSdrMeetings";
 import { useMinhasReunioesV2, MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { MeetingSummaryCards } from "@/components/sdr/MeetingSummaryCards";
 import { MeetingsTable } from "@/components/sdr/MeetingsTable";
-import { MeetingDetailsDrawer } from "@/components/sdr/MeetingDetailsDrawer";
+import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 import { ReviewRequestModal } from "@/components/sdr/ReviewRequestModal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -66,7 +66,7 @@ export default function MinhasReunioes() {
   const { startDate, endDate } = getDateRange();
   
   // Usar nova hook V2 com lógica corrigida
-  const { meetings, summary, isLoading } = useMinhasReunioesV2(startDate, endDate);
+  const { meetings, summary, isLoading, refetch } = useMinhasReunioesV2(startDate, endDate);
 
   // Filtrar reuniões localmente
   const filteredMeetings = meetings.filter(m => {
@@ -339,27 +339,12 @@ export default function MinhasReunioes() {
         />
       </div>
       
-      {/* Details Drawer - adaptar para MeetingV2 */}
+      {/* Details Drawer with Actions */}
       {selectedMeeting && (
-        <MeetingDetailsDrawer 
-          meeting={{
-            id: selectedMeeting.deal_id,
-            dealId: selectedMeeting.deal_id,
-            dealName: selectedMeeting.deal_name,
-            contactName: selectedMeeting.contact_name,
-            contactEmail: selectedMeeting.contact_email,
-            contactPhone: selectedMeeting.contact_phone,
-            originId: null,
-            originName: selectedMeeting.origin_name || 'Desconhecida',
-            currentStage: selectedMeeting.status_atual,
-            currentStageClassification: 'other',
-            scheduledDate: selectedMeeting.data_agendamento,
-            probability: selectedMeeting.probability,
-            timeToSchedule: null,
-            timeToContract: null,
-            createdAt: ''
-          }} 
-          onClose={() => setSelectedMeeting(null)} 
+        <SdrMeetingActionsDrawer 
+          meeting={selectedMeeting}
+          onClose={() => setSelectedMeeting(null)}
+          onRefresh={refetch}
         />
       )}
       

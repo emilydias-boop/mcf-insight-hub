@@ -10,9 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MeetingsTable } from "./MeetingsTable";
-import { MeetingDetailsDrawer } from "./MeetingDetailsDrawer";
+import { SdrMeetingActionsDrawer } from "./SdrMeetingActionsDrawer";
 import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
-import { Meeting } from "@/hooks/useSdrMeetings";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -31,7 +30,7 @@ export function SelectedSdrLeadsPanel({
 }: SelectedSdrLeadsPanelProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [tipoFilter, setTipoFilter] = useState<string>("all");
-  const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | Meeting | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<MeetingV2 | null>(null);
 
   // Get unique status values
   const uniqueStatuses = useMemo(() => {
@@ -166,15 +165,15 @@ export function SelectedSdrLeadsPanel({
             <MeetingsTable
               meetings={filteredMeetings}
               isLoading={false}
-              onSelectMeeting={(meeting) => setSelectedMeeting(meeting)}
+              onSelectMeeting={(meeting) => setSelectedMeeting(meeting as MeetingV2)}
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Meeting Details Drawer */}
-      <MeetingDetailsDrawer
-        meeting={selectedMeeting as Meeting | null}
+      {/* Meeting Actions Drawer */}
+      <SdrMeetingActionsDrawer
+        meeting={selectedMeeting}
         onClose={() => setSelectedMeeting(null)}
       />
     </>

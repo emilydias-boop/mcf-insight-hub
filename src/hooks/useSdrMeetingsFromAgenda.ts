@@ -17,6 +17,9 @@ interface AgendaMeetingRow {
   closer: string;
   origin_name: string;
   probability: number;
+  attendee_id: string | null;
+  meeting_slot_id: string | null;
+  attendee_status: string | null;
 }
 
 interface UseSdrMeetingsFromAgendaParams {
@@ -80,6 +83,10 @@ export function useSdrMeetingsFromAgenda({
           conta: true,
           total_movimentacoes: 1,
           from_stage: null,
+          // New fields for attendee actions
+          attendee_id: row.attendee_id || null,
+          meeting_slot_id: row.meeting_slot_id || null,
+          attendee_status: row.attendee_status || null,
         };
       });
     },
