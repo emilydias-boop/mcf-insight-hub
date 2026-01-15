@@ -6071,6 +6071,8 @@ export type Database = {
           start_date: string
         }
         Returns: {
+          attendee_id: string
+          attendee_status: string
           closer: string
           contact_email: string
           contact_name: string
@@ -6079,6 +6081,7 @@ export type Database = {
           deal_id: string
           deal_name: string
           intermediador: string
+          meeting_slot_id: string
           origin_name: string
           probability: number
           scheduled_at: string
