@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
-import { WEEK_STARTS_ON } from "@/lib/businessDays";
+import { WEEK_STARTS_ON, contarDiasUteis } from "@/lib/businessDays";
 import { Calendar, Users, RefreshCw, Download, Building2 } from "lucide-react";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
@@ -26,6 +26,7 @@ import { useGhostCountBySdr } from "@/hooks/useGhostCountBySdr";
 import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useAgendamentosCreatedToday } from "@/hooks/useAgendamentosCreatedToday";
+import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
 import { SDR_LIST } from "@/constants/team";
 
@@ -178,6 +179,27 @@ export default function ReunioesEquipe() {
 
   // Ghost appointments data
   const { data: ghostCountBySdr } = useGhostCountBySdr();
+
+  // Fetch all SDRs for meta_diaria
+  const { data: allSdrsData } = useSdrsAll();
+
+  // Create sdrMetaMap: email -> meta_diaria
+  const sdrMetaMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (allSdrsData) {
+      allSdrsData.forEach(sdr => {
+        if (sdr.email) {
+          map.set(sdr.email.toLowerCase(), sdr.meta_diaria || 10);
+        }
+      });
+    }
+    return map;
+  }, [allSdrsData]);
+
+  // Calculate business days in the selected period
+  const diasUteisNoPeriodo = useMemo(() => {
+    return contarDiasUteis(start, end);
+  }, [start, end]);
 
   // Fetch meeting_slots KPIs for today (agenda-based)
   const { data: dayAgendaKPIs } = useMeetingSlotsKPIs(dayStart, dayEnd);
@@ -480,6 +502,8 @@ export default function ReunioesEquipe() {
             isLoading={isLoading}
             ghostCountBySdr={ghostCountBySdr}
             disableNavigation={isSdr}
+            sdrMetaMap={sdrMetaMap}
+            diasUteisNoPeriodo={diasUteisNoPeriodo}
           />
         </CardContent>
       </Card>
