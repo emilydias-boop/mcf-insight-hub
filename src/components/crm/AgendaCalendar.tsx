@@ -883,6 +883,18 @@ export function AgendaCalendar({
                               rescheduled: 'border-l-yellow-500',
                             };
 
+                            // Background colors with low opacity to match border
+                            const STATUS_BG_COLORS: Record<string, string> = {
+                              scheduled: 'bg-green-500/10',
+                              invited: 'bg-green-500/10',
+                              completed: 'bg-blue-500/10',
+                              no_show: 'bg-red-500/10',
+                              contract_paid: 'bg-emerald-600/10',
+                              cancelled: 'bg-gray-400/10',
+                              canceled: 'bg-gray-400/10',
+                              rescheduled: 'bg-yellow-500/10',
+                            };
+
                             // Get all attendees for display
                             const allAttendees = meetings.flatMap(m => 
                               (m.attendees || []).map(att => ({ 
@@ -909,8 +921,9 @@ export function AgendaCalendar({
                                           {...dragProvided.dragHandleProps}
                                           onClick={() => onSelectMeeting(firstMeeting)}
                                           className={cn(
-                                            'absolute top-0.5 text-left p-1.5 rounded-md bg-card shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
+                                            'absolute top-0.5 text-left p-1.5 rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
                                             STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
+                                            STATUS_BG_COLORS[firstMeeting.status] || 'bg-card',
                                             dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                           )}
                                           style={{ 
