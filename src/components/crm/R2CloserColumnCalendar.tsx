@@ -6,12 +6,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
 import { R2Closer } from "@/hooks/useR2Closers";
+import { R2DailySlotsMap } from "@/hooks/useR2DailySlotsForView";
 import { cn } from "@/lib/utils";
 
 interface R2CloserColumnCalendarProps {
   meetings: R2Meeting[];
   closers: R2Closer[];
   selectedDate: Date;
+  configuredSlotsMap?: R2DailySlotsMap;
   onSelectMeeting: (meeting: R2Meeting) => void;
   onSelectSlot: (closerId: string, date: Date) => void;
 }
@@ -34,7 +36,7 @@ const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; shortLabel: string
 };
 
 // Fixed time slots for R2 (9:00 to 21:00, 30-min intervals)
-const TIME_SLOTS = Array.from({ length: 25 }, (_, i) => {
+const ALL_TIME_SLOTS = Array.from({ length: 25 }, (_, i) => {
   const hour = Math.floor(i / 2) + 9;
   const minute = (i % 2) * 30;
   return { hour, minute, label: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}` };
@@ -44,6 +46,7 @@ export function R2CloserColumnCalendar({
   meetings,
   closers,
   selectedDate,
+  configuredSlotsMap,
   onSelectMeeting,
   onSelectSlot,
 }: R2CloserColumnCalendarProps) {
@@ -60,10 +63,39 @@ export function R2CloserColumnCalendar({
     });
   };
 
-  const isSlotAvailable = (closerId: string, hour: number, minute: number) => {
-    const hasMeeting = getMeetingForSlot(closerId, hour, minute);
-    return !hasMeeting;
+  // Check if a slot is configured for a specific closer
+  const isSlotConfiguredForCloser = (closerId: string, hour: number, minute: number) => {
+    if (!configuredSlotsMap) return true; // If no map provided, show all as available (fallback)
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    const dateSlots = configuredSlotsMap[dateStr];
+    if (!dateSlots || !dateSlots[timeStr]) return false;
+    return dateSlots[timeStr].closerIds.includes(closerId);
   };
+
+  const isSlotAvailable = (closerId: string, hour: number, minute: number) => {
+    // First check if slot is configured for this closer
+    if (!isSlotConfiguredForCloser(closerId, hour, minute)) return false;
+    // Then check if there's no meeting
+    return !getMeetingForSlot(closerId, hour, minute);
+  };
+
+  // Filter time slots to only show times that have at least one configured slot
+  const timeSlots = useMemo(() => {
+    if (!configuredSlotsMap) return ALL_TIME_SLOTS;
+    
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const dateSlots = configuredSlotsMap[dateStr];
+    
+    if (!dateSlots || Object.keys(dateSlots).length === 0) {
+      return []; // No configured slots for this date
+    }
+    
+    // Get all configured times
+    const configuredTimes = new Set(Object.keys(dateSlots));
+    
+    return ALL_TIME_SLOTS.filter(slot => configuredTimes.has(slot.label));
+  }, [configuredSlotsMap, selectedDate]);
 
   const now = new Date();
   const isToday = isSameDay(selectedDate, now);
@@ -71,7 +103,7 @@ export function R2CloserColumnCalendar({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!scrollContainerRef.current || TIME_SLOTS.length === 0) return;
+    if (!scrollContainerRef.current || timeSlots.length === 0) return;
 
     const targetMeeting = meetings
       .filter((m) => {
@@ -86,11 +118,11 @@ export function R2CloserColumnCalendar({
 
     if (targetMeeting) {
       const meetingTime = parseISO(targetMeeting.scheduled_at);
-      targetSlotIndex = TIME_SLOTS.findIndex(
+      targetSlotIndex = timeSlots.findIndex(
         (slot) => slot.hour === meetingTime.getHours() && slot.minute === meetingTime.getMinutes()
       );
     } else if (isToday) {
-      targetSlotIndex = TIME_SLOTS.findIndex(
+      targetSlotIndex = timeSlots.findIndex(
         (slot) => slot.hour > now.getHours() || (slot.hour === now.getHours() && slot.minute >= now.getMinutes())
       );
     }
@@ -99,7 +131,7 @@ export function R2CloserColumnCalendar({
       const scrollPosition = Math.max(0, (targetSlotIndex - 2) * 44);
       scrollContainerRef.current.scrollTop = scrollPosition;
     }
-  }, [meetings, selectedDate, isToday]);
+  }, [meetings, selectedDate, isToday, timeSlots]);
 
   return (
     <div className="border rounded-lg overflow-hidden bg-card">
@@ -122,7 +154,11 @@ export function R2CloserColumnCalendar({
 
       {/* Time slots grid */}
       <div ref={scrollContainerRef} className="max-h-[500px] overflow-y-auto">
-        {TIME_SLOTS.map((slot, idx) => {
+        {timeSlots.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Nenhum horário configurado para esta data.
+          </div>
+        ) : timeSlots.map((slot, idx) => {
           const isCurrentSlot =
             isToday &&
             now.getHours() === slot.hour &&

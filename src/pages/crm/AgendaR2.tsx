@@ -39,6 +39,7 @@ import { R2Meeting } from '@/hooks/useR2AgendaMeetings';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useR2DailySlotsForView } from '@/hooks/useR2DailySlotsForView';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -84,6 +85,10 @@ export default function AgendaR2() {
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const pendingCount = useR2PendingLeadsCount();
+  
+  // Fetch R2 configured slots for the "Por Closer" view
+  const closerIds = useMemo(() => closers.map(c => c.id), [closers]);
+  const { data: r2ConfiguredSlotsMap } = useR2DailySlotsForView(rangeStart, rangeEnd, closerIds);
 
   // Filter meetings by closer and status
   const filteredMeetings = useMemo(() => {
@@ -467,6 +472,7 @@ export default function AgendaR2() {
                   meetings={meetingsAsR2Meeting}
                   closers={displayClosers}
                   selectedDate={selectedDate}
+                  configuredSlotsMap={r2ConfiguredSlotsMap}
                   onSelectMeeting={(m) => {
                     const meeting = meetings.find(mt => mt.id === m.id);
                     if (meeting) handleSelectMeeting(meeting);
