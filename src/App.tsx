@@ -9,6 +9,7 @@ import { AppearanceProvider } from "./contexts/AppearanceContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { RoleGuard } from "./components/auth/RoleGuard";
+import { R2AccessGuard } from "./components/auth/R2AccessGuard";
 import { MainLayout } from "./components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
@@ -198,7 +199,7 @@ const App = () => (
                 <Route path="atendimentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Atendimentos /></RoleGuard>} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
-                <Route path="agenda-r2" element={<AgendaR2 />} />
+                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
                 <Route path="configurar-closers-r2" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfigurarClosersR2 /></RoleGuard>} />
                 <Route path="origens" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Origens /></RoleGuard>} />
                 <Route path="grupos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Grupos /></RoleGuard>} />
