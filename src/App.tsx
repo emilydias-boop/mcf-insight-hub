@@ -11,6 +11,7 @@ import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { RoleGuard } from "./components/auth/RoleGuard";
 import { R2AccessGuard } from "./components/auth/R2AccessGuard";
 import { MainLayout } from "./components/layout/MainLayout";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Receita from "./pages/receita/Index";
@@ -115,7 +116,9 @@ const App = () => (
               path="/"
               element={
                 <ProtectedRoute>
-                  <MainLayout />
+                  <ErrorBoundary>
+                    <MainLayout />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             >
