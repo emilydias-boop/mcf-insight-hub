@@ -6,7 +6,7 @@ import {
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
   Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
 import { supabase } from '@/integrations/supabase/client';
 import { useOutsideDetectionBatch } from '@/hooks/useOutsideDetection';
@@ -17,6 +17,14 @@ import {
   SheetTitle,
   SheetClose,
 } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -108,6 +116,7 @@ const DELETE_ALLOWED_ROLES = ['admin', 'manager', 'coordenador', 'sdr'];
 
 export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpenChange, onReschedule }: AgendaMeetingDrawerProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { role, user } = useAuth();
   const [closerNotes, setCloserNotes] = useState(meeting?.closer_notes || '');
   const [sdrNote, setSdrNote] = useState(meeting?.notes || '');
@@ -121,6 +130,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [editingPhoneId, setEditingPhoneId] = useState<string | null>(null);
   const [editedPhone, setEditedPhone] = useState('');
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showR2PromptDialog, setShowR2PromptDialog] = useState(false);
+  const [contractPaidParticipant, setContractPaidParticipant] = useState<{ id: string; name: string; dealId: string | null } | null>(null);
   
   const updateStatus = useUpdateMeetingStatus();
   const cancelMeeting = useCancelMeeting();
@@ -176,7 +187,24 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   const handleContractPaid = () => {
     if (selectedParticipant) {
+      // Store participant info for R2 prompt
+      const participantName = selectedParticipant.name;
+      const dealId = activeMeeting?.deal_id || null;
+      
       handleParticipantStatusChange(selectedParticipant.id, 'contract_paid');
+      
+      // Show R2 scheduling prompt after contract paid
+      setContractPaidParticipant({
+        id: selectedParticipant.id,
+        name: participantName,
+        dealId
+      });
+      // Small delay to let the status update complete
+      setTimeout(() => {
+        setShowR2PromptDialog(true);
+        // Invalidate pending leads query to update count
+        queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
+      }, 500);
     }
   };
 
@@ -1097,6 +1125,42 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           onOpenChange={setShowMoveModal}
         />
       </SheetContent>
+
+      {/* R2 Scheduling Prompt Dialog */}
+      <Dialog open={showR2PromptDialog} onOpenChange={setShowR2PromptDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle className="h-5 w-5" />
+              Contrato Pago Registrado!
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              O lead <strong>{contractPaidParticipant?.name}</strong> teve o contrato marcado como pago.
+              <br /><br />
+              Deseja agendar a reunião R2 agora?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowR2PromptDialog(false)}
+            >
+              Depois
+            </Button>
+            <Button 
+              className="bg-purple-600 hover:bg-purple-700"
+              onClick={() => {
+                setShowR2PromptDialog(false);
+                onOpenChange(false);
+                navigate('/crm/agenda-r2');
+              }}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Agendar R2 Agora
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }
