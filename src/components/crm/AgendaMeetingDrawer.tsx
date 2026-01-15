@@ -780,6 +780,19 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                     </div>
                   )}
                   
+                  {/* Nota Original do Agendamento (meeting_slot_attendees.notes) */}
+                  {selectedParticipant.notes && (
+                    <div className="bg-amber-500/10 rounded-lg p-3 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <StickyNote className="h-4 w-4 text-amber-600" />
+                        <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                          Nota do Agendamento
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{selectedParticipant.notes}</p>
+                    </div>
+                  )}
+                  
                   {/* Multiple Notes Section - using new attendee_notes table */}
                   <div className="pt-2 border-t border-blue-500/20">
                     <AttendeeNotesSection

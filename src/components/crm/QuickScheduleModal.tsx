@@ -1018,13 +1018,17 @@ export function QuickScheduleModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label>{weeklyLeadData ? 'Motivo do Reagendamento' : 'Notas (opcional)'}</Label>
+            <Label>{weeklyLeadData ? 'Motivo do Reagendamento' : 'Notas'} <span className="text-destructive">*</span></Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={weeklyLeadData ? 'Ex: Cliente pediu para remarcar, não atendeu, etc...' : 'Adicione observações...'}
+              placeholder={weeklyLeadData ? 'Ex: Cliente pediu para remarcar, não atendeu, etc...' : 'Adicione observações sobre o lead...'}
               rows={2}
+              className={cn(!notes.trim() && "border-destructive/50")}
             />
+            {!notes.trim() && (
+              <p className="text-xs text-destructive">Nota obrigatória para agendar</p>
+            )}
           </div>
 
           {/* Auto-send WhatsApp Toggle - hidden for now
@@ -1044,7 +1048,7 @@ export function QuickScheduleModal({
           <Button 
             className="w-full" 
             onClick={handleSubmit}
-            disabled={!selectedDeal || !selectedCloser || !selectedDate || createMeeting.isPending}
+            disabled={!selectedDeal || !selectedCloser || !selectedDate || !notes.trim() || createMeeting.isPending}
           >
             {createMeeting.isPending ? 'Agendando...' : 'Agendar Reunião'}
           </Button>
