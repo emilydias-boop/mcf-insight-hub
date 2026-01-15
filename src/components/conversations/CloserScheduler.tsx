@@ -5,10 +5,44 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAvailableSlots, useDealMeetings, AvailableSlot } from '@/hooks/useCloserScheduling';
 import { useBookMeetingWithCalendly } from '@/hooks/useCalendlyIntegration';
 import { MeetingLinkShare } from '@/components/crm/MeetingLinkShare';
-import { format, addDays, startOfDay, isSameDay } from 'date-fns';
+import { format, addDays, startOfDay, isSameDay, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+// Helper function to check if a date is disabled for SDR scheduling
+const isDateDisabledForSDR = (targetDate: Date): boolean => {
+  const today = startOfDay(new Date());
+  const target = startOfDay(targetDate);
+  const dayOfWeek = getDay(today); // 0=Dom, 4=Qui, 5=Sex, 6=Sab
+  
+  // Passado sempre desabilitado
+  if (target < today) return true;
+  
+  // Quinta (4): pode quinta, sexta, sábado
+  if (dayOfWeek === 4) {
+    const friday = addDays(today, 1);
+    const saturday = addDays(today, 2);
+    return !(isSameDay(target, today) || isSameDay(target, friday) || isSameDay(target, saturday));
+  }
+  
+  // Sexta (5): pode sexta, sábado, segunda
+  if (dayOfWeek === 5) {
+    const saturday = addDays(today, 1);
+    const monday = addDays(today, 3);
+    return !(isSameDay(target, today) || isSameDay(target, saturday) || isSameDay(target, monday));
+  }
+  
+  // Sábado (6): pode sábado, segunda
+  if (dayOfWeek === 6) {
+    const monday = addDays(today, 2);
+    return !(isSameDay(target, today) || isSameDay(target, monday));
+  }
+  
+  // Outros dias: hoje e amanhã
+  const tomorrow = addDays(today, 1);
+  return !(isSameDay(target, today) || isSameDay(target, tomorrow));
+};
 
 interface CloserSchedulerProps {
   dealId: string;
@@ -186,12 +220,13 @@ export function CloserScheduler({
           const hasSlots = slotsByDate[dateKey]?.length > 0;
           const isSelected = isSameDay(day, selectedDate);
           const isPast = day < startOfDay(new Date());
+          const isDisabledByRule = isDateDisabledForSDR(day);
           
           return (
             <button
               key={dateKey}
-              onClick={() => !isPast && setSelectedDate(day)}
-              disabled={isPast || !hasSlots}
+              onClick={() => !isPast && !isDisabledByRule && setSelectedDate(day)}
+              disabled={isPast || !hasSlots || isDisabledByRule}
               className={cn(
                 "flex-1 py-2 px-1 rounded-lg text-center transition-colors",
                 isSelected && "bg-primary text-primary-foreground",

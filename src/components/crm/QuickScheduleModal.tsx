@@ -853,10 +853,25 @@ export function QuickScheduleModal({
                       const targetDate = new Date(date);
                       targetDate.setHours(0, 0, 0, 0);
                       
-                      const dayOfWeek = getDay(today); // 0=Domingo, 5=Sexta, 6=Sábado
+                      const dayOfWeek = getDay(today); // 0=Domingo, 4=Quinta, 5=Sexta, 6=Sábado
                       
                       // Não pode agendar no passado
                       if (targetDate < today) return true;
+                      
+                      // Se hoje é quinta (4): pode quinta, sexta, sábado
+                      if (dayOfWeek === 4) {
+                        const friday = new Date(today);
+                        friday.setDate(today.getDate() + 1);
+                        
+                        const saturday = new Date(today);
+                        saturday.setDate(today.getDate() + 2);
+                        
+                        const isToday = targetDate.getTime() === today.getTime();
+                        const isFriday = targetDate.getTime() === friday.getTime();
+                        const isSaturday = targetDate.getTime() === saturday.getTime();
+                        
+                        return !(isToday || isFriday || isSaturday);
+                      }
                       
                       // Se hoje é sexta (5): pode sexta, sábado, segunda
                       if (dayOfWeek === 5) {
