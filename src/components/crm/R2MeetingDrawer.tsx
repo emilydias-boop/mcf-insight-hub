@@ -40,7 +40,9 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
 
   if (!meeting) return null;
 
-  const contact = meeting.deal?.contact;
+  const firstAttendee = meeting.attendees?.[0];
+  const contact = firstAttendee?.deal?.contact || firstAttendee;
+  const contactPhone = firstAttendee?.phone || firstAttendee?.deal?.contact?.phone;
   const statusInfo = STATUS_LABELS[meeting.status] || STATUS_LABELS.scheduled;
   const isPending = meeting.status === 'scheduled' || meeting.status === 'rescheduled';
 
@@ -49,14 +51,14 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
   };
 
   const handleCall = () => {
-    if (contact?.phone) {
-      window.open(`tel:${contact.phone}`, '_blank');
+    if (contactPhone) {
+      window.open(`tel:${contactPhone}`, '_blank');
     }
   };
 
   const handleWhatsApp = () => {
-    if (contact?.phone) {
-      const phone = contact.phone.replace(/\D/g, '');
+    if (contactPhone) {
+      const phone = contactPhone.replace(/\D/g, '');
       window.open(`https://wa.me/55${phone}`, '_blank');
     }
   };
@@ -89,7 +91,7 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
                     {format(parseISO(meeting.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {format(parseISO(meeting.scheduled_at), 'HH:mm')} - {meeting.duration_minutes}min
+                    {format(parseISO(meeting.scheduled_at), 'HH:mm')} - 30min
                   </div>
                 </div>
               </div>
@@ -116,17 +118,17 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
                 <div key={att.id} className="bg-muted/50 rounded-lg p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">
-                      {att.attendee_name || att.contact?.name || 'Lead'}
+                      {att.name || att.deal?.contact?.name || 'Lead'}
                     </span>
                     <Badge variant="outline" className="text-xs">
                       {STATUS_LABELS[att.status]?.label || att.status}
                     </Badge>
                   </div>
                   
-                  {(att.attendee_phone || att.contact?.phone) && (
+                  {(att.phone || att.deal?.contact?.phone) && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Phone className="h-3 w-3" />
-                      {att.attendee_phone || att.contact?.phone}
+                      {att.phone || att.deal?.contact?.phone}
                     </div>
                   )}
                 </div>
@@ -146,7 +148,7 @@ export function R2MeetingDrawer({ meeting, open, onOpenChange, onReschedule }: R
             )}
 
             {/* Contact Actions */}
-            {contact?.phone && (
+            {contactPhone && (
               <>
                 <Separator />
                 <div className="flex gap-2">

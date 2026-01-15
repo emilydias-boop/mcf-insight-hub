@@ -50,7 +50,7 @@ export function R2CloserColumnCalendar({
 
   const getMeetingForSlot = (closerId: string, hour: number, minute: number) => {
     return meetings.find((m) => {
-      if (m.closer_id !== closerId) return false;
+      if (m.closer?.id !== closerId) return false;
       const meetingTime = parseISO(m.scheduled_at);
       return (
         isSameDay(meetingTime, selectedDate) &&
@@ -169,7 +169,7 @@ export function R2CloserColumnCalendar({
                                   meeting.attendees.slice(0, 2).map((att) => (
                                     <div key={att.id} className="flex items-center justify-between gap-1">
                                       <span className="truncate font-medium">
-                                        {att.attendee_name || att.contact?.name || "Lead"}
+                                        {att.name || att.deal?.contact?.name || "Lead"}
                                       </span>
                                       <Badge
                                         variant="outline"
@@ -184,7 +184,7 @@ export function R2CloserColumnCalendar({
                                   ))
                                 ) : (
                                   <div className="font-medium truncate">
-                                    {meeting.deal?.contact?.name || meeting.deal?.name || "Lead"}
+                                    {meeting.attendees?.[0]?.deal?.contact?.name || meeting.attendees?.[0]?.deal?.name || "Lead"}
                                   </div>
                                 )}
                                 {meeting.attendees && meeting.attendees.length > 2 && (
@@ -199,17 +199,17 @@ export function R2CloserColumnCalendar({
                               {meeting.attendees?.length ? (
                                 meeting.attendees.map((att) => (
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
-                                    <span>• {att.attendee_name || att.contact?.name || "Lead"}</span>
+                                    <span>• {att.name || att.deal?.contact?.name || "Lead"}</span>
                                     <Badge variant="outline" className="text-[9px] px-1 py-0">
                                       {ATTENDEE_STATUS_CONFIG[att.status]?.label || att.status}
                                     </Badge>
                                   </div>
                                 ))
                               ) : (
-                                <div className="text-xs">{meeting.deal?.contact?.name || meeting.deal?.name}</div>
+                                <div className="text-xs">{meeting.attendees?.[0]?.deal?.contact?.name || meeting.attendees?.[0]?.deal?.name}</div>
                               )}
                               <div className="text-xs text-muted-foreground pt-1">
-                                {format(parseISO(meeting.scheduled_at), "HH:mm")} - {meeting.duration_minutes}min
+                                {format(parseISO(meeting.scheduled_at), "HH:mm")} - 30min
                               </div>
                               <Badge variant="outline" className="text-xs">
                                 {meeting.status === "scheduled" && "Agendada"}

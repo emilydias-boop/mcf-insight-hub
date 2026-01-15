@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths } from 'date-fns';
+import { useState, useMemo, useEffect } from 'react';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, subDays, addWeeks, subWeeks, addMonths, subMonths, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Calendar as CalendarIcon, 
@@ -9,7 +9,9 @@ import {
   Plus,
   Users,
   Settings,
-  BarChart3
+  BarChart3,
+  List,
+  LayoutGrid
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,9 +20,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useR2CloserMetrics } from '@/hooks/useR2CloserMetrics';
-import { useR2AgendaMeetings } from '@/hooks/useR2AgendaMeetings';
+import { useR2AgendaMeetings, R2Meeting } from '@/hooks/useR2AgendaMeetings';
 import { useActiveR2Closers } from '@/hooks/useR2Closers';
 import { R2CloserSummaryTable } from '@/components/crm/R2CloserSummaryTable';
+import { R2CloserColumnCalendar } from '@/components/crm/R2CloserColumnCalendar';
+import { R2MeetingDrawer } from '@/components/crm/R2MeetingDrawer';
+import { R2QuickScheduleModal } from '@/components/crm/R2QuickScheduleModal';
+import { R2RescheduleModal } from '@/components/crm/R2RescheduleModal';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,8 +37,18 @@ type ViewMode = 'day' | 'week' | 'month';
 export default function AgendaR2() {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [closerFilter, setCloserFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  
+  // Modal/Drawer states
+  const [selectedMeeting, setSelectedMeeting] = useState<R2Meeting | null>(null);
+  const [meetingDrawerOpen, setMeetingDrawerOpen] = useState(false);
+  const [quickScheduleOpen, setQuickScheduleOpen] = useState(false);
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [meetingToReschedule, setMeetingToReschedule] = useState<R2Meeting | null>(null);
+  const [preselectedCloserId, setPreselectedCloserId] = useState<string | undefined>();
+  const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
 
   // Calculate date range based on view mode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -53,16 +69,27 @@ export default function AgendaR2() {
   }, [selectedDate, viewMode]);
 
   // Fetch data
-  const { data: closers, isLoading: isLoadingClosers } = useActiveR2Closers();
+  const { data: closers = [], isLoading: isLoadingClosers } = useActiveR2Closers();
   const { data: metrics, isLoading: isLoadingMetrics, refetch: refetchMetrics } = useR2CloserMetrics(rangeStart, rangeEnd);
-  const { data: meetings, isLoading: isLoadingMeetings, refetch: refetchMeetings } = useR2AgendaMeetings(rangeStart, rangeEnd);
+  const { data: meetings = [], isLoading: isLoadingMeetings, refetch: refetchMeetings } = useR2AgendaMeetings(rangeStart, rangeEnd);
 
-  // Filter meetings by closer
+  // Filter meetings by closer and status
   const filteredMeetings = useMemo(() => {
-    if (!meetings) return [];
-    if (closerFilter === 'all') return meetings;
-    return meetings.filter(m => m.closer?.id === closerFilter);
-  }, [meetings, closerFilter]);
+    let filtered = meetings;
+    if (closerFilter !== 'all') {
+      filtered = filtered.filter(m => m.closer?.id === closerFilter);
+    }
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(m => m.status === statusFilter);
+    }
+    return filtered;
+  }, [meetings, closerFilter, statusFilter]);
+
+  // Filter closers based on filter
+  const displayClosers = useMemo(() => {
+    if (closerFilter === 'all') return closers;
+    return closers.filter(c => c.id === closerFilter);
+  }, [closers, closerFilter]);
 
   // Navigation handlers
   const handlePrev = () => {
@@ -101,6 +128,39 @@ export default function AgendaR2() {
     refetchMetrics();
     refetchMeetings();
   };
+
+  // Meeting handlers
+  const handleSelectMeeting = (meeting: R2Meeting) => {
+    setSelectedMeeting(meeting);
+    setMeetingDrawerOpen(true);
+  };
+
+  const handleSelectSlot = (closerId: string, date: Date) => {
+    setPreselectedCloserId(closerId);
+    setPreselectedDate(date);
+    setQuickScheduleOpen(true);
+  };
+
+  const handleReschedule = (meeting: R2Meeting) => {
+    setMeetingToReschedule(meeting);
+    setMeetingDrawerOpen(false);
+    setRescheduleModalOpen(true);
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' && !e.ctrlKey) handlePrev();
+      if (e.key === 'ArrowRight' && !e.ctrlKey) handleNext();
+      if (e.key === 'Escape') {
+        setMeetingDrawerOpen(false);
+        setQuickScheduleOpen(false);
+        setRescheduleModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedDate, viewMode]);
 
   // Format date range display
   const dateRangeDisplay = useMemo(() => {
@@ -147,10 +207,90 @@ export default function AgendaR2() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
           </Button>
-          <Button size="sm">
+          <Button size="sm" onClick={() => setQuickScheduleOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Agendar R2
           </Button>
+        </div>
+      </div>
+
+      {/* Navigation Bar */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        {/* Date Navigation */}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={handlePrev}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="min-w-[200px]">
+                <CalendarIcon className="h-4 w-4 mr-2" />
+                {dateRangeDisplay}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                locale={ptBR}
+              />
+            </PopoverContent>
+          </Popover>
+          <Button variant="outline" size="icon" onClick={handleNext}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleToday}>
+            Hoje
+          </Button>
+        </div>
+
+        {/* View Mode & Filters */}
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center border rounded-md">
+            {(['day', 'week', 'month'] as ViewMode[]).map((mode) => (
+              <Button
+                key={mode}
+                variant={viewMode === mode ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode(mode)}
+                className="rounded-none first:rounded-l-md last:rounded-r-md"
+              >
+                {mode === 'day' ? 'Dia' : mode === 'week' ? 'Semana' : 'Mês'}
+              </Button>
+            ))}
+          </div>
+
+          {/* Closer Filter */}
+          <Select value={closerFilter} onValueChange={setCloserFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filtrar closer" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os closers</SelectItem>
+              {closers.map((closer) => (
+                <SelectItem key={closer.id} value={closer.id}>
+                  {closer.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Status Filter */}
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="scheduled">Agendadas</SelectItem>
+              <SelectItem value="completed">Realizadas</SelectItem>
+              <SelectItem value="no_show">No-show</SelectItem>
+              <SelectItem value="rescheduled">Reagendadas</SelectItem>
+              <SelectItem value="contract_paid">Contrato Pago</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -210,100 +350,51 @@ export default function AgendaR2() {
         </Card>
       </div>
 
-      {/* Metrics Table */}
+      {/* Main Content with Tabs */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Performance por Closer R2</CardTitle>
-            <div className="flex items-center gap-2">
-              {/* Date Navigation */}
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" onClick={handlePrev}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="min-w-[200px]">
-                      <CalendarIcon className="h-4 w-4 mr-2" />
-                      {dateRangeDisplay}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="center">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={(date) => date && setSelectedDate(date)}
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
-                <Button variant="outline" size="icon" onClick={handleNext}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleToday}>
-                  Hoje
-                </Button>
-              </div>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center border rounded-md">
-                {(['day', 'week', 'month'] as ViewMode[]).map((mode) => (
-                  <Button
-                    key={mode}
-                    variant={viewMode === mode ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode(mode)}
-                    className="rounded-none first:rounded-l-md last:rounded-r-md"
-                  >
-                    {mode === 'day' ? 'Dia' : mode === 'week' ? 'Semana' : 'Mês'}
-                  </Button>
-                ))}
+        <CardContent className="pt-4">
+          <Tabs defaultValue="closer">
+            <div className="flex items-center justify-between mb-4">
+              <TabsList>
+                <TabsTrigger value="closer" className="gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  Por Closer
+                </TabsTrigger>
+                <TabsTrigger value="list" className="gap-2">
+                  <List className="h-4 w-4" />
+                  Lista
+                </TabsTrigger>
+              </TabsList>
+              <div className="text-sm text-muted-foreground">
+                {filteredMeetings.length} reunião(ões)
               </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <R2CloserSummaryTable 
-            data={metrics} 
-            isLoading={isLoadingMetrics}
-            onCloserClick={(closerId) => setCloserFilter(closerId)}
-          />
-        </CardContent>
-      </Card>
 
-      {/* Calendar/List View */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Reuniões R2</CardTitle>
-            <Select value={closerFilter} onValueChange={setCloserFilter}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filtrar por closer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os closers</SelectItem>
-                {closers?.map((closer) => (
-                  <SelectItem key={closer.id} value={closer.id}>
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-2 h-2 rounded-full" 
-                        style={{ backgroundColor: closer.color || '#6B7280' }}
-                      />
-                      {closer.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="list">
-            <TabsList>
-              <TabsTrigger value="list">Lista</TabsTrigger>
-              <TabsTrigger value="calendar">Calendário</TabsTrigger>
-            </TabsList>
-            <TabsContent value="list" className="mt-4">
+            {/* By Closer View */}
+            <TabsContent value="closer" className="mt-0">
+              {isLoadingMeetings || isLoadingClosers ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : displayClosers.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhum closer R2 ativo encontrado.
+                </div>
+              ) : (
+                <R2CloserColumnCalendar
+                  meetings={filteredMeetings}
+                  closers={displayClosers}
+                  selectedDate={selectedDate}
+                  onSelectMeeting={handleSelectMeeting}
+                  onSelectSlot={handleSelectSlot}
+                />
+              )}
+            </TabsContent>
+
+            {/* List View */}
+            <TabsContent value="list" className="mt-0">
               {isLoadingMeetings ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
@@ -321,16 +412,16 @@ export default function AgendaR2() {
                     return (
                       <div 
                         key={meeting.id}
+                        onClick={() => handleSelectMeeting(meeting)}
                         className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center gap-3">
                           <div 
-                            className="w-1 h-12 rounded-full"
-                            style={{ backgroundColor: meeting.closer?.color || '#6B7280' }}
+                            className="w-1 h-12 rounded-full bg-purple-500"
                           />
                           <div>
                             <p className="font-medium">
-                              {attendee?.name || 'Sem participante'}
+                              {attendee?.name || attendee?.deal?.contact?.name || 'Sem participante'}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {format(new Date(meeting.scheduled_at), "EEEE, d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
@@ -345,14 +436,18 @@ export default function AgendaR2() {
                               className={cn(
                                 meeting.status === 'completed' && 'bg-green-500/10 text-green-600 border-green-500/20',
                                 meeting.status === 'no_show' && 'bg-red-500/10 text-red-600 border-red-500/20',
-                                meeting.status === 'scheduled' && 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-                                meeting.status === 'cancelled' && 'bg-gray-500/10 text-gray-600 border-gray-500/20'
+                                meeting.status === 'scheduled' && 'bg-purple-500/10 text-purple-600 border-purple-500/20',
+                                meeting.status === 'rescheduled' && 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
+                                meeting.status === 'contract_paid' && 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+                                meeting.status === 'canceled' && 'bg-gray-500/10 text-gray-600 border-gray-500/20'
                               )}
                             >
                               {meeting.status === 'completed' ? 'Realizada' :
                                meeting.status === 'no_show' ? 'No-show' :
                                meeting.status === 'scheduled' ? 'Agendada' :
-                               meeting.status === 'cancelled' ? 'Cancelada' :
+                               meeting.status === 'rescheduled' ? 'Reagendada' :
+                               meeting.status === 'contract_paid' ? 'Contrato Pago' :
+                               meeting.status === 'canceled' ? 'Cancelada' :
                                meeting.status}
                             </Badge>
                           </div>
@@ -363,14 +458,54 @@ export default function AgendaR2() {
                 </div>
               )}
             </TabsContent>
-            <TabsContent value="calendar" className="mt-4">
-              <div className="text-center py-8 text-muted-foreground">
-                Calendário visual em desenvolvimento...
-              </div>
-            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Metrics Table */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Performance por Closer R2</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <R2CloserSummaryTable 
+            data={metrics} 
+            isLoading={isLoadingMetrics}
+            onCloserClick={(closerId) => setCloserFilter(closerId)}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Meeting Drawer */}
+      <R2MeetingDrawer
+        meeting={selectedMeeting}
+        open={meetingDrawerOpen}
+        onOpenChange={setMeetingDrawerOpen}
+        onReschedule={handleReschedule}
+      />
+
+      {/* Quick Schedule Modal */}
+      <R2QuickScheduleModal
+        open={quickScheduleOpen}
+        onOpenChange={(open) => {
+          setQuickScheduleOpen(open);
+          if (!open) {
+            setPreselectedCloserId(undefined);
+            setPreselectedDate(undefined);
+          }
+        }}
+        closers={closers}
+        preselectedCloserId={preselectedCloserId}
+        preselectedDate={preselectedDate}
+      />
+
+      {/* Reschedule Modal */}
+      <R2RescheduleModal
+        meeting={meetingToReschedule}
+        open={rescheduleModalOpen}
+        onOpenChange={setRescheduleModalOpen}
+        closers={closers}
+      />
     </div>
   );
 }
