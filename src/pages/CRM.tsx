@@ -2,17 +2,21 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { LayoutDashboard, Users, Briefcase, MessageCircle, Settings, Shield, CalendarDays, UserX, Copy } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 
 const CRM = () => {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const location = useLocation();
   
-  // Roles que só podem ver Agenda
+  // Roles que só podem ver Agenda (exceto se estiver na whitelist R2)
   const agendaOnlyRoles = ['sdr', 'closer'];
   const isAgendaOnly = role && agendaOnlyRoles.includes(role);
   
-  // Redirecionar para /crm/agenda se for sdr/closer acessando /crm
-  if (isAgendaOnly && location.pathname === '/crm') {
+  // Verificar se usuário tem permissão especial para R2
+  const canViewR2 = canUserAccessR2(role, user?.id);
+  
+  // Redirecionar para /crm/agenda se for sdr/closer sem permissão R2
+  if (isAgendaOnly && !canViewR2 && location.pathname === '/crm') {
     return <Navigate to="/crm/agenda" replace />;
   }
   
@@ -29,10 +33,20 @@ const CRM = () => {
     { to: '/crm/configuracoes', label: 'Configurações', icon: Settings },
   ];
   
-  // SDR/Closer só vê Agenda
-  const navItems = isAgendaOnly 
-    ? allNavItems.filter(item => item.to === '/crm/agenda')
-    : allNavItems;
+  // Filtrar navegação baseado nas permissões
+  let navItems = allNavItems;
+  
+  if (isAgendaOnly) {
+    if (canViewR2) {
+      // SDR/Closer com permissão R2: vê apenas agendas
+      navItems = allNavItems.filter(item => 
+        item.to === '/crm/agenda' || item.to === '/crm/agenda-r2'
+      );
+    } else {
+      // SDR/Closer regular: só vê Agenda R1
+      navItems = allNavItems.filter(item => item.to === '/crm/agenda');
+    }
+  }
 
   return (
     <div className="h-full flex flex-col">
