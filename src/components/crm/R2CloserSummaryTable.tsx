@@ -81,13 +81,7 @@ export function R2CloserSummaryTable({ data, isLoading, onCloserClick }: R2Close
               onClick={() => onCloserClick?.(row.closer_id)}
             >
               <TableCell>
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: row.closer_color || '#6B7280' }}
-                  />
-                  <span className="font-medium">{row.closer_name}</span>
-                </div>
+                <span className="font-medium">{row.closer_name}</span>
               </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
