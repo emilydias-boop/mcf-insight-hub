@@ -58,6 +58,7 @@ import {
 } from '@/hooks/useAgendaData';
 import { MoveAttendeeModal } from './MoveAttendeeModal';
 import { AttendeeNotesSection } from './AttendeeNotesSection';
+import { MovementHistorySection } from '@/components/sdr/MovementHistorySection';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useConversationsContext } from '@/contexts/ConversationsContext';
@@ -1025,6 +1026,14 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
               </>
             )}
 
+            {/* Movement History Section */}
+            {selectedParticipant && (
+              <>
+                <Separator />
+                <MovementHistorySection attendeeId={selectedParticipant.id} />
+              </>
+            )}
+
             {/* No-Show Confirmation Dialog */}
             <AlertDialog open={showNoShowConfirm} onOpenChange={setShowNoShowConfirm}>
               <AlertDialogContent>
@@ -1122,6 +1131,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           currentMeetingId={activeMeeting?.id || null}
           currentMeetingDate={activeMeeting?.scheduled_at ? new Date(activeMeeting.scheduled_at) : undefined}
           currentAttendeeStatus={selectedParticipant?.status}
+          currentCloserId={activeMeeting?.closer?.id}
+          currentCloserName={activeMeeting?.closer?.name}
           open={showMoveModal}
           onOpenChange={setShowMoveModal}
         />
