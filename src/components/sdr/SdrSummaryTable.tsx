@@ -55,14 +55,11 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavig
           <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">SDR</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">1º Agend.</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Reagend.</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Total</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Realizadas</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">No-Show</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Contratos</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Agendamento</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Contrato PAGO</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">
                 <Ghost className="h-4 w-4 inline" />
               </TableHead>
@@ -90,44 +87,22 @@ export function SdrSummaryTable({ data, isLoading, ghostCountBySdr, disableNavig
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                      {row.primeiroAgendamento}
+                      {row.agendamentos}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30">
-                      {row.reagendamento}
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                      {row.r1Agendada}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-center font-bold text-foreground">
-                    {row.totalAgendamentos}
-                  </TableCell>
                   <TableCell className="text-center">
-                    <span className="text-green-400">{row.realizadas}</span>
+                    <span className="text-green-400 font-medium">{row.r1Realizada}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-red-400">{row.noShows}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contratos}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge 
-                      variant="outline" 
-                      className={
-                        row.taxaConversao >= 70 
-                          ? 'bg-green-500/10 text-green-400 border-green-500/30' 
-                          : row.taxaConversao >= 50 
-                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                            : 'bg-red-500/10 text-red-400 border-red-500/30'
-                      }
-                    >
-                      {row.taxaConversao.toFixed(1)}%
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className={row.taxaNoShow > 30 ? 'text-red-400' : 'text-muted-foreground'}>
-                      {row.taxaNoShow.toFixed(1)}%
-                    </span>
                   </TableCell>
                   <TableCell className="text-center">
                     {hasGhostCases ? (

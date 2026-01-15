@@ -55,9 +55,23 @@ export function SdrRankingBlock({ sdrMetrics, ranking, teamAverages, isLoading }
   const metrics = [
     {
       label: "Agendamentos",
-      value: sdrMetrics.totalAgendamentos,
+      value: sdrMetrics.agendamentos,
       avg: teamAverages.avgAgendamentos.toFixed(1),
       rank: ranking.agendamentos,
+      format: "number",
+    },
+    {
+      label: "R1 Agendada",
+      value: sdrMetrics.r1Agendada,
+      avg: teamAverages.avgR1Agendada.toFixed(1),
+      rank: ranking.r1Agendada,
+      format: "number",
+    },
+    {
+      label: "R1 Realizada",
+      value: sdrMetrics.r1Realizada,
+      avg: teamAverages.avgR1Realizada.toFixed(1),
+      rank: ranking.r1Realizada,
       format: "number",
     },
     {
@@ -66,21 +80,6 @@ export function SdrRankingBlock({ sdrMetrics, ranking, teamAverages, isLoading }
       avg: teamAverages.avgContratos.toFixed(1),
       rank: ranking.contratos,
       format: "number",
-    },
-    {
-      label: "Taxa Conversão",
-      value: `${sdrMetrics.taxaConversao.toFixed(1)}%`,
-      avg: `${teamAverages.avgTaxaConversao.toFixed(1)}%`,
-      rank: ranking.taxaConversao,
-      format: "percent",
-    },
-    {
-      label: "Taxa No-Show",
-      value: `${sdrMetrics.taxaNoShow.toFixed(1)}%`,
-      avg: `${teamAverages.avgTaxaNoShow.toFixed(1)}%`,
-      rank: ranking.taxaNoShow,
-      format: "percent",
-      note: "(menor é melhor)",
     },
   ];
 
@@ -108,9 +107,6 @@ export function SdrRankingBlock({ sdrMetrics, ranking, teamAverages, isLoading }
                 <tr key={metric.label} className="border-b border-border/50 last:border-0">
                   <td className="py-3 text-foreground">
                     {metric.label}
-                    {metric.note && (
-                      <span className="text-xs text-muted-foreground ml-1">{metric.note}</span>
-                    )}
                   </td>
                   <td className="py-3 text-center font-medium text-foreground">{metric.value}</td>
                   <td className="py-3 text-center text-muted-foreground">{metric.avg}</td>

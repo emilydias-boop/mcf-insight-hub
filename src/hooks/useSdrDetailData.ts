@@ -5,19 +5,17 @@ import { SDR_LIST } from "@/constants/team";
 
 export interface TeamAverages {
   avgAgendamentos: number;
-  avgRealizadas: number;
+  avgR1Agendada: number;
+  avgR1Realizada: number;
   avgNoShows: number;
   avgContratos: number;
-  avgTaxaConversao: number;
-  avgTaxaNoShow: number;
 }
 
 export interface SdrRanking {
   agendamentos: number;
-  realizadas: number;
+  r1Agendada: number;
+  r1Realizada: number;
   contratos: number;
-  taxaConversao: number;
-  taxaNoShow: number; // Lower is better
   totalSdrs: number;
 }
 
@@ -73,33 +71,30 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     if (sdrs.length === 0) {
       return {
         avgAgendamentos: 0,
-        avgRealizadas: 0,
+        avgR1Agendada: 0,
+        avgR1Realizada: 0,
         avgNoShows: 0,
         avgContratos: 0,
-        avgTaxaConversao: 0,
-        avgTaxaNoShow: 0,
       };
     }
 
     const sum = sdrs.reduce(
       (acc, s) => ({
-        agendamentos: acc.agendamentos + s.totalAgendamentos,
-        realizadas: acc.realizadas + s.realizadas,
+        agendamentos: acc.agendamentos + s.agendamentos,
+        r1Agendada: acc.r1Agendada + s.r1Agendada,
+        r1Realizada: acc.r1Realizada + s.r1Realizada,
         noShows: acc.noShows + s.noShows,
         contratos: acc.contratos + s.contratos,
-        taxaConversao: acc.taxaConversao + s.taxaConversao,
-        taxaNoShow: acc.taxaNoShow + s.taxaNoShow,
       }),
-      { agendamentos: 0, realizadas: 0, noShows: 0, contratos: 0, taxaConversao: 0, taxaNoShow: 0 }
+      { agendamentos: 0, r1Agendada: 0, r1Realizada: 0, noShows: 0, contratos: 0 }
     );
 
     return {
       avgAgendamentos: sum.agendamentos / sdrs.length,
-      avgRealizadas: sum.realizadas / sdrs.length,
+      avgR1Agendada: sum.r1Agendada / sdrs.length,
+      avgR1Realizada: sum.r1Realizada / sdrs.length,
       avgNoShows: sum.noShows / sdrs.length,
       avgContratos: sum.contratos / sdrs.length,
-      avgTaxaConversao: sum.taxaConversao / sdrs.length,
-      avgTaxaNoShow: sum.taxaNoShow / sdrs.length,
     };
   }, [teamData.bySDR]);
 
@@ -111,40 +106,34 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     if (totalSdrs === 0 || !sdrMetrics) {
       return {
         agendamentos: 0,
-        realizadas: 0,
+        r1Agendada: 0,
+        r1Realizada: 0,
         contratos: 0,
-        taxaConversao: 0,
-        taxaNoShow: 0,
         totalSdrs: 0,
       };
     }
 
     // Agendamentos (higher is better)
-    const byAgendamentos = [...sdrs].sort((a, b) => b.totalAgendamentos - a.totalAgendamentos);
+    const byAgendamentos = [...sdrs].sort((a, b) => b.agendamentos - a.agendamentos);
     const agendamentosRank = byAgendamentos.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
-    // Realizadas (higher is better)
-    const byRealizadas = [...sdrs].sort((a, b) => b.realizadas - a.realizadas);
-    const realizadasRank = byRealizadas.findIndex(s => s.sdrEmail === sdrEmail) + 1;
+    // R1 Agendada (higher is better)
+    const byR1Agendada = [...sdrs].sort((a, b) => b.r1Agendada - a.r1Agendada);
+    const r1AgendadaRank = byR1Agendada.findIndex(s => s.sdrEmail === sdrEmail) + 1;
+
+    // R1 Realizada (higher is better)
+    const byR1Realizada = [...sdrs].sort((a, b) => b.r1Realizada - a.r1Realizada);
+    const r1RealizadaRank = byR1Realizada.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
     // Contratos (higher is better)
     const byContratos = [...sdrs].sort((a, b) => b.contratos - a.contratos);
     const contratosRank = byContratos.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
-    // Taxa Conversão (higher is better)
-    const byTaxaConversao = [...sdrs].sort((a, b) => b.taxaConversao - a.taxaConversao);
-    const taxaConversaoRank = byTaxaConversao.findIndex(s => s.sdrEmail === sdrEmail) + 1;
-
-    // Taxa No-Show (lower is better, so sort ascending)
-    const byTaxaNoShow = [...sdrs].sort((a, b) => a.taxaNoShow - b.taxaNoShow);
-    const taxaNoShowRank = byTaxaNoShow.findIndex(s => s.sdrEmail === sdrEmail) + 1;
-
     return {
       agendamentos: agendamentosRank,
-      realizadas: realizadasRank,
+      r1Agendada: r1AgendadaRank,
+      r1Realizada: r1RealizadaRank,
       contratos: contratosRank,
-      taxaConversao: taxaConversaoRank,
-      taxaNoShow: taxaNoShowRank,
       totalSdrs,
     };
   }, [teamData.bySDR, sdrMetrics, sdrEmail]);
