@@ -70,6 +70,7 @@ export function useSdrMeetingsFromAgenda({
           contact_phone: row.contact_phone || "",
           tipo: tipoValue,
           data_agendamento: row.data_agendamento,
+          scheduled_at: row.scheduled_at || null,
           status_atual: row.status_atual || "Reunião 01 Agendada",
           intermediador: row.intermediador || "",
           current_owner: row.intermediador || "",

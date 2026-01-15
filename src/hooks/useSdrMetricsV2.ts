@@ -25,6 +25,7 @@ export interface MeetingV2 {
   contact_phone: string | null;
   tipo: '1º Agendamento' | 'Reagendamento Válido' | 'Reagendamento Inválido';
   data_agendamento: string;
+  scheduled_at?: string;
   status_atual: 'Agendada' | 'Realizada' | 'No-Show' | 'Contrato' | string;
   intermediador: string;
   current_owner: string | null;

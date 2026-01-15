@@ -117,9 +117,18 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
                     onClick={() => onSelectMeeting(meeting)}
                   >
                     <TableCell className="font-medium">
-                      {date
-                        ? format(new Date(date), "dd/MM HH:mm", { locale: ptBR })
-                        : 'N/A'}
+                      {isV2Meeting && meeting.scheduled_at ? (
+                        <div>
+                          <p>{format(new Date(meeting.scheduled_at), "dd/MM HH:mm", { locale: ptBR })}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Agendado em {format(new Date(date), "dd/MM HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                      ) : date ? (
+                        format(new Date(date), "dd/MM HH:mm", { locale: ptBR })
+                      ) : (
+                        'N/A'
+                      )}
                     </TableCell>
                     
                     {isV2Meeting && (
@@ -199,7 +208,7 @@ export function MeetingsTable({ meetings, isLoading, onSelectMeeting }: Meetings
                       <TableCell>
                         {meeting.closer ? (
                           <span className="text-amber-400 font-medium">
-                            {meeting.closer.split('@')[0]}
+                            {meeting.closer}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">-</span>
