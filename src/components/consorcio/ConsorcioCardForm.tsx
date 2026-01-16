@@ -594,13 +594,16 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
     }
   }, [open, card, form]);
 
-  // Auto-set default parcelas when changing to intercalado
+  // Auto-set default parcelas when changing to intercalado (only for NEW cards)
   useEffect(() => {
+    // Skip auto-set when editing an existing card
+    if (card) return;
+    
     if (tipoContrato === 'intercalado' && prazoMeses > 0) {
       const parcelasPares = Math.floor(prazoMeses / 2);
       form.setValue('parcelas_pagas_empresa', parcelasPares);
     }
-  }, [tipoContrato, prazoMeses, form]);
+  }, [tipoContrato, prazoMeses, form, card]);
 
   // Handle CEP lookup for PF
   const handleCepBlur = async (cep: string) => {
