@@ -40,8 +40,8 @@ import { toast } from 'sonner';
 import { useCreateConsorcioCard, useUpdateConsorcioCard } from '@/hooks/useConsorcio';
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
-import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
-import { calcularParcela } from '@/lib/consorcioCalculos';
+import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';
+import { calcularParcela, getValoresTabelados } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
 import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import {
@@ -330,20 +330,52 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
     );
   }, [produtos, produtoCodigo, valorCredito, form]);
 
-  // Calculate installment composition
+  // Fetch credits for the selected product to get tabulated values
+  const { data: creditos } = useConsorcioCreditos(produtoSelecionado?.id);
+  
+  // Find tabulated credit for the exact value
+  const creditoTabelado = useMemo(() => {
+    if (!creditos || valorCredito <= 0) return undefined;
+    return creditos.find(c => c.valor_credito === valorCredito);
+  }, [creditos, valorCredito]);
+
+  // Calculate installment composition - prioritize tabulated values
   const calculoParcela = useMemo(() => {
     if (!produtoSelecionado || valorCredito <= 0 || prazoMeses <= 0) return null;
     
     const prazoValido = [200, 220, 240].includes(prazoMeses) ? prazoMeses as PrazoParcelas : 240;
     
-    return calcularParcela(
+    // First calculate using formulas
+    const calculoBase = calcularParcela(
       valorCredito,
       prazoValido,
       produtoSelecionado,
       condicaoPagamento,
       incluiSeguro
     );
-  }, [produtoSelecionado, valorCredito, prazoMeses, condicaoPagamento, incluiSeguro]);
+    
+    // Check if we have tabulated values for this credit
+    const valoresTabelados = getValoresTabelados(creditoTabelado, prazoValido, condicaoPagamento);
+    
+    // If tabulated values exist, use them instead
+    if (valoresTabelados.parcela1a12 && valoresTabelados.parcelaDemais) {
+      const totalPagoTabelado = (valoresTabelados.parcela1a12 * 12) + 
+        (valoresTabelados.parcelaDemais * (prazoValido - 12));
+      
+      return {
+        ...calculoBase,
+        parcela1a12: valoresTabelados.parcela1a12,
+        parcelaDemais: valoresTabelados.parcelaDemais,
+        totalPago: totalPagoTabelado,
+        usandoTabelaOficial: true,
+      };
+    }
+    
+    return {
+      ...calculoBase,
+      usandoTabelaOficial: false,
+    };
+  }, [produtoSelecionado, valorCredito, prazoMeses, condicaoPagamento, incluiSeguro, creditoTabelado]);
 
   // Calculate total value of installments paid by the company
   const valorTotalParcelasEmpresa = useMemo(() => {
@@ -950,6 +982,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     prazo={prazoMeses}
                     incluiSeguro={incluiSeguro}
                     taxaAntecipadaTipo={produtoSelecionado.taxa_antecipada_tipo}
+                    usandoTabelaOficial={calculoParcela.usandoTabelaOficial}
                   />
                 )}
 

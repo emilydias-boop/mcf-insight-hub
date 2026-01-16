@@ -47,6 +47,16 @@ export function useConsorcioCreditos(produtoId?: string) {
   });
 }
 
+// Hook para buscar créditos por valor específico (para usar valores tabelados)
+export function useConsorcioCreditoByValor(produtoId?: string, valorCredito?: number) {
+  const { data: creditos } = useConsorcioCreditos(produtoId);
+  
+  if (!creditos || !valorCredito) return undefined;
+  
+  // Busca exata pelo valor do crédito
+  return creditos.find(c => c.valor_credito === valorCredito);
+}
+
 export function useProdutoByCredito(valorCredito: number, tipoTaxa?: 'dividida_12' | 'primeira_parcela') {
   const { data: produtos } = useConsorcioProdutos();
 
