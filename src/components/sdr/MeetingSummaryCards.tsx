@@ -101,19 +101,19 @@ export function MeetingSummaryCards({ summary, isLoading }: MeetingSummaryCardsP
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
         {visibleCards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
               <Card className="bg-card border-border cursor-help">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${card.bgColor}`}>
-                      <card.icon className={`h-5 w-5 ${card.color}`} />
+                <CardContent className="p-2 sm:p-4">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`p-1.5 sm:p-2 rounded-lg ${card.bgColor}`}>
+                      <card.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${card.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground truncate">{card.title}</p>
-                      <p className="text-2xl font-bold text-foreground">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{card.title}</p>
+                      <p className="text-lg sm:text-2xl font-bold text-foreground">
                         {isLoading ? "..." : card.value}
                       </p>
                     </div>

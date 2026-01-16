@@ -81,24 +81,27 @@ const Contatos = () => {
   };
 
   return (
-    <div className="flex flex-col gap-scale-lg">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-3 sm:gap-scale-lg">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Contatos</h2>
-          <p className="text-muted-foreground">Gerencie todos os seus contatos</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground">Contatos</h2>
+          <p className="text-sm text-muted-foreground hidden sm:block">Gerencie todos os seus contatos</p>
         </div>
-        <div className="flex gap-scale-sm">
+        <div className="flex gap-2 w-full sm:w-auto">
           <Button 
             variant="outline" 
             onClick={handleSync}
             disabled={syncMutation.isPending}
+            className="flex-1 sm:flex-none"
+            size="sm"
           >
-            <RefreshCw className={`icon-scale-sm mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-            Sincronizar
+            <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Sincronizar</span>
           </Button>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="icon-scale-sm mr-2" />
-            Novo Contato
+          <Button onClick={() => setCreateDialogOpen(true)} className="flex-1 sm:flex-none" size="sm">
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Novo Contato</span>
+            <span className="sm:hidden">Novo</span>
           </Button>
         </div>
       </div>

@@ -82,7 +82,7 @@ export function SetorRow({
           <div className="h-6 w-40 bg-muted animate-pulse rounded" />
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
             {[1, 2, 3].map((i) => (
               <div key={i} className="space-y-2">
                 <div className="h-4 w-24 bg-muted animate-pulse rounded" />
@@ -107,7 +107,7 @@ export function SetorRow({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
           <MetricColumn 
             label={semanaLabel}
             apurado={apuradoSemanal}

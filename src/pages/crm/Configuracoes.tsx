@@ -136,29 +136,33 @@ const Configuracoes = () => {
   const [activeTab, setActiveTab] = useState('configuracoes');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Configurações do CRM</h2>
-        <p className="text-muted-foreground">Personalize, configure e importe dados para seu CRM</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-1 sm:mb-2">Configurações do CRM</h2>
+        <p className="text-sm text-muted-foreground hidden sm:block">Personalize, configure e importe dados para seu CRM</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-muted">
-          <TabsTrigger value="configuracoes" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Configurações
+        <TabsList className="bg-muted flex flex-wrap h-auto gap-1 p-1 w-full md:w-auto">
+          <TabsTrigger value="configuracoes" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
+            <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden xs:inline">Configurações</span>
+            <span className="xs:hidden">Config</span>
           </TabsTrigger>
-          <TabsTrigger value="importar-contatos" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
-            Importar Contatos
+          <TabsTrigger value="importar-contatos" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
+            <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Importar Contatos</span>
+            <span className="sm:hidden">Contatos</span>
           </TabsTrigger>
-          <TabsTrigger value="importar-negocios" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Importar Negócios
+          <TabsTrigger value="importar-negocios" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
+            <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Importar Negócios</span>
+            <span className="sm:hidden">Negócios</span>
           </TabsTrigger>
-          <TabsTrigger value="importar-historico" className="flex items-center gap-2">
-            <History className="h-4 w-4" />
-            Importar Histórico
+          <TabsTrigger value="importar-historico" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm flex-1 md:flex-none">
+            <History className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Importar Histórico</span>
+            <span className="sm:hidden">Histórico</span>
           </TabsTrigger>
         </TabsList>
 

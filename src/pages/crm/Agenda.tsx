@@ -194,47 +194,49 @@ export default function Agenda() {
   }, [selectedDate, viewMode, rangeStart, rangeEnd]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <CalendarDays className="h-6 w-6 text-primary" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-lg sm:text-2xl font-bold">
               {isCloser ? 'Minha Agenda' : 'Agenda dos Closers'}
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
               {isCloser ? 'Suas reuniões agendadas' : 'Gerencie reuniões e disponibilidade'}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => refetch()}>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="icon" onClick={() => refetch()} className="h-8 w-8 sm:h-9 sm:w-9">
             <RefreshCw className="h-4 w-4" />
           </Button>
           {!isCloser && (
             <>
-              <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')}>
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Métricas
+              <Button variant="outline" onClick={() => navigate('/crm/agenda/metricas')} size="sm" className="hidden sm:flex">
+                <BarChart3 className="h-4 w-4 sm:mr-2" />
+                <span className="hidden md:inline">Métricas</span>
               </Button>
-              <Button variant="outline" onClick={() => setConfigOpen(true)}>
-                <Settings className="h-4 w-4 mr-2" />
-                Configurar
+              <Button variant="outline" onClick={() => setConfigOpen(true)} size="sm" className="hidden sm:flex">
+                <Settings className="h-4 w-4 sm:mr-2" />
+                <span className="hidden md:inline">Configurar</span>
               </Button>
             </>
           )}
-          <Button onClick={() => setQuickScheduleOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Agendar
+          <Button onClick={() => setQuickScheduleOpen(true)} size="sm" className="flex-1 sm:flex-none">
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Agendar</span>
+            <span className="sm:hidden">Novo</span>
           </Button>
         </div>
       </div>
 
       {/* Navigation and Filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2">
-        <div className="flex items-center gap-2">
-          {/* View Mode Toggle - also resets to current date */}
+      <div className="flex flex-col gap-3 pb-2">
+        {/* View Mode and Date Navigation */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* View Mode Toggle */}
           <ToggleGroup 
             type="single" 
             value={viewMode} 
@@ -244,10 +246,11 @@ export default function Agenda() {
                 setSelectedDate(new Date());
               }
             }}
+            className="flex-shrink-0"
           >
-            <ToggleGroupItem value="day" className="text-xs px-3">Dia</ToggleGroupItem>
-            <ToggleGroupItem value="week" className="text-xs px-3">Semana</ToggleGroupItem>
-            <ToggleGroupItem value="month" className="text-xs px-3">Mês</ToggleGroupItem>
+            <ToggleGroupItem value="day" className="text-xs px-2 sm:px-3">Dia</ToggleGroupItem>
+            <ToggleGroupItem value="week" className="text-xs px-2 sm:px-3">Sem</ToggleGroupItem>
+            <ToggleGroupItem value="month" className="text-xs px-2 sm:px-3">Mês</ToggleGroupItem>
           </ToggleGroup>
 
           {/* Date navigation with integrated arrows and mini-calendar */}
@@ -259,7 +262,7 @@ export default function Agenda() {
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="text-sm font-medium px-2 min-w-[140px] text-center capitalize h-7 hover:bg-muted"
+                  className="text-xs sm:text-sm font-medium px-1 sm:px-2 min-w-[100px] sm:min-w-[140px] text-center capitalize h-7 hover:bg-muted"
                   title="Clique para selecionar data"
                 >
                   {dateRangeLabel}
@@ -286,12 +289,13 @@ export default function Agenda() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
           {!isCloser && (
             <Select value={closerFilter || 'all'} onValueChange={(v) => setCloserFilter(v === 'all' ? null : v)}>
-              <SelectTrigger className="w-[180px]">
-                <Users className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Todos os closers" />
+              <SelectTrigger className="w-[140px] sm:w-[180px] text-xs sm:text-sm">
+                <Users className="h-4 w-4 mr-1 sm:mr-2 flex-shrink-0" />
+                <SelectValue placeholder="Closers" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os closers</SelectItem>
@@ -299,7 +303,7 @@ export default function Agenda() {
                   <SelectItem key={closer.id} value={closer.id}>
                     <div className="flex items-center gap-2">
                       <div
-                        className="w-2.5 h-2.5 rounded-full"
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: closer.color || '#6B7280' }}
                       />
                       {closer.name}
@@ -311,8 +315,8 @@ export default function Agenda() {
           )}
 
           <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? null : v)}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Todos status" />
+            <SelectTrigger className="w-[120px] sm:w-[150px] text-xs sm:text-sm">
+              <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos status</SelectItem>

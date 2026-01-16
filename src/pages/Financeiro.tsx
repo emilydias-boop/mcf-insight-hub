@@ -19,14 +19,14 @@ const Financeiro = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>
-        <p className="text-muted-foreground">Gestão de pagamentos e receitas</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Financeiro</h1>
+        <p className="text-sm text-muted-foreground hidden sm:block">Gestão de pagamentos e receitas</p>
       </div>
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="grid w-full max-w-lg grid-cols-3">
+        <TabsList className="grid w-full grid-cols-3 max-w-full sm:max-w-lg text-xs sm:text-sm">
           <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           <TabsTrigger value="transacoes">Transações</TabsTrigger>
           <TabsTrigger value="receitas">Receitas</TabsTrigger>

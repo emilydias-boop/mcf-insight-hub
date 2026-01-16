@@ -39,31 +39,32 @@ export default function EfeitoAlavanca() {
 
   return (
     <ResourceGuard resource="efeito_alavanca">
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-6 md:space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Efeito Alavanca</h1>
-          <p className="text-muted-foreground mt-1">Simulação de investimentos e ROI por canal</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Efeito Alavanca</h1>
+          <p className="text-sm text-muted-foreground mt-1 hidden sm:block">Simulação de investimentos e ROI por canal</p>
         </div>
 
         <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Simulador de Investimento</CardTitle>
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-sm sm:text-base text-foreground">Simulador de Investimento</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Valor do Investimento (R$)</label>
+                <label className="text-xs sm:text-sm font-medium text-foreground">Valor do Investimento (R$)</label>
                 <Input 
                   type="number" 
                   value={investimento} 
                   onChange={(e) => setInvestimento(Number(e.target.value))}
                   placeholder="Ex: 50000"
+                  className="text-sm"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Canal</label>
+                <label className="text-xs sm:text-sm font-medium text-foreground">Canal</label>
                 <Select value={canalSelecionado} onValueChange={setCanalSelecionado}>
-                  <SelectTrigger>
+                  <SelectTrigger className="text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -75,42 +76,43 @@ export default function EfeitoAlavanca() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-4 border border-border rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Receita Estimada</p>
-                <p className="text-2xl font-bold text-success">{formatCurrency(resultado.receitaEstimada)}</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+              <div className="p-2 sm:p-4 border border-border rounded-lg">
+                <p className="text-[10px] sm:text-sm text-muted-foreground mb-1">Receita Estimada</p>
+                <p className="text-base sm:text-2xl font-bold text-success">{formatCurrency(resultado.receitaEstimada)}</p>
               </div>
-              <div className="p-4 border border-border rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">ROI Projetado</p>
-                <p className="text-2xl font-bold text-primary">{resultado.roi.toFixed(2)}%</p>
+              <div className="p-2 sm:p-4 border border-border rounded-lg">
+                <p className="text-[10px] sm:text-sm text-muted-foreground mb-1">ROI Projetado</p>
+                <p className="text-base sm:text-2xl font-bold text-primary">{resultado.roi.toFixed(2)}%</p>
               </div>
-              <div className="p-4 border border-border rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">ROAS</p>
-                <p className="text-2xl font-bold text-info">{resultado.roas.toFixed(2)}x</p>
+              <div className="p-2 sm:p-4 border border-border rounded-lg">
+                <p className="text-[10px] sm:text-sm text-muted-foreground mb-1">ROAS</p>
+                <p className="text-base sm:text-2xl font-bold text-info">{resultado.roas.toFixed(2)}x</p>
               </div>
-              <div className="p-4 border border-border rounded-lg">
-                <p className="text-sm text-muted-foreground mb-1">Payback (meses)</p>
-                <p className="text-2xl font-bold text-foreground">{resultado.paybackMeses}</p>
+              <div className="p-2 sm:p-4 border border-border rounded-lg">
+                <p className="text-[10px] sm:text-sm text-muted-foreground mb-1">Payback (meses)</p>
+                <p className="text-base sm:text-2xl font-bold text-foreground">{resultado.paybackMeses}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">ROI Histórico por Canal</CardTitle>
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-sm sm:text-base text-foreground">ROI Histórico por Canal</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={400}>
+          <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+            <ResponsiveContainer width="100%" height={300} className="sm:!h-[400px]">
               <BarChart data={roiData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                <YAxis dataKey="canal" type="category" stroke="hsl(var(--muted-foreground))" width={150} />
+                <XAxis type="number" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
+                <YAxis dataKey="canal" type="category" stroke="hsl(var(--muted-foreground))" width={80} tick={{ fontSize: 10 }} className="sm:!w-[150px]" />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--card))', 
                     border: '1px solid hsl(var(--border))',
-                    color: 'hsl(var(--foreground))'
+                    color: 'hsl(var(--foreground))',
+                    fontSize: '12px'
                   }}
                   formatter={(value: any) => `${value.toFixed(2)}%`}
                 />
