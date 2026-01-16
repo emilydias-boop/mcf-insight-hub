@@ -187,6 +187,20 @@ export const TIPO_VINCULO_OPTIONS = [
   { value: 'Outro', label: 'Outro' },
 ];
 
+export const DEPARTAMENTO_OPTIONS = [
+  'BU - Consórcio',
+  'BU - Crédito',
+  'BU - Seguros',
+  'Financeiro',
+  'Marketing',
+  'Operações',
+  'RH',
+  'TI',
+  'Administrativo',
+  'Diretoria',
+  'Outro',
+];
+
 export const TIPO_VARIAVEL_OPTIONS = [
   { value: 'pct_faturamento', label: '% sobre faturamento' },
   { value: 'comissao_contrato', label: 'Comissão por contrato' },
