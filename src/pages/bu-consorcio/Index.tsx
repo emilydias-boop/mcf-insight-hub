@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -48,6 +48,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from '@/components/ui/pagination';
 
 function formatCurrency(value: number): string {
   if (value >= 1000000) {
@@ -108,6 +117,8 @@ export default function ConsorcioPage() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<ConsorcioCard | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const { data: employees } = useEmployees();
 
@@ -156,6 +167,18 @@ export default function ConsorcioPage() {
       return new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
     });
   }, [cards]);
+
+  // Pagination
+  const totalPages = Math.ceil((sortedCards?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedCards = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedCards.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [sortedCards, currentPage]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, tipoFilter, vendedorFilter, period]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -418,11 +441,13 @@ export default function ConsorcioPage() {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : sortedCards && sortedCards.length > 0 ? (
-                sortedCards.map((card, index) => {
+              ) : paginatedCards && paginatedCards.length > 0 ? (
+                paginatedCards.map((card, index) => {
                   const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                   const statusConfig = STATUS_OPTIONS.find(s => s.value === card.status);
                   const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
+                  // Descending number: total - (page offset + index)
+                  const orderNumber = sortedCards.length - ((currentPage - 1) * ITEMS_PER_PAGE + index);
 
                   return (
                     <TableRow 
@@ -431,7 +456,7 @@ export default function ConsorcioPage() {
                       onClick={() => handleViewCard(card)}
                     >
                       <TableCell className="text-center font-medium text-muted-foreground">
-                        {index + 1}
+                        {orderNumber}
                       </TableCell>
                       <TableCell className="font-medium">{getFirstLastName(displayName)}</TableCell>
                       <TableCell className="text-center">{card.grupo}</TableCell>
@@ -545,6 +570,53 @@ export default function ConsorcioPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} a {Math.min(currentPage * ITEMS_PER_PAGE, sortedCards.length)} de {sortedCards.length} registros
+          </span>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                .map((page, idx, arr) => (
+                  <span key={page} className="contents">
+                    {idx > 0 && arr[idx - 1] !== page - 1 && (
+                      <PaginationItem>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    )}
+                    <PaginationItem>
+                      <PaginationLink 
+                        isActive={page === currentPage}
+                        onClick={() => setCurrentPage(page)}
+                        className="cursor-pointer"
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  </span>
+                ))}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
 
       {/* Form Dialog */}
       <ConsorcioCardForm 
