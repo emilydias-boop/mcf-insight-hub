@@ -121,6 +121,12 @@ const formSchema = z.object({
   origem_detalhe: z.string().optional(),
   vendedor_id: z.string().optional(),
   
+  // Controle adicional
+  valor_comissao: z.number().optional().nullable(),
+  e_transferencia: z.boolean().optional(),
+  transferido_de: z.string().optional(),
+  observacoes: z.string().optional(),
+  
   // Produto Embracon e cálculos
   produto_codigo: z.string().optional(),
   condicao_pagamento: z.enum(['convencional', '50', '25']).optional(),
@@ -229,6 +235,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       data_contratacao: new Date(card.data_contratacao),
       vendedor_id: card.vendedor_id || undefined,
       vendedor_name: card.vendedor_name || undefined,
+      // Controle adicional
+      valor_comissao: card.valor_comissao ? Number(card.valor_comissao) : undefined,
+      e_transferencia: card.e_transferencia || false,
+      transferido_de: card.transferido_de || undefined,
+      observacoes: card.observacoes || undefined,
       // PF
       nome_completo: card.nome_completo || undefined,
       data_nascimento: card.data_nascimento ? new Date(card.data_nascimento) : undefined,
@@ -282,6 +293,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       produto_codigo: 'auto',
       condicao_pagamento: 'convencional',
       inclui_seguro: false,
+      // Controle adicional
+      valor_comissao: undefined,
+      e_transferencia: false,
+      transferido_de: undefined,
+      observacoes: undefined,
     },
   });
 
@@ -728,6 +744,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       email_comercial: data.email_comercial,
       faturamento_mensal: data.faturamento_mensal || undefined,
       num_funcionarios: data.num_funcionarios || undefined,
+      // Controle adicional
+      valor_comissao: data.valor_comissao || undefined,
+      e_transferencia: data.e_transferencia || false,
+      transferido_de: data.transferido_de,
+      observacoes: data.observacoes,
       partners: (data.partners || []).filter(p => p.nome && p.cpf) as Array<{ nome: string; cpf: string; renda?: number }>,
     };
 
@@ -1236,6 +1257,84 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     </FormItem>
                   )}
                 />
+
+                {/* Seção: Controle Adicional */}
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/30 mt-6">
+                  <h3 className="font-medium text-sm text-muted-foreground">Informações Adicionais</h3>
+                  
+                  <FormField
+                    control={form.control}
+                    name="valor_comissao"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Valor da Comissão</FormLabel>
+                        <FormControl>
+                          <Input
+                            value={formatMonetaryDisplay(field.value || 0)}
+                            onChange={e => {
+                              const rawValue = parseMonetaryInput(e.target.value);
+                              field.onChange(rawValue);
+                            }}
+                            placeholder="R$ 0,00"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="e_transferencia"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                        <div className="space-y-0.5">
+                          <FormLabel>É Transferência?</FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            Marque se esta cota foi transferida de outro consorciado
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {form.watch('e_transferencia') && (
+                    <FormField
+                      control={form.control}
+                      name="transferido_de"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Transferido de</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Nome do antigo consorciado" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="observacoes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Observações</FormLabel>
+                        <FormControl>
+                          <textarea
+                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            placeholder="Observações gerais sobre a cota..."
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 {/* Navigation buttons */}
                 <div className="flex justify-between pt-4 border-t mt-6">

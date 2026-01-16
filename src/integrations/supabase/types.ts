@@ -1104,6 +1104,7 @@ export type Database = {
           data_fundacao: string | null
           data_nascimento: string | null
           dia_vencimento: number
+          e_transferencia: boolean | null
           email: string | null
           email_comercial: string | null
           endereco_bairro: string | null
@@ -1130,6 +1131,7 @@ export type Database = {
           nome_completo: string | null
           num_funcionarios: number | null
           numero_contemplacao: string | null
+          observacoes: string | null
           origem: string
           origem_detalhe: string | null
           parcelas_pagas_empresa: number
@@ -1148,7 +1150,9 @@ export type Database = {
           tipo_pessoa: string
           tipo_produto: string
           tipo_servidor: string | null
+          transferido_de: string | null
           updated_at: string
+          valor_comissao: number | null
           valor_credito: number
           valor_lance: number | null
           vendedor_id: string | null
@@ -1166,6 +1170,7 @@ export type Database = {
           data_fundacao?: string | null
           data_nascimento?: string | null
           dia_vencimento: number
+          e_transferencia?: boolean | null
           email?: string | null
           email_comercial?: string | null
           endereco_bairro?: string | null
@@ -1192,6 +1197,7 @@ export type Database = {
           nome_completo?: string | null
           num_funcionarios?: number | null
           numero_contemplacao?: string | null
+          observacoes?: string | null
           origem: string
           origem_detalhe?: string | null
           parcelas_pagas_empresa?: number
@@ -1210,7 +1216,9 @@ export type Database = {
           tipo_pessoa: string
           tipo_produto: string
           tipo_servidor?: string | null
+          transferido_de?: string | null
           updated_at?: string
+          valor_comissao?: number | null
           valor_credito: number
           valor_lance?: number | null
           vendedor_id?: string | null
@@ -1228,6 +1236,7 @@ export type Database = {
           data_fundacao?: string | null
           data_nascimento?: string | null
           dia_vencimento?: number
+          e_transferencia?: boolean | null
           email?: string | null
           email_comercial?: string | null
           endereco_bairro?: string | null
@@ -1254,6 +1263,7 @@ export type Database = {
           nome_completo?: string | null
           num_funcionarios?: number | null
           numero_contemplacao?: string | null
+          observacoes?: string | null
           origem?: string
           origem_detalhe?: string | null
           parcelas_pagas_empresa?: number
@@ -1272,7 +1282,9 @@ export type Database = {
           tipo_pessoa?: string
           tipo_produto?: string
           tipo_servidor?: string | null
+          transferido_de?: string | null
           updated_at?: string
+          valor_comissao?: number | null
           valor_credito?: number
           valor_lance?: number | null
           vendedor_id?: string | null

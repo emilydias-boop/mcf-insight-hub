@@ -30,7 +30,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -69,14 +69,32 @@ function formatCurrencyFull(value: number): string {
   }).format(value);
 }
 
-function getInitials(name?: string): string {
-  if (!name) return '??';
-  return name
-    .split(' ')
-    .map(n => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+// Extract first name and last name from full name
+function getFirstLastName(fullName?: string): string {
+  if (!fullName) return '-';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
+// Calculate next due date based on dia_vencimento
+function calcularProximoVencimento(diaVencimento: number): Date {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentDay = now.getDate();
+  
+  // Adjust day to be valid for any month (max 28 for safety, or actual last day)
+  const adjustedDay = Math.min(diaVencimento, 28);
+  
+  let nextDueDate = new Date(currentYear, currentMonth, adjustedDay);
+  
+  // If the due date has passed this month, move to next month
+  if (currentDay > diaVencimento) {
+    nextDueDate = new Date(currentYear, currentMonth + 1, adjustedDay);
+  }
+  
+  return nextDueDate;
 }
 
 type PeriodType = 'month' | 'lastMonth' | 'custom';
@@ -122,26 +140,20 @@ export default function ConsorcioPage() {
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate });
   const deleteCard = useDeleteConsorcioCard();
 
-  // Sort cards: Date (desc) → Name (asc) → Group (numeric asc) → Quota (numeric asc)
+  // Sort cards: Cota (desc) → Grupo (asc) → Date (desc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
     return [...cards].sort((a, b) => {
-      // 1. Data de contratação (mais recente primeiro)
-      const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
-      if (dateCompare !== 0) return dateCompare;
+      // 1. Cota (numérico decrescente - maior primeiro)
+      const cotaCompare = Number(b.cota) - Number(a.cota);
+      if (cotaCompare !== 0) return cotaCompare;
 
-      // 2. Nome (A-Z)
-      const nameA = (a.nome_completo || a.razao_social || '').toLowerCase();
-      const nameB = (b.nome_completo || b.razao_social || '').toLowerCase();
-      const nameCompare = nameA.localeCompare(nameB, 'pt-BR');
-      if (nameCompare !== 0) return nameCompare;
-
-      // 3. Grupo (numérico crescente)
+      // 2. Grupo (numérico crescente)
       const grupoCompare = Number(a.grupo) - Number(b.grupo);
       if (grupoCompare !== 0) return grupoCompare;
 
-      // 4. Cota (numérico crescente)
-      return Number(a.cota) - Number(b.cota);
+      // 3. Data de contratação (mais recente primeiro)
+      return new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
     });
   }, [cards]);
 
@@ -160,18 +172,30 @@ export default function ConsorcioPage() {
   };
 
   const handleExportCSV = () => {
-    if (!cards || cards.length === 0) return;
+    if (!sortedCards || sortedCards.length === 0) return;
 
-    const headers = ['Nome', 'Grupo-Cota', 'Valor Crédito', 'Data Contratação', 'Tipo', 'Status', 'Vendedor'];
-    const rows = cards.map(card => [
-      card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social,
-      `${card.grupo}-${card.cota}`,
-      card.valor_credito,
-      format(new Date(card.data_contratacao), 'dd/MM/yyyy'),
-      card.tipo_produto,
-      card.status,
-      card.vendedor_name || '',
-    ]);
+    const headers = ['Nº', 'Nome', 'Grupo', 'Cota', 'Valor Crédito', 'DT Contratação', 'Vencimento', 'Tipo', 'Categoria', 'Origem', 'Status', 'Responsável', 'Comissão'];
+    const rows = sortedCards.map((card, index) => {
+      const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
+      const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
+      const origemConfig = ORIGEM_OPTIONS.find(o => o.value === card.origem);
+      
+      return [
+        index + 1,
+        getFirstLastName(displayName),
+        card.grupo,
+        card.cota,
+        card.valor_credito,
+        format(new Date(card.data_contratacao), 'dd/MM/yyyy'),
+        format(proximoVencimento, 'dd/MM/yyyy'),
+        card.tipo_produto,
+        card.categoria === 'inside' ? 'Inside' : 'Life',
+        origemConfig?.label || card.origem,
+        card.status,
+        card.vendedor_name || '',
+        card.valor_comissao || 0,
+      ];
+    });
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -369,17 +393,20 @@ export default function ConsorcioPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12"></TableHead>
+                <TableHead className="w-12 text-center">Nº</TableHead>
                 <TableHead>Nome</TableHead>
-                <TableHead>Grupo-Cota</TableHead>
+                <TableHead className="text-center">Grupo</TableHead>
+                <TableHead className="text-center">Cota</TableHead>
                 <TableHead className="text-right">Valor Crédito</TableHead>
-                <TableHead>Data Contratação</TableHead>
+                <TableHead>DT Contratação</TableHead>
+                <TableHead>Vencimento</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Vendedor</TableHead>
-                <TableHead className="w-20">Ação</TableHead>
+                <TableHead>Responsável</TableHead>
+                <TableHead className="text-right">Comissão</TableHead>
+                <TableHead className="w-20">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -392,9 +419,10 @@ export default function ConsorcioPage() {
                   </TableRow>
                 ))
               ) : sortedCards && sortedCards.length > 0 ? (
-                sortedCards.map((card) => {
+                sortedCards.map((card, index) => {
                   const displayName = card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social;
                   const statusConfig = STATUS_OPTIONS.find(s => s.value === card.status);
+                  const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
 
                   return (
                     <TableRow 
@@ -402,20 +430,20 @@ export default function ConsorcioPage() {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleViewCard(card)}
                     >
-                      <TableCell>
-                        <Avatar className="h-9 w-9">
-                          <AvatarFallback className="text-xs">
-                            {getInitials(displayName)}
-                          </AvatarFallback>
-                        </Avatar>
+                      <TableCell className="text-center font-medium text-muted-foreground">
+                        {index + 1}
                       </TableCell>
-                      <TableCell className="font-medium">{displayName || '-'}</TableCell>
-                      <TableCell>{card.grupo}-{card.cota}</TableCell>
+                      <TableCell className="font-medium">{getFirstLastName(displayName)}</TableCell>
+                      <TableCell className="text-center">{card.grupo}</TableCell>
+                      <TableCell className="text-center font-medium">{card.cota}</TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrencyFull(Number(card.valor_credito))}
                       </TableCell>
                       <TableCell>
                         {format(new Date(card.data_contratacao), 'dd/MM/yyyy')}
+                      </TableCell>
+                      <TableCell>
+                        {format(proximoVencimento, 'dd/MM/yyyy')}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
@@ -450,6 +478,9 @@ export default function ConsorcioPage() {
                         )}
                       </TableCell>
                       <TableCell>{card.vendedor_name || '-'}</TableCell>
+                      <TableCell className="text-right">
+                        {card.valor_comissao ? formatCurrencyFull(Number(card.valor_comissao)) : '-'}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Button 
@@ -505,7 +536,7 @@ export default function ConsorcioPage() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={14} className="text-center py-10 text-muted-foreground">
                     Nenhuma carta encontrada para o período selecionado
                   </TableCell>
                 </TableRow>
