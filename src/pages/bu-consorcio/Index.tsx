@@ -152,20 +152,20 @@ export default function ConsorcioPage() {
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate });
   const deleteCard = useDeleteConsorcioCard();
 
-  // Sort cards: Cota (desc) → Grupo (asc) → Date (desc)
+  // Sort cards: Data de Contratação (desc) → Cota (desc) → Grupo (asc)
   const sortedCards = useMemo(() => {
     if (!cards) return [];
     return [...cards].sort((a, b) => {
-      // 1. Cota (numérico decrescente - maior primeiro)
+      // 1. Data de contratação (mais recente primeiro)
+      const dateCompare = new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
+      if (dateCompare !== 0) return dateCompare;
+
+      // 2. Cota (numérico decrescente - maior primeiro)
       const cotaCompare = Number(b.cota) - Number(a.cota);
       if (cotaCompare !== 0) return cotaCompare;
 
-      // 2. Grupo (numérico crescente)
-      const grupoCompare = Number(a.grupo) - Number(b.grupo);
-      if (grupoCompare !== 0) return grupoCompare;
-
-      // 3. Data de contratação (mais recente primeiro)
-      return new Date(b.data_contratacao).getTime() - new Date(a.data_contratacao).getTime();
+      // 3. Grupo (numérico crescente)
+      return Number(a.grupo) - Number(b.grupo);
     });
   }, [cards]);
 
