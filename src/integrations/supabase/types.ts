@@ -1095,6 +1095,7 @@ export type Database = {
         Row: {
           categoria: string
           cnpj: string | null
+          condicao_pagamento: string | null
           cota: string
           cpf: string | null
           cpf_conjuge: string | null
@@ -1125,6 +1126,7 @@ export type Database = {
           faturamento_mensal: number | null
           grupo: string
           id: string
+          inclui_seguro_vida: boolean | null
           inscricao_estadual: string | null
           motivo_contemplacao: string | null
           natureza_juridica: string | null
@@ -1134,11 +1136,14 @@ export type Database = {
           observacoes: string | null
           origem: string
           origem_detalhe: string | null
+          parcela_1a_12a: number | null
+          parcela_demais: number | null
           parcelas_pagas_empresa: number
           patrimonio: number | null
           percentual_lance: number | null
           pix: string | null
           prazo_meses: number
+          produto_embracon: string | null
           profissao: string | null
           razao_social: string | null
           renda: number | null
@@ -1161,6 +1166,7 @@ export type Database = {
         Insert: {
           categoria?: string
           cnpj?: string | null
+          condicao_pagamento?: string | null
           cota: string
           cpf?: string | null
           cpf_conjuge?: string | null
@@ -1191,6 +1197,7 @@ export type Database = {
           faturamento_mensal?: number | null
           grupo: string
           id?: string
+          inclui_seguro_vida?: boolean | null
           inscricao_estadual?: string | null
           motivo_contemplacao?: string | null
           natureza_juridica?: string | null
@@ -1200,11 +1207,14 @@ export type Database = {
           observacoes?: string | null
           origem: string
           origem_detalhe?: string | null
+          parcela_1a_12a?: number | null
+          parcela_demais?: number | null
           parcelas_pagas_empresa?: number
           patrimonio?: number | null
           percentual_lance?: number | null
           pix?: string | null
           prazo_meses: number
+          produto_embracon?: string | null
           profissao?: string | null
           razao_social?: string | null
           renda?: number | null
@@ -1227,6 +1237,7 @@ export type Database = {
         Update: {
           categoria?: string
           cnpj?: string | null
+          condicao_pagamento?: string | null
           cota?: string
           cpf?: string | null
           cpf_conjuge?: string | null
@@ -1257,6 +1268,7 @@ export type Database = {
           faturamento_mensal?: number | null
           grupo?: string
           id?: string
+          inclui_seguro_vida?: boolean | null
           inscricao_estadual?: string | null
           motivo_contemplacao?: string | null
           natureza_juridica?: string | null
@@ -1266,11 +1278,14 @@ export type Database = {
           observacoes?: string | null
           origem?: string
           origem_detalhe?: string | null
+          parcela_1a_12a?: number | null
+          parcela_demais?: number | null
           parcelas_pagas_empresa?: number
           patrimonio?: number | null
           percentual_lance?: number | null
           pix?: string | null
           prazo_meses?: number
+          produto_embracon?: string | null
           profissao?: string | null
           razao_social?: string | null
           renda?: number | null

@@ -526,6 +526,10 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           faturamento_mensal: card.faturamento_mensal ? Number(card.faturamento_mensal) : undefined,
           num_funcionarios: card.num_funcionarios ? Number(card.num_funcionarios) : undefined,
           partners: card.partners?.map(p => ({ nome: p.nome, cpf: p.cpf, renda: p.renda ? Number(p.renda) : undefined })) || [],
+          // Composição da parcela
+          produto_codigo: (card as any).produto_embracon || 'auto',
+          condicao_pagamento: ((card as any).condicao_pagamento || 'convencional') as 'convencional' | '50' | '25',
+          inclui_seguro: (card as any).inclui_seguro_vida || false,
         });
       } else {
         // Create mode - reset to empty values
@@ -744,6 +748,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       e_transferencia: data.e_transferencia || false,
       transferido_de: data.transferido_de,
       observacoes: data.observacoes,
+      
+      // Composição da parcela
+      produto_embracon: data.produto_codigo || undefined,
+      condicao_pagamento: data.condicao_pagamento || undefined,
+      inclui_seguro_vida: data.inclui_seguro || false,
+      parcela_1a_12a: calculoParcela?.parcela1a12 || undefined,
+      parcela_demais: calculoParcela?.parcelaDemais || undefined,
+      
       partners: (data.partners || []).filter(p => p.nome && p.cpf) as Array<{ nome: string; cpf: string; renda?: number }>,
     };
 
