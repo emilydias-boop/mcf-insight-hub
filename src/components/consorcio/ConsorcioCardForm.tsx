@@ -365,8 +365,18 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
     
     // If tabulated values exist, use them instead
     if (valoresTabelados.parcela1a12 && valoresTabelados.parcelaDemais) {
-      const totalPagoTabelado = (valoresTabelados.parcela1a12 * 12) + 
-        (valoresTabelados.parcelaDemais * (prazoValido - 12));
+      // Calcular total baseado no tipo de taxa do produto
+      let totalPagoTabelado: number;
+      
+      if (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12') {
+        // PARCELINHA: 12 primeiras iguais + demais
+        totalPagoTabelado = (valoresTabelados.parcela1a12 * 12) + 
+          (valoresTabelados.parcelaDemais * (prazoValido - 12));
+      } else {
+        // SELECT: 1ª parcela (já com taxa) + (prazo-1) parcelas demais
+        totalPagoTabelado = valoresTabelados.parcela1a12 + 
+          (valoresTabelados.parcelaDemais * (prazoValido - 1));
+      }
       
       return {
         ...calculoBase,
