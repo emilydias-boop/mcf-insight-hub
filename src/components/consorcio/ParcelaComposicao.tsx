@@ -67,25 +67,55 @@ export function ParcelaComposicao({
 
         {/* Valores das parcelas */}
         <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="font-medium">1ª a 12ª Parcela</span>
-              {taxaAntecipadaTipo === 'primeira_parcela' && (
-                <p className="text-xs text-muted-foreground">
-                  1ª parcela: +{formatCurrency(calculo.taxaAntecipada)} (taxa)
-                </p>
-              )}
-            </div>
-            <span className="text-lg font-bold text-primary">
-              {formatCurrency(calculo.parcela1a12)}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="font-medium">13ª em diante</span>
-            <span className="text-lg font-bold">
-              {formatCurrency(calculo.parcelaDemais)}
-            </span>
-          </div>
+          {taxaAntecipadaTipo === 'primeira_parcela' ? (
+            // SELECT: 1ª parcela com valor cheio (inclui 2%), 2ª-12ª separadas
+            <>
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="font-medium">1ª Parcela</span>
+                  <p className="text-xs text-muted-foreground">
+                    inclui taxa antecipada de 2%
+                  </p>
+                </div>
+                <span className="text-lg font-bold text-primary">
+                  {formatCurrency(calculo.parcela1a12 + calculo.taxaAntecipada)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium">2ª a 12ª Parcela</span>
+                <span className="text-lg font-bold">
+                  {formatCurrency(calculo.parcela1a12)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium">13ª em diante</span>
+                <span className="text-lg font-bold">
+                  {formatCurrency(calculo.parcelaDemais)}
+                </span>
+              </div>
+            </>
+          ) : (
+            // PARCELINHA: 1ª a 12ª com taxa de 1,2% diluída
+            <>
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="font-medium">1ª a 12ª Parcela</span>
+                  <p className="text-xs text-muted-foreground">
+                    inclui taxa antecipada de 1,2% diluída
+                  </p>
+                </div>
+                <span className="text-lg font-bold text-primary">
+                  {formatCurrency(calculo.parcela1a12)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium">13ª em diante</span>
+                <span className="text-lg font-bold">
+                  {formatCurrency(calculo.parcelaDemais)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         <Separator />
