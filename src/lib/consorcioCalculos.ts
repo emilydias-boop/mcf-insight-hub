@@ -40,10 +40,15 @@ export function calcularParcela(
   }
 
   // Calcular componentes
+  // Fundo comum é sobre o crédito base (reduzido em Mais por Menos)
   const fundoComum = creditoBase / prazo;
   const taxaAdmPercentual = getTaxaAdm(produto, prazo);
-  const taxaAdm = (valorCredito * (taxaAdmPercentual / 100)) / prazo;
-  const fundoReserva = (valorCredito * (produto.fundo_reserva / 100)) / prazo;
+  
+  // Para Select (primeira_parcela): taxa adm e fundo reserva são sobre creditoBase
+  // Para Parcelinha (dividida_12): taxa adm e fundo reserva são sobre valorCredito total
+  const baseParaTaxas = produto.taxa_antecipada_tipo === 'primeira_parcela' ? creditoBase : valorCredito;
+  const taxaAdm = (baseParaTaxas * (taxaAdmPercentual / 100)) / prazo;
+  const fundoReserva = (baseParaTaxas * (produto.fundo_reserva / 100)) / prazo;
 
   // Seguro de vida (aplicado sobre crédito + taxa adm total)
   let seguroVida = 0;
