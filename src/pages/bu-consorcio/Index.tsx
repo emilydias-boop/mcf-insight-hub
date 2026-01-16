@@ -123,7 +123,7 @@ export default function ConsorcioPage() {
   const [editingCard, setEditingCard] = useState<ConsorcioCard | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [configOpen, setConfigOpen] = useState(false);
-  const ITEMS_PER_PAGE = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const { data: employees } = useEmployees();
   const { data: tipoOptions = [] } = useConsorcioTipoOptions();
@@ -177,16 +177,16 @@ export default function ConsorcioPage() {
   }, [cards]);
 
   // Pagination
-  const totalPages = Math.ceil((sortedCards?.length || 0) / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil((sortedCards?.length || 0) / itemsPerPage);
   const paginatedCards = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return sortedCards.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [sortedCards, currentPage]);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return sortedCards.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedCards, currentPage, itemsPerPage]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, period]);
+  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -459,7 +459,7 @@ export default function ConsorcioPage() {
                   const statusConfig = STATUS_OPTIONS.find(s => s.value === card.status);
                   const proximoVencimento = calcularProximoVencimento(card.dia_vencimento);
                   // Descending number: total - (page offset + index)
-                  const orderNumber = sortedCards.length - ((currentPage - 1) * ITEMS_PER_PAGE + index);
+                  const orderNumber = sortedCards.length - ((currentPage - 1) * itemsPerPage + index);
 
                   return (
                     <TableRow 
@@ -586,49 +586,70 @@ export default function ConsorcioPage() {
       </Card>
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {sortedCards.length > 0 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">
-            Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} a {Math.min(currentPage * ITEMS_PER_PAGE, sortedCards.length)} de {sortedCards.length} registros
-          </span>
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                />
-              </PaginationItem>
-              
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
-                .map((page, idx, arr) => (
-                  <span key={page} className="contents">
-                    {idx > 0 && arr[idx - 1] !== page - 1 && (
+          <div className="flex items-center gap-3">
+            <Select 
+              value={itemsPerPage.toString()} 
+              onValueChange={(v) => {
+                setItemsPerPage(Number(v));
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-24 h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10 / pág</SelectItem>
+                <SelectItem value="12">12 / pág</SelectItem>
+                <SelectItem value="25">25 / pág</SelectItem>
+                <SelectItem value="50">50 / pág</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">
+              Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, sortedCards.length)} de {sortedCards.length} registros
+            </span>
+          </div>
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+                  .map((page, idx, arr) => (
+                    <span key={page} className="contents">
+                      {idx > 0 && arr[idx - 1] !== page - 1 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
                       <PaginationItem>
-                        <PaginationEllipsis />
+                        <PaginationLink 
+                          isActive={page === currentPage}
+                          onClick={() => setCurrentPage(page)}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
                       </PaginationItem>
-                    )}
-                    <PaginationItem>
-                      <PaginationLink 
-                        isActive={page === currentPage}
-                        onClick={() => setCurrentPage(page)}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  </span>
-                ))}
-              
-              <PaginationItem>
-                <PaginationNext 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+                    </span>
+                  ))}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
 
