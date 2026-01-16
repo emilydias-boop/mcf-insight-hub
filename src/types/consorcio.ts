@@ -84,6 +84,12 @@ export interface ConsorcioCard {
   email_comercial?: string;
   faturamento_mensal?: number;
   num_funcionarios?: number;
+  
+  // Controle adicional
+  valor_comissao?: number;
+  e_transferencia?: boolean;
+  transferido_de?: string;
+  observacoes?: string;
 }
 
 export interface ConsorcioPartner {
@@ -192,6 +198,12 @@ export interface CreateConsorcioCardInput {
   email_comercial?: string;
   faturamento_mensal?: number;
   num_funcionarios?: number;
+  
+  // Controle adicional
+  valor_comissao?: number;
+  e_transferencia?: boolean;
+  transferido_de?: string;
+  observacoes?: string;
   
   // Partners (PJ only)
   partners?: Array<{ nome: string; cpf: string; renda?: number }>;
