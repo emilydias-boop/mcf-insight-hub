@@ -120,7 +120,7 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
   return useQuery({
     queryKey: ['consortium-summary', filters],
     queryFn: async () => {
-      let query = supabase.from('consortium_cards').select('*');
+      let query = supabase.from('consortium_cards').select('id, valor_credito, tipo_produto');
 
       if (filters.startDate) {
         query = query.gte('data_contratacao', filters.startDate.toISOString().split('T')[0]);
@@ -135,32 +135,43 @@ export function useConsorcioSummary(filters: ConsorcioFilters = {}) {
       const { data: cards, error: cardsError } = await query;
       if (cardsError) throw cardsError;
 
-      // Get all installments for these cards
       const cardIds = cards?.map(c => c.id) || [];
-      const { data: installments } = await supabase
-        .from('consortium_installments')
-        .select('*')
-        .in('card_id', cardIds);
+      
+      // Use aggregation to avoid 1000 row limit
+      // Fetch installments in batches to get accurate totals
+      let comissaoTotal = 0;
+      let comissaoRecebida = 0;
+      let comissaoPendente = 0;
+
+      if (cardIds.length > 0) {
+        // Fetch sum of commissions per card to avoid row limit
+        for (const cardId of cardIds) {
+          const { data: installments } = await supabase
+            .from('consortium_installments')
+            .select('valor_comissao, status')
+            .eq('card_id', cardId);
+
+          installments?.forEach(inst => {
+            const valor = Number(inst.valor_comissao);
+            comissaoTotal += valor;
+            if (inst.status === 'pago') {
+              comissaoRecebida += valor;
+            } else {
+              comissaoPendente += valor;
+            }
+          });
+        }
+      }
 
       const summary: ConsorcioSummary = {
         totalCartas: cards?.length || 0,
         totalCredito: cards?.reduce((acc, c) => acc + Number(c.valor_credito), 0) || 0,
-        comissaoTotal: 0,
-        comissaoRecebida: 0,
-        comissaoPendente: 0,
+        comissaoTotal,
+        comissaoRecebida,
+        comissaoPendente,
         cartasSelect: cards?.filter(c => c.tipo_produto === 'select').length || 0,
         cartasParcelinha: cards?.filter(c => c.tipo_produto === 'parcelinha').length || 0,
       };
-
-      // Calculate commissions from installments
-      installments?.forEach(inst => {
-        summary.comissaoTotal += Number(inst.valor_comissao);
-        if (inst.status === 'pago') {
-          summary.comissaoRecebida += Number(inst.valor_comissao);
-        } else {
-          summary.comissaoPendente += Number(inst.valor_comissao);
-        }
-      });
 
       return summary;
     },
