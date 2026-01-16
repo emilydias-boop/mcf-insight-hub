@@ -180,8 +180,10 @@ export function useCreateConsorcioCard() {
         // Determine if this installment is paid by client or company
         let tipo: 'cliente' | 'empresa';
         if (input.tipo_contrato === 'intercalado') {
-          // Intercalado: empresa paga parcelas ímpares, cliente paga pares (ou vice-versa)
-          tipo = i % 2 === 1 ? 'empresa' : 'cliente';
+          // Intercalado: empresa paga as primeiras N parcelas PARES (2, 4, 6, 8...)
+          const ehPar = i % 2 === 0;
+          const qualParcelaParEhEssa = i / 2; // 2→1, 4→2, 6→3, 8→4...
+          tipo = (ehPar && qualParcelaParEhEssa <= input.parcelas_pagas_empresa) ? 'empresa' : 'cliente';
         } else {
           // Normal: empresa paga as primeiras N parcelas
           tipo = i <= input.parcelas_pagas_empresa ? 'empresa' : 'cliente';
