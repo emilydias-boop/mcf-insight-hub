@@ -989,19 +989,19 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="tipo_produto"
+                    name="empresa_paga_parcelas"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Tipo de Produto *</FormLabel>
+                        <FormLabel>Empresa paga parcelas? *</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue />
+                              <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="select">Select</SelectItem>
-                            <SelectItem value="parcelinha">Parcelinha</SelectItem>
+                            <SelectItem value="nao">Não</SelectItem>
+                            <SelectItem value="sim">Sim</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormItem>
@@ -1027,28 +1027,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     )}
                   />
                 </div>
-
-                {/* Parcelas pagas pela empresa */}
-                <FormField
-                  control={form.control}
-                  name="empresa_paga_parcelas"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Empresa paga parcelas? *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="nao">Não</SelectItem>
-                          <SelectItem value="sim">Sim</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
 
                 {/* Campos condicionais quando empresa paga parcelas */}
                 {empresaPagaParcelas === 'sim' && (
