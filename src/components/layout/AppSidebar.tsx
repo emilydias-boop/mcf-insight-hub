@@ -282,10 +282,11 @@ export function AppSidebar() {
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { data: myProducts = [] } = useMyProducts();
   const { data: myBU } = useMyBU();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, isMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
   const isCollapsed = state === "collapsed";
+  const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
 
   const getRoleBadgeVariant = (userRole: AppRole | null) => {
@@ -446,7 +447,7 @@ export function AppSidebar() {
                           }}
                         >
                           <item.icon className="h-5 w-5" />
-                          {!isCollapsed && (
+                          {showText && (
                             <>
                               <span>{item.title}</span>
                               <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
