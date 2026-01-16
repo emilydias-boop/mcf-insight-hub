@@ -9,6 +9,7 @@ interface ParcelaComposicaoProps {
   prazo: number;
   incluiSeguro: boolean;
   taxaAntecipadaTipo: 'primeira_parcela' | 'dividida_12';
+  usandoTabelaOficial?: boolean;
 }
 
 export function ParcelaComposicao({
@@ -16,6 +17,7 @@ export function ParcelaComposicao({
   prazo,
   incluiSeguro,
   taxaAntecipadaTipo,
+  usandoTabelaOficial,
 }: ParcelaComposicaoProps) {
   return (
     <Card className="bg-muted/30 border-primary/20">
@@ -25,6 +27,11 @@ export function ParcelaComposicao({
           <Badge variant="outline" className="text-xs font-normal">
             {prazo} meses
           </Badge>
+          {usandoTabelaOficial && (
+            <Badge variant="default" className="text-xs font-normal bg-green-600 hover:bg-green-700">
+              ✓ Tabela Oficial
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">

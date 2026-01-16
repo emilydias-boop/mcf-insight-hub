@@ -65,6 +65,7 @@ export interface CalculoParcela {
   parcela1a12: number;
   parcelaDemais: number;
   totalPago: number;
+  usandoTabelaOficial?: boolean;
 }
 
 export const CONDICAO_PAGAMENTO_OPTIONS = [
