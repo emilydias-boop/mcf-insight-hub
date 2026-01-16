@@ -43,6 +43,7 @@ import { useCreateConsorcioCard, useUpdateConsorcioCard } from '@/hooks/useConso
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useConsorcioProdutos, useConsorcioCreditos } from '@/hooks/useConsorcioProdutos';
+import { useConsorcioOrigemOptions, useConsorcioCategoriaOptions } from '@/hooks/useConsorcioConfigOptions';
 import { calcularParcela, getValoresTabelados } from '@/lib/consorcioCalculos';
 import { ParcelaComposicao } from './ParcelaComposicao';
 import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
@@ -212,6 +213,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const isEditing = !!card;
   const { data: employees } = useEmployees();
   const { data: produtos } = useConsorcioProdutos();
+  const { data: origemOptions = [] } = useConsorcioOrigemOptions();
+  const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
   const createCard = useCreateConsorcioCard();
   const updateCard = useUpdateConsorcioCard();
   const batchUpload = useBatchUploadDocuments();
@@ -865,9 +868,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {CATEGORIA_OPTIONS.map(opt => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
+                      {categoriaOptions
+                        .filter(opt => opt.is_active)
+                        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+                        .map(opt => (
+                          <SelectItem key={opt.name} value={opt.name}>{opt.label}</SelectItem>
+                        ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1203,11 +1209,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {ORIGEM_OPTIONS.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
+                      {origemOptions
+                        .filter(opt => opt.is_active)
+                        .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+                        .map(opt => (
+                          <SelectItem key={opt.name} value={opt.name}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
                           </SelectContent>
                         </Select>
                       </FormItem>
