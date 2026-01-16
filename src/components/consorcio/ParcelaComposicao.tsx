@@ -68,7 +68,7 @@ export function ParcelaComposicao({
         {/* Valores das parcelas */}
         <div className="space-y-2">
           {taxaAntecipadaTipo === 'primeira_parcela' ? (
-            // SELECT: 1ª parcela com valor cheio (inclui 2%), 2ª-12ª separadas
+            // SELECT: 1ª parcela cheia + demais parcelas (todas iguais da 2ª em diante)
             <>
               <div className="flex justify-between items-center">
                 <div>
@@ -82,15 +82,9 @@ export function ParcelaComposicao({
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="font-medium">2ª a 12ª Parcela</span>
+                <span className="font-medium">Demais Parcelas</span>
                 <span className="text-lg font-bold">
                   {formatCurrency(calculo.parcela1a12)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-medium">13ª em diante</span>
-                <span className="text-lg font-bold">
-                  {formatCurrency(calculo.parcelaDemais)}
                 </span>
               </div>
             </>
