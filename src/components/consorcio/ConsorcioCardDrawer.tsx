@@ -130,8 +130,8 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[95vh]">
-        <DrawerHeader className="border-b">
+      <DrawerContent className="max-w-2xl mx-auto h-[95vh] flex flex-col">
+        <DrawerHeader className="border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Avatar className="h-14 w-14">
@@ -160,7 +160,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
           </div>
         </DrawerHeader>
 
-        <ScrollArea className="flex-1 p-6">
+        <div className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="p-6">
           {isLoading ? (
             <div className="flex items-center justify-center h-40">
               <span className="text-muted-foreground">Carregando...</span>
@@ -656,9 +658,11 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                   Editar Carta
                 </Button>
               </div>
+              </div>
+            ) : null}
             </div>
-          ) : null}
-        </ScrollArea>
+          </ScrollArea>
+        </div>
       </DrawerContent>
 
       {/* Edit Form */}
