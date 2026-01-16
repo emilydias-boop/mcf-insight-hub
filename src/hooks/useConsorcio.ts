@@ -259,6 +259,31 @@ export function useUpdateConsorcioCard() {
       id: string; 
       partners?: Array<{ nome: string; cpf: string; renda?: number }> 
     }) => {
+      // 0. Check if tipo_produto is changing - need to recalculate commissions
+      let shouldRecalculateCommissions = false;
+      let newTipoProduto: TipoProduto | undefined;
+      let newValorCredito: number | undefined;
+
+      if (cardData.tipo_produto || cardData.valor_credito) {
+        // Fetch current card to compare
+        const { data: currentCard, error: fetchError } = await supabase
+          .from('consortium_cards')
+          .select('tipo_produto, valor_credito')
+          .eq('id', id)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        const tipoProdutoChanged = cardData.tipo_produto && cardData.tipo_produto !== currentCard.tipo_produto;
+        const valorCreditoChanged = cardData.valor_credito && Number(cardData.valor_credito) !== Number(currentCard.valor_credito);
+
+        if (tipoProdutoChanged || valorCreditoChanged) {
+          shouldRecalculateCommissions = true;
+          newTipoProduto = (cardData.tipo_produto || currentCard.tipo_produto) as TipoProduto;
+          newValorCredito = Number(cardData.valor_credito || currentCard.valor_credito);
+        }
+      }
+
       // 1. Update the card (without partners field)
       const { error: cardError } = await supabase
         .from('consortium_cards')
@@ -291,6 +316,29 @@ export function useUpdateConsorcioCard() {
             .insert(partnersData);
 
           if (insertError) throw insertError;
+        }
+      }
+
+      // 3. Recalculate commissions if tipo_produto or valor_credito changed
+      if (shouldRecalculateCommissions && newTipoProduto && newValorCredito) {
+        const { data: installments, error: instError } = await supabase
+          .from('consortium_installments')
+          .select('id, numero_parcela, valor_comissao')
+          .eq('card_id', id);
+
+        if (instError) throw instError;
+
+        for (const inst of installments || []) {
+          const comissaoCorreta = calcularComissao(newValorCredito, newTipoProduto, inst.numero_parcela);
+
+          if (Math.abs(Number(inst.valor_comissao) - comissaoCorreta) > 0.01) {
+            const { error: updateError } = await supabase
+              .from('consortium_installments')
+              .update({ valor_comissao: comissaoCorreta })
+              .eq('id', inst.id);
+
+            if (updateError) throw updateError;
+          }
         }
       }
     },
