@@ -939,6 +939,39 @@ export type Database = {
           },
         ]
       }
+      consorcio_categoria_options: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          label: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       consorcio_creditos: {
         Row: {
           ativo: boolean | null
@@ -1028,6 +1061,36 @@ export type Database = {
           },
         ]
       }
+      consorcio_origem_options: {
+        Row: {
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          label: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       consorcio_produtos: {
         Row: {
           ativo: boolean | null
@@ -1087,6 +1150,39 @@ export type Database = {
           taxa_adm_240?: number | null
           taxa_antecipada_percentual?: number
           taxa_antecipada_tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      consorcio_tipo_produto_options: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          label: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          label?: string
+          name?: string
           updated_at?: string | null
         }
         Relationships: []
