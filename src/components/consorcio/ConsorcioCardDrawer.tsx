@@ -95,6 +95,16 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const recalculateCommissions = useRecalculateCommissions();
   const updateCardStatus = useUpdateCardStatus();
 
+  // Check inadimplência - must be before useEffect
+  const deveCancelar = card?.installments ? deveSerCancelado(card.installments) : false;
+
+  // Auto-cancel if 4+ overdue and still active - useEffect must be before early return
+  useEffect(() => {
+    if (card && deveCancelar && card.status === 'ativo') {
+      updateCardStatus.mutate({ cardId: card.id, status: 'cancelado' });
+    }
+  }, [card, deveCancelar, updateCardStatus]);
+
   if (!cardId) return null;
 
   const statusConfig = STATUS_OPTIONS.find((s) => s.value === card?.status);
@@ -111,14 +121,6 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
   // Check inadimplência
   const inadimplenciaInfo = card?.installments ? verificarRiscoCancelamento(card.installments) : null;
-  const deveCancelar = card?.installments ? deveSerCancelado(card.installments) : false;
-
-  // Auto-cancel if 4+ overdue and still active
-  useEffect(() => {
-    if (card && deveCancelar && card.status === 'ativo') {
-      updateCardStatus.mutate({ cardId: card.id, status: 'cancelado' });
-    }
-  }, [card, deveCancelar]);
 
   const handlePayInstallment = async (installment: ConsorcioInstallment) => {
     await payInstallment.mutateAsync({
