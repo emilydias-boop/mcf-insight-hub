@@ -138,7 +138,7 @@ const DashboardContent = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
         {statsCards.map((stat) => {
           const Icon = stat.icon;
           return (
@@ -157,7 +157,7 @@ const DashboardContent = () => {
                   </>
                 ) : (
                   <>
-                    <div className="text-2xl font-bold text-foreground">{stat.value}</div>
+                    <div className="text-lg sm:text-2xl font-bold text-foreground">{stat.value}</div>
                     <p className="text-xs text-muted-foreground">{stat.description}</p>
                   </>
                 )}
@@ -242,28 +242,29 @@ const Overview = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Visão Geral do CRM</h2>
-        <p className="text-muted-foreground">Dashboard, origens, grupos e tags do seu CRM</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-1 sm:mb-2">Visão Geral do CRM</h2>
+        <p className="text-sm text-muted-foreground hidden sm:block">Dashboard, origens, grupos e tags do seu CRM</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="bg-muted">
-          <TabsTrigger value="dashboard" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Dashboard
+        <TabsList className="bg-muted flex flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="dashboard" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden xs:inline">Dashboard</span>
+            <span className="xs:hidden">Dash</span>
           </TabsTrigger>
-          <TabsTrigger value="origens" className="flex items-center gap-2">
-            <MapPin className="h-4 w-4" />
+          <TabsTrigger value="origens" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+            <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
             Origens
           </TabsTrigger>
-          <TabsTrigger value="grupos" className="flex items-center gap-2">
-            <Layers className="h-4 w-4" />
+          <TabsTrigger value="grupos" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+            <Layers className="h-3 w-3 sm:h-4 sm:w-4" />
             Grupos
           </TabsTrigger>
-          <TabsTrigger value="tags" className="flex items-center gap-2">
-            <Tag className="h-4 w-4" />
+          <TabsTrigger value="tags" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+            <Tag className="h-3 w-3 sm:h-4 sm:w-4" />
             Tags
           </TabsTrigger>
         </TabsList>

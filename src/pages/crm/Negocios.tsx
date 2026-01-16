@@ -157,41 +157,46 @@ const Negocios = () => {
   };
   
   return (
-    <div className="flex h-[calc(100vh-56px)] overflow-hidden">
-      <OriginsSidebar
-        pipelineId={selectedPipelineId}
-        selectedOriginId={selectedOriginId}
-        onSelectOrigin={setSelectedOriginId}
-        onSelectPipeline={handlePipelineChange}
-      />
+    <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
+      {/* Sidebar - hidden on mobile */}
+      <div className="hidden md:block">
+        <OriginsSidebar
+          pipelineId={selectedPipelineId}
+          selectedOriginId={selectedOriginId}
+          onSelectOrigin={setSelectedOriginId}
+          onSelectPipeline={handlePipelineChange}
+        />
+      </div>
       
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <div className="flex items-center justify-between p-4 border-b gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b gap-3">
           <div>
-            <h2 className="text-xl font-bold">
+            <h2 className="text-lg sm:text-xl font-bold">
               {isRestrictedRole ? 'Meus Negócios' : 'Pipeline de Vendas'}
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {filteredDeals.length} oportunidade{filteredDeals.length !== 1 ? 's' : ''}
             </p>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <Button 
               variant="outline" 
               onClick={handleSync}
               disabled={syncMutation.isPending}
               size="sm"
+              className="flex-1 sm:flex-none"
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
-              Sincronizar
+              <RefreshCw className={`h-4 w-4 sm:mr-2 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sincronizar</span>
             </Button>
             <DealFormDialog
               defaultOriginId={selectedOriginId || selectedPipelineId || undefined}
               trigger={
-                <Button size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Novo Negócio
+                <Button size="sm" className="flex-1 sm:flex-none">
+                  <Plus className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Novo Negócio</span>
+                  <span className="sm:hidden">Novo</span>
                 </Button>
               }
             />
@@ -204,7 +209,7 @@ const Negocios = () => {
           onClear={clearFilters}
         />
         
-        <div className="flex-1 overflow-hidden p-4">
+        <div className="flex-1 overflow-hidden p-2 sm:p-4">
           {error ? (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />

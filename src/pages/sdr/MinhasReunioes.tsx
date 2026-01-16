@@ -149,48 +149,51 @@ export default function MinhasReunioes() {
   };
 
   return (
-    <div className="h-[calc(100vh-56px)] flex flex-col p-6 overflow-hidden">
+    <div className="h-[calc(100vh-56px)] flex flex-col p-3 sm:p-4 md:p-6 overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Calendar className="h-6 w-6" />
-            Minhas Reuniões
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Resumo dos seus agendamentos e resultados (nova lógica de contagem)
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          {/* Month Selector (for month preset) */}
-          <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setDatePreset('month'); }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions.map((month) => (
-                <SelectItem key={month.value} value={month.value}>
-                  {month.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="flex flex-col gap-3 flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground flex items-center gap-2">
+              <Calendar className="h-5 w-5 sm:h-6 sm:w-6" />
+              Minhas Reuniões
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
+              Resumo dos seus agendamentos e resultados
+            </p>
+          </div>
           
-          {/* Review Request Button */}
-          <Button 
-            variant="outline" 
-            onClick={() => setReviewModalOpen(true)}
-            className="gap-2"
-          >
-            <AlertCircle className="h-4 w-4" />
-            <span className="hidden sm:inline">Pedir revisão</span>
-          </Button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Month Selector (for month preset) */}
+            <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setDatePreset('month'); }}>
+              <SelectTrigger className="w-[140px] sm:w-[180px] text-xs sm:text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((month) => (
+                  <SelectItem key={month.value} value={month.value}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            {/* Review Request Button */}
+            <Button 
+              variant="outline" 
+              onClick={() => setReviewModalOpen(true)}
+              className="gap-2"
+              size="sm"
+            >
+              <AlertCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Pedir revisão</span>
+            </Button>
+          </div>
         </div>
       </div>
       
       {/* Summary Cards */}
-      <div className="flex-shrink-0 mt-6">
+      <div className="flex-shrink-0 mt-4 sm:mt-6">
         <MeetingSummaryCards 
           summary={summary} 
           isLoading={isLoading} 
@@ -198,10 +201,10 @@ export default function MinhasReunioes() {
       </div>
       
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/30 rounded-lg mt-6 flex-shrink-0">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-muted/30 rounded-lg mt-4 sm:mt-6 flex-shrink-0">
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
           <Filter className="h-4 w-4" />
-          Filtros:
+          <span className="hidden sm:inline">Filtros:</span>
         </div>
         
         {/* Date Preset Shortcuts */}
@@ -210,6 +213,7 @@ export default function MinhasReunioes() {
             variant={datePreset === 'today' ? 'default' : 'outline'} 
             size="sm" 
             onClick={() => handlePresetClick('today')}
+            className="text-xs px-2 sm:px-3"
           >
             Hoje
           </Button>
@@ -217,6 +221,7 @@ export default function MinhasReunioes() {
             variant={datePreset === 'week' ? 'default' : 'outline'} 
             size="sm" 
             onClick={() => handlePresetClick('week')}
+            className="text-xs px-2 sm:px-3"
           >
             Semana
           </Button>
@@ -224,6 +229,7 @@ export default function MinhasReunioes() {
             variant={datePreset === 'month' ? 'default' : 'outline'} 
             size="sm" 
             onClick={() => handlePresetClick('month')}
+            className="text-xs px-2 sm:px-3"
           >
             Mês
           </Button>

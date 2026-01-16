@@ -52,7 +52,7 @@ export default function Dashboard() {
 
   return (
     <ResourceGuard resource="dashboard">
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         {/* Alert para métricas pendentes de aprovação */}
         <PendingMetricsAlert onReviewClick={() => setApprovalDialogOpen(true)} />
         
@@ -63,10 +63,10 @@ export default function Dashboard() {
         />
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Painel do Diretor</h1>
-            <p className="text-muted-foreground text-sm">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Painel do Diretor</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
               Visão consolidada de metas e resultados por setor
             </p>
           </div>
