@@ -6,6 +6,8 @@ import { format } from 'date-fns';
 import { formatDateForDB } from '@/lib/dateHelpers';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon, Plus, Trash2, Loader2, Upload, FileText, X, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -300,15 +302,19 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const condicaoPagamento = (form.watch('condicao_pagamento') || 'convencional') as CondicaoPagamento;
   const incluiSeguro = form.watch('inclui_seguro') || false;
 
-  // Filter employees that belong to BU Consórcio
-  const consorcioEmployees = useMemo(() => {
-    return employees?.filter(emp => 
-      emp.departamento?.toLowerCase().includes('consórcio') ||
-      emp.departamento?.toLowerCase().includes('consorcio') ||
-      emp.squad?.toLowerCase().includes('consórcio') ||
-      emp.squad?.toLowerCase().includes('consorcio')
-    ) || [];
-  }, [employees]);
+  // Fetch profiles with squad = consorcio
+  const { data: consorcioProfiles } = useQuery({
+    queryKey: ['consorcio-profiles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('squad', 'consorcio')
+        .order('full_name');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   // Find product that matches selected code or auto-detect from credit value
   const produtoSelecionado = useMemo(() => {
@@ -1137,7 +1143,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     control={form.control}
                     name="origem"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col">
                         <FormLabel>Origem *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
@@ -1180,8 +1186,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       <Select
                         onValueChange={(value) => {
                           field.onChange(value);
-                          const emp = consorcioEmployees.find(e => e.id === value);
-                          form.setValue('vendedor_name', emp?.nome_completo || '');
+                          const profile = consorcioProfiles?.find(p => p.id === value);
+                          form.setValue('vendedor_name', profile?.full_name || '');
                         }}
                         value={field.value}
                       >
@@ -1191,10 +1197,10 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {consorcioEmployees.length > 0 ? (
-                            consorcioEmployees.map(emp => (
-                              <SelectItem key={emp.id} value={emp.id}>
-                                {emp.nome_completo}
+                          {consorcioProfiles && consorcioProfiles.length > 0 ? (
+                            consorcioProfiles.map(profile => (
+                              <SelectItem key={profile.id} value={profile.id}>
+                                {profile.full_name}
                               </SelectItem>
                             ))
                           ) : (
@@ -1204,9 +1210,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                           )}
                         </SelectContent>
                       </Select>
-                      {consorcioEmployees.length === 0 && (
+                      {(!consorcioProfiles || consorcioProfiles.length === 0) && (
                         <p className="text-xs text-muted-foreground">
-                          Cadastre colaboradores com departamento "BU - Consórcio" para aparecerem aqui.
+                          Configure usuários com BU - Consórcio nas configurações de perfil.
                         </p>
                       )}
                     </FormItem>
