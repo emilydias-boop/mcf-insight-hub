@@ -128,7 +128,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:w-[85vw] lg:w-[90vw] xl:w-[65vw] 2xl:w-[60vw] p-0 flex flex-col">
+      <SheetContent side="right" className="w-full sm:w-[95vw] lg:w-[90vw] xl:w-[85vw] 2xl:w-[80vw] p-0 flex flex-col max-w-none">
         <SheetHeader className="border-b flex-shrink-0 p-6">
           <div className="flex items-center gap-4">
             <Avatar className="h-14 w-14">
