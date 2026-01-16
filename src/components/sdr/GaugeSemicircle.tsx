@@ -24,12 +24,12 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
   ];
 
   return (
-    <div className="flex flex-col items-center justify-center gap-1 p-2 bg-card rounded border border-border flex-1 min-h-0">
-      <div className="text-xs font-medium text-center text-muted-foreground truncate w-full px-1">
+    <div className="flex flex-col items-center justify-center gap-0.5 sm:gap-1 p-1.5 sm:p-2 bg-card rounded border border-border flex-1 min-h-0">
+      <div className="text-[10px] sm:text-xs font-medium text-center text-muted-foreground line-clamp-2 w-full px-1 min-h-[2em]">
         {titulo}
       </div>
       <div className="relative w-full">
-        <ResponsiveContainer width="100%" height={75}>
+        <ResponsiveContainer width="100%" height={55} className="sm:!h-[75px]">
           <PieChart>
             <Pie
               data={data}
@@ -37,8 +37,8 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
               cy="80%"
               startAngle={180}
               endAngle={0}
-              innerRadius={30}
-              outerRadius={42}
+              innerRadius="55%"
+              outerRadius="85%"
               dataKey="value"
               stroke="none"
             >
@@ -48,14 +48,14 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
           </PieChart>
         </ResponsiveContainer>
         {/* Valor/Meta centralizado no arco */}
-        <div className="absolute inset-0 flex items-center justify-center" style={{ top: '30%' }}>
-          <span className="text-base font-bold" style={{ color }}>
+        <div className="absolute inset-0 flex items-center justify-center" style={{ top: '25%' }}>
+          <span className="text-xs sm:text-base font-bold" style={{ color }}>
             {valor} / {meta}
           </span>
         </div>
       </div>
       {/* Porcentagem abaixo com fonte maior */}
-      <div className="text-xl font-bold -mt-1" style={{ color }}>
+      <div className="text-base sm:text-xl font-bold -mt-1" style={{ color }}>
         {percentual.toFixed(0)}%
       </div>
     </div>

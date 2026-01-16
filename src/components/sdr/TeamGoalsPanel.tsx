@@ -78,10 +78,10 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
   if (isLoading) {
     return (
       <Card className="bg-card border-border">
-        <CardContent className="p-6">
-          <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
-            {[...Array(16)].map((_, i) => (
-              <Skeleton key={i} className="h-32 w-full" />
+        <CardContent className="p-3 sm:p-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+            {[...Array(8)].map((_, i) => (
+              <Skeleton key={i} className="h-24 sm:h-32 w-full" />
             ))}
           </div>
         </CardContent>
@@ -92,10 +92,10 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
   return (
     <>
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Target className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+              <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               Metas da Equipe
             </CardTitle>
             {canEdit && (
@@ -103,19 +103,19 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
                 variant="ghost"
                 size="sm"
                 onClick={() => setEditModalOpen(true)}
-                className="h-8 px-2"
+                className="h-7 sm:h-8 px-2 text-xs sm:text-sm"
               >
-                <Settings2 className="h-4 w-4 mr-1" />
-                Editar
+                <Settings2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="hidden sm:inline">Editar</span>
               </Button>
             )}
           </div>
         </CardHeader>
-        <CardContent className="pt-0 space-y-4">
+        <CardContent className="pt-0 space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
           {/* Day section */}
           <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Dia</h3>
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+            <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Dia</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2">
               {dayGauges.map((gauge, index) => (
                 <GaugeSemicircle
                   key={`day-${index}`}
@@ -129,8 +129,8 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
 
           {/* Week section */}
           <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Semana</h3>
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+            <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Semana</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2">
               {weekGauges.map((gauge, index) => (
                 <GaugeSemicircle
                   key={`week-${index}`}
@@ -144,8 +144,8 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
 
           {/* Month section */}
           <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Mês</h3>
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+            <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Mês</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2">
               {monthGauges.map((gauge, index) => (
                 <GaugeSemicircle
                   key={`month-${index}`}

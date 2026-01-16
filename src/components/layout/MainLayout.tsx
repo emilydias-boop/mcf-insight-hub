@@ -1,11 +1,12 @@
 import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { RealTimeAlerts } from "@/components/dashboard/RealTimeAlerts";
 import { TwilioSoftphone } from "@/components/crm/TwilioSoftphone";
 import { ConversationsProvider } from "@/contexts/ConversationsContext";
 import { ConversationsFloatingWidget } from "@/components/conversations/ConversationsFloatingWidget";
 import { ConversationsDrawer } from "@/components/conversations/ConversationsDrawer";
+import { Menu } from "lucide-react";
 
 export function MainLayout() {
   return (
@@ -14,10 +15,14 @@ export function MainLayout() {
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar />
           <SidebarInset className="flex-1 overflow-hidden">
-            <header className="flex h-14 items-center justify-end gap-4 border-b border-border bg-background px-6">
+            <header className="flex h-14 items-center justify-between gap-4 border-b border-border bg-background px-4 md:px-6">
+              <SidebarTrigger className="md:hidden p-2 hover:bg-muted rounded-md">
+                <Menu className="h-5 w-5" />
+              </SidebarTrigger>
+              <div className="flex-1" />
               <RealTimeAlerts />
             </header>
-            <div className="flex-1 overflow-hidden p-5">
+            <div className="flex-1 overflow-auto p-2 sm:p-4 md:p-5">
               <Outlet />
             </div>
           </SidebarInset>

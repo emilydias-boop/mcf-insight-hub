@@ -385,7 +385,7 @@ export default function ReunioesEquipe() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
       {/* MCF Incorporador - Métricas Monetárias - PRIMEIRO */}
       <IncorporadorMetricsCard />
 
@@ -394,14 +394,15 @@ export default function ReunioesEquipe() {
 
       {/* Filters */}
       <Card className="bg-card border-border">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-4">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
             {/* Date Preset Buttons */}
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-full sm:w-auto">
               <Button
                 variant={datePreset === "today" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => handlePresetChange("today")}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
               >
                 Hoje
               </Button>
@@ -409,6 +410,7 @@ export default function ReunioesEquipe() {
                 variant={datePreset === "week" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => handlePresetChange("week")}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
               >
                 Semana
               </Button>
@@ -416,6 +418,7 @@ export default function ReunioesEquipe() {
                 variant={datePreset === "month" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => handlePresetChange("month")}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
               >
                 Mês
               </Button>
@@ -423,8 +426,9 @@ export default function ReunioesEquipe() {
                 variant={datePreset === "custom" ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => handlePresetChange("custom")}
+                className="flex-1 sm:flex-initial text-xs sm:text-sm"
               >
-                Personalizado
+                Custom
               </Button>
             </div>
 
@@ -462,7 +466,7 @@ export default function ReunioesEquipe() {
 
             {/* SDR Filter */}
             <Select value={sdrFilter} onValueChange={setSdrFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="Filtrar por SDR" />
               </SelectTrigger>
               <SelectContent>
@@ -480,9 +484,10 @@ export default function ReunioesEquipe() {
               size="sm"
               onClick={handleExportExcel}
               disabled={isLoading}
+              className="w-full sm:w-auto"
             >
               <Download className="h-4 w-4 mr-1" />
-              Exportar Excel
+              <span className="sm:inline">Exportar</span>
             </Button>
           </div>
 
@@ -497,28 +502,28 @@ export default function ReunioesEquipe() {
       <TeamKPICards kpis={teamKPIs} isLoading={isLoading} />
 
       {/* SDR / Closer Summary Table with Tabs */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
+      <Card className="bg-card border-border overflow-hidden">
+        <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "sdrs" | "closers")}>
-            <TabsList className="bg-muted/50">
-              <TabsTrigger value="sdrs" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
+            <TabsList className="bg-muted/50 w-full sm:w-auto">
+              <TabsTrigger value="sdrs" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Users className="h-3 w-3 sm:h-4 sm:w-4" />
                 SDRs
-                <span className="text-xs text-muted-foreground">
+                <span className="text-[10px] sm:text-xs text-muted-foreground">
                   ({filteredBySDR.length})
                 </span>
               </TabsTrigger>
-              <TabsTrigger value="closers" className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4" />
+              <TabsTrigger value="closers" className="flex-1 sm:flex-initial flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Briefcase className="h-3 w-3 sm:h-4 sm:w-4" />
                 Closers
-                <span className="text-xs text-muted-foreground">
+                <span className="text-[10px] sm:text-xs text-muted-foreground">
                   ({closerMetrics?.length || 0})
                 </span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 px-0 sm:px-6 pb-3 sm:pb-6 overflow-x-auto">
           {activeTab === "sdrs" ? (
             <SdrSummaryTable
               data={filteredBySDR}
