@@ -81,6 +81,20 @@ function formatPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+// Format currency for display (R$ 000.000,00)
+function formatMonetaryDisplay(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value || 0);
+}
+
+// Parse monetary input and return raw number
+function parseMonetaryInput(value: string): number {
+  const digits = value.replace(/\D/g, '');
+  return Number(digits) / 100;
+}
+
 const formSchema = z.object({
   tipo_pessoa: z.enum(['pf', 'pj']),
   categoria: z.enum(['inside', 'life']),
@@ -91,8 +105,9 @@ const formSchema = z.object({
   valor_credito: z.number().min(1, 'Valor do crédito é obrigatório'),
   prazo_meses: z.number().min(1, 'Prazo é obrigatório'),
   tipo_produto: z.enum(['select', 'parcelinha']),
-  tipo_contrato: z.enum(['normal', 'intercalado']),
-  parcelas_pagas_empresa: z.number().min(0),
+  empresa_paga_parcelas: z.enum(['sim', 'nao']),
+  tipo_contrato: z.enum(['normal', 'intercalado']).optional(),
+  parcelas_pagas_empresa: z.number().min(0).optional(),
   data_contratacao: z.date(),
   dia_vencimento: z.number().min(1).max(31),
   origem: z.enum(['socio', 'gr', 'indicacao', 'outros']),
@@ -188,7 +203,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
       categoria: (card.categoria as 'inside' | 'life') || 'inside',
       tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
-      tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado',
+      empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
+      tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | undefined,
       parcelas_pagas_empresa: card.parcelas_pagas_empresa,
       dia_vencimento: card.dia_vencimento,
       origem: card.origem as 'socio' | 'gr' | 'indicacao' | 'outros',
@@ -243,7 +259,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       tipo_pessoa: 'pf',
       categoria: 'inside',
       tipo_produto: 'select',
-      tipo_contrato: 'normal',
+      empresa_paga_parcelas: 'nao',
+      tipo_contrato: undefined,
       parcelas_pagas_empresa: 0,
       dia_vencimento: 10,
       origem: 'socio',
@@ -259,6 +276,33 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const tipoPessoa = form.watch('tipo_pessoa');
   const estadoCivil = form.watch('estado_civil');
   const profissao = form.watch('profissao');
+  const empresaPagaParcelas = form.watch('empresa_paga_parcelas');
+  const tipoContrato = form.watch('tipo_contrato');
+  const valorCredito = form.watch('valor_credito') || 0;
+  const prazoMeses = form.watch('prazo_meses') || 1;
+  const parcelasPagasEmpresa = form.watch('parcelas_pagas_empresa') || 0;
+
+  // Filter employees that belong to BU Consórcio
+  const consorcioEmployees = useMemo(() => {
+    return employees?.filter(emp => 
+      emp.departamento?.toLowerCase().includes('consórcio') ||
+      emp.departamento?.toLowerCase().includes('consorcio') ||
+      emp.squad?.toLowerCase().includes('consórcio') ||
+      emp.squad?.toLowerCase().includes('consorcio')
+    ) || [];
+  }, [employees]);
+
+  // Calculate total value of installments paid by the company
+  const valorTotalParcelasEmpresa = useMemo(() => {
+    if (empresaPagaParcelas !== 'sim' || prazoMeses <= 0) return 0;
+    const valorParcela = valorCredito / prazoMeses;
+    if (tipoContrato === 'intercalado') {
+      // Intercalado: empresa paga as parcelas ímpares (1, 3, 5, ...)
+      return Math.ceil(prazoMeses / 2) * valorParcela;
+    }
+    // Normal: empresa paga as primeiras N parcelas
+    return parcelasPagasEmpresa * valorParcela;
+  }, [empresaPagaParcelas, valorCredito, prazoMeses, tipoContrato, parcelasPagasEmpresa]);
 
   // === Tab navigation logic ===
   const tabOrder = useMemo(() => {
@@ -312,7 +356,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           tipo_pessoa: card.tipo_pessoa as 'pf' | 'pj',
           categoria: (card.categoria as 'inside' | 'life') || 'inside',
           tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
-          tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado',
+          empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
+          tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | undefined,
           parcelas_pagas_empresa: card.parcelas_pagas_empresa,
           dia_vencimento: card.dia_vencimento,
           origem: card.origem as 'socio' | 'gr' | 'indicacao' | 'outros',
@@ -368,7 +413,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           tipo_pessoa: 'pf',
           categoria: 'inside',
           tipo_produto: 'select',
-          tipo_contrato: 'normal',
+          empresa_paga_parcelas: 'nao',
+          tipo_contrato: undefined,
           parcelas_pagas_empresa: 0,
           dia_vencimento: 10,
           origem: 'socio',
@@ -506,6 +552,18 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   };
 
   const onSubmit = async (data: FormData) => {
+    // Calculate parcelas_pagas_empresa based on empresa_paga_parcelas and tipo_contrato
+    let calculatedParcelas = 0;
+    if (data.empresa_paga_parcelas === 'sim') {
+      if (data.tipo_contrato === 'intercalado') {
+        // Intercalado: empresa paga as parcelas ímpares
+        calculatedParcelas = Math.ceil(data.prazo_meses / 2);
+      } else {
+        // Normal: empresa paga as primeiras N parcelas
+        calculatedParcelas = data.parcelas_pagas_empresa || 0;
+      }
+    }
+
     const input: CreateConsorcioCardInput = {
       tipo_pessoa: data.tipo_pessoa,
       categoria: data.categoria,
@@ -514,8 +572,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       valor_credito: data.valor_credito,
       prazo_meses: data.prazo_meses,
       tipo_produto: data.tipo_produto,
-      tipo_contrato: data.tipo_contrato,
-      parcelas_pagas_empresa: data.parcelas_pagas_empresa,
+      tipo_contrato: data.empresa_paga_parcelas === 'sim' ? (data.tipo_contrato || 'normal') : 'normal',
+      parcelas_pagas_empresa: calculatedParcelas,
       data_contratacao: formatDateForDB(data.data_contratacao),
       dia_vencimento: data.dia_vencimento,
       origem: data.origem,
@@ -710,10 +768,12 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                         <FormLabel>Valor do Crédito *</FormLabel>
                         <FormControl>
                           <Input
-                            type="number"
-                            {...field}
-                            onChange={e => field.onChange(Number(e.target.value))}
-                            placeholder="50000"
+                            value={formatMonetaryDisplay(field.value || 0)}
+                            onChange={e => {
+                              const rawValue = parseMonetaryInput(e.target.value);
+                              field.onChange(rawValue);
+                            }}
+                            placeholder="R$ 0,00"
                           />
                         </FormControl>
                         <FormMessage />
@@ -747,7 +807,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Tipo de Produto *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue />
@@ -758,47 +818,6 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                             <SelectItem value="parcelinha">Parcelinha</SelectItem>
                           </SelectContent>
                         </Select>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="tipo_contrato"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tipo de Contrato *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="normal">Normal</SelectItem>
-                            <SelectItem value="intercalado">Intercalado</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="parcelas_pagas_empresa"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Parcelas pagas pela empresa</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={e => field.onChange(Number(e.target.value))}
-                            placeholder="0"
-                          />
-                        </FormControl>
-                        <FormMessage />
                       </FormItem>
                     )}
                   />
@@ -822,6 +841,94 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     )}
                   />
                 </div>
+
+                {/* Parcelas pagas pela empresa */}
+                <FormField
+                  control={form.control}
+                  name="empresa_paga_parcelas"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Empresa paga parcelas? *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="nao">Não</SelectItem>
+                          <SelectItem value="sim">Sim</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+
+                {/* Campos condicionais quando empresa paga parcelas */}
+                {empresaPagaParcelas === 'sim' && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="tipo_contrato"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tipo de Contrato *</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="normal">Normal (primeiras parcelas)</SelectItem>
+                                <SelectItem value="intercalado">Intercalado (parcelas ímpares)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {tipoContrato === 'normal' && (
+                        <FormField
+                          control={form.control}
+                          name="parcelas_pagas_empresa"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Quantas parcelas a empresa paga?</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={prazoMeses}
+                                  {...field}
+                                  onChange={e => field.onChange(Number(e.target.value))}
+                                  value={field.value ?? 0}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+
+                    {/* Valor total calculado */}
+                    {tipoContrato && (
+                      <div className="p-3 bg-primary/10 rounded-md">
+                        <p className="text-sm text-muted-foreground">
+                          {tipoContrato === 'intercalado' 
+                            ? `Intercalado: empresa paga ${Math.ceil(prazoMeses / 2)} parcelas ímpares`
+                            : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`
+                          }
+                        </p>
+                        <p className="text-lg font-semibold text-primary mt-1">
+                          Valor total: {formatMonetaryDisplay(valorTotalParcelasEmpresa)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -909,7 +1016,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       <Select
                         onValueChange={(value) => {
                           field.onChange(value);
-                          const emp = employees?.find(e => e.id === value);
+                          const emp = consorcioEmployees.find(e => e.id === value);
                           form.setValue('vendedor_name', emp?.nome_completo || '');
                         }}
                         value={field.value}
@@ -920,13 +1027,24 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {employees?.map(emp => (
-                            <SelectItem key={emp.id} value={emp.id}>
-                              {emp.nome_completo}
-                            </SelectItem>
-                          ))}
+                          {consorcioEmployees.length > 0 ? (
+                            consorcioEmployees.map(emp => (
+                              <SelectItem key={emp.id} value={emp.id}>
+                                {emp.nome_completo}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="p-2 text-sm text-muted-foreground">
+                              Nenhum vendedor cadastrado para BU Consórcio
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
+                      {consorcioEmployees.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Cadastre colaboradores com departamento "BU - Consórcio" para aparecerem aqui.
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
