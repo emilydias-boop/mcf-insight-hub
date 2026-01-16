@@ -43,7 +43,13 @@ export function InstallmentsPaginated({
 }: InstallmentsPaginatedProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [filter, setFilter] = useState<FilterType>('todas');
-  const itemsPerPage = 12;
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+
+  const handleItemsPerPageChange = (value: string) => {
+    const newValue = value === 'all' ? filteredInstallments.length : Number(value);
+    setItemsPerPage(newValue);
+    setCurrentPage(1);
+  };
 
   // Filter installments
   const filteredInstallments = useMemo(() => {
@@ -108,7 +114,7 @@ export function InstallmentsPaginated({
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
           <Select value={filter} onValueChange={(v) => { setFilter(v as FilterType); setCurrentPage(1); }}>
-            <SelectTrigger className="w-36 h-8">
+            <SelectTrigger className="w-32 h-8">
               <SelectValue placeholder="Filtrar" />
             </SelectTrigger>
             <SelectContent>
@@ -118,6 +124,23 @@ export function InstallmentsPaginated({
               <SelectItem value="atrasado">Atrasadas</SelectItem>
             </SelectContent>
           </Select>
+          
+          <Select 
+            value={itemsPerPage >= filteredInstallments.length ? 'all' : String(itemsPerPage)} 
+            onValueChange={handleItemsPerPageChange}
+          >
+            <SelectTrigger className="w-28 h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="12">12 / pág</SelectItem>
+              <SelectItem value="24">24 / pág</SelectItem>
+              <SelectItem value="48">48 / pág</SelectItem>
+              <SelectItem value="100">100 / pág</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
+            </SelectContent>
+          </Select>
+          
           <Button variant="outline" size="sm" onClick={goToFirstPending}>
             Ir para pendente
           </Button>
@@ -231,9 +254,16 @@ export function InstallmentsPaginated({
           <ChevronLeft className="h-4 w-4" />
         </Button>
         
-        <span className="px-4 py-2 text-sm font-medium">
-          Página {currentPage} de {totalPages || 1}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="px-4 py-2 text-sm font-medium">
+            Página {currentPage} de {totalPages || 1}
+          </span>
+          {itemsPerPage === 12 && totalPages > 0 && (
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+              Ano {currentPage} de {totalPages}
+            </span>
+          )}
+        </div>
         
         <Button
           variant="outline"
