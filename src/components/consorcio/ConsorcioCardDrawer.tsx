@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { X, Phone, Mail, MapPin, User, Building2, CreditCard, Calendar, Check, Clock, AlertCircle, Trash2, Edit } from 'lucide-react';
+import { X, Phone, Mail, MapPin, User, Building2, CreditCard, Calendar, Trash2, Edit, RefreshCw, Wallet, FileText, Briefcase, Heart } from 'lucide-react';
 import {
   Drawer,
   DrawerContent,
@@ -15,14 +15,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,9 +28,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
-import { STATUS_OPTIONS, ConsorcioInstallment } from '@/types/consorcio';
+import { useRecalculateCommissions } from '@/hooks/useRecalculateCommissions';
+import { STATUS_OPTIONS, ESTADO_CIVIL_OPTIONS, ConsorcioInstallment } from '@/types/consorcio';
 import { calcularResumoComissoes } from '@/lib/commissionCalculator';
 import { ConsorcioCardForm } from './ConsorcioCardForm';
+import { InstallmentsPaginated } from './InstallmentsPaginated';
+import { GroupDetailsCard } from './GroupDetailsCard';
 
 interface ConsorcioCardDrawerProps {
   cardId: string | null;
@@ -62,11 +58,27 @@ function getInitials(name?: string): string {
     .toUpperCase();
 }
 
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '-';
+  try {
+    return format(new Date(dateStr), 'dd/MM/yyyy');
+  } catch {
+    return '-';
+  }
+}
+
+function getEstadoCivilLabel(value?: string | null): string {
+  if (!value) return '-';
+  const option = ESTADO_CIVIL_OPTIONS.find(o => o.value === value);
+  return option?.label || value;
+}
+
 export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCardDrawerProps) {
   const [editFormOpen, setEditFormOpen] = useState(false);
   const { data: card, isLoading } = useConsorcioCardDetails(cardId);
   const payInstallment = usePayInstallment();
   const deleteCard = useDeleteConsorcioCard();
+  const recalculateCommissions = useRecalculateCommissions();
 
   if (!cardId) return null;
 
@@ -84,6 +96,14 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
       )
     : { total: 0, recebida: 0, pendente: 0 };
 
+  // Calculate progress
+  const progressoParcelas = card?.installments 
+    ? (parcelasPagas.length / card.installments.length) * 100 
+    : 0;
+  const progressoComissao = resumoComissoes.total > 0 
+    ? (resumoComissoes.recebida / resumoComissoes.total) * 100 
+    : 0;
+
   const handlePayInstallment = async (installment: ConsorcioInstallment) => {
     await payInstallment.mutateAsync({
       installmentId: installment.id,
@@ -95,6 +115,12 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
     if (cardId) {
       await deleteCard.mutateAsync(cardId);
       onOpenChange(false);
+    }
+  };
+
+  const handleRecalculateCommissions = async () => {
+    if (cardId) {
+      await recalculateCommissions.mutateAsync(cardId);
     }
   };
 
@@ -122,6 +148,9 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                   {statusConfig && (
                     <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
                   )}
+                  <Badge variant="outline" className="capitalize">
+                    {card?.categoria || 'inside'}
+                  </Badge>
                 </div>
               </div>
             </div>
@@ -141,10 +170,21 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
               {/* Resumo Financeiro */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Resumo Financeiro
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <CreditCard className="h-5 w-5" />
+                      Resumo Financeiro
+                    </CardTitle>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={handleRecalculateCommissions}
+                      disabled={recalculateCommissions.isPending}
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${recalculateCommissions.isPending ? 'animate-spin' : ''}`} />
+                      Recalcular
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-4 gap-4">
@@ -165,8 +205,29 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                       <p className="text-xl font-bold text-orange-600">{formatCurrency(resumoComissoes.pendente)}</p>
                     </div>
                   </div>
+                  
+                  {/* Progress bars */}
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">Parcelas pagas</span>
+                        <span className="font-medium">{parcelasPagas.length} de {card.installments?.length || 0}</span>
+                      </div>
+                      <Progress value={progressoParcelas} className="h-2" />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">Comissão recebida</span>
+                        <span className="font-medium">{progressoComissao.toFixed(1)}%</span>
+                      </div>
+                      <Progress value={progressoComissao} className="h-2" />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
+
+              {/* Detalhes do Grupo */}
+              <GroupDetailsCard grupo={card.grupo} dataContratacao={card.data_contratacao} />
 
               <Tabs defaultValue="parcelas">
                 <TabsList className="w-full">
@@ -177,74 +238,11 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
                 {/* Tab: Parcelas */}
                 <TabsContent value="parcelas" className="mt-4">
-                  <Card>
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-16">#</TableHead>
-                            <TableHead>Tipo</TableHead>
-                            <TableHead>Vencimento</TableHead>
-                            <TableHead className="text-right">Valor</TableHead>
-                            <TableHead className="text-right">Comissão</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="w-24">Ação</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {card.installments?.map((installment) => (
-                            <TableRow key={installment.id}>
-                              <TableCell className="font-medium">{installment.numero_parcela}</TableCell>
-                              <TableCell>
-                                <Badge variant={installment.tipo === 'empresa' ? 'default' : 'secondary'}>
-                                  {installment.tipo === 'empresa' ? 'Empresa' : 'Cliente'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {format(new Date(installment.data_vencimento), 'dd/MM/yyyy')}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(Number(installment.valor_parcela))}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(Number(installment.valor_comissao))}
-                              </TableCell>
-                              <TableCell>
-                                {installment.status === 'pago' ? (
-                                  <Badge className="bg-green-500">
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Pago
-                                  </Badge>
-                                ) : installment.status === 'atrasado' ? (
-                                  <Badge variant="destructive">
-                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                    Atrasado
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline">
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    Pendente
-                                  </Badge>
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {installment.status !== 'pago' && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handlePayInstallment(installment)}
-                                    disabled={payInstallment.isPending}
-                                  >
-                                    Pagar
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
+                  <InstallmentsPaginated
+                    installments={card.installments || []}
+                    onPayInstallment={handlePayInstallment}
+                    isPaying={payInstallment.isPending}
+                  />
                 </TabsContent>
 
                 {/* Tab: Dados do Cliente */}
@@ -253,128 +251,244 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                     <CardContent className="pt-6">
                       {card.tipo_pessoa === 'pf' ? (
                         <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex items-center gap-2">
-                              <User className="h-4 w-4 text-muted-foreground" />
+                          {/* Dados Pessoais */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              Dados Pessoais
+                            </h4>
+                            <div className="grid grid-cols-3 gap-4">
                               <div>
-                                <p className="text-sm text-muted-foreground">Nome</p>
+                                <p className="text-sm text-muted-foreground">Nome Completo</p>
                                 <p className="font-medium">{card.nome_completo || '-'}</p>
                               </div>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">CPF</p>
-                              <p className="font-medium">{card.cpf || '-'}</p>
+                              <div>
+                                <p className="text-sm text-muted-foreground">CPF</p>
+                                <p className="font-medium">{card.cpf || '-'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">RG</p>
+                                <p className="font-medium">{card.rg || '-'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Data de Nascimento</p>
+                                <p className="font-medium">{formatDate(card.data_nascimento)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Estado Civil</p>
+                                <p className="font-medium">{getEstadoCivilLabel(card.estado_civil)}</p>
+                              </div>
+                              {(card.estado_civil === 'casado' || card.estado_civil === 'uniao_estavel') && (
+                                <div>
+                                  <p className="text-sm text-muted-foreground">CPF do Cônjuge</p>
+                                  <p className="font-medium">{card.cpf_conjuge || '-'}</p>
+                                </div>
+                              )}
                             </div>
                           </div>
 
                           <Separator />
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="text-sm text-muted-foreground">Telefone</p>
-                                <p className="font-medium">{card.telefone || '-'}</p>
+                          {/* Contato */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <Phone className="h-4 w-4" />
+                              Contato
+                            </h4>
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Telefone</p>
+                                  <p className="font-medium">{card.telefone || '-'}</p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="text-sm text-muted-foreground">Email</p>
-                                <p className="font-medium">{card.email || '-'}</p>
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Email</p>
+                                  <p className="font-medium">{card.email || '-'}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Wallet className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">PIX</p>
+                                  <p className="font-medium">{card.pix || '-'}</p>
+                                </div>
                               </div>
                             </div>
                           </div>
 
                           <Separator />
 
-                          <div className="flex items-start gap-2">
-                            <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
-                            <div>
-                              <p className="text-sm text-muted-foreground">Endereço</p>
-                              <p className="font-medium">
-                                {card.endereco_rua ? (
-                                  <>
+                          {/* Endereço */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              Endereço
+                            </h4>
+                            <div className="bg-muted/50 p-3 rounded-lg">
+                              {card.endereco_rua ? (
+                                <>
+                                  <p className="font-medium">
                                     {card.endereco_rua}, {card.endereco_numero}
                                     {card.endereco_complemento && ` - ${card.endereco_complemento}`}
-                                    <br />
+                                  </p>
+                                  <p className="text-muted-foreground">
                                     {card.endereco_bairro} - {card.endereco_cidade}/{card.endereco_estado}
-                                    <br />
-                                    CEP: {card.endereco_cep}
-                                  </>
-                                ) : '-'}
-                              </p>
+                                  </p>
+                                  <p className="text-muted-foreground">CEP: {card.endereco_cep}</p>
+                                </>
+                              ) : (
+                                <p className="text-muted-foreground">Endereço não informado</p>
+                              )}
                             </div>
                           </div>
 
                           <Separator />
 
-                          <div className="grid grid-cols-3 gap-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Profissão</p>
-                              <p className="font-medium">{card.profissao || '-'}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Renda</p>
-                              <p className="font-medium">
-                                {card.renda ? formatCurrency(Number(card.renda)) : '-'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Patrimônio</p>
-                              <p className="font-medium">
-                                {card.patrimonio ? formatCurrency(Number(card.patrimonio)) : '-'}
-                              </p>
+                          {/* Profissão e Renda */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <Briefcase className="h-4 w-4" />
+                              Profissão e Renda
+                            </h4>
+                            <div className="grid grid-cols-4 gap-4">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Profissão</p>
+                                <p className="font-medium">{card.profissao || '-'}</p>
+                              </div>
+                              {card.profissao === 'servidor_publico' && (
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Tipo de Servidor</p>
+                                  <p className="font-medium capitalize">{card.tipo_servidor || '-'}</p>
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-sm text-muted-foreground">Renda</p>
+                                <p className="font-medium">
+                                  {card.renda ? formatCurrency(Number(card.renda)) : '-'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Patrimônio</p>
+                                <p className="font-medium">
+                                  {card.patrimonio ? formatCurrency(Number(card.patrimonio)) : '-'}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                          {/* Dados da Empresa */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <Building2 className="h-4 w-4" />
+                              Dados da Empresa
+                            </h4>
+                            <div className="grid grid-cols-3 gap-4">
                               <div>
                                 <p className="text-sm text-muted-foreground">Razão Social</p>
                                 <p className="font-medium">{card.razao_social || '-'}</p>
                               </div>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">CNPJ</p>
-                              <p className="font-medium">{card.cnpj || '-'}</p>
-                            </div>
-                          </div>
-
-                          <Separator />
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4 text-muted-foreground" />
                               <div>
-                                <p className="text-sm text-muted-foreground">Telefone Comercial</p>
-                                <p className="font-medium">{card.telefone_comercial || '-'}</p>
+                                <p className="text-sm text-muted-foreground">CNPJ</p>
+                                <p className="font-medium">{card.cnpj || '-'}</p>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4 text-muted-foreground" />
                               <div>
-                                <p className="text-sm text-muted-foreground">Email Comercial</p>
-                                <p className="font-medium">{card.email_comercial || '-'}</p>
+                                <p className="text-sm text-muted-foreground">Inscrição Estadual</p>
+                                <p className="font-medium">{card.inscricao_estadual || '-'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Natureza Jurídica</p>
+                                <p className="font-medium">{card.natureza_juridica || '-'}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Data de Fundação</p>
+                                <p className="font-medium">{formatDate(card.data_fundacao)}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Nº de Funcionários</p>
+                                <p className="font-medium">{card.num_funcionarios || '-'}</p>
                               </div>
                             </div>
                           </div>
 
                           <Separator />
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Faturamento Mensal</p>
-                              <p className="font-medium">
-                                {card.faturamento_mensal ? formatCurrency(Number(card.faturamento_mensal)) : '-'}
-                              </p>
+                          {/* Contato Comercial */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <Phone className="h-4 w-4" />
+                              Contato Comercial
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Telefone</p>
+                                  <p className="font-medium">{card.telefone_comercial || '-'}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm text-muted-foreground">Email</p>
+                                  <p className="font-medium">{card.email_comercial || '-'}</p>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Funcionários</p>
-                              <p className="font-medium">{card.num_funcionarios || '-'}</p>
+                          </div>
+
+                          <Separator />
+
+                          {/* Endereço Comercial */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              Endereço Comercial
+                            </h4>
+                            <div className="bg-muted/50 p-3 rounded-lg">
+                              {card.endereco_comercial_rua ? (
+                                <>
+                                  <p className="font-medium">
+                                    {card.endereco_comercial_rua}, {card.endereco_comercial_numero}
+                                    {card.endereco_comercial_complemento && ` - ${card.endereco_comercial_complemento}`}
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    {card.endereco_comercial_bairro} - {card.endereco_comercial_cidade}/{card.endereco_comercial_estado}
+                                  </p>
+                                  <p className="text-muted-foreground">CEP: {card.endereco_comercial_cep}</p>
+                                </>
+                              ) : (
+                                <p className="text-muted-foreground">Endereço comercial não informado</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* Financeiro */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                              <Wallet className="h-4 w-4" />
+                              Informações Financeiras
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Faturamento Mensal</p>
+                                <p className="font-medium">
+                                  {card.faturamento_mensal ? formatCurrency(Number(card.faturamento_mensal)) : '-'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-muted-foreground">Patrimônio</p>
+                                <p className="font-medium">
+                                  {card.patrimonio ? formatCurrency(Number(card.patrimonio)) : '-'}
+                                </p>
+                              </div>
                             </div>
                           </div>
 
@@ -382,17 +496,27 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                             <>
                               <Separator />
                               <div>
-                                <p className="text-sm text-muted-foreground mb-2">Sócios</p>
+                                <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                                  <User className="h-4 w-4" />
+                                  Sócios
+                                </h4>
                                 <div className="space-y-2">
                                   {card.partners.map((partner, idx) => (
-                                    <div key={partner.id} className="flex items-center gap-4 p-2 bg-muted/50 rounded">
-                                      <span className="font-medium">{idx + 1}.</span>
-                                      <span>{partner.nome}</span>
-                                      <span className="text-muted-foreground">CPF: {partner.cpf}</span>
+                                    <div key={partner.id} className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarFallback className="text-xs">
+                                          {getInitials(partner.nome)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div className="flex-1">
+                                        <p className="font-medium">{partner.nome}</p>
+                                        <p className="text-sm text-muted-foreground">CPF: {partner.cpf}</p>
+                                      </div>
                                       {partner.renda && (
-                                        <span className="text-muted-foreground">
-                                          Renda: {formatCurrency(Number(partner.renda))}
-                                        </span>
+                                        <div className="text-right">
+                                          <p className="text-sm text-muted-foreground">Renda</p>
+                                          <p className="font-medium">{formatCurrency(Number(partner.renda))}</p>
+                                        </div>
                                       )}
                                     </div>
                                   ))}
@@ -414,9 +538,14 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                         <div className="space-y-2">
                           {card.documents.map((doc) => (
                             <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-                              <div>
-                                <p className="font-medium">{doc.nome_arquivo}</p>
-                                <p className="text-sm text-muted-foreground capitalize">{doc.tipo}</p>
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-muted">
+                                  <FileText className="h-5 w-5 text-muted-foreground" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">{doc.nome_arquivo}</p>
+                                  <p className="text-sm text-muted-foreground capitalize">{doc.tipo}</p>
+                                </div>
                               </div>
                               <Button variant="outline" size="sm">
                                 Visualizar
@@ -446,9 +575,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                   <div className="grid grid-cols-4 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Data Contratação</p>
-                      <p className="font-medium">
-                        {format(new Date(card.data_contratacao), 'dd/MM/yyyy')}
-                      </p>
+                      <p className="font-medium">{formatDate(card.data_contratacao)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Prazo</p>
@@ -463,10 +590,23 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                       <p className="font-medium capitalize">{card.tipo_contrato}</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4 mt-4">
+                  <div className="grid grid-cols-4 gap-4 mt-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Categoria</p>
+                      <Badge variant="outline" className="mt-1 capitalize">
+                        {card.categoria === 'life' ? (
+                          <><Heart className="h-3 w-3 mr-1" /> Life</>
+                        ) : (
+                          <><Briefcase className="h-3 w-3 mr-1" /> Inside</>
+                        )}
+                      </Badge>
+                    </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Origem</p>
                       <p className="font-medium capitalize">{card.origem}</p>
+                      {card.origem_detalhe && (
+                        <p className="text-xs text-muted-foreground">{card.origem_detalhe}</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Vendedor</p>
@@ -477,6 +617,12 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                       <p className="font-medium">Dia {card.dia_vencimento}</p>
                     </div>
                   </div>
+                  {card.parcelas_pagas_empresa > 0 && (
+                    <div className="mt-4 p-3 bg-primary/5 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Parcelas pagas pela empresa</p>
+                      <p className="font-medium text-primary">{card.parcelas_pagas_empresa} primeiras parcelas</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
