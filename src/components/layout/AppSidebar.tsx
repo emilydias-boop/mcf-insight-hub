@@ -130,7 +130,6 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "manager", "coordenador"],
     requiredProducts: ["consorcio"],
     items: [
-      { title: "Controle de Cartas", url: "/consorcio/controle-cartas" },
       { title: "Fechamento", url: "/consorcio/fechamento" },
       { title: "Relatório", url: "/consorcio/relatorio" },
       { title: "CRM", url: "/consorcio/crm" },

@@ -81,7 +81,6 @@ import CreditoSocios from "./pages/bu-credito/Socios";
 import CreditoClientes from "./pages/bu-credito/Clientes";
 
 // BU Consórcio - Páginas Unificadas
-import ConsorcioControleCartas from "./pages/bu-consorcio/ControleCartas";
 import ConsorcioFechamento from "./pages/bu-consorcio/Fechamento";
 import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
 import ConsorcioCRM from "./pages/bu-consorcio/CRM";
@@ -137,7 +136,6 @@ const App = () => (
               {/* BU Consórcio Routes - Unificado */}
               <Route path="consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'sdr', 'closer', 'coordenador']}><ConsorcioIndex /></RoleGuard>} />
               <Route path="consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioImportar /></RoleGuard>} />
-              <Route path="consorcio/controle-cartas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioControleCartas /></RoleGuard>} />
               <Route path="consorcio/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamento /></RoleGuard>} />
               <Route path="consorcio/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioRelatorio /></RoleGuard>} />
               <Route path="consorcio/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioCRM /></RoleGuard>} />
