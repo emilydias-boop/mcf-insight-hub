@@ -680,16 +680,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   };
 
   const onSubmit = async (data: FormData) => {
-    // Calculate parcelas_pagas_empresa based on empresa_paga_parcelas and tipo_contrato
+    // Calculate parcelas_pagas_empresa based on empresa_paga_parcelas
     let calculatedParcelas = 0;
     if (data.empresa_paga_parcelas === 'sim') {
-      if (data.tipo_contrato === 'intercalado') {
-        // Intercalado: empresa paga as parcelas ímpares
-        calculatedParcelas = Math.ceil(data.prazo_meses / 2);
-      } else {
-        // Normal: empresa paga as primeiras N parcelas
-        calculatedParcelas = data.parcelas_pagas_empresa || 0;
-      }
+      // Para ambos os modos (normal e intercalado), usar o valor digitado pelo usuário
+      calculatedParcelas = data.parcelas_pagas_empresa || 0;
     }
 
     const input: CreateConsorcioCardInput = {
@@ -1126,10 +1121,10 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     {tipoContrato && (
                       <div className="p-3 bg-primary/10 rounded-md">
                         <p className="text-sm text-muted-foreground">
-                          {tipoContrato === 'intercalado' 
-                            ? `Intercalado: empresa paga ${parcelasPagasEmpresa} parcelas pares`
-                            : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`
-                          }
+                      {tipoContrato === 'intercalado' 
+                        ? `Intercalado: empresa paga as parcelas 2, 4, 6...${parcelasPagasEmpresa * 2} (${parcelasPagasEmpresa} parcelas pares)`
+                        : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`
+                      }
                         </p>
                         <p className="text-lg font-semibold text-primary mt-1">
                           Valor total: {formatMonetaryDisplay(valorTotalParcelasEmpresa)}
