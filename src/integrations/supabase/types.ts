@@ -1099,6 +1099,7 @@ export type Database = {
           cpf: string | null
           cpf_conjuge: string | null
           created_at: string
+          data_contemplacao: string | null
           data_contratacao: string
           data_fundacao: string | null
           data_nascimento: string | null
@@ -1124,13 +1125,16 @@ export type Database = {
           grupo: string
           id: string
           inscricao_estadual: string | null
+          motivo_contemplacao: string | null
           natureza_juridica: string | null
           nome_completo: string | null
           num_funcionarios: number | null
+          numero_contemplacao: string | null
           origem: string
           origem_detalhe: string | null
           parcelas_pagas_empresa: number
           patrimonio: number | null
+          percentual_lance: number | null
           pix: string | null
           prazo_meses: number
           profissao: string | null
@@ -1146,6 +1150,7 @@ export type Database = {
           tipo_servidor: string | null
           updated_at: string
           valor_credito: number
+          valor_lance: number | null
           vendedor_id: string | null
           vendedor_name: string | null
         }
@@ -1156,6 +1161,7 @@ export type Database = {
           cpf?: string | null
           cpf_conjuge?: string | null
           created_at?: string
+          data_contemplacao?: string | null
           data_contratacao: string
           data_fundacao?: string | null
           data_nascimento?: string | null
@@ -1181,13 +1187,16 @@ export type Database = {
           grupo: string
           id?: string
           inscricao_estadual?: string | null
+          motivo_contemplacao?: string | null
           natureza_juridica?: string | null
           nome_completo?: string | null
           num_funcionarios?: number | null
+          numero_contemplacao?: string | null
           origem: string
           origem_detalhe?: string | null
           parcelas_pagas_empresa?: number
           patrimonio?: number | null
+          percentual_lance?: number | null
           pix?: string | null
           prazo_meses: number
           profissao?: string | null
@@ -1203,6 +1212,7 @@ export type Database = {
           tipo_servidor?: string | null
           updated_at?: string
           valor_credito: number
+          valor_lance?: number | null
           vendedor_id?: string | null
           vendedor_name?: string | null
         }
@@ -1213,6 +1223,7 @@ export type Database = {
           cpf?: string | null
           cpf_conjuge?: string | null
           created_at?: string
+          data_contemplacao?: string | null
           data_contratacao?: string
           data_fundacao?: string | null
           data_nascimento?: string | null
@@ -1238,13 +1249,16 @@ export type Database = {
           grupo?: string
           id?: string
           inscricao_estadual?: string | null
+          motivo_contemplacao?: string | null
           natureza_juridica?: string | null
           nome_completo?: string | null
           num_funcionarios?: number | null
+          numero_contemplacao?: string | null
           origem?: string
           origem_detalhe?: string | null
           parcelas_pagas_empresa?: number
           patrimonio?: number | null
+          percentual_lance?: number | null
           pix?: string | null
           prazo_meses?: number
           profissao?: string | null
@@ -1260,6 +1274,7 @@ export type Database = {
           tipo_servidor?: string | null
           updated_at?: string
           valor_credito?: number
+          valor_lance?: number | null
           vendedor_id?: string | null
           vendedor_name?: string | null
         }

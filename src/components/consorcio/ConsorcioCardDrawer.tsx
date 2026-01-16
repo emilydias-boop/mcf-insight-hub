@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -37,13 +37,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard } from "@/hooks/useConsorcio";
+import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard, useUpdateCardStatus } from "@/hooks/useConsorcio";
 import { useRecalculateCommissions } from "@/hooks/useRecalculateCommissions";
-import { STATUS_OPTIONS, ESTADO_CIVIL_OPTIONS, ConsorcioInstallment } from "@/types/consorcio";
+import { STATUS_OPTIONS, ESTADO_CIVIL_OPTIONS, ConsorcioInstallment, ConsorcioStatus, MotivoContemplacao } from "@/types/consorcio";
 import { calcularResumoComissoes } from "@/lib/commissionCalculator";
+import { verificarRiscoCancelamento, deveSerCancelado } from "@/lib/inadimplenciaUtils";
 import { ConsorcioCardForm } from "./ConsorcioCardForm";
 import { InstallmentsPaginated } from "./InstallmentsPaginated";
 import { GroupDetailsCard } from "./GroupDetailsCard";
+import { InadimplenciaAlert } from "./InadimplenciaAlert";
+import { ContemplationCard } from "./ContemplationCard";
+import { StatusEditDropdown } from "./StatusEditDropdown";
 
 interface ConsorcioCardDrawerProps {
   cardId: string | null;
@@ -89,6 +93,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   const payInstallment = usePayInstallment();
   const deleteCard = useDeleteConsorcioCard();
   const recalculateCommissions = useRecalculateCommissions();
+  const updateCardStatus = useUpdateCardStatus();
 
   if (!cardId) return null;
 
@@ -103,6 +108,17 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
   // Calculate progress
   const progressoParcelas = card?.installments ? (parcelasPagas.length / card.installments.length) * 100 : 0;
   const progressoComissao = resumoComissoes.total > 0 ? (resumoComissoes.recebida / resumoComissoes.total) * 100 : 0;
+
+  // Check inadimplência
+  const inadimplenciaInfo = card?.installments ? verificarRiscoCancelamento(card.installments) : null;
+  const deveCancelar = card?.installments ? deveSerCancelado(card.installments) : false;
+
+  // Auto-cancel if 4+ overdue and still active
+  useEffect(() => {
+    if (card && deveCancelar && card.status === 'ativo') {
+      updateCardStatus.mutate({ cardId: card.id, status: 'cancelado' });
+    }
+  }, [card, deveCancelar]);
 
   const handlePayInstallment = async (installment: ConsorcioInstallment) => {
     await payInstallment.mutateAsync({
@@ -124,6 +140,28 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
     }
   };
 
+  const handleStatusChange = async (newStatus: ConsorcioStatus) => {
+    if (cardId) {
+      await updateCardStatus.mutateAsync({ cardId, status: newStatus });
+    }
+  };
+
+  const handleContemplar = async (data: {
+    numeroContemplacao: string;
+    dataContemplacao: string;
+    motivoContemplacao: MotivoContemplacao;
+    valorLance?: number;
+    percentualLance?: number;
+  }) => {
+    if (cardId) {
+      await updateCardStatus.mutateAsync({
+        cardId,
+        status: 'contemplado',
+        ...data,
+      });
+    }
+  };
+
   const displayName = card?.tipo_pessoa === "pf" ? card?.nome_completo : card?.razao_social;
 
   return (
@@ -134,18 +172,24 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
             <Avatar className="h-14 w-14">
               <AvatarFallback className="text-lg bg-primary/10">{getInitials(displayName)}</AvatarFallback>
             </Avatar>
-            <div>
+            <div className="flex-1">
               <SheetTitle className="text-xl text-left">{displayName || "Sem nome"}</SheetTitle>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-muted-foreground">
                   Grupo {card?.grupo} - Cota {card?.cota}
                 </span>
-                {statusConfig && <Badge className={statusConfig.color}>{statusConfig.label}</Badge>}
                 <Badge variant="outline" className="capitalize">
                   {card?.categoria || "inside"}
                 </Badge>
               </div>
             </div>
+            {card && (
+              <StatusEditDropdown
+                currentStatus={card.status as ConsorcioStatus}
+                onStatusChange={handleStatusChange}
+                isLoading={updateCardStatus.isPending}
+              />
+            )}
           </div>
         </SheetHeader>
 
@@ -158,6 +202,18 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                 </div>
               ) : card ? (
                 <div className="space-y-6">
+                  {/* Alerta de Inadimplência */}
+                  {inadimplenciaInfo && inadimplenciaInfo.risco !== 'baixo' && (
+                    <InadimplenciaAlert 
+                      info={inadimplenciaInfo}
+                      onRegularizar={() => {
+                        // Scroll to parcelas tab
+                        const parcelasTab = document.querySelector('[value="parcelas"]');
+                        if (parcelasTab instanceof HTMLElement) parcelasTab.click();
+                      }}
+                    />
+                  )}
+
                   {/* Resumo Financeiro */}
                   <Card>
                     <CardHeader className="pb-2">
@@ -225,6 +281,17 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
 
                   {/* Detalhes do Grupo */}
                   <GroupDetailsCard grupo={card.grupo} dataContratacao={card.data_contratacao} />
+
+                  {/* Card de Contemplação */}
+                  <ContemplationCard
+                    cota={card.cota}
+                    valorCredito={Number(card.valor_credito)}
+                    status={card.status}
+                    numeroContemplacao={card.numero_contemplacao}
+                    dataContemplacao={card.data_contemplacao}
+                    motivoContemplacao={card.motivo_contemplacao}
+                    onContemplar={handleContemplar}
+                  />
 
                   <Tabs defaultValue="parcelas">
                     <TabsList className="w-full">

@@ -1,0 +1,134 @@
+export type MotivoContemplacao = 'sorteio' | 'lance' | 'lance_fixo';
+
+export interface ResultadoVerificacaoLoteria {
+  contemplado: boolean;
+  distancia: number;
+  mensagem: string;
+}
+
+export interface SimulacaoLance {
+  percentualLance: number;
+  posicaoEstimada: number;
+  chanceContemplacao: 'baixa' | 'media' | 'alta' | 'muito_alta';
+  mensagem: string;
+}
+
+/**
+ * Extrai os últimos 4 dígitos de um número de cota
+ */
+export function extrairUltimos4Digitos(numero: string): string {
+  const apenasNumeros = numero.replace(/\D/g, '');
+  return apenasNumeros.slice(-4).padStart(4, '0');
+}
+
+/**
+ * Verifica se a cota foi contemplada pelo sorteio da loteria federal
+ * Compara os últimos 4 dígitos da cota com o resultado da loteria
+ */
+export function verificarContemplacao(cota: string, resultadoLoteria: string): ResultadoVerificacaoLoteria {
+  const ultimosCota = extrairUltimos4Digitos(cota);
+  const ultimosLoteria = extrairUltimos4Digitos(resultadoLoteria);
+  
+  const contemplado = ultimosCota === ultimosLoteria;
+  const distancia = calcularDistanciaNumeros(ultimosCota, ultimosLoteria);
+  
+  let mensagem: string;
+  if (contemplado) {
+    mensagem = '🎉 CONTEMPLADO! Os números coincidem!';
+  } else if (distancia <= 10) {
+    mensagem = `Muito próximo! Diferença de apenas ${distancia}`;
+  } else if (distancia <= 100) {
+    mensagem = `Próximo. Diferença de ${distancia}`;
+  } else if (distancia <= 500) {
+    mensagem = `Razoável. Diferença de ${distancia}`;
+  } else {
+    mensagem = `Não contemplado. Diferença de ${distancia}`;
+  }
+  
+  return {
+    contemplado,
+    distancia,
+    mensagem,
+  };
+}
+
+/**
+ * Calcula a distância numérica entre dois números de 4 dígitos
+ */
+export function calcularDistanciaNumeros(numero1: string, numero2: string): number {
+  const n1 = parseInt(numero1, 10);
+  const n2 = parseInt(numero2, 10);
+  return Math.abs(n1 - n2);
+}
+
+/**
+ * Simula a chance de contemplação por lance baseado no percentual oferecido
+ * Usa faixas típicas de mercado para estimar posição e chance
+ */
+export function simularChanceLance(
+  valorCredito: number,
+  percentualLance: number
+): SimulacaoLance {
+  const valorLance = (valorCredito * percentualLance) / 100;
+  
+  // Faixas típicas de mercado (podem ser ajustadas com dados reais)
+  let chanceContemplacao: SimulacaoLance['chanceContemplacao'];
+  let posicaoEstimada: number;
+  let mensagem: string;
+  
+  if (percentualLance < 15) {
+    chanceContemplacao = 'baixa';
+    posicaoEstimada = Math.floor(Math.random() * 30) + 20; // Posição 20-50
+    mensagem = `Lance de ${percentualLance}% (${formatCurrency(valorLance)}) tem baixa chance. Considere aumentar para 20%+.`;
+  } else if (percentualLance < 25) {
+    chanceContemplacao = 'media';
+    posicaoEstimada = Math.floor(Math.random() * 15) + 10; // Posição 10-25
+    mensagem = `Lance de ${percentualLance}% (${formatCurrency(valorLance)}) tem chance média. Pode contemplar em grupos menores.`;
+  } else if (percentualLance < 35) {
+    chanceContemplacao = 'alta';
+    posicaoEstimada = Math.floor(Math.random() * 8) + 3; // Posição 3-11
+    mensagem = `Lance de ${percentualLance}% (${formatCurrency(valorLance)}) tem boa chance! Competitivo na maioria dos grupos.`;
+  } else {
+    chanceContemplacao = 'muito_alta';
+    posicaoEstimada = Math.floor(Math.random() * 3) + 1; // Posição 1-3
+    mensagem = `Lance de ${percentualLance}% (${formatCurrency(valorLance)}) tem excelente chance! Provavelmente estará entre os primeiros.`;
+  }
+  
+  return {
+    percentualLance,
+    posicaoEstimada,
+    chanceContemplacao,
+    mensagem,
+  };
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+}
+
+/**
+ * Retorna a cor do badge baseado na chance de contemplação
+ */
+export function getCorChanceLance(chance: SimulacaoLance['chanceContemplacao']): string {
+  switch (chance) {
+    case 'baixa':
+      return 'bg-red-100 text-red-800';
+    case 'media':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'alta':
+      return 'bg-green-100 text-green-800';
+    case 'muito_alta':
+      return 'bg-emerald-100 text-emerald-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
+
+export const MOTIVO_CONTEMPLACAO_OPTIONS = [
+  { value: 'sorteio', label: 'Sorteio Loteria Federal' },
+  { value: 'lance', label: 'Lance Livre' },
+  { value: 'lance_fixo', label: 'Lance Fixo' },
+] as const;

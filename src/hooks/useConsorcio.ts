@@ -298,6 +298,65 @@ export function useDeleteConsorcioCard() {
   });
 }
 
+export function useUpdateCardStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      cardId, 
+      status,
+      numeroContemplacao,
+      dataContemplacao,
+      motivoContemplacao,
+      valorLance,
+      percentualLance,
+    }: { 
+      cardId: string; 
+      status: string;
+      numeroContemplacao?: string;
+      dataContemplacao?: string;
+      motivoContemplacao?: string;
+      valorLance?: number;
+      percentualLance?: number;
+    }) => {
+      const updateData: Record<string, unknown> = { status };
+      
+      if (numeroContemplacao !== undefined) {
+        updateData.numero_contemplacao = numeroContemplacao;
+      }
+      if (dataContemplacao !== undefined) {
+        updateData.data_contemplacao = dataContemplacao;
+      }
+      if (motivoContemplacao !== undefined) {
+        updateData.motivo_contemplacao = motivoContemplacao;
+      }
+      if (valorLance !== undefined) {
+        updateData.valor_lance = valorLance;
+      }
+      if (percentualLance !== undefined) {
+        updateData.percentual_lance = percentualLance;
+      }
+
+      const { error } = await supabase
+        .from('consortium_cards')
+        .update(updateData)
+        .eq('id', cardId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['consortium-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-card-details', variables.cardId] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
+      toast.success('Status atualizado com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao atualizar status:', error);
+      toast.error('Erro ao atualizar status');
+    },
+  });
+}
+
 export function usePayInstallment() {
   const queryClient = useQueryClient();
 
