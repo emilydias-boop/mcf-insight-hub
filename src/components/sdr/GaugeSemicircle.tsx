@@ -29,16 +29,16 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
         {titulo}
       </div>
       <div className="relative w-full">
-        <ResponsiveContainer width="100%" height={55} className="sm:!h-[75px]">
+        <ResponsiveContainer width="100%" height={50} className="sm:!h-[70px]">
           <PieChart>
             <Pie
               data={data}
               cx="50%"
-              cy="80%"
+              cy="100%"
               startAngle={180}
               endAngle={0}
-              innerRadius="55%"
-              outerRadius="85%"
+              innerRadius="50%"
+              outerRadius="90%"
               dataKey="value"
               stroke="none"
             >
@@ -47,15 +47,13 @@ export function GaugeSemicircle({ titulo, valor, meta, leadType }: GaugeSemicirc
             </Pie>
           </PieChart>
         </ResponsiveContainer>
-        {/* Valor/Meta centralizado no arco */}
-        <div className="absolute inset-0 flex items-center justify-center" style={{ top: '25%' }}>
-          <span className="text-xs sm:text-base font-bold" style={{ color }}>
-            {valor} / {meta}
-          </span>
-        </div>
       </div>
-      {/* Porcentagem abaixo com fonte maior */}
-      <div className="text-base sm:text-xl font-bold -mt-1" style={{ color }}>
+      {/* Valor/Meta abaixo do arco */}
+      <div className="text-[10px] sm:text-sm font-bold -mt-2" style={{ color }}>
+        {valor} / {meta}
+      </div>
+      {/* Porcentagem abaixo */}
+      <div className="text-sm sm:text-lg font-bold" style={{ color }}>
         {percentual.toFixed(0)}%
       </div>
     </div>
