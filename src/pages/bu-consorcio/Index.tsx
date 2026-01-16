@@ -10,7 +10,8 @@ import {
   Filter,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +37,9 @@ import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '
 import { useEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
+import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
 import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import {
   AlertDialog,
@@ -119,9 +122,13 @@ export default function ConsorcioPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<ConsorcioCard | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [configOpen, setConfigOpen] = useState(false);
   const ITEMS_PER_PAGE = 10;
 
   const { data: employees } = useEmployees();
+  const { data: tipoOptions = [] } = useConsorcioTipoOptions();
+  const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
+  const { data: origemOptions = [] } = useConsorcioOrigemOptions();
 
   // Calculate date range based on period
   const now = new Date();
@@ -253,6 +260,9 @@ export default function ConsorcioPage() {
               </SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" size="icon" onClick={() => setConfigOpen(true)}>
+            <Settings className="h-4 w-4" />
+          </Button>
           <Button onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Adicionar Cota
@@ -386,8 +396,9 @@ export default function ConsorcioPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="select">Select</SelectItem>
-            <SelectItem value="parcelinha">Parcelinha</SelectItem>
+            {tipoOptions.map(opt => (
+              <SelectItem key={opt.id} value={opt.name}>{opt.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -478,10 +489,11 @@ export default function ConsorcioPage() {
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const categoriaConfig = CATEGORIA_OPTIONS.find(c => c.value === card.categoria);
+                          const categoriaConfig = categoriaOptions.find(c => c.name === card.categoria) 
+                            || CATEGORIA_OPTIONS.find(c => c.value === card.categoria);
                           return categoriaConfig ? (
-                            <Badge className={`${categoriaConfig.color} text-white`}>
-                              {card.categoria === 'inside' ? 'Inside' : 'Life'}
+                            <Badge style={{ backgroundColor: 'color' in categoriaConfig ? categoriaConfig.color : undefined }} className="text-white">
+                              {categoriaConfig.label}
                             </Badge>
                           ) : (
                           <span className="text-muted-foreground">-</span>
@@ -490,7 +502,8 @@ export default function ConsorcioPage() {
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const origemConfig = ORIGEM_OPTIONS.find(o => o.value === card.origem);
+                          const origemConfig = origemOptions.find(o => o.name === card.origem) 
+                            || ORIGEM_OPTIONS.find(o => o.value === card.origem);
                           return origemConfig ? (
                             <span className="text-sm">{origemConfig.label}</span>
                           ) : (
@@ -634,6 +647,12 @@ export default function ConsorcioPage() {
         cardId={selectedCardId} 
         open={drawerOpen} 
         onOpenChange={setDrawerOpen} 
+      />
+
+      {/* Config Modal */}
+      <ConsorcioConfigModal 
+        open={configOpen} 
+        onOpenChange={setConfigOpen} 
       />
     </div>
   );
