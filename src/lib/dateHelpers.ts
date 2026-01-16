@@ -169,3 +169,14 @@ export function formatDateForDB(date: Date): string {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Parse uma string de data (YYYY-MM-DD) sem problemas de timezone
+ * Evita o problema de datas serem interpretadas como UTC e convertidas para o fuso local
+ * @param dateString - String no formato "YYYY-MM-DD"
+ * @returns Date object no horário local
+ */
+export function parseDateWithoutTimezone(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
