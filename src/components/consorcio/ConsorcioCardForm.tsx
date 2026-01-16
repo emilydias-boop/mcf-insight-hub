@@ -277,6 +277,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       origem: 'socio',
       partners: [],
       prazo_meses: 240,
+      produto_codigo: 'auto',
       condicao_pagamento: 'convencional',
       inclui_seguro: false,
     },
@@ -313,7 +314,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const produtoSelecionado = useMemo(() => {
     if (!produtos) return undefined;
     
-    if (produtoCodigo) {
+    if (produtoCodigo && produtoCodigo !== 'auto') {
       return produtos.find(p => p.codigo === produtoCodigo);
     }
     
@@ -872,14 +873,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Produto Embracon</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <Select onValueChange={field.onChange} value={field.value || 'auto'}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder={produtoSelecionado ? produtoSelecionado.nome : "Auto-detectar"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">Auto-detectar</SelectItem>
+                            <SelectItem value="auto">Auto-detectar</SelectItem>
                             {produtos?.filter(p => p.ativo).map(p => (
                               <SelectItem key={p.codigo} value={p.codigo}>
                                 {p.codigo} - {p.nome}
@@ -887,7 +888,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                             ))}
                           </SelectContent>
                         </Select>
-                        {produtoSelecionado && !field.value && (
+                        {produtoSelecionado && (!field.value || field.value === 'auto') && (
                           <p className="text-xs text-muted-foreground">
                             Detectado: {produtoSelecionado.codigo} - {produtoSelecionado.nome}
                           </p>
