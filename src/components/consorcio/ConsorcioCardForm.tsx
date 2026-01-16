@@ -32,6 +32,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { buscarCep } from '@/lib/cepUtils';
 import { validateCpf, validateCnpj, buscarCnpj } from '@/lib/documentUtils';
@@ -39,6 +40,10 @@ import { toast } from 'sonner';
 import { useCreateConsorcioCard, useUpdateConsorcioCard } from '@/hooks/useConsorcio';
 import { useBatchUploadDocuments } from '@/hooks/useConsorcioDocuments';
 import { useEmployees } from '@/hooks/useEmployees';
+import { useConsorcioProdutos } from '@/hooks/useConsorcioProdutos';
+import { calcularParcela } from '@/lib/consorcioCalculos';
+import { ParcelaComposicao } from './ParcelaComposicao';
+import { CondicaoPagamento, PrazoParcelas, CONDICAO_PAGAMENTO_OPTIONS, PRAZO_OPTIONS } from '@/types/consorcioProdutos';
 import {
   ESTADO_CIVIL_OPTIONS,
   TIPO_SERVIDOR_OPTIONS,
@@ -113,6 +118,11 @@ const formSchema = z.object({
   origem: z.enum(['socio', 'gr', 'indicacao', 'outros']),
   origem_detalhe: z.string().optional(),
   vendedor_id: z.string().optional(),
+  
+  // Produto Embracon e cálculos
+  produto_codigo: z.string().optional(),
+  condicao_pagamento: z.enum(['convencional', '50', '25']).optional(),
+  inclui_seguro: z.boolean().optional(),
   vendedor_name: z.string().optional(),
   
   // PF
@@ -193,6 +203,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   
   const isEditing = !!card;
   const { data: employees } = useEmployees();
+  const { data: produtos } = useConsorcioProdutos();
   const createCard = useCreateConsorcioCard();
   const updateCard = useUpdateConsorcioCard();
   const batchUpload = useBatchUploadDocuments();
@@ -265,6 +276,9 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       dia_vencimento: 10,
       origem: 'socio',
       partners: [],
+      prazo_meses: 240,
+      condicao_pagamento: 'convencional',
+      inclui_seguro: false,
     },
   });
 
@@ -279,8 +293,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const empresaPagaParcelas = form.watch('empresa_paga_parcelas');
   const tipoContrato = form.watch('tipo_contrato');
   const valorCredito = form.watch('valor_credito') || 0;
-  const prazoMeses = form.watch('prazo_meses') || 1;
+  const prazoMeses = form.watch('prazo_meses') || 240;
   const parcelasPagasEmpresa = form.watch('parcelas_pagas_empresa') || 0;
+  const produtoCodigo = form.watch('produto_codigo');
+  const condicaoPagamento = (form.watch('condicao_pagamento') || 'convencional') as CondicaoPagamento;
+  const incluiSeguro = form.watch('inclui_seguro') || false;
 
   // Filter employees that belong to BU Consórcio
   const consorcioEmployees = useMemo(() => {
@@ -292,17 +309,55 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
     ) || [];
   }, [employees]);
 
+  // Find product that matches selected code or auto-detect from credit value
+  const produtoSelecionado = useMemo(() => {
+    if (!produtos) return undefined;
+    
+    if (produtoCodigo) {
+      return produtos.find(p => p.codigo === produtoCodigo);
+    }
+    
+    // Auto-detect based on credit value and tipo_produto
+    const tipoProduto = form.watch('tipo_produto');
+    const taxaTipo = tipoProduto === 'parcelinha' ? 'dividida_12' : 'primeira_parcela';
+    
+    return produtos.find(p => 
+      p.ativo &&
+      valorCredito >= p.faixa_credito_min &&
+      valorCredito <= p.faixa_credito_max &&
+      p.taxa_antecipada_tipo === taxaTipo
+    );
+  }, [produtos, produtoCodigo, valorCredito, form]);
+
+  // Calculate installment composition
+  const calculoParcela = useMemo(() => {
+    if (!produtoSelecionado || valorCredito <= 0 || prazoMeses <= 0) return null;
+    
+    const prazoValido = [200, 220, 240].includes(prazoMeses) ? prazoMeses as PrazoParcelas : 240;
+    
+    return calcularParcela(
+      valorCredito,
+      prazoValido,
+      produtoSelecionado,
+      condicaoPagamento,
+      incluiSeguro
+    );
+  }, [produtoSelecionado, valorCredito, prazoMeses, condicaoPagamento, incluiSeguro]);
+
   // Calculate total value of installments paid by the company
   const valorTotalParcelasEmpresa = useMemo(() => {
     if (empresaPagaParcelas !== 'sim' || prazoMeses <= 0) return 0;
-    const valorParcela = valorCredito / prazoMeses;
+    
+    // Use calculated installment value if available
+    const valorParcela = calculoParcela?.parcelaDemais || (valorCredito / prazoMeses);
+    
     if (tipoContrato === 'intercalado') {
       // Intercalado: empresa paga as parcelas ímpares (1, 3, 5, ...)
       return Math.ceil(prazoMeses / 2) * valorParcela;
     }
     // Normal: empresa paga as primeiras N parcelas
     return parcelasPagasEmpresa * valorParcela;
-  }, [empresaPagaParcelas, valorCredito, prazoMeses, tipoContrato, parcelasPagasEmpresa]);
+  }, [empresaPagaParcelas, valorCredito, prazoMeses, tipoContrato, parcelasPagasEmpresa, calculoParcela]);
 
   // === Tab navigation logic ===
   const tabOrder = useMemo(() => {
@@ -786,19 +841,116 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Prazo (meses) *</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            {...field}
-                            onChange={e => field.onChange(Number(e.target.value))}
-                            placeholder="120"
-                          />
-                        </FormControl>
+                        <Select 
+                          onValueChange={(v) => field.onChange(Number(v))} 
+                          value={field.value?.toString() || '240'}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o prazo" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {PRAZO_OPTIONS.map(opt => (
+                              <SelectItem key={opt.value} value={opt.value.toString()}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
+
+                {/* Produto e condição de pagamento */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="produto_codigo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Produto Embracon</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={produtoSelecionado ? produtoSelecionado.nome : "Auto-detectar"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="">Auto-detectar</SelectItem>
+                            {produtos?.filter(p => p.ativo).map(p => (
+                              <SelectItem key={p.codigo} value={p.codigo}>
+                                {p.codigo} - {p.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {produtoSelecionado && !field.value && (
+                          <p className="text-xs text-muted-foreground">
+                            Detectado: {produtoSelecionado.codigo} - {produtoSelecionado.nome}
+                          </p>
+                        )}
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="condicao_pagamento"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Condição de Pagamento</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || 'convencional'}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CONDICAO_PAGAMENTO_OPTIONS.map(opt => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Seguro de vida opcional */}
+                <FormField
+                  control={form.control}
+                  name="inclui_seguro"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Seguro de Vida</FormLabel>
+                        <p className="text-xs text-muted-foreground">
+                          Inclui seguro de vida opcional na parcela
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {/* Composição da parcela calculada */}
+                {calculoParcela && produtoSelecionado && (
+                  <ParcelaComposicao
+                    calculo={calculoParcela}
+                    prazo={prazoMeses}
+                    incluiSeguro={incluiSeguro}
+                    taxaAntecipadaTipo={produtoSelecionado.taxa_antecipada_tipo}
+                  />
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
