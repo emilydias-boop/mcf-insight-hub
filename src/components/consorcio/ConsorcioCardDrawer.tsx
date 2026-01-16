@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { X, Phone, Mail, MapPin, User, Building2, CreditCard, Calendar, Trash2, Edit, RefreshCw, Wallet, FileText, Briefcase, Heart } from 'lucide-react';
+import { Phone, Mail, MapPin, User, Building2, CreditCard, Calendar, Trash2, Edit, RefreshCw, Wallet, FileText, Briefcase, Heart } from 'lucide-react';
 import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from '@/components/ui/drawer';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -129,36 +129,31 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
     : card?.razao_social;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-w-2xl mx-auto h-[95vh] flex flex-col">
-        <DrawerHeader className="border-b flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-14 w-14">
-                <AvatarFallback className="text-lg bg-primary/10">
-                  {getInitials(displayName)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <DrawerTitle className="text-xl">{displayName || 'Sem nome'}</DrawerTitle>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-muted-foreground">
-                    Grupo {card?.grupo} - Cota {card?.cota}
-                  </span>
-                  {statusConfig && (
-                    <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
-                  )}
-                  <Badge variant="outline" className="capitalize">
-                    {card?.categoria || 'inside'}
-                  </Badge>
-                </div>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:w-[70vw] lg:w-[55vw] xl:w-[50vw] p-0 flex flex-col">
+        <SheetHeader className="border-b flex-shrink-0 p-6">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14">
+              <AvatarFallback className="text-lg bg-primary/10">
+                {getInitials(displayName)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <SheetTitle className="text-xl text-left">{displayName || 'Sem nome'}</SheetTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-muted-foreground">
+                  Grupo {card?.grupo} - Cota {card?.cota}
+                </span>
+                {statusConfig && (
+                  <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
+                )}
+                <Badge variant="outline" className="capitalize">
+                  {card?.categoria || 'inside'}
+                </Badge>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
-              <X className="h-5 w-5" />
-            </Button>
           </div>
-        </DrawerHeader>
+        </SheetHeader>
 
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
@@ -663,7 +658,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
             </div>
           </ScrollArea>
         </div>
-      </DrawerContent>
+      </SheetContent>
 
       {/* Edit Form */}
       <ConsorcioCardForm 
@@ -671,6 +666,6 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
         onOpenChange={setEditFormOpen}
         card={card}
       />
-    </Drawer>
+    </Sheet>
   );
 }
