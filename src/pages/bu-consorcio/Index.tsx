@@ -13,7 +13,8 @@ import {
   Trash2,
   Settings,
   Search,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +43,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
+import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
 import { useConsorcioEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
@@ -173,6 +175,7 @@ export default function ConsorcioPage() {
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
   const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate });
   const deleteCard = useDeleteConsorcioCard();
+  const recalculateAll = useRecalculateAllCommissions();
 
   // Sort cards: Data de Contratação (desc) → Cota (desc) → Grupo (asc)
   const sortedCards = useMemo(() => {
@@ -289,6 +292,15 @@ export default function ConsorcioPage() {
               </SelectItem>
             </SelectContent>
           </Select>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => recalculateAll.mutate()}
+            disabled={recalculateAll.isPending}
+            title="Recalcular todas as comissões"
+          >
+            <RefreshCw className={`h-4 w-4 ${recalculateAll.isPending ? 'animate-spin' : ''}`} />
+          </Button>
           <Button variant="outline" size="icon" onClick={() => setConfigOpen(true)}>
             <Settings className="h-4 w-4" />
           </Button>
