@@ -440,10 +440,13 @@ export function AppSidebar() {
                         <SidebarMenuButton
                           tooltip={item.title}
                           className={isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""}
-                          onClick={() => {
-                            if (isCollapsed) {
+                          onClick={(e) => {
+                            // Apenas no desktop com sidebar colapsado, expande o sidebar primeiro
+                            if (isCollapsed && !isMobile) {
+                              e.preventDefault();
                               toggleSidebar();
                             }
+                            // No mobile ou com sidebar expandido, deixa o Collapsible funcionar
                           }}
                         >
                           <item.icon className="h-5 w-5" />
