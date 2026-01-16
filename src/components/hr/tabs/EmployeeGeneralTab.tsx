@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Employee, EMPLOYEE_STATUS_LABELS, CARGO_OPTIONS, SQUAD_OPTIONS, TIPO_VINCULO_OPTIONS } from '@/types/hr';
+import { Employee, EMPLOYEE_STATUS_LABELS, CARGO_OPTIONS, SQUAD_OPTIONS, TIPO_VINCULO_OPTIONS, DEPARTAMENTO_OPTIONS } from '@/types/hr';
 import { useEmployeeMutations, useEmployees } from '@/hooks/useEmployees';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,6 +82,21 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
                   <SelectItem value="_none">Selecione...</SelectItem>
                   {CARGO_OPTIONS.map((cargo) => (
                     <SelectItem key={cargo} value={cargo}>{cargo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Departamento</Label>
+              <Select
+                value={formData.departamento || '_none'}
+                onValueChange={(v) => setFormData({ ...formData, departamento: v === '_none' ? null : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Selecione...</SelectItem>
+                  {DEPARTAMENTO_OPTIONS.map((dept) => (
+                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -291,6 +306,7 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
         </CardHeader>
         <CardContent className="divide-y">
           <InfoRow label="Cargo / Função" value={employee.cargo} />
+          <InfoRow label="Departamento" value={employee.departamento} />
           <InfoRow label="Squad / Equipe" value={employee.squad} />
           <InfoRow label="Gestor Direto" value={gestor?.nome_completo || null} />
           <InfoRow label="Tipo de Vínculo" value={employee.tipo_contrato} />
