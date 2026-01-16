@@ -1,15 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users } from 'lucide-react';
 
-export default function InsideConsorcioCRM() {
+export default function ConsorcioCRM() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-3">
         <Users className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">CRM - Inside Consórcio</h1>
+          <h1 className="text-2xl font-bold">CRM - Consórcio</h1>
           <p className="text-muted-foreground">
-            Gestão de contatos e negócios da equipe Inside Consórcio
+            Gestão de contatos e negócios das equipes de consórcio
           </p>
         </div>
       </div>
