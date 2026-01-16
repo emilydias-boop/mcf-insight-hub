@@ -123,35 +123,19 @@ const menuItems: MenuItem[] = [
     ],
   },
 
-  // BU - CONSÓRCIO (com submenus Inside e Life)
+  // BU - CONSÓRCIO (unificado com filtro de categoria)
   {
     title: "BU - Consórcio",
     icon: Handshake,
     requiredRoles: ["admin", "manager", "coordenador"],
     requiredProducts: ["consorcio"],
     items: [
-      {
-        title: "Inside Consórcio",
-        items: [
-          { title: "Controle de Cartas", url: "/consorcio/inside/controle-cartas" },
-          { title: "Fechamento", url: "/consorcio/inside/fechamento" },
-          { title: "Relatório", url: "/consorcio/inside/relatorio" },
-          { title: "CRM", url: "/consorcio/inside/crm" },
-          { title: "Painel Equipe", url: "/consorcio/inside/painel-equipe" },
-          { title: "Vendas", url: "/consorcio/inside/vendas" },
-        ],
-      },
-      {
-        title: "Life Consórcio",
-        items: [
-          { title: "Controle de Cartas", url: "/consorcio/life/controle-cartas" },
-          { title: "Fechamento", url: "/consorcio/life/fechamento" },
-          { title: "Relatório", url: "/consorcio/life/relatorio" },
-          { title: "CRM", url: "/consorcio/life/crm" },
-          { title: "Painel Equipe", url: "/consorcio/life/painel-equipe" },
-          { title: "Vendas", url: "/consorcio/life/vendas" },
-        ],
-      },
+      { title: "Controle de Cartas", url: "/consorcio/controle-cartas" },
+      { title: "Fechamento", url: "/consorcio/fechamento" },
+      { title: "Relatório", url: "/consorcio/relatorio" },
+      { title: "CRM", url: "/consorcio/crm" },
+      { title: "Painel Equipe", url: "/consorcio/painel-equipe" },
+      { title: "Vendas", url: "/consorcio/vendas" },
       { title: "Controle Consorcio", url: "/consorcio" },
       { title: "Importar", url: "/consorcio/importar" },
     ],

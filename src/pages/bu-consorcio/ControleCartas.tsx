@@ -36,7 +36,7 @@ import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '
 import { useEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
-import { STATUS_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { STATUS_OPTIONS, ConsorcioCard, CATEGORIA_OPTIONS } from '@/types/consorcio';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -81,11 +81,12 @@ function getInitials(name?: string): string {
 
 type PeriodType = 'month' | 'lastMonth' | 'custom';
 
-export default function LifeConsorcioControleCartas() {
+export default function ControleCartas() {
   const [period, setPeriod] = useState<PeriodType>('month');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
+  const [categoriaFilter, setCategoriaFilter] = useState<string>('todos');
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -115,11 +116,15 @@ export default function LifeConsorcioControleCartas() {
     status: statusFilter !== 'todos' ? statusFilter : undefined,
     tipoProduto: tipoFilter !== 'todos' ? tipoFilter : undefined,
     vendedorId: vendedorFilter !== 'todos' ? vendedorFilter : undefined,
-    categoria: 'life' as const,
+    categoria: categoriaFilter !== 'todos' ? categoriaFilter as 'inside' | 'life' : undefined,
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
-  const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate, categoria: 'life' });
+  const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ 
+    startDate, 
+    endDate, 
+    categoria: categoriaFilter !== 'todos' ? categoriaFilter as 'inside' | 'life' : undefined 
+  });
   const deleteCard = useDeleteConsorcioCard();
 
   const handleViewCard = (card: ConsorcioCard) => {
@@ -139,7 +144,7 @@ export default function LifeConsorcioControleCartas() {
   const handleExportCSV = () => {
     if (!cards || cards.length === 0) return;
 
-    const headers = ['Nome', 'Grupo-Cota', 'Valor Crédito', 'Data Contratação', 'Tipo', 'Status', 'Vendedor'];
+    const headers = ['Nome', 'Grupo-Cota', 'Valor Crédito', 'Data Contratação', 'Tipo', 'Status', 'Vendedor', 'Categoria'];
     const rows = cards.map(card => [
       card.tipo_pessoa === 'pf' ? card.nome_completo : card.razao_social,
       `${card.grupo}-${card.cota}`,
@@ -148,14 +153,20 @@ export default function LifeConsorcioControleCartas() {
       card.tipo_produto,
       card.status,
       card.vendedor_name || '',
+      card.categoria,
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `consorcio_life_${format(now, 'yyyy-MM-dd')}.csv`;
+    link.download = `consorcio_cartas_${format(now, 'yyyy-MM-dd')}.csv`;
     link.click();
+  };
+
+  const getCategoriaLabel = (categoria: string) => {
+    const opt = CATEGORIA_OPTIONS?.find(c => c.value === categoria);
+    return opt?.label || categoria;
   };
 
   return (
@@ -163,9 +174,9 @@ export default function LifeConsorcioControleCartas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">📋 Controle de Cartas - Life Consórcio</h1>
+          <h1 className="text-3xl font-bold">📋 Controle de Cartas</h1>
           <p className="text-muted-foreground">
-            Gestão de cartas da equipe Life
+            Gestão de cartas de consórcio
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -297,6 +308,18 @@ export default function LifeConsorcioControleCartas() {
           <Filter className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">Filtros:</span>
         </div>
+
+        <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas Categorias</SelectItem>
+            <SelectItem value="inside">Inside Consórcio</SelectItem>
+            <SelectItem value="life">Life Consórcio</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-32">
             <SelectValue placeholder="Status" />
@@ -353,6 +376,7 @@ export default function LifeConsorcioControleCartas() {
                 <TableHead>Data Contratação</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Categoria</TableHead>
                 <TableHead>Vendedor</TableHead>
                 <TableHead className="w-20">Ação</TableHead>
               </TableRow>
@@ -361,7 +385,7 @@ export default function LifeConsorcioControleCartas() {
               {cardsLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={9}>
+                    <TableCell colSpan={10}>
                       <Skeleton className="h-12 w-full" />
                     </TableCell>
                   </TableRow>
@@ -401,6 +425,11 @@ export default function LifeConsorcioControleCartas() {
                         {statusConfig && (
                           <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={card.categoria === 'inside' ? 'secondary' : 'default'}>
+                          {getCategoriaLabel(card.categoria)}
+                        </Badge>
                       </TableCell>
                       <TableCell>{card.vendedor_name || '-'}</TableCell>
                       <TableCell>
@@ -458,7 +487,7 @@ export default function LifeConsorcioControleCartas() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
                     Nenhuma carta encontrada para o período selecionado
                   </TableCell>
                 </TableRow>

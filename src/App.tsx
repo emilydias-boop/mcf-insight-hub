@@ -80,21 +80,13 @@ import CreditoDeals from "./pages/bu-credito/Deals";
 import CreditoSocios from "./pages/bu-credito/Socios";
 import CreditoClientes from "./pages/bu-credito/Clientes";
 
-// BU Consórcio - Inside
-import InsideConsorcioFechamento from "./pages/bu-consorcio/inside/Fechamento";
-import InsideConsorcioRelatorio from "./pages/bu-consorcio/inside/Relatorio";
-import InsideConsorcioCRM from "./pages/bu-consorcio/inside/CRM";
-import InsideConsorcioPainelEquipe from "./pages/bu-consorcio/inside/PainelEquipe";
-import InsideConsorcioVendas from "./pages/bu-consorcio/inside/Vendas";
-import InsideConsorcioControleCartas from "./pages/bu-consorcio/inside/ControleCartas";
-
-// BU Consórcio - Life
-import LifeConsorcioFechamento from "./pages/bu-consorcio/life/Fechamento";
-import LifeConsorcioRelatorio from "./pages/bu-consorcio/life/Relatorio";
-import LifeConsorcioCRM from "./pages/bu-consorcio/life/CRM";
-import LifeConsorcioPainelEquipe from "./pages/bu-consorcio/life/PainelEquipe";
-import LifeConsorcioVendas from "./pages/bu-consorcio/life/Vendas";
-import LifeConsorcioControleCartas from "./pages/bu-consorcio/life/ControleCartas";
+// BU Consórcio - Páginas Unificadas
+import ConsorcioControleCartas from "./pages/bu-consorcio/ControleCartas";
+import ConsorcioFechamento from "./pages/bu-consorcio/Fechamento";
+import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
+import ConsorcioCRM from "./pages/bu-consorcio/CRM";
+import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
+import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 
 const queryClient = new QueryClient();
 
@@ -142,25 +134,15 @@ const App = () => (
               <Route path="relatorios/leads-sem-tag" element={<ResourceGuard resource="relatorios"><LeadsSemTag /></ResourceGuard>} />
               <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
               
-              {/* BU Consórcio Routes */}
+              {/* BU Consórcio Routes - Unificado */}
               <Route path="consorcio" element={<RoleGuard allowedRoles={['admin', 'manager', 'sdr', 'closer', 'coordenador']}><ConsorcioIndex /></RoleGuard>} />
               <Route path="consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioImportar /></RoleGuard>} />
-              
-              {/* BU Consórcio - Inside */}
-              <Route path="consorcio/inside/controle-cartas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><InsideConsorcioControleCartas /></RoleGuard>} />
-              <Route path="consorcio/inside/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><InsideConsorcioFechamento /></RoleGuard>} />
-              <Route path="consorcio/inside/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><InsideConsorcioRelatorio /></RoleGuard>} />
-              <Route path="consorcio/inside/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><InsideConsorcioCRM /></RoleGuard>} />
-              <Route path="consorcio/inside/painel-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><InsideConsorcioPainelEquipe /></RoleGuard>} />
-              <Route path="consorcio/inside/vendas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><InsideConsorcioVendas /></RoleGuard>} />
-              
-              {/* BU Consórcio - Life */}
-              <Route path="consorcio/life/controle-cartas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LifeConsorcioControleCartas /></RoleGuard>} />
-              <Route path="consorcio/life/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LifeConsorcioFechamento /></RoleGuard>} />
-              <Route path="consorcio/life/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LifeConsorcioRelatorio /></RoleGuard>} />
-              <Route path="consorcio/life/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LifeConsorcioCRM /></RoleGuard>} />
-              <Route path="consorcio/life/painel-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LifeConsorcioPainelEquipe /></RoleGuard>} />
-              <Route path="consorcio/life/vendas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><LifeConsorcioVendas /></RoleGuard>} />
+              <Route path="consorcio/controle-cartas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioControleCartas /></RoleGuard>} />
+              <Route path="consorcio/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamento /></RoleGuard>} />
+              <Route path="consorcio/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioRelatorio /></RoleGuard>} />
+              <Route path="consorcio/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioCRM /></RoleGuard>} />
+              <Route path="consorcio/painel-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioPainelEquipe /></RoleGuard>} />
+              <Route path="consorcio/vendas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioVendas /></RoleGuard>} />
               
               <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
               <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />

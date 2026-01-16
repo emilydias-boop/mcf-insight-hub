@@ -1,15 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calculator } from 'lucide-react';
+import { Users2 } from 'lucide-react';
 
-export default function InsideConsorcioFechamento() {
+export default function ConsorcioPainelEquipe() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <Calculator className="h-8 w-8 text-primary" />
+        <Users2 className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">Fechamento - Inside Consórcio</h1>
+          <h1 className="text-2xl font-bold">Painel da Equipe - Consórcio</h1>
           <p className="text-muted-foreground">
-            Gestão de fechamento e comissões da equipe Inside Consórcio
+            Acompanhamento de performance e metas das equipes de consórcio
           </p>
         </div>
       </div>

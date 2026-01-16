@@ -1,15 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users2 } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 
-export default function LifeConsorcioPainelEquipe() {
+export default function ConsorcioVendas() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <Users2 className="h-8 w-8 text-primary" />
+        <ShoppingCart className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold">Painel da Equipe - Life Consórcio</h1>
+          <h1 className="text-2xl font-bold">Vendas - Consórcio</h1>
           <p className="text-muted-foreground">
-            Acompanhamento de performance e metas da equipe Life Consórcio
+            Gestão de vendas e transações das equipes de consórcio
           </p>
         </div>
       </div>
