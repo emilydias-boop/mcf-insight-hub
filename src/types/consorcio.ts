@@ -9,6 +9,8 @@ export type TipoDocumento = 'cnh' | 'rg' | 'contrato_social' | 'cartao_cnpj' | '
 export type TipoParcela = 'cliente' | 'empresa';
 export type StatusParcela = 'pendente' | 'pago' | 'atrasado';
 export type CategoriaConsorcio = 'inside' | 'life';
+export type MotivoContemplacao = 'sorteio' | 'lance' | 'lance_fixo';
+
 export interface ConsorcioCard {
   id: string;
   created_at: string;
@@ -35,6 +37,13 @@ export interface ConsorcioCard {
   // Responsável
   vendedor_id?: string;
   vendedor_name?: string;
+  
+  // Contemplação
+  numero_contemplacao?: string | null;
+  data_contemplacao?: string | null;
+  motivo_contemplacao?: MotivoContemplacao | null;
+  valor_lance?: number | null;
+  percentual_lance?: number | null;
   
   // Dados PF
   nome_completo?: string;
