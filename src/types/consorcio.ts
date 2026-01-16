@@ -87,6 +87,7 @@ export interface ConsorcioCard {
   
   // Controle adicional
   valor_comissao?: number;
+  valor_comissao_total?: number; // Soma das comissões das parcelas
   e_transferencia?: boolean;
   transferido_de?: string;
   observacoes?: string;

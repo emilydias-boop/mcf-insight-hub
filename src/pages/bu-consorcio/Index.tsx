@@ -518,7 +518,7 @@ export default function ConsorcioPage() {
                       </TableCell>
                       <TableCell>{card.vendedor_name || '-'}</TableCell>
                       <TableCell className="text-right">
-                        {card.valor_comissao ? formatCurrencyFull(Number(card.valor_comissao)) : '-'}
+                        {card.valor_comissao_total ? formatCurrencyFull(card.valor_comissao_total) : '-'}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

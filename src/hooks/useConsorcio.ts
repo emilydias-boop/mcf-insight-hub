@@ -29,7 +29,10 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}) {
     queryFn: async () => {
       let query = supabase
         .from('consortium_cards')
-        .select('*')
+        .select(`
+          *,
+          consortium_installments(valor_comissao)
+        `)
         .order('created_at', { ascending: false });
 
       if (filters.startDate) {
@@ -54,7 +57,23 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}) {
       const { data, error } = await query;
 
       if (error) throw error;
-      return data as ConsorcioCard[];
+      
+      // Calculate total commission from installments for each card
+      const cardsWithCommission = (data || []).map((card: any) => {
+        const valorComissaoTotal = card.consortium_installments?.reduce(
+          (sum: number, inst: { valor_comissao: number }) => sum + Number(inst.valor_comissao || 0),
+          0
+        ) || 0;
+        
+        // Remove raw installments data and add calculated total
+        const { consortium_installments, ...cardData } = card;
+        return {
+          ...cardData,
+          valor_comissao_total: valorComissaoTotal,
+        } as ConsorcioCard;
+      });
+      
+      return cardsWithCommission;
     },
   });
 }
