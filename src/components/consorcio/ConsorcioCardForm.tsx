@@ -391,8 +391,8 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
     const valorParcela = calculoParcela?.parcelaDemais || (valorCredito / prazoMeses);
     
     if (tipoContrato === 'intercalado') {
-      // Intercalado: empresa paga as parcelas ímpares (1, 3, 5, ...)
-      return Math.ceil(prazoMeses / 2) * valorParcela;
+      // Intercalado: empresa paga as parcelas pares (2, 4, 6, ...)
+      return parcelasPagasEmpresa * valorParcela;
     }
     // Normal: empresa paga as primeiras N parcelas
     return parcelasPagasEmpresa * valorParcela;
@@ -560,6 +560,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       }
     }
   }, [open, card, form]);
+
+  // Auto-set default parcelas when changing to intercalado
+  useEffect(() => {
+    if (tipoContrato === 'intercalado' && prazoMeses > 0) {
+      const parcelasPares = Math.floor(prazoMeses / 2);
+      form.setValue('parcelas_pagas_empresa', parcelasPares);
+    }
+  }, [tipoContrato, prazoMeses, form]);
 
   // Handle CEP lookup for PF
   const handleCepBlur = async (cep: string) => {
@@ -1052,14 +1060,14 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="normal">Normal (primeiras parcelas)</SelectItem>
-                                <SelectItem value="intercalado">Intercalado (parcelas ímpares)</SelectItem>
+                                <SelectItem value="intercalado">Intercalado (parcelas pares)</SelectItem>
                               </SelectContent>
                             </Select>
                           </FormItem>
                         )}
                       />
                       
-                      {tipoContrato === 'normal' && (
+                      {tipoContrato && (
                         <FormField
                           control={form.control}
                           name="parcelas_pagas_empresa"
@@ -1070,7 +1078,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                                 <Input
                                   type="number"
                                   min={0}
-                                  max={prazoMeses}
+                                  max={tipoContrato === 'intercalado' ? Math.floor(prazoMeses / 2) : prazoMeses}
                                   {...field}
                                   onChange={e => field.onChange(Number(e.target.value))}
                                   value={field.value ?? 0}
@@ -1088,7 +1096,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                       <div className="p-3 bg-primary/10 rounded-md">
                         <p className="text-sm text-muted-foreground">
                           {tipoContrato === 'intercalado' 
-                            ? `Intercalado: empresa paga ${Math.ceil(prazoMeses / 2)} parcelas ímpares`
+                            ? `Intercalado: empresa paga ${parcelasPagasEmpresa} parcelas pares`
                             : `Normal: empresa paga as primeiras ${parcelasPagasEmpresa} parcelas`
                           }
                         </p>
