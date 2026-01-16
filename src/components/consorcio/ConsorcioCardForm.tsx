@@ -691,6 +691,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       calculatedParcelas = data.parcelas_pagas_empresa || 0;
     }
 
+    // Derivar tipo_produto automaticamente do produto selecionado
+    const tipoProdutoDerivado: 'select' | 'parcelinha' = produtoSelecionado
+      ? (produtoSelecionado.taxa_antecipada_tipo === 'dividida_12' ? 'parcelinha' : 'select')
+      : data.tipo_produto;
+
     const input: CreateConsorcioCardInput = {
       tipo_pessoa: data.tipo_pessoa,
       categoria: data.categoria,
@@ -698,7 +703,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       cota: data.cota,
       valor_credito: data.valor_credito,
       prazo_meses: data.prazo_meses,
-      tipo_produto: data.tipo_produto,
+      tipo_produto: tipoProdutoDerivado,
       tipo_contrato: data.empresa_paga_parcelas === 'sim' ? (data.tipo_contrato || 'normal') : 'normal',
       parcelas_pagas_empresa: calculatedParcelas,
       data_contratacao: formatDateForDB(data.data_contratacao),
