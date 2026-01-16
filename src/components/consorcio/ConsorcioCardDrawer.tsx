@@ -75,7 +75,9 @@ function getInitials(name?: string): string {
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return "-";
   try {
-    return format(new Date(dateStr), "dd/MM/yyyy");
+    // Parse without timezone to avoid UTC conversion issues
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return format(new Date(year, month - 1, day), "dd/MM/yyyy");
   } catch {
     return "-";
   }

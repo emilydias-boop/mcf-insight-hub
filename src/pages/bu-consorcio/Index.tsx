@@ -37,6 +37,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
 import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
+import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -209,7 +210,7 @@ export default function ConsorcioPage() {
         card.grupo,
         card.cota,
         card.valor_credito,
-        format(new Date(card.data_contratacao), 'dd/MM/yyyy'),
+        format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy'),
         format(proximoVencimento, 'dd/MM/yyyy'),
         card.tipo_produto,
         card.categoria === 'inside' ? 'Inside' : 'Life',
@@ -465,7 +466,7 @@ export default function ConsorcioPage() {
                         {formatCurrencyFull(Number(card.valor_credito))}
                       </TableCell>
                       <TableCell>
-                        {format(new Date(card.data_contratacao), 'dd/MM/yyyy')}
+                        {format(parseDateWithoutTimezone(card.data_contratacao), 'dd/MM/yyyy')}
                       </TableCell>
                       <TableCell>
                         {format(proximoVencimento, 'dd/MM/yyyy')}
