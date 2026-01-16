@@ -21,6 +21,9 @@ interface ConsorcioFilters {
   tipoProduto?: string;
   vendedorId?: string;
   categoria?: 'inside' | 'life';
+  search?: string;
+  diaVencimento?: number;
+  grupo?: string;
 }
 
 export function useConsorcioCards(filters: ConsorcioFilters = {}) {
@@ -52,6 +55,15 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}) {
       }
       if (filters.categoria) {
         query = query.eq('categoria', filters.categoria);
+      }
+      if (filters.search) {
+        query = query.or(`nome_completo.ilike.%${filters.search}%,telefone.ilike.%${filters.search}%,email.ilike.%${filters.search}%,razao_social.ilike.%${filters.search}%`);
+      }
+      if (filters.diaVencimento) {
+        query = query.eq('dia_vencimento', filters.diaVencimento);
+      }
+      if (filters.grupo) {
+        query = query.eq('grupo', filters.grupo);
       }
 
       const { data, error } = await query;

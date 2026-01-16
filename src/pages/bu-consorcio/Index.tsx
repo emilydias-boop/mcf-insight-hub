@@ -11,7 +11,9 @@ import {
   Eye,
   Edit,
   Trash2,
-  Settings
+  Settings,
+  Search,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,10 +33,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-
+import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
-import { useEmployees } from '@/hooks/useEmployees';
+import { useConsorcioEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
 import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
@@ -117,6 +125,10 @@ export default function ConsorcioPage() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [vencimentoFilter, setVencimentoFilter] = useState<string>('todos');
+  const [grupoFilter, setGrupoFilter] = useState<string>('todos');
+  const [dataFilter, setDataFilter] = useState<Date | undefined>();
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -125,7 +137,7 @@ export default function ConsorcioPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const { data: employees } = useEmployees();
+  const { data: employees } = useConsorcioEmployees();
   const { data: tipoOptions = [] } = useConsorcioTipoOptions();
   const { data: categoriaOptions = [] } = useConsorcioCategoriaOptions();
   const { data: origemOptions = [] } = useConsorcioOrigemOptions();
@@ -148,11 +160,14 @@ export default function ConsorcioPage() {
   }
 
   const filters = {
-    startDate,
-    endDate,
+    startDate: dataFilter || startDate,
+    endDate: dataFilter || endDate,
     status: statusFilter !== 'todos' ? statusFilter : undefined,
     tipoProduto: tipoFilter !== 'todos' ? tipoFilter : undefined,
     vendedorId: vendedorFilter !== 'todos' ? vendedorFilter : undefined,
+    search: searchTerm || undefined,
+    diaVencimento: vencimentoFilter !== 'todos' ? Number(vencimentoFilter) : undefined,
+    grupo: grupoFilter !== 'todos' ? grupoFilter : undefined,
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
@@ -183,10 +198,24 @@ export default function ConsorcioPage() {
     return sortedCards.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedCards, currentPage, itemsPerPage]);
 
+  // Get unique groups for filter dropdown
+  const uniqueGrupos = useMemo(() => {
+    if (!cards) return [];
+    const grupos = [...new Set(cards.map(c => c.grupo))];
+    return grupos.sort((a, b) => Number(a) - Number(b));
+  }, [cards]);
+
+  // Get unique vencimento days for filter dropdown
+  const uniqueVencimentos = useMemo(() => {
+    if (!cards) return [];
+    const dias = [...new Set(cards.map(c => c.dia_vencimento))];
+    return dias.sort((a, b) => a - b);
+  }, [cards]);
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage]);
+  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, dataFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -373,17 +402,28 @@ export default function ConsorcioPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Nome, telefone ou email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 w-64"
+          />
+        </div>
+
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Filtros:</span>
         </div>
+        
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-32">
+          <SelectTrigger className="w-28">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="todos">Status</SelectItem>
             {STATUS_OPTIONS.map(opt => (
               <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
             ))}
@@ -391,11 +431,11 @@ export default function ConsorcioPage() {
         </Select>
 
         <Select value={tipoFilter} onValueChange={setTipoFilter}>
-          <SelectTrigger className="w-32">
+          <SelectTrigger className="w-28">
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="todos">Tipo</SelectItem>
             {tipoOptions.map(opt => (
               <SelectItem key={opt.id} value={opt.name}>{opt.label}</SelectItem>
             ))}
@@ -403,16 +443,70 @@ export default function ConsorcioPage() {
         </Select>
 
         <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-36">
             <SelectValue placeholder="Vendedor" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="todos">Vendedor</SelectItem>
             {employees?.map(emp => (
               <SelectItem key={emp.id} value={emp.id}>{emp.nome_completo}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+
+        <Select value={vencimentoFilter} onValueChange={setVencimentoFilter}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Vencimento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Vencimento</SelectItem>
+            {uniqueVencimentos.map(dia => (
+              <SelectItem key={dia} value={String(dia)}>Dia {dia}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={grupoFilter} onValueChange={setGrupoFilter}>
+          <SelectTrigger className="w-28">
+            <SelectValue placeholder="Grupo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Grupo</SelectItem>
+            {uniqueGrupos.map(grupo => (
+              <SelectItem key={grupo} value={grupo}>{grupo}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-36 justify-start text-left font-normal">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dataFilter ? format(dataFilter, 'dd/MM/yyyy') : 'Data'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dataFilter}
+              onSelect={setDataFilter}
+              locale={ptBR}
+              initialFocus
+            />
+            {dataFilter && (
+              <div className="p-2 border-t">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full" 
+                  onClick={() => setDataFilter(undefined)}
+                >
+                  Limpar
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
 
         <div className="flex-1" />
 

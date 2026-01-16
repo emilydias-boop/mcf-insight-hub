@@ -18,6 +18,23 @@ export function useEmployees() {
   });
 }
 
+// Hook specifically for Consorcio BU employees
+export function useConsorcioEmployees() {
+  return useQuery({
+    queryKey: ['employees-consorcio'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('departamento', 'BU - Consórcio')
+        .order('nome_completo');
+      
+      if (error) throw error;
+      return data as Employee[];
+    },
+  });
+}
+
 export function useEmployee(id: string | null) {
   return useQuery({
     queryKey: ['employee', id],
