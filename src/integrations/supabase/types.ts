@@ -939,6 +939,158 @@ export type Database = {
           },
         ]
       }
+      consorcio_creditos: {
+        Row: {
+          ativo: boolean | null
+          codigo_credito: string
+          created_at: string | null
+          id: string
+          parcela_1a_12a_25_200: number | null
+          parcela_1a_12a_25_220: number | null
+          parcela_1a_12a_25_240: number | null
+          parcela_1a_12a_50_200: number | null
+          parcela_1a_12a_50_220: number | null
+          parcela_1a_12a_50_240: number | null
+          parcela_1a_12a_conv_200: number | null
+          parcela_1a_12a_conv_220: number | null
+          parcela_1a_12a_conv_240: number | null
+          parcela_demais_25_200: number | null
+          parcela_demais_25_220: number | null
+          parcela_demais_25_240: number | null
+          parcela_demais_50_200: number | null
+          parcela_demais_50_220: number | null
+          parcela_demais_50_240: number | null
+          parcela_demais_conv_200: number | null
+          parcela_demais_conv_220: number | null
+          parcela_demais_conv_240: number | null
+          produto_id: string | null
+          valor_credito: number
+        }
+        Insert: {
+          ativo?: boolean | null
+          codigo_credito: string
+          created_at?: string | null
+          id?: string
+          parcela_1a_12a_25_200?: number | null
+          parcela_1a_12a_25_220?: number | null
+          parcela_1a_12a_25_240?: number | null
+          parcela_1a_12a_50_200?: number | null
+          parcela_1a_12a_50_220?: number | null
+          parcela_1a_12a_50_240?: number | null
+          parcela_1a_12a_conv_200?: number | null
+          parcela_1a_12a_conv_220?: number | null
+          parcela_1a_12a_conv_240?: number | null
+          parcela_demais_25_200?: number | null
+          parcela_demais_25_220?: number | null
+          parcela_demais_25_240?: number | null
+          parcela_demais_50_200?: number | null
+          parcela_demais_50_220?: number | null
+          parcela_demais_50_240?: number | null
+          parcela_demais_conv_200?: number | null
+          parcela_demais_conv_220?: number | null
+          parcela_demais_conv_240?: number | null
+          produto_id?: string | null
+          valor_credito: number
+        }
+        Update: {
+          ativo?: boolean | null
+          codigo_credito?: string
+          created_at?: string | null
+          id?: string
+          parcela_1a_12a_25_200?: number | null
+          parcela_1a_12a_25_220?: number | null
+          parcela_1a_12a_25_240?: number | null
+          parcela_1a_12a_50_200?: number | null
+          parcela_1a_12a_50_220?: number | null
+          parcela_1a_12a_50_240?: number | null
+          parcela_1a_12a_conv_200?: number | null
+          parcela_1a_12a_conv_220?: number | null
+          parcela_1a_12a_conv_240?: number | null
+          parcela_demais_25_200?: number | null
+          parcela_demais_25_220?: number | null
+          parcela_demais_25_240?: number | null
+          parcela_demais_50_200?: number | null
+          parcela_demais_50_220?: number | null
+          parcela_demais_50_240?: number | null
+          parcela_demais_conv_200?: number | null
+          parcela_demais_conv_220?: number | null
+          parcela_demais_conv_240?: number | null
+          produto_id?: string | null
+          valor_credito?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_creditos_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "consorcio_produtos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consorcio_produtos: {
+        Row: {
+          ativo: boolean | null
+          codigo: string
+          created_at: string | null
+          descricao: string | null
+          faixa_credito_max: number
+          faixa_credito_min: number
+          fundo_reserva: number | null
+          grupo_padrao: string | null
+          id: string
+          nome: string
+          prazos_disponiveis: number[]
+          seguro_vida_percentual: number | null
+          taxa_adm_200: number | null
+          taxa_adm_220: number | null
+          taxa_adm_240: number | null
+          taxa_antecipada_percentual: number
+          taxa_antecipada_tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          codigo: string
+          created_at?: string | null
+          descricao?: string | null
+          faixa_credito_max: number
+          faixa_credito_min: number
+          fundo_reserva?: number | null
+          grupo_padrao?: string | null
+          id?: string
+          nome: string
+          prazos_disponiveis: number[]
+          seguro_vida_percentual?: number | null
+          taxa_adm_200?: number | null
+          taxa_adm_220?: number | null
+          taxa_adm_240?: number | null
+          taxa_antecipada_percentual: number
+          taxa_antecipada_tipo: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          codigo?: string
+          created_at?: string | null
+          descricao?: string | null
+          faixa_credito_max?: number
+          faixa_credito_min?: number
+          fundo_reserva?: number | null
+          grupo_padrao?: string | null
+          id?: string
+          nome?: string
+          prazos_disponiveis?: number[]
+          seguro_vida_percentual?: number | null
+          taxa_adm_200?: number | null
+          taxa_adm_220?: number | null
+          taxa_adm_240?: number | null
+          taxa_antecipada_percentual?: number
+          taxa_antecipada_tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       consortium_cards: {
         Row: {
           categoria: string
