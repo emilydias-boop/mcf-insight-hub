@@ -90,6 +90,13 @@ export interface ConsorcioCard {
   e_transferencia?: boolean;
   transferido_de?: string;
   observacoes?: string;
+  
+  // Composição da parcela
+  produto_embracon?: string;
+  condicao_pagamento?: string;
+  inclui_seguro_vida?: boolean;
+  parcela_1a_12a?: number;
+  parcela_demais?: number;
 }
 
 export interface ConsorcioPartner {
@@ -204,6 +211,13 @@ export interface CreateConsorcioCardInput {
   e_transferencia?: boolean;
   transferido_de?: string;
   observacoes?: string;
+  
+  // Composição da parcela
+  produto_embracon?: string;
+  condicao_pagamento?: string;
+  inclui_seguro_vida?: boolean;
+  parcela_1a_12a?: number;
+  parcela_demais?: number;
   
   // Partners (PJ only)
   partners?: Array<{ nome: string; cpf: string; renda?: number }>;
