@@ -166,15 +166,21 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     const favorited = isFavorite(origin.id);
     
     return (
-      <div key={origin.id} className="group relative flex items-center">
-        {/* Botão de favorito à esquerda */}
+      <div 
+        key={origin.id} 
+        className={cn(
+          "group flex items-center gap-1",
+          indented && "pl-6"
+        )}
+      >
+        {/* Botão de favorito - agora em fluxo normal, não absoluto */}
         {showFavorite && (
           <Button
             variant="ghost"
             size="icon"
             className={cn(
-              "absolute left-0 h-6 w-6 transition-opacity z-10",
-              favorited ? "opacity-100" : "opacity-30 hover:opacity-100"
+              "h-6 w-6 flex-shrink-0 transition-opacity",
+              favorited ? "opacity-100" : "opacity-0 group-hover:opacity-70"
             )}
             onClick={(e) => {
               e.stopPropagation();
@@ -196,10 +202,8 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         <Button
           variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
           className={cn(
-            "w-full justify-between h-auto py-2 text-left",
-            selectedOriginId === origin.id && "bg-primary/10",
-            showFavorite && "pl-8",
-            indented && "pl-12"
+            "flex-1 justify-between h-auto py-2 text-left",
+            selectedOriginId === origin.id && "bg-primary/10"
           )}
           onClick={() => onSelectOrigin(origin.id)}
         >
