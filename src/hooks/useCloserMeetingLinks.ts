@@ -75,6 +75,9 @@ export function useCloserDaySlots(dayOfWeek: number, meetingType: 'r1' | 'r2' = 
       if (error) throw error;
       return data || [];
     },
+    staleTime: 30 * 1000, // 30 seconds - consider data stale quickly
+    refetchOnMount: 'always', // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 }
 
