@@ -7,6 +7,7 @@ import { Settings, Users, Zap, Database, Shield, Upload, FileText, History } fro
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
 import { WhatsAppConfigCard } from '@/components/whatsapp/WhatsAppConfigCard';
+import { CRMPermissionsManager } from '@/components/crm/CRMPermissionsManager';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Import sub-page components
@@ -17,6 +18,7 @@ import ImportarHistorico from './ImportarHistorico';
 const ConfiguracoesContent = () => {
   const { role } = useAuth();
   const canManageTemplates = role === 'admin' || role === 'coordenador' || role === 'manager';
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
 
   const settingsSections = [
     {
@@ -63,6 +65,7 @@ const ConfiguracoesContent = () => {
       <div className="grid gap-6 md:grid-cols-2">
         {settingsSections.map((section) => {
           const Icon = section.icon;
+          const isPermissions = section.title === 'Permissões';
           return (
             <Card key={section.title} className="bg-card border-border">
               <CardHeader>
@@ -77,7 +80,10 @@ const ConfiguracoesContent = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                <Button 
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={isPermissions ? () => setPermissionsOpen(true) : undefined}
+                >
                   {section.action}
                 </Button>
               </CardContent>
@@ -85,6 +91,9 @@ const ConfiguracoesContent = () => {
           );
         })}
       </div>
+
+      {/* Modal de Permissões */}
+      <CRMPermissionsManager open={permissionsOpen} onOpenChange={setPermissionsOpen} />
 
       <Card className="bg-card border-border">
         <CardHeader>
