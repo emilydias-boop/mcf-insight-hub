@@ -4203,6 +4203,51 @@ export type Database = {
           },
         ]
       }
+      product_configurations: {
+        Row: {
+          count_in_dashboard: boolean | null
+          created_at: string | null
+          display_name: string | null
+          id: string
+          is_active: boolean | null
+          notes: string | null
+          product_category: string
+          product_code: string | null
+          product_name: string
+          reference_price: number | null
+          target_bu: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          count_in_dashboard?: boolean | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          product_category?: string
+          product_code?: string | null
+          product_name: string
+          reference_price?: number | null
+          target_bu?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          count_in_dashboard?: boolean | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          product_category?: string
+          product_code?: string | null
+          product_name?: string
+          reference_price?: number | null
+          target_bu?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           access_status: string | null
