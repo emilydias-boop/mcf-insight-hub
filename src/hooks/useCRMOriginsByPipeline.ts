@@ -113,7 +113,7 @@ function buildOriginTree(origins: any[], groups: any[]): Group[] {
     }
   });
   
-  const result = Array.from(groupsMap.values()).filter(g => g.children.length > 0);
+  const result = Array.from(groupsMap.values());
   
   if (ungroupedOrigins.length > 0) {
     result.push({
