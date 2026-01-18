@@ -4042,6 +4042,54 @@ export type Database = {
         }
         Relationships: []
       }
+      pipeline_permissions: {
+        Row: {
+          can_edit: boolean | null
+          can_view: boolean | null
+          created_at: string | null
+          group_id: string | null
+          id: string
+          origin_id: string | null
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          can_edit?: boolean | null
+          can_view?: boolean | null
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          origin_id?: string | null
+          role: string
+          updated_at?: string | null
+        }
+        Update: {
+          can_edit?: boolean | null
+          can_view?: boolean | null
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          origin_id?: string | null
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pipeline_permissions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "crm_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipeline_permissions_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       playbook_docs: {
         Row: {
           ativo: boolean
@@ -5130,6 +5178,7 @@ export type Database = {
           id: string
           role: Database["public"]["Enums"]["app_role"]
           stage_id: string
+          stage_uuid: string | null
         }
         Insert: {
           can_edit?: boolean | null
@@ -5140,6 +5189,7 @@ export type Database = {
           id?: string
           role: Database["public"]["Enums"]["app_role"]
           stage_id: string
+          stage_uuid?: string | null
         }
         Update: {
           can_edit?: boolean | null
@@ -5150,6 +5200,7 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           stage_id?: string
+          stage_uuid?: string | null
         }
         Relationships: [
           {
@@ -5158,6 +5209,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "deal_stages"
             referencedColumns: ["stage_id"]
+          },
+          {
+            foreignKeyName: "stage_permissions_stage_uuid_fkey"
+            columns: ["stage_uuid"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
           },
         ]
       }
