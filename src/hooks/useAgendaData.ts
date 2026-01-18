@@ -911,6 +911,7 @@ export function useCreateMeeting() {
       sdrEmail,
       alreadyBuilds,
       parentAttendeeId,
+      bookedAt,
     }: {
       closerId: string;
       dealId: string;
@@ -923,6 +924,7 @@ export function useCreateMeeting() {
       sdrEmail?: string;
       alreadyBuilds?: boolean | null;
       parentAttendeeId?: string;
+      bookedAt?: Date;
     }) => {
       // Chamar a edge function que cria o evento no Google Calendar com Meet
       const { data, error } = await supabase.functions.invoke('calendly-create-event', {
@@ -937,6 +939,7 @@ export function useCreateMeeting() {
           sdrEmail,
           alreadyBuilds,
           parentAttendeeId,
+          bookedAt: bookedAt?.toISOString(),
         },
       });
 

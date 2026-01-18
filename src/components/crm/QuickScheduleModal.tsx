@@ -150,6 +150,9 @@ export function QuickScheduleModal({
   const [alreadyBuilds, setAlreadyBuilds] = useState<boolean | null>(null);
   const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
   
+  // State for retroactive booking date
+  const [customBookedAt, setCustomBookedAt] = useState<Date | undefined>(undefined);
+  
   // State to store weekly lead data for reschedule note concatenation
   const [weeklyLeadData, setWeeklyLeadData] = useState<{
     originalNotes?: string;
@@ -168,6 +171,25 @@ export function QuickScheduleModal({
   const detectedLeadType = useMemo(() => {
     return detectLeadType(selectedDeal?.tags);
   }, [selectedDeal?.tags]);
+
+  // Detect if booking is retroactive (meeting date is in the past)
+  const isRetroactiveBooking = useMemo(() => {
+    if (!selectedDate) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const meetingDate = new Date(selectedDate);
+    meetingDate.setHours(0, 0, 0, 0);
+    return meetingDate < today;
+  }, [selectedDate]);
+
+  // Reset/set customBookedAt when retroactive status changes
+  useEffect(() => {
+    if (isRetroactiveBooking && !customBookedAt) {
+      setCustomBookedAt(selectedDate);
+    } else if (!isRetroactiveBooking) {
+      setCustomBookedAt(undefined);
+    }
+  }, [isRetroactiveBooking, selectedDate]);
 
   // Check slot availability
   const scheduledAtForCheck = useMemo(() => {
@@ -301,6 +323,7 @@ export function QuickScheduleModal({
       sdrEmail: selectedSdr || undefined,
       alreadyBuilds,
       parentAttendeeId,
+      bookedAt: isRetroactiveBooking ? customBookedAt : undefined,
     }, {
       onSuccess: (data) => {
         // Send WhatsApp notification if enabled
@@ -336,6 +359,7 @@ export function QuickScheduleModal({
     setAutoSendWhatsApp(true);
     setWeeklyLeadData(null);
     setAlreadyBuilds(null);
+    setCustomBookedAt(undefined);
   };
 
   // Get day of week for selected date (0=Sunday, 1=Monday, etc.)
@@ -953,6 +977,45 @@ export function QuickScheduleModal({
               </Select>
             </div>
           </div>
+
+          {/* Retroactive Booking Date Field */}
+          {isRetroactiveBooking && (
+            <div className="space-y-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                <CalendarDays className="h-4 w-4" />
+                <Label className="font-medium text-amber-700 dark:text-amber-400">Data do Agendamento (retroativo)</Label>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    {customBookedAt ? format(customBookedAt, 'dd/MM/yyyy', { locale: ptBR }) : 'Selecione a data'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={customBookedAt}
+                    onSelect={setCustomBookedAt}
+                    className="pointer-events-auto"
+                    locale={ptBR}
+                    disabled={(date) => {
+                      const today = new Date();
+                      today.setHours(23, 59, 59, 999);
+                      // Cannot be in the future
+                      if (date > today) return true;
+                      // Cannot be after the meeting date
+                      if (selectedDate && date > selectedDate) return true;
+                      return false;
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Quando este agendamento foi feito? (não pode ser após a data da reunião)
+              </p>
+            </div>
+          )}
 
           {/* Slot availability indicator with already_builds breakdown */}
           {selectedCloser && selectedDate && slotAvailability && (
