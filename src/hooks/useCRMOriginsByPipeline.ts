@@ -89,27 +89,42 @@ export const useCRMOriginsByPipeline = (pipelineId: string | null) => {
       // Retornar como lista flat (não agrupada) para o pipeline específico
       return originsWithCounts;
     },
+    staleTime: 0, // Forçar refresh
     enabled: true,
   });
 };
 
 // Função para construir árvore de origens agrupadas
 function buildOriginTree(origins: any[], groups: any[]): Group[] {
+  // Criar mapa de grupos com estrutura limpa
   const groupsMap = new Map<string, Group>();
   groups.forEach(g => {
     groupsMap.set(g.id, { 
-      ...g, 
-      children: [] 
+      id: g.id,
+      name: g.name,
+      display_name: g.display_name,
+      children: [] as Origin[]
     });
   });
   
   const ungroupedOrigins: Origin[] = [];
   
+  // Associar origens aos grupos
   origins.forEach(origin => {
+    const originData: Origin = {
+      id: origin.id,
+      name: origin.name,
+      display_name: origin.display_name,
+      group_id: origin.group_id,
+      contact_count: origin.contact_count || 0,
+      deal_count: origin.deal_count || 0
+    };
+    
     if (origin.group_id && groupsMap.has(origin.group_id)) {
-      groupsMap.get(origin.group_id)!.children.push(origin);
-    } else if (!origin.group_id) {
-      ungroupedOrigins.push(origin);
+      const group = groupsMap.get(origin.group_id)!;
+      group.children.push(originData);
+    } else {
+      ungroupedOrigins.push(originData);
     }
   });
   
