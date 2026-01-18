@@ -17,6 +17,7 @@ interface CreateEventRequest {
   sdrEmail?: string;
   alreadyBuilds?: boolean | null;
   parentAttendeeId?: string;
+  bookedAt?: string; // Data real do agendamento (para retroativos)
 }
 
 // Google Calendar JWT authentication
@@ -542,6 +543,16 @@ serve(async (req) => {
     // Add attendee record with the same notes as the slot
     // Include attendee_name and attendee_phone even without contact_id for display purposes
     // Include parent_attendee_id if this is a reschedule/remanejamento
+    // For retroactive bookings, use bookedAt if provided, otherwise use scheduledAt if it's in the past
+    const now = new Date();
+    let bookedAtValue: string | null = null;
+    if (body.bookedAt) {
+      bookedAtValue = body.bookedAt;
+    } else if (scheduledDate < now) {
+      // Retroactive: use scheduled date as booked date
+      bookedAtValue = scheduledAt;
+    }
+    
     const { data: attendee, error: attendeeError } = await supabase
       .from("meeting_slot_attendees")
       .insert({
@@ -555,6 +566,7 @@ serve(async (req) => {
         attendee_phone: contactInfo.phone || null,
         already_builds: body.alreadyBuilds ?? null,
         parent_attendee_id: body.parentAttendeeId || null,
+        booked_at: bookedAtValue,
       })
       .select("id")
       .single();
