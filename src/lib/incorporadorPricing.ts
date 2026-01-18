@@ -1,7 +1,10 @@
-// ===== PREÇOS BRUTOS FIXOS POR PRODUTO (Incorporador) =====
-// Match parcial, case-insensitive - usado para cálculo de faturamento bruto
+import { getCachedFixedGrossPrice } from '@/hooks/useProductPricesCache';
 
-export const FIXED_GROSS_PRICES: { pattern: string; price: number }[] = [
+// ===== PREÇOS BRUTOS FIXOS POR PRODUTO - FALLBACK (Incorporador) =====
+// Usado quando o cache do banco ainda não está carregado
+// Os valores reais vêm da tabela product_configurations
+
+export const FIXED_GROSS_PRICES_FALLBACK: { pattern: string; price: number }[] = [
   { pattern: 'a005 - mcf p2', price: 0 },
   { pattern: 'a009 - mcf incorporador completo + the club', price: 19500 },
   { pattern: 'a001 - mcf incorporador completo', price: 14500 },
@@ -12,16 +15,28 @@ export const FIXED_GROSS_PRICES: { pattern: string; price: number }[] = [
   { pattern: 'a003 - mcf plano anticrise completo', price: 7500 },
 ];
 
-// Função para obter preço bruto fixo ou original
+// Mantém export antigo para retrocompatibilidade
+export const FIXED_GROSS_PRICES = FIXED_GROSS_PRICES_FALLBACK;
+
+// Função para obter preço bruto fixo - tenta cache do banco primeiro
 export const getFixedGrossPrice = (productName: string | null, originalPrice: number): number => {
   if (!productName) return originalPrice;
+  
+  // 1. Tenta buscar do cache do banco de dados
+  const cachedPrice = getCachedFixedGrossPrice(productName);
+  if (cachedPrice >= 0) {
+    return cachedPrice;
+  }
+  
+  // 2. Fallback para valores hardcoded
   const normalizedName = productName.toLowerCase().trim();
   
-  for (const { pattern, price } of FIXED_GROSS_PRICES) {
+  for (const { pattern, price } of FIXED_GROSS_PRICES_FALLBACK) {
     if (normalizedName.includes(pattern)) {
       return price;
     }
   }
+  
   return originalPrice;
 };
 

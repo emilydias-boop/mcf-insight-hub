@@ -12,6 +12,13 @@ import { RoleGuard } from "./components/auth/RoleGuard";
 import { R2AccessGuard } from "./components/auth/R2AccessGuard";
 import { MainLayout } from "./components/layout/MainLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { useProductPricesCache } from "./hooks/useProductPricesCache";
+
+// Componente que inicializa o cache de preços na startup
+const PriceCacheInitializer = () => {
+  useProductPricesCache();
+  return null;
+};
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Receita from "./pages/receita/Index";
@@ -96,6 +103,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <PriceCacheInitializer />
         <BrowserRouter>
           <AuthProvider>
             <TwilioProvider>
