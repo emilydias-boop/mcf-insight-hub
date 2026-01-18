@@ -1,7 +1,9 @@
-// ===== PREÇOS DE REFERÊNCIA (valores da planilha, não do cartão parcelado) =====
-// Usado para Faturamento Clint Bruto - ignora juros do cartão
-// A005/P2 NÃO tem valor fixo - usa product_price do banco
-export const PRECO_REFERENCIA: Record<string, number> = {
+import { getCachedPrecoReferencia } from '@/hooks/useProductPricesCache';
+
+// ===== PREÇOS DE REFERÊNCIA - FALLBACK (valores hardcoded) =====
+// Usado quando o cache do banco ainda não está carregado
+// Os valores reais vêm da tabela product_configurations
+export const PRECO_REFERENCIA_FALLBACK: Record<string, number> = {
   'A010': 47,     // A010 - Consultoria Construa para Vender
   'A009': 19500,  // MCF INCORPORADOR COMPLETO + THE CLUB
   'A001': 14500,  // MCF INCORPORADOR COMPLETO
@@ -13,6 +15,9 @@ export const PRECO_REFERENCIA: Record<string, number> = {
   'CONTRATO_ANTICRISE': 397,
   // A005/P2 não entra - usa valor do banco (valor variável)
 };
+
+// Mantém export antigo para retrocompatibilidade
+export const PRECO_REFERENCIA = PRECO_REFERENCIA_FALLBACK;
 
 // Normaliza nome do produto para chave de deduplicação (email+produto)
 export const normalizeProductForDedup = (productName: string): string => {
@@ -32,7 +37,7 @@ export const normalizeProductForDedup = (productName: string): string => {
   return upper.substring(0, 20); // Fallback
 };
 
-// Obtém preço de referência ou usa valor do banco (para A005/P2 e outros sem valor fixo)
+// Obtém preço de referência - tenta cache do banco primeiro, depois fallback hardcoded
 export const getPrecoReferencia = (productName: string, productPriceFromDB: number): number => {
   const normalizado = normalizeProductForDedup(productName);
   
@@ -41,10 +46,17 @@ export const getPrecoReferencia = (productName: string, productPriceFromDB: numb
     return 0;
   }
   
-  // Se tem preço de referência, usar ele
-  if (PRECO_REFERENCIA[normalizado]) {
-    return PRECO_REFERENCIA[normalizado];
+  // 1. Tenta buscar do cache do banco de dados
+  const cachedPrice = getCachedPrecoReferencia(normalizado);
+  if (cachedPrice >= 0) {
+    return cachedPrice;
   }
-  // Caso contrário, usar valor do banco
+  
+  // 2. Fallback para valores hardcoded
+  if (PRECO_REFERENCIA_FALLBACK[normalizado]) {
+    return PRECO_REFERENCIA_FALLBACK[normalizado];
+  }
+  
+  // 3. Último recurso: valor do banco
   return productPriceFromDB;
 };
