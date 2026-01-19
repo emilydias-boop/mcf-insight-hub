@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
         origin_id: origin_id,
         probability: deal.probability || null,
         expected_close_date: deal.expected_close_date || null,
-        owner_id: deal.owner_id || null,
+        owner_id: deal.user?.email || deal.owner_id || null,
         tags: deal.tags || [],
         custom_fields: deal.custom_fields || {},
       }));
