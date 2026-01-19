@@ -192,32 +192,89 @@ Deno.serve(async (req) => {
       updatedContacts?.forEach(c => contactMap.set(c.clint_id, c.id));
     }
 
-    // Bulk upsert deals
+    // Bulk upsert deals - separando deals COM e SEM owner para preservar owner_id existente
     if (allDeals.length > 0) {
-      const dealsToUpsert = allDeals.map(deal => ({
-        clint_id: deal.id,
-        name: deal.name || 'Negócio sem título',
-        value: deal.value || 0,
-        stage_id: stageMap.get(deal.stage_id) || null,
-        contact_id: contactMap.get(deal.contact_id) || null,
-        origin_id: origin_id,
-        probability: deal.probability || null,
-        expected_close_date: deal.expected_close_date || null,
-        owner_id: deal.user?.email || deal.owner_id || null,
-        tags: deal.tags || [],
-        custom_fields: deal.custom_fields || {},
-      }));
+      const newOwner = (deal: any) => deal.user?.email || null;
+      
+      // Deals que têm owner na resposta da API - atualizar normalmente
+      const dealsWithOwner = allDeals.filter(deal => newOwner(deal));
+      // Deals sem owner na API - NÃO devem sobrescrever owner_id existente
+      const dealsWithoutOwner = allDeals.filter(deal => !newOwner(deal));
 
-      const { error: dealError } = await supabase
-        .from('crm_deals')
-        .upsert(dealsToUpsert, { onConflict: 'clint_id' });
+      console.log(`📊 Deals com owner: ${dealsWithOwner.length}, sem owner: ${dealsWithoutOwner.length}`);
 
-      if (dealError) {
-        console.error('❌ Erro ao inserir deals:', dealError);
-        throw dealError;
+      // Upsert deals COM owner (atualiza owner_id)
+      if (dealsWithOwner.length > 0) {
+        const dealsToUpsert = dealsWithOwner.map(deal => ({
+          clint_id: deal.id,
+          name: deal.name || 'Negócio sem título',
+          value: deal.value || 0,
+          stage_id: stageMap.get(deal.stage_id) || null,
+          contact_id: contactMap.get(deal.contact_id) || null,
+          origin_id: origin_id,
+          probability: deal.probability || null,
+          expected_close_date: deal.expected_close_date || null,
+          owner_id: newOwner(deal),
+          tags: deal.tags || [],
+          custom_fields: deal.custom_fields || {},
+        }));
+
+        const { error: dealError } = await supabase
+          .from('crm_deals')
+          .upsert(dealsToUpsert, { onConflict: 'clint_id' });
+
+        if (dealError) {
+          console.error('❌ Erro ao inserir deals com owner:', dealError);
+          throw dealError;
+        }
+        console.log(`✅ ${dealsToUpsert.length} deals com owner inseridos`);
       }
 
-      console.log(`✅ ${dealsToUpsert.length} deals inseridos`);
+      // Upsert deals SEM owner (preserva owner_id existente)
+      if (dealsWithoutOwner.length > 0) {
+        const dealsToUpsertNoOwner = dealsWithoutOwner.map(deal => ({
+          clint_id: deal.id,
+          name: deal.name || 'Negócio sem título',
+          value: deal.value || 0,
+          stage_id: stageMap.get(deal.stage_id) || null,
+          contact_id: contactMap.get(deal.contact_id) || null,
+          origin_id: origin_id,
+          probability: deal.probability || null,
+          expected_close_date: deal.expected_close_date || null,
+          // OMITIR owner_id para não sobrescrever o existente
+          tags: deal.tags || [],
+          custom_fields: deal.custom_fields || {},
+        }));
+
+        // Para preservar owner_id existente, usar SQL raw com COALESCE
+        // Como não podemos usar SQL raw diretamente, vamos buscar os deals existentes primeiro
+        const clintIds = dealsWithoutOwner.map(d => d.id);
+        
+        const { data: existingDeals } = await supabase
+          .from('crm_deals')
+          .select('clint_id, owner_id')
+          .in('clint_id', clintIds);
+
+        const existingOwnerMap = new Map(existingDeals?.map(d => [d.clint_id, d.owner_id]) || []);
+
+        // Mesclar owner_id existente
+        const finalDeals = dealsToUpsertNoOwner.map(deal => ({
+          ...deal,
+          owner_id: existingOwnerMap.get(deal.clint_id) || null,
+        }));
+
+        const { error: dealError } = await supabase
+          .from('crm_deals')
+          .upsert(finalDeals, { onConflict: 'clint_id' });
+
+        if (dealError) {
+          console.error('❌ Erro ao inserir deals sem owner:', dealError);
+          throw dealError;
+        }
+        console.log(`✅ ${finalDeals.length} deals sem owner inseridos (owner_id preservado)`);
+      }
+
+      console.log(`✅ Total: ${allDeals.length} deals processados`);
     }
 
     // Atualizar contact_count da origin
