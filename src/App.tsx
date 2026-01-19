@@ -87,6 +87,15 @@ import CreditoOverview from "./pages/bu-credito/Overview";
 import CreditoDeals from "./pages/bu-credito/Deals";
 import CreditoSocios from "./pages/bu-credito/Socios";
 import CreditoClientes from "./pages/bu-credito/Clientes";
+import CreditoVendas from "./pages/bu-credito/Vendas";
+
+// BU Projetos
+import BUProjetosIndex from "./pages/bu-projetos/Index";
+import ProjetosVendas from "./pages/bu-projetos/Vendas";
+
+// BU Outros
+import BUOutrosIndex from "./pages/bu-outros/Index";
+import OutrosVendas from "./pages/bu-outros/Vendas";
 
 // BU Consórcio - Páginas Unificadas
 import ConsorcioFechamento from "./pages/bu-consorcio/Fechamento";
@@ -161,6 +170,19 @@ const App = () => (
                 <Route path="deals" element={<CreditoDeals />} />
                 <Route path="socios" element={<CreditoSocios />} />
                 <Route path="clientes" element={<CreditoClientes />} />
+                <Route path="vendas" element={<CreditoVendas />} />
+              </Route>
+              
+              {/* BU Projetos Routes */}
+              <Route path="bu-projetos" element={<BUProjetosIndex />}>
+                <Route index element={<ProjetosVendas />} />
+                <Route path="vendas" element={<ProjetosVendas />} />
+              </Route>
+              
+              {/* BU Outros Routes */}
+              <Route path="bu-outros" element={<BUOutrosIndex />}>
+                <Route index element={<OutrosVendas />} />
+                <Route path="vendas" element={<OutrosVendas />} />
               </Route>
               
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
