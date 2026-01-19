@@ -6429,6 +6429,30 @@ export type Database = {
           phone_suffix: string
         }[]
       }
+      get_hubla_transactions_by_bu: {
+        Args: {
+          p_end_date?: string
+          p_limit?: number
+          p_search?: string
+          p_start_date?: string
+          p_target_bu: string
+        }
+        Returns: {
+          customer_email: string
+          customer_name: string
+          gross_winner: boolean
+          id: string
+          installment_number: number
+          net_value: number
+          product_category: string
+          product_name: string
+          product_price: number
+          sale_date: string
+          sale_status: string
+          source: string
+          total_installments: number
+        }[]
+      }
       get_incorporador_transactions:
         | {
             Args: { p_limit?: number; p_search?: string }
