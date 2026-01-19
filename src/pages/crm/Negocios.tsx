@@ -53,6 +53,12 @@ const Negocios = () => {
     // Se já tem uma origem selecionada manualmente, usar ela
     if (selectedOriginId) return selectedOriginId;
     
+    // Para SDRs com acesso limitado, usar o group_id diretamente
+    // O useCRMDeals agora sabe resolver grupos para suas origens filhas
+    if (isSdrWithAccess && selectedPipelineId) {
+      return selectedPipelineId;
+    }
+    
     // Se tem um pipeline selecionado, verificar se é um grupo ou uma origem
     if (selectedPipelineId && pipelineOrigins && Array.isArray(pipelineOrigins)) {
       // pipelineOrigins pode ser uma lista flat de origens quando um pipeline está selecionado
@@ -65,7 +71,7 @@ const Negocios = () => {
     }
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins]);
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdrWithAccess]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   useEffect(() => {
@@ -133,7 +139,8 @@ const Negocios = () => {
     if (!deal || !deal.id || !deal.name) return false;
     
     // Filtro por role: SDR/Closer veem apenas seus próprios deals
-    if (isRestrictedRole && userProfile?.email) {
+    // EXCETO SDRs com acesso especial a Negócios (ex: Caroline no Perpétuo X1)
+    if (isRestrictedRole && !isSdrWithAccess && userProfile?.email) {
       if (deal.owner_id !== userProfile.email) return false;
     }
     
