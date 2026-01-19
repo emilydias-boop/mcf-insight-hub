@@ -74,8 +74,16 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   }, [deals, visibleStages]);
   
   // Buscar atividades de todos os deals de uma vez para performance
+  // Incluir stageIds para buscar limites corretos por estágio
   const dealIds = useMemo(() => deals.map(d => d.id), [deals]);
-  const { data: activitySummaries } = useBatchDealActivitySummary(dealIds);
+  const stageIdsMap = useMemo(() => {
+    const map = new Map<string, string>();
+    deals.forEach(d => {
+      if (d.stage_id) map.set(d.id, d.stage_id);
+    });
+    return map;
+  }, [deals]);
+  const { data: activitySummaries } = useBatchDealActivitySummary(dealIds, stageIdsMap);
   
   const getVisibleCountForStage = (stageId: string) => 
     visibleCountByStage[stageId] || INITIAL_VISIBLE_COUNT;

@@ -241,33 +241,48 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
         {/* Linha 2: Nome do Lead */}
         <div className="font-medium text-sm line-clamp-2">{contactName || deal.name}</div>
 
-        {/* Linha 3: Indicadores de Atividade */}
-        {activitySummary && (activitySummary.totalCalls > 0 || activitySummary.whatsappSent > 0) && (
-          <div className="flex items-center gap-2 text-xs">
-            {activitySummary.totalCalls > 0 && (
-              <span 
-                className={`flex items-center gap-0.5 ${
-                  activitySummary.answeredCalls > 0 ? 'text-green-500' : 'text-muted-foreground'
-                }`}
-                title={`${activitySummary.answeredCalls} atendidas, ${activitySummary.missedCalls} não atendidas`}
-              >
-                {activitySummary.answeredCalls > 0 ? (
-                  <PhoneCall className="h-3 w-3" />
-                ) : (
-                  <PhoneMissed className="h-3 w-3" />
-                )}
-                {activitySummary.totalCalls}
-              </span>
-            )}
-            {activitySummary.whatsappSent > 0 && (
-              <span className="flex items-center gap-0.5 text-green-500" title="WhatsApp enviados">
-                <MessageCircle className="h-3 w-3" />
-                {activitySummary.whatsappSent}
-              </span>
-            )}
+        {/* Linha 3: Indicadores de Atividade - Sempre visível */}
+        {activitySummary && (
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            {/* Contador de ligações */}
+            <span 
+              className={`flex items-center gap-0.5 ${
+                activitySummary.totalCalls === 0 
+                  ? 'text-muted-foreground/50' 
+                  : activitySummary.answeredCalls > 0 
+                    ? 'text-green-500' 
+                    : 'text-muted-foreground'
+              }`}
+              title={`${activitySummary.answeredCalls} atendidas, ${activitySummary.missedCalls} não atendidas`}
+            >
+              {activitySummary.answeredCalls > 0 ? (
+                <PhoneCall className="h-3 w-3" />
+              ) : (
+                <Phone className="h-3 w-3" />
+              )}
+              {activitySummary.totalCalls}
+            </span>
+            
+            {/* Contador de WhatsApp */}
+            <span 
+              className={`flex items-center gap-0.5 ${
+                activitySummary.whatsappSent === 0 ? 'text-muted-foreground/50' : 'text-green-500'
+              }`} 
+              title="WhatsApp enviados"
+            >
+              <MessageCircle className="h-3 w-3" />
+              {activitySummary.whatsappSent}
+            </span>
+            
+            {/* Progresso de tentativas */}
+            <span className="text-muted-foreground">
+              | {activitySummary.totalCalls}/{activitySummary.maxAttempts}
+            </span>
+            
+            {/* Badge de esgotadas */}
             {activitySummary.attemptsExhausted && (
               <Badge variant="destructive" className="text-[9px] px-1 py-0">
-                Tentativas esgotadas
+                Esgotadas
               </Badge>
             )}
           </div>

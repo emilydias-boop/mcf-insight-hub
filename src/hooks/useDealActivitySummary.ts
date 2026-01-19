@@ -8,7 +8,10 @@ export interface ActivitySummary {
   whatsappSent: number;
   lastContactAttempt: string | null;
   attemptsExhausted: boolean;
+  maxAttempts: number;
 }
+
+const DEFAULT_MAX_ATTEMPTS = 5;
 
 const defaultSummary: ActivitySummary = {
   totalCalls: 0,
@@ -17,16 +20,28 @@ const defaultSummary: ActivitySummary = {
   whatsappSent: 0,
   lastContactAttempt: null,
   attemptsExhausted: false,
+  maxAttempts: DEFAULT_MAX_ATTEMPTS,
 };
 
-// Limite de tentativas configurável por estágio (pode ser expandido)
-const MAX_ATTEMPTS = 5;
-
-export function useDealActivitySummary(dealId: string | undefined) {
+export function useDealActivitySummary(dealId: string | undefined, stageId?: string) {
   return useQuery({
-    queryKey: ['deal-activity-summary', dealId],
+    queryKey: ['deal-activity-summary', dealId, stageId],
     queryFn: async (): Promise<ActivitySummary> => {
       if (!dealId) return defaultSummary;
+
+      // Buscar limite de tentativas do estágio
+      let maxAttempts = DEFAULT_MAX_ATTEMPTS;
+      if (stageId) {
+        const { data: limitData } = await supabase
+          .from('stage_attempt_limits')
+          .select('max_attempts')
+          .eq('stage_id', stageId)
+          .maybeSingle();
+        
+        if (limitData?.max_attempts) {
+          maxAttempts = limitData.max_attempts;
+        }
+      }
 
       // Buscar ligações do deal
       const { data: calls, error } = await supabase
@@ -37,7 +52,7 @@ export function useDealActivitySummary(dealId: string | undefined) {
 
       if (error) {
         console.error('Error fetching call activity:', error);
-        return defaultSummary;
+        return { ...defaultSummary, maxAttempts };
       }
 
       const totalCalls = calls?.length || 0;
@@ -57,7 +72,7 @@ export function useDealActivitySummary(dealId: string | undefined) {
 
       const whatsappSent = whatsappActivities?.length || 0;
 
-      const attemptsExhausted = totalCalls >= MAX_ATTEMPTS && answeredCalls === 0;
+      const attemptsExhausted = totalCalls >= maxAttempts && answeredCalls === 0;
 
       return {
         totalCalls,
@@ -66,6 +81,7 @@ export function useDealActivitySummary(dealId: string | undefined) {
         whatsappSent,
         lastContactAttempt: calls?.[0]?.created_at || null,
         attemptsExhausted,
+        maxAttempts,
       };
     },
     enabled: !!dealId,
@@ -74,16 +90,30 @@ export function useDealActivitySummary(dealId: string | undefined) {
 }
 
 // Hook para buscar atividades de múltiplos deals de uma vez (otimização)
-export function useBatchDealActivitySummary(dealIds: string[]) {
+export function useBatchDealActivitySummary(dealIds: string[], stageIds?: Map<string, string>) {
   return useQuery({
-    queryKey: ['batch-deal-activity-summary', dealIds.sort().join(',')],
+    queryKey: ['batch-deal-activity-summary', dealIds.sort().join(','), stageIds ? Array.from(stageIds.entries()).sort().join(',') : ''],
     queryFn: async (): Promise<Map<string, ActivitySummary>> => {
       const summaryMap = new Map<string, ActivitySummary>();
       
       if (dealIds.length === 0) return summaryMap;
 
+      // Buscar limites de tentativas por estágio
+      const { data: stageLimits } = await supabase
+        .from('stage_attempt_limits')
+        .select('stage_id, max_attempts');
+      
+      const limitsMap = new Map<string, number>();
+      stageLimits?.forEach(l => {
+        if (l.stage_id) limitsMap.set(l.stage_id, l.max_attempts);
+      });
+
       // Inicializar com valores padrão
-      dealIds.forEach(id => summaryMap.set(id, { ...defaultSummary }));
+      dealIds.forEach(id => {
+        const stageId = stageIds?.get(id);
+        const maxAttempts = stageId ? (limitsMap.get(stageId) ?? DEFAULT_MAX_ATTEMPTS) : DEFAULT_MAX_ATTEMPTS;
+        summaryMap.set(id, { ...defaultSummary, maxAttempts });
+      });
 
       // Buscar todas as ligações de uma vez
       const { data: calls } = await supabase
@@ -131,7 +161,7 @@ export function useBatchDealActivitySummary(dealIds: string[]) {
 
       // Marcar tentativas esgotadas
       summaryMap.forEach((summary) => {
-        summary.attemptsExhausted = summary.totalCalls >= MAX_ATTEMPTS && summary.answeredCalls === 0;
+        summary.attemptsExhausted = summary.totalCalls >= summary.maxAttempts && summary.answeredCalls === 0;
       });
 
       return summaryMap;
