@@ -227,3 +227,6 @@ verify_jwt = false
 
 [functions.notify-new-lead]
 verify_jwt = false
+
+[functions.backfill-deal-tasks]
+verify_jwt = false
