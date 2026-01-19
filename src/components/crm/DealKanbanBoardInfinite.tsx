@@ -10,7 +10,6 @@ import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
 import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
-import { useGenerateTasksForStage } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { Inbox, Loader2 } from 'lucide-react';
@@ -46,7 +45,6 @@ export const DealKanbanBoardInfinite = ({
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
-  const generateTasks = useGenerateTasksForStage();
   const { data: stages } = useCRMStages(originId);
   const { user } = useAuth();
   
@@ -156,7 +154,7 @@ export const DealKanbanBoardInfinite = ({
                               newStage?.stage_name?.toLowerCase().includes('lost');
     
     updateDealMutation.mutate(
-      { id: dealId, stage_id: newStageId },
+      { id: dealId, stage_id: newStageId, previousStageId: oldStageId },
       {
         onSuccess: () => {
           const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
@@ -178,17 +176,7 @@ export const DealKanbanBoardInfinite = ({
             }
           });
           
-          // Generate tasks for new stage automatically
-          if (deal) {
-            generateTasks.mutate({
-              dealId: dealId,
-              contactId: deal.contact_id,
-              ownerId: deal.owner_id,
-              originId: deal.origin_id || originId,
-              stageId: newStageId,
-              createdBy: user?.id,
-            });
-          }
+          // Tasks are now generated automatically in useUpdateCRMDeal hook
           
           // Se moveu para "Sem Interesse", abrir modal de qualificação
           if (isNoInterestStage && deal) {
