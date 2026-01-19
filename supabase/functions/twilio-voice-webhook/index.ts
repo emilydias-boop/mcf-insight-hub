@@ -114,9 +114,9 @@ serve(async (req) => {
       updated_at: new Date().toISOString()
     };
 
-    // Set answered_at when call is answered
+    // Set started_at when call is answered
     if (callStatus === 'in-progress') {
-      updates.answered_at = new Date().toISOString();
+      updates.started_at = new Date().toISOString();
     }
 
     // Set ended_at and duration when call completes
