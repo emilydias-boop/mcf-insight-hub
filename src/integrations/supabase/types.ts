@@ -6440,7 +6440,6 @@ export type Database = {
         Returns: {
           customer_email: string
           customer_name: string
-          gross_winner: boolean
           id: string
           installment_number: number
           net_value: number
