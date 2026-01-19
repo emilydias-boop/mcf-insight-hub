@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Users, Zap, Database, Shield, Upload, FileText, History } from 'lucide-react';
+import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, ClipboardList } from 'lucide-react';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
 import { ActivityTemplateManager } from '@/components/crm/ActivityTemplateManager';
 import { WhatsAppConfigCard } from '@/components/whatsapp/WhatsAppConfigCard';
 import { CRMPermissionsManager } from '@/components/crm/CRMPermissionsManager';
+import { QualificationFieldsManager } from '@/components/crm/QualificationFieldsManager';
 import { useAuth } from '@/contexts/AuthContext';
 
 // Import sub-page components
@@ -19,31 +20,43 @@ const ConfiguracoesContent = () => {
   const { role } = useAuth();
   const canManageTemplates = role === 'admin' || role === 'coordenador' || role === 'manager';
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [qualificationFieldsOpen, setQualificationFieldsOpen] = useState(false);
 
   const settingsSections = [
+    {
+      icon: ClipboardList,
+      title: 'Campos de Qualificação',
+      description: 'Configure as perguntas do formulário de qualificação por funil',
+      action: 'Gerenciar Campos',
+      key: 'qualification',
+    },
     {
       icon: Database,
       title: 'Campos Customizados',
       description: 'Adicione campos personalizados aos seus contatos e negócios',
       action: 'Gerenciar Campos',
+      key: 'custom-fields',
     },
     {
       icon: Zap,
       title: 'Automações',
       description: 'Configure automações para otimizar seu fluxo de trabalho',
       action: 'Configurar Automações',
+      key: 'automations',
     },
     {
       icon: Users,
       title: 'Estágios do Pipeline',
       description: 'Personalize os estágios do seu funil de vendas',
       action: 'Editar Estágios',
+      key: 'stages',
     },
     {
       icon: Shield,
       title: 'Permissões',
       description: 'Gerencie permissões de acesso ao CRM',
       action: 'Gerenciar Permissões',
+      key: 'permissions',
     },
   ];
 
@@ -65,9 +78,15 @@ const ConfiguracoesContent = () => {
       <div className="grid gap-6 md:grid-cols-2">
         {settingsSections.map((section) => {
           const Icon = section.icon;
-          const isPermissions = section.title === 'Permissões';
+          const handleClick = () => {
+            if (section.key === 'permissions') {
+              setPermissionsOpen(true);
+            } else if (section.key === 'qualification') {
+              setQualificationFieldsOpen(true);
+            }
+          };
           return (
-            <Card key={section.title} className="bg-card border-border">
+            <Card key={section.key} className="bg-card border-border">
               <CardHeader>
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -82,7 +101,7 @@ const ConfiguracoesContent = () => {
               <CardContent>
                 <Button 
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                  onClick={isPermissions ? () => setPermissionsOpen(true) : undefined}
+                  onClick={handleClick}
                 >
                   {section.action}
                 </Button>
@@ -94,6 +113,9 @@ const ConfiguracoesContent = () => {
 
       {/* Modal de Permissões */}
       <CRMPermissionsManager open={permissionsOpen} onOpenChange={setPermissionsOpen} />
+
+      {/* Modal de Campos de Qualificação */}
+      <QualificationFieldsManager open={qualificationFieldsOpen} onOpenChange={setQualificationFieldsOpen} />
 
       <Card className="bg-card border-border">
         <CardHeader>
