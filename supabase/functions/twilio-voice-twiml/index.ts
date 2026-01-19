@@ -7,9 +7,10 @@ serve(async (req) => {
     
     const to = formData.get('To')?.toString();
     const from = formData.get('From')?.toString();
+    const callRecordId = formData.get('callRecordId')?.toString() || '';
     const callerId = Deno.env.get('TWILIO_PHONE_NUMBER');
 
-    console.log(`TwiML request: To=${to}, From=${from}`);
+    console.log(`TwiML request: To=${to}, From=${from}, callRecordId=${callRecordId}`);
 
     if (!to) {
       console.error('Missing To number');
@@ -34,6 +35,12 @@ serve(async (req) => {
       cleanNumber = '+55' + cleanNumber.replace(/\D/g, '');
     }
 
+    // Build webhook URL with callRecordId as query parameter
+    const webhookBaseUrl = 'https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook';
+    const webhookUrl = callRecordId 
+      ? `${webhookBaseUrl}?callRecordId=${callRecordId}`
+      : webhookBaseUrl;
+
     // Generate TwiML to dial the number with recording enabled
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -41,14 +48,14 @@ serve(async (req) => {
     callerId="${callerId}" 
     timeout="30" 
     record="record-from-answer-dual"
-    recordingStatusCallback="https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook"
+    recordingStatusCallback="${webhookUrl}"
     recordingStatusCallbackEvent="completed"
-    action="https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/twilio-voice-webhook">
+    action="${webhookUrl}">
     <Number>${cleanNumber}</Number>
   </Dial>
 </Response>`;
 
-    console.log(`Generated TwiML for call to: ${cleanNumber}`);
+    console.log(`Generated TwiML for call to: ${cleanNumber}, webhook: ${webhookUrl}`);
 
     return new Response(twiml, {
       headers: { 'Content-Type': 'application/xml' }
