@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { 
   isSdrWithNegociosAccess, 
-  getAuthorizedGroupsForUser 
+  getAuthorizedOriginsForUser 
 } from '@/components/auth/NegociosAccessGuard';
 
 export function useNewLeadNotifications() {
@@ -17,10 +17,10 @@ export function useNewLeadNotifications() {
     // Só ativar para SDRs com acesso especial a Negócios
     if (!user?.id || !isSdrWithNegociosAccess(role, user.id)) return;
 
-    const authorizedGroups = getAuthorizedGroupsForUser(user.id);
-    if (authorizedGroups.length === 0) return;
+    const authorizedOrigins = getAuthorizedOriginsForUser(user.id);
+    if (authorizedOrigins.length === 0) return;
 
-    console.log('[NewLeadNotifications] Subscrevendo a novos leads para grupos:', authorizedGroups);
+    console.log('[NewLeadNotifications] Subscrevendo a novos leads para origens:', authorizedOrigins);
 
     // Subscrever a novos deals
     const channel = supabase
@@ -38,35 +38,20 @@ export function useNewLeadNotifications() {
           
           if (!newDeal.origin_id) return;
 
-          try {
-            // Verificar se o origin pertence ao grupo autorizado
-            const { data: origin, error } = await supabase
-              .from('crm_origins')
-              .select('group_id, name')
-              .eq('id', newDeal.origin_id)
-              .single();
+          // Verificar se o origin é autorizado (direto, não via grupo)
+          if (authorizedOrigins.includes(newDeal.origin_id)) {
+            console.log('[NewLeadNotifications] Lead pertence à origem autorizada!');
+            
+            // Mostrar toast de notificação
+            toast({
+              title: '🚨 Novo Lead!',
+              description: `Lead "${newDeal.name || 'Novo'}" chegou em Inside Sales`,
+              variant: 'default',
+            });
 
-            if (error) {
-              console.error('[NewLeadNotifications] Erro ao buscar origin:', error);
-              return;
-            }
-
-            if (origin && authorizedGroups.includes(origin.group_id)) {
-              console.log('[NewLeadNotifications] Lead pertence ao grupo autorizado!');
-              
-              // Mostrar toast de notificação
-              toast({
-                title: '🚨 Novo Lead!',
-                description: `Lead "${newDeal.name || 'Novo'}" chegou em ${origin.name || 'Perpétuo X1'}`,
-                variant: 'default',
-              });
-
-              // Invalidar queries do Kanban para atualizar a lista
-              queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
-              queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
-            }
-          } catch (err) {
-            console.error('[NewLeadNotifications] Erro ao processar novo lead:', err);
+            // Invalidar queries do Kanban para atualizar a lista
+            queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+            queryClient.invalidateQueries({ queryKey: ['user-notifications'] });
           }
         }
       )
