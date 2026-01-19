@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
     // Verificar se já existe KPI e preservar tentativas/organização
     const { data: existingKpi, error: kpiCheckError } = await supabase
       .from('sdr_month_kpi')
-      .select('id, tentativas_ligacoes, score_organizacao')
+      .select('id, tentativas_ligacoes, score_organizacao, ligacoes_manual_override')
       .eq('sdr_id', sdr_id)
       .eq('ano_mes', ano_mes)
       .maybeSingle()
@@ -190,6 +190,63 @@ Deno.serve(async (req) => {
     if (kpiCheckError) {
       console.error('Erro ao verificar KPI existente:', kpiCheckError)
     }
+
+    // ========== CONTAR LIGAÇÕES AUTOMATICAMENTE ==========
+    console.log('Contando ligações automáticas...')
+    
+    let totalLigacoes = 0
+    let ligacoesContato = 0
+    
+    // Buscar user_id do SDR (pode estar vinculado ou não)
+    const { data: sdrWithUser } = await supabase
+      .from('sdr')
+      .select('user_id')
+      .eq('id', sdr_id)
+      .single()
+    
+    if (sdrWithUser?.user_id) {
+      // Outcomes que indicam contato realizado
+      const CONTACT_OUTCOMES = ['interessado', 'agendou_r1', 'agendou_r2', 'atendeu', 'qualificado', 'callback']
+      
+      const { data: calls, error: callsError } = await supabase
+        .from('calls')
+        .select('id, status, outcome, duration_seconds, started_at, ended_at')
+        .eq('user_id', sdrWithUser.user_id)
+        .eq('direction', 'outbound')
+        .gte('created_at', `${monthStart}T00:00:00`)
+        .lte('created_at', `${monthEnd}T23:59:59`)
+      
+      if (callsError) {
+        console.error('Erro ao buscar ligações:', callsError)
+      } else if (calls) {
+        totalLigacoes = calls.length
+        
+        for (const call of calls) {
+          const duration = call.duration_seconds || 
+            (call.started_at && call.ended_at 
+              ? Math.floor((new Date(call.ended_at).getTime() - new Date(call.started_at).getTime()) / 1000)
+              : 0)
+          
+          const isContact = 
+            (call.status === 'completed' && duration > 0) ||
+            CONTACT_OUTCOMES.includes(call.outcome || '')
+          
+          if (isContact) {
+            ligacoesContato++
+          }
+        }
+        
+        console.log(`📞 Ligações: Total=${totalLigacoes}, Contatos=${ligacoesContato}, Tentativas=${totalLigacoes - ligacoesContato}`)
+      }
+    } else {
+      console.log('⚠️ SDR não possui user_id vinculado, ligações não serão contadas automaticamente')
+    }
+
+    // Determinar se usa valor manual ou automático
+    const usarManual = existingKpi?.ligacoes_manual_override === true
+    const tentativasFinais = usarManual 
+      ? (existingKpi?.tentativas_ligacoes || 0) 
+      : totalLigacoes
 
     const kpiData = {
       sdr_id,
@@ -199,8 +256,12 @@ Deno.serve(async (req) => {
       reunioes_realizadas: reunioesRealizadas,
       taxa_no_show: taxaNoShow,
       intermediacoes_contrato: totalIntermediacoes || 0,
-      // Preservar tentativas e organização se já existirem
-      tentativas_ligacoes: existingKpi?.tentativas_ligacoes || 0,
+      // Ligações automáticas
+      tentativas_auto: totalLigacoes,
+      ligacoes_contato: ligacoesContato,
+      // Usar valor manual se override ativo, senão usar automático
+      tentativas_ligacoes: tentativasFinais,
+      // Preservar organização se já existir
       score_organizacao: existingKpi?.score_organizacao || 0,
       updated_at: new Date().toISOString(),
     }
@@ -243,6 +304,10 @@ Deno.serve(async (req) => {
           total_activities: metricsData?.summary?.total_movimentacoes || 0,
           intermediacoes_contrato: totalIntermediacoes || 0,
           intermediacoes_inserted: intermediacoesInserted,
+          ligacoes_total: totalLigacoes,
+          ligacoes_contato: ligacoesContato,
+          ligacoes_tentativas: totalLigacoes - ligacoesContato,
+          ligacoes_manual_override: usarManual,
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

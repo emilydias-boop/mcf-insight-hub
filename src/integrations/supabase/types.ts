@@ -5058,6 +5058,8 @@ export type Database = {
           created_at: string | null
           id: string
           intermediacoes_contrato: number | null
+          ligacoes_contato: number | null
+          ligacoes_manual_override: boolean | null
           modo_entrada: string | null
           no_shows: number | null
           reunioes_agendadas: number | null
@@ -5065,6 +5067,7 @@ export type Database = {
           score_organizacao: number | null
           sdr_id: string
           taxa_no_show: number | null
+          tentativas_auto: number | null
           tentativas_ligacoes: number | null
           updated_at: string | null
         }
@@ -5073,6 +5076,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           intermediacoes_contrato?: number | null
+          ligacoes_contato?: number | null
+          ligacoes_manual_override?: boolean | null
           modo_entrada?: string | null
           no_shows?: number | null
           reunioes_agendadas?: number | null
@@ -5080,6 +5085,7 @@ export type Database = {
           score_organizacao?: number | null
           sdr_id: string
           taxa_no_show?: number | null
+          tentativas_auto?: number | null
           tentativas_ligacoes?: number | null
           updated_at?: string | null
         }
@@ -5088,6 +5094,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           intermediacoes_contrato?: number | null
+          ligacoes_contato?: number | null
+          ligacoes_manual_override?: boolean | null
           modo_entrada?: string | null
           no_shows?: number | null
           reunioes_agendadas?: number | null
@@ -5095,6 +5103,7 @@ export type Database = {
           score_organizacao?: number | null
           sdr_id?: string
           taxa_no_show?: number | null
+          tentativas_auto?: number | null
           tentativas_ligacoes?: number | null
           updated_at?: string | null
         }
