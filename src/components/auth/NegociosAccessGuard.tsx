@@ -11,6 +11,8 @@ export interface NegociosAccessConfig {
   userId: string;
   userName: string;
   allowedGroupIds: string[]; // IDs dos grupos/funis que o usuário pode ver
+  whatsappPhone?: string; // Número para notificações WhatsApp
+  email?: string; // Email para notificações
 }
 
 export const NEGOCIOS_AUTHORIZED_SDRS: NegociosAccessConfig[] = [
@@ -18,6 +20,8 @@ export const NEGOCIOS_AUTHORIZED_SDRS: NegociosAccessConfig[] = [
     userId: 'c7005c87-76fc-43a9-8bfa-e1b41f48a9b7', // Caroline Aparecida Corrêa
     userName: 'Caroline Correa',
     allowedGroupIds: ['a6f3cbfc-0567-427f-a405-5a869aaa6010'], // Perpétuo - X1
+    whatsappPhone: '5519992937317',
+    email: 'carol.correa@minhacasafinanciada.com',
   },
 ];
 

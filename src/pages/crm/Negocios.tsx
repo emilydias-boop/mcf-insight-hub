@@ -19,8 +19,11 @@ import {
   isSdrWithNegociosAccess, 
   getAuthorizedGroupsForUser 
 } from '@/components/auth/NegociosAccessGuard';
+import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 
 const Negocios = () => {
+  // Ativar notificações em tempo real para novos leads
+  useNewLeadNotifications();
   const { role, user } = useAuth();
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
