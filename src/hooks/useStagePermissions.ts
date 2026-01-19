@@ -22,25 +22,25 @@ const STAGE_NAME_MAP: Record<string, string> = {
   'qualificado': 'lead_qualificado',
   'lead qualificado': 'lead_qualificado',
   
-  // Variações do pipeline Inside Sales (com acento)
+  // Variações do pipeline Inside Sales (com acento) -> mapeando para IDs reais em deal_stages
   'reunião 01 agendada': 'reuniao_1_agendada',
-  'reunião 01 realizada': 'reuniao_1_realizada',
-  'reunião 02 agendada': 'reuniao_2_agendada',
-  'reunião 02 realizada': 'reuniao_2_realizada',
+  'reunião 01 realizada': 'r1_realizada',    // NOTA: deal_stages usa r1_realizada
+  'reunião 02 agendada': 'r2_agendada',      // NOTA: deal_stages usa r2_agendada
+  'reunião 02 realizada': 'r2_realizada',
   
-  // Variações do pipeline Inside Sales (sem acento)
+  // Variações sem acento
   'reuniao 01 agendada': 'reuniao_1_agendada',
-  'reuniao 01 realizada': 'reuniao_1_realizada',
-  'reuniao 02 agendada': 'reuniao_2_agendada',
-  'reuniao 02 realizada': 'reuniao_2_realizada',
+  'reuniao 01 realizada': 'r1_realizada',
+  'reuniao 02 agendada': 'r2_agendada',
+  'reuniao 02 realizada': 'r2_realizada',
   
   // Variações curtas (R1/R2)
   'agendamento': 'reuniao_1_agendada',
   'reunião agendada': 'reuniao_1_agendada',
   'r1 agendada': 'reuniao_1_agendada',
-  'r1 realizada': 'reuniao_1_realizada',
-  'r2 agendada': 'reuniao_2_agendada',
-  'r2 realizada': 'reuniao_2_realizada',
+  'r1 realizada': 'r1_realizada',
+  'r2 agendada': 'r2_agendada',
+  'r2 realizada': 'r2_realizada',
   
   // Estágios finais
   'no-show': 'no_show',
@@ -48,11 +48,11 @@ const STAGE_NAME_MAP: Record<string, string> = {
   'noshow': 'no_show',
   'perdido': 'perdido',
   'sem interesse': 'sem_interesse',
-  'contrato enviado': 'contrato_enviado',
+  'contrato enviado': 'contrato_pago',
   'venda realizada': 'venda_realizada',
   'contrato pago': 'contrato_pago',
-  'ganho': 'ganho',
-  'fechado': 'ganho',
+  'ganho': 'venda_realizada',
+  'fechado': 'venda_realizada',
 };
 
 const normalizeStageId = (stageName: string): string => {
