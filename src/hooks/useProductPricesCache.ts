@@ -100,8 +100,14 @@ export const getCachedFixedGrossPrice = (productName: string | null): number => 
   
   const normalizedName = productName.toLowerCase().trim();
   
-  // Busca por pattern matching
-  for (const { pattern, price } of pricesByPattern) {
+  // Ordenar do mais longo para o mais curto (mais específico primeiro)
+  // Isso garante que "Imersão Presencial Alphaville SP 27/01" seja encontrado antes de "Imersão Presencial"
+  const sortedPatterns = [...pricesByPattern].sort(
+    (a, b) => b.pattern.length - a.pattern.length
+  );
+  
+  // Busca por pattern matching (mais específico primeiro)
+  for (const { pattern, price } of sortedPatterns) {
     if (normalizedName.includes(pattern) || pattern.includes(normalizedName)) {
       return price;
     }
