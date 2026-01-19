@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, getDay } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import type { DayContentProps } from 'react-day-picker';
 import { ptBR } from 'date-fns/locale';
 import { Search, Calendar, Clock, User, Tag, Send, Phone, Mail, X, Check, CalendarDays, StickyNote } from 'lucide-react';
@@ -48,6 +50,8 @@ interface QuickScheduleModalProps {
   closers: CloserWithAvailability[];
   preselectedCloserId?: string;
   preselectedDate?: Date;
+  prefilledDealId?: string;
+  prefilledNotes?: string;
 }
 
 interface DealOption {
@@ -100,7 +104,9 @@ export function QuickScheduleModal({
   onOpenChange, 
   closers,
   preselectedCloserId,
-  preselectedDate 
+  preselectedDate,
+  prefilledDealId,
+  prefilledNotes,
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const isCoordinatorOrAbove = ['admin', 'manager', 'coordenador'].includes(role || '');
@@ -133,7 +139,7 @@ export function QuickScheduleModal({
   const [selectedCloser, setSelectedCloser] = useState(preselectedCloserId || '');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(preselectedDate);
   const [selectedTime, setSelectedTime] = useState(preselectedDate ? format(preselectedDate, 'HH:mm') : '09:00');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(prefilledNotes || '');
 
   // Sync internal state when preselected values change and modal opens
   useEffect(() => {
@@ -145,8 +151,52 @@ export function QuickScheduleModal({
         setSelectedDate(preselectedDate);
         setSelectedTime(format(preselectedDate, 'HH:mm'));
       }
+      if (prefilledNotes) {
+        setNotes(prefilledNotes);
+      }
     }
-  }, [open, preselectedCloserId, preselectedDate]);
+  }, [open, preselectedCloserId, preselectedDate, prefilledNotes]);
+  
+  // Fetch prefilled deal if provided
+  const { data: prefilledDealData } = useQuery({
+    queryKey: ['prefilled-deal', prefilledDealId],
+    queryFn: async () => {
+      if (!prefilledDealId) return null;
+      const { data } = await supabase
+        .from('crm_deals')
+        .select(`
+          id, name, tags,
+          crm_contacts:contact_id (id, name, phone, email),
+          crm_stages:stage_id (id, stage_name)
+        `)
+        .eq('id', prefilledDealId)
+        .single();
+      return data;
+    },
+    enabled: !!prefilledDealId && open,
+  });
+  
+  // Auto-select prefilled deal when data loads
+  useEffect(() => {
+    if (prefilledDealData && open && !selectedDeal) {
+      const contact = prefilledDealData.crm_contacts as any;
+      setSelectedDeal({
+        id: prefilledDealData.id,
+        name: prefilledDealData.name,
+        tags: prefilledDealData.tags || [],
+        contact: contact ? {
+          id: contact.id,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+        } : null,
+        stage: prefilledDealData.crm_stages as any,
+      });
+      setNameQuery(contact?.name || prefilledDealData.name);
+      setSelectedEmail(contact?.email || '');
+      setSelectedPhone(contact?.phone || '');
+    }
+  }, [prefilledDealData, open]);
   const [alreadyBuilds, setAlreadyBuilds] = useState<boolean | null>(null);
   const [autoSendWhatsApp, setAutoSendWhatsApp] = useState(true);
   

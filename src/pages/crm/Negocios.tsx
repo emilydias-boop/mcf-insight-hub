@@ -15,6 +15,10 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
+import { 
+  isSdrWithNegociosAccess, 
+  getAuthorizedGroupsForUser 
+} from '@/components/auth/NegociosAccessGuard';
 
 const Negocios = () => {
   const { role, user } = useAuth();
@@ -27,6 +31,10 @@ const Negocios = () => {
     owner: null,
     dealStatus: 'all',
   });
+  
+  // Verificar se é SDR com acesso especial a Negócios
+  const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
+  const authorizedGroups = getAuthorizedGroupsForUser(user?.id);
   
   // Ref para garantir que só define o default UMA VEZ
   const hasSetDefault = useRef(false);
@@ -60,6 +68,13 @@ const Negocios = () => {
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current) {
       hasSetDefault.current = true;
+      
+      // Se for SDR com acesso limitado, pré-selecionar o grupo autorizado
+      if (isSdrWithAccess && authorizedGroups.length > 0) {
+        setSelectedPipelineId(authorizedGroups[0]); // Perpétuo X1
+        return;
+      }
+      
       const insideSales = pipelines.find(p => 
         p.name === 'PIPELINE INSIDE SALES' || 
         p.display_name?.includes('Inside Sales')
@@ -70,7 +85,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines]);
+  }, [pipelines, isSdrWithAccess, authorizedGroups]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -158,15 +173,17 @@ const Negocios = () => {
   
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
-      {/* Sidebar - hidden on mobile */}
-      <div className="hidden md:block">
-        <OriginsSidebar
-          pipelineId={selectedPipelineId}
-          selectedOriginId={selectedOriginId}
-          onSelectOrigin={setSelectedOriginId}
-          onSelectPipeline={handlePipelineChange}
-        />
-      </div>
+      {/* Sidebar - hidden on mobile, hidden for restricted SDRs */}
+      {!isSdrWithAccess && (
+        <div className="hidden md:block">
+          <OriginsSidebar
+            pipelineId={selectedPipelineId}
+            selectedOriginId={selectedOriginId}
+            onSelectOrigin={setSelectedOriginId}
+            onSelectPipeline={handlePipelineChange}
+          />
+        </div>
+      )}
       
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b gap-3">
