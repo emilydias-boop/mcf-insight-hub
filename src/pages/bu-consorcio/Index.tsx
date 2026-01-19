@@ -171,7 +171,10 @@ export default function ConsorcioPage() {
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
-  const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({ startDate, endDate });
+  const { data: summary, isLoading: summaryLoading } = useConsorcioSummary({
+    startDate: dateRangeFilter.startDate || startDate,
+    endDate: dateRangeFilter.endDate || endDate,
+  });
   const deleteCard = useDeleteConsorcioCard();
   const recalculateAll = useRecalculateAllCommissions();
 
