@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
-import { useStagePermissions, isCloserOnlyStage, isLostStage } from '@/hooks/useStagePermissions';
+import { useStagePermissions, isLostStage } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
@@ -44,7 +44,7 @@ export const DealKanbanBoardInfinite = ({
   fetchNextPage,
   showLostDeals = false
 }: DealKanbanBoardInfiniteProps) => {
-  const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
+  const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
   const { data: stages } = useCRMStages(originId);
@@ -69,22 +69,21 @@ export const DealKanbanBoardInfinite = ({
     contactName: string;
   }>({ open: false, dealId: '', contactName: '' });
   
-  // Filter stages - hide closer-only and lost stages from SDRs (unless filtered)
+  // Filter stages based on stage_permissions (source of truth)
+  // For SDRs, also filter lost stages unless showLostDeals is true
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
     
-    // SDRs don't see closer-only stages (Realizada, Contrato Pago, etc.)
-    // and don't see lost stages unless showLostDeals is true
-    if (role === 'sdr') {
-      return activeStages.filter((s: any) => {
-        if (isCloserOnlyStage(s.stage_name)) return false;
-        if (!showLostDeals && isLostStage(s.stage_name)) return false;
-        return true;
-      });
+    // Use stage_permissions as source of truth for visibility
+    const filteredByPermission = activeStages.filter((s: any) => canViewStage(s.id));
+    
+    // For SDRs, hide lost stages unless explicitly filtered
+    if (role === 'sdr' && !showLostDeals) {
+      return filteredByPermission.filter((s: any) => !isLostStage(s.stage_name));
     }
     
-    return activeStages;
-  }, [stages, role, showLostDeals]);
+    return filteredByPermission;
+  }, [stages, role, showLostDeals, canViewStage]);
   
   // Buscar atividades de todos os deals de uma vez para performance
   // Incluir stageIds para buscar limites corretos por estágio
