@@ -43,10 +43,17 @@ export async function findPhoneByEmail(email: string): Promise<string | null> {
 
 /**
  * Extrai telefone de múltiplas fontes do deal
+ * Prioriza o contato passado separadamente (mais confiável)
  */
-export function extractPhoneFromDeal(deal: any): string | null {
+export function extractPhoneFromDeal(deal: any, contact?: any): string | null {
+  // Prioridade 1: Telefone do contato passado (mais confiável, vem do crm_contacts)
+  if (contact?.phone) return contact.phone;
+  
+  // Prioridade 2: Telefone do deal.contact (se carregado via join)
+  if (deal.contact?.phone) return deal.contact.phone;
+  
+  // Prioridade 3: Custom fields (pode estar desatualizado)
   return (
-    deal.contact?.phone ||
     deal.custom_fields?.telefone ||
     deal.custom_fields?.phone ||
     deal.custom_fields?.complete_phone ||
