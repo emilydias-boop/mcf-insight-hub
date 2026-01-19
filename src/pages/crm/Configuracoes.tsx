@@ -50,6 +50,51 @@ const ConfiguracoesContent = () => {
     }
   };
 
+  const handleBackfillAll = async () => {
+    setIsBackfilling(true);
+    let totalProcessed = 0;
+    let totalTasks = 0;
+    let totalSkipped = 0;
+    let hasMore = true;
+    let iterations = 0;
+    const maxIterations = 200;
+
+    try {
+      while (hasMore && iterations < maxIterations) {
+        const { data, error } = await supabase.functions.invoke('backfill-deal-tasks', {
+          body: { dryRun: false, limit: 200 }
+        });
+
+        if (error) throw error;
+
+        const processed = data.processed || 0;
+        totalProcessed += processed;
+        totalTasks += data.tasksCreated || 0;
+        totalSkipped += data.skipped || 0;
+        iterations++;
+
+        hasMore = processed > 0;
+
+        setBackfillResult({
+          processed: totalProcessed,
+          tasksCreated: totalTasks,
+          skipped: totalSkipped
+        });
+
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      toast.success(`Concluído! ${totalTasks} tarefas criadas para ${totalProcessed} deals em ${iterations} lotes`);
+    } catch (error) {
+      console.error('Backfill all error:', error);
+      toast.error(`Erro após ${iterations} lotes. ${totalTasks} tarefas criadas até o momento.`);
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
   const settingsSections = [
     {
       icon: ClipboardList,
@@ -195,13 +240,18 @@ const ConfiguracoesContent = () => {
               <p className="text-sm text-muted-foreground">
                 Gera tarefas automaticamente para deals existentes que não possuem tarefas pendentes
               </p>
-              {backfillResult && (
+              {backfillResult && !isBackfilling && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Último resultado: {backfillResult.tasksCreated ?? backfillResult.tasksToCreate} tarefas, {backfillResult.processed} deals processados, {backfillResult.skipped} ignorados
                 </p>
               )}
+              {isBackfilling && backfillResult && (
+                <p className="text-xs text-primary mt-1 animate-pulse">
+                  Processando... {backfillResult.processed} deals, {backfillResult.tasksCreated} tarefas criadas
+                </p>
+              )}
             </div>
-            <div className="flex gap-2 flex-shrink-0">
+            <div className="flex gap-2 flex-shrink-0 flex-wrap">
               <Button 
                 variant="outline" 
                 onClick={() => handleBackfillTasks(true)}
@@ -211,11 +261,26 @@ const ConfiguracoesContent = () => {
                 {isBackfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simular'}
               </Button>
               <Button 
+                variant="outline"
                 onClick={() => handleBackfillTasks(false)}
                 disabled={isBackfilling}
                 size="sm"
               >
-                {isBackfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Executar'}
+                {isBackfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Executar 200'}
+              </Button>
+              <Button 
+                onClick={handleBackfillAll}
+                disabled={isBackfilling}
+                size="sm"
+              >
+                {isBackfilling ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    Processando...
+                  </>
+                ) : (
+                  'Executar Tudo'
+                )}
               </Button>
             </div>
           </div>
