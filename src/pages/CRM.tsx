@@ -3,20 +3,24 @@ import { NavLink } from '@/components/NavLink';
 import { LayoutDashboard, Users, Briefcase, MessageCircle, Settings, Shield, CalendarDays, UserX, Copy } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
+import { canUserAccessNegocios } from '@/components/auth/NegociosAccessGuard';
 
 const CRM = () => {
   const { role, user } = useAuth();
   const location = useLocation();
   
-  // Roles que só podem ver Agenda (exceto se estiver na whitelist R2)
+  // Roles que só podem ver Agenda (exceto se estiver na whitelist R2 ou Negócios)
   const agendaOnlyRoles = ['sdr', 'closer'];
   const isAgendaOnly = role && agendaOnlyRoles.includes(role);
   
   // Verificar se usuário tem permissão especial para R2
   const canViewR2 = canUserAccessR2(role, user?.id);
   
-  // Redirecionar para /crm/agenda se for sdr/closer sem permissão R2
-  if (isAgendaOnly && !canViewR2 && location.pathname === '/crm') {
+  // Verificar se usuário tem permissão especial para Negócios
+  const canViewNegocios = canUserAccessNegocios(role, user?.id);
+  
+  // Redirecionar para /crm/agenda se for sdr/closer sem permissão R2 ou Negócios
+  if (isAgendaOnly && !canViewR2 && !canViewNegocios && location.pathname === '/crm') {
     return <Navigate to="/crm/agenda" replace />;
   }
   
@@ -37,15 +41,17 @@ const CRM = () => {
   let navItems = allNavItems;
   
   if (isAgendaOnly) {
+    const allowedTabs: string[] = ['/crm/agenda']; // Sempre tem acesso à Agenda R1
+    
     if (canViewR2) {
-      // SDR/Closer com permissão R2: vê apenas agendas
-      navItems = allNavItems.filter(item => 
-        item.to === '/crm/agenda' || item.to === '/crm/agenda-r2'
-      );
-    } else {
-      // SDR/Closer regular: só vê Agenda R1
-      navItems = allNavItems.filter(item => item.to === '/crm/agenda');
+      allowedTabs.push('/crm/agenda-r2');
     }
+    
+    if (canViewNegocios) {
+      allowedTabs.push('/crm/negocios');
+    }
+    
+    navItems = allNavItems.filter(item => allowedTabs.includes(item.to));
   }
 
   return (

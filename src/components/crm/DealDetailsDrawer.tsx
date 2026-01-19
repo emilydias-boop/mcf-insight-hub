@@ -13,7 +13,11 @@ import { NextActionBlockCompact } from './NextActionBlockCompact';
 import { A010JourneyCollapsible } from './A010JourneyCollapsible';
 import { QuickActionsBlock } from './QuickActionsBlock';
 import { LeadJourneyCard } from './LeadJourneyCard';
+import { SdrQualificationBlock } from './SdrQualificationBlock';
+import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { Phone, History, StickyNote, CheckSquare } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { isSdrWithNegociosAccess } from '@/components/auth/NegociosAccessGuard';
 
 interface DealDetailsDrawerProps {
   dealId: string | null;
@@ -22,10 +26,23 @@ interface DealDetailsDrawerProps {
 }
 
 export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDrawerProps) => {
+  const { role, user } = useAuth();
   const { data: deal, isLoading: dealLoading, refetch: refetchDeal } = useCRMDeal(dealId || '');
   const { data: contact, isLoading: contactLoading } = useCRMContact(deal?.contact_id || '');
   
+  // Verificar se é SDR com acesso especial
+  const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
+  
+  // State para modal de agendamento
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [leadSummaryForSchedule, setLeadSummaryForSchedule] = useState('');
+  
   const isLoading = dealLoading || contactLoading;
+  
+  const handleScheduleFromQualification = (summary: string) => {
+    setLeadSummaryForSchedule(summary);
+    setShowScheduleDialog(true);
+  };
   
   if (!dealId) return null;
   
@@ -72,6 +89,16 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
               <LeadJourneyCard dealId={dealId} />
+              
+              {/* ===== QUALIFICAÇÃO SDR (apenas para SDRs com acesso) ===== */}
+              {isSdrWithAccess && (
+                <SdrQualificationBlock
+                  dealId={deal.id}
+                  customFields={deal.custom_fields as Record<string, any> | null}
+                  onFieldChange={() => refetchDeal()}
+                  onSchedule={handleScheduleFromQualification}
+                />
+              )}
               
               {/* ===== 5. RESUMO (contato + negócio unificado) ===== */}
               <SdrSummaryBlock deal={deal} contact={contact} />
@@ -135,6 +162,18 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
           </div>
         )}
       </SheetContent>
+      
+      {/* Modal de agendamento para SDR */}
+      {dealId && (
+        <SdrScheduleDialog
+          open={showScheduleDialog}
+          onOpenChange={setShowScheduleDialog}
+          dealId={dealId}
+          contactName={contact?.name}
+          initialNotes={leadSummaryForSchedule}
+          onScheduled={() => refetchDeal()}
+        />
+      )}
     </Sheet>
   );
 };
