@@ -7,10 +7,12 @@ import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
+import { QualificationAndScheduleModal } from '@/components/crm/QualificationAndScheduleModal';
 import { useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCallQualificationTrigger } from '@/hooks/useCallQualificationTrigger';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,6 +36,18 @@ const Negocios = () => {
     owner: null,
     dealStatus: 'all',
   });
+  
+  // Hook para detectar quando lead atende a ligação
+  const { dealIdForQualification, clearTrigger } = useCallQualificationTrigger();
+  const [qualificationModalDealId, setQualificationModalDealId] = useState<string | null>(null);
+  
+  // Abrir modal de qualificação quando lead atende
+  useEffect(() => {
+    if (dealIdForQualification) {
+      setQualificationModalDealId(dealIdForQualification);
+      clearTrigger();
+    }
+  }, [dealIdForQualification, clearTrigger]);
   
   // Verificar se é SDR com acesso especial a Negócios
   const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
@@ -280,6 +294,16 @@ const Negocios = () => {
           )}
         </div>
       </div>
+      
+      {/* Modal de qualificação automática quando lead atende */}
+      {qualificationModalDealId && (
+        <QualificationAndScheduleModal
+          open={!!qualificationModalDealId}
+          onOpenChange={(open) => !open && setQualificationModalDealId(null)}
+          dealId={qualificationModalDealId}
+          autoFocus="qualification"
+        />
+      )}
     </div>
   );
 };
