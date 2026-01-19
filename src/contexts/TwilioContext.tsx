@@ -63,6 +63,12 @@ interface TwilioContextType {
   toggleMute: () => void;
   isTestPipeline: (originId: string | null | undefined) => boolean;
   testPipelineId: string | null;
+  // Qualification modal control (global)
+  qualificationModalOpen: boolean;
+  qualificationDealId: string | null;
+  qualificationContactName: string | null;
+  openQualificationModal: (dealId: string, contactName?: string) => void;
+  closeQualificationModal: () => void;
 }
 
 const TwilioContext = createContext<TwilioContextType | null>(null);
@@ -81,6 +87,11 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [currentCallDealId, setCurrentCallDealId] = useState<string | null>(null);
   const [testPipelineId, setTestPipelineId] = useState<string | null>(null);
   const [durationInterval, setDurationInterval] = useState<NodeJS.Timeout | null>(null);
+  
+  // Qualification modal state (global)
+  const [qualificationModalOpen, setQualificationModalOpen] = useState(false);
+  const [qualificationDealId, setQualificationDealId] = useState<string | null>(null);
+  const [qualificationContactName, setQualificationContactName] = useState<string | null>(null);
 
   // Fetch test pipeline ID on mount
   useEffect(() => {
@@ -284,6 +295,22 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     return originId === testPipelineId;
   }, [testPipelineId]);
 
+  // Qualification modal functions
+  const openQualificationModal = useCallback((dealId: string, contactName?: string) => {
+    setQualificationDealId(dealId);
+    setQualificationContactName(contactName || null);
+    setQualificationModalOpen(true);
+  }, []);
+
+  const closeQualificationModal = useCallback(() => {
+    setQualificationModalOpen(false);
+    // Don't clear the dealId immediately to allow for animations
+    setTimeout(() => {
+      setQualificationDealId(null);
+      setQualificationContactName(null);
+    }, 300);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -308,7 +335,13 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       hangUp,
       toggleMute,
       isTestPipeline,
-      testPipelineId
+      testPipelineId,
+      // Qualification modal
+      qualificationModalOpen,
+      qualificationDealId,
+      qualificationContactName,
+      openQualificationModal,
+      closeQualificationModal
     }}>
       {children}
     </TwilioContext.Provider>

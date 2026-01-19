@@ -7,7 +7,6 @@ import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
-import { QualificationAndScheduleModal } from '@/components/crm/QualificationAndScheduleModal';
 import { useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
@@ -26,6 +25,10 @@ import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
   useNewLeadNotifications();
+  
+  // Hook que abre o modal global quando lead atende (via TwilioContext)
+  useCallQualificationTrigger();
+  
   const { role, user } = useAuth();
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
@@ -36,18 +39,6 @@ const Negocios = () => {
     owner: null,
     dealStatus: 'all',
   });
-  
-  // Hook para detectar quando lead atende a ligação
-  const { dealIdForQualification, clearTrigger } = useCallQualificationTrigger();
-  const [qualificationModalDealId, setQualificationModalDealId] = useState<string | null>(null);
-  
-  // Abrir modal de qualificação quando lead atende
-  useEffect(() => {
-    if (dealIdForQualification) {
-      setQualificationModalDealId(dealIdForQualification);
-      clearTrigger();
-    }
-  }, [dealIdForQualification, clearTrigger]);
   
   // Verificar se é SDR com acesso especial a Negócios
   const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
@@ -295,16 +286,6 @@ const Negocios = () => {
           )}
         </div>
       </div>
-      
-      {/* Modal de qualificação automática quando lead atende */}
-      {qualificationModalDealId && (
-        <QualificationAndScheduleModal
-          open={!!qualificationModalDealId}
-          onOpenChange={(open) => !open && setQualificationModalDealId(null)}
-          dealId={qualificationModalDealId}
-          autoFocus="qualification"
-        />
-      )}
     </div>
   );
 };

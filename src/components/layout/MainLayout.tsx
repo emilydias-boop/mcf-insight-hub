@@ -6,7 +6,30 @@ import { TwilioSoftphone } from "@/components/crm/TwilioSoftphone";
 import { ConversationsProvider } from "@/contexts/ConversationsContext";
 import { ConversationsFloatingWidget } from "@/components/conversations/ConversationsFloatingWidget";
 import { ConversationsDrawer } from "@/components/conversations/ConversationsDrawer";
+import { QualificationAndScheduleModal } from "@/components/crm/QualificationAndScheduleModal";
+import { useTwilio } from "@/contexts/TwilioContext";
 import { Menu } from "lucide-react";
+
+function GlobalQualificationModal() {
+  const { 
+    qualificationModalOpen, 
+    qualificationDealId, 
+    qualificationContactName,
+    closeQualificationModal 
+  } = useTwilio();
+  
+  if (!qualificationDealId) return null;
+  
+  return (
+    <QualificationAndScheduleModal
+      open={qualificationModalOpen}
+      onOpenChange={(open) => !open && closeQualificationModal()}
+      dealId={qualificationDealId}
+      contactName={qualificationContactName || undefined}
+      autoFocus="qualification"
+    />
+  );
+}
 
 export function MainLayout() {
   return (
@@ -27,6 +50,7 @@ export function MainLayout() {
             </div>
           </SidebarInset>
           <TwilioSoftphone />
+          <GlobalQualificationModal />
           <ConversationsFloatingWidget />
           <ConversationsDrawer />
         </div>

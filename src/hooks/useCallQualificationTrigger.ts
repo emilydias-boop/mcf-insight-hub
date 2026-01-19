@@ -1,13 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTwilio } from '@/contexts/TwilioContext';
 
 /**
  * Hook que detecta quando o lead atende a ligação (callStatus muda para 'in-progress')
- * e dispara a abertura do drawer de qualificação
+ * e abre automaticamente o modal global de qualificação
  */
 export function useCallQualificationTrigger() {
-  const { callStatus, currentCallDealId } = useTwilio();
-  const [dealIdForQualification, setDealIdForQualification] = useState<string | null>(null);
+  const { 
+    callStatus, 
+    currentCallDealId, 
+    openQualificationModal 
+  } = useTwilio();
+  
   const prevStatusRef = useRef(callStatus);
 
   useEffect(() => {
@@ -17,17 +21,14 @@ export function useCallQualificationTrigger() {
       callStatus === 'in-progress' && 
       currentCallDealId
     ) {
-      setDealIdForQualification(currentCallDealId);
+      // Abre o modal global via contexto
+      openQualificationModal(currentCallDealId);
     }
     
     prevStatusRef.current = callStatus;
-  }, [callStatus, currentCallDealId]);
-
-  const clearTrigger = () => setDealIdForQualification(null);
+  }, [callStatus, currentCallDealId, openQualificationModal]);
 
   return { 
-    dealIdForQualification, 
-    clearTrigger,
     isCallInProgress: callStatus === 'in-progress'
   };
 }
