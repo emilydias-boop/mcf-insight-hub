@@ -520,6 +520,17 @@ async function handleDealCreated(supabase: any, data: any) {
   // 8. Registrar atividade
   await createDealActivity(supabase, deal.id, 'created', 'Deal criado via webhook', null, null, data);
 
+  // 9. Generate tasks from activity templates for the initial stage
+  if (deal.stage_id && deal.origin_id) {
+    try {
+      const tasksCreated = await generateTasksFromTemplates(supabase, deal);
+      console.log(`[DEAL.CREATED] Generated ${tasksCreated} tasks for deal ${deal.id}`);
+    } catch (taskError) {
+      console.error('[DEAL.CREATED] Error generating tasks:', taskError);
+      // Don't fail the deal creation if task generation fails
+    }
+  }
+
   console.log('[DEAL.CREATED] Success - Deal ID:', deal.id, 'Product:', productName);
   return { action: 'created', deal_id: deal.id, deal_name: deal.name, product_name: productName };
 }
@@ -556,6 +567,58 @@ function extractProductFromDeal(data: any, originName?: string): string | null {
   if (customProduct) return customProduct;
   
   return null;
+}
+
+// ============= HELPER: Generate tasks from activity templates =============
+async function generateTasksFromTemplates(supabase: any, deal: any): Promise<number> {
+  // 1. Fetch active templates for the deal's stage
+  const { data: templates, error: templatesError } = await supabase
+    .from('activity_templates')
+    .select('*')
+    .eq('stage_id', deal.stage_id)
+    .eq('is_active', true)
+    .order('order_index');
+
+  if (templatesError) {
+    console.error('[TASKS] Error fetching templates:', templatesError);
+    return 0;
+  }
+
+  if (!templates || templates.length === 0) {
+    console.log(`[TASKS] No templates found for stage ${deal.stage_id}`);
+    return 0;
+  }
+
+  // 2. Create tasks from templates
+  const now = new Date();
+  const tasks = templates.map((template: any) => {
+    const dueDays = template.default_due_days || 0;
+    const dueDate = new Date(now.getTime() + dueDays * 24 * 60 * 60 * 1000);
+
+    return {
+      deal_id: deal.id,
+      template_id: template.id,
+      title: template.name,
+      description: template.description,
+      type: template.type || 'other',
+      status: 'pending',
+      due_date: dueDate.toISOString(),
+      owner_id: deal.owner_id || null,
+      contact_id: deal.contact_id || null,
+    };
+  });
+
+  const { error: insertError } = await supabase
+    .from('deal_tasks')
+    .insert(tasks);
+
+  if (insertError) {
+    console.error('[TASKS] Error inserting tasks:', insertError);
+    return 0;
+  }
+
+  console.log(`[TASKS] Created ${tasks.length} tasks for deal ${deal.id}`);
+  return tasks.length;
 }
 
 async function handleDealUpdated(supabase: any, data: any) {

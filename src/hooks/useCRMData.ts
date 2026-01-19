@@ -445,10 +445,29 @@ export const useCreateCRMDeal = () => {
         .single();
       
       if (error) throw error;
+      
+      // Generate tasks automatically for the initial stage
+      if (data.stage_id && data.origin_id) {
+        try {
+          const { generateTasksForStage } = await import('./useStageTaskGeneration');
+          await generateTasksForStage(
+            data.id,
+            data.stage_id,
+            data.origin_id,
+            data.owner_id,
+            data.contact_id
+          );
+        } catch (taskError) {
+          console.error('Error generating initial tasks:', taskError);
+          // Don't fail the deal creation if task generation fails
+        }
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-tasks'] });
       toast.success('Negócio criado com sucesso');
     },
     onError: (error: any) => {
