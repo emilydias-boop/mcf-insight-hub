@@ -461,19 +461,39 @@ export const useUpdateCRMDeal = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, ...deal }: any) => {
+    mutationFn: async ({ id, previousStageId, ...deal }: any) => {
+      // First, update the deal
       const { data, error } = await supabase
         .from('crm_deals')
         .update(deal)
         .eq('id', id)
-        .select()
+        .select(`
+          *,
+          crm_contacts(id, name, email, phone)
+        `)
         .single();
       
       if (error) throw error;
+      
+      // Check if stage changed and generate tasks
+      if (deal.stage_id && previousStageId !== deal.stage_id && data.origin_id) {
+        // Import dynamically to avoid circular dependencies
+        const { handleStageChange } = await import('./useStageTaskGeneration');
+        await handleStageChange(
+          id,
+          previousStageId,
+          deal.stage_id,
+          data.origin_id,
+          data.owner_id,
+          data.contact_id
+        );
+      }
+      
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['deal-tasks'] });
       toast.success('Negócio atualizado com sucesso');
     },
     onError: (error: any) => {
