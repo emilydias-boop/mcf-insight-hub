@@ -6,11 +6,11 @@ import { AppRole } from '@/types/user-management';
 // Roles que têm acesso padrão à aba Negócios
 const NEGOCIOS_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador'];
 
-// Configuração de usuários SDR com acesso especial a Negócios e seus grupos/funis autorizados
+// Configuração de usuários SDR com acesso especial a Negócios e suas origens autorizadas
 export interface NegociosAccessConfig {
   userId: string;
   userName: string;
-  allowedGroupIds: string[]; // IDs dos grupos/funis que o usuário pode ver
+  allowedOriginIds: string[]; // IDs das origens específicas que o usuário pode ver
   whatsappPhone?: string; // Número para notificações WhatsApp
   email?: string; // Email para notificações
 }
@@ -19,7 +19,7 @@ export const NEGOCIOS_AUTHORIZED_SDRS: NegociosAccessConfig[] = [
   {
     userId: 'c7005c87-76fc-43a9-8bfa-e1b41f48a9b7', // Caroline Aparecida Corrêa
     userName: 'Caroline Correa',
-    allowedGroupIds: ['a6f3cbfc-0567-427f-a405-5a869aaa6010'], // Perpétuo - X1
+    allowedOriginIds: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // PIPELINE INSIDE SALES
     whatsappPhone: '5519992937317',
     email: 'carol.correa@minhacasafinanciada.com',
   },
@@ -63,11 +63,11 @@ export const canUserAccessNegocios = (role: AppRole | null, userId: string | und
   return hasRoleAccess || hasUserAccess;
 };
 
-// Helper para obter grupos permitidos para um SDR específico
-export const getAuthorizedGroupsForUser = (userId: string | undefined): string[] => {
+// Helper para obter origens permitidas para um SDR específico
+export const getAuthorizedOriginsForUser = (userId: string | undefined): string[] => {
   if (!userId) return [];
   const config = NEGOCIOS_AUTHORIZED_SDRS.find(c => c.userId === userId);
-  return config?.allowedGroupIds || [];
+  return config?.allowedOriginIds || [];
 };
 
 // Helper para verificar se um usuário é um SDR com acesso limitado a Negócios

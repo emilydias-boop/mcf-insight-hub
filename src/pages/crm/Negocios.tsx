@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 import { 
   isSdrWithNegociosAccess, 
-  getAuthorizedGroupsForUser 
+  getAuthorizedOriginsForUser 
 } from '@/components/auth/NegociosAccessGuard';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 
@@ -37,7 +37,7 @@ const Negocios = () => {
   
   // Verificar se é SDR com acesso especial a Negócios
   const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
-  const authorizedGroups = getAuthorizedGroupsForUser(user?.id);
+  const authorizedOrigins = getAuthorizedOriginsForUser(user?.id);
   
   // Ref para garantir que só define o default UMA VEZ
   const hasSetDefault = useRef(false);
@@ -53,10 +53,9 @@ const Negocios = () => {
     // Se já tem uma origem selecionada manualmente, usar ela
     if (selectedOriginId) return selectedOriginId;
     
-    // Para SDRs com acesso limitado, usar o group_id diretamente
-    // O useCRMDeals agora sabe resolver grupos para suas origens filhas
-    if (isSdrWithAccess && selectedPipelineId) {
-      return selectedPipelineId;
+    // Para SDRs com acesso limitado, usar a origem autorizada diretamente
+    if (isSdrWithAccess && authorizedOrigins.length > 0) {
+      return authorizedOrigins[0];
     }
     
     // Se tem um pipeline selecionado, verificar se é um grupo ou uma origem
@@ -71,16 +70,16 @@ const Negocios = () => {
     }
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdrWithAccess]);
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdrWithAccess, authorizedOrigins]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current) {
       hasSetDefault.current = true;
       
-      // Se for SDR com acesso limitado, pré-selecionar o grupo autorizado
-      if (isSdrWithAccess && authorizedGroups.length > 0) {
-        setSelectedPipelineId(authorizedGroups[0]); // Perpétuo X1
+      // Se for SDR com acesso limitado, pré-selecionar a origem autorizada
+      if (isSdrWithAccess && authorizedOrigins.length > 0) {
+        setSelectedPipelineId(authorizedOrigins[0]); // PIPELINE INSIDE SALES
         return;
       }
       
@@ -94,7 +93,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdrWithAccess, authorizedGroups]);
+  }, [pipelines, isSdrWithAccess, authorizedOrigins]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
