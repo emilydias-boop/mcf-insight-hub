@@ -139,8 +139,7 @@ const Negocios = () => {
     if (!deal || !deal.id || !deal.name) return false;
     
     // Filtro por role: SDR/Closer veem apenas seus próprios deals
-    // EXCETO SDRs com acesso especial a Negócios (ex: Caroline no Perpétuo X1)
-    if (isRestrictedRole && !isSdrWithAccess && userProfile?.email) {
+    if (isRestrictedRole && userProfile?.email) {
       if (deal.owner_id !== userProfile.email) return false;
     }
     
