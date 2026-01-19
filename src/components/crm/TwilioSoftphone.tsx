@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2 } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, Minimize2, Maximize2, GripVertical, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PostCallModal } from './PostCallModal';
 
@@ -13,6 +13,13 @@ function formatDuration(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+const STORAGE_KEY = 'softphone-position';
+
+interface Position {
+  x: number;
+  y: number;
+}
+
 export function TwilioSoftphone() {
   const { 
     deviceStatus, 
@@ -20,15 +27,44 @@ export function TwilioSoftphone() {
     callDuration, 
     isMuted,
     currentCallId,
+    currentCallDealId,
     currentCall,
     initializeDevice, 
     hangUp, 
-    toggleMute 
+    toggleMute,
+    qualificationModalOpen,
+    openQualificationModal
   } = useTwilio();
   
   const [isMinimized, setIsMinimized] = useState(false);
   const [showPostCallModal, setShowPostCallModal] = useState(false);
   const [completedCallId, setCompletedCallId] = useState<string | null>(null);
+  
+  // Drag state
+  const [position, setPosition] = useState<Position | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<HTMLDivElement>(null);
+  const dragStartPos = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+
+  // Load saved position
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setPosition(parsed);
+      } catch (e) {
+        console.error('Failed to parse saved position');
+      }
+    }
+  }, []);
+
+  // Save position when it changes
+  useEffect(() => {
+    if (position) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(position));
+    }
+  }, [position]);
 
   // Show post-call modal when call completes
   useEffect(() => {
@@ -37,6 +73,63 @@ export function TwilioSoftphone() {
       setShowPostCallModal(true);
     }
   }, [callStatus, currentCallId]);
+
+  // Drag handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!dragRef.current) return;
+    
+    e.preventDefault();
+    const rect = dragRef.current.getBoundingClientRect();
+    
+    dragStartPos.current = {
+      x: e.clientX,
+      y: e.clientY,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top
+    };
+    setIsDragging(true);
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging || !dragStartPos.current || !dragRef.current) return;
+    
+    const newX = e.clientX - dragStartPos.current.offsetX;
+    const newY = e.clientY - dragStartPos.current.offsetY;
+    
+    // Constrain to viewport
+    const rect = dragRef.current.getBoundingClientRect();
+    const maxX = window.innerWidth - rect.width;
+    const maxY = window.innerHeight - rect.height;
+    
+    setPosition({
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY))
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    dragStartPos.current = null;
+  }, []);
+
+  // Add/remove global mouse listeners
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  // Handle opening qualification modal
+  const handleOpenQualification = () => {
+    if (currentCallDealId) {
+      openQualificationModal(currentCallDealId);
+    }
+  };
 
   // Don't render if device is not initialized
   if (deviceStatus === 'disconnected') {
@@ -68,23 +161,79 @@ export function TwilioSoftphone() {
     failed: 'Falhou'
   };
 
+  const isInCall = callStatus !== 'idle' && callStatus !== 'completed' && callStatus !== 'failed';
+
+  // Calculate position style
+  const positionStyle: React.CSSProperties = position 
+    ? { 
+        left: position.x, 
+        top: position.y, 
+        right: 'auto', 
+        bottom: 'auto' 
+      }
+    : { 
+        right: 16, 
+        bottom: 16 
+      };
+
   if (isMinimized) {
     return (
       <>
         <div 
-          className="fixed bottom-4 right-4 z-50 cursor-pointer"
-          onClick={() => setIsMinimized(false)}
+          ref={dragRef}
+          className={cn(
+            "fixed z-50",
+            isDragging && "cursor-grabbing"
+          )}
+          style={positionStyle}
         >
-          <div className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full shadow-lg",
-            deviceStatus === 'busy' ? "bg-orange-500 text-white animate-pulse" : "bg-card border"
-          )}>
-            <div className={cn("w-2 h-2 rounded-full", statusColors[deviceStatus])} />
-            <Phone className="h-4 w-4" />
-            {deviceStatus === 'busy' && (
-              <span className="font-mono text-sm">{formatDuration(callDuration)}</span>
+          <div 
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-full shadow-lg cursor-pointer select-none",
+              deviceStatus === 'busy' ? "bg-orange-500 text-white animate-pulse" : "bg-card border"
             )}
-            <Maximize2 className="h-3 w-3 ml-1" />
+          >
+            {/* Drag handle */}
+            <div 
+              className="cursor-grab active:cursor-grabbing p-1 -ml-2 hover:bg-black/10 rounded"
+              onMouseDown={handleMouseDown}
+            >
+              <GripVertical className="h-3 w-3 opacity-50" />
+            </div>
+            
+            <div 
+              className="flex items-center gap-2"
+              onClick={() => setIsMinimized(false)}
+            >
+              <div className={cn("w-2 h-2 rounded-full", statusColors[deviceStatus])} />
+              <Phone className="h-4 w-4" />
+              {deviceStatus === 'busy' && (
+                <span className="font-mono text-sm">{formatDuration(callDuration)}</span>
+              )}
+            </div>
+            
+            {/* Show form button when in call */}
+            {isInCall && currentCallDealId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-6 w-6 rounded-full",
+                  qualificationModalOpen ? "bg-primary text-primary-foreground" : "hover:bg-black/10"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenQualification();
+                }}
+              >
+                <FileText className="h-3 w-3" />
+              </Button>
+            )}
+            
+            <Maximize2 
+              className="h-3 w-3 ml-1 cursor-pointer hover:opacity-70" 
+              onClick={() => setIsMinimized(false)}
+            />
           </div>
         </div>
 
@@ -100,9 +249,23 @@ export function TwilioSoftphone() {
 
   return (
     <>
-      <Card className="fixed bottom-4 right-4 z-50 w-72 shadow-xl">
+      <Card 
+        ref={dragRef}
+        className={cn(
+          "fixed z-50 w-72 shadow-xl select-none",
+          isDragging && "cursor-grabbing"
+        )}
+        style={positionStyle}
+      >
         <CardHeader className="py-3 px-4 flex flex-row items-center justify-between space-y-0">
           <div className="flex items-center gap-2">
+            {/* Drag handle */}
+            <div 
+              className="cursor-grab active:cursor-grabbing p-1 -ml-1 hover:bg-muted rounded"
+              onMouseDown={handleMouseDown}
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
             <div className={cn("w-3 h-3 rounded-full", statusColors[deviceStatus])} />
             <CardTitle className="text-sm font-medium">
               {statusLabels[deviceStatus]}
@@ -120,7 +283,7 @@ export function TwilioSoftphone() {
 
         <CardContent className="py-3 px-4">
           {/* Durante chamada */}
-          {callStatus !== 'idle' && callStatus !== 'completed' && callStatus !== 'failed' && (
+          {isInCall && (
             <div className="space-y-4">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -146,6 +309,18 @@ export function TwilioSoftphone() {
                   {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                 </Button>
                 
+                {/* Form button */}
+                {currentCallDealId && (
+                  <Button
+                    variant={qualificationModalOpen ? "default" : "outline"}
+                    size="icon"
+                    className="h-10 w-10 rounded-full"
+                    onClick={handleOpenQualification}
+                  >
+                    <FileText className="h-5 w-5" />
+                  </Button>
+                )}
+                
                 <Button
                   variant="destructive"
                   size="icon"
@@ -155,11 +330,18 @@ export function TwilioSoftphone() {
                   <PhoneOff className="h-5 w-5" />
                 </Button>
               </div>
+              
+              {/* Indicator if form is open */}
+              {qualificationModalOpen && (
+                <p className="text-xs text-center text-muted-foreground">
+                  Formulário de qualificação aberto
+                </p>
+              )}
             </div>
           )}
 
           {/* Quando disponível (sem chamada ativa) */}
-          {(callStatus === 'idle' || callStatus === 'completed' || callStatus === 'failed') && deviceStatus === 'ready' && (
+          {!isInCall && deviceStatus === 'ready' && (
             <div className="text-center py-2">
               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                 <Phone className="h-3 w-3 mr-1" />
