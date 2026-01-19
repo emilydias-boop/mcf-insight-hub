@@ -12,6 +12,7 @@ interface StagePermission {
 
 // Mapa de normalização de nomes de stage para identificadores genéricos
 const STAGE_NAME_MAP: Record<string, string> = {
+  // Estágios base
   'base': 'novo_lead',
   'novo lead': 'novo_lead',
   'novo': 'novo_lead',
@@ -20,18 +21,36 @@ const STAGE_NAME_MAP: Record<string, string> = {
   'prospecção': 'lead_qualificado',
   'qualificado': 'lead_qualificado',
   'lead qualificado': 'lead_qualificado',
+  
+  // Variações do pipeline Inside Sales (com acento)
+  'reunião 01 agendada': 'reuniao_1_agendada',
+  'reunião 01 realizada': 'reuniao_1_realizada',
+  'reunião 02 agendada': 'reuniao_2_agendada',
+  'reunião 02 realizada': 'reuniao_2_realizada',
+  
+  // Variações do pipeline Inside Sales (sem acento)
+  'reuniao 01 agendada': 'reuniao_1_agendada',
+  'reuniao 01 realizada': 'reuniao_1_realizada',
+  'reuniao 02 agendada': 'reuniao_2_agendada',
+  'reuniao 02 realizada': 'reuniao_2_realizada',
+  
+  // Variações curtas (R1/R2)
   'agendamento': 'reuniao_1_agendada',
   'reunião agendada': 'reuniao_1_agendada',
   'r1 agendada': 'reuniao_1_agendada',
   'r1 realizada': 'reuniao_1_realizada',
   'r2 agendada': 'reuniao_2_agendada',
   'r2 realizada': 'reuniao_2_realizada',
+  
+  // Estágios finais
   'no-show': 'no_show',
   'no show': 'no_show',
   'noshow': 'no_show',
   'perdido': 'perdido',
   'sem interesse': 'sem_interesse',
   'contrato enviado': 'contrato_enviado',
+  'venda realizada': 'venda_realizada',
+  'contrato pago': 'contrato_pago',
   'ganho': 'ganho',
   'fechado': 'ganho',
 };
