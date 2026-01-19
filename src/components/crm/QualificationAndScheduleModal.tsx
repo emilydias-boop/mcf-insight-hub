@@ -4,73 +4,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCRMDeal, useUpdateCRMDeal } from '@/hooks/useCRMData';
-import { useMeetingSuggestion, type QualificationData } from '@/hooks/useMeetingSuggestion';
+import { useCRMDeal } from '@/hooks/useCRMData';
+import { useMeetingSuggestion } from '@/hooks/useMeetingSuggestion';
+import { useSaveQualificationNote } from '@/hooks/useQualificationNote';
 import { SuggestionCard } from './SuggestionCard';
 import { QuickScheduleModal } from './QuickScheduleModal';
-import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X } from 'lucide-react';
+import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
+import { 
+  QUALIFICATION_FIELDS, 
+  generateQualificationSummary,
+  type QualificationDataType 
+} from './qualification/QualificationFields';
+import { ClipboardList, Sparkles, Calendar, Loader2, Save, Check, X, Edit2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-
-// Campos de qualificação do Perpétuo X1
-const QUALIFICATION_FIELDS = [
-  {
-    key: 'renda',
-    label: 'Renda Mensal',
-    type: 'select',
-    options: [
-      'Até R$ 5.000',
-      'R$ 5.000 a R$ 10.000',
-      'R$ 10.000 a R$ 20.000',
-      'R$ 20.000 a R$ 30.000',
-      '+R$ 30.000',
-    ],
-    required: true,
-  },
-  {
-    key: 'empreende',
-    label: 'Já Empreende?',
-    type: 'select',
-    options: ['Sim, tenho negócio próprio', 'Sim, mas é CLT também', 'Não, sou CLT', 'Não trabalho atualmente'],
-    required: true,
-  },
-  {
-    key: 'terreno',
-    label: 'Possui Terreno?',
-    type: 'select',
-    options: ['Sim, já tenho terreno', 'Não, mas pretendo comprar', 'Não tenho e não pretendo'],
-    required: true,
-  },
-  {
-    key: 'investimento',
-    label: 'Quanto Pretende Investir?',
-    type: 'select',
-    options: [
-      'Até R$ 50.000',
-      'R$ 50.000 a R$ 100.000',
-      'R$ 100.000 a R$ 200.000',
-      '+R$ 200.000',
-    ],
-    required: true,
-  },
-  {
-    key: 'solucao',
-    label: 'Qual Solução Busca?',
-    type: 'select',
-    options: [
-      'Renda extra',
-      'Substituir emprego atual',
-      'Investimento para aposentadoria',
-      'Negócio para família',
-      'Outro',
-    ],
-    required: true,
-  },
-];
+import { useAuth } from '@/contexts/AuthContext';
 
 interface QualificationAndScheduleModalProps {
   open: boolean;
@@ -87,18 +41,20 @@ export function QualificationAndScheduleModal({
   contactName,
   autoFocus = 'qualification',
 }: QualificationAndScheduleModalProps) {
+  const { user } = useAuth();
   const { data: deal, refetch: refetchDeal } = useCRMDeal(dealId);
-  const updateDeal = useUpdateCRMDeal();
+  const saveQualification = useSaveQualificationNote();
   
   const [activeTab, setActiveTab] = useState<string>(autoFocus);
-  const [qualificationData, setQualificationData] = useState<QualificationData>({});
+  const [qualificationData, setQualificationData] = useState<QualificationDataType>({});
   const [leadSummary, setLeadSummary] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [isQualificationSaved, setIsQualificationSaved] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [showManualSchedule, setShowManualSchedule] = useState(false);
 
   // Buscar sugestões de agendamento
   const { suggestions, topSuggestion, isLoading: suggestionsLoading } = useMeetingSuggestion({
-    qualificationData,
+    qualificationData: qualificationData as any,
     enabled: open && Object.keys(qualificationData).length >= 3,
   });
 
@@ -106,7 +62,13 @@ export function QualificationAndScheduleModal({
   useEffect(() => {
     if (deal?.custom_fields) {
       const fields = deal.custom_fields as Record<string, any>;
+      
+      // Carregar dados de qualificação
       setQualificationData({
+        profissao: fields.profissao || '',
+        tem_socio: fields.tem_socio === true || fields.tem_socio === 'true',
+        nome_socio: fields.nome_socio || '',
+        estado: fields.estado || '',
         renda: fields.renda || '',
         empreende: fields.empreende || '',
         terreno: fields.terreno || '',
@@ -114,48 +76,53 @@ export function QualificationAndScheduleModal({
         solucao: fields.solucao || '',
       });
       setLeadSummary(fields.leadSummary || '');
+      
+      // Verificar se já foi salvo
+      if (fields.qualification_saved) {
+        setIsQualificationSaved(true);
+        setIsEditing(false);
+      }
     }
   }, [deal]);
 
   // Calcular progresso
   const requiredFields = QUALIFICATION_FIELDS.filter(f => f.required);
-  const filledCount = requiredFields.filter(f => qualificationData[f.key as keyof QualificationData]).length;
+  const filledCount = requiredFields.filter(f => {
+    const value = qualificationData[f.key];
+    return value !== undefined && value !== null && value !== '';
+  }).length;
   const progress = (filledCount / requiredFields.length) * 100;
   const isComplete = progress === 100;
 
-  const handleFieldChange = (key: string, value: string) => {
+  const handleFieldChange = (key: string, value: string | boolean) => {
     setQualificationData(prev => ({ ...prev, [key]: value }));
   };
 
-  const generateSummary = () => {
-    const parts: string[] = [];
-    
-    if (qualificationData.renda) parts.push(`Renda: ${qualificationData.renda}`);
-    if (qualificationData.empreende) parts.push(`Empreende: ${qualificationData.empreende}`);
-    if (qualificationData.terreno) parts.push(`Terreno: ${qualificationData.terreno}`);
-    if (qualificationData.investimento) parts.push(`Investimento: ${qualificationData.investimento}`);
-    if (qualificationData.solucao) parts.push(`Busca: ${qualificationData.solucao}`);
-    
-    const summary = parts.join(' | ');
+  const handleGenerateSummary = () => {
+    const userName = user?.email?.split('@')[0] || 'SDR';
+    const summary = generateQualificationSummary(qualificationData, userName);
     setLeadSummary(summary);
-    return summary;
   };
 
   const handleSaveQualification = async () => {
-    setIsSaving(true);
     try {
-      const summary = leadSummary || generateSummary();
+      // Gerar resumo se não existir
+      let summary = leadSummary;
+      if (!summary) {
+        const userName = user?.email?.split('@')[0] || 'SDR';
+        summary = generateQualificationSummary(qualificationData, userName);
+        setLeadSummary(summary);
+      }
       
-      await updateDeal.mutateAsync({
-        id: dealId,
-        custom_fields: {
-          ...(deal?.custom_fields as Record<string, any> || {}),
-          ...qualificationData,
-          leadSummary: summary,
-        },
+      await saveQualification.mutateAsync({
+        dealId,
+        qualificationData,
+        summary,
+        paraR1: true,
       });
 
-      toast.success('Qualificação salva!');
+      setIsQualificationSaved(true);
+      setIsEditing(false);
       refetchDeal();
       
       // Se completou qualificação, ir para aba de sugestões
@@ -164,16 +131,11 @@ export function QualificationAndScheduleModal({
       }
     } catch (error) {
       console.error('Error saving qualification:', error);
-      toast.error('Erro ao salvar qualificação');
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handleAcceptSuggestion = async () => {
     if (!topSuggestion) return;
-    
-    // Abrir modal de agendamento com dados pré-preenchidos
     setShowManualSchedule(true);
   };
 
@@ -181,6 +143,12 @@ export function QualificationAndScheduleModal({
     setShowManualSchedule(false);
     onOpenChange(false);
     toast.success('Reunião agendada com sucesso!');
+  };
+
+  // Renderizar campo condicional
+  const shouldShowField = (field: typeof QUALIFICATION_FIELDS[0]) => {
+    if (!field.showIf) return true;
+    return qualificationData[field.showIf] === true;
   };
 
   return (
@@ -215,85 +183,153 @@ export function QualificationAndScheduleModal({
 
             {/* Tab: Qualificação */}
             <TabsContent value="qualification" className="space-y-4 mt-4">
-              {/* Progress */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progresso da qualificação</span>
-                  <span className="font-medium">{Math.round(progress)}%</span>
-                </div>
-                <Progress value={progress} className="h-2" />
-              </div>
-
-              {/* Fields */}
-              <div className="grid gap-4">
-                {QUALIFICATION_FIELDS.map(field => (
-                  <div key={field.key} className="space-y-2">
-                    <Label>
-                      {field.label}
-                      {field.required && <span className="text-destructive ml-1">*</span>}
-                    </Label>
-                    <Select
-                      value={qualificationData[field.key as keyof QualificationData] || ''}
-                      onValueChange={(value) => handleFieldChange(field.key, value)}
+              {/* Se já salvou, mostrar apenas o resumo */}
+              {isQualificationSaved && !isEditing ? (
+                <div className="space-y-4">
+                  <QualificationSummaryCard
+                    data={qualificationData}
+                    summary={leadSummary}
+                    sdrName={user?.email?.split('@')[0]}
+                    qualifiedAt={new Date().toISOString()}
+                  />
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsEditing(true)}
+                      className="flex-1"
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {field.options?.map(opt => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Edit2 className="h-4 w-4 mr-2" />
+                      Editar
+                    </Button>
+                    <Button 
+                      onClick={() => setActiveTab('suggestions')}
+                      className="flex-1"
+                      disabled={!isComplete}
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Ver Sugestões
+                    </Button>
                   </div>
-                ))}
-              </div>
-
-              {/* Summary */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Resumo do Lead</Label>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={generateSummary}
-                    disabled={!isComplete}
-                  >
-                    <Sparkles className="h-4 w-4 mr-1" />
-                    Gerar
-                  </Button>
                 </div>
-                <Textarea
-                  value={leadSummary}
-                  onChange={(e) => setLeadSummary(e.target.value)}
-                  placeholder="O resumo será gerado automaticamente..."
-                  rows={3}
-                />
-              </div>
+              ) : (
+                <>
+                  {/* Progress */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Progresso da qualificação</span>
+                      <span className="font-medium">{Math.round(progress)}%</span>
+                    </div>
+                    <Progress value={progress} className="h-2" />
+                  </div>
 
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => onOpenChange(false)}
-                  className="flex-1"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={handleSaveQualification}
-                  disabled={isSaving}
-                  className="flex-1"
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  {isComplete ? 'Salvar e Continuar' : 'Salvar'}
-                </Button>
-              </div>
+                  {/* Fields */}
+                  <div className="grid gap-4">
+                    {QUALIFICATION_FIELDS.map(field => {
+                      if (!shouldShowField(field)) return null;
+                      
+                      return (
+                        <div key={field.key} className="space-y-2">
+                          <Label className="flex items-center gap-2">
+                            {field.icon && <span>{field.icon}</span>}
+                            {field.label}
+                            {field.required && <span className="text-destructive ml-1">*</span>}
+                          </Label>
+                          
+                          {field.type === 'boolean' && (
+                            <div className="flex items-center gap-3">
+                              <Checkbox
+                                checked={qualificationData[field.key] === true}
+                                onCheckedChange={(checked) => handleFieldChange(field.key, !!checked)}
+                              />
+                              <span className="text-sm">
+                                {qualificationData[field.key] ? 'Sim' : 'Não'}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {field.type === 'select' && (
+                            <Select
+                              value={qualificationData[field.key] as string || ''}
+                              onValueChange={(value) => handleFieldChange(field.key, value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {field.options?.map(opt => (
+                                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          
+                          {field.type === 'text' && (
+                            <Input
+                              value={qualificationData[field.key] as string || ''}
+                              onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                              placeholder="Digite..."
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Summary */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Resumo do Lead (para R1)</Label>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleGenerateSummary}
+                        disabled={!isComplete}
+                      >
+                        <Sparkles className="h-4 w-4 mr-1" />
+                        Gerar
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={leadSummary}
+                      onChange={(e) => setLeadSummary(e.target.value)}
+                      placeholder="O resumo será gerado automaticamente ou escreva suas observações..."
+                      rows={5}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        if (isQualificationSaved) {
+                          setIsEditing(false);
+                        } else {
+                          onOpenChange(false);
+                        }
+                      }}
+                      className="flex-1"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      {isQualificationSaved ? 'Cancelar' : 'Fechar'}
+                    </Button>
+                    <Button 
+                      onClick={handleSaveQualification}
+                      disabled={saveQualification.isPending}
+                      className="flex-1"
+                    >
+                      {saveQualification.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                      )}
+                      {isComplete ? 'Salvar e Continuar' : 'Salvar'}
+                    </Button>
+                  </div>
+                </>
+              )}
             </TabsContent>
 
             {/* Tab: Sugestões IA */}
@@ -309,7 +345,7 @@ export function QualificationAndScheduleModal({
                     suggestion={topSuggestion}
                     onAccept={handleAcceptSuggestion}
                     onChooseOther={() => setActiveTab('manual')}
-                    isLoading={isSaving}
+                    isLoading={saveQualification.isPending}
                   />
 
                   {suggestions.length > 1 && (
@@ -322,9 +358,6 @@ export function QualificationAndScheduleModal({
                           <Card 
                             key={idx} 
                             className="cursor-pointer hover:border-primary/50 transition-colors"
-                            onClick={() => {
-                              // TODO: Selecionar esta sugestão
-                            }}
                           >
                             <CardContent className="p-3 flex items-center justify-between">
                               <div className="flex items-center gap-3">

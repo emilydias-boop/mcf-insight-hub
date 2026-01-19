@@ -3,6 +3,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCRMDeal, useCRMContact } from '@/hooks/useCRMData';
+import { useQualificationNote } from '@/hooks/useQualificationNote';
 import { DealHistory } from './DealHistory';
 import { CallHistorySection } from './CallHistorySection';
 import { DealNotesTab } from './DealNotesTab';
@@ -15,6 +16,7 @@ import { QuickActionsBlock } from './QuickActionsBlock';
 import { LeadJourneyCard } from './LeadJourneyCard';
 import { SdrQualificationBlock } from './SdrQualificationBlock';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
+import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
 import { Phone, History, StickyNote, CheckSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { isSdrWithNegociosAccess } from '@/components/auth/NegociosAccessGuard';
@@ -29,9 +31,11 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   const { role, user } = useAuth();
   const { data: deal, isLoading: dealLoading, refetch: refetchDeal } = useCRMDeal(dealId || '');
   const { data: contact, isLoading: contactLoading } = useCRMContact(deal?.contact_id || '');
+  const { data: qualificationNote } = useQualificationNote(dealId || '');
   
-  // Verificar se é SDR com acesso especial
+  // Verificar se é SDR com acesso especial ou Closer
   const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
+  const isCloser = role === 'closer';
   
   // State para modal de agendamento
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
@@ -89,6 +93,17 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
               <LeadJourneyCard dealId={dealId} />
+              
+              {/* ===== QUALIFICAÇÃO DO SDR (para closers verem) ===== */}
+              {isCloser && qualificationNote && (
+                <QualificationSummaryCard
+                  data={(qualificationNote.metadata as any)?.qualification_data || {}}
+                  summary={qualificationNote.description || ''}
+                  sdrName={(qualificationNote.metadata as any)?.sdr_name}
+                  qualifiedAt={(qualificationNote.metadata as any)?.qualified_at}
+                  compact
+                />
+              )}
               
               {/* ===== QUALIFICAÇÃO SDR (apenas para SDRs com acesso) ===== */}
               {isSdrWithAccess && (
