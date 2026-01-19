@@ -72,26 +72,38 @@ Deno.serve(async (req) => {
     // Buscar todos os deals dessa origin da API Clint
     let allDeals: any[] = [];
     let page = 1;
-    const MAX_PAGES = 50;
+    const MAX_PAGES = 500; // Aumentado para cobrir até 100.000 deals
+    const PER_PAGE = 200; // Máximo permitido pela API
+
+    console.log(`🔍 Buscando deals com origin_id: ${origin.clint_id}`);
 
     while (page <= MAX_PAGES) {
       const response = await callClintAPI<any[]>('deals', {
         page: page.toString(),
-        per_page: '100',
+        per_page: PER_PAGE.toString(),
       });
 
-      if (!response.data || response.data.length === 0) break;
+      const deals = response.data || [];
+      if (deals.length === 0) {
+        console.log(`📄 Página ${page}: vazia, encerrando busca`);
+        break;
+      }
 
       // Filtrar deals dessa origin
-      const dealsFromOrigin = response.data.filter((deal: any) => 
+      const dealsFromOrigin = deals.filter((deal: any) => 
         deal.origin_id === origin.clint_id
       );
 
       allDeals.push(...dealsFromOrigin);
 
-      console.log(`📄 Página ${page}: ${dealsFromOrigin.length} deals dessa origin`);
+      console.log(`📄 Página ${page}: ${deals.length} deals total, ${dealsFromOrigin.length} dessa origin (acumulado: ${allDeals.length})`);
 
-      if (!response.meta || page >= response.meta.total / 100) break;
+      // Continuar até não haver mais dados
+      if (deals.length < PER_PAGE) {
+        console.log(`📄 Última página alcançada (${deals.length} < ${PER_PAGE})`);
+        break;
+      }
+      
       page++;
     }
 
