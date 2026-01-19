@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,12 +14,11 @@ import { NextActionBlockCompact } from './NextActionBlockCompact';
 import { A010JourneyCollapsible } from './A010JourneyCollapsible';
 import { QuickActionsBlock } from './QuickActionsBlock';
 import { LeadJourneyCard } from './LeadJourneyCard';
-import { SdrQualificationBlock } from './SdrQualificationBlock';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
+import { LossReasonCard } from './LossReasonCard';
 import { Phone, History, StickyNote, CheckSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSdrWithNegociosAccess } from '@/components/auth/NegociosAccessGuard';
 
 interface DealDetailsDrawerProps {
   dealId: string | null;
@@ -28,20 +27,31 @@ interface DealDetailsDrawerProps {
 }
 
 export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDrawerProps) => {
-  const { role, user } = useAuth();
+  const { role } = useAuth();
   const { data: deal, isLoading: dealLoading, refetch: refetchDeal } = useCRMDeal(dealId || '');
   const { data: contact, isLoading: contactLoading } = useCRMContact(deal?.contact_id || '');
   const { data: qualificationNote } = useQualificationNote(dealId || '');
-  
-  // Verificar se é SDR com acesso especial ou Closer
-  const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
-  const isCloser = role === 'closer';
   
   // State para modal de agendamento
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [leadSummaryForSchedule, setLeadSummaryForSchedule] = useState('');
   
   const isLoading = dealLoading || contactLoading;
+  
+  // Determinar comportamento baseado no stage
+  const stageInfo = useMemo(() => {
+    const stageName = (deal?.crm_stages as any)?.stage_name?.toLowerCase() || '';
+    
+    const isLostStage = ['sem interesse', 'não quer', 'perdido', 'desistente', 'cancelado'].some(
+      s => stageName.includes(s)
+    );
+    
+    const isAdvancedStage = ['qualificado', 'reunião', 'agendada', 'realizada', 'contrato'].some(
+      s => stageName.includes(s)
+    );
+    
+    return { isLostStage, isAdvancedStage, stageName };
+  }, [deal?.crm_stages]);
   
   const handleScheduleFromQualification = (summary: string) => {
     setLeadSummaryForSchedule(summary);
@@ -94,24 +104,22 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
               <LeadJourneyCard dealId={dealId} />
               
-              {/* ===== QUALIFICAÇÃO DO SDR (para closers verem) ===== */}
-              {isCloser && qualificationNote && (
+              {/* ===== MOTIVO DE PERDA (apenas para stages de perda) ===== */}
+              {stageInfo.isLostStage && (
+                <LossReasonCard
+                  stageName={(deal.crm_stages as any)?.stage_name}
+                  reason={(deal.custom_fields as any)?.motivo_sem_interesse}
+                />
+              )}
+              
+              {/* ===== QUALIFICAÇÃO RESUMO (stages avançadas ou de perda) ===== */}
+              {(stageInfo.isAdvancedStage || stageInfo.isLostStage) && qualificationNote && (
                 <QualificationSummaryCard
                   data={(qualificationNote.metadata as any)?.qualification_data || {}}
                   summary={qualificationNote.description || ''}
                   sdrName={(qualificationNote.metadata as any)?.sdr_name}
                   qualifiedAt={(qualificationNote.metadata as any)?.qualified_at}
                   compact
-                />
-              )}
-              
-              {/* ===== QUALIFICAÇÃO SDR (apenas para SDRs com acesso) ===== */}
-              {isSdrWithAccess && (
-                <SdrQualificationBlock
-                  dealId={deal.id}
-                  customFields={deal.custom_fields as Record<string, any> | null}
-                  onFieldChange={() => refetchDeal()}
-                  onSchedule={handleScheduleFromQualification}
                 />
               )}
               
