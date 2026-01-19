@@ -227,6 +227,31 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
     queryFn: async () => {
       const limit = filters.limit || 5000;
       
+      let originIds: string[] = [];
+      
+      // Verificar se originId é um grupo (não uma origem)
+      if (filters.originId) {
+        // Primeiro, verificar se é um group_id
+        const { data: groupCheck } = await supabase
+          .from('crm_groups')
+          .select('id')
+          .eq('id', filters.originId)
+          .maybeSingle();
+        
+        if (groupCheck) {
+          // É um grupo! Buscar todas as origens filhas
+          const { data: childOrigins } = await supabase
+            .from('crm_origins')
+            .select('id')
+            .eq('group_id', filters.originId);
+          
+          originIds = childOrigins?.map(o => o.id) || [];
+        } else {
+          // É uma origem normal
+          originIds = [filters.originId];
+        }
+      }
+      
       let query = supabase
         .from('crm_deals')
         .select(`
@@ -238,7 +263,11 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
         .order('created_at', { ascending: false })
         .limit(limit);
       
-      if (filters.originId) query = query.eq('origin_id', filters.originId);
+      // Aplicar filtro de origens
+      if (originIds.length > 0) {
+        query = query.in('origin_id', originIds);
+      }
+      
       if (filters.stageId) query = query.eq('stage_id', filters.stageId);
       if (filters.contactId) query = query.eq('contact_id', filters.contactId);
       if (filters.ownerId) query = query.eq('owner_id', filters.ownerId);
