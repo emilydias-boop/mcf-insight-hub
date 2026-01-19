@@ -3671,6 +3671,60 @@ export type Database = {
         }
         Relationships: []
       }
+      local_pipeline_stages: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          group_id: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          origin_id: string | null
+          stage_order: number
+          stage_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          origin_id?: string | null
+          stage_order?: number
+          stage_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          group_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          origin_id?: string | null
+          stage_order?: number
+          stage_type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "local_pipeline_stages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "crm_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "local_pipeline_stages_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_slot_attendees: {
         Row: {
           already_builds: boolean | null
