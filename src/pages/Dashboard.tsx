@@ -8,7 +8,9 @@ import { PendingMetricsAlert } from "@/components/dashboard/PendingMetricsAlert"
 import { MetricsApprovalDialog } from "@/components/dashboard/MetricsApprovalDialog";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { EfeitoAlavancaRow } from "@/components/dashboard/EfeitoAlavancaRow";
+import { TotalGeralRow } from "@/components/dashboard/TotalGeralRow";
 import { useSetoresDashboard } from "@/hooks/useSetoresDashboard";
+import { Separator } from "@/components/ui/separator";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function Dashboard() {
@@ -86,6 +88,21 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* Quadro Geral - Totais Consolidados */}
+        <TotalGeralRow
+          semanaLabel={data?.semanaLabel || ""}
+          mesLabel={data?.mesLabel || ""}
+          apuradoSemanal={data?.totais?.apuradoSemanal || 0}
+          metaSemanal={data?.totais?.metaSemanal || 0}
+          apuradoMensal={data?.totais?.apuradoMensal || 0}
+          metaMensal={data?.totais?.metaMensal || 0}
+          apuradoAnual={data?.totais?.apuradoAnual || 0}
+          metaAnual={data?.totais?.metaAnual || 0}
+          isLoading={isLoading}
+        />
+
+        <Separator className="my-2" />
 
         {/* Setores em Linhas */}
         <div className="space-y-4">

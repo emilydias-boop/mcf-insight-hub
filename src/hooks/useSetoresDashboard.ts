@@ -72,7 +72,19 @@ export function useSetoresDashboard() {
 
   const query = useQuery({
     queryKey: ['setores-dashboard', weekStartStr, monthStartStr, yearStartStr],
-    queryFn: async (): Promise<{ setores: SetorData[]; semanaLabel: string; mesLabel: string }> => {
+    queryFn: async (): Promise<{ 
+      setores: SetorData[]; 
+      semanaLabel: string; 
+      mesLabel: string;
+      totais: {
+        apuradoSemanal: number;
+        metaSemanal: number;
+        apuradoMensal: number;
+        metaMensal: number;
+        apuradoAnual: number;
+        metaAnual: number;
+      };
+    }> => {
       // Fetch all transaction data in parallel
       const [
         hublaWeekly,
@@ -253,13 +265,39 @@ export function useSetoresDashboard() {
         };
       });
 
-      return { setores, semanaLabel, mesLabel };
+      // Calculate totals across all sectors
+      // For Efeito Alavanca, use comissao (the actual revenue), not total cartas
+      const totais = {
+        apuradoSemanal: setores.reduce((sum, s) => {
+          if (s.id === 'efeito_alavanca') {
+            return sum + calculateConsortiumTotal(insideInstallmentsWeekly.data);
+          }
+          return sum + s.apuradoSemanal;
+        }, 0),
+        metaSemanal: setores.reduce((sum, s) => sum + s.metaSemanal, 0),
+        apuradoMensal: setores.reduce((sum, s) => {
+          if (s.id === 'efeito_alavanca') {
+            return sum + calculateConsortiumTotal(insideInstallmentsMonthly.data);
+          }
+          return sum + s.apuradoMensal;
+        }, 0),
+        metaMensal: setores.reduce((sum, s) => sum + s.metaMensal, 0),
+        apuradoAnual: setores.reduce((sum, s) => {
+          if (s.id === 'efeito_alavanca') {
+            return sum + calculateConsortiumTotal(insideInstallmentsAnnual.data);
+          }
+          return sum + s.apuradoAnual;
+        }, 0),
+        metaAnual: setores.reduce((sum, s) => sum + s.metaAnual, 0),
+      };
+
+      return { setores, semanaLabel, mesLabel, totais };
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
     refetchInterval: 1000 * 30, // 30 seconds
   });
 
-  // Create modified data with Incorporador gross metrics (without mutating original)
+  // Create modified data with Incorporador gross metrics and recalculated totals
   const modifiedData = useMemo(() => {
     if (!query.data) return undefined;
     
@@ -275,9 +313,26 @@ export function useSetoresDashboard() {
       return setor;
     });
 
+    // Recalculate totals with the updated Incorporador values
+    // For Efeito Alavanca, use comissao (already correct from query.data.totais calculation)
+    const incorporadorOriginal = query.data.setores.find(s => s.id === 'incorporador');
+    const incorporadorDiffSemanal = incorporadorMetrics.brutoSemanal - (incorporadorOriginal?.apuradoSemanal || 0);
+    const incorporadorDiffMensal = incorporadorMetrics.brutoMensal - (incorporadorOriginal?.apuradoMensal || 0);
+    const incorporadorDiffAnual = incorporadorMetrics.brutoAnual - (incorporadorOriginal?.apuradoAnual || 0);
+
+    const totais = {
+      apuradoSemanal: query.data.totais.apuradoSemanal + incorporadorDiffSemanal,
+      metaSemanal: query.data.totais.metaSemanal,
+      apuradoMensal: query.data.totais.apuradoMensal + incorporadorDiffMensal,
+      metaMensal: query.data.totais.metaMensal,
+      apuradoAnual: query.data.totais.apuradoAnual + incorporadorDiffAnual,
+      metaAnual: query.data.totais.metaAnual,
+    };
+
     return {
       ...query.data,
       setores,
+      totais,
     };
   }, [query.data, incorporadorMetrics.brutoSemanal, incorporadorMetrics.brutoMensal, incorporadorMetrics.brutoAnual]);
 
