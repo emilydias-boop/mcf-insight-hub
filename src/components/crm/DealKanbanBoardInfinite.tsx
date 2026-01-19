@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
-import { useStagePermissions } from '@/hooks/useStagePermissions';
+import { useStagePermissions, isCloserOnlyStage } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
@@ -46,7 +46,7 @@ export const DealKanbanBoardInfinite = ({
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
   const { data: stages } = useCRMStages(originId);
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -67,7 +67,17 @@ export const DealKanbanBoardInfinite = ({
     contactName: string;
   }>({ open: false, dealId: '', contactName: '' });
   
-  const visibleStages = (stages || []).filter((s: any) => s.is_active);
+  // Filter stages - hide closer-only stages from SDRs
+  const visibleStages = useMemo(() => {
+    const activeStages = (stages || []).filter((s: any) => s.is_active);
+    
+    // SDRs don't see closer-only stages (Realizada, Contrato Pago, etc.)
+    if (role === 'sdr') {
+      return activeStages.filter((s: any) => !isCloserOnlyStage(s.stage_name));
+    }
+    
+    return activeStages;
+  }, [stages, role]);
   
   // Buscar atividades de todos os deals de uma vez para performance
   // Incluir stageIds para buscar limites corretos por estágio

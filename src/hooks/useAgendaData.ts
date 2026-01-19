@@ -1318,8 +1318,95 @@ export function useUpdateAttendeeStatus() {
   });
 }
 
+// Helper function to sync deal stage from agenda status
+async function syncDealStageFromAgenda(
+  dealId: string, 
+  agendaStatus: string,
+  meetingType: 'r1' | 'r2' = 'r1'
+): Promise<void> {
+  try {
+    // 1. Fetch deal to get origin_id and current stage
+    const { data: deal, error: dealError } = await supabase
+      .from('crm_deals')
+      .select('origin_id, stage_id')
+      .eq('id', dealId)
+      .single();
+
+    if (dealError || !deal) {
+      console.warn('Deal not found for CRM sync:', dealId);
+      return;
+    }
+
+    // 2. Map agenda status to target stage name
+    const stageNameMap: Record<string, string[]> = {
+      'no_show': ['No-Show', 'NO-SHOW', 'No-show', 'NoShow'],
+      'completed': meetingType === 'r2' 
+        ? ['Reunião 02 Realizada', 'Reunião 2 Realizada', 'R2 Realizada', 'REUNIÃO 2 REALIZADA']
+        : ['Reunião 01 Realizada', 'Reunião 1 Realizada', 'R1 Realizada', 'REUNIÃO 1 REALIZADA'],
+      'contract_paid': ['Contrato Pago', 'CONTRATO PAGO', 'Contrato pago'],
+      'r2_scheduled': ['Reunião 02 Agendada', 'Reunião 2 Agendada', 'R2 Agendada', 'REUNIÃO 2 AGENDADA'],
+    };
+
+    const targetStageNames = stageNameMap[agendaStatus];
+    if (!targetStageNames) return;
+
+    // 3. Find matching stage in the same origin/pipeline
+    let targetStage: { id: string } | null = null;
+    
+    for (const stageName of targetStageNames) {
+      const { data } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .eq('origin_id', deal.origin_id)
+        .ilike('stage_name', stageName)
+        .limit(1);
+      
+      if (data && data.length > 0) {
+        targetStage = data[0];
+        break;
+      }
+    }
+
+    if (!targetStage) {
+      console.warn(`No matching stage found for status "${agendaStatus}" in origin ${deal.origin_id}`);
+      return;
+    }
+
+    // 4. Skip if already in target stage
+    if (deal.stage_id === targetStage.id) return;
+
+    // 5. Update deal stage
+    const { error: updateError } = await supabase
+      .from('crm_deals')
+      .update({ stage_id: targetStage.id })
+      .eq('id', dealId);
+
+    if (updateError) {
+      console.error('Failed to update deal stage:', updateError);
+      return;
+    }
+
+    // 6. Log activity
+    await supabase
+      .from('deal_activities')
+      .insert({
+        deal_id: dealId,
+        activity_type: 'stage_change',
+        description: `Status atualizado via Agenda: ${agendaStatus}`,
+        from_stage: deal.stage_id,
+        to_stage: targetStage.id,
+        metadata: { via: 'agenda_sync', status: agendaStatus, meetingType }
+      });
+    
+    console.log(`CRM synced: Deal ${dealId} moved to stage ${targetStage.id} (${agendaStatus})`);
+  } catch (error) {
+    console.error('Error syncing deal stage from agenda:', error);
+  }
+}
+
 // Combined mutation to update attendee AND meeting slot status atomically
 // This prevents race conditions where the cache is invalidated with inconsistent data
+// Also syncs the deal stage in CRM when status changes
 export function useUpdateAttendeeAndSlotStatus() {
   const queryClient = useQueryClient();
 
@@ -1328,14 +1415,23 @@ export function useUpdateAttendeeAndSlotStatus() {
       attendeeId, 
       status, 
       meetingId,
-      syncSlot = false 
+      syncSlot = false,
+      meetingType = 'r1'
     }: { 
       attendeeId: string; 
       status: string;
       meetingId?: string;
       syncSlot?: boolean;
+      meetingType?: 'r1' | 'r2';
     }) => {
-      // 1. Update attendee status
+      // 1. Fetch attendee to get deal_id for CRM sync
+      const { data: attendee } = await supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id')
+        .eq('id', attendeeId)
+        .single();
+
+      // 2. Update attendee status
       const { error: attendeeError } = await supabase
         .from('meeting_slot_attendees')
         .update({ status })
@@ -1343,7 +1439,7 @@ export function useUpdateAttendeeAndSlotStatus() {
 
       if (attendeeError) throw attendeeError;
 
-      // 2. Optionally sync meeting_slots status (for principal participants)
+      // 3. Optionally sync meeting_slots status (for principal participants)
       if (syncSlot && meetingId) {
         const { error: slotError } = await supabase
           .from('meeting_slots')
@@ -1352,13 +1448,20 @@ export function useUpdateAttendeeAndSlotStatus() {
 
         if (slotError) throw slotError;
       }
+
+      // 4. Sync deal stage in CRM if applicable
+      const statusesToSync = ['no_show', 'completed', 'contract_paid'];
+      if (attendee?.deal_id && statusesToSync.includes(status)) {
+        await syncDealStageFromAgenda(attendee.deal_id, status, meetingType);
+      }
     },
     onSuccess: () => {
-      // Only invalidate ONCE after both updates complete - prevents race condition
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] }); // Refresh CRM too
       toast.success('Status atualizado');
     },
     onError: () => {
@@ -1366,6 +1469,9 @@ export function useUpdateAttendeeAndSlotStatus() {
     },
   });
 }
+
+// Export helper for external use (e.g., R2 scheduling)
+export { syncDealStageFromAgenda };
 
 export function useUpdateAttendeeNotes() {
   const queryClient = useQueryClient();
