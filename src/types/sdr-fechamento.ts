@@ -63,6 +63,10 @@ export interface SdrMonthKpi {
   no_shows: number;
   intermediacoes_contrato: number;
   taxa_no_show: number | null;
+  // Novas colunas para contagem automática de ligações
+  ligacoes_contato: number;
+  tentativas_auto: number;
+  ligacoes_manual_override: boolean;
   created_at: string;
   updated_at: string;
 }

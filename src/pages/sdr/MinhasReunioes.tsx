@@ -23,6 +23,9 @@ import { MeetingSummaryCards } from "@/components/sdr/MeetingSummaryCards";
 import { MeetingsTable } from "@/components/sdr/MeetingsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 import { ReviewRequestModal } from "@/components/sdr/ReviewRequestModal";
+import { CallMetricsCards } from "@/components/sdr/CallMetricsCards";
+import { useSdrCallMetrics } from "@/hooks/useSdrCallMetrics";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -65,8 +68,18 @@ export default function MinhasReunioes() {
 
   const { startDate, endDate } = getDateRange();
   
+  // Buscar usuário logado
+  const { user } = useAuth();
+  
   // Usar nova hook V2 com lógica corrigida
   const { meetings, summary, isLoading, refetch } = useMinhasReunioesV2(startDate, endDate);
+  
+  // Buscar métricas de ligações do SDR
+  const { data: callMetrics, isLoading: callsLoading } = useSdrCallMetrics(
+    user?.email,
+    startDate,
+    endDate
+  );
 
   // Filtrar reuniões localmente
   const filteredMeetings = meetings.filter(m => {
@@ -197,6 +210,17 @@ export default function MinhasReunioes() {
         <MeetingSummaryCards 
           summary={summary} 
           isLoading={isLoading} 
+        />
+      </div>
+      
+      {/* Call Metrics Cards */}
+      <div className="flex-shrink-0 mt-4">
+        <CallMetricsCards
+          totalCalls={callMetrics?.totalCalls || 0}
+          answered={callMetrics?.answered || 0}
+          unanswered={callMetrics?.unanswered || 0}
+          avgDurationSeconds={callMetrics?.avgDurationSeconds || 0}
+          isLoading={callsLoading}
         />
       </div>
       
