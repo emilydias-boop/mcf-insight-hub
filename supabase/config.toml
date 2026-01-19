@@ -224,3 +224,6 @@ verify_jwt = false
 
 [functions.webhook-leilao]
 verify_jwt = false
+
+[functions.notify-new-lead]
+verify_jwt = false
