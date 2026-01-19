@@ -30,8 +30,9 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
   // Dados derivados
-  const contactName = deal.crm_contacts?.name || deal.contact?.name;
-  const contactEmail = deal.crm_contacts?.email || deal.contact?.email;
+  const contact = deal.crm_contacts || deal.contact;
+  const contactName = contact?.name;
+  const contactEmail = contact?.email;
 
   // Prioridade baseada em tags
   const getPriorityInfo = () => {
@@ -55,7 +56,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   const handleCall = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    let phone = extractPhoneFromDeal(deal);
+    let phone = extractPhoneFromDeal(deal, contact);
 
     if (!phone && contactEmail) {
       setIsSearchingPhone(true);
@@ -90,7 +91,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   const handleWhatsApp = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    let phone = extractPhoneFromDeal(deal);
+    let phone = extractPhoneFromDeal(deal, contact);
 
     if (!phone && contactEmail) {
       setIsSearchingPhone(true);

@@ -38,7 +38,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   const futureStages = stages?.filter(s => s.stage_order > currentStageOrder) || [];
   
   const handleCall = async () => {
-    let phone = extractPhoneFromDeal(deal);
+    let phone = extractPhoneFromDeal(deal, contact);
     
     if (!phone && contact?.email) {
       setIsSearchingPhone(true);
@@ -71,7 +71,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   };
   
   const handleWhatsApp = () => {
-    let phone = extractPhoneFromDeal(deal) || contact?.phone;
+    let phone = extractPhoneFromDeal(deal, contact);
     
     if (!phone) {
       toast.error('Contato não possui telefone cadastrado');
@@ -131,7 +131,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
     }
   };
   
-  const hasPhone = extractPhoneFromDeal(deal) || contact?.phone;
+  const hasPhone = extractPhoneFromDeal(deal, contact);
   
   return (
     <>
