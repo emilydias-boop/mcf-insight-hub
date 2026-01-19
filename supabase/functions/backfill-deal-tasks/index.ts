@@ -21,14 +21,14 @@ serve(async (req) => {
     // Parse optional filters from request body
     let originId: string | null = null;
     let stageId: string | null = null;
-    let limit: number = 500; // Reduced default limit
+    let limit: number = 200; // Small default for safety
     let dryRun: boolean = false;
 
     try {
       const body = await req.json();
       originId = body.origin_id || body.originId || null;
       stageId = body.stage_id || body.stageId || null;
-      limit = Math.min(body.limit || 500, 1000); // Cap at 1000
+      limit = Math.min(body.limit || 200, 500); // Cap at 500
       dryRun = body.dry_run || body.dryRun || false;
     } catch {
       // No body or invalid JSON, use defaults
@@ -36,7 +36,7 @@ serve(async (req) => {
 
     console.log(`[BACKFILL] Starting - originId: ${originId}, stageId: ${stageId}, limit: ${limit}, dryRun: ${dryRun}`);
 
-    // 1. Get all activity templates first (to avoid processing deals without templates)
+    // 1. Get all activity templates first
     const { data: allTemplates, error: templatesError } = await supabase
       .from("activity_templates")
       .select("id, name, description, type, default_due_days, stage_id, order_index")
@@ -67,7 +67,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         processed: 0,
         skipped: 0,
-        noTemplates: 0,
         tasksCreated: 0,
         tasksToCreate: 0,
         dryRun,
@@ -78,7 +77,7 @@ serve(async (req) => {
       });
     }
 
-    // 2. Get deals that are in stages with templates (optimized query)
+    // 2. Get deals that are in stages with templates
     let dealsQuery = supabase
       .from("crm_deals")
       .select("id, stage_id, origin_id, owner_id, contact_id")
@@ -95,59 +94,63 @@ serve(async (req) => {
       throw dealsError;
     }
 
-    console.log(`[BACKFILL] Found ${deals?.length || 0} deals in stages with templates`);
+    console.log(`[BACKFILL] Found ${deals?.length || 0} deals`);
 
     if (!deals || deals.length === 0) {
       return new Response(JSON.stringify({
         processed: 0,
         skipped: 0,
-        noTemplates: 0,
         tasksCreated: 0,
         tasksToCreate: 0,
         dryRun,
-        message: "No deals found matching criteria"
+        message: "No deals found"
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
 
-    // 3. Get deals that already have pending tasks (single optimized query)
+    // 3. Check existing tasks in batches of 50 to avoid "Bad Request"
+    const dealsWithTasks = new Set<string>();
     const dealIds = deals.map(d => d.id);
-    const { data: existingTasks, error: tasksError } = await supabase
-      .from("deal_tasks")
-      .select("deal_id")
-      .in("deal_id", dealIds)
-      .eq("status", "pending");
+    const checkBatchSize = 50;
 
-    if (tasksError) {
-      console.error("[BACKFILL] Error checking existing tasks:", tasksError);
-      throw tasksError;
+    for (let i = 0; i < dealIds.length; i += checkBatchSize) {
+      const batchIds = dealIds.slice(i, i + checkBatchSize);
+      const { data: existingTasks, error: tasksError } = await supabase
+        .from("deal_tasks")
+        .select("deal_id")
+        .in("deal_id", batchIds)
+        .eq("status", "pending");
+
+      if (tasksError) {
+        console.error(`[BACKFILL] Error checking batch ${i}:`, tasksError);
+        continue; // Continue with other batches
+      }
+
+      for (const task of existingTasks || []) {
+        dealsWithTasks.add(task.deal_id);
+      }
     }
 
-    // Create a Set of deal IDs that already have pending tasks
-    const dealsWithTasks = new Set((existingTasks || []).map(t => t.deal_id));
     console.log(`[BACKFILL] ${dealsWithTasks.size} deals already have pending tasks`);
 
-    // 4. Filter deals and create tasks
+    // 4. Create tasks for deals without existing tasks
     let processed = 0;
-    let skipped = dealsWithTasks.size;
+    const skipped = dealsWithTasks.size;
     const allTasksToInsert: any[] = [];
     const now = new Date();
 
     for (const deal of deals) {
-      // Skip if already has pending tasks
       if (dealsWithTasks.has(deal.id)) {
         continue;
       }
 
-      // Get templates for this deal's stage
       const templates = templatesByStage[deal.stage_id] || [];
       if (templates.length === 0) {
         continue;
       }
 
-      // Create tasks from templates
       for (const template of templates) {
         const dueDays = template.default_due_days || 0;
         const dueDate = new Date(now.getTime() + dueDays * 24 * 60 * 60 * 1000);
@@ -169,21 +172,21 @@ serve(async (req) => {
 
     console.log(`[BACKFILL] Will create ${allTasksToInsert.length} tasks for ${processed} deals`);
 
-    // 5. Insert all tasks in batches (if not dry run)
+    // 5. Insert tasks in small batches
     let insertedCount = 0;
     const errors: string[] = [];
 
     if (!dryRun && allTasksToInsert.length > 0) {
-      const batchSize = 200; // Smaller batches for reliability
-      for (let i = 0; i < allTasksToInsert.length; i += batchSize) {
-        const batch = allTasksToInsert.slice(i, i + batchSize);
+      const insertBatchSize = 100;
+      for (let i = 0; i < allTasksToInsert.length; i += insertBatchSize) {
+        const batch = allTasksToInsert.slice(i, i + insertBatchSize);
         const { error: insertError } = await supabase
           .from("deal_tasks")
           .insert(batch);
 
         if (insertError) {
-          console.error(`[BACKFILL] Error inserting batch ${Math.floor(i / batchSize) + 1}:`, insertError);
-          errors.push(`Batch ${Math.floor(i / batchSize) + 1} error: ${insertError.message}`);
+          console.error(`[BACKFILL] Insert batch error:`, insertError);
+          errors.push(`Batch ${Math.floor(i / insertBatchSize) + 1}: ${insertError.message}`);
         } else {
           insertedCount += batch.length;
         }

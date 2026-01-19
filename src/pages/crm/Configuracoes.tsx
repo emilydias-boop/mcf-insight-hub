@@ -30,7 +30,7 @@ const ConfiguracoesContent = () => {
     setIsBackfilling(true);
     try {
       const { data, error } = await supabase.functions.invoke('backfill-deal-tasks', {
-        body: { dryRun, limit: 5000 }
+        body: { dryRun, limit: 200 }
       });
       
       if (error) throw error;
