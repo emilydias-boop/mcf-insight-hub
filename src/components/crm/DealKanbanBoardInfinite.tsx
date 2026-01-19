@@ -72,8 +72,16 @@ export const DealKanbanBoardInfinite = ({
   const visibleStages = (stages || []).filter((s: any) => s.is_active);
   
   // Buscar atividades de todos os deals de uma vez para performance
+  // Incluir stageIds para buscar limites corretos por estágio
   const dealIds = useMemo(() => deals.map(d => d.id), [deals]);
-  const { data: activitySummaries } = useBatchDealActivitySummary(dealIds);
+  const stageIdsMap = useMemo(() => {
+    const map = new Map<string, string>();
+    deals.forEach(d => {
+      if (d.stage_id) map.set(d.id, d.stage_id);
+    });
+    return map;
+  }, [deals]);
+  const { data: activitySummaries } = useBatchDealActivitySummary(dealIds, stageIdsMap);
   
   // Intersection Observer para scroll infinito
   useEffect(() => {

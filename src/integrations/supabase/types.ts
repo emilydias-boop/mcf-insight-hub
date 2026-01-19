@@ -5270,6 +5270,41 @@ export type Database = {
         }
         Relationships: []
       }
+      stage_attempt_limits: {
+        Row: {
+          created_at: string
+          id: string
+          max_attempts: number
+          stage_id: string | null
+          stage_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          max_attempts?: number
+          stage_id?: string | null
+          stage_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          max_attempts?: number
+          stage_id?: string | null
+          stage_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_attempt_limits_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: true
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stage_permissions: {
         Row: {
           can_edit: boolean | null
