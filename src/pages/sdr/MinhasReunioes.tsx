@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useSdrOriginsAndStages } from "@/hooks/useSdrMeetings";
-import { useMinhasReunioesV2, MeetingV2 } from "@/hooks/useSdrMetricsV2";
+import { useMinhasReunioesFromAgenda } from "@/hooks/useMinhasReunioesFromAgenda";
+import { MeetingV2 } from "@/hooks/useSdrMetricsV2";
 import { MeetingSummaryCards } from "@/components/sdr/MeetingSummaryCards";
 import { MeetingsTable } from "@/components/sdr/MeetingsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
@@ -71,8 +72,8 @@ export default function MinhasReunioes() {
   // Buscar usuário logado
   const { user } = useAuth();
   
-  // Usar nova hook V2 com lógica corrigida
-  const { meetings, summary, isLoading, refetch } = useMinhasReunioesV2(startDate, endDate);
+  // Usar dados da AGENDA (fonte de verdade) ao invés do Clint
+  const { meetings, summary, isLoading, refetch } = useMinhasReunioesFromAgenda(startDate, endDate);
   
   // Buscar métricas de ligações do SDR
   const { data: callMetrics, isLoading: callsLoading } = useSdrCallMetrics(
