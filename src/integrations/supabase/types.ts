@@ -4421,6 +4421,71 @@ export type Database = {
         }
         Relationships: []
       }
+      qualification_field_configs: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          fields: Json
+          group_id: string | null
+          id: string
+          is_active: boolean | null
+          origin_id: string | null
+          scope_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          fields?: Json
+          group_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          origin_id?: string | null
+          scope_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          fields?: Json
+          group_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          origin_id?: string | null
+          scope_type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qualification_field_configs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qualification_field_configs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "qualification_field_configs_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "crm_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qualification_field_configs_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       r2_daily_slots: {
         Row: {
           closer_id: string
