@@ -231,15 +231,32 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         }
       });
 
+      // Capture CallSid once available and update the database
+      // The CallSid is in call.parameters after connection
+      const checkAndUpdateCallSid = async () => {
+        const callSid = (call as any).parameters?.CallSid;
+        if (callSid) {
+          console.log(`Updating twilio_call_sid: ${callSid} for call ${callId}`);
+          await supabase
+            .from('calls')
+            .update({ twilio_call_sid: callSid })
+            .eq('id', callId);
+        }
+      };
+
       call.on('ringing', () => {
         console.log('Call ringing');
         setCallStatus('ringing');
+        // Try to capture CallSid when ringing starts
+        checkAndUpdateCallSid();
       });
 
       call.on('accept', () => {
         console.log('Call accepted');
         setCallStatus('in-progress');
         setDeviceStatus('busy');
+        // Also try when call is accepted (backup)
+        checkAndUpdateCallSid();
       });
 
       call.on('disconnect', () => {
