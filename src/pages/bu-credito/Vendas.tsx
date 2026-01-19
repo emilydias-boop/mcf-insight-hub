@@ -1,0 +1,321 @@
+import { useState, useMemo } from 'react';
+import { format, startOfMonth } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ShoppingCart } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
+
+import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
+import { TransactionFilters } from '@/hooks/useAllHublaTransactions';
+import { formatCurrency } from '@/lib/formatters';
+
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
+
+export default function CreditoVendas() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState<Date | undefined>(startOfMonth(new Date()));
+  const [endDate, setEndDate] = useState<Date | undefined>(new Date());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  const filters: TransactionFilters = {
+    search: searchTerm || undefined,
+    startDate,
+    endDate,
+  };
+
+  const { data: transactions = [], isLoading, refetch, isFetching } = useTransactionsByBU('credito', filters);
+
+  const totalPages = Math.ceil(transactions.length / itemsPerPage);
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return transactions.slice(start, start + itemsPerPage);
+  }, [transactions, currentPage, itemsPerPage]);
+
+  const totals = useMemo(() => {
+    const bruto = transactions.reduce((sum, t) => sum + (t.product_price || 0), 0);
+    const liquido = transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
+    return { count: transactions.length, bruto, liquido };
+  }, [transactions]);
+
+  const handleRefresh = async () => {
+    await refetch();
+    toast.success('Dados atualizados!');
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setStartDate(undefined);
+    setEndDate(undefined);
+    setCurrentPage(1);
+  };
+
+  const handleExport = () => {
+    if (transactions.length === 0) {
+      toast.error('Nenhuma transação para exportar');
+      return;
+    }
+
+    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte'];
+    const rows = transactions.map(t => [
+      t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
+      t.product_name || '',
+      t.customer_name || '',
+      t.customer_email || '',
+      t.installment_number && t.total_installments ? `${t.installment_number}/${t.total_installments}` : '1/1',
+      (t.product_price || 0).toFixed(2),
+      (t.net_value || 0).toFixed(2),
+      t.source || '',
+    ]);
+
+    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vendas-credito-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Exportação concluída!');
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleStartDateChange = (date: Date | undefined) => {
+    setStartDate(date);
+    setCurrentPage(1);
+  };
+
+  const handleEndDateChange = (date: Date | undefined) => {
+    setEndDate(date);
+    setCurrentPage(1);
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <ShoppingCart className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Vendas - Crédito</h1>
+            <p className="text-muted-foreground">Transações de produtos de crédito</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            Exportar
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="text-sm font-medium mb-2 block">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Nome, email ou produto..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="w-full sm:w-48">
+              <label className="text-sm font-medium mb-2 block">Data Inicial</label>
+              <DatePickerCustom
+                selected={startDate}
+                onSelect={handleStartDateChange}
+                placeholder="Selecione..."
+              />
+            </div>
+            <div className="w-full sm:w-48">
+              <label className="text-sm font-medium mb-2 block">Data Final</label>
+              <DatePickerCustom
+                selected={endDate}
+                onSelect={handleEndDateChange}
+                placeholder="Selecione..."
+              />
+            </div>
+            <Button variant="ghost" size="icon" onClick={handleClearFilters} title="Limpar filtros">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm font-medium text-muted-foreground">Total de Transações</div>
+            <div className="text-2xl font-bold">{totals.count.toLocaleString('pt-BR')}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm font-medium text-muted-foreground">Bruto Total</div>
+            <div className="text-2xl font-bold">{formatCurrency(totals.bruto)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm font-medium text-muted-foreground">Líquido Total</div>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(totals.liquido)}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-32">Data</TableHead>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="w-24 text-center">Parcela</TableHead>
+                  <TableHead className="w-28 text-right">Bruto</TableHead>
+                  <TableHead className="w-28 text-right">Líquido</TableHead>
+                  <TableHead className="w-24">Fonte</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: 10 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : paginatedTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                      {transactions.length === 0 
+                        ? 'Nenhuma transação encontrada. Configure produtos com target_bu = "credito" na página de Produtos.'
+                        : 'Nenhuma transação encontrada'
+                      }
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedTransactions.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-medium">
+                        {t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yy HH:mm', { locale: ptBR }) : '-'}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate" title={t.product_name || ''}>
+                        {t.product_name || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-[180px]">
+                          <div className="truncate font-medium" title={t.customer_name || ''}>
+                            {t.customer_name || '-'}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground" title={t.customer_email || ''}>
+                            {t.customer_email || '-'}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {t.installment_number && t.total_installments 
+                          ? `${t.installment_number}/${t.total_installments}` 
+                          : '1/1'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(t.product_price || 0)}
+                      </TableCell>
+                      <TableCell className="text-right text-green-600 font-medium">
+                        {formatCurrency(t.net_value || 0)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-muted">
+                          {t.source || 'hubla'}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {transactions.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between border-t px-4 py-3 gap-3">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Mostrar</span>
+                  <Select value={itemsPerPage.toString()} onValueChange={handlePageSizeChange}>
+                    <SelectTrigger className="w-[70px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAGE_SIZE_OPTIONS.map((size) => (
+                        <SelectItem key={size} value={size.toString()}>
+                          {size}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-sm text-muted-foreground">por página</span>
+                </div>
+                <div className="text-sm text-muted-foreground hidden md:block">
+                  Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, transactions.length)} de {transactions.length.toLocaleString('pt-BR')}
+                </div>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-3 text-sm">Página {currentPage} de {totalPages}</span>
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
