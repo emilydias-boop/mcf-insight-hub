@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { Phone, MessageCircle, ArrowRight, Loader2, XCircle } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MarkAsLostModal } from './MarkAsLostModal';
 
 interface QuickActionsBlockProps {
   deal: any;
@@ -28,6 +29,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
   const [selectedStageId, setSelectedStageId] = useState<string>('');
+  const [showLostModal, setShowLostModal] = useState(false);
   
   const isTestDeal = deal ? isTestPipeline(deal.origin_id) : false;
   const currentStageOrder = deal?.crm_stages?.stage_order || 0;
@@ -132,61 +134,86 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   const hasPhone = extractPhoneFromDeal(deal) || contact?.phone;
   
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {/* Botão Ligar */}
-      <Button
-        size="sm"
-        className="bg-primary hover:bg-primary/90 h-8"
-        onClick={handleCall}
-        disabled={isSearchingPhone}
-      >
-        {isSearchingPhone ? (
-          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-        ) : (
-          <Phone className="h-3.5 w-3.5 mr-1.5" />
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Botão Ligar */}
+        <Button
+          size="sm"
+          className="bg-primary hover:bg-primary/90 h-8"
+          onClick={handleCall}
+          disabled={isSearchingPhone}
+        >
+          {isSearchingPhone ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Phone className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          {isTestDeal ? 'Ligar' : 'Ligar'}
+        </Button>
+        
+        {/* Botão WhatsApp */}
+        <Button
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
+          onClick={handleWhatsApp}
+          disabled={!hasPhone}
+        >
+          <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+          WhatsApp
+        </Button>
+        
+        {/* Mover estágio inline */}
+        {futureStages.length > 0 && (
+          <>
+            <div className="h-4 w-px bg-border mx-1" />
+            <Select value={selectedStageId} onValueChange={setSelectedStageId}>
+              <SelectTrigger className="w-[140px] h-8 bg-background text-xs">
+                <SelectValue placeholder="Mover para..." />
+              </SelectTrigger>
+              <SelectContent>
+                {futureStages.map((stage) => (
+                  <SelectItem key={stage.id} value={stage.id}>
+                    {stage.stage_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              onClick={handleMoveStage}
+              disabled={!selectedStageId || updateDeal.isPending}
+            >
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </>
         )}
-        {isTestDeal ? 'Ligar' : 'Ligar'}
-      </Button>
-      
-      {/* Botão WhatsApp */}
-      <Button
-        size="sm"
-        className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
-        onClick={handleWhatsApp}
-        disabled={!hasPhone}
-      >
-        <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
-        WhatsApp
-      </Button>
-      
-      {/* Mover estágio inline */}
-      {futureStages.length > 0 && (
-        <>
-          <div className="h-4 w-px bg-border mx-1" />
-          <Select value={selectedStageId} onValueChange={setSelectedStageId}>
-            <SelectTrigger className="w-[140px] h-8 bg-background text-xs">
-              <SelectValue placeholder="Mover para..." />
-            </SelectTrigger>
-            <SelectContent>
-              {futureStages.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
-                  {stage.stage_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Button
-            size="icon"
-            variant="outline"
-            className="h-8 w-8"
-            onClick={handleMoveStage}
-            disabled={!selectedStageId || updateDeal.isPending}
-          >
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
-        </>
-      )}
-    </div>
+        
+        {/* Botão Perdido */}
+        <div className="h-4 w-px bg-border mx-1" />
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
+          onClick={() => setShowLostModal(true)}
+        >
+          <XCircle className="h-3.5 w-3.5 mr-1.5" />
+          Perdido
+        </Button>
+      </div>
+
+      {/* Modal de Perda */}
+      <MarkAsLostModal
+        open={showLostModal}
+        onOpenChange={setShowLostModal}
+        dealId={deal?.id}
+        dealName={deal?.name || 'Lead'}
+        originId={deal?.origin_id}
+        currentCustomFields={deal?.custom_fields || {}}
+        onSuccess={onStageChange}
+      />
+    </>
   );
 };

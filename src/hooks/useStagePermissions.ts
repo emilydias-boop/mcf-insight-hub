@@ -26,10 +26,28 @@ export const CLOSER_ONLY_STAGE_PATTERNS = [
   'venda realizada',
 ];
 
+// Stages that represent "lost" deals
+export const LOST_STAGE_PATTERNS = [
+  'sem interesse',
+  'perdido',
+  'perdida',
+  'não quer',
+  'desistente',
+  'cancelado',
+];
+
 // Check if a stage name matches closer-only patterns
 export const isCloserOnlyStage = (stageName: string): boolean => {
   const normalized = stageName.toLowerCase().trim();
   return CLOSER_ONLY_STAGE_PATTERNS.some(pattern => 
+    normalized.includes(pattern) || normalized === pattern
+  );
+};
+
+// Check if a stage name matches lost patterns
+export const isLostStage = (stageName: string): boolean => {
+  const normalized = stageName.toLowerCase().trim();
+  return LOST_STAGE_PATTERNS.some(pattern => 
     normalized.includes(pattern) || normalized === pattern
   );
 };

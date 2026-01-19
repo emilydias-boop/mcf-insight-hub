@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
-import { useStagePermissions, isCloserOnlyStage } from '@/hooks/useStagePermissions';
+import { useStagePermissions, isCloserOnlyStage, isLostStage } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
@@ -33,6 +33,7 @@ interface DealKanbanBoardInfiniteProps {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   fetchNextPage?: () => void;
+  showLostDeals?: boolean;
 }
 
 export const DealKanbanBoardInfinite = ({ 
@@ -40,7 +41,8 @@ export const DealKanbanBoardInfinite = ({
   originId,
   hasNextPage,
   isFetchingNextPage,
-  fetchNextPage 
+  fetchNextPage,
+  showLostDeals = false
 }: DealKanbanBoardInfiniteProps) => {
   const { getVisibleStages, canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
@@ -67,17 +69,22 @@ export const DealKanbanBoardInfinite = ({
     contactName: string;
   }>({ open: false, dealId: '', contactName: '' });
   
-  // Filter stages - hide closer-only stages from SDRs
+  // Filter stages - hide closer-only and lost stages from SDRs (unless filtered)
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
     
     // SDRs don't see closer-only stages (Realizada, Contrato Pago, etc.)
+    // and don't see lost stages unless showLostDeals is true
     if (role === 'sdr') {
-      return activeStages.filter((s: any) => !isCloserOnlyStage(s.stage_name));
+      return activeStages.filter((s: any) => {
+        if (isCloserOnlyStage(s.stage_name)) return false;
+        if (!showLostDeals && isLostStage(s.stage_name)) return false;
+        return true;
+      });
     }
     
     return activeStages;
-  }, [stages, role]);
+  }, [stages, role, showLostDeals]);
   
   // Buscar atividades de todos os deals de uma vez para performance
   // Incluir stageIds para buscar limites corretos por estágio
