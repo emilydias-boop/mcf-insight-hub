@@ -10,6 +10,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { ResourceGuard } from "./components/auth/ResourceGuard";
 import { RoleGuard } from "./components/auth/RoleGuard";
 import { R2AccessGuard } from "./components/auth/R2AccessGuard";
+import { NegociosAccessGuard } from "./components/auth/NegociosAccessGuard";
 import { MainLayout } from "./components/layout/MainLayout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useProductPricesCache } from "./hooks/useProductPricesCache";
@@ -210,7 +211,7 @@ const App = () => (
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
                 <Route path="contatos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Contatos /></RoleGuard>} />
-                <Route path="negocios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Negocios /></RoleGuard>} />
+                <Route path="negocios" element={<NegociosAccessGuard><Negocios /></NegociosAccessGuard>} />
                 <Route path="atendimentos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Atendimentos /></RoleGuard>} />
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
