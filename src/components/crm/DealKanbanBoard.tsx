@@ -12,6 +12,7 @@ import { StageChangeModal } from './StageChangeModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useGenerateTasksForStage } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { Inbox, ChevronDown } from 'lucide-react';
 
 interface Deal {
@@ -71,6 +72,10 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
     });
     return map;
   }, [deals, visibleStages]);
+  
+  // Buscar atividades de todos os deals de uma vez para performance
+  const dealIds = useMemo(() => deals.map(d => d.id), [deals]);
+  const { data: activitySummaries } = useBatchDealActivitySummary(dealIds);
   
   const getVisibleCountForStage = (stageId: string) => 
     visibleCountByStage[stageId] || INITIAL_VISIBLE_COUNT;
@@ -218,6 +223,7 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
                                     isDragging={snapshot.isDragging}
                                     provided={provided}
                                     onClick={() => handleDealClick(deal.id)}
+                                    activitySummary={activitySummaries?.get(deal.id)}
                                   />
                                 )}
                               </Draggable>

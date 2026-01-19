@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useGenerateTasksForStage } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { Inbox, Loader2 } from 'lucide-react';
 
 interface Deal {
@@ -69,6 +70,10 @@ export const DealKanbanBoardInfinite = ({
   }>({ open: false, dealId: '', contactName: '' });
   
   const visibleStages = (stages || []).filter((s: any) => s.is_active);
+  
+  // Buscar atividades de todos os deals de uma vez para performance
+  const dealIds = useMemo(() => deals.map(d => d.id), [deals]);
+  const { data: activitySummaries } = useBatchDealActivitySummary(dealIds);
   
   // Intersection Observer para scroll infinito
   useEffect(() => {
@@ -241,6 +246,7 @@ export const DealKanbanBoardInfinite = ({
                                   isDragging={snapshot.isDragging}
                                   provided={provided}
                                   onClick={() => handleDealClick(deal.id)}
+                                  activitySummary={activitySummaries?.get(deal.id)}
                                 />
                               )}
                             </Draggable>
