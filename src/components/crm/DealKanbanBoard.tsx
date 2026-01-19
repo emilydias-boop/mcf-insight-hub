@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
-import { useStagePermissions, isCloserOnlyStage } from '@/hooks/useStagePermissions';
+import { useStagePermissions, isCloserOnlyStage, isLostStage } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
@@ -30,11 +30,12 @@ interface Deal {
 interface DealKanbanBoardProps {
   deals: Deal[];
   originId?: string;
+  showLostDeals?: boolean;
 }
 
 const INITIAL_VISIBLE_COUNT = 50;
 
-export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
+export const DealKanbanBoard = ({ deals, originId, showLostDeals = false }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
@@ -55,17 +56,22 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
     newStageName: string;
   }>({ open: false, dealId: '', dealName: '', newStageName: '' });
   
-  // Filter stages - hide closer-only stages from SDRs
+  // Filter stages - hide closer-only and lost stages from SDRs (unless filtered)
   const visibleStages = useMemo(() => {
     const activeStages = (stages || []).filter((s: any) => s.is_active);
     
     // SDRs don't see closer-only stages (Realizada, Contrato Pago, etc.)
+    // and don't see lost stages unless showLostDeals is true
     if (role === 'sdr') {
-      return activeStages.filter((s: any) => !isCloserOnlyStage(s.stage_name));
+      return activeStages.filter((s: any) => {
+        if (isCloserOnlyStage(s.stage_name)) return false;
+        if (!showLostDeals && isLostStage(s.stage_name)) return false;
+        return true;
+      });
     }
     
     return activeStages;
-  }, [stages, role]);
+  }, [stages, role, showLostDeals]);
   
   // Memoize deals by stage para evitar recálculos
   const dealsByStage = useMemo(() => {

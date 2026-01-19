@@ -290,6 +290,7 @@ const Negocios = () => {
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
               }))}
               originId={effectiveOriginId}
+              showLostDeals={filters.dealStatus === 'lost'}
             />
           )}
         </div>
