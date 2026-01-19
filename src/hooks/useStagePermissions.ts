@@ -10,6 +10,30 @@ interface StagePermission {
   can_move_to: boolean;
 }
 
+// Stages that should only be visible to closers (not SDRs)
+// SDRs will not see these columns in the Kanban board
+export const CLOSER_ONLY_STAGE_PATTERNS = [
+  'reunião 01 realizada',
+  'reunião 1 realizada',
+  'r1 realizada',
+  'reunião 02 agendada',
+  'reunião 2 agendada',
+  'r2 agendada',
+  'reunião 02 realizada',
+  'reunião 2 realizada', 
+  'r2 realizada',
+  'contrato pago',
+  'venda realizada',
+];
+
+// Check if a stage name matches closer-only patterns
+export const isCloserOnlyStage = (stageName: string): boolean => {
+  const normalized = stageName.toLowerCase().trim();
+  return CLOSER_ONLY_STAGE_PATTERNS.some(pattern => 
+    normalized.includes(pattern) || normalized === pattern
+  );
+};
+
 // Mapa de normalização de nomes de stage para identificadores genéricos
 const STAGE_NAME_MAP: Record<string, string> = {
   // Estágios base

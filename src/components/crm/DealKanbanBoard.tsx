@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
-import { useStagePermissions } from '@/hooks/useStagePermissions';
+import { useStagePermissions, isCloserOnlyStage } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
@@ -39,7 +39,7 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
   const { data: stages } = useCRMStages(originId);
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -55,10 +55,17 @@ export const DealKanbanBoard = ({ deals, originId }: DealKanbanBoardProps) => {
     newStageName: string;
   }>({ open: false, dealId: '', dealName: '', newStageName: '' });
   
-  const visibleStages = useMemo(() => 
-    (stages || []).filter((s: any) => s.is_active), 
-    [stages]
-  );
+  // Filter stages - hide closer-only stages from SDRs
+  const visibleStages = useMemo(() => {
+    const activeStages = (stages || []).filter((s: any) => s.is_active);
+    
+    // SDRs don't see closer-only stages (Realizada, Contrato Pago, etc.)
+    if (role === 'sdr') {
+      return activeStages.filter((s: any) => !isCloserOnlyStage(s.stage_name));
+    }
+    
+    return activeStages;
+  }, [stages, role]);
   
   // Memoize deals by stage para evitar recálculos
   const dealsByStage = useMemo(() => {
