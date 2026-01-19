@@ -15,9 +15,12 @@ export const useCreateDealActivity = () => {
       user_id?: string;
       metadata?: any;
     }) => {
+      // Não passar user_id explícito - deixar o banco usar auth.uid() via RLS
+      const { user_id, ...insertData } = data;
+      
       const { data: result, error } = await supabase
         .from('deal_activities')
-        .insert(data)
+        .insert(insertData)
         .select()
         .single();
       
