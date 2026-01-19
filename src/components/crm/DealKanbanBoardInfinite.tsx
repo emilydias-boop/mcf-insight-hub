@@ -8,6 +8,7 @@ import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
+import { QualificationAndScheduleModal } from './QualificationAndScheduleModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useGenerateTasksForStage } from '@/hooks/useDealTasks';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,6 +60,13 @@ export const DealKanbanBoardInfinite = ({
     dealName: string;
     newStageName: string;
   }>({ open: false, dealId: '', dealName: '', newStageName: '' });
+  
+  // State para modal de qualificação (quando arrasta para "Sem Interesse")
+  const [qualificationModal, setQualificationModal] = useState<{
+    open: boolean;
+    dealId: string;
+    contactName: string;
+  }>({ open: false, dealId: '', contactName: '' });
   
   const visibleStages = (stages || []).filter((s: any) => s.is_active);
   
@@ -129,6 +137,11 @@ export const DealKanbanBoardInfinite = ({
     const oldStage = visibleStages.find((s: any) => s.id === oldStageId);
     const newStage = visibleStages.find((s: any) => s.id === newStageId);
     
+    // Verificar se está movendo para "Sem Interesse" para abrir qualificação
+    const isNoInterestStage = newStage?.stage_name?.toLowerCase().includes('sem interesse') ||
+                              newStage?.stage_name?.toLowerCase().includes('não interessado') ||
+                              newStage?.stage_name?.toLowerCase().includes('lost');
+    
     updateDealMutation.mutate(
       { id: dealId, stage_id: newStageId },
       {
@@ -164,8 +177,15 @@ export const DealKanbanBoardInfinite = ({
             });
           }
           
-          // Abrir modal para definir próxima ação
-          if (deal && newStage) {
+          // Se moveu para "Sem Interesse", abrir modal de qualificação
+          if (isNoInterestStage && deal) {
+            setQualificationModal({
+              open: true,
+              dealId: dealId,
+              contactName: deal.name,
+            });
+          } else if (deal && newStage) {
+            // Abrir modal para definir próxima ação
             setStageChangeModal({
               open: true,
               dealId: dealId,
@@ -262,6 +282,15 @@ export const DealKanbanBoardInfinite = ({
         dealId={stageChangeModal.dealId}
         dealName={stageChangeModal.dealName}
         newStageName={stageChangeModal.newStageName}
+      />
+      
+      {/* Modal de qualificação quando move para "Sem Interesse" */}
+      <QualificationAndScheduleModal
+        open={qualificationModal.open}
+        onOpenChange={(open) => setQualificationModal(prev => ({ ...prev, open }))}
+        dealId={qualificationModal.dealId}
+        contactName={qualificationModal.contactName}
+        autoFocus="qualification"
       />
     </>
   );

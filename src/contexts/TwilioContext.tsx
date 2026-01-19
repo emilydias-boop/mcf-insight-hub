@@ -56,6 +56,7 @@ interface TwilioContextType {
   callDuration: number;
   isMuted: boolean;
   currentCallId: string | null;
+  currentCallDealId: string | null;
   initializeDevice: () => Promise<void>;
   makeCall: (phoneNumber: string, dealId?: string, contactId?: string, originId?: string) => Promise<string | null>;
   hangUp: () => void;
@@ -77,6 +78,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
+  const [currentCallDealId, setCurrentCallDealId] = useState<string | null>(null);
   const [testPipelineId, setTestPipelineId] = useState<string | null>(null);
   const [durationInterval, setDurationInterval] = useState<NodeJS.Timeout | null>(null);
 
@@ -208,6 +210,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       
       const callId = insertResult.data.id;
       setCurrentCallId(callId);
+      setCurrentCallDealId(dealId || null);
 
       // Make the call via Twilio
       const call = await device.connect({
@@ -299,6 +302,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       callDuration,
       isMuted,
       currentCallId,
+      currentCallDealId,
       initializeDevice,
       makeCall,
       hangUp,
