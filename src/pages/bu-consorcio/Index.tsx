@@ -13,7 +13,6 @@ import {
   Trash2,
   Settings,
   Search,
-  Calendar as CalendarIcon,
   RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,12 +34,6 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConsorcioCards, useConsorcioSummary, useDeleteConsorcioCard } from '@/hooks/useConsorcio';
 import { useRecalculateAllCommissions } from '@/hooks/useRecalculateCommissions';
@@ -48,6 +41,7 @@ import { useConsorcioEmployees } from '@/hooks/useEmployees';
 import { ConsorcioCardForm } from '@/components/consorcio/ConsorcioCardForm';
 import { ConsorcioCardDrawer } from '@/components/consorcio/ConsorcioCardDrawer';
 import { ConsorcioConfigModal } from '@/components/consorcio/ConsorcioConfigModal';
+import { ConsorcioPeriodFilter, DateRangeFilter } from '@/components/consorcio/ConsorcioPeriodFilter';
 import { STATUS_OPTIONS, CATEGORIA_OPTIONS, ORIGEM_OPTIONS, ConsorcioCard } from '@/types/consorcio';
 import { useConsorcioCategoriaOptions, useConsorcioOrigemOptions, useConsorcioTipoOptions } from '@/hooks/useConsorcioConfigOptions';
 import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
@@ -130,7 +124,11 @@ export default function ConsorcioPage() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [vencimentoFilter, setVencimentoFilter] = useState<string>('todos');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
-  const [dataFilter, setDataFilter] = useState<Date | undefined>();
+  const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>({
+    startDate: undefined,
+    endDate: undefined,
+    label: 'Período'
+  });
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -162,8 +160,8 @@ export default function ConsorcioPage() {
   }
 
   const filters = {
-    startDate: dataFilter || startDate,
-    endDate: dataFilter || endDate,
+    startDate: dateRangeFilter.startDate || startDate,
+    endDate: dateRangeFilter.endDate || endDate,
     status: statusFilter !== 'todos' ? statusFilter : undefined,
     tipoProduto: tipoFilter !== 'todos' ? tipoFilter : undefined,
     vendedorId: vendedorFilter !== 'todos' ? vendedorFilter : undefined,
@@ -218,7 +216,7 @@ export default function ConsorcioPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, dataFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, dateRangeFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -490,35 +488,10 @@ export default function ConsorcioPage() {
           </SelectContent>
         </Select>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="w-36 justify-start text-left font-normal">
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {dataFilter ? format(dataFilter, 'dd/MM/yyyy') : 'Data'}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={dataFilter}
-              onSelect={setDataFilter}
-              locale={ptBR}
-              initialFocus
-            />
-            {dataFilter && (
-              <div className="p-2 border-t">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="w-full" 
-                  onClick={() => setDataFilter(undefined)}
-                >
-                  Limpar
-                </Button>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
+        <ConsorcioPeriodFilter 
+          value={dateRangeFilter} 
+          onChange={setDateRangeFilter} 
+        />
 
         <div className="flex-1" />
 
