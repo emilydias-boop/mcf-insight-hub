@@ -6,6 +6,8 @@ import { Phone, Clock, User, FileText, Volume2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+const SUPABASE_URL = "https://rehcfgqvigfcekiipqkc.supabase.co";
+
 interface CallHistorySectionProps {
   contactId?: string;
   dealId?: string;
@@ -18,6 +20,8 @@ interface CallRecord {
   to_number: string | null;
   status: string;
   duration_seconds: number | null;
+  started_at: string | null;
+  ended_at: string | null;
   outcome: string | null;
   notes: string | null;
   created_at: string;
@@ -50,11 +54,32 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 function formatDuration(seconds: number | null): string {
-  if (!seconds) return '0s';
+  if (!seconds || seconds <= 0) return '0s';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   if (mins === 0) return `${secs}s`;
   return `${mins}m ${secs}s`;
+}
+
+// Calculate duration from timestamps if duration_seconds is 0
+function getCallDuration(call: CallRecord): number {
+  if (call.duration_seconds && call.duration_seconds > 0) {
+    return call.duration_seconds;
+  }
+  if (call.started_at && call.ended_at) {
+    return Math.floor((new Date(call.ended_at).getTime() - new Date(call.started_at).getTime()) / 1000);
+  }
+  return 0;
+}
+
+// Get proxy URL for recording playback
+function getRecordingProxyUrl(recordingUrl: string): string {
+  // Extract RecordingSid from URL like: https://api.twilio.com/.../Recordings/RE123.mp3
+  const match = recordingUrl.match(/Recordings\/([^.\/]+)/);
+  if (match && match[1]) {
+    return `${SUPABASE_URL}/functions/v1/get-recording?recordingSid=${match[1]}`;
+  }
+  return recordingUrl;
 }
 
 export function CallHistorySection({ contactId, dealId }: CallHistorySectionProps) {
@@ -70,6 +95,8 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
           to_number,
           status,
           duration_seconds,
+          started_at,
+          ended_at,
           outcome,
           notes,
           created_at,
@@ -169,7 +196,7 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
                 {/* Duration Badge */}
                 <div className="flex items-center gap-1 text-xs">
                   <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="font-mono">{formatDuration(call.duration_seconds)}</span>
+                  <span className="font-mono">{formatDuration(getCallDuration(call))}</span>
                 </div>
               </div>
 
@@ -203,7 +230,7 @@ export function CallHistorySection({ contactId, dealId }: CallHistorySectionProp
                   <audio 
                     controls 
                     className="w-full h-8"
-                    src={call.recording_url}
+                    src={getRecordingProxyUrl(call.recording_url)}
                     preload="none"
                   >
                     Seu navegador não suporta o player de áudio.

@@ -31,7 +31,8 @@ serve(async (req) => {
     const recordingDuration = formData.get('RecordingDuration')?.toString();
     const recordingStatus = formData.get('RecordingStatus')?.toString();
 
-    console.log(`Webhook received: CallSid=${callSid}, Status=${callStatus}, RecordingStatus=${recordingStatus}, RecordingSid=${recordingSid}, callRecordId=${callRecordIdFromUrl}`);
+    // Detailed logging for debugging
+    console.log(`Webhook received: CallSid=${callSid}, Status=${callStatus}, Duration=${callDuration}, RecordingStatus=${recordingStatus}, RecordingSid=${recordingSid}, RecordingDuration=${recordingDuration}, callRecordId=${callRecordIdFromUrl}`);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -40,36 +41,43 @@ serve(async (req) => {
 
     // Check if this is a recording status callback (separate from call status)
     if (recordingStatus === 'completed' && recordingUrl) {
-      // This is a recording callback - just save the recording URL
+      // This is a recording callback - save URL and duration
       const finalRecordingUrl = recordingUrl.endsWith('.mp3') 
         ? recordingUrl 
         : `${recordingUrl}.mp3`;
 
-      console.log(`Recording completed: ${finalRecordingUrl}`);
+      // Parse recording duration (more reliable than CallDuration)
+      const durationSeconds = parseInt(recordingDuration || '0') || null;
+
+      console.log(`Recording completed: ${finalRecordingUrl}, duration=${durationSeconds}s`);
+
+      const recordingUpdates: Record<string, any> = { 
+        recording_url: finalRecordingUrl,
+        updated_at: new Date().toISOString()
+      };
+
+      // Save recording duration if available
+      if (durationSeconds && durationSeconds > 0) {
+        recordingUpdates.duration_seconds = durationSeconds;
+      }
 
       // Try to update by callRecordId first (from URL param)
       if (callRecordIdFromUrl) {
         const { error } = await supabase
           .from('calls')
-          .update({ 
-            recording_url: finalRecordingUrl,
-            updated_at: new Date().toISOString()
-          })
+          .update(recordingUpdates)
           .eq('id', callRecordIdFromUrl);
 
         if (error) {
           console.error('Error updating recording by callRecordId:', error);
         } else {
-          console.log(`Recording saved for call ${callRecordIdFromUrl}`);
+          console.log(`Recording saved for call ${callRecordIdFromUrl} with duration ${durationSeconds}s`);
         }
       } else if (callSid) {
         // Fallback to CallSid
         const { error } = await supabase
           .from('calls')
-          .update({ 
-            recording_url: finalRecordingUrl,
-            updated_at: new Date().toISOString()
-          })
+          .update(recordingUpdates)
           .eq('twilio_call_sid', callSid);
 
         if (error) {
