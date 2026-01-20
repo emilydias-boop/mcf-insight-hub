@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { useMeetingsForDate, useMoveAttendeeToMeeting } from '@/hooks/useAgendaData';
+import { useMeetingsForDate, useMoveAttendeeToMeeting, syncDealStageFromAgenda } from '@/hooks/useAgendaData';
 import { useClosers, useCloserAvailability, useBookedSlots } from '@/hooks/useCloserScheduling';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -266,6 +266,33 @@ export function MoveAttendeeModal({
           note_type: 'reschedule',
           created_by: authData?.user?.id || null,
         });
+
+        // Sync deal stage back to R1 Agendada and mark as rescheduled
+        if (originalAttendee.deal_id) {
+          await syncDealStageFromAgenda(originalAttendee.deal_id, 'rescheduled', 'r1');
+          
+          // Mark deal as rescheduled in custom_fields
+          const { data: currentDeal } = await supabase
+            .from('crm_deals')
+            .select('custom_fields')
+            .eq('id', originalAttendee.deal_id)
+            .single();
+          
+          const currentFields = (currentDeal?.custom_fields as Record<string, unknown>) || {};
+          const rescheduleCount = (currentFields.reschedule_count as number) || 0;
+          
+          await supabase
+            .from('crm_deals')
+            .update({ 
+              custom_fields: {
+                ...currentFields,
+                is_rescheduled: true,
+                reschedule_count: rescheduleCount + 1,
+                last_reschedule_at: new Date().toISOString()
+              }
+            })
+            .eq('id', originalAttendee.deal_id);
+        }
 
         return { id: targetSlotId, newAttendeeId: newAttendee.id };
       }

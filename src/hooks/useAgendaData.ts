@@ -1340,6 +1340,9 @@ async function syncDealStageFromAgenda(
     // 2. Map agenda status to target stage name
     const stageNameMap: Record<string, string[]> = {
       'no_show': ['No-Show', 'NO-SHOW', 'No-show', 'NoShow'],
+      'rescheduled': meetingType === 'r2'
+        ? ['Reunião 02 Agendada', 'Reunião 2 Agendada', 'R2 Agendada', 'REUNIÃO 2 AGENDADA']
+        : ['Reunião 01 Agendada', 'Reunião 1 Agendada', 'R1 Agendada', 'REUNIÃO 1 AGENDADA'],
       'completed': meetingType === 'r2' 
         ? ['Reunião 02 Realizada', 'Reunião 2 Realizada', 'R2 Realizada', 'REUNIÃO 2 REALIZADA']
         : ['Reunião 01 Realizada', 'Reunião 1 Realizada', 'R1 Realizada', 'REUNIÃO 1 REALIZADA'],
