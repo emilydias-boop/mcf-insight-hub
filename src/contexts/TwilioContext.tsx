@@ -57,7 +57,7 @@ interface TwilioContextType {
   isMuted: boolean;
   currentCallId: string | null;
   currentCallDealId: string | null;
-  initializeDevice: () => Promise<void>;
+  initializeDevice: () => Promise<boolean>;
   makeCall: (phoneNumber: string, dealId?: string, contactId?: string, originId?: string) => Promise<string | null>;
   hangUp: () => void;
   toggleMute: () => void;
@@ -133,8 +133,13 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }
   }, [callStatus]);
 
-  const initializeDevice = useCallback(async () => {
-    if (!user) return;
+  const initializeDevice = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
+    
+    // If already ready, return immediately
+    if (deviceStatus === 'ready' && device) {
+      return true;
+    }
     
     try {
       setDeviceStatus('connecting');
@@ -150,7 +155,7 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       if (error || !data?.token) {
         console.error('Failed to get Twilio token:', error);
         setDeviceStatus('error');
-        return;
+        return false;
       }
 
       // Create and register device
@@ -158,29 +163,35 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
         logLevel: 1
       });
 
-      twilioDevice.on('registered', () => {
-        console.log('Twilio device registered');
-        setDeviceStatus('ready');
-      });
+      // Return Promise that resolves when device is registered
+      return new Promise<boolean>((resolve) => {
+        twilioDevice.on('registered', () => {
+          console.log('Twilio device registered');
+          setDeviceStatus('ready');
+          setDevice(twilioDevice as unknown as TwilioDevice);
+          resolve(true);
+        });
 
-      twilioDevice.on('unregistered', () => {
-        console.log('Twilio device unregistered');
-        setDeviceStatus('disconnected');
-      });
+        twilioDevice.on('unregistered', () => {
+          console.log('Twilio device unregistered');
+          setDeviceStatus('disconnected');
+        });
 
-      twilioDevice.on('error', (err: Error) => {
-        console.error('Twilio device error:', err);
-        setDeviceStatus('error');
-      });
+        twilioDevice.on('error', (err: Error) => {
+          console.error('Twilio device error:', err);
+          setDeviceStatus('error');
+          resolve(false);
+        });
 
-      await twilioDevice.register();
-      setDevice(twilioDevice as unknown as TwilioDevice);
+        twilioDevice.register();
+      });
       
     } catch (error) {
       console.error('Error initializing Twilio device:', error);
       setDeviceStatus('error');
+      return false;
     }
-  }, [user]);
+  }, [user, deviceStatus, device]);
 
   const makeCall = useCallback(async (
     phoneNumber: string, 
