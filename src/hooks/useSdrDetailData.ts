@@ -131,10 +131,10 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     const byContratos = [...sdrs].sort((a, b) => b.contratos - a.contratos);
     const contratosRank = byContratos.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
-    // Taxa Contrato (Contratos / Agendamentos - higher % is better)
+    // Taxa Contrato (Contratos / R1 Realizada - higher % is better)
     const withTaxaContrato = sdrs.map(s => ({
       ...s,
-      taxaContrato: s.agendamentos > 0 ? (s.contratos / s.agendamentos) * 100 : 0
+      taxaContrato: s.r1Realizada > 0 ? (s.contratos / s.r1Realizada) * 100 : 0
     }));
     const byTaxaContrato = [...withTaxaContrato].sort((a, b) => b.taxaContrato - a.taxaContrato);
     const taxaContratoRank = byTaxaContrato.findIndex(s => s.sdrEmail === sdrEmail) + 1;

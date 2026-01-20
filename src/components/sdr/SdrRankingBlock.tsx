@@ -52,12 +52,12 @@ export function SdrRankingBlock({ sdrMetrics, ranking, teamAverages, isLoading }
     );
   }
 
-  // Calculate taxa contrato values
-  const taxaContratoValue = sdrMetrics.agendamentos > 0 
-    ? (sdrMetrics.contratos / sdrMetrics.agendamentos) * 100 
+  // Calculate taxa contrato values (Contratos / R1 Realizada)
+  const taxaContratoValue = sdrMetrics.r1Realizada > 0 
+    ? (sdrMetrics.contratos / sdrMetrics.r1Realizada) * 100 
     : 0;
-  const avgTaxaContrato = teamAverages.avgAgendamentos > 0 
-    ? (teamAverages.avgContratos / teamAverages.avgAgendamentos) * 100 
+  const avgTaxaContrato = teamAverages.avgR1Realizada > 0 
+    ? (teamAverages.avgContratos / teamAverages.avgR1Realizada) * 100 
     : 0;
 
   const metrics = [
