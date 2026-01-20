@@ -31,6 +31,9 @@ function GlobalQualificationModal() {
   );
 }
 
+// Feature flag - set to true when conversations feature is ready
+const ENABLE_CONVERSATIONS_WIDGET = false;
+
 export function MainLayout() {
   return (
     <ConversationsProvider>
@@ -51,8 +54,8 @@ export function MainLayout() {
           </SidebarInset>
           <TwilioSoftphone />
           <GlobalQualificationModal />
-          <ConversationsFloatingWidget />
-          <ConversationsDrawer />
+          {ENABLE_CONVERSATIONS_WIDGET && <ConversationsFloatingWidget />}
+          {ENABLE_CONVERSATIONS_WIDGET && <ConversationsDrawer />}
         </div>
       </SidebarProvider>
     </ConversationsProvider>
