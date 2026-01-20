@@ -241,7 +241,12 @@ const Negocios = () => {
               <span className="hidden sm:inline">Sincronizar</span>
             </Button>
             <DealFormDialog
-              defaultOriginId={selectedOriginId || selectedPipelineId || undefined}
+              defaultOriginId={effectiveOriginId}
+              defaultOriginName={
+                selectedOriginId 
+                  ? (pipelineOrigins as any[])?.find((o: any) => o.id === selectedOriginId)?.name 
+                  : pipelines?.find(p => p.id === selectedPipelineId)?.display_name || pipelines?.find(p => p.id === selectedPipelineId)?.name
+              }
               trigger={
                 <Button size="sm" className="flex-1 sm:flex-none">
                   <Plus className="h-4 w-4 sm:mr-2" />
