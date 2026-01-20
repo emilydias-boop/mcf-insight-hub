@@ -33,7 +33,9 @@ export function TwilioSoftphone() {
     hangUp, 
     toggleMute,
     qualificationModalOpen,
-    openQualificationModal
+    openQualificationModal,
+    isDrawerOpen,
+    drawerDealId
   } = useTwilio();
   
   const [isMinimized, setIsMinimized] = useState(false);
@@ -136,6 +138,22 @@ export function TwilioSoftphone() {
     return null;
   }
 
+  // Hide floating softphone if drawer is open AND the call is for the same deal
+  // (controls are shown inline in the drawer instead)
+  const isInCall = callStatus !== 'idle' && callStatus !== 'completed' && callStatus !== 'failed';
+  const shouldHideForDrawer = isDrawerOpen && isInCall && currentCallDealId === drawerDealId;
+  
+  if (shouldHideForDrawer) {
+    return (
+      <PostCallModal
+        open={showPostCallModal}
+        onClose={() => setShowPostCallModal(false)}
+        callId={completedCallId}
+        onSave={() => setCompletedCallId(null)}
+      />
+    );
+  }
+
   const statusColors = {
     connecting: 'bg-yellow-500',
     ready: 'bg-green-500',
@@ -161,7 +179,7 @@ export function TwilioSoftphone() {
     failed: 'Falhou'
   };
 
-  const isInCall = callStatus !== 'idle' && callStatus !== 'completed' && callStatus !== 'failed';
+  // (isInCall already declared above)
 
   // Calculate position style
   const positionStyle: React.CSSProperties = position 
