@@ -70,6 +70,7 @@ export function SdrSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato PAGO</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Taxa Contrato</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">
                 <Ghost className="h-4 w-4 inline" />
@@ -99,6 +100,19 @@ export function SdrSummaryTable({
               const taxaColorClass = taxaConversao >= 70 
                 ? 'text-green-400' 
                 : taxaConversao >= 40 
+                  ? 'text-amber-400' 
+                  : 'text-red-400';
+
+              // Calculate taxa de contrato (Contratos / Agendamentos)
+              const taxaContrato = row.agendamentos > 0 
+                ? ((row.contratos / row.agendamentos) * 100)
+                : 0;
+              const taxaContratoFormatted = taxaContrato.toFixed(1);
+
+              // Taxa contrato color: green >= 20%, amber >= 10%, red < 10%
+              const taxaContratoColorClass = taxaContrato >= 20 
+                ? 'text-green-400' 
+                : taxaContrato >= 10 
                   ? 'text-amber-400' 
                   : 'text-red-400';
 
@@ -137,6 +151,9 @@ export function SdrSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contratos}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-medium ${taxaContratoColorClass}`}>{taxaContratoFormatted}%</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
