@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAddDealNote } from '@/hooks/useNextAction';
-import { Send, StickyNote, User } from 'lucide-react';
+import { Send, StickyNote, User, Calendar, Phone, MessageCircle, ArrowRightLeft } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -14,22 +14,165 @@ interface DealNotesTabProps {
   dealId: string;
 }
 
+type NoteType = 'manual' | 'scheduling' | 'attendee' | 'reschedule' | 'call';
+
+interface CombinedNote {
+  id: string;
+  content: string;
+  created_at: string;
+  type: NoteType;
+  author: string;
+  meetingType?: string;
+  closerName?: string;
+  outcome?: string;
+}
+
+const NOTE_STYLES: Record<NoteType, { bg: string; border: string; color: string; label: string }> = {
+  manual: { bg: 'bg-secondary/30', border: 'border-border', color: 'text-muted-foreground', label: 'Nota' },
+  scheduling: { bg: 'bg-amber-500/10', border: 'border-amber-500/30', color: 'text-amber-600', label: 'Agendamento' },
+  attendee: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', color: 'text-blue-600', label: 'Nota do Closer' },
+  reschedule: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', color: 'text-yellow-600', label: 'Reagendamento' },
+  call: { bg: 'bg-green-500/10', border: 'border-green-500/30', color: 'text-green-600', label: 'Ligação' }
+};
+
+const NOTE_ICONS: Record<NoteType, React.ReactNode> = {
+  manual: <StickyNote className="h-3 w-3" />,
+  scheduling: <Calendar className="h-3 w-3" />,
+  attendee: <MessageCircle className="h-3 w-3" />,
+  reschedule: <ArrowRightLeft className="h-3 w-3" />,
+  call: <Phone className="h-3 w-3" />
+};
+
 export const DealNotesTab = ({ dealId }: DealNotesTabProps) => {
   const [newNote, setNewNote] = useState('');
   const addNote = useAddDealNote();
   
-  const { data: notes, isLoading } = useQuery({
-    queryKey: ['deal-notes', dealId],
+  const { data: allNotes, isLoading } = useQuery({
+    queryKey: ['all-deal-notes', dealId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Notas manuais (deal_activities)
+      const { data: manualNotes } = await supabase
         .from('deal_activities')
-        .select('*')
+        .select('id, description, created_at, metadata')
         .eq('deal_id', dealId)
-        .eq('activity_type', 'note')
-        .order('created_at', { ascending: false });
+        .eq('activity_type', 'note');
       
-      if (error) throw error;
-      return data;
+      // 2. Notas de agendamento (meeting_slot_attendees)
+      const { data: attendees } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id, notes, created_at, booked_by,
+          meeting_slots(meeting_type, scheduled_at, closers(name))
+        `)
+        .eq('deal_id', dealId);
+      
+      // 3. Buscar attendee_notes para cada attendee encontrado
+      const attendeeIds = attendees?.map(a => a.id) || [];
+      const { data: attendeeNotes } = attendeeIds.length > 0 
+        ? await supabase
+            .from('attendee_notes')
+            .select(`
+              id, note, note_type, created_at, created_by
+            `)
+            .in('attendee_id', attendeeIds)
+        : { data: [] };
+      
+      // Buscar perfis dos criadores de attendee_notes
+      const creatorIds = attendeeNotes?.map(n => n.created_by).filter(Boolean) as string[] || [];
+      const { data: creatorProfiles } = creatorIds.length > 0
+        ? await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', creatorIds)
+        : { data: [] };
+      
+      const creatorMap = new Map<string, string>();
+      creatorProfiles?.forEach(p => creatorMap.set(p.id, p.full_name || 'Usuário'));
+      
+      // Buscar perfis dos booked_by
+      const bookedByIds = attendees?.map(a => a.booked_by).filter(Boolean) as string[] || [];
+      const { data: bookedByProfiles } = bookedByIds.length > 0
+        ? await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', bookedByIds)
+        : { data: [] };
+      
+      const bookedByMap = new Map<string, string>();
+      bookedByProfiles?.forEach(p => bookedByMap.set(p.id, p.full_name || 'SDR'));
+      
+      // 4. Notas de ligação (calls)
+      const { data: callNotes } = await supabase
+        .from('calls')
+        .select('id, notes, outcome, created_at, user_id')
+        .eq('deal_id', dealId)
+        .not('notes', 'is', null);
+      
+      // Buscar perfis dos usuários de calls
+      const callUserIds = callNotes?.map(c => c.user_id).filter(Boolean) as string[] || [];
+      const { data: callUserProfiles } = callUserIds.length > 0
+        ? await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', callUserIds)
+        : { data: [] };
+      
+      const callUserMap = new Map<string, string>();
+      callUserProfiles?.forEach(p => callUserMap.set(p.id, p.full_name || 'SDR'));
+      
+      // Combinar todas as fontes
+      const combined: CombinedNote[] = [
+        // Notas manuais
+        ...(manualNotes || []).map(n => ({
+          id: n.id,
+          content: n.description || '',
+          created_at: n.created_at!,
+          type: 'manual' as const,
+          author: (n.metadata as Record<string, any>)?.author || 'Usuário'
+        })),
+        
+        // Notas de agendamento
+        ...(attendees || [])
+          .filter(a => a.notes?.trim())
+          .map(a => {
+            const slots = a.meeting_slots as any;
+            return {
+              id: `scheduling-${a.id}`,
+              content: a.notes!,
+              created_at: a.created_at!,
+              type: 'scheduling' as const,
+              author: bookedByMap.get(a.booked_by!) || 'SDR',
+              meetingType: slots?.meeting_type?.toUpperCase(),
+              closerName: slots?.closers?.name
+            };
+          }),
+        
+        // Notas de attendee (closers/reagendamentos)
+        ...(attendeeNotes || []).map(n => ({
+          id: n.id,
+          content: n.note,
+          created_at: n.created_at!,
+          type: (n.note_type === 'reschedule' ? 'reschedule' : 'attendee') as NoteType,
+          author: creatorMap.get(n.created_by!) || 'Usuário'
+        })),
+        
+        // Notas de ligação
+        ...(callNotes || [])
+          .filter(c => c.notes?.trim())
+          .map(c => ({
+            id: `call-${c.id}`,
+            content: c.notes!,
+            created_at: c.created_at!,
+            type: 'call' as const,
+            author: callUserMap.get(c.user_id!) || 'SDR',
+            outcome: c.outcome || undefined
+          }))
+      ];
+      
+      // Ordenar por data (mais recente primeiro)
+      return combined.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     },
     enabled: !!dealId,
   });
@@ -80,24 +223,37 @@ export const DealNotesTab = ({ dealId }: DealNotesTabProps) => {
       
       {/* Lista de notas */}
       <ScrollArea className="h-[250px]">
-        {notes && notes.length > 0 ? (
+        {allNotes && allNotes.length > 0 ? (
           <div className="space-y-3">
-            {notes.map((note) => {
-              const metadata = note.metadata as Record<string, any> | null;
+            {allNotes.map((note) => {
+              const style = NOTE_STYLES[note.type];
+              const icon = NOTE_ICONS[note.type];
+              
+              let label = style.label;
+              if (note.type === 'scheduling' && note.meetingType) {
+                label = `${note.meetingType}${note.closerName ? `: ${note.closerName}` : ''}`;
+              } else if (note.type === 'call' && note.outcome) {
+                label = `Ligação - ${note.outcome}`;
+              }
+              
               return (
                 <div 
                   key={note.id} 
-                  className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2"
+                  className={`rounded-lg border ${style.border} ${style.bg} p-3 space-y-2`}
                 >
+                  <div className={`flex items-center gap-2 text-xs ${style.color}`}>
+                    {icon}
+                    <span className="font-medium">{label}</span>
+                  </div>
                   <p className="text-sm text-foreground whitespace-pre-wrap">
-                    {note.description}
+                    {note.content}
                   </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <User className="h-3 w-3" />
-                    <span>{metadata?.author || 'Usuário'}</span>
+                    <span>{note.author}</span>
                     <span>•</span>
                     <span>
-                      {formatDistanceToNow(new Date(note.created_at!), { 
+                      {formatDistanceToNow(new Date(note.created_at), { 
                         addSuffix: true, 
                         locale: ptBR 
                       })}
