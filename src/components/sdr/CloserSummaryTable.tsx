@@ -51,9 +51,9 @@ export function CloserSummaryTable({
     { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, r2_agendada: 0 }
   );
 
-  // Calculate total conversion rate
-  const totalTaxaConversao = totals.r1_agendada > 0 
-    ? ((totals.contrato_pago / totals.r1_agendada) * 100)
+  // Calculate total conversion rate (Contrato / Realizada)
+  const totalTaxaConversao = totals.r1_realizada > 0 
+    ? ((totals.contrato_pago / totals.r1_realizada) * 100)
     : 0;
 
   return (
@@ -73,9 +73,9 @@ export function CloserSummaryTable({
           </TableHeader>
           <TableBody>
             {data.map((row) => {
-              // Calculate taxa de conversão (Contrato Pago / R1 Agendada)
-              const taxaConversao = row.r1_agendada > 0 
-                ? ((row.contrato_pago / row.r1_agendada) * 100)
+              // Calculate taxa de conversão (Contrato Pago / R1 Realizada)
+              const taxaConversao = row.r1_realizada > 0 
+                ? ((row.contrato_pago / row.r1_realizada) * 100)
                 : 0;
               const taxaConversaoFormatted = taxaConversao.toFixed(1);
 

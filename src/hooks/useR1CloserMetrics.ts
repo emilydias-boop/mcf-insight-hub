@@ -141,8 +141,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
             metric!.r1_agendada++;
           }
           
-          // R1 Realizada: completed
-          if (status === 'completed') {
+          // R1 Realizada: completed OR contract_paid (paid = meeting happened)
+          if (status === 'completed' || status === 'contract_paid') {
             metric!.r1_realizada++;
           }
           
