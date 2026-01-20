@@ -52,6 +52,14 @@ export function SdrRankingBlock({ sdrMetrics, ranking, teamAverages, isLoading }
     );
   }
 
+  // Calculate taxa contrato values
+  const taxaContratoValue = sdrMetrics.agendamentos > 0 
+    ? (sdrMetrics.contratos / sdrMetrics.agendamentos) * 100 
+    : 0;
+  const avgTaxaContrato = teamAverages.avgAgendamentos > 0 
+    ? (teamAverages.avgContratos / teamAverages.avgAgendamentos) * 100 
+    : 0;
+
   const metrics = [
     {
       label: "Agendamentos",
@@ -80,6 +88,13 @@ export function SdrRankingBlock({ sdrMetrics, ranking, teamAverages, isLoading }
       avg: teamAverages.avgContratos.toFixed(1),
       rank: ranking.contratos,
       format: "number",
+    },
+    {
+      label: "Taxa Contrato",
+      value: `${taxaContratoValue.toFixed(1)}%`,
+      avg: `${avgTaxaContrato.toFixed(1)}%`,
+      rank: ranking.taxaContrato,
+      format: "percent",
     },
   ];
 

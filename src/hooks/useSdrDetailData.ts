@@ -16,6 +16,7 @@ export interface SdrRanking {
   r1Agendada: number;
   r1Realizada: number;
   contratos: number;
+  taxaContrato: number;
   totalSdrs: number;
 }
 
@@ -109,6 +110,7 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
         r1Agendada: 0,
         r1Realizada: 0,
         contratos: 0,
+        taxaContrato: 0,
         totalSdrs: 0,
       };
     }
@@ -129,11 +131,20 @@ export function useSdrDetailData({ sdrEmail, startDate, endDate }: UseSdrDetailP
     const byContratos = [...sdrs].sort((a, b) => b.contratos - a.contratos);
     const contratosRank = byContratos.findIndex(s => s.sdrEmail === sdrEmail) + 1;
 
+    // Taxa Contrato (Contratos / Agendamentos - higher % is better)
+    const withTaxaContrato = sdrs.map(s => ({
+      ...s,
+      taxaContrato: s.agendamentos > 0 ? (s.contratos / s.agendamentos) * 100 : 0
+    }));
+    const byTaxaContrato = [...withTaxaContrato].sort((a, b) => b.taxaContrato - a.taxaContrato);
+    const taxaContratoRank = byTaxaContrato.findIndex(s => s.sdrEmail === sdrEmail) + 1;
+
     return {
       agendamentos: agendamentosRank,
       r1Agendada: r1AgendadaRank,
       r1Realizada: r1RealizadaRank,
       contratos: contratosRank,
+      taxaContrato: taxaContratoRank,
       totalSdrs,
     };
   }, [teamData.bySDR, sdrMetrics, sdrEmail]);
