@@ -189,7 +189,88 @@ export function MoveAttendeeModal({
         targetSlotId = newSlot.id;
       }
 
-      // 2. Mover o attendee para o slot e marcar como rescheduled
+      // 2. Para no-show sendo reagendado, precisamos criar um NOVO attendee
+      // e vincular ao original via parent_attendee_id
+      if (isNoShow && isDifferentDay) {
+        // Buscar dados do attendee original para copiar
+        const { data: originalAttendee } = await supabase
+          .from('meeting_slot_attendees')
+          .select('contact_id, deal_id, booked_by')
+          .eq('id', attendee.id)
+          .single();
+
+        if (!originalAttendee) throw new Error('Attendee original não encontrado');
+
+        // Criar novo attendee vinculado ao original (reagendamento)
+        const { data: newAttendee, error: createAttendeeError } = await supabase
+          .from('meeting_slot_attendees')
+          .insert({
+            meeting_slot_id: targetSlotId,
+            contact_id: originalAttendee.contact_id,
+            deal_id: originalAttendee.deal_id,
+            status: 'rescheduled',
+            is_reschedule: true,
+            parent_attendee_id: attendee.id, // Vincula ao original no-show
+            booked_by: originalAttendee.booked_by,
+            booked_at: new Date().toISOString(), // Data do reagendamento
+          })
+          .select()
+          .single();
+
+        if (createAttendeeError) throw createAttendeeError;
+
+        // Mover partners para o novo attendee
+        await supabase
+          .from('meeting_slot_attendees')
+          .update({ 
+            meeting_slot_id: targetSlotId,
+            parent_attendee_id: newAttendee.id
+          })
+          .eq('parent_attendee_id', attendee.id);
+
+        // Registrar log de movimentação
+        const { data: authData } = await supabase.auth.getUser();
+        let movedByName = null;
+        
+        if (authData?.user?.id) {
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', authData.user.id)
+            .single();
+          movedByName = userProfile?.full_name;
+        }
+
+        await supabase.from('attendee_movement_logs').insert({
+          attendee_id: newAttendee.id,
+          from_slot_id: currentMeetingId,
+          to_slot_id: targetSlotId,
+          from_scheduled_at: currentMeetingDate?.toISOString() || null,
+          to_scheduled_at: scheduledAt,
+          from_closer_id: currentCloserId || null,
+          from_closer_name: currentCloserName || null,
+          to_closer_id: slot.closerId,
+          to_closer_name: slot.closerName,
+          previous_status: currentAttendeeStatus || null,
+          reason: reason || null,
+          movement_type: 'no_show_reschedule',
+          moved_by: authData?.user?.id || null,
+          moved_by_name: movedByName,
+          moved_by_role: null
+        });
+
+        // Adicionar nota técnica ao novo attendee
+        await supabase.from('attendee_notes').insert({
+          attendee_id: newAttendee.id,
+          note: `[REAGENDAMENTO] Motivo: ${reason || 'Não informado'}. Original: ${currentCloserName || 'N/A'} em ${currentMeetingDate ? format(currentMeetingDate, "dd/MM 'às' HH:mm") : 'N/A'}. Status anterior: No-Show.`,
+          note_type: 'reschedule',
+          created_by: authData?.user?.id || null,
+        });
+
+        return { id: targetSlotId, newAttendeeId: newAttendee.id };
+      }
+
+      // Para movimentações no mesmo dia, apenas atualizar o attendee existente
       const { error: moveError } = await supabase
         .from('meeting_slot_attendees')
         .update({ 
@@ -202,13 +283,13 @@ export function MoveAttendeeModal({
 
       if (moveError) throw moveError;
 
-      // 3. Mover partners vinculados
+      // Mover partners vinculados
       await supabase
         .from('meeting_slot_attendees')
         .update({ meeting_slot_id: targetSlotId })
         .eq('parent_attendee_id', attendee.id);
 
-      // 4. Limpar slot antigo se ficou órfão
+      // Limpar slot antigo se ficou órfão
       const { count } = await supabase
         .from('meeting_slot_attendees')
         .select('*', { count: 'exact', head: true })
@@ -221,7 +302,7 @@ export function MoveAttendeeModal({
           .eq('id', currentMeetingId);
       }
 
-      // 5. Registrar log de movimentação
+      // Registrar log de movimentação
       const { data: authData } = await supabase.auth.getUser();
       let movedByName = null;
       
@@ -246,7 +327,7 @@ export function MoveAttendeeModal({
         to_closer_name: slot.closerName,
         previous_status: currentAttendeeStatus || null,
         reason: reason || null,
-        movement_type: isNoShow ? 'no_show_reschedule' : 'same_day_reschedule',
+        movement_type: 'same_day_reschedule',
         moved_by: authData?.user?.id || null,
         moved_by_name: movedByName,
         moved_by_role: null
