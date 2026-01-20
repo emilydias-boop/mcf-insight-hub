@@ -5,14 +5,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Save, RefreshCw, Cloud, AlertCircle, Zap, Edit3, FileWarning } from 'lucide-react';
+import { Save, RefreshCw, Calendar, AlertCircle, Zap, Edit3, Phone } from 'lucide-react';
 import { SdrMonthKpi, SdrCompPlan } from '@/types/sdr-fechamento';
-import { useSyncSdrKpis } from '@/hooks/useSyncSdrKpis';
+import { useSdrAgendaMetricsBySdrId } from '@/hooks/useSdrAgendaMetricsBySdrId';
+import { useSdrCallMetricsBySdrId } from '@/hooks/useSdrCallMetrics';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-
-// Meses que requerem entrada manual devido a dados incompletos no Clint
-const MANUAL_OVERRIDE_MONTHS = ['2025-11'];
 
 interface KpiEditFormProps {
   kpi: SdrMonthKpi | null;
@@ -53,11 +51,16 @@ export const KpiEditForm = ({
     score_organizacao: 0,
   });
 
-  const syncKpis = useSyncSdrKpis();
+  // Buscar métricas da Agenda
+  const agendaMetrics = useSdrAgendaMetricsBySdrId(sdrId, anoMes);
   
-  // Verifica se é mês de entrada manual (dados incompletos)
-  const isManualOverrideMonth = MANUAL_OVERRIDE_MONTHS.includes(anoMes);
+  // Buscar métricas de ligações do Twilio
+  const callMetrics = useSdrCallMetricsBySdrId(sdrId, anoMes);
 
+  // Flag para indicar se estamos carregando dados automáticos
+  const isLoadingAuto = agendaMetrics.isLoading || callMetrics.isLoading;
+
+  // Preencher formulário com dados existentes do KPI
   useEffect(() => {
     if (kpi) {
       setFormData({
@@ -70,30 +73,69 @@ export const KpiEditForm = ({
     }
   }, [kpi]);
 
+  // Auto-preencher campos com dados da Agenda e Twilio quando não tem KPI salvo
+  useEffect(() => {
+    if (!kpi && agendaMetrics.data && !agendaMetrics.isLoading) {
+      setFormData(prev => ({
+        ...prev,
+        reunioes_agendadas: agendaMetrics.data.r1_agendada,
+        reunioes_realizadas: agendaMetrics.data.r1_realizada,
+        no_shows: agendaMetrics.data.no_shows,
+      }));
+    }
+  }, [kpi, agendaMetrics.data, agendaMetrics.isLoading]);
+
+  useEffect(() => {
+    if (!kpi && callMetrics.data && !callMetrics.isLoading) {
+      setFormData(prev => ({
+        ...prev,
+        tentativas_ligacoes: callMetrics.data.totalCalls,
+      }));
+    }
+  }, [kpi, callMetrics.data, callMetrics.isLoading]);
+
   const handleChange = (field: string, value: string) => {
     const numValue = parseInt(value) || 0;
     setFormData(prev => ({ ...prev, [field]: numValue }));
+  };
+
+  const handleSyncFromAgenda = () => {
+    let updated = false;
+    
+    if (agendaMetrics.data) {
+      setFormData(prev => ({
+        ...prev,
+        reunioes_agendadas: agendaMetrics.data!.r1_agendada,
+        reunioes_realizadas: agendaMetrics.data!.r1_realizada,
+        no_shows: agendaMetrics.data!.no_shows,
+      }));
+      updated = true;
+    }
+    
+    if (callMetrics.data) {
+      setFormData(prev => ({
+        ...prev,
+        tentativas_ligacoes: callMetrics.data!.totalCalls,
+      }));
+      updated = true;
+    }
+    
+    if (updated) {
+      toast.success('Dados atualizados da Agenda e Twilio');
+    } else {
+      toast.info('Nenhum dado disponível para sincronizar');
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate manual fields
-    const hasPendingManualFields = formData.tentativas_ligacoes === 0 || formData.score_organizacao === 0;
-    
-    // Para meses de override, validar também os campos de KPI
-    if (isManualOverrideMonth) {
-      const hasIncompleteKpis = formData.reunioes_agendadas === 0;
-      if (hasIncompleteKpis) {
-        toast.warning('Preencha os KPIs', {
-          description: 'Reuniões Agendadas deve ser preenchido para este mês.',
-        });
-      }
-    }
+    const hasPendingManualFields = formData.score_organizacao === 0;
     
     if (hasPendingManualFields) {
-      toast.warning('Atenção: Campos manuais estão zerados', {
-        description: 'Tentativas de Ligações e/ou Organização ainda precisam ser preenchidos.',
+      toast.warning('Atenção: Campo manual está zerado', {
+        description: 'Score de Organização ainda precisa ser preenchido.',
       });
     }
     
@@ -111,90 +153,75 @@ export const KpiEditForm = ({
     });
   };
 
-  const handleSyncFromClint = () => {
-    syncKpis.mutate({ sdr_id: sdrId, ano_mes: anoMes });
-  };
 
   const taxaNoShow = formData.reunioes_agendadas > 0
     ? ((formData.no_shows / formData.reunioes_agendadas) * 100).toFixed(1)
     : '0.0';
 
-  // Check for pending manual inputs (usando metas calculadas, não do plano)
-  const tentativasPending = formData.tentativas_ligacoes === 0 && metaTentativasCalculada > 0;
+  // Check for pending manual inputs
   const organizacaoPending = formData.score_organizacao === 0 && metaOrganizacaoFixa > 0;
-  const hasPendingFields = tentativasPending || organizacaoPending;
+  const hasPendingFields = organizacaoPending;
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between py-3">
         <div>
           <CardTitle className="text-sm font-semibold">Editar KPIs</CardTitle>
-          {hasPendingFields && !isManualOverrideMonth && (
+          {hasPendingFields && (
             <p className="text-xs text-yellow-500 mt-1 flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
-              Campos manuais pendentes de preenchimento
+              Campo manual pendente de preenchimento
             </p>
           )}
-          {isManualOverrideMonth && (
-            <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
-              <FileWarning className="h-3 w-3" />
-              Mês com entrada manual de KPIs
+          {isLoadingAuto && (
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              Carregando dados da Agenda e Twilio...
             </p>
           )}
         </div>
-        {/* Ocultar botão de sincronização para meses de override */}
-        {!isManualOverrideMonth && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncFromClint}
-            disabled={disabled || syncKpis.isPending}
-            className="text-xs h-8"
-          >
-            {syncKpis.isPending ? (
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            ) : (
-              <Cloud className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            Sincronizar do Clint
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncFromAgenda}
+          disabled={disabled || isLoadingAuto}
+          className="text-xs h-8"
+        >
+          {isLoadingAuto ? (
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <Calendar className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          Atualizar da Agenda
+        </Button>
       </CardHeader>
       <CardContent className="pt-0">
-        {/* Alerta para mês de entrada manual */}
-        {isManualOverrideMonth && (
-          <Alert className="mb-3 border-orange-500/50 bg-orange-500/10 py-2">
-            <FileWarning className="h-3.5 w-3.5 text-orange-500" />
-            <AlertDescription className="text-xs text-orange-500">
-              <strong>Novembro 2025 - Entrada Manual:</strong> Devido a dados incompletos no Clint 
-              (período 15-23/nov sem registro), os valores de R1 Agendadas, R1 Realizadas e No-Shows 
-              devem ser inseridos manualmente.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {hasPendingFields && !isManualOverrideMonth && (
+        {hasPendingFields && (
           <Alert className="mb-3 border-yellow-500/50 bg-yellow-500/10 py-2">
             <Edit3 className="h-3.5 w-3.5 text-yellow-500" />
             <AlertDescription className="text-xs text-yellow-500">
-              <strong>Preencha os campos manuais:</strong> Tentativas de Ligações e Score de Organização 
-              devem ser inseridos manualmente pelo coordenador.
+              <strong>Preencha o campo manual:</strong> Score de Organização 
+              deve ser inserido manualmente pelo coordenador.
             </AlertDescription>
           </Alert>
         )}
         
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            {/* Campo: Reuniões Agendadas - Editável */}
+            {/* Campo: Reuniões Agendadas - Auto (Agenda) + Editável */}
             <div className="space-y-1">
               <Label htmlFor="reunioes_agendadas" className="flex items-center gap-1.5 text-xs">
                 Reuniões Agendadas
-                <Badge variant="outline" className="text-[10px] h-4 border-blue-500 text-blue-500">
-                  Editável
+                <Badge variant="outline" className="text-[10px] h-4 border-green-500 text-green-500">
+                  <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                  Auto (Agenda)
                 </Badge>
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
                 Meta: {metaAgendadasCalculada} ({sdrMetaDiaria}/dia × {diasUteisMes} dias)
+                {agendaMetrics.data && (
+                  <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.r1_agendada}</span>
+                )}
               </span>
               <Input
                 id="reunioes_agendadas"
@@ -207,16 +234,20 @@ export const KpiEditForm = ({
               />
             </div>
 
-            {/* Campo: Reuniões Realizadas - Editável */}
+            {/* Campo: Reuniões Realizadas - Auto (Agenda) + Editável */}
             <div className="space-y-1">
               <Label htmlFor="reunioes_realizadas" className="flex items-center gap-1.5 text-xs">
                 Reuniões Realizadas
-                <Badge variant="outline" className="text-[10px] h-4 border-blue-500 text-blue-500">
-                  Editável
+                <Badge variant="outline" className="text-[10px] h-4 border-green-500 text-green-500">
+                  <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                  Auto (Agenda)
                 </Badge>
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
                 Meta: {Math.round(formData.reunioes_agendadas * 0.7)} (70% de {formData.reunioes_agendadas} agendadas)
+                {agendaMetrics.data && (
+                  <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.r1_realizada}</span>
+                )}
               </span>
               <Input
                 id="reunioes_realizadas"
@@ -229,16 +260,20 @@ export const KpiEditForm = ({
               />
             </div>
 
-            {/* Campo: No-Shows - Editável */}
+            {/* Campo: No-Shows - Auto (Agenda) + Editável */}
             <div className="space-y-1">
               <Label htmlFor="no_shows" className="flex items-center gap-1.5 text-xs">
                 No-Shows
-                <Badge variant="outline" className="text-[10px] h-4 border-blue-500 text-blue-500">
-                  Editável
+                <Badge variant="outline" className="text-[10px] h-4 border-green-500 text-green-500">
+                  <Calendar className="h-2.5 w-2.5 mr-0.5" />
+                  Auto (Agenda)
                 </Badge>
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
                 Taxa: {taxaNoShow}% / Max: 30%
+                {agendaMetrics.data && (
+                  <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.no_shows}</span>
+                )}
               </span>
               <Input
                 id="no_shows"
@@ -251,19 +286,20 @@ export const KpiEditForm = ({
               />
             </div>
 
-            {/* Campo Manual: Tentativas de Ligações */}
+            {/* Campo: Tentativas de Ligações - Auto (Twilio) + Editável */}
             <div className="space-y-1">
               <Label htmlFor="tentativas_ligacoes" className="flex items-center gap-1.5 text-xs">
                 Tentativas de Ligações
-                <Badge variant="outline" className={cn(
-                  "text-[10px] h-4",
-                  tentativasPending ? "border-yellow-500 text-yellow-500" : "border-blue-500 text-blue-500"
-                )}>
-                  Manual
+                <Badge variant="outline" className="text-[10px] h-4 border-purple-500 text-purple-500">
+                  <Phone className="h-2.5 w-2.5 mr-0.5" />
+                  Auto (Twilio)
                 </Badge>
               </Label>
               <span className="text-[10px] text-muted-foreground/70 block">
                 Meta: {metaTentativasCalculada} (84/dia × {diasUteisMes} dias)
+                {callMetrics.data && (
+                  <span className="ml-1 text-purple-500">• Twilio: {callMetrics.data.totalCalls}</span>
+                )}
               </span>
               <Input
                 id="tentativas_ligacoes"
@@ -272,11 +308,7 @@ export const KpiEditForm = ({
                 value={formData.tentativas_ligacoes}
                 onChange={(e) => handleChange('tentativas_ligacoes', e.target.value)}
                 disabled={disabled}
-                className={cn(
-                  "h-8 text-sm",
-                  tentativasPending && "border-yellow-500 focus-visible:ring-yellow-500"
-                )}
-                placeholder={tentativasPending ? "Preencha" : undefined}
+                className="h-8 text-sm"
               />
             </div>
 
