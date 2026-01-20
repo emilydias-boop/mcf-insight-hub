@@ -36,7 +36,6 @@ const Negocios = () => {
   const [filters, setFilters] = useState<DealFiltersState>({
     search: '',
     dateRange: undefined,
-    tags: [],
     owner: null,
     dealStatus: 'all',
   });
@@ -148,13 +147,34 @@ const Negocios = () => {
       if (deal.owner_id !== userProfile.email) return false;
     }
     
-    if (filters.search && !deal.name.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false;
+    // Busca expandida: nome do deal, nome do contato, email e telefone
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      const searchRaw = filters.search;
+      
+      const matchesDealName = deal.name?.toLowerCase().includes(searchLower);
+      const matchesContactName = deal.crm_contacts?.name?.toLowerCase().includes(searchLower);
+      const matchesEmail = deal.crm_contacts?.email?.toLowerCase().includes(searchLower);
+      const matchesPhone = deal.crm_contacts?.phone?.includes(searchRaw);
+      
+      if (!matchesDealName && !matchesContactName && !matchesEmail && !matchesPhone) {
+        return false;
+      }
     }
     
-    if (filters.tags && filters.tags.length > 0) {
-      const dealTags = deal.tags || [];
-      if (!filters.tags.some(tag => dealTags.includes(tag))) return false;
+    // Filtro por data de criação
+    if (filters.dateRange?.from) {
+      const dealDate = new Date(deal.created_at);
+      const fromDate = new Date(filters.dateRange.from);
+      fromDate.setHours(0, 0, 0, 0);
+      
+      if (dealDate < fromDate) return false;
+      
+      if (filters.dateRange.to) {
+        const toDate = new Date(filters.dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        if (dealDate > toDate) return false;
+      }
     }
     
     if (filters.owner && deal.owner_id !== filters.owner) return false;
@@ -173,7 +193,6 @@ const Negocios = () => {
     setFilters({
       search: '',
       dateRange: undefined,
-      tags: [],
       owner: null,
       dealStatus: 'all',
     });
