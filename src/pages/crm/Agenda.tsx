@@ -408,6 +408,7 @@ export default function Agenda() {
               selectedDate={selectedDate}
               onSelectMeeting={setSelectedMeeting}
               onSelectSlot={handleSelectSlot}
+              onAddToMeeting={handleSelectSlot}
               onEditHours={() => setConfigOpen(true)}
             />
           )}
