@@ -18,6 +18,7 @@ interface CreateEventRequest {
   alreadyBuilds?: boolean | null;
   parentAttendeeId?: string;
   bookedAt?: string; // Data real do agendamento (para retroativos)
+  meetingType?: 'r1' | 'r2'; // Tipo da reunião para mover para estágio correto
 }
 
 // Google Calendar JWT authentication
@@ -577,10 +578,57 @@ serve(async (req) => {
       console.log("✅ Added attendee to slot", body.parentAttendeeId ? `(parent: ${body.parentAttendeeId})` : '');
     }
 
-    // NOTE: Stage update and activity creation removed intentionally.
-    // The Clint webhook is the single source of truth for stage_change activities.
-    // This function only creates meeting_slots for calendar visualization.
-    // Metrics are calculated exclusively from Clint webhook activities.
+    // Mover deal para estágio "R1 Agendada" ou "R2 Agendada" automaticamente
+    try {
+      const meetingType = body.meetingType || 'r1';
+      const stageNamesR1 = ['Reunião 01 Agendada', 'Reunião 1 Agendada', 'R1 Agendada'];
+      const stageNamesR2 = ['Reunião 02 Agendada', 'Reunião 2 Agendada', 'R2 Agendada'];
+      const stageNames = meetingType === 'r2' ? stageNamesR2 : stageNamesR1;
+      
+      // Buscar o deal para pegar origin_id e stage_id atual
+      const { data: dealForStage } = await supabase
+        .from('crm_deals')
+        .select('origin_id, stage_id')
+        .eq('id', dealId)
+        .single();
+      
+      if (dealForStage?.origin_id) {
+        // Encontrar estágio correspondente na mesma pipeline
+        for (const stageName of stageNames) {
+          const { data: targetStage } = await supabase
+            .from('crm_stages')
+            .select('id')
+            .eq('origin_id', dealForStage.origin_id)
+            .ilike('stage_name', `%${stageName}%`)
+            .limit(1);
+          
+          if (targetStage?.[0] && targetStage[0].id !== dealForStage.stage_id) {
+            console.log(`📍 Moving deal to stage: ${stageName}`);
+            
+            await supabase
+              .from('crm_deals')
+              .update({ stage_id: targetStage[0].id })
+              .eq('id', dealId);
+            
+            // Registrar atividade de mudança de estágio
+            await supabase.from('deal_activities').insert({
+              deal_id: dealId,
+              activity_type: 'stage_change',
+              description: `Movido automaticamente ao agendar ${meetingType.toUpperCase()}`,
+              from_stage: dealForStage.stage_id,
+              to_stage: targetStage[0].id,
+              metadata: { via: 'agenda_scheduling', meeting_slot_id: slotId }
+            });
+            
+            console.log(`✅ Deal moved to ${stageName} stage`);
+            break;
+          }
+        }
+      }
+    } catch (stageError) {
+      console.error('⚠️ Error updating deal stage (non-fatal):', stageError);
+      // Não falhar o agendamento se a mudança de estágio falhar
+    }
 
     // Get the created slot with all relations
     const { data: slot } = await supabase

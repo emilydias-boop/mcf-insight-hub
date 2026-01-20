@@ -82,41 +82,50 @@ export const useLeadJourney = (dealId: string | null) => {
         }
       }
 
-      // Buscar reuniões R1 (meeting_slots com meeting_type = 'r1')
-      const { data: r1Meetings } = await supabase
-        .from('meeting_slots')
+      // Buscar reuniões via meeting_slot_attendees (para funcionar com slots compartilhados)
+      const { data: attendeeData } = await supabase
+        .from('meeting_slot_attendees')
         .select(`
           id,
-          scheduled_at,
+          meeting_slot_id,
           status,
-          meeting_type,
           notes,
-          closer_notes,
           booked_by,
-          closer:closers(
+          meeting_slots!inner(
             id,
-            name,
-            email,
-            employee_id
+            scheduled_at,
+            status,
+            meeting_type,
+            closer_notes,
+            closer:closers(
+              id,
+              name,
+              email,
+              employee_id
+            )
           )
         `)
         .eq('deal_id', dealId)
-        .eq('meeting_type', 'r1')
-        .order('scheduled_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
+
+      // Processar R1 meetings
+      const r1AttendeeData = attendeeData?.filter((a: any) => 
+        a.meeting_slots?.meeting_type === 'r1'
+      );
 
       let r1Meeting: LeadJourneyMeeting | null = null;
       
-      if (r1Meetings && r1Meetings.length > 0) {
-        const meeting = r1Meetings[0];
+      if (r1AttendeeData && r1AttendeeData.length > 0) {
+        const attendeeRecord = r1AttendeeData[0] as any;
+        const meeting = attendeeRecord.meeting_slots;
         
         // Buscar quem agendou (booked_by)
         let bookedBy: { name: string; email: string } | null = null;
-        if (meeting.booked_by) {
+        if (attendeeRecord.booked_by) {
           const { data: booker } = await supabase
             .from('profiles')
             .select('full_name, email')
-            .eq('id', meeting.booked_by)
+            .eq('id', attendeeRecord.booked_by)
             .single();
           
           if (booker) {
@@ -127,11 +136,11 @@ export const useLeadJourney = (dealId: string | null) => {
           }
         }
 
-        const closer = meeting.closer as any;
+        const closer = meeting?.closer as any;
         r1Meeting = {
-          id: meeting.id,
-          scheduledAt: meeting.scheduled_at,
-          status: meeting.status || 'scheduled',
+          id: meeting?.id || attendeeRecord.meeting_slot_id,
+          scheduledAt: meeting?.scheduled_at,
+          status: attendeeRecord.status || meeting?.status || 'scheduled',
           meetingType: 'r1',
           closer: {
             id: closer?.id || '',
@@ -139,47 +148,30 @@ export const useLeadJourney = (dealId: string | null) => {
             email: closer?.email || '',
             employeeId: closer?.employee_id || null
           },
-          bookingNotes: meeting.notes,
-          closerNotes: meeting.closer_notes,
+          bookingNotes: attendeeRecord.notes,
+          closerNotes: meeting?.closer_notes,
           bookedBy
         };
       }
 
-      // Buscar reuniões R2 (meeting_slots com meeting_type = 'r2')
-      const { data: r2Meetings } = await supabase
-        .from('meeting_slots')
-        .select(`
-          id,
-          scheduled_at,
-          status,
-          meeting_type,
-          notes,
-          closer_notes,
-          booked_by,
-          closer:closers(
-            id,
-            name,
-            email,
-            employee_id
-          )
-        `)
-        .eq('deal_id', dealId)
-        .eq('meeting_type', 'r2')
-        .order('scheduled_at', { ascending: false })
-        .limit(1);
+      // Processar R2 meetings
+      const r2AttendeeData = attendeeData?.filter((a: any) => 
+        a.meeting_slots?.meeting_type === 'r2'
+      );
 
       let r2Meeting: LeadJourneyMeeting | null = null;
       
-      if (r2Meetings && r2Meetings.length > 0) {
-        const meeting = r2Meetings[0];
+      if (r2AttendeeData && r2AttendeeData.length > 0) {
+        const attendeeRecord = r2AttendeeData[0] as any;
+        const meeting = attendeeRecord.meeting_slots;
         
         // Buscar quem agendou (booked_by)
         let bookedBy: { name: string; email: string } | null = null;
-        if (meeting.booked_by) {
+        if (attendeeRecord.booked_by) {
           const { data: booker } = await supabase
             .from('profiles')
             .select('full_name, email')
-            .eq('id', meeting.booked_by)
+            .eq('id', attendeeRecord.booked_by)
             .single();
           
           if (booker) {
@@ -190,11 +182,11 @@ export const useLeadJourney = (dealId: string | null) => {
           }
         }
 
-        const closer = meeting.closer as any;
+        const closer = meeting?.closer as any;
         r2Meeting = {
-          id: meeting.id,
-          scheduledAt: meeting.scheduled_at,
-          status: meeting.status || 'scheduled',
+          id: meeting?.id || attendeeRecord.meeting_slot_id,
+          scheduledAt: meeting?.scheduled_at,
+          status: attendeeRecord.status || meeting?.status || 'scheduled',
           meetingType: 'r2',
           closer: {
             id: closer?.id || '',
@@ -202,8 +194,8 @@ export const useLeadJourney = (dealId: string | null) => {
             email: closer?.email || '',
             employeeId: closer?.employee_id || null
           },
-          bookingNotes: meeting.notes,
-          closerNotes: meeting.closer_notes,
+          bookingNotes: attendeeRecord.notes,
+          closerNotes: meeting?.closer_notes,
           bookedBy
         };
       }
