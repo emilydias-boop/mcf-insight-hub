@@ -3,6 +3,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Phone,
   MessageCircle,
   Loader2,
@@ -11,11 +17,13 @@ import {
   Snowflake,
   Mail,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
+import { format } from "date-fns";
 
 interface DealKanbanCardProps {
   deal: any;
@@ -165,9 +173,23 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   const timeAgoShort = deal.updated_at ? getShortTimeAgo(deal.updated_at) : null;
   const totalCalls = activitySummary?.totalCalls || 0;
   const maxAttempts = activitySummary?.maxAttempts || 5;
+  const contactPhone = contact?.phone || extractPhoneFromDeal(deal, contact);
+
+  // Formatar valor: evitar "R$ 0k" para valores pequenos
+  const formatDealValue = (value: number | null | undefined) => {
+    if (!value || value <= 0) return null;
+    if (value < 1000) return `R$ ${value.toLocaleString('pt-BR')}`;
+    if (value < 10000) return `R$ ${(value / 1000).toFixed(1).replace('.', ',')}k`;
+    return `R$ ${Math.round(value / 1000)}k`;
+  };
+
+  const formattedValue = formatDealValue(deal.value);
 
   return (
-    <Card
+    <TooltipProvider>
+      <Tooltip delayDuration={400}>
+        <TooltipTrigger asChild>
+          <Card
       ref={provided.innerRef}
       {...provided.draggableProps}
       {...provided.dragHandleProps}
@@ -233,8 +255,8 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
 
           {/* Lado direito: Valor + Tentativas + Tempo */}
           <div className="flex items-center gap-2 text-muted-foreground">
-            <span className={`font-semibold ${deal.value > 0 ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-              {deal.value > 0 ? `R$ ${(deal.value / 1000).toFixed(0)}k` : 'R$ -'}
+            <span className={`font-semibold ${formattedValue ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+              {formattedValue || 'R$ -'}
             </span>
             <span className={`flex items-center gap-0.5 ${activitySummary?.attemptsExhausted ? "text-destructive" : ""}`}>
               <Phone className="h-2.5 w-2.5" />
@@ -245,5 +267,36 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
         </div>
       </CardContent>
     </Card>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="max-w-xs">
+          <div className="space-y-1.5 text-xs">
+            <p className="font-medium text-sm">{contactName || deal.name}</p>
+            
+            {contactEmail && (
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Mail className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{contactEmail}</span>
+              </div>
+            )}
+            
+            {contactPhone && (
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Phone className="h-3 w-3 flex-shrink-0" />
+                <span>{contactPhone}</span>
+              </div>
+            )}
+            
+            <div className="flex items-center gap-1.5 text-muted-foreground pt-1 border-t border-border/50">
+              <Clock className="h-3 w-3 flex-shrink-0" />
+              <span>
+                {activitySummary?.lastContactAttempt 
+                  ? `Último contato: ${format(new Date(activitySummary.lastContactAttempt), "dd/MM HH:mm")}`
+                  : "Sem tentativas de contato"}
+              </span>
+            </div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
