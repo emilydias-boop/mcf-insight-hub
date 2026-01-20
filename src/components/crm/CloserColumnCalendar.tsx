@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Settings, Plus, ArrowRightLeft, DollarSign } from "lucide-react";
+import { Settings, Plus, ArrowRightLeft, DollarSign, UserPlus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { MeetingSlot, CloserWithAvailability, BlockedDate } from "@/hooks/useAgendaData";
@@ -16,6 +16,7 @@ interface CloserColumnCalendarProps {
   selectedDate: Date;
   onSelectMeeting: (meeting: MeetingSlot) => void;
   onSelectSlot: (closerId: string, date: Date) => void;
+  onAddToMeeting?: (closerId: string, date: Date) => void;
   onEditHours?: () => void;
 }
 
@@ -76,6 +77,7 @@ export function CloserColumnCalendar({
   selectedDate,
   onSelectMeeting,
   onSelectSlot,
+  onAddToMeeting,
   onEditHours,
 }: CloserColumnCalendarProps) {
   const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay();
@@ -274,16 +276,17 @@ export function CloserColumnCalendar({
                     className={cn("min-h-[40px] p-0.5 border-l relative", isCurrentSlot && "bg-primary/5")}
                   >
                     {meeting ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              onClick={() => onSelectMeeting(meeting)}
-                              className={cn(
-                                "w-full h-full px-2 py-1 rounded text-xs text-white text-left transition-colors",
-                                STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled,
-                              )}
-                            >
+                      <div className="relative group h-full">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => onSelectMeeting(meeting)}
+                                className={cn(
+                                  "w-full h-full px-2 py-1 rounded text-xs text-white text-left transition-colors",
+                                  STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled,
+                                )}
+                              >
                               <div className="space-y-0.5">
                                 {meeting.attendees?.length ? (
                                   meeting.attendees.slice(0, 3).map((att, i) => (
@@ -377,6 +380,19 @@ export function CloserColumnCalendar({
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
+                        {onAddToMeeting && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAddToMeeting(closer.id, slot);
+                            }}
+                            className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-white/90 rounded-full p-0.5 shadow hover:bg-green-100 transition-opacity z-10"
+                            title="Adicionar lead a esta reunião"
+                          >
+                            <UserPlus className="h-3.5 w-3.5 text-green-600" />
+                          </button>
+                        )}
+                      </div>
                     ) : isBlocked ? (
                       <div className="w-full h-full bg-muted/50 rounded flex items-center justify-center">
                         <span className="text-xs text-muted-foreground">Bloqueado</span>
