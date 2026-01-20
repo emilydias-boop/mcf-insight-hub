@@ -109,7 +109,7 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
               />
               
               {/* ===== 4. JORNADA DO LEAD (SDR, R1, R2) ===== */}
-              <LeadJourneyCard dealId={dealId} />
+              <LeadJourneyCard dealId={dealId} dealCreatedAt={deal.created_at} />
               
               {/* ===== MOTIVO DE PERDA (apenas para stages de perda) ===== */}
               {stageInfo.isLostStage && (

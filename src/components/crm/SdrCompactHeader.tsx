@@ -28,8 +28,8 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
         <h2 className="text-lg font-bold text-foreground truncate flex-1">
           {deal.name}
         </h2>
-        <span className="text-lg font-bold text-primary whitespace-nowrap">
-          R$ {(deal.value || 0).toLocaleString('pt-BR')}
+              <span className="text-lg font-bold text-primary whitespace-nowrap">
+                R$ {((deal.value && deal.value > 0) ? deal.value : (a010Data?.totalPaid || 0)).toLocaleString('pt-BR')}
         </span>
       </div>
       

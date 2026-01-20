@@ -9,7 +9,8 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
-  MessageSquare
+  MessageSquare,
+  CalendarPlus
 } from 'lucide-react';
 import { useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -20,6 +21,7 @@ import { cn } from '@/lib/utils';
 
 interface LeadJourneyCardProps {
   dealId: string;
+  dealCreatedAt?: string;
 }
 
 const getStatusConfig = (status: string) => {
@@ -118,7 +120,7 @@ const MeetingStep = ({ meeting, type }: { meeting: LeadJourneyMeeting; type: 'r1
   );
 };
 
-export const LeadJourneyCard = ({ dealId }: LeadJourneyCardProps) => {
+export const LeadJourneyCard = ({ dealId, dealCreatedAt }: LeadJourneyCardProps) => {
   const [isOpen, setIsOpen] = useState(true);
   const { data: journey, isLoading } = useLeadJourney(dealId);
   
@@ -132,8 +134,8 @@ export const LeadJourneyCard = ({ dealId }: LeadJourneyCardProps) => {
     );
   }
   
-  // Não mostrar se não há nenhuma informação relevante
-  if (!journey || (!journey.sdr && !journey.r1Meeting && !journey.r2Meeting)) {
+  // Não mostrar se não há nenhuma informação relevante (exceto se tiver data de entrada)
+  if (!journey || (!dealCreatedAt && !journey.sdr && !journey.r1Meeting && !journey.r2Meeting)) {
     return null;
   }
   
@@ -156,6 +158,26 @@ export const LeadJourneyCard = ({ dealId }: LeadJourneyCardProps) => {
         
         <CollapsibleContent>
           <div className="px-3 pb-3">
+            {/* Data de entrada na pipeline */}
+            {dealCreatedAt && (
+              <div className="relative pl-6 pb-4">
+                {/* Linha vertical */}
+                <div className="absolute left-[9px] top-6 bottom-0 w-0.5 bg-border" />
+                
+                {/* Ícone */}
+                <div className="absolute left-0 w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <CalendarPlus className="h-3 w-3 text-green-500" />
+                </div>
+                
+                <div>
+                  <span className="font-medium text-sm">Entrada na Pipeline</span>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(dealCreatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  </p>
+                </div>
+              </div>
+            )}
+            
             {/* SDR */}
             {journey.sdr && (
               <div className="relative pl-6 pb-4">
