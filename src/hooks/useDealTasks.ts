@@ -274,10 +274,13 @@ export function useGenerateTasksForStage() {
       queryClient.invalidateQueries({ queryKey: ['deal-tasks', result.dealId] });
       if (result.created > 0) {
         toast.success(`${result.created} tarefa(s) criada(s) automaticamente`);
+      } else {
+        toast.info('Nenhum template configurado para este estágio');
       }
     },
     onError: (error) => {
       console.error('Erro ao gerar tarefas:', error);
+      toast.error('Erro ao gerar tarefas. Verifique suas permissões.');
     },
   });
 }
