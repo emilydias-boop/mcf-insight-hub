@@ -23,6 +23,7 @@ interface KpiEditFormProps {
   intermediacoes?: number;
   sdrMetaDiaria?: number;
   diasUteisMes?: number;
+  roleType?: 'sdr' | 'closer';
 }
 
 export const KpiEditForm = ({
@@ -36,7 +37,9 @@ export const KpiEditForm = ({
   intermediacoes = 0,
   sdrMetaDiaria = 10,
   diasUteisMes = 19,
+  roleType = 'sdr',
 }: KpiEditFormProps) => {
+  const isCloser = roleType === 'closer';
   // Calcular metas baseadas na meta diária do SDR
   const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
   // Meta fixa de tentativas: 84 por dia × dias úteis
@@ -130,8 +133,8 @@ export const KpiEditForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate manual fields
-    const hasPendingManualFields = formData.score_organizacao === 0;
+    // Validate manual fields - só para SDRs
+    const hasPendingManualFields = !isCloser && formData.score_organizacao === 0;
     
     if (hasPendingManualFields) {
       toast.warning('Atenção: Campo manual está zerado', {
@@ -158,8 +161,8 @@ export const KpiEditForm = ({
     ? ((formData.no_shows / formData.reunioes_agendadas) * 100).toFixed(1)
     : '0.0';
 
-  // Check for pending manual inputs
-  const organizacaoPending = formData.score_organizacao === 0 && metaOrganizacaoFixa > 0;
+  // Check for pending manual inputs - só para SDRs
+  const organizacaoPending = !isCloser && formData.score_organizacao === 0 && metaOrganizacaoFixa > 0;
   const hasPendingFields = organizacaoPending;
 
   return (
@@ -286,61 +289,65 @@ export const KpiEditForm = ({
               />
             </div>
 
-            {/* Campo: Tentativas de Ligações - Auto (Twilio) + Editável */}
-            <div className="space-y-1">
-              <Label htmlFor="tentativas_ligacoes" className="flex items-center gap-1.5 text-xs">
-                Tentativas de Ligações
-                <Badge variant="outline" className="text-[10px] h-4 border-purple-500 text-purple-500">
-                  <Phone className="h-2.5 w-2.5 mr-0.5" />
-                  Auto (Twilio)
-                </Badge>
-              </Label>
-              <span className="text-[10px] text-muted-foreground/70 block">
-                Meta: {metaTentativasCalculada} (84/dia × {diasUteisMes} dias)
-                {callMetrics.data && (
-                  <span className="ml-1 text-purple-500">• Twilio: {callMetrics.data.totalCalls}</span>
-                )}
-              </span>
-              <Input
-                id="tentativas_ligacoes"
-                type="number"
-                min="0"
-                value={formData.tentativas_ligacoes}
-                onChange={(e) => handleChange('tentativas_ligacoes', e.target.value)}
-                disabled={disabled}
-                className="h-8 text-sm"
-              />
-            </div>
+            {/* Campo: Tentativas de Ligações - Auto (Twilio) + Editável - APENAS SDR */}
+            {!isCloser && (
+              <div className="space-y-1">
+                <Label htmlFor="tentativas_ligacoes" className="flex items-center gap-1.5 text-xs">
+                  Tentativas de Ligações
+                  <Badge variant="outline" className="text-[10px] h-4 border-purple-500 text-purple-500">
+                    <Phone className="h-2.5 w-2.5 mr-0.5" />
+                    Auto (Twilio)
+                  </Badge>
+                </Label>
+                <span className="text-[10px] text-muted-foreground/70 block">
+                  Meta: {metaTentativasCalculada} (84/dia × {diasUteisMes} dias)
+                  {callMetrics.data && (
+                    <span className="ml-1 text-purple-500">• Twilio: {callMetrics.data.totalCalls}</span>
+                  )}
+                </span>
+                <Input
+                  id="tentativas_ligacoes"
+                  type="number"
+                  min="0"
+                  value={formData.tentativas_ligacoes}
+                  onChange={(e) => handleChange('tentativas_ligacoes', e.target.value)}
+                  disabled={disabled}
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
 
-            {/* Campo Manual: Score de Organização */}
-            <div className="space-y-1">
-              <Label htmlFor="score_organizacao" className="flex items-center gap-1.5 text-xs">
-                Score de Organização (%)
-                <Badge variant="outline" className={cn(
-                  "text-[10px] h-4",
-                  organizacaoPending ? "border-yellow-500 text-yellow-500" : "border-blue-500 text-blue-500"
-                )}>
-                  Manual
-                </Badge>
-              </Label>
-              <span className="text-[10px] text-muted-foreground/70 block">
-                Meta: {metaOrganizacaoFixa}% (fixa)
-              </span>
-              <Input
-                id="score_organizacao"
-                type="number"
-                min="0"
-                max="150"
-                value={formData.score_organizacao}
-                onChange={(e) => handleChange('score_organizacao', e.target.value)}
-                disabled={disabled}
-                className={cn(
-                  "h-8 text-sm",
-                  organizacaoPending && "border-yellow-500 focus-visible:ring-yellow-500"
-                )}
-                placeholder={organizacaoPending ? "Preencha" : undefined}
-              />
-            </div>
+            {/* Campo Manual: Score de Organização - APENAS SDR */}
+            {!isCloser && (
+              <div className="space-y-1">
+                <Label htmlFor="score_organizacao" className="flex items-center gap-1.5 text-xs">
+                  Score de Organização (%)
+                  <Badge variant="outline" className={cn(
+                    "text-[10px] h-4",
+                    organizacaoPending ? "border-yellow-500 text-yellow-500" : "border-blue-500 text-blue-500"
+                  )}>
+                    Manual
+                  </Badge>
+                </Label>
+                <span className="text-[10px] text-muted-foreground/70 block">
+                  Meta: {metaOrganizacaoFixa}% (fixa)
+                </span>
+                <Input
+                  id="score_organizacao"
+                  type="number"
+                  min="0"
+                  max="150"
+                  value={formData.score_organizacao}
+                  onChange={(e) => handleChange('score_organizacao', e.target.value)}
+                  disabled={disabled}
+                  className={cn(
+                    "h-8 text-sm",
+                    organizacaoPending && "border-yellow-500 focus-visible:ring-yellow-500"
+                  )}
+                  placeholder={organizacaoPending ? "Preencha" : undefined}
+                />
+              </div>
+            )}
 
             {/* Campo Automático: Intermediações de Contrato */}
             <div className="space-y-1">

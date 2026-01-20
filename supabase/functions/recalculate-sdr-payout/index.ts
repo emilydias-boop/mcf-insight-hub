@@ -55,7 +55,7 @@ interface Kpi {
 const META_TENTATIVAS_DIARIA = 84; // Meta fixa de 84 tentativas por dia
 const META_ORGANIZACAO = 100; // Meta fixa de 100%
 
-const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: number, calendarIfoodMensal?: number, diasUteisMes?: number) => {
+const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: number, calendarIfoodMensal?: number, diasUteisMes?: number, isCloser: boolean = false) => {
   // Dias úteis do mês (do calendário ou padrão)
   const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
 
@@ -65,8 +65,8 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: numb
   // Meta de Realizadas = 70% do que foi REALMENTE agendado (não da meta teórica)
   const metaRealizadasAjustada = Math.round(kpi.reunioes_agendadas * 0.7);
   
-  // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos)
-  const metaTentativasAjustada = Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
+  // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos) - APENAS SDR
+  const metaTentativasAjustada = isCloser ? 0 : Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
 
   const pct_reunioes_agendadas = metaAgendadasAjustada > 0 
     ? (kpi.reunioes_agendadas / metaAgendadasAjustada) * 100 
@@ -74,36 +74,42 @@ const calculatePayoutValues = (compPlan: CompPlan, kpi: Kpi, sdrMetaDiaria: numb
   const pct_reunioes_realizadas = metaRealizadasAjustada > 0
     ? (kpi.reunioes_realizadas / metaRealizadasAjustada) * 100
     : 0;
-  const pct_tentativas = metaTentativasAjustada > 0
+  
+  // Tentativas e Organização: ZERAR para Closers (não se aplicam)
+  const pct_tentativas = isCloser ? 100 : (metaTentativasAjustada > 0
     ? (kpi.tentativas_ligacoes / metaTentativasAjustada) * 100
-    : 0;
-  // Organização = meta fixa de 100%
-  const pct_organizacao = (kpi.score_organizacao / META_ORGANIZACAO) * 100;
+    : 0);
+  // Organização = meta fixa de 100% - para Closers, considerar 100% automaticamente
+  const pct_organizacao = isCloser ? 100 : (kpi.score_organizacao / META_ORGANIZACAO) * 100;
 
   const pct_no_show = calculateNoShowPerformance(kpi.no_shows || 0, kpi.reunioes_agendadas || 0);
 
   const cappedPctAgendadas = Math.min(pct_reunioes_agendadas, 120);
   const cappedPctRealizadas = Math.min(pct_reunioes_realizadas, 120);
-  const cappedPctTentativas = Math.min(pct_tentativas, 120);
-  const cappedPctOrganizacao = Math.min(pct_organizacao, 120);
+  const cappedPctTentativas = isCloser ? 100 : Math.min(pct_tentativas, 120);
+  const cappedPctOrganizacao = isCloser ? 100 : Math.min(pct_organizacao, 120);
   const cappedPctNoShow = Math.min(pct_no_show, 120);
 
   const mult_reunioes_agendadas = getMultiplier(cappedPctAgendadas);
   const mult_reunioes_realizadas = getMultiplier(cappedPctRealizadas);
-  const mult_tentativas = getMultiplier(cappedPctTentativas);
-  const mult_organizacao = getMultiplier(cappedPctOrganizacao);
+  const mult_tentativas = isCloser ? 1 : getMultiplier(cappedPctTentativas);
+  const mult_organizacao = isCloser ? 1 : getMultiplier(cappedPctOrganizacao);
   const mult_no_show = getMultiplier(cappedPctNoShow);
 
   const valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
   const valor_reunioes_realizadas = compPlan.valor_docs_reuniao * mult_reunioes_realizadas;
-  const valor_tentativas = compPlan.valor_tentativas * mult_tentativas;
-  const valor_organizacao = compPlan.valor_organizacao * mult_organizacao;
+  // Para Closers: valor de tentativas e organização = 0 (não se aplicam ao cargo)
+  const valor_tentativas = isCloser ? 0 : compPlan.valor_tentativas * mult_tentativas;
+  const valor_organizacao = isCloser ? 0 : compPlan.valor_organizacao * mult_organizacao;
 
   const valor_variavel_total = valor_reunioes_agendadas + valor_reunioes_realizadas + valor_tentativas + valor_organizacao;
   const valor_fixo = compPlan.fixo_valor;
   const total_conta = valor_fixo + valor_variavel_total;
 
-  const pct_media_global = (cappedPctAgendadas + cappedPctRealizadas + cappedPctTentativas + cappedPctOrganizacao) / 4;
+  // Para Closers: média global considera apenas 2 indicadores (agendadas e realizadas)
+  const pct_media_global = isCloser
+    ? (cappedPctAgendadas + cappedPctRealizadas) / 2
+    : (cappedPctAgendadas + cappedPctRealizadas + cappedPctTentativas + cappedPctOrganizacao) / 4;
   const ifood_mensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
   const ifood_ultrameta = pct_media_global >= 100 ? compPlan.ifood_ultrameta : 0;
   const total_ifood = ifood_mensal + ifood_ultrameta;
@@ -388,7 +394,7 @@ serve(async (req) => {
 
         // Calculate values - passa dias_uteis_final do calendário para ajuste proporcional
         const diasUteisMes = calendarData?.dias_uteis_final ?? null;
-        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, sdr.meta_diaria || 0, calendarIfoodMensal, diasUteisMes);
+        const calculatedValues = calculatePayoutValues(compPlan as CompPlan, kpi as Kpi, sdr.meta_diaria || 0, calendarIfoodMensal, diasUteisMes, isCloser);
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
           pct_agendadas: calculatedValues.pct_reunioes_agendadas.toFixed(1),

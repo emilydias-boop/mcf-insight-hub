@@ -360,6 +360,7 @@ const FechamentoSDRDetail = () => {
           intermediacoes={intermediacaoCount}
           sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
           diasUteisMes={payout.dias_uteis_mes || 19}
+          roleType={(payout.sdr as any)?.role_type || 'sdr'}
         />
       )}
 
@@ -374,11 +375,12 @@ const FechamentoSDRDetail = () => {
           // Meta de Realizadas = 70% do que foi REALMENTE agendado
           const agendadasRealizado = kpi?.reunioes_agendadas || 0;
           const metaRealizadasCalculada = Math.round(agendadasRealizado * 0.7);
+          const isCloser = (payout.sdr as any)?.role_type === 'closer';
           
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               <SdrIndicatorCard
-                title="Reuniões Agendadas"
+                title={isCloser ? "Reuniões Alocadas" : "Reuniões Agendadas"}
                 meta={sdrMetaDiaria}
                 metaAjustada={payout.meta_agendadas_ajustada ?? metaAgendadasCalculada}
                 realizado={kpi?.reunioes_agendadas || 0}
@@ -401,34 +403,39 @@ const FechamentoSDRDetail = () => {
                 isManual={false}
               />
 
-          <NoShowIndicator
-            agendadas={kpi?.reunioes_agendadas || 0}
-            noShows={kpi?.no_shows || 0}
-          />
-
-          <SdrIndicatorCard
-            title="Tentativas de Ligações"
-            meta={84}
-            metaAjustada={payout.meta_tentativas_ajustada ?? (84 * diasUteisMes)}
-            realizado={kpi?.tentativas_ligacoes || 0}
-            pct={payout.pct_tentativas || 0}
-            multiplicador={payout.mult_tentativas || 0}
-            valorBase={compPlan?.valor_tentativas || 0}
-            valorFinal={payout.valor_tentativas || 0}
-            isManual={true}
-          />
-
-              <SdrIndicatorCard
-                title="Organização Clint"
-                meta={100}
-                realizado={kpi?.score_organizacao || 0}
-                pct={payout.pct_organizacao || 0}
-                multiplicador={payout.mult_organizacao || 0}
-                valorBase={compPlan?.valor_organizacao || 0}
-                valorFinal={payout.valor_organizacao || 0}
-                isPercentage
-                isManual={true}
+              <NoShowIndicator
+                agendadas={kpi?.reunioes_agendadas || 0}
+                noShows={kpi?.no_shows || 0}
               />
+
+              {/* Indicadores específicos de SDR - ocultos para Closers */}
+              {!isCloser && (
+                <SdrIndicatorCard
+                  title="Tentativas de Ligações"
+                  meta={84}
+                  metaAjustada={payout.meta_tentativas_ajustada ?? (84 * diasUteisMes)}
+                  realizado={kpi?.tentativas_ligacoes || 0}
+                  pct={payout.pct_tentativas || 0}
+                  multiplicador={payout.mult_tentativas || 0}
+                  valorBase={compPlan?.valor_tentativas || 0}
+                  valorFinal={payout.valor_tentativas || 0}
+                  isManual={true}
+                />
+              )}
+
+              {!isCloser && (
+                <SdrIndicatorCard
+                  title="Organização Clint"
+                  meta={100}
+                  realizado={kpi?.score_organizacao || 0}
+                  pct={payout.pct_organizacao || 0}
+                  multiplicador={payout.mult_organizacao || 0}
+                  valorBase={compPlan?.valor_organizacao || 0}
+                  valorFinal={payout.valor_organizacao || 0}
+                  isPercentage
+                  isManual={true}
+                />
+              )}
             </div>
           );
         })()}
