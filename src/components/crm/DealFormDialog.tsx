@@ -6,6 +6,7 @@ import { CalendarIcon, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -40,14 +41,13 @@ import {
 } from '@/components/ui/popover';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
-import { useCreateClintDeal } from '@/hooks/useClintAPI';
+import { useCreateCRMDeal, useCRMOrigins } from '@/hooks/useCRMData';
 import { useDealStages } from '@/hooks/useDealStages';
-import { useClintOrigins, useClintUsers } from '@/hooks/useClintAPI';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { ContactSelector } from './ContactSelector';
-import { TagsSelector } from './TagsSelector';
+import { supabase } from '@/integrations/supabase/client';
 
 const dealSchema = z.object({
   name: z.string()
@@ -63,7 +63,6 @@ const dealSchema = z.object({
   expected_close_date: z.date().optional(),
   contact_id: z.string().optional(),
   origin_id: z.string().optional(),
-  tags: z.array(z.string()).optional(),
   owner_id: z.string().optional(),
   notes: z.string().max(1000, 'Notas devem ter no máximo 1000 caracteres').optional(),
 });
@@ -80,15 +79,33 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
   const { user } = useAuth();
   
   const { data: stages = [], isLoading: stagesLoading } = useDealStages();
-  const { data: originsResponse } = useClintOrigins();
-  const { data: usersResponse } = useClintUsers();
+  const { data: originsData } = useCRMOrigins();
   const { canMoveToStage } = useStagePermissions();
   
-  // Extract arrays from API response structure
-  const origins = Array.isArray(originsResponse) ? originsResponse : (originsResponse?.data || []);
-  const users = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.data || []);
+  // Fetch only SDRs and Closers from local profiles
+  const { data: dealOwners = [] } = useQuery({
+    queryKey: ['deal-owners-sdr-closer'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          user_roles!inner(role)
+        `)
+        .order('full_name');
+      
+      // Filter only SDRs and Closers
+      return (data || []).filter((u: any) => 
+        u.user_roles?.some((r: any) => ['sdr', 'closer'].includes(r.role))
+      );
+    }
+  });
   
-  const createDealMutation = useCreateClintDeal();
+  // Flatten origins from grouped tree structure
+  const origins = (originsData || []).flatMap((group: any) => group.children || []);
+  
+  const createDealMutation = useCreateCRMDeal();
   const createActivityMutation = useCreateDealActivity();
 
   const form = useForm<DealFormValues>({
@@ -99,7 +116,6 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
       stage: '',
       probability: 50,
       origin_id: defaultOriginId || '',
-      tags: [],
       owner_id: user?.id || '',
       notes: '',
     },
@@ -112,14 +128,13 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
       const payload = {
         name: data.name,
         value: data.value,
-        stage: data.stage,
+        stage_id: data.stage,
         probability: data.probability,
         expected_close_date: data.expected_close_date?.toISOString(),
         contact_id: data.contact_id,
+        origin_id: data.origin_id,
         owner_id: data.owner_id || user?.id,
         custom_fields: {
-          origin_id: data.origin_id,
-          tags: data.tags,
           notes: data.notes,
         }
       };
@@ -334,13 +349,13 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                       </FormControl>
                       <SelectContent>
                         {origins
-                          .filter(origin => 
+                          .filter((origin: any) => 
                             origin.id && 
                             origin.id.trim() !== '' && 
                             origin.name && 
                             origin.name.trim() !== ''
                           )
-                          .map((origin) => (
+                          .map((origin: any) => (
                             <SelectItem key={origin.id} value={origin.id}>
                               {origin.name}
                             </SelectItem>
@@ -352,7 +367,7 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                 )}
               />
 
-              {/* Responsável */}
+              {/* Responsável - Apenas SDRs e Closers */}
               <FormField
                 control={form.control}
                 name="owner_id"
@@ -366,38 +381,13 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {users
-                          .filter(user => 
-                            user.id && 
-                            user.id.trim() !== '' && 
-                            user.name && 
-                            user.name.trim() !== ''
-                          )
-                          .map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                              {user.name}
-                            </SelectItem>
-                          ))}
+                        {dealOwners.map((owner: any) => (
+                          <SelectItem key={owner.id} value={owner.id}>
+                            {owner.full_name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Tags */}
-              <FormField
-                control={form.control}
-                name="tags"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Tags</FormLabel>
-                    <FormControl>
-                      <TagsSelector
-                        value={field.value || []}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
