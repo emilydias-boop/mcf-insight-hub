@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw } from 'lucide-react';
+import { Settings, Users, Zap, Database, Shield, Upload, FileText, History, ClipboardList, Loader2, RefreshCw, CalendarSync } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { WebhookMonitor } from '@/components/crm/WebhookMonitor';
@@ -25,6 +25,8 @@ const ConfiguracoesContent = () => {
   const [qualificationFieldsOpen, setQualificationFieldsOpen] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<{ processed?: number; skipped?: number; tasksCreated?: number; tasksToCreate?: number } | null>(null);
+  const [isSyncingAgenda, setIsSyncingAgenda] = useState(false);
+  const [syncAgendaResult, setSyncAgendaResult] = useState<{ synced?: number; skipped?: number; processed?: number } | null>(null);
 
   const handleBackfillTasks = async (dryRun: boolean = false) => {
     setIsBackfilling(true);
@@ -92,6 +94,30 @@ const ConfiguracoesContent = () => {
       toast.error(`Erro após ${iterations} lotes. ${totalTasks} tarefas criadas até o momento.`);
     } finally {
       setIsBackfilling(false);
+    }
+  };
+
+  const handleSyncFromAgenda = async (dryRun: boolean = false) => {
+    setIsSyncingAgenda(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-deals-from-agenda', {
+        body: { dryRun, limit: 200 }
+      });
+      
+      if (error) throw error;
+      
+      setSyncAgendaResult(data);
+      
+      if (dryRun) {
+        toast.info(`Simulação: ${data.synced} deals seriam sincronizados de ${data.processed} processados`);
+      } else {
+        toast.success(`${data.synced} deals sincronizados para R1/R2 Agendada`);
+      }
+    } catch (error) {
+      console.error('Sync agenda error:', error);
+      toast.error('Erro ao sincronizar deals da agenda');
+    } finally {
+      setIsSyncingAgenda(false);
     }
   };
 
@@ -280,6 +306,48 @@ const ConfiguracoesContent = () => {
                   </>
                 ) : (
                   'Executar Tudo'
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Sincronizar Deals da Agenda */}
+          <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-muted/30">
+            <div>
+              <p className="font-medium text-foreground flex items-center gap-2">
+                <CalendarSync className="h-4 w-4" />
+                Sincronizar Deals da Agenda
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Move deals que já possuem reunião agendada para o estágio "R1 Agendada" ou "R2 Agendada"
+              </p>
+              {syncAgendaResult && !isSyncingAgenda && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Último resultado: {syncAgendaResult.synced} sincronizados, {syncAgendaResult.processed} processados, {syncAgendaResult.skipped} ignorados
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button 
+                variant="outline" 
+                onClick={() => handleSyncFromAgenda(true)}
+                disabled={isSyncingAgenda}
+                size="sm"
+              >
+                {isSyncingAgenda ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Simular'}
+              </Button>
+              <Button 
+                onClick={() => handleSyncFromAgenda(false)}
+                disabled={isSyncingAgenda}
+                size="sm"
+              >
+                {isSyncingAgenda ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    Sincronizando...
+                  </>
+                ) : (
+                  'Sincronizar'
                 )}
               </Button>
             </div>

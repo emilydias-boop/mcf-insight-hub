@@ -233,3 +233,6 @@ verify_jwt = false
 
 [functions.get-recording]
 verify_jwt = false
+
+[functions.sync-deals-from-agenda]
+verify_jwt = false
