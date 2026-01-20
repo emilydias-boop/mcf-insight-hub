@@ -4,7 +4,7 @@ import { ShieldAlert } from 'lucide-react';
 import { AppRole } from '@/types/user-management';
 
 // Roles que têm acesso padrão à aba Negócios
-const NEGOCIOS_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador'];
+const NEGOCIOS_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador', 'sdr'];
 
 // Configuração de usuários SDR com acesso especial a Negócios e suas origens autorizadas
 export interface NegociosAccessConfig {
