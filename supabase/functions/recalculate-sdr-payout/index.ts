@@ -173,8 +173,8 @@ serve(async (req) => {
     const calendarIfoodMensal = calendarData?.ifood_mensal_calculado ?? null;
     console.log(`📅 Calendário ${ano_mes}: iFood Mensal = ${calendarIfoodMensal ?? 'não definido'}`);
 
-    // Get SDRs to process (with email for RPC call)
-    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria').eq('active', true);
+    // Get SDRs to process (with email and role_type for RPC call)
+    let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad').eq('active', true);
     if (sdr_id) {
       sdrsQuery = sdrsQuery.eq('id', sdr_id);
     }
@@ -203,36 +203,61 @@ serve(async (req) => {
 
     for (const sdr of sdrs) {
       try {
-        console.log(`   ⏳ Processando SDR: ${sdr.name} (${sdr.id})`);
+        const isCloser = sdr.role_type === 'closer';
+        console.log(`   ⏳ Processando ${isCloser ? 'Closer' : 'SDR'}: ${sdr.name} (${sdr.id}) - BU: ${sdr.squad || 'N/A'}`);
 
-        // ===== USAR RPC get_sdr_metrics_v2 PARA CONSISTÊNCIA =====
+        // ===== BUSCAR MÉTRICAS - LÓGICA DIFERENTE PARA SDR VS CLOSER =====
         let reunioesAgendadas = 0;
         let noShows = 0;
         let reunioesRealizadas = 0;
         let taxaNoShow = 0;
 
         if (sdr.email) {
-          const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
-            start_date: monthStart,
-            end_date: monthEnd,
-            sdr_email_filter: sdr.email
-          });
+          if (isCloser) {
+            // CLOSER: Buscar métricas de reuniões REALIZADAS pelo closer
+            // Usando a tabela meeting_slot_attendees onde closer_email = sdr.email
+            const { data: closerMetrics, error: closerError } = await supabase
+              .from('meeting_slot_attendees')
+              .select('id, status, slot:meeting_slots!inner(scheduled_at)')
+              .eq('closer_email', sdr.email)
+              .gte('slot.scheduled_at', monthStart)
+              .lte('slot.scheduled_at', monthEnd);
 
-          if (metricsError) {
-            console.log(`   ⚠️ Erro ao buscar métricas RPC para ${sdr.name}: ${metricsError.message}`);
-          } else if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
-            const metrics = metricsData.metrics[0];
-            reunioesAgendadas = metrics.total_agendamentos || 0;
-            noShows = metrics.no_shows || 0;
-            reunioesRealizadas = metrics.realizadas || 0;
-            taxaNoShow = metrics.taxa_no_show || 0;
-            
-            console.log(`   📊 Métricas da RPC para ${sdr.name}: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
+            if (closerError) {
+              console.log(`   ⚠️ Erro ao buscar métricas de Closer para ${sdr.name}: ${closerError.message}`);
+            } else if (closerMetrics) {
+              // Para Closer: agendadas = total de reuniões alocadas, realizadas = status completed
+              reunioesAgendadas = closerMetrics.length;
+              reunioesRealizadas = closerMetrics.filter(m => m.status === 'completed').length;
+              noShows = closerMetrics.filter(m => m.status === 'no_show').length;
+              taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
+              
+              console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}`);
+            }
           } else {
-            console.log(`   ⚠️ Nenhuma métrica encontrada na RPC para ${sdr.name}`);
+            // SDR: Usar RPC get_sdr_metrics_v2 para contar agendamentos
+            const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
+              start_date: monthStart,
+              end_date: monthEnd,
+              sdr_email_filter: sdr.email
+            });
+
+            if (metricsError) {
+              console.log(`   ⚠️ Erro ao buscar métricas RPC para ${sdr.name}: ${metricsError.message}`);
+            } else if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
+              const metrics = metricsData.metrics[0];
+              reunioesAgendadas = metrics.total_agendamentos || 0;
+              noShows = metrics.no_shows || 0;
+              reunioesRealizadas = metrics.realizadas || 0;
+              taxaNoShow = metrics.taxa_no_show || 0;
+              
+              console.log(`   📊 Métricas da RPC para ${sdr.name}: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
+            } else {
+              console.log(`   ⚠️ Nenhuma métrica encontrada na RPC para ${sdr.name}`);
+            }
           }
         } else {
-          console.log(`   ⚠️ SDR ${sdr.name} não tem email configurado`);
+          console.log(`   ⚠️ ${isCloser ? 'Closer' : 'SDR'} ${sdr.name} não tem email configurado`);
         }
 
         // Get comp plan
