@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { startOfDay, endOfDay, format } from "date-fns";
+import { SDR_LIST } from "@/constants/team";
 
 export interface R1CloserMetric {
   closer_id: string;
@@ -31,6 +32,9 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
       // Filter closers that handle R1 (meeting_type is null or 'r1')
       const r1Closers = closers?.filter(c => !c.meeting_type || c.meeting_type === 'r1') || [];
 
+      // Build set of valid SDR emails (active SDRs only)
+      const validSdrEmails = new Set(SDR_LIST.map(s => s.email.toLowerCase()));
+
       // Fetch R1 meeting slots with attendees in the period
       const { data: meetings, error: meetingsError } = await supabase
         .from('meeting_slots')
@@ -42,7 +46,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
           meeting_slot_attendees (
             id,
             status,
-            deal_id
+            deal_id,
+            booked_by
           )
         `)
         .eq('meeting_type', 'r1')
@@ -51,6 +56,24 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
         .not('status', 'eq', 'cancelled');
 
       if (meetingsError) throw meetingsError;
+
+      // Fetch profiles to map booked_by UUID to email
+      const bookedByIds = new Set<string>();
+      meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (att.booked_by) bookedByIds.add(att.booked_by);
+        });
+      });
+
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', Array.from(bookedByIds));
+
+      const profileEmailMap = new Map<string, string>();
+      profiles?.forEach(p => {
+        if (p.email) profileEmailMap.set(p.id, p.email.toLowerCase());
+      });
 
       // Fetch R2 meetings to count R2 agendadas per closer
       // R2 is attributed to the closer who did the R1 for the same deal
@@ -70,12 +93,16 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
 
       if (r2Error) throw r2Error;
 
-      // Build a map of deal_id -> R1 closer_id
+      // Build a map of deal_id -> R1 closer_id (only for valid SDR bookings)
       const dealToR1Closer = new Map<string, string>();
       meetings?.forEach(meeting => {
         meeting.meeting_slot_attendees?.forEach(att => {
           if (att.deal_id && meeting.closer_id) {
-            dealToR1Closer.set(att.deal_id, meeting.closer_id);
+            // Only include if booked by valid SDR
+            const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
+            if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
+              dealToR1Closer.set(att.deal_id, meeting.closer_id);
+            }
           }
         });
       });
@@ -132,8 +159,14 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
           metricsMap.set(closerId, metric);
         }
 
-        // Count attendees by status
+        // Count attendees by status - only if booked by valid SDR
         meeting.meeting_slot_attendees?.forEach(att => {
+          // Filter: only count if booked by a valid SDR from SDR_LIST
+          const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
+          if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) {
+            return; // Skip attendees not booked by valid SDR
+          }
+
           const status = att.status;
           
           // R1 Agendada: all non-cancelled attendees
