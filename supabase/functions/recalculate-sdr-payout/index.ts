@@ -214,25 +214,35 @@ serve(async (req) => {
 
         if (sdr.email) {
           if (isCloser) {
-            // CLOSER: Buscar métricas de reuniões REALIZADAS pelo closer
-            // Usando a tabela meeting_slot_attendees onde closer_email = sdr.email
-            const { data: closerMetrics, error: closerError } = await supabase
-              .from('meeting_slot_attendees')
-              .select('id, status, slot:meeting_slots!inner(scheduled_at)')
-              .eq('closer_email', sdr.email)
-              .gte('slot.scheduled_at', monthStart)
-              .lte('slot.scheduled_at', monthEnd);
+            // CLOSER: Buscar o closer_id correspondente na tabela closers pelo email
+            const { data: closerRecord } = await supabase
+              .from('closers')
+              .select('id')
+              .eq('email', sdr.email)
+              .single();
 
-            if (closerError) {
-              console.log(`   ⚠️ Erro ao buscar métricas de Closer para ${sdr.name}: ${closerError.message}`);
-            } else if (closerMetrics) {
-              // Para Closer: agendadas = total de reuniões alocadas, realizadas = status completed
-              reunioesAgendadas = closerMetrics.length;
-              reunioesRealizadas = closerMetrics.filter(m => m.status === 'completed').length;
-              noShows = closerMetrics.filter(m => m.status === 'no_show').length;
-              taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
-              
-              console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}`);
+            if (closerRecord) {
+              // Buscar reuniões na meeting_slots pelo closer_id
+              const { data: closerSlots, error: slotsError } = await supabase
+                .from('meeting_slots')
+                .select('id, status, scheduled_at')
+                .eq('closer_id', closerRecord.id)
+                .gte('scheduled_at', monthStart)
+                .lte('scheduled_at', monthEnd);
+
+              if (slotsError) {
+                console.log(`   ⚠️ Erro ao buscar slots de Closer para ${sdr.name}: ${slotsError.message}`);
+              } else if (closerSlots) {
+                // Para Closer: agendadas = total de reuniões alocadas, realizadas = status completed
+                reunioesAgendadas = closerSlots.length;
+                reunioesRealizadas = closerSlots.filter(m => m.status === 'completed').length;
+                noShows = closerSlots.filter(m => m.status === 'no_show').length;
+                taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
+                
+                console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}`);
+              }
+            } else {
+              console.log(`   ⚠️ Closer ${sdr.name} não encontrado na tabela closers`);
             }
           } else {
             // SDR: Usar RPC get_sdr_metrics_v2 para contar agendamentos
