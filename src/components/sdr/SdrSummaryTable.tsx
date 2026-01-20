@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -39,6 +40,24 @@ export function SdrSummaryTable({
     const params = new URLSearchParams(searchParams);
     navigate(`/crm/reunioes-equipe/${encodeURIComponent(sdrEmail)}?${params.toString()}`);
   };
+
+  // Calculate ranking for Taxa Contrato (higher % = better rank)
+  const taxaContratoRanking = useMemo(() => {
+    const withTaxa = data.map(row => ({
+      email: row.sdrEmail,
+      taxa: row.r1Realizada > 0 ? (row.contratos / row.r1Realizada) * 100 : 0
+    }));
+    
+    const sorted = [...withTaxa].sort((a, b) => b.taxa - a.taxa);
+    
+    const rankMap = new Map<string, number>();
+    sorted.forEach((item, index) => {
+      rankMap.set(item.email, index + 1);
+    });
+    
+    return rankMap;
+  }, [data]);
+
   if (isLoading) {
     return (
       <div className="space-y-2 p-4">
@@ -146,14 +165,32 @@ export function SdrSummaryTable({
                   <TableCell className="text-center">
                     <span className="text-green-400 font-medium">{row.r1Realizada}</span>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-red-400">{row.noShows}</span>
+              <TableCell className="text-center">
+                    <div className="flex flex-col items-center">
+                      <span className="text-red-400 font-medium">{row.noShows}</span>
+                      {row.r1Agendada > 0 && (
+                        <span className={`text-xs ${
+                          (row.noShows / row.r1Agendada) * 100 <= 20 
+                            ? 'text-green-400' 
+                            : (row.noShows / row.r1Agendada) * 100 <= 35 
+                              ? 'text-amber-400' 
+                              : 'text-red-400'
+                        }`}>
+                          ({((row.noShows / row.r1Agendada) * 100).toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contratos}</span>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <span className={`font-medium ${taxaContratoColorClass}`}>{taxaContratoFormatted}%</span>
+              <TableCell className="text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="text-xs text-muted-foreground font-medium">
+                        #{taxaContratoRanking.get(row.sdrEmail)}
+                      </span>
+                      <span className={`font-medium ${taxaContratoColorClass}`}>{taxaContratoFormatted}%</span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className={`font-medium ${taxaColorClass}`}>{taxaConversaoFormatted}%</span>
