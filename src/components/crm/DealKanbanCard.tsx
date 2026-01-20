@@ -10,6 +10,7 @@ import {
   Thermometer,
   Snowflake,
   Mail,
+  RefreshCw,
 } from "lucide-react";
 import { useTwilio } from "@/contexts/TwilioContext";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   };
 
   const priority = getPriorityInfo();
+  const isRescheduled = (deal.custom_fields as Record<string, unknown>)?.is_rescheduled === true;
 
   const handleCall = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -154,8 +156,17 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
       onClick={onClick}
     >
       <CardContent className="p-2.5 space-y-1.5">
-        {/* Linha 1: Tags + Prioridade */}
-        <div className="flex items-center gap-1">
+        {/* Linha 1: Tags + Prioridade + Remarcado */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {isRescheduled && (
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5"
+            >
+              <RefreshCw className="h-2.5 w-2.5" />
+              Remarcado
+            </Badge>
+          )}
           {deal.tags?.slice(0, 1).map((tag: any, idx: number) => (
             <Badge
               key={idx}
