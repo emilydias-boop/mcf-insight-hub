@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { CalendarIcon, DollarSign } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useCreateCRMDeal } from '@/hooks/useCRMData';
+import { useCreateDealActivity } from '@/hooks/useDealActivities';
+import { toast } from 'sonner';
+
 import {
   Dialog,
   DialogContent,
@@ -23,9 +24,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -33,38 +31,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Slider } from '@/components/ui/slider';
-import { cn } from '@/lib/utils';
-import { useCreateCRMDeal, useCRMOrigins } from '@/hooks/useCRMData';
-import { useDealStages } from '@/hooks/useDealStages';
-import { useStagePermissions } from '@/hooks/useStagePermissions';
-import { useCreateDealActivity } from '@/hooks/useDealActivities';
-import { useAuth } from '@/contexts/AuthContext';
-import { ContactSelector } from './ContactSelector';
-import { supabase } from '@/integrations/supabase/client';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 
 const dealSchema = z.object({
   name: z.string()
     .min(3, 'Nome deve ter no mínimo 3 caracteres')
     .max(100, 'Nome deve ter no máximo 100 caracteres'),
   value: z.coerce.number()
-    .positive('Valor deve ser positivo')
-    .min(1, 'Valor mínimo é R$ 1'),
+    .min(0, 'Valor mínimo é R$ 0'),
   stage: z.string().min(1, 'Selecione um estágio'),
-  probability: z.number()
-    .min(0, 'Probabilidade mínima é 0%')
-    .max(100, 'Probabilidade máxima é 100%'),
-  expected_close_date: z.date().optional(),
-  contact_id: z.string().optional(),
-  origin_id: z.string().optional(),
+  contact_name: z.string().min(2, 'Nome do lead é obrigatório'),
+  contact_email: z.string().email('Email inválido').optional().or(z.literal('')),
+  contact_phone: z.string().optional(),
   owner_id: z.string().optional(),
-  notes: z.string().max(1000, 'Notas devem ter no máximo 1000 caracteres').optional(),
+  notes: z.string().max(1000).optional(),
 });
 
 type DealFormValues = z.infer<typeof dealSchema>;
@@ -72,19 +55,51 @@ type DealFormValues = z.infer<typeof dealSchema>;
 interface DealFormDialogProps {
   trigger: React.ReactNode;
   defaultOriginId?: string;
+  defaultOriginName?: string;
 }
 
-export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps) {
+export function DealFormDialog({ 
+  trigger, 
+  defaultOriginId,
+  defaultOriginName 
+}: DealFormDialogProps) {
   const [open, setOpen] = useState(false);
-  const { user } = useAuth();
-  
-  const { data: stages = [], isLoading: stagesLoading } = useDealStages();
-  const { data: originsData } = useCRMOrigins();
-  const { canMoveToStage } = useStagePermissions();
-  
-  // Fetch only SDRs and Closers from local profiles
+  const createDealMutation = useCreateCRMDeal();
+  const createActivityMutation = useCreateDealActivity();
+
+  // Fetch stages for the origin
+  const { data: stages = [] } = useQuery({
+    queryKey: ['crm-stages', defaultOriginId],
+    queryFn: async () => {
+      if (!defaultOriginId) return [];
+      
+      // First try to get stages for the specific origin
+      let { data: localStages } = await supabase
+        .from('crm_stages')
+        .select('*')
+        .eq('origin_id', defaultOriginId)
+        .eq('is_active', true)
+        .order('stage_order');
+      
+      // If no local stages, get global stages
+      if (!localStages || localStages.length === 0) {
+        const { data: globalStages } = await supabase
+          .from('crm_stages')
+          .select('*')
+          .is('origin_id', null)
+          .eq('is_active', true)
+          .order('stage_order');
+        return globalStages || [];
+      }
+      
+      return localStages;
+    },
+    enabled: !!defaultOriginId,
+  });
+
+  // Fetch SDRs for this origin/pipeline
   const { data: dealOwners = [] } = useQuery({
-    queryKey: ['deal-owners-sdr-closer'],
+    queryKey: ['deal-owners-sdr', defaultOriginId],
     queryFn: async () => {
       const { data } = await supabase
         .from('profiles')
@@ -95,18 +110,12 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
         `)
         .order('full_name');
       
-      // Filter only SDRs and Closers
+      // Filter only SDRs
       return (data || []).filter((u: any) => 
-        u.user_roles?.some((r: any) => ['sdr', 'closer'].includes(r.role))
+        u.user_roles?.some((r: any) => r.role === 'sdr')
       );
-    }
+    },
   });
-  
-  // Flatten origins from grouped tree structure
-  const origins = (originsData || []).flatMap((group: any) => group.children || []);
-  
-  const createDealMutation = useCreateCRMDeal();
-  const createActivityMutation = useCreateDealActivity();
 
   const form = useForm<DealFormValues>({
     resolver: zodResolver(dealSchema),
@@ -114,46 +123,57 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
       name: '',
       value: 0,
       stage: '',
-      probability: 50,
-      origin_id: defaultOriginId || '',
-      owner_id: user?.id || '',
+      contact_name: '',
+      contact_email: '',
+      contact_phone: '',
+      owner_id: '',
       notes: '',
     },
   });
 
-  const availableStages = stages.filter(stage => canMoveToStage(stage.stage_id));
-
   const onSubmit = async (data: DealFormValues) => {
     try {
+      // 1. Create contact first
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: `local-${Date.now()}`,
+          name: data.contact_name,
+          email: data.contact_email || null,
+          phone: data.contact_phone || null,
+          origin_id: defaultOriginId,
+        })
+        .select()
+        .single();
+      
+      if (contactError) throw contactError;
+
+      // 2. Create deal linked to contact
       const payload = {
         name: data.name,
         value: data.value,
         stage_id: data.stage,
-        probability: data.probability,
-        expected_close_date: data.expected_close_date?.toISOString(),
-        contact_id: data.contact_id,
-        origin_id: data.origin_id,
-        owner_id: data.owner_id || user?.id,
-        custom_fields: {
-          notes: data.notes,
-        }
+        contact_id: newContact.id,
+        origin_id: defaultOriginId,
+        owner_id: data.owner_id || undefined,
       };
 
-      const newDeal = await createDealMutation.mutateAsync(payload) as any;
+      const newDeal = await createDealMutation.mutateAsync(payload);
 
-      // Registrar atividade no Supabase
-      await createActivityMutation.mutateAsync({
-        deal_id: newDeal.id,
-        activity_type: 'created',
-        description: `Negócio "${data.name}" criado`,
-        to_stage: data.stage,
-        metadata: {
-          initial_value: data.value,
-          initial_probability: data.probability,
-        }
-      });
+      // 3. Log activity
+      if (newDeal) {
+        await createActivityMutation.mutateAsync({
+          deal_id: newDeal.id,
+          activity_type: 'deal_created',
+          description: `Negócio "${data.name}" criado`,
+          metadata: {
+            value: data.value,
+            notes: data.notes,
+          },
+        });
+      }
 
-      toast.success('Negócio criado com sucesso! 🎉');
+      toast.success(`Negócio "${data.contact_name}" criado com sucesso!`);
       form.reset();
       setOpen(false);
     } catch (error) {
@@ -167,106 +187,140 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Criar Novo Negócio</DialogTitle>
           <DialogDescription>
-            Preencha os dados do negócio abaixo. Campos com * são obrigatórios.
+            Adicione um novo lead ao pipeline
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Nome do Negócio */}
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Nome do Negócio *</FormLabel>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Origem (read-only) */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Origem</label>
+              <div className="flex items-center h-10 px-3 border rounded-md bg-muted">
+                <span className="text-sm text-muted-foreground">
+                  {defaultOriginName || 'Pipeline selecionada'}
+                </span>
+              </div>
+            </div>
+
+            {/* Estágio Inicial */}
+            <FormField
+              control={form.control}
+              name="stage"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Etapa *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <Input placeholder="Ex: Venda apartamento centro" {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a etapa inicial" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <SelectContent>
+                      {stages.map((stage: any) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.stage_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              {/* Valor */}
-              <FormField
-                control={form.control}
-                name="value"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Valor *</FormLabel>
+            {/* Responsável (SDRs apenas) */}
+            <FormField
+              control={form.control}
+              name="owner_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Dono do negócio</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="number"
-                          placeholder="0.00"
-                          className="pl-9"
-                          {...field}
-                        />
-                      </div>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o responsável" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <SelectContent>
+                      {dealOwners.map((user: any) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              {/* Estágio Inicial */}
+            {/* Valor do Negócio */}
+            <FormField
+              control={form.control}
+              name="value"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Valor do negócio</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      placeholder="R$ 0,00"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Nome do Lead */}
+            <FormField
+              control={form.control}
+              name="contact_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome do Lead *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: João Silva" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Nome do Negócio */}
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome do Negócio *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Consórcio Imóvel" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Email e Telefone */}
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="stage"
+                name="contact_email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estágio Inicial *</FormLabel>
-                    <Select
-                      disabled={stagesLoading}
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o estágio" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {availableStages
-                          .filter(stage => 
-                            stage.stage_id && 
-                            stage.stage_id.trim() !== '' && 
-                            stage.stage_name && 
-                            stage.stage_name.trim() !== ''
-                          )
-                          .map((stage) => (
-                            <SelectItem key={stage.stage_id} value={stage.stage_id}>
-                              {stage.stage_name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Probabilidade */}
-              <FormField
-                control={form.control}
-                name="probability"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Probabilidade: {field.value}%</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Slider
-                        min={0}
-                        max={100}
-                        step={5}
-                        value={[field.value]}
-                        onValueChange={(vals) => field.onChange(vals[0])}
+                      <Input 
+                        type="email" 
+                        placeholder="email@exemplo.com" 
+                        {...field} 
                       />
                     </FormControl>
                     <FormMessage />
@@ -274,138 +328,14 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
                 )}
               />
 
-              {/* Data Prevista */}
               <FormField
                 control={form.control}
-                name="expected_close_date"
+                name="contact_phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Data Prevista de Fechamento</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              'w-full pl-3 text-left font-normal',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, 'PPP', { locale: ptBR })
-                            ) : (
-                              <span>Selecione uma data</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < new Date()}
-                          initialFocus
-                          className="pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Contato */}
-              <FormField
-                control={form.control}
-                name="contact_id"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Contato</FormLabel>
+                    <FormLabel>Telefone</FormLabel>
                     <FormControl>
-                      <ContactSelector
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Origem */}
-              <FormField
-                control={form.control}
-                name="origin_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Origem</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione a origem" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {origins
-                          .filter((origin: any) => 
-                            origin.id && 
-                            origin.id.trim() !== '' && 
-                            origin.name && 
-                            origin.name.trim() !== ''
-                          )
-                          .map((origin: any) => (
-                            <SelectItem key={origin.id} value={origin.id}>
-                              {origin.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Responsável - Apenas SDRs e Closers */}
-              <FormField
-                control={form.control}
-                name="owner_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Responsável</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o responsável" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {dealOwners.map((owner: any) => (
-                          <SelectItem key={owner.id} value={owner.id}>
-                            {owner.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Observações */}
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Observações</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Adicione observações sobre este negócio..."
-                        className="min-h-[100px]"
-                        {...field}
-                      />
+                      <Input placeholder="(11) 99999-9999" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -413,22 +343,47 @@ export function DealFormDialog({ trigger, defaultOriginId }: DealFormDialogProps
               />
             </div>
 
-            <div className="flex justify-end gap-3">
+            {/* Observações */}
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Observações</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Adicione observações sobre o negócio..."
+                      className="resize-none"
+                      rows={3}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Botões */}
+            <div className="flex justify-end gap-3 pt-4">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  form.reset();
-                  setOpen(false);
-                }}
+                onClick={() => setOpen(false)}
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
-                disabled={createDealMutation.isPending || createActivityMutation.isPending}
+                disabled={createDealMutation.isPending}
               >
-                {createDealMutation.isPending ? 'Criando...' : 'Criar Negócio'}
+                {createDealMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  `Criar ${form.watch('contact_name') || 'Negócio'}`
+                )}
               </Button>
             </div>
           </form>
