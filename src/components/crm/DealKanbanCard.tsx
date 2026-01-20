@@ -130,6 +130,27 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
       .slice(0, 2);
   };
 
+  // Extrair iniciais do SDR a partir do owner_id (email)
+  const getSdrInitials = (ownerId: string | null | undefined) => {
+    if (!ownerId) return null;
+    
+    // Se for email, pegar a parte antes do @
+    const emailPart = ownerId.split('@')[0];
+    
+    // Separar por pontos ou underscores comuns em emails corporativos
+    // Ex: "caroline.correa" -> "CC", "joao.silva" -> "JS"
+    const parts = emailPart.split(/[._-]/).filter(Boolean);
+    
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    
+    // Se não tiver separador, pegar primeiras 2 letras
+    return emailPart.slice(0, 2).toUpperCase();
+  };
+
+  const sdrInitials = getSdrInitials(deal.owner_id);
+
   // Tempo formatado curto: 89m, 2h, 1d
   const getShortTimeAgo = (date: string) => {
     const now = new Date();
@@ -189,7 +210,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
           <div className="flex items-center gap-1.5">
             <Avatar className="h-5 w-5">
               <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
-                {getInitials(contactName || deal.name)}
+                {sdrInitials || getInitials(contactName || deal.name)}
               </AvatarFallback>
             </Avatar>
 
@@ -212,8 +233,8 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
 
           {/* Lado direito: Valor + Tentativas + Tempo */}
           <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="font-semibold text-emerald-500">
-              R$ {deal.value ? (deal.value / 1000).toFixed(0) + "k" : "0"}
+            <span className={`font-semibold ${deal.value > 0 ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+              {deal.value > 0 ? `R$ ${(deal.value / 1000).toFixed(0)}k` : 'R$ -'}
             </span>
             <span className={`flex items-center gap-0.5 ${activitySummary?.attemptsExhausted ? "text-destructive" : ""}`}>
               <Phone className="h-2.5 w-2.5" />
