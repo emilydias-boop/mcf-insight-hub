@@ -182,7 +182,7 @@ export function TwilioSoftphone() {
         <div 
           ref={dragRef}
           className={cn(
-            "fixed z-50",
+            "fixed z-[100]",
             isDragging && "cursor-grabbing"
           )}
           style={positionStyle}
@@ -252,7 +252,7 @@ export function TwilioSoftphone() {
       <Card 
         ref={dragRef}
         className={cn(
-          "fixed z-50 w-72 shadow-xl select-none",
+          "fixed z-[100] w-72 shadow-xl select-none",
           isDragging && "cursor-grabbing"
         )}
         style={positionStyle}

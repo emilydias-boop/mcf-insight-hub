@@ -79,12 +79,17 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
 
     const normalizedPhone = normalizePhoneNumber(phone);
 
+    // If device is not ready, initialize and wait
     if (deviceStatus !== "ready") {
       toast.info("Inicializando Twilio...");
-      await initializeDevice();
-      return;
+      const success = await initializeDevice();
+      if (!success) {
+        toast.error("Erro ao inicializar Twilio");
+        return;
+      }
     }
 
+    // Now device is ready, make the call
     await makeCall(normalizedPhone, deal.id, deal.contact_id, deal.origin_id);
   };
 

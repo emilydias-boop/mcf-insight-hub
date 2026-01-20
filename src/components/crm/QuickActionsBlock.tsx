@@ -61,12 +61,17 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
     
     const normalizedPhone = normalizePhoneNumber(phone);
     
+    // If device is not ready, initialize and wait
     if (deviceStatus !== 'ready') {
       toast.info('Inicializando Twilio...');
-      await initializeDevice();
-      return;
+      const success = await initializeDevice();
+      if (!success) {
+        toast.error('Erro ao inicializar Twilio');
+        return;
+      }
     }
     
+    // Now device is ready, make the call
     await makeCall(normalizedPhone, deal?.id, contact?.id, deal?.origin_id);
   };
   
