@@ -177,15 +177,18 @@ export function AgendaCalendar({
     
     const hour = currentTime.getHours();
     const minute = currentTime.getMinutes();
-    const minHour = timeSlots[0].hour;
+    const currentMinutes = hour * 60 + minute;
+    
+    const firstSlot = timeSlots[0];
     const lastSlot = timeSlots[timeSlots.length - 1];
-    const maxHour = lastSlot.hour + ((lastSlot.minute + 15) / 60);
+    const minMinutes = firstSlot.hour * 60 + firstSlot.minute;
+    const maxMinutes = lastSlot.hour * 60 + lastSlot.minute + 15;
     
-    if (hour < minHour || hour >= maxHour) return null;
+    if (currentMinutes < minMinutes || currentMinutes >= maxMinutes) return null;
     
-    // Cada slot = 40px, calcular offset (4 slots por hora com intervalo de 15min)
-    const slotsFromStart = (hour - minHour) * 4 + (minute / 15);
-    return slotsFromStart * SLOT_HEIGHT;
+    // Calcular posição proporcional baseado nos minutos desde o primeiro slot
+    const slotIndex = (currentMinutes - minMinutes) / 15;
+    return slotIndex * SLOT_HEIGHT;
   }, [currentTime, timeSlots]);
   
   const viewDays = useMemo(() => {
