@@ -4,8 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  isSdrWithNegociosAccess, 
-  getAuthorizedOriginsForUser 
+  isSdrRole, 
+  getAuthorizedOriginsForRole 
 } from '@/components/auth/NegociosAccessGuard';
 
 export function useNewLeadNotifications() {
@@ -14,10 +14,10 @@ export function useNewLeadNotifications() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Só ativar para SDRs com acesso especial a Negócios
-    if (!user?.id || !isSdrWithNegociosAccess(role, user.id)) return;
+    // Só ativar para SDRs com acesso a Negócios
+    if (!user?.id || !isSdrRole(role)) return;
 
-    const authorizedOrigins = getAuthorizedOriginsForUser(user.id);
+    const authorizedOrigins = getAuthorizedOriginsForRole(role);
     if (authorizedOrigins.length === 0) return;
 
     console.log('[NewLeadNotifications] Subscrevendo a novos leads para origens:', authorizedOrigins);

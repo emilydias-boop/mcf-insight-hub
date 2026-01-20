@@ -6,24 +6,12 @@ import { AppRole } from '@/types/user-management';
 // Roles que têm acesso padrão à aba Negócios
 const NEGOCIOS_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador', 'sdr'];
 
-// Configuração de usuários SDR com acesso especial a Negócios e suas origens autorizadas
-export interface NegociosAccessConfig {
-  userId: string;
-  userName: string;
-  allowedOriginIds: string[]; // IDs das origens específicas que o usuário pode ver
-  whatsappPhone?: string; // Número para notificações WhatsApp
-  email?: string; // Email para notificações
-}
+// ============ CONFIGURAÇÃO GLOBAL DE SDRs ============
+// ID da origem autorizada para TODOS os SDRs (PIPELINE INSIDE SALES)
+export const SDR_AUTHORIZED_ORIGIN_ID = 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c';
 
-export const NEGOCIOS_AUTHORIZED_SDRS: NegociosAccessConfig[] = [
-  {
-    userId: 'c7005c87-76fc-43a9-8bfa-e1b41f48a9b7', // Caroline Aparecida Corrêa
-    userName: 'Caroline Correa',
-    allowedOriginIds: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // PIPELINE INSIDE SALES
-    whatsappPhone: '5519992937317',
-    email: 'carol.correa@minhacasafinanciada.com',
-  },
-];
+// ID do grupo/funil onde fica a origem autorizada (Perpétuo - X1)
+export const SDR_AUTHORIZED_GROUP_ID = 'a6f3cbfc-0567-427f-a405-5a869aaa6010';
 
 interface NegociosAccessGuardProps {
   children: React.ReactNode;
@@ -31,12 +19,11 @@ interface NegociosAccessGuardProps {
 }
 
 export const NegociosAccessGuard = ({ children, fallback }: NegociosAccessGuardProps) => {
-  const { role, user } = useAuth();
+  const { role } = useAuth();
 
   const hasRoleAccess = role && NEGOCIOS_ALLOWED_ROLES.includes(role);
-  const hasUserAccess = user?.id && NEGOCIOS_AUTHORIZED_SDRS.some(config => config.userId === user.id);
 
-  if (!hasRoleAccess && !hasUserAccess) {
+  if (!hasRoleAccess) {
     if (fallback) {
       return <>{fallback}</>;
     }
@@ -57,22 +44,19 @@ export const NegociosAccessGuard = ({ children, fallback }: NegociosAccessGuardP
 };
 
 // Helper para verificar se usuário pode ver aba Negócios
-export const canUserAccessNegocios = (role: AppRole | null, userId: string | undefined): boolean => {
-  const hasRoleAccess = role && NEGOCIOS_ALLOWED_ROLES.includes(role);
-  const hasUserAccess = userId && NEGOCIOS_AUTHORIZED_SDRS.some(config => config.userId === userId);
-  return hasRoleAccess || hasUserAccess;
+export const canUserAccessNegocios = (role: AppRole | null): boolean => {
+  return role !== null && NEGOCIOS_ALLOWED_ROLES.includes(role);
 };
 
-// Helper para obter origens permitidas para um SDR específico
-export const getAuthorizedOriginsForUser = (userId: string | undefined): string[] => {
-  if (!userId) return [];
-  const config = NEGOCIOS_AUTHORIZED_SDRS.find(c => c.userId === userId);
-  return config?.allowedOriginIds || [];
+// Helper para obter origens permitidas baseado na role
+export const getAuthorizedOriginsForRole = (role: AppRole | null): string[] => {
+  if (role === 'sdr') {
+    return [SDR_AUTHORIZED_ORIGIN_ID];
+  }
+  return []; // Admin/Manager/Coordenador veem tudo
 };
 
-// Helper para verificar se um usuário é um SDR com acesso limitado a Negócios
-export const isSdrWithNegociosAccess = (role: AppRole | null, userId: string | undefined): boolean => {
-  const isAgendaOnlyRole = role === 'sdr' || role === 'closer';
-  const hasUserAccess = userId && NEGOCIOS_AUTHORIZED_SDRS.some(config => config.userId === userId);
-  return isAgendaOnlyRole && hasUserAccess;
+// Helper para verificar se é um SDR (acesso restrito ao Kanban)
+export const isSdrRole = (role: AppRole | null): boolean => {
+  return role === 'sdr';
 };

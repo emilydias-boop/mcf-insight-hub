@@ -16,8 +16,8 @@ const CRM = () => {
   // Verificar se usuário tem permissão especial para R2
   const canViewR2 = canUserAccessR2(role, user?.id);
   
-  // Verificar se usuário tem permissão especial para Negócios
-  const canViewNegocios = canUserAccessNegocios(role, user?.id);
+  // Verificar se usuário tem permissão para Negócios (baseado na role)
+  const canViewNegocios = canUserAccessNegocios(role);
   
   // Redirecionar para /crm/agenda se for sdr/closer sem permissão R2 ou Negócios
   if (isAgendaOnly && !canViewR2 && !canViewNegocios && location.pathname === '/crm') {

@@ -17,8 +17,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 import { 
-  isSdrWithNegociosAccess, 
-  getAuthorizedOriginsForUser 
+  isSdrRole, 
+  getAuthorizedOriginsForRole,
+  SDR_AUTHORIZED_ORIGIN_ID 
 } from '@/components/auth/NegociosAccessGuard';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 
@@ -40,9 +41,9 @@ const Negocios = () => {
     dealStatus: 'all',
   });
   
-  // Verificar se é SDR com acesso especial a Negócios
-  const isSdrWithAccess = isSdrWithNegociosAccess(role, user?.id);
-  const authorizedOrigins = getAuthorizedOriginsForUser(user?.id);
+  // Verificar se é SDR (acesso restrito ao Pipeline Inside Sales)
+  const isSdr = isSdrRole(role);
+  const authorizedOrigins = getAuthorizedOriginsForRole(role);
   
   // Ref para garantir que só define o default UMA VEZ
   const hasSetDefault = useRef(false);
@@ -55,13 +56,13 @@ const Negocios = () => {
   
   // Calcular o originId correto para usar nas queries
   const effectiveOriginId = useMemo(() => {
+    // Para SDRs, SEMPRE usar a origem autorizada (PIPELINE INSIDE SALES)
+    if (isSdr) {
+      return SDR_AUTHORIZED_ORIGIN_ID;
+    }
+    
     // Se já tem uma origem selecionada manualmente, usar ela
     if (selectedOriginId) return selectedOriginId;
-    
-    // Para SDRs com acesso limitado, usar a origem autorizada diretamente
-    if (isSdrWithAccess && authorizedOrigins.length > 0) {
-      return authorizedOrigins[0];
-    }
     
     // Se tem um pipeline selecionado, verificar se é um grupo ou uma origem
     if (selectedPipelineId && pipelineOrigins && Array.isArray(pipelineOrigins)) {
@@ -75,16 +76,16 @@ const Negocios = () => {
     }
     
     return undefined;
-  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdrWithAccess, authorizedOrigins]);
+  }, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr]);
   
   // Definir pipeline padrão APENAS na primeira montagem
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current) {
       hasSetDefault.current = true;
       
-      // Se for SDR com acesso limitado, pré-selecionar a origem autorizada
-      if (isSdrWithAccess && authorizedOrigins.length > 0) {
-        setSelectedPipelineId(authorizedOrigins[0]); // PIPELINE INSIDE SALES
+      // Se for SDR, pré-selecionar a origem autorizada (PIPELINE INSIDE SALES)
+      if (isSdr) {
+        setSelectedPipelineId(SDR_AUTHORIZED_ORIGIN_ID);
         return;
       }
       
@@ -98,7 +99,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdrWithAccess, authorizedOrigins]);
+  }, [pipelines, isSdr]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -186,8 +187,8 @@ const Negocios = () => {
   
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
-      {/* Sidebar - hidden on mobile, hidden for restricted SDRs */}
-      {!isSdrWithAccess && (
+      {/* Sidebar - hidden on mobile, hidden for SDRs */}
+      {!isSdr && (
         <div className="hidden md:block">
           <OriginsSidebar
             pipelineId={selectedPipelineId}
