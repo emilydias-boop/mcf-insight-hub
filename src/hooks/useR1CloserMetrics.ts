@@ -35,6 +35,9 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
       // Build set of valid SDR emails (active SDRs only)
       const validSdrEmails = new Set(SDR_LIST.map(s => s.email.toLowerCase()));
 
+      // Statuses that count as "Agendada" - explicitly defined to avoid counting canceled/rescheduled
+      const allowedAgendadaStatuses = ['scheduled', 'invited', 'completed', 'no_show', 'contract_paid'];
+
       // Fetch R1 meeting slots with attendees in the period
       const { data: meetings, error: meetingsError } = await supabase
         .from('meeting_slots')
@@ -53,7 +56,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
         .eq('meeting_type', 'r1')
         .gte('scheduled_at', start)
         .lte('scheduled_at', end)
-        .not('status', 'eq', 'cancelled');
+        .neq('status', 'cancelled')
+        .neq('status', 'canceled');
 
       if (meetingsError) throw meetingsError;
 
@@ -93,14 +97,15 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
 
       if (r2Error) throw r2Error;
 
-      // Build a map of deal_id -> R1 closer_id (only for valid SDR bookings)
+      // Build a map of deal_id -> R1 closer_id (only for valid SDR bookings with allowed statuses)
       const dealToR1Closer = new Map<string, string>();
       meetings?.forEach(meeting => {
         meeting.meeting_slot_attendees?.forEach(att => {
           if (att.deal_id && meeting.closer_id) {
-            // Only include if booked by valid SDR
+            // Only include if booked by valid SDR AND has an allowed status
             const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
-            if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
+            const status = att.status;
+            if (bookedByEmail && validSdrEmails.has(bookedByEmail) && allowedAgendadaStatuses.includes(status)) {
               dealToR1Closer.set(att.deal_id, meeting.closer_id);
             }
           }
@@ -169,8 +174,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
 
           const status = att.status;
           
-          // R1 Agendada: all non-cancelled attendees
-          if (status !== 'cancelled') {
+          // R1 Agendada: only statuses in allowedAgendadaStatuses
+          if (allowedAgendadaStatuses.includes(status)) {
             metric!.r1_agendada++;
           }
           
