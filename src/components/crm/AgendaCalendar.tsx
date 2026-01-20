@@ -4,6 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { WEEK_STARTS_ON } from '@/lib/businessDays';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { UserPlus } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@/hooks/useAgendaData';
@@ -22,6 +23,7 @@ interface AgendaCalendarProps {
   viewMode?: ViewMode;
   onEditHours?: () => void;
   onSelectSlot?: (day: Date, hour: number, minute: number, closerId?: string) => void;
+  onAddToMeeting?: (day: Date, hour: number, minute: number, closerId?: string) => void;
   meetingType?: 'r1' | 'r2';
 }
 
@@ -69,6 +71,7 @@ export function AgendaCalendar({
   onEditHours,
   viewMode = 'week',
   onSelectSlot,
+  onAddToMeeting,
   meetingType = 'r1'
 }: AgendaCalendarProps) {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
@@ -966,8 +969,9 @@ export function AgendaCalendar({
                                 index={groupIndex}
                               >
                                 {(dragProvided, dragSnapshot) => (
-                                  <TooltipProvider>
-                                    <Tooltip>
+                                  <div className="relative group">
+                                    <TooltipProvider>
+                                      <Tooltip>
                                       <TooltipTrigger asChild>
                                         <button
                                           ref={dragProvided.innerRef}
@@ -1159,6 +1163,25 @@ export function AgendaCalendar({
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
+                                    {onAddToMeeting && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const meetingDate = parseISO(firstMeeting.scheduled_at);
+                                          onAddToMeeting(
+                                            day,
+                                            meetingDate.getHours(),
+                                            meetingDate.getMinutes(),
+                                            group.closerId
+                                          );
+                                        }}
+                                        className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 bg-white/90 rounded-full p-0.5 shadow hover:bg-green-100 transition-opacity z-20"
+                                        title="Adicionar lead a esta reunião"
+                                      >
+                                        <UserPlus className="h-3.5 w-3.5 text-green-600" />
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </Draggable>
                             );
