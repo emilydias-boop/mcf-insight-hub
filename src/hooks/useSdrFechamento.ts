@@ -106,22 +106,54 @@ const transformPayout = (data: any): SdrPayoutWithDetails => ({
   status: data.status as PayoutStatus,
 });
 
-// Fetch all payouts for a month
-export const useSdrPayouts = (anoMes: string) => {
+// Fetch all payouts for a month with filters
+export const useSdrPayouts = (anoMes: string, filters?: {
+  roleType?: 'sdr' | 'closer' | 'all';
+  squad?: string;
+  search?: string;
+}) => {
   return useQuery({
-    queryKey: ['sdr-payouts', anoMes],
+    queryKey: ['sdr-payouts', anoMes, filters],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sdr_month_payout')
         .select(`
           *,
-          sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at)
+          sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at, squad, role_type)
         `)
         .eq('ano_mes', anoMes)
         .order('created_at');
       
       if (error) throw error;
-      return (data || []).map(transformPayout);
+      
+      let result = (data || []).map(transformPayout);
+      
+      // Apply filters
+      if (filters) {
+        // Only show active SDRs
+        result = result.filter(p => p.sdr?.active !== false);
+        
+        // Filter by role type
+        if (filters.roleType && filters.roleType !== 'all') {
+          result = result.filter(p => (p.sdr as any)?.role_type === filters.roleType);
+        }
+        
+        // Filter by squad/BU
+        if (filters.squad && filters.squad !== 'all') {
+          result = result.filter(p => (p.sdr as any)?.squad === filters.squad);
+        }
+        
+        // Filter by search
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase();
+          result = result.filter(p => 
+            p.sdr?.name?.toLowerCase().includes(searchLower) ||
+            p.sdr?.email?.toLowerCase().includes(searchLower)
+          );
+        }
+      }
+      
+      return result;
     },
   });
 };

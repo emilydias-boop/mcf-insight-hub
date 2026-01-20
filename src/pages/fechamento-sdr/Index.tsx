@@ -20,10 +20,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { useSdrPayouts, useRecalculateAllPayouts } from '@/hooks/useSdrFechamento';
 import { formatCurrency } from '@/lib/formatters';
-import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed } from 'lucide-react';
+import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed, Search, Users } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,7 +35,16 @@ const FechamentoSDRList = () => {
   const currentMonth = format(new Date(), 'yyyy-MM');
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   
-  const { data: payouts, isLoading } = useSdrPayouts(selectedMonth);
+  // Filter states
+  const [roleFilter, setRoleFilter] = useState<'sdr' | 'closer' | 'all'>('all');
+  const [squadFilter, setSquadFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const { data: payouts, isLoading } = useSdrPayouts(selectedMonth, {
+    roleType: roleFilter,
+    squad: squadFilter,
+    search: searchTerm,
+  });
   const recalculateAll = useRecalculateAllPayouts();
 
   // Mutation to call edge function for recalculation with correct iFood from calendar
@@ -134,11 +144,31 @@ const FechamentoSDRList = () => {
     return str;
   };
 
+  const getRoleLabel = (roleType: string | null | undefined) => {
+    switch (roleType) {
+      case 'closer': return 'Closer';
+      case 'sdr': return 'SDR';
+      default: return 'SDR';
+    }
+  };
+
+  const getSquadLabel = (squad: string | null | undefined) => {
+    switch (squad) {
+      case 'incorporador': return 'Incorporador';
+      case 'consorcio': return 'Consórcio';
+      case 'credito': return 'Crédito';
+      case 'projetos': return 'Projetos';
+      default: return squad || '-';
+    }
+  };
+
   const handleExportCSV = () => {
     if (!payouts || payouts.length === 0) return;
 
     const headers = [
       'Nome',
+      'Cargo',
+      'BU',
       'Nível',
       'OTE',
       '% Meta Global',
@@ -163,8 +193,11 @@ const FechamentoSDRList = () => {
     const rows = payouts.map((p) => {
       const compPlan = getCompPlanForSdr(p.sdr_id);
       const globalPct = calculateGlobalPct(p);
+      const sdrData = p.sdr as any;
       return [
         escapeCSV(p.sdr?.name || ''),
+        escapeCSV(getRoleLabel(sdrData?.role_type)),
+        escapeCSV(getSquadLabel(sdrData?.squad)),
         escapeCSV(p.sdr?.nivel || 1),
         escapeCSV(compPlan?.ote_total || 4000),
         escapeCSV(globalPct.toFixed(1)),
@@ -202,41 +235,101 @@ const FechamentoSDRList = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Fechamento SDR</h1>
-          <p className="text-muted-foreground">
-            Gerencie o fechamento mensal dos SDRs
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Fechamento SDR</h1>
+            <p className="text-muted-foreground">
+              Gerencie o fechamento mensal dos SDRs e Closers
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              onClick={() => recalculateViaEdge.mutate(selectedMonth)}
+              disabled={recalculateViaEdge.isPending}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${recalculateViaEdge.isPending ? 'animate-spin' : ''}`} />
+              Recalcular Todos
+            </Button>
+
+            <Button variant="outline" onClick={handleExportCSV}>
+              <Download className="h-4 w-4 mr-2" />
+              Exportar CSV
+            </Button>
+          </div>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue />
+
+        {/* Filters Row */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as 'sdr' | 'closer' | 'all')}>
+            <SelectTrigger className="w-[140px]">
+              <Users className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Cargo" />
             </SelectTrigger>
             <SelectContent>
-              {monthOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="sdr">SDR</SelectItem>
+              <SelectItem value="closer">Closer</SelectItem>
             </SelectContent>
           </Select>
 
-          <Button
-            variant="outline"
-            onClick={() => recalculateViaEdge.mutate(selectedMonth)}
-            disabled={recalculateViaEdge.isPending}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${recalculateViaEdge.isPending ? 'animate-spin' : ''}`} />
-            Recalcular Todos
-          </Button>
+          <Select value={squadFilter} onValueChange={setSquadFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="BU" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas BUs</SelectItem>
+              <SelectItem value="incorporador">Incorporador</SelectItem>
+              <SelectItem value="consorcio">Consórcio</SelectItem>
+              <SelectItem value="credito">Crédito</SelectItem>
+              <SelectItem value="projetos">Projetos</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <Button variant="outline" onClick={handleExportCSV}>
-            <Download className="h-4 w-4 mr-2" />
-            Exportar CSV
-          </Button>
+          {(searchTerm || roleFilter !== 'all' || squadFilter !== 'all') && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                setSearchTerm('');
+                setRoleFilter('all');
+                setSquadFilter('all');
+              }}
+            >
+              Limpar filtros
+            </Button>
+          )}
+
+          {payouts && (
+            <Badge variant="secondary" className="ml-auto">
+              {payouts.length} resultado(s)
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -344,7 +437,9 @@ const FechamentoSDRList = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome do SDR</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead className="text-center">Cargo</TableHead>
+                  <TableHead className="text-center">BU</TableHead>
                   <TableHead className="text-center">Nível</TableHead>
                   <TableHead className="text-right">OTE</TableHead>
                   <TableHead className="text-right">% Meta Global</TableHead>
@@ -363,6 +458,7 @@ const FechamentoSDRList = () => {
                   const ote = compPlan?.ote_total || 4000;
                   const isCritical = globalPct < 70;
                   const isWarning = globalPct >= 70 && globalPct < 100;
+                  const sdrData = payout.sdr as any;
                   
                   return (
                     <TableRow key={payout.id} className={isCritical ? 'bg-red-500/5' : isWarning ? 'bg-yellow-500/5' : ''}>
@@ -375,6 +471,16 @@ const FechamentoSDRList = () => {
                             </Badge>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={sdrData?.role_type === 'closer' ? 'secondary' : 'outline'} className="font-normal">
+                          {getRoleLabel(sdrData?.role_type)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="text-sm text-muted-foreground">
+                          {getSquadLabel(sdrData?.squad)}
+                        </span>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="font-mono">

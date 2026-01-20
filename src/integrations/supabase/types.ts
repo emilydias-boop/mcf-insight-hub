@@ -4808,6 +4808,8 @@ export type Database = {
           name: string
           nivel: number | null
           observacao: string | null
+          role_type: string | null
+          squad: string | null
           status: string | null
           updated_at: string | null
           user_id: string | null
@@ -4824,6 +4826,8 @@ export type Database = {
           name: string
           nivel?: number | null
           observacao?: string | null
+          role_type?: string | null
+          squad?: string | null
           status?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -4840,6 +4844,8 @@ export type Database = {
           name?: string
           nivel?: number | null
           observacao?: string | null
+          role_type?: string | null
+          squad?: string | null
           status?: string | null
           updated_at?: string | null
           user_id?: string | null
