@@ -97,23 +97,38 @@ export function DealFormDialog({
     enabled: !!defaultOriginId,
   });
 
-  // Fetch SDRs for this origin/pipeline
+  // Fetch SDRs for this origin/pipeline (two-step query to avoid join issues)
   const { data: dealOwners = [] } = useQuery({
-    queryKey: ['deal-owners-sdr', defaultOriginId],
+    queryKey: ['deal-owners-sdr'],
     queryFn: async () => {
-      const { data } = await supabase
+      // 1. Buscar user_ids que têm role = 'sdr'
+      const { data: sdrRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'sdr');
+      
+      if (rolesError) {
+        console.error('Error fetching SDR roles:', rolesError);
+        return [];
+      }
+      
+      if (!sdrRoles || sdrRoles.length === 0) return [];
+      
+      const sdrUserIds = sdrRoles.map(r => r.user_id);
+      
+      // 2. Buscar profiles desses users
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          user_roles!inner(role)
-        `)
+        .select('id, full_name')
+        .in('id', sdrUserIds)
         .order('full_name');
       
-      // Filter only SDRs
-      return (data || []).filter((u: any) => 
-        u.user_roles?.some((r: any) => r.role === 'sdr')
-      );
+      if (profilesError) {
+        console.error('Error fetching SDR profiles:', profilesError);
+        return [];
+      }
+      
+      return profiles || [];
     },
   });
 
