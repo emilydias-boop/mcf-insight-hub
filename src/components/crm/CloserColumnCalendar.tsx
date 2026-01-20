@@ -70,6 +70,16 @@ const ATTENDEE_STATUS_CONFIG: Record<
   },
 };
 
+// Helper to get initials from full name
+const getInitials = (name: string): string => {
+  return name
+    .split(' ')
+    .filter(word => word.length > 0)
+    .slice(0, 2)
+    .map(word => word[0].toUpperCase())
+    .join('');
+};
+
 export function CloserColumnCalendar({
   meetings,
   closers,
@@ -289,34 +299,46 @@ export function CloserColumnCalendar({
                               >
                               <div className="space-y-0.5">
                                 {meeting.attendees?.length ? (
-                                  meeting.attendees.slice(0, 3).map((att, i) => (
-                                    <div key={att.id} className="flex items-center justify-between gap-1">
-                                      <div className="flex items-center gap-1 truncate">
-                                        <span className="truncate font-medium">
-                                          {att.attendee_name || att.contact?.name || "Lead"}
-                                        </span>
-                                        {outsideData[att.id]?.isOutside && (
-                                          <span className="flex items-center bg-yellow-500/40 rounded px-0.5">
-                                            <DollarSign className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                  meeting.attendees.slice(0, 3).map((att, i) => {
+                                    const sdrName = att.booked_by_profile?.full_name || meeting.booked_by_profile?.full_name;
+                                    const leadFirstName = (att.attendee_name || att.contact?.name || "Lead").split(' ')[0];
+                                    return (
+                                      <div key={att.id} className="flex items-center justify-between gap-1">
+                                        <div className="flex items-center gap-1 truncate">
+                                          {sdrName && (
+                                            <>
+                                              <span className="text-white/70 font-semibold flex-shrink-0">
+                                                {getInitials(sdrName)}
+                                              </span>
+                                              <span className="text-white/50">•</span>
+                                            </>
+                                          )}
+                                          <span className="truncate font-medium">
+                                            {leadFirstName}
                                           </span>
-                                        )}
-                                        {!att.is_partner && att.parent_attendee_id && (
-                                          <span className="flex items-center bg-orange-500/40 rounded px-0.5">
-                                            <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
-                                          </span>
-                                        )}
+                                          {outsideData[att.id]?.isOutside && (
+                                            <span className="flex items-center bg-yellow-500/40 rounded px-0.5">
+                                              <DollarSign className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                            </span>
+                                          )}
+                                          {!att.is_partner && att.parent_attendee_id && (
+                                            <span className="flex items-center bg-orange-500/40 rounded px-0.5">
+                                              <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
+                                            </span>
+                                          )}
+                                        </div>
+                                        <Badge
+                                          variant="outline"
+                                          className={cn(
+                                            "text-[9px] px-1 py-0 border-white/30",
+                                            ATTENDEE_STATUS_CONFIG[att.status]?.bgClass || "bg-white/20",
+                                          )}
+                                        >
+                                          {ATTENDEE_STATUS_CONFIG[att.status]?.shortLabel || att.status}
+                                        </Badge>
                                       </div>
-                                      <Badge
-                                        variant="outline"
-                                        className={cn(
-                                          "text-[9px] px-1 py-0 border-white/30",
-                                          ATTENDEE_STATUS_CONFIG[att.status]?.bgClass || "bg-white/20",
-                                        )}
-                                      >
-                                        {ATTENDEE_STATUS_CONFIG[att.status]?.shortLabel || att.status}
-                                      </Badge>
-                                    </div>
-                                  ))
+                                    );
+                                  })
                                 ) : (
                                   <div className="font-medium truncate">
                                     {meeting.deal?.contact?.name || meeting.deal?.name || "Lead"}
