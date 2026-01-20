@@ -393,6 +393,15 @@ export default function Agenda() {
                 }
                 setQuickScheduleOpen(true);
               }}
+              onAddToMeeting={(day, hour, minute, closerId) => {
+                const selectedDateTime = new Date(day);
+                selectedDateTime.setHours(hour, minute, 0, 0);
+                setPreselectedDate(selectedDateTime);
+                if (closerId) {
+                  setPreselectedCloserId(closerId);
+                }
+                setQuickScheduleOpen(true);
+              }}
             />
           )}
         </TabsContent>
