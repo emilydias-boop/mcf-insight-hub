@@ -11,7 +11,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface DealNotesTabProps {
-  dealId: string;
+  dealUuid: string;
+  dealClintId?: string;
 }
 
 type NoteType = 'manual' | 'scheduling' | 'attendee' | 'reschedule' | 'call';
@@ -43,18 +44,19 @@ const NOTE_ICONS: Record<NoteType, React.ReactNode> = {
   call: <Phone className="h-3 w-3" />
 };
 
-export const DealNotesTab = ({ dealId }: DealNotesTabProps) => {
+export const DealNotesTab = ({ dealUuid, dealClintId }: DealNotesTabProps) => {
   const [newNote, setNewNote] = useState('');
   const addNote = useAddDealNote();
   
   const { data: allNotes, isLoading } = useQuery({
-    queryKey: ['all-deal-notes', dealId],
+    queryKey: ['all-deal-notes', dealUuid],
     queryFn: async () => {
-      // 1. Notas manuais (deal_activities)
+      // 1. Notas manuais (deal_activities) - busca por UUID ou clint_id (legado)
+      const dealIdFilters = dealClintId ? [dealUuid, dealClintId] : [dealUuid];
       const { data: manualNotes } = await supabase
         .from('deal_activities')
         .select('id, description, created_at, metadata')
-        .eq('deal_id', dealId)
+        .in('deal_id', dealIdFilters)
         .eq('activity_type', 'note');
       
       // 2. Notas de agendamento (meeting_slot_attendees)
@@ -63,8 +65,8 @@ export const DealNotesTab = ({ dealId }: DealNotesTabProps) => {
         .select(`
           id, notes, created_at, booked_by,
           meeting_slots(meeting_type, scheduled_at, closers(name))
-        `)
-        .eq('deal_id', dealId);
+      `)
+        .eq('deal_id', dealUuid);
       
       // 3. Buscar attendee_notes para cada attendee encontrado
       const attendeeIds = attendees?.map(a => a.id) || [];
@@ -105,7 +107,7 @@ export const DealNotesTab = ({ dealId }: DealNotesTabProps) => {
       const { data: callNotes } = await supabase
         .from('calls')
         .select('id, notes, outcome, created_at, user_id')
-        .eq('deal_id', dealId)
+        .eq('deal_id', dealUuid)
         .not('notes', 'is', null);
       
       // Buscar perfis dos usuários de calls
@@ -174,13 +176,13 @@ export const DealNotesTab = ({ dealId }: DealNotesTabProps) => {
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
     },
-    enabled: !!dealId,
+    enabled: !!dealUuid,
   });
   
   const handleAddNote = async () => {
-    if (!newNote.trim()) return;
+    if (!newNote.trim() || !dealUuid) return;
     
-    await addNote.mutateAsync({ dealId, note: newNote.trim() });
+    await addNote.mutateAsync({ dealId: dealUuid, note: newNote.trim() });
     setNewNote('');
   };
   
