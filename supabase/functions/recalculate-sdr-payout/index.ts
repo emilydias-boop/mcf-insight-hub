@@ -261,13 +261,44 @@ serve(async (req) => {
 
         let kpi;
         if (existingKpi) {
-          // KPI já existe - usar os valores do banco (respeita edições manuais)
-          console.log(`   📊 Usando KPI existente (valores manuais preservados):`, {
+          // KPI já existe - SEMPRE atualizar campos da Agenda, preservar campos manuais
+          console.log(`   📊 KPI existente encontrado. Atualizando campos da Agenda...`);
+          console.log(`   📊 Valores anteriores:`, {
             reunioes_agendadas: existingKpi.reunioes_agendadas,
             reunioes_realizadas: existingKpi.reunioes_realizadas,
             no_shows: existingKpi.no_shows,
           });
-          kpi = existingKpi;
+          console.log(`   📊 Novos valores da Agenda:`, {
+            reunioes_agendadas: reunioesAgendadas,
+            reunioes_realizadas: reunioesRealizadas,
+            no_shows: noShows,
+          });
+          
+          // Campos da Agenda: SEMPRE atualizar
+          // Campos manuais (tentativas_ligacoes, score_organizacao): PRESERVAR
+          const updateFields: Record<string, unknown> = {
+            reunioes_agendadas: reunioesAgendadas,
+            reunioes_realizadas: reunioesRealizadas,
+            no_shows: noShows,
+            taxa_no_show: taxaNoShow,
+            updated_at: new Date().toISOString(),
+          };
+          
+          const { data: updatedKpi, error: updateError } = await supabase
+            .from('sdr_month_kpi')
+            .update(updateFields)
+            .eq('id', existingKpi.id)
+            .select()
+            .single();
+          
+          if (updateError) {
+            console.error(`   ❌ Erro ao atualizar KPI: ${updateError.message}`);
+            errors++;
+            continue;
+          }
+          
+          kpi = updatedKpi;
+          console.log(`   ✅ KPI atualizado com dados frescos da Agenda`);
         } else {
           // KPI não existe - criar com dados da RPC
           const kpiData = {
