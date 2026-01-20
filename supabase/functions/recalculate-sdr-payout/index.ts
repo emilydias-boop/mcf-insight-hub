@@ -245,8 +245,8 @@ serve(async (req) => {
               console.log(`   ⚠️ Closer ${sdr.name} não encontrado na tabela closers`);
             }
           } else {
-            // SDR: Usar RPC get_sdr_metrics_v2 para contar agendamentos
-            const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_v2', {
+            // SDR: Usar RPC get_sdr_metrics_from_agenda (mesma fonte de dados do frontend)
+            const { data: metricsData, error: metricsError } = await supabase.rpc('get_sdr_metrics_from_agenda', {
               start_date: monthStart,
               end_date: monthEnd,
               sdr_email_filter: sdr.email
@@ -256,12 +256,13 @@ serve(async (req) => {
               console.log(`   ⚠️ Erro ao buscar métricas RPC para ${sdr.name}: ${metricsError.message}`);
             } else if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
               const metrics = metricsData.metrics[0];
-              reunioesAgendadas = metrics.total_agendamentos || 0;
+              // Campos da RPC get_sdr_metrics_from_agenda
+              reunioesAgendadas = metrics.r1_agendada || 0;
               noShows = metrics.no_shows || 0;
-              reunioesRealizadas = metrics.realizadas || 0;
-              taxaNoShow = metrics.taxa_no_show || 0;
+              reunioesRealizadas = metrics.r1_realizada || 0;
+              taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
               
-              console.log(`   📊 Métricas da RPC para ${sdr.name}: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
+              console.log(`   📊 Métricas da Agenda para ${sdr.name}: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);
             } else {
               console.log(`   ⚠️ Nenhuma métrica encontrada na RPC para ${sdr.name}`);
             }
