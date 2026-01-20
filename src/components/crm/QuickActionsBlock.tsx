@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { MarkAsLostModal } from './MarkAsLostModal';
+import { InlineCallControls } from './InlineCallControls';
 
 interface QuickActionsBlockProps {
   deal: any;
@@ -23,7 +24,7 @@ interface QuickActionsBlockProps {
 }
 
 export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActionsBlockProps) => {
-  const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
+  const { makeCall, isTestPipeline, deviceStatus, initializeDevice, callStatus, currentCallDealId } = useTwilio();
   const updateDeal = useUpdateCRMDeal();
   const { data: stages } = useCRMStages(deal?.origin_id);
   
@@ -36,6 +37,13 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   
   // Filtrar estágios futuros
   const futureStages = stages?.filter(s => s.stage_order > currentStageOrder) || [];
+  
+  // Check if there's an active call for THIS deal
+  const isInCallWithThisDeal = 
+    currentCallDealId === deal?.id && 
+    callStatus !== 'idle' && 
+    callStatus !== 'completed' && 
+    callStatus !== 'failed';
   
   const handleCall = async () => {
     let phone = extractPhoneFromDeal(deal, contact);
@@ -141,31 +149,38 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        {/* Botão Ligar */}
-        <Button
-          size="sm"
-          className="bg-primary hover:bg-primary/90 h-8"
-          onClick={handleCall}
-          disabled={isSearchingPhone}
-        >
-          {isSearchingPhone ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-          ) : (
-            <Phone className="h-3.5 w-3.5 mr-1.5" />
-          )}
-          {isTestDeal ? 'Ligar' : 'Ligar'}
-        </Button>
-        
-        {/* Botão WhatsApp */}
-        <Button
-          size="sm"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
-          onClick={handleWhatsApp}
-          disabled={!hasPhone}
-        >
-          <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
-          WhatsApp
-        </Button>
+        {/* Controles inline quando em chamada com este deal */}
+        {isInCallWithThisDeal && deal?.id ? (
+          <InlineCallControls dealId={deal.id} />
+        ) : (
+          <>
+            {/* Botão Ligar */}
+            <Button
+              size="sm"
+              className="bg-primary hover:bg-primary/90 h-8"
+              onClick={handleCall}
+              disabled={isSearchingPhone}
+            >
+              {isSearchingPhone ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Phone className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              {isTestDeal ? 'Ligar' : 'Ligar'}
+            </Button>
+            
+            {/* Botão WhatsApp */}
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
+              onClick={handleWhatsApp}
+              disabled={!hasPhone}
+            >
+              <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+              WhatsApp
+            </Button>
+          </>
+        )}
         
         {/* Mover estágio inline */}
         {futureStages.length > 0 && (
@@ -196,17 +211,21 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
           </>
         )}
         
-        {/* Botão Perdido */}
-        <div className="h-4 w-px bg-border mx-1" />
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
-          onClick={() => setShowLostModal(true)}
-        >
-          <XCircle className="h-3.5 w-3.5 mr-1.5" />
-          Perdido
-        </Button>
+        {/* Botão Perdido - esconder quando em chamada */}
+        {!isInCallWithThisDeal && (
+          <>
+            <div className="h-4 w-px bg-border mx-1" />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-destructive border-destructive/50 hover:bg-destructive/10"
+              onClick={() => setShowLostModal(true)}
+            >
+              <XCircle className="h-3.5 w-3.5 mr-1.5" />
+              Perdido
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Modal de Perda */}

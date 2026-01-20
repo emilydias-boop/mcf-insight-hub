@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCRMDeal, useCRMContact } from '@/hooks/useCRMData';
 import { useQualificationNote } from '@/hooks/useQualificationNote';
+import { useTwilio } from '@/contexts/TwilioContext';
 import { DealHistory } from './DealHistory';
 import { CallHistorySection } from './CallHistorySection';
 import { DealNotesTab } from './DealNotesTab';
@@ -28,6 +29,7 @@ interface DealDetailsDrawerProps {
 
 export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDrawerProps) => {
   const { role } = useAuth();
+  const { setDrawerState } = useTwilio();
   const { data: deal, isLoading: dealLoading, refetch: refetchDeal } = useCRMDeal(dealId || '');
   const { data: contact, isLoading: contactLoading } = useCRMContact(deal?.contact_id || '');
   const { data: qualificationNote } = useQualificationNote(dealId || '');
@@ -37,6 +39,11 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
   const [leadSummaryForSchedule, setLeadSummaryForSchedule] = useState('');
   
   const isLoading = dealLoading || contactLoading;
+  
+  // Notify TwilioContext when drawer opens/closes
+  useEffect(() => {
+    setDrawerState(open, open ? dealId : null);
+  }, [open, dealId, setDrawerState]);
   
   // Determinar comportamento baseado no stage
   const stageInfo = useMemo(() => {

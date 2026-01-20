@@ -69,6 +69,10 @@ interface TwilioContextType {
   qualificationContactName: string | null;
   openQualificationModal: (dealId: string, contactName?: string) => void;
   closeQualificationModal: () => void;
+  // Drawer state for inline call controls
+  isDrawerOpen: boolean;
+  drawerDealId: string | null;
+  setDrawerState: (open: boolean, dealId: string | null) => void;
 }
 
 const TwilioContext = createContext<TwilioContextType | null>(null);
@@ -92,6 +96,10 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
   const [qualificationModalOpen, setQualificationModalOpen] = useState(false);
   const [qualificationDealId, setQualificationDealId] = useState<string | null>(null);
   const [qualificationContactName, setQualificationContactName] = useState<string | null>(null);
+  
+  // Drawer state for inline call controls
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [drawerDealId, setDrawerDealId] = useState<string | null>(null);
 
   // Fetch test pipeline ID on mount
   useEffect(() => {
@@ -339,6 +347,12 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
     }, 300);
   }, []);
 
+  // Drawer state setter
+  const setDrawerState = useCallback((open: boolean, dealId: string | null) => {
+    setIsDrawerOpen(open);
+    setDrawerDealId(dealId);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -369,7 +383,11 @@ export function TwilioProvider({ children }: { children: ReactNode }) {
       qualificationDealId,
       qualificationContactName,
       openQualificationModal,
-      closeQualificationModal
+      closeQualificationModal,
+      // Drawer state
+      isDrawerOpen,
+      drawerDealId,
+      setDrawerState
     }}>
       {children}
     </TwilioContext.Provider>
