@@ -103,9 +103,9 @@ export function SdrSummaryTable({
                   ? 'text-amber-400' 
                   : 'text-red-400';
 
-              // Calculate taxa de contrato (Contratos / Agendamentos)
-              const taxaContrato = row.agendamentos > 0 
-                ? ((row.contratos / row.agendamentos) * 100)
+              // Calculate taxa de contrato (Contratos / R1 Realizada)
+              const taxaContrato = row.r1Realizada > 0 
+                ? ((row.contratos / row.r1Realizada) * 100)
                 : 0;
               const taxaContratoFormatted = taxaContrato.toFixed(1);
 
