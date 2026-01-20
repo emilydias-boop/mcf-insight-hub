@@ -122,7 +122,7 @@ const Negocios = () => {
   } = useCRMDeals({
     originId: effectiveOriginId,
     searchTerm: filters.search || undefined,
-    limit: 5000,
+    limit: 10000,
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
