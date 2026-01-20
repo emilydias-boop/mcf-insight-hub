@@ -56,6 +56,11 @@ export function CloserSummaryTable({
     ? ((totals.contrato_pago / totals.r1_realizada) * 100)
     : 0;
 
+  // Calculate total no-show rate (No-Show / Agendada)
+  const totalTaxaNoShow = totals.r1_agendada > 0 
+    ? ((totals.noshow / totals.r1_agendada) * 100)
+    : 0;
+
   return (
     <div className="rounded-md border border-border overflow-hidden">
       <div className="overflow-x-auto">
@@ -66,6 +71,7 @@ export function CloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R2 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
@@ -79,10 +85,23 @@ export function CloserSummaryTable({
                 : 0;
               const taxaConversaoFormatted = taxaConversao.toFixed(1);
 
-              // Taxa color: green >= 20%, amber >= 10%, red < 10%
+              // Calculate taxa de no-show (No-Show / R1 Agendada)
+              const taxaNoShow = row.r1_agendada > 0 
+                ? ((row.noshow / row.r1_agendada) * 100)
+                : 0;
+              const taxaNoShowFormatted = taxaNoShow.toFixed(1);
+
+              // Taxa conversão color: green >= 20%, amber >= 10%, red < 10%
               const taxaColorClass = taxaConversao >= 20 
                 ? 'text-green-400' 
                 : taxaConversao >= 10 
+                  ? 'text-amber-400' 
+                  : 'text-red-400';
+
+              // Taxa no-show color: green <= 20%, amber 21-35%, red > 35%
+              const taxaNoShowColorClass = taxaNoShow <= 20 
+                ? 'text-green-400' 
+                : taxaNoShow <= 35 
                   ? 'text-amber-400' 
                   : 'text-red-400';
 
@@ -105,6 +124,9 @@ export function CloserSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-red-400">{row.noshow}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-medium ${taxaNoShowColorClass}`}>{taxaNoShowFormatted}%</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contrato_pago}</span>
@@ -134,6 +156,17 @@ export function CloserSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 <span className="text-red-400">{totals.noshow}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className={`font-medium ${
+                  totalTaxaNoShow <= 20 
+                    ? 'text-green-400' 
+                    : totalTaxaNoShow <= 35 
+                      ? 'text-amber-400' 
+                      : 'text-red-400'
+                }`}>
+                  {totalTaxaNoShow.toFixed(1)}%
+                </span>
               </TableCell>
               <TableCell className="text-center">
                 <span className="text-amber-400">{totals.contrato_pago}</span>
