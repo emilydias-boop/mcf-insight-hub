@@ -12,13 +12,12 @@ import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 import { R2AprovadosList } from '@/components/crm/R2AprovadosList';
 import { R2ForaDoCarrinhoList } from '@/components/crm/R2ForaDoCarrinhoList';
 import { useR2ForaDoCarrinhoData } from '@/hooks/useR2ForaDoCarrinhoData';
-import { R2RealizadasList } from '@/components/crm/R2RealizadasList';
 import { R2AgendadasList } from '@/components/crm/R2AgendadasList';
+import { R2MetricsPanel } from '@/components/crm/R2MetricsPanel';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
-  const [statusFilter, setStatusFilter] = useState('all');
   const queryClient = useQueryClient();
 
   const weekStart = getCustomWeekStart(weekDate);
@@ -33,7 +32,6 @@ export default function R2Carrinho() {
   // Fetch data for each tab
   const { data: agendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekDate, 'agendadas');
   const { data: foraCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekDate);
-  const { data: realizadasData = [], isLoading: realizadasLoading } = useR2CarrinhoData(weekDate, 'realizadas');
   const { data: aprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekDate, 'aprovados');
 
   const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
@@ -119,8 +117,8 @@ export default function R2Carrinho() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="aprovados" className="space-y-4">
+      {/* Tabs - Nova ordem: R2 Agendada | Fora do Carrinho | Aprovados | Métricas */}
+      <Tabs defaultValue="metricas" className="space-y-4">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
             R2 Agendadas
@@ -134,17 +132,14 @@ export default function R2Carrinho() {
               {foraCarrinhoData.length}
             </span>
           </TabsTrigger>
-          <TabsTrigger value="realizadas" className="flex items-center gap-2">
-            R2 Realizadas
-            <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-              {realizadasData.length}
-            </span>
-          </TabsTrigger>
           <TabsTrigger value="aprovados" className="flex items-center gap-2">
             ✓ Aprovados
-            <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 px-2 py-0.5 rounded-full">
               {aprovadosData.length}
             </span>
+          </TabsTrigger>
+          <TabsTrigger value="metricas" className="flex items-center gap-2">
+            📊 Métricas
           </TabsTrigger>
         </TabsList>
 
@@ -162,22 +157,16 @@ export default function R2Carrinho() {
           />
         </TabsContent>
 
-        <TabsContent value="realizadas">
-          <R2RealizadasList 
-            attendees={realizadasData} 
-            isLoading={realizadasLoading}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            statusOptions={statusOptions.map(s => ({ id: s.id, name: s.name, color: s.color }))}
-          />
-        </TabsContent>
-
         <TabsContent value="aprovados">
           <R2AprovadosList 
             attendees={aprovadosData} 
             isLoading={aprovadosLoading}
             weekEnd={weekEnd}
           />
+        </TabsContent>
+
+        <TabsContent value="metricas">
+          <R2MetricsPanel weekDate={weekDate} />
         </TabsContent>
       </Tabs>
     </div>
