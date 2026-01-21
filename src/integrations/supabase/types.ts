@@ -4593,6 +4593,63 @@ export type Database = {
         }
         Relationships: []
       }
+      r2_vendas_extras: {
+        Row: {
+          attendee_email: string | null
+          attendee_name: string
+          attendee_phone: string | null
+          closer_id: string | null
+          created_at: string | null
+          created_by: string | null
+          hubla_transaction_id: string | null
+          id: string
+          notes: string | null
+          sale_date: string | null
+          week_start: string
+        }
+        Insert: {
+          attendee_email?: string | null
+          attendee_name: string
+          attendee_phone?: string | null
+          closer_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          notes?: string | null
+          sale_date?: string | null
+          week_start: string
+        }
+        Update: {
+          attendee_email?: string | null
+          attendee_name?: string
+          attendee_phone?: string | null
+          closer_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          hubla_transaction_id?: string | null
+          id?: string
+          notes?: string | null
+          sale_date?: string | null
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "r2_vendas_extras_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "r2_vendas_extras_hubla_transaction_id_fkey"
+            columns: ["hubla_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "hubla_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regua_faixas: {
         Row: {
           created_at: string
