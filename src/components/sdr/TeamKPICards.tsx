@@ -5,7 +5,8 @@ import {
   XCircle, 
   FileText, 
   TrendingUp, 
-  AlertTriangle 
+  AlertTriangle,
+  Clock
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -19,9 +20,11 @@ import { TeamKPIs } from "@/hooks/useTeamMeetingsData";
 interface TeamKPICardsProps {
   kpis: TeamKPIs;
   isLoading?: boolean;
+  isToday?: boolean;
+  pendentesHoje?: number;
 }
 
-export function TeamKPICards({ kpis, isLoading }: TeamKPICardsProps) {
+export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKPICardsProps) {
   const cards = [
     {
       title: "SDRs Ativos",
@@ -31,6 +34,15 @@ export function TeamKPICards({ kpis, isLoading }: TeamKPICardsProps) {
       bgColor: "bg-cyan-500/10",
       tooltip: "SDRs com atividade no período"
     },
+    // Card condicional: Pendentes Hoje (2ª posição)
+    ...(isToday ? [{
+      title: "Pendentes Hoje",
+      value: pendentesHoje ?? 0,
+      icon: Clock,
+      color: "text-sky-500",
+      bgColor: "bg-sky-500/10",
+      tooltip: "Reuniões agendadas para hoje que ainda não aconteceram"
+    }] : []),
     {
       title: "Agendamentos",
       value: kpis.totalAgendamentos,
@@ -83,7 +95,7 @@ export function TeamKPICards({ kpis, isLoading }: TeamKPICardsProps) {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${isToday ? 'lg:grid-cols-8' : 'lg:grid-cols-7'} gap-3`}>
         {cards.map((card) => (
           <Tooltip key={card.title}>
             <TooltipTrigger asChild>
