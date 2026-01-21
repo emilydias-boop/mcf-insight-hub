@@ -11,6 +11,8 @@ interface AvailableSlot {
   time: string;
   link: string | null;
   isAvailable: boolean;
+  currentCount: number;
+  maxCount: number;
 }
 
 export function useR2CloserAvailableSlots(closerId: string | undefined, date: Date | undefined) {
@@ -53,7 +55,17 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
         source = 'weekday';
       }
 
-      // 3. Fetch already booked meetings for this closer on this specific date
+      // 3. Fetch max leads per slot from closer settings
+      const { data: closerData, error: closerError } = await supabase
+        .from('closers')
+        .select('max_leads_per_slot')
+        .eq('id', closerId)
+        .single();
+
+      if (closerError) throw closerError;
+      const maxLeadsPerSlot = closerData?.max_leads_per_slot || 4;
+
+      // 4. Fetch already booked meetings for this closer on this specific date
       const startOfDayStr = `${dateStr}T00:00:00`;
       const endOfDayStr = `${dateStr}T23:59:59`;
 
@@ -66,19 +78,27 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
 
       if (meetingsError) throw meetingsError;
 
-      // Extract booked times (HH:mm format)
-      const bookedTimes = (bookedMeetings || []).map(m => {
+      // Count bookings per time slot
+      const bookedCounts: Record<string, number> = {};
+      (bookedMeetings || []).forEach(m => {
         const d = new Date(m.scheduled_at);
-        return format(d, 'HH:mm');
+        const time = format(d, 'HH:mm');
+        bookedCounts[time] = (bookedCounts[time] || 0) + 1;
       });
 
-      // 4. Build available slots list
+      // Extract booked times for backwards compatibility
+      const bookedTimes = Object.keys(bookedCounts);
+
+      // 5. Build available slots list with capacity check
       const availableSlots: AvailableSlot[] = configuredSlots.map((slot: ConfiguredSlot) => {
         const time = slot.start_time.substring(0, 5); // "HH:mm"
+        const currentCount = bookedCounts[time] || 0;
         return {
           time,
           link: slot.google_meet_link,
-          isAvailable: !bookedTimes.includes(time),
+          isAvailable: currentCount < maxLeadsPerSlot,
+          currentCount,
+          maxCount: maxLeadsPerSlot,
         };
       });
 
@@ -87,6 +107,7 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
         bookedTimes,
         availableSlots,
         source,
+        maxLeadsPerSlot,
       };
     },
     enabled: !!closerId && !!date,
