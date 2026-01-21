@@ -14,6 +14,8 @@ interface UpdateAttendeeData {
     r2_confirmation?: string | null;
     r2_observations?: string | null;
     meeting_link?: string | null;
+    is_decision_maker?: boolean | null;
+    decision_maker_type?: string | null;
   };
 }
 

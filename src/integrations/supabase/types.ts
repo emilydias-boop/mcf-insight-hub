@@ -3743,7 +3743,9 @@ export type Database = {
           contact_id: string | null
           created_at: string | null
           deal_id: string | null
+          decision_maker_type: string | null
           id: string
+          is_decision_maker: boolean | null
           is_partner: boolean | null
           is_reschedule: boolean | null
           lead_profile: string | null
@@ -3773,7 +3775,9 @@ export type Database = {
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
+          decision_maker_type?: string | null
           id?: string
+          is_decision_maker?: boolean | null
           is_partner?: boolean | null
           is_reschedule?: boolean | null
           lead_profile?: string | null
@@ -3803,7 +3807,9 @@ export type Database = {
           contact_id?: string | null
           created_at?: string | null
           deal_id?: string | null
+          decision_maker_type?: string | null
           id?: string
+          is_decision_maker?: boolean | null
           is_partner?: boolean | null
           is_reschedule?: boolean | null
           lead_profile?: string | null
