@@ -45,12 +45,11 @@ export interface TransactionForGross {
   product_name: string | null;
   product_price: number | null;
   installment_number: number | null;
-  gross_winner: boolean | null;
   gross_override?: number | null;  // Override manual do valor bruto
 }
 
-// Calcula o valor bruto de uma transação seguindo as regras de deduplicação
-// O banco determina a transação vencedora (gross_winner) considerando todo o histórico
+// Calcula o valor bruto de uma transação
+// Usa override manual se definido, senão calcula baseado no preço fixo do produto
 export const getDeduplicatedGross = (transaction: TransactionForGross): number => {
   const installment = transaction.installment_number || 1;
   
@@ -64,11 +63,7 @@ export const getDeduplicatedGross = (transaction: TransactionForGross): number =
     return transaction.gross_override;
   }
   
-  // Regra 3: Apenas a transação marcada como gross_winner pelo banco tem bruto
-  if (transaction.gross_winner !== true) {
-    return 0;
-  }
-  
+  // Regra 3: Calcula baseado no preço fixo do produto
   return getFixedGrossPrice(transaction.product_name, transaction.product_price || 0);
 };
 
