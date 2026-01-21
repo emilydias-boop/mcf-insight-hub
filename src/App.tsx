@@ -62,6 +62,7 @@ import DealsOrfaos from "./pages/crm/DealsOrfaos";
 import ContatosDuplicados from "./pages/crm/ContatosDuplicados";
 import AgendaMetricas from "./pages/crm/AgendaMetricas";
 import AgendaR2 from "./pages/crm/AgendaR2";
+import R2Carrinho from "./pages/crm/R2Carrinho";
 import ConfigurarClosersR2 from "./pages/crm/ConfigurarClosersR2";
 import FechamentoSDRList from "./pages/fechamento-sdr/Index";
 import FechamentoSDRDetail from "./pages/fechamento-sdr/Detail";
@@ -216,6 +217,7 @@ const App = () => (
                 <Route path="agenda" element={<Agenda />} />
                 <Route path="agenda/metricas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><AgendaMetricas /></RoleGuard>} />
                 <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
+                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
                 <Route path="configurar-closers-r2" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConfigurarClosersR2 /></RoleGuard>} />
                 <Route path="origens" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Origens /></RoleGuard>} />
                 <Route path="grupos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Grupos /></RoleGuard>} />
