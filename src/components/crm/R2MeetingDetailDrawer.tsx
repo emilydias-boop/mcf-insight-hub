@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Calendar, CheckCircle, XCircle, 
   ExternalLink, Clock, User, Users, Video,
-  MessageSquare, History, Save, RotateCcw
+  MessageSquare, History, RotateCcw, ShoppingCart,
+  FileText, ChevronDown
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -23,15 +24,15 @@ import {
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger
 } from '@/components/ui/collapsible';
-import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { 
   R2MeetingRow, R2StatusOption, R2ThermometerOption,
-  LEAD_PROFILE_OPTIONS, ATTENDANCE_STATUS_OPTIONS, VIDEO_STATUS_OPTIONS
+  LEAD_PROFILE_OPTIONS, VIDEO_STATUS_OPTIONS, DECISION_MAKER_TYPE_OPTIONS
 } from '@/types/r2Agenda';
 import { useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
-import { useR2AuditHistory, getAuditDiff } from '@/hooks/useR2AuditHistory';
 import { useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData';
+import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
+import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
@@ -52,6 +53,20 @@ const MEETING_STATUS_LABELS: Record<string, { label: string; color: string }> = 
   refunded: { label: 'Reembolsado', color: 'bg-orange-500' },
 };
 
+const NOTE_TYPE_STYLES: Record<NoteType, { bg: string; label: string }> = {
+  manual: { bg: 'bg-blue-50 border-blue-200', label: 'Nota SDR' },
+  scheduling: { bg: 'bg-purple-50 border-purple-200', label: 'Agendamento' },
+  call: { bg: 'bg-amber-50 border-amber-200', label: 'Ligação' },
+  closer: { bg: 'bg-green-50 border-green-200', label: 'Closer' },
+  r2: { bg: 'bg-indigo-50 border-indigo-200', label: 'R2' },
+};
+
+const PURCHASE_STATUS_ICONS: Record<string, { icon: string; color: string }> = {
+  completed: { icon: '✓', color: 'text-green-600' },
+  refunded: { icon: '↩', color: 'text-orange-500' },
+  pending: { icon: '⏳', color: 'text-yellow-600' },
+};
+
 export function R2MeetingDetailDrawer({
   meeting,
   statusOptions,
@@ -61,13 +76,17 @@ export function R2MeetingDetailDrawer({
   onReschedule
 }: R2MeetingDetailDrawerProps) {
   const [selectedAttendeeId, setSelectedAttendeeId] = useState<string | null>(null);
-  const [showAudit, setShowAudit] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [showPurchases, setShowPurchases] = useState(false);
   
   const updateAttendee = useUpdateR2Attendee();
   const updateMeetingStatus = useUpdateR2MeetingStatus();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
-  const { data: auditHistory } = useR2AuditHistory(attendee?.id || null);
+  const contactEmail = attendee?.deal?.contact?.email;
+  
+  const { data: leadNotes } = useLeadNotes(attendee?.deal_id, attendee?.id);
+  const { data: purchaseHistory } = useLeadPurchaseHistory(contactEmail);
 
   if (!meeting) return null;
 
@@ -91,6 +110,13 @@ export function R2MeetingDetailDrawer({
     if (contactPhone) {
       const phone = contactPhone.replace(/\D/g, '');
       window.open(`https://wa.me/55${phone}`, '_blank');
+    }
+  };
+
+  const handleDecisionMakerChange = (isDecisionMaker: boolean) => {
+    handleAttendeeUpdate('is_decision_maker', isDecisionMaker);
+    if (isDecisionMaker) {
+      handleAttendeeUpdate('decision_maker_type', null);
     }
   };
 
@@ -136,7 +162,7 @@ export function R2MeetingDetailDrawer({
               </div>
             )}
 
-            {/* 1. Lead Information - First Section */}
+            {/* 1. Lead Information */}
             {attendee && (
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-2">
@@ -144,19 +170,16 @@ export function R2MeetingDetailDrawer({
                   Informações do Lead
                 </Label>
                 <div className="bg-muted/30 rounded-lg p-4 space-y-3">
-                  {/* Nome */}
                   <div className="font-medium text-lg">
                     {attendee.name || attendee.deal?.contact?.name || 'Lead'}
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    {/* Email */}
                     <div>
                       <span className="text-muted-foreground text-xs">Email</span>
                       <div>{attendee.deal?.contact?.email || '—'}</div>
                     </div>
                     
-                    {/* Telefone */}
                     <div>
                       <span className="text-muted-foreground text-xs">Telefone</span>
                       <div className="flex items-center gap-2">
@@ -173,7 +196,6 @@ export function R2MeetingDetailDrawer({
                       </div>
                     </div>
                     
-                    {/* Estado */}
                     {attendee.deal?.custom_fields?.estado && (
                       <div>
                         <span className="text-muted-foreground text-xs">📍 Estado</span>
@@ -181,7 +203,6 @@ export function R2MeetingDetailDrawer({
                       </div>
                     )}
                     
-                    {/* Profissão */}
                     {attendee.deal?.custom_fields?.profissao && (
                       <div>
                         <span className="text-muted-foreground text-xs">👤 Profissão</span>
@@ -189,7 +210,6 @@ export function R2MeetingDetailDrawer({
                       </div>
                     )}
                     
-                    {/* Renda */}
                     {attendee.deal?.custom_fields?.renda && (
                       <div>
                         <span className="text-muted-foreground text-xs">💰 Renda</span>
@@ -197,7 +217,6 @@ export function R2MeetingDetailDrawer({
                       </div>
                     )}
                     
-                    {/* Possui Imóvel / Terreno */}
                     {(attendee.deal?.custom_fields?.terreno || attendee.deal?.custom_fields?.possui_imovel) && (
                       <div>
                         <span className="text-muted-foreground text-xs">🏡 Terreno/Imóvel</span>
@@ -205,7 +224,6 @@ export function R2MeetingDetailDrawer({
                       </div>
                     )}
                     
-                    {/* Investimento */}
                     {attendee.deal?.custom_fields?.investimento && (
                       <div>
                         <span className="text-muted-foreground text-xs">💵 Investimento</span>
@@ -213,7 +231,6 @@ export function R2MeetingDetailDrawer({
                       </div>
                     )}
                     
-                    {/* Sócio */}
                     {attendee.deal?.custom_fields?.tem_socio && (
                       <div>
                         <span className="text-muted-foreground text-xs">🤝 Sócio</span>
@@ -222,7 +239,6 @@ export function R2MeetingDetailDrawer({
                     )}
                   </div>
                   
-                  {/* Solução que busca */}
                   {attendee.deal?.custom_fields?.solucao && (
                     <div className="pt-2 border-t text-sm">
                       <span className="text-muted-foreground text-xs">🎯 Solução que busca</span>
@@ -304,23 +320,51 @@ export function R2MeetingDetailDrawer({
 
             <Separator />
 
-            {/* 4. Editable Fields */}
+            {/* 4. Editable Fields - Side by Side Layout */}
             {attendee && (
               <div className="space-y-4">
-
-                {/* Editable Fields */}
-                <div className="grid gap-4">
-                  {/* Sócio */}
+                {/* Row 1: Sócio Decisor */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Sócio Responsável</Label>
-                    <Input
-                      value={attendee.partner_name || ''}
-                      onChange={(e) => handleAttendeeUpdate('partner_name', e.target.value || null)}
-                      placeholder="Nome do sócio"
-                    />
+                    <Label className="text-xs">É o Decisor?</Label>
+                    <Select
+                      value={attendee.is_decision_maker === false ? 'nao' : 'sim'}
+                      onValueChange={(v) => handleDecisionMakerChange(v === 'sim')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sim">Sim</SelectItem>
+                        <SelectItem value="nao">Não</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Perfil do Lead */}
+                  {attendee.is_decision_maker === false && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Quem é o Decisor?</Label>
+                      <Select
+                        value={attendee.decision_maker_type || ''}
+                        onValueChange={(v) => handleAttendeeUpdate('decision_maker_type', v || null)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DECISION_MAKER_TYPE_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Row 2: Perfil do Lead + Status do Vídeo */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Perfil do Lead</Label>
                     <Select
@@ -340,27 +384,6 @@ export function R2MeetingDetailDrawer({
                     </Select>
                   </div>
 
-                  {/* Comparecimento */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Comparecimento</Label>
-                    <Select
-                      value={attendee.status}
-                      onValueChange={(v) => handleAttendeeUpdate('status', v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ATTENDANCE_STATUS_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Vídeo */}
                   <div className="space-y-1.5">
                     <Label className="text-xs flex items-center gap-1">
                       <Video className="h-3 w-3" />
@@ -382,8 +405,10 @@ export function R2MeetingDetailDrawer({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
 
-                  {/* Status Final */}
+                {/* Row 3: Status Final + Termômetro */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Status Final</Label>
                     <Select
@@ -410,104 +435,136 @@ export function R2MeetingDetailDrawer({
                     </Select>
                   </div>
 
-                  {/* Termômetro */}
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Termômetro / Tags</Label>
-                    <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-[40px]">
-                      {thermometerOptions.map(opt => {
-                        const isSelected = (attendee.thermometer_ids || []).includes(opt.id);
-                        return (
-                          <Badge
-                            key={opt.id}
-                            variant={isSelected ? "default" : "outline"}
-                            className="cursor-pointer"
-                            style={{ 
-                              backgroundColor: isSelected ? opt.color : 'transparent',
-                              borderColor: opt.color,
-                              color: isSelected ? 'white' : opt.color
-                            }}
-                            onClick={() => {
-                              const newIds = isSelected
-                                ? (attendee.thermometer_ids || []).filter(id => id !== opt.id)
-                                : [...(attendee.thermometer_ids || []), opt.id];
-                              handleAttendeeUpdate('thermometer_ids', newIds);
-                            }}
-                          >
-                            {opt.name}
-                          </Badge>
-                        );
-                      })}
-                    </div>
+                    <Label className="text-xs">Termômetro</Label>
+                    <Select
+                      value={attendee.thermometer_ids?.[0] || '__none__'}
+                      onValueChange={(v) => handleAttendeeUpdate('thermometer_ids', v === '__none__' ? [] : [v])}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— Nenhum —</SelectItem>
+                        {thermometerOptions.map(opt => (
+                          <SelectItem key={opt.id} value={opt.id}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="h-2 w-2 rounded-full" 
+                                style={{ backgroundColor: opt.color }} 
+                              />
+                              {opt.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                </div>
 
-                  {/* Link da Reunião */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Link da Reunião</Label>
-                    <Input
-                      value={attendee.meeting_link || ''}
-                      onChange={(e) => handleAttendeeUpdate('meeting_link', e.target.value || null)}
-                      placeholder="https://..."
-                    />
-                  </div>
+                {/* Link da Reunião */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Link da Reunião</Label>
+                  <Input
+                    value={attendee.meeting_link || ''}
+                    onChange={(e) => handleAttendeeUpdate('meeting_link', e.target.value || null)}
+                    placeholder="https://..."
+                  />
+                </div>
 
-                  {/* Confirmação R2 */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Confirmação R2</Label>
-                    <Input
-                      value={attendee.r2_confirmation || ''}
-                      onChange={(e) => handleAttendeeUpdate('r2_confirmation', e.target.value || null)}
-                      placeholder="Confirmado p/ R2, etc."
-                    />
-                  </div>
-
-                  {/* Observações */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs flex items-center gap-1">
-                      <MessageSquare className="h-3 w-3" />
-                      Observações R2
-                    </Label>
-                    <Textarea
-                      value={attendee.r2_observations || ''}
-                      onChange={(e) => handleAttendeeUpdate('r2_observations', e.target.value || null)}
-                      placeholder="Anotações sobre a reunião..."
-                      rows={3}
-                    />
-                  </div>
+                {/* Observações */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1">
+                    <MessageSquare className="h-3 w-3" />
+                    Observações R2
+                  </Label>
+                  <Textarea
+                    value={attendee.r2_observations || ''}
+                    onChange={(e) => handleAttendeeUpdate('r2_observations', e.target.value || null)}
+                    placeholder="Anotações sobre a reunião..."
+                    rows={3}
+                  />
                 </div>
 
                 <Separator />
 
-                {/* Audit History */}
-                <Collapsible open={showAudit} onOpenChange={setShowAudit}>
+                {/* 5. Notas do Lead */}
+                <Collapsible open={showNotes} onOpenChange={setShowNotes}>
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm" className="w-full justify-between">
                       <span className="flex items-center gap-2">
-                        <History className="h-4 w-4" />
-                        Histórico de Alterações
+                        <FileText className="h-4 w-4" />
+                        📝 Notas do Lead
                       </span>
-                      <Badge variant="outline">{auditHistory?.length || 0}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{leadNotes?.length || 0}</Badge>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", showNotes && "rotate-180")} />
+                      </div>
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-2">
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {auditHistory?.length === 0 && (
+                      {(!leadNotes || leadNotes.length === 0) && (
                         <p className="text-xs text-muted-foreground text-center py-2">
-                          Nenhuma alteração registrada
+                          Nenhuma nota encontrada
                         </p>
                       )}
-                      {auditHistory?.map(log => {
-                        const changes = getAuditDiff(log.old_data, log.new_data);
-                        if (changes.length === 0) return null;
-                        
+                      {leadNotes?.map(note => {
+                        const style = NOTE_TYPE_STYLES[note.type] || NOTE_TYPE_STYLES.manual;
                         return (
-                          <div key={log.id} className="text-xs border-l-2 border-muted pl-2 py-1">
-                            <div className="text-muted-foreground">
-                              {format(parseISO(log.created_at), "dd/MM HH:mm")}
-                              {log.user?.name && ` - ${log.user.name}`}
+                          <div key={note.id} className={cn("rounded-lg p-2 border text-sm", style.bg)}>
+                            <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
+                              <span className="font-medium">{style.label}</span>
+                              <span>
+                                {note.author && `${note.author} • `}
+                                {formatDistanceToNow(parseISO(note.created_at), { addSuffix: true, locale: ptBR })}
+                              </span>
                             </div>
-                            {changes.map((change, i) => (
-                              <div key={i} className="text-foreground">{change}</div>
-                            ))}
+                            <p className="text-foreground">{note.content}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                {/* 6. Histórico de Compras */}
+                <Collapsible open={showPurchases} onOpenChange={setShowPurchases}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-full justify-between">
+                      <span className="flex items-center gap-2">
+                        <ShoppingCart className="h-4 w-4" />
+                        🛒 Histórico de Compras
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{purchaseHistory?.length || 0}</Badge>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", showPurchases && "rotate-180")} />
+                      </div>
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2">
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {(!purchaseHistory || purchaseHistory.length === 0) && (
+                        <p className="text-xs text-muted-foreground text-center py-2">
+                          Nenhuma compra encontrada
+                        </p>
+                      )}
+                      {purchaseHistory?.map(purchase => {
+                        const statusStyle = PURCHASE_STATUS_ICONS[purchase.sale_status] || PURCHASE_STATUS_ICONS.pending;
+                        return (
+                          <div key={purchase.id} className="flex justify-between items-center p-2 border rounded-lg text-sm">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className={statusStyle.color}>{statusStyle.icon}</span>
+                                <span className="font-medium">{purchase.product_name}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {format(parseISO(purchase.sale_date), 'dd/MM/yyyy')} • {purchase.sale_status}
+                              </div>
+                            </div>
+                            <div className="font-medium">
+                              R$ {purchase.product_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </div>
                           </div>
                         );
                       })}

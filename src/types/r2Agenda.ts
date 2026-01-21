@@ -40,6 +40,9 @@ export interface R2AttendeeExtended {
   meeting_link: string | null;
   updated_by: string | null;
   updated_at: string | null;
+  // Decision maker fields
+  is_decision_maker: boolean | null;
+  decision_maker_type: string | null;
   deal?: {
     id: string;
     name: string;
@@ -63,6 +66,18 @@ export interface R2AttendeeExtended {
     } | null;
   } | null;
 }
+
+// Decision maker type options
+export const DECISION_MAKER_TYPE_OPTIONS = [
+  { value: 'outro_socio', label: 'Outro Sócio' },
+  { value: 'esposa', label: 'Esposa' },
+  { value: 'marido', label: 'Marido' },
+  { value: 'filho', label: 'Filho(a)' },
+  { value: 'irmao', label: 'Irmão(ã)' },
+  { value: 'pai', label: 'Pai' },
+  { value: 'mae', label: 'Mãe' },
+  { value: 'outros', label: 'Outros' },
+];
 
 export interface R2MeetingRow {
   id: string;
