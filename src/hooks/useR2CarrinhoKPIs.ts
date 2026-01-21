@@ -7,7 +7,7 @@ export interface R2CarrinhoKPIs {
   contratosPagos: number;
   r2Agendadas: number;
   r2Realizadas: number;
-  r2NoShow: number;
+  foraDoCarrinho: number;
   aprovados: number;
   pendentes: number;
   emAnalise: number;
@@ -76,6 +76,12 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
         s.name.toLowerCase().includes('analysis')
       )?.id;
 
+      // Get IDs for "fora do carrinho" statuses
+      const foraDoCarrinhoNames = ['reembolso', 'desistente', 'reprovado', 'próxima semana', 'cancelado'];
+      const foraDoCarrinhoStatusIds = statusOptions
+        ?.filter(s => foraDoCarrinhoNames.some(name => s.name.toLowerCase().includes(name)))
+        .map(s => s.id) || [];
+
       // Calculate KPIs
       const r2Agendadas = r2Meetings?.filter(m => 
         !['cancelled', 'rescheduled'].includes(m.status)
@@ -83,10 +89,6 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
 
       const r2Realizadas = r2Meetings?.filter(m => 
         m.status === 'completed'
-      ).length || 0;
-
-      const r2NoShow = r2Meetings?.filter(m => 
-        m.status === 'no_show'
       ).length || 0;
 
       // Count attendees by R2 status
@@ -104,11 +106,15 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
         a.r2_status_id === emAnaliseStatusId
       ).length;
 
+      const foraDoCarrinho = allAttendees.filter(a => 
+        a.r2_status_id && foraDoCarrinhoStatusIds.includes(a.r2_status_id)
+      ).length;
+
       return {
         contratosPagos: r1Contracts?.length || 0,
         r2Agendadas,
         r2Realizadas,
-        r2NoShow,
+        foraDoCarrinho,
         aprovados,
         pendentes,
         emAnalise,

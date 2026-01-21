@@ -10,7 +10,8 @@ import { useR2CarrinhoData } from '@/hooks/useR2CarrinhoData';
 import { useR2StatusOptions } from '@/hooks/useR2StatusOptions';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 import { R2AprovadosList } from '@/components/crm/R2AprovadosList';
-import { R2NoShowList } from '@/components/crm/R2NoShowList';
+import { R2ForaDoCarrinhoList } from '@/components/crm/R2ForaDoCarrinhoList';
+import { useR2ForaDoCarrinhoData } from '@/hooks/useR2ForaDoCarrinhoData';
 import { R2RealizadasList } from '@/components/crm/R2RealizadasList';
 import { R2AgendadasList } from '@/components/crm/R2AgendadasList';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,7 +32,7 @@ export default function R2Carrinho() {
 
   // Fetch data for each tab
   const { data: agendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekDate, 'agendadas');
-  const { data: noShowData = [], isLoading: noShowLoading } = useR2CarrinhoData(weekDate, 'no_show');
+  const { data: foraCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekDate);
   const { data: realizadasData = [], isLoading: realizadasLoading } = useR2CarrinhoData(weekDate, 'realizadas');
   const { data: aprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekDate, 'aprovados');
 
@@ -42,6 +43,7 @@ export default function R2Carrinho() {
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+    queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
   };
 
   const handleReschedule = (meetingId: string) => {
@@ -57,7 +59,7 @@ export default function R2Carrinho() {
     { label: 'Contratos (R1)', value: kpis?.contratosPagos ?? 0, color: 'bg-blue-500' },
     { label: 'R2 Agendadas', value: kpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
     { label: 'R2 Realizadas', value: kpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
-    { label: 'No-Show', value: kpis?.r2NoShow ?? 0, color: 'bg-red-500' },
+    { label: 'Fora do Carrinho', value: kpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
     { label: 'Aprovados', value: kpis?.aprovados ?? 0, color: 'bg-emerald-500' },
   ];
 
@@ -126,10 +128,10 @@ export default function R2Carrinho() {
               {agendadasData.length}
             </span>
           </TabsTrigger>
-          <TabsTrigger value="no_show" className="flex items-center gap-2">
-            No-Show
+          <TabsTrigger value="fora_carrinho" className="flex items-center gap-2">
+            Fora do Carrinho
             <span className="text-xs bg-destructive/20 text-destructive px-2 py-0.5 rounded-full">
-              {noShowData.length}
+              {foraCarrinhoData.length}
             </span>
           </TabsTrigger>
           <TabsTrigger value="realizadas" className="flex items-center gap-2">
@@ -153,11 +155,10 @@ export default function R2Carrinho() {
           />
         </TabsContent>
 
-        <TabsContent value="no_show">
-          <R2NoShowList 
-            attendees={noShowData} 
-            isLoading={noShowLoading}
-            onReschedule={handleReschedule}
+        <TabsContent value="fora_carrinho">
+          <R2ForaDoCarrinhoList 
+            attendees={foraCarrinhoData} 
+            isLoading={foraCarrinhoLoading}
           />
         </TabsContent>
 
