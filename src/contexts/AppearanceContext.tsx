@@ -20,13 +20,7 @@ const FONT_SIZE_KEY = 'font-size-preference';
 const THEME_KEY = 'theme-preference';
 
 export function AppearanceProvider({ children }: { children: React.ReactNode }) {
-  // Safely get queryClient - may be null during initial render
-  let queryClient: ReturnType<typeof useQueryClient> | null = null;
-  try {
-    queryClient = useQueryClient();
-  } catch {
-    // QueryClient not available yet, will use localStorage only
-  }
+  const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
   
   // Initialize from localStorage for immediate rendering
@@ -107,7 +101,7 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient?.invalidateQueries({ queryKey: ['appearance-preferences', userId] });
+      queryClient.invalidateQueries({ queryKey: ['appearance-preferences', userId] });
     },
   });
 
