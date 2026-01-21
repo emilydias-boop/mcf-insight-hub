@@ -678,7 +678,7 @@ export function R2MeetingDetailDrawer({
             <div className="grid grid-cols-2 gap-2">
               <Button 
                 variant="outline" 
-                className="text-green-600 border-green-200 hover:bg-green-50"
+                className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
                 onClick={() => handleStatusChange('completed')}
               >
                 <CheckCircle className="h-4 w-4 mr-2" />
@@ -686,7 +686,7 @@ export function R2MeetingDetailDrawer({
               </Button>
               <Button 
                 variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50"
+                className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
                 onClick={() => handleStatusChange('no_show')}
               >
                 <XCircle className="h-4 w-4 mr-2" />
@@ -705,7 +705,7 @@ export function R2MeetingDetailDrawer({
             </Button>
             <Button 
               variant="outline"
-              className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+              className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950"
               onClick={() => handleStatusChange('contract_paid')}
             >
               Contrato Pago
@@ -714,7 +714,7 @@ export function R2MeetingDetailDrawer({
 
           <Button 
             variant="outline"
-            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50"
+            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
             onClick={() => handleStatusChange('refunded')}
           >
             <RotateCcw className="h-4 w-4 mr-2" />

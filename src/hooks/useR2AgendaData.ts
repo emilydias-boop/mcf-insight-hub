@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { syncDealStageFromAgenda } from './useAgendaData';
 
 // Re-export types from existing hooks
 export type { R2Meeting } from './useR2AgendaMeetings';
@@ -25,12 +26,29 @@ export function useUpdateR2MeetingStatus() {
 
   return useMutation({
     mutationFn: async ({ meetingId, status }: { meetingId: string; status: string }) => {
+      // 1. Update meeting status
       const { error } = await supabase
         .from('meeting_slots')
         .update({ status })
         .eq('id', meetingId);
 
       if (error) throw error;
+
+      // 2. Fetch deal_id from first attendee for CRM sync
+      const { data: attendees } = await supabase
+        .from('meeting_slot_attendees')
+        .select('deal_id')
+        .eq('meeting_slot_id', meetingId)
+        .not('deal_id', 'is', null)
+        .limit(1);
+
+      const dealId = attendees?.[0]?.deal_id;
+
+      // 3. Sync with CRM if deal is linked
+      const statusesToSync = ['no_show', 'completed', 'contract_paid', 'refunded'];
+      if (dealId && statusesToSync.includes(status)) {
+        await syncDealStageFromAgenda(dealId, status, 'r2');
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
