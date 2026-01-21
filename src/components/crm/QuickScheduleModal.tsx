@@ -445,15 +445,15 @@ export function QuickScheduleModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Agendar Reunião
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
           {/* Search Mode Toggle */}
           <div className="flex gap-2">
             <Button
@@ -1172,7 +1172,10 @@ export function QuickScheduleModal({
           </div>
           */}
 
-          {/* Submit */}
+        </div>
+
+        {/* Submit - Fixed at bottom */}
+        <div className="flex-shrink-0 pt-4 border-t">
           <Button 
             className="w-full" 
             onClick={handleSubmit}
