@@ -8,16 +8,27 @@ export function useMeetingsPendentesHoje() {
   return useQuery({
     queryKey: ["meetings-pendentes-hoje", today.toDateString()],
     queryFn: async () => {
-      const now = new Date();
+      const startISO = startOfDay(today).toISOString();
+      const endISO = endOfDay(today).toISOString();
+
+      // Query meeting_slot_attendees (same source as R1 Agendada KPI)
       const { data, error } = await supabase
-        .from("meeting_slots")
-        .select("id")
-        .gte("scheduled_at", now.toISOString()) // A partir de agora
-        .lte("scheduled_at", endOfDay(today).toISOString()) // Até fim do dia
-        .in("status", ["scheduled", "invited", "rescheduled"]);
+        .from("meeting_slot_attendees")
+        .select(`
+          status,
+          meeting_slot:meeting_slots!inner(scheduled_at)
+        `)
+        .gte("meeting_slot.scheduled_at", startISO)
+        .lte("meeting_slot.scheduled_at", endISO);
 
       if (error) throw error;
-      return data?.length || 0;
+
+      // Pendentes = leads with status indicating "hasn't happened yet"
+      const pendentes = (data || []).filter(
+        (a) => ["scheduled", "invited", "rescheduled"].includes(a.status || "")
+      );
+
+      return pendentes.length;
     },
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000, // Auto-refresh a cada 1 minuto
