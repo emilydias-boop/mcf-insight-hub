@@ -35,9 +35,9 @@ interface IncorporadorTransactionDrawerProps {
     id: string;
     customer_name: string | null;
     customer_email: string | null;
-    customer_phone: string | null;
-    product_name: string;
-    sale_date: string;
+    customer_phone?: string | null;
+    product_name: string | null;
+    sale_date: string | null;
     product_price: number | null;
     net_value: number | null;
     installment_number: number | null;
