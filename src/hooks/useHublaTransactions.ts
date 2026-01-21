@@ -155,6 +155,7 @@ export interface CreateTransactionData {
 
 export interface UpdateTransactionData extends CreateTransactionData {
   id: string;
+  gross_override?: number | null;
 }
 
 // Criar transação manual
@@ -201,7 +202,7 @@ export const useUpdateTransaction = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: UpdateTransactionData) => {
+    mutationFn: async ({ id, gross_override, ...data }: UpdateTransactionData) => {
       const { error } = await supabase
         .from('hubla_transactions')
         .update({
@@ -215,6 +216,7 @@ export const useUpdateTransaction = () => {
           installment_number: data.installment_number || 1,
           total_installments: data.total_installments || 1,
           count_in_dashboard: data.count_in_dashboard ?? true,
+          gross_override: gross_override,
         })
         .eq('id', id);
 

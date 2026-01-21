@@ -3372,6 +3372,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           event_type: string
+          gross_override: number | null
           hubla_id: string
           id: string
           installment_fee_cents: number | null
@@ -3402,6 +3403,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           event_type: string
+          gross_override?: number | null
           hubla_id: string
           id?: string
           installment_fee_cents?: number | null
@@ -3432,6 +3434,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           event_type?: string
+          gross_override?: number | null
           hubla_id?: string
           id?: string
           installment_fee_cents?: number | null
