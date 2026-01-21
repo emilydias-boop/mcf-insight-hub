@@ -116,7 +116,7 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "manager", "coordenador"],
     separator: true,
     items: [
-      { title: "Painel SDR", url: "/crm/reunioes-equipe" },
+      { title: "Painel Comercial", url: "/crm/reunioes-equipe" },
       { title: "Fechamento Equipe", url: "/fechamento-sdr" },
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "CRM", url: "/crm" },
