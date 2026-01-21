@@ -29,6 +29,7 @@ import { useMeetingSlotsKPIs } from "@/hooks/useMeetingSlotsKPIs";
 import { useR2MeetingSlotsKPIs } from "@/hooks/useR2MeetingSlotsKPIs";
 import { useR2VendasKPIs } from "@/hooks/useR2VendasKPIs";
 import { useR1CloserMetrics } from "@/hooks/useR1CloserMetrics";
+import { useMeetingsPendentesHoje } from "@/hooks/useMeetingsPendentesHoje";
 
 import { useSdrsAll } from "@/hooks/useSdrFechamento";
 import { useAuth } from "@/contexts/AuthContext";
@@ -241,6 +242,9 @@ export default function ReunioesEquipe() {
 
   // Fetch Closer metrics for the selected period
   const { data: closerMetrics, isLoading: closerLoading } = useR1CloserMetrics(start, end);
+
+  // Fetch pending meetings for today (only used when preset is "today")
+  const { data: pendentesHoje } = useMeetingsPendentesHoje();
 
 
   // Create base dataset with all SDRs (zeros) for "today" preset
@@ -499,7 +503,12 @@ export default function ReunioesEquipe() {
       </Card>
 
       {/* KPI Cards */}
-      <TeamKPICards kpis={teamKPIs} isLoading={isLoading} />
+      <TeamKPICards 
+        kpis={teamKPIs} 
+        isLoading={isLoading}
+        isToday={datePreset === "today"}
+        pendentesHoje={pendentesHoje}
+      />
 
       {/* SDR / Closer Summary Table with Tabs */}
       <Card className="bg-card border-border overflow-hidden">
