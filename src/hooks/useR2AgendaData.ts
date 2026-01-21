@@ -146,6 +146,7 @@ export function useCreateR2Meeting() {
           status: 'scheduled',
           notes: notes || null,
           meeting_type: 'r2',
+          booked_by: bookedBy || null,
         })
         .select()
         .single();

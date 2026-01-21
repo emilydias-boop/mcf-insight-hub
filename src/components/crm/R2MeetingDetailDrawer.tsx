@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Calendar, CheckCircle, XCircle, 
   ExternalLink, Clock, User, Users, Video,
-  MessageSquare, History, Save
+  MessageSquare, History, Save, RotateCcw
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -49,6 +49,7 @@ const MEETING_STATUS_LABELS: Record<string, { label: string; color: string }> = 
   no_show: { label: 'No-show', color: 'bg-red-500' },
   canceled: { label: 'Cancelada', color: 'bg-muted' },
   contract_paid: { label: 'Contrato Pago', color: 'bg-emerald-600' },
+  refunded: { label: 'Reembolsado', color: 'bg-orange-500' },
 };
 
 export function R2MeetingDetailDrawer({
@@ -469,6 +470,15 @@ export function R2MeetingDetailDrawer({
               Contrato Pago
             </Button>
           </div>
+
+          <Button 
+            variant="outline"
+            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50"
+            onClick={() => handleStatusChange('refunded')}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reembolso
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
