@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, Trash2 } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
+import { IncorporadorTransactionDrawer } from '@/components/incorporador/IncorporadorTransactionDrawer';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +45,7 @@ export default function TransacoesIncorp() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<HublaTransaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -137,6 +139,11 @@ export default function TransacoesIncorp() {
   const handlePageSizeChange = (value: string) => {
     setItemsPerPage(Number(value));
     setCurrentPage(1);
+  };
+
+  const handleViewDetails = (transaction: HublaTransaction) => {
+    setSelectedTransaction(transaction);
+    setDetailsDrawerOpen(true);
   };
 
   const handleEdit = (transaction: HublaTransaction) => {
@@ -323,16 +330,37 @@ export default function TransacoesIncorp() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          {t.source === 'manual' && (
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(t)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(t)}>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8" 
+                              onClick={() => handleViewDetails(t)}
+                              title="Ver detalhes"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8" 
+                              onClick={() => handleEdit(t)}
+                              title="Editar"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            {t.source === 'manual' && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8" 
+                                onClick={() => handleDelete(t)}
+                                title="Excluir"
+                              >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -447,6 +475,12 @@ export default function TransacoesIncorp() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <IncorporadorTransactionDrawer
+          transaction={selectedTransaction}
+          open={detailsDrawerOpen}
+          onOpenChange={setDetailsDrawerOpen}
+        />
     </div>
   );
 }

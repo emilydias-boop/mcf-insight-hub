@@ -10,6 +10,7 @@ export interface HublaTransaction {
   net_value: number | null;
   customer_name: string | null;
   customer_email: string | null;
+  customer_phone: string | null;
   sale_date: string | null;
   sale_status: string | null;
   installment_number: number | null;
