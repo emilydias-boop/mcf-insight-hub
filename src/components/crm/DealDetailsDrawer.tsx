@@ -18,8 +18,11 @@ import { LeadJourneyCard } from './LeadJourneyCard';
 import { SdrScheduleDialog } from './SdrScheduleDialog';
 import { QualificationSummaryCard } from './qualification/QualificationSummaryCard';
 import { LossReasonCard } from './LossReasonCard';
-import { Phone, History, StickyNote, CheckSquare } from 'lucide-react';
+import { Phone, History, StickyNote, CheckSquare, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface DealDetailsDrawerProps {
   dealId: string | null;
@@ -92,6 +95,26 @@ export const DealDetailsDrawer = ({ dealId, open, onOpenChange }: DealDetailsDra
             {/* ===== CONTEÚDO PRINCIPAL ===== */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               
+              {/* ===== ALERTA DE REEMBOLSO ===== */}
+              {(deal.custom_fields as any)?.reembolso_solicitado && (
+                <Alert className="bg-orange-50 border-orange-300 dark:bg-orange-950 dark:border-orange-800">
+                  <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <AlertDescription className="text-orange-700 dark:text-orange-300 text-sm">
+                    <strong>⚠️ Lead solicitou REEMBOLSO</strong>
+                    {(deal.custom_fields as any)?.reembolso_em && (
+                      <span className="block text-xs mt-1">
+                        Em: {format(new Date((deal.custom_fields as any).reembolso_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </span>
+                    )}
+                    {(deal.custom_fields as any)?.motivo_reembolso && (
+                      <span className="block text-xs">
+                        Motivo: {(deal.custom_fields as any).motivo_reembolso}
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* ===== 2. AÇÕES RÁPIDAS (acima da dobra) ===== */}
               <QuickActionsBlock 
                 deal={deal} 

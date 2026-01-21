@@ -33,6 +33,7 @@ import { useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData';
 import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
 import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
+import { RefundModal } from './RefundModal';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
@@ -78,6 +79,7 @@ export function R2MeetingDetailDrawer({
   const [selectedAttendeeId, setSelectedAttendeeId] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
   const [showPurchases, setShowPurchases] = useState(false);
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
   
   // Optimistic UI state for all editable fields
   const [localDecisionMaker, setLocalDecisionMaker] = useState<boolean | null>(null);
@@ -672,28 +674,26 @@ export function R2MeetingDetailDrawer({
           </div>
         </ScrollArea>
 
-        {/* Footer Actions */}
+        {/* Footer Actions - Grid 2x2 */}
         <div className="border-t p-4 space-y-2">
-          {isPending && (
-            <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="outline" 
-                className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
-                onClick={() => handleStatusChange('completed')}
-              >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Realizada
-              </Button>
-              <Button 
-                variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
-                onClick={() => handleStatusChange('no_show')}
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                No-show
-              </Button>
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              variant="outline" 
+              className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
+              onClick={() => handleStatusChange('completed')}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Realizada
+            </Button>
+            <Button 
+              variant="outline"
+              className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
+              onClick={() => handleStatusChange('no_show')}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              No-show
+            </Button>
+          </div>
           
           <div className="grid grid-cols-2 gap-2">
             <Button 
@@ -705,23 +705,29 @@ export function R2MeetingDetailDrawer({
             </Button>
             <Button 
               variant="outline"
-              className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-              onClick={() => handleStatusChange('contract_paid')}
+              className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
+              onClick={() => setRefundModalOpen(true)}
             >
-              Contrato Pago
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Reembolso
             </Button>
           </div>
-
-          <Button 
-            variant="outline"
-            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
-            onClick={() => handleStatusChange('refunded')}
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reembolso
-          </Button>
         </div>
       </SheetContent>
+
+      {/* Refund Modal */}
+      {meeting && attendee && (
+        <RefundModal
+          open={refundModalOpen}
+          onOpenChange={setRefundModalOpen}
+          meetingId={meeting.id}
+          dealId={attendee.deal_id}
+          dealName={attendee.name || attendee.deal?.contact?.name}
+          originId={(attendee.deal as any)?.origin_id}
+          currentCustomFields={attendee.deal?.custom_fields as Record<string, any>}
+          onSuccess={() => onOpenChange(false)}
+        />
+      )}
     </Sheet>
   );
 }
