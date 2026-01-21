@@ -44,6 +44,8 @@ const formSchema = z.object({
   net_value: z.number().min(0, "Valor líquido é obrigatório"),
   installment_number: z.number().min(1).default(1),
   total_installments: z.number().min(1).default(1),
+  use_gross_override: z.boolean().default(false),
+  gross_override: z.number().min(0).nullable().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -62,6 +64,7 @@ interface TransactionFormDialogProps {
     net_value: number | null;
     installment_number: number | null;
     total_installments: number | null;
+    gross_override?: number | null;
   } | null;
   onSuccess?: () => void;
 }
@@ -96,8 +99,12 @@ export function TransactionFormDialog({
       net_value: 0,
       installment_number: 1,
       total_installments: 1,
+      use_gross_override: false,
+      gross_override: null,
     },
   });
+
+  const useGrossOverride = watch("use_gross_override");
 
   const selectedProductCode = watch("product_code");
 
@@ -118,6 +125,8 @@ export function TransactionFormDialog({
         transaction.product_name?.toUpperCase().includes(p.code)
       )?.code || "";
 
+      const hasOverride = transaction.gross_override !== null && transaction.gross_override !== undefined;
+
       reset({
         product_code: productCode,
         customer_name: transaction.customer_name || "",
@@ -128,6 +137,8 @@ export function TransactionFormDialog({
         net_value: transaction.net_value || 0,
         installment_number: transaction.installment_number || 1,
         total_installments: transaction.total_installments || 1,
+        use_gross_override: hasOverride,
+        gross_override: hasOverride ? transaction.gross_override : null,
       });
     } else if (mode === "create" && open) {
       reset({
@@ -140,6 +151,8 @@ export function TransactionFormDialog({
         net_value: 0,
         installment_number: 1,
         total_installments: 1,
+        use_gross_override: false,
+        gross_override: null,
       });
     }
   }, [mode, transaction, open, reset]);
@@ -174,6 +187,7 @@ export function TransactionFormDialog({
           net_value: data.net_value,
           installment_number: data.installment_number,
           total_installments: data.total_installments,
+          gross_override: data.use_gross_override ? (data.gross_override ?? 0) : null,
         });
         toast({ title: "Sucesso", description: "Transação atualizada com sucesso" });
       }
@@ -270,12 +284,14 @@ export function TransactionFormDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Valor Bruto (R$)</Label>
+              <Label>Valor Bruto Padrão (R$)</Label>
               <Input
                 type="number"
                 step="0.01"
                 {...register("product_price", { valueAsNumber: true })}
                 placeholder="0,00"
+                disabled
+                className="bg-muted"
               />
             </div>
 
@@ -291,6 +307,48 @@ export function TransactionFormDialog({
                 <p className="text-sm text-destructive">{errors.net_value.message}</p>
               )}
             </div>
+          </div>
+
+          {/* Override do valor bruto */}
+          <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Controller
+                name="use_gross_override"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={(e) => {
+                      field.onChange(e.target.checked);
+                      if (!e.target.checked) {
+                        setValue("gross_override", null);
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                )}
+              />
+              <Label className="font-normal cursor-pointer">
+                Usar valor bruto manual (sobrepõe cálculo automático)
+              </Label>
+            </div>
+            
+            {useGrossOverride && (
+              <div className="space-y-2">
+                <Label>Valor Bruto Manual (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  {...register("gross_override", { valueAsNumber: true })}
+                  placeholder="0,00 para zerar o bruto"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Digite 0 para zerar o valor bruto desta transação
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
