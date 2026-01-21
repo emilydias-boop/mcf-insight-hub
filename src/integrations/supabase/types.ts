@@ -3739,6 +3739,8 @@ export type Database = {
           booked_at: string | null
           booked_by: string | null
           calendly_invitee_uri: string | null
+          carrinho_status: string | null
+          carrinho_updated_at: string | null
           closer_notes: string | null
           contact_id: string | null
           created_at: string | null
@@ -3771,6 +3773,8 @@ export type Database = {
           booked_at?: string | null
           booked_by?: string | null
           calendly_invitee_uri?: string | null
+          carrinho_status?: string | null
+          carrinho_updated_at?: string | null
           closer_notes?: string | null
           contact_id?: string | null
           created_at?: string | null
@@ -3803,6 +3807,8 @@ export type Database = {
           booked_at?: string | null
           booked_by?: string | null
           calendly_invitee_uri?: string | null
+          carrinho_status?: string | null
+          carrinho_updated_at?: string | null
           closer_notes?: string | null
           contact_id?: string | null
           created_at?: string | null

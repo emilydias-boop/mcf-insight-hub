@@ -31,6 +31,7 @@ const CRM = () => {
     { to: '/crm/atendimentos', label: 'Atendimentos', icon: MessageCircle },
     { to: '/crm/agenda', label: 'Agenda R1', icon: CalendarDays },
     { to: '/crm/agenda-r2', label: 'Agenda R2', icon: CalendarDays },
+    { to: '/crm/r2-carrinho', label: 'Carrinho R2', icon: Briefcase },
     { to: '/crm/deals-orfaos', label: 'Órfãos', icon: UserX },
     { to: '/crm/contatos-duplicados', label: 'Duplicados', icon: Copy },
     { to: '/crm/auditoria-agendamentos', label: 'Auditoria', icon: Shield },
