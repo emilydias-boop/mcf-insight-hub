@@ -892,6 +892,7 @@ export type Database = {
           google_calendar_id: string | null
           id: string
           is_active: boolean | null
+          max_leads_per_slot: number | null
           meeting_type: string | null
           name: string
           priority: number | null
@@ -908,6 +909,7 @@ export type Database = {
           google_calendar_id?: string | null
           id?: string
           is_active?: boolean | null
+          max_leads_per_slot?: number | null
           meeting_type?: string | null
           name: string
           priority?: number | null
@@ -924,6 +926,7 @@ export type Database = {
           google_calendar_id?: string | null
           id?: string
           is_active?: boolean | null
+          max_leads_per_slot?: number | null
           meeting_type?: string | null
           name?: string
           priority?: number | null

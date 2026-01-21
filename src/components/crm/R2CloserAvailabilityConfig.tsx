@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Palette, Plus, Trash2, Copy, Loader2 } from 'lucide-react';
+import { Palette, Plus, Trash2, Copy, Loader2, Users } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 import { BlockedDatesConfig } from './BlockedDatesConfig';
 import { R2DailySlotConfig } from './R2DailySlotConfig';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,7 @@ function R2CloserAvailabilityForm({ closer }: { closer: R2Closer }) {
   const updateLink = useUpdateCloserMeetingLink();
   
   const [selectedColor, setSelectedColor] = useState(closer.color || '#3B82F6');
+  const [maxLeads, setMaxLeads] = useState(closer.max_leads_per_slot || 4);
   const [addingDay, setAddingDay] = useState<number | null>(null);
   const [newTime, setNewTime] = useState('09:00');
   const [newLink, setNewLink] = useState('');
@@ -114,6 +116,11 @@ function R2CloserAvailabilityForm({ closer }: { closer: R2Closer }) {
   const handleColorChange = (color: string) => {
     setSelectedColor(color);
     updateR2Closer.mutate({ id: closer.id, data: { color } });
+  };
+
+  const handleMaxLeadsChange = (value: number[]) => {
+    setMaxLeads(value[0]);
+    updateR2Closer.mutate({ id: closer.id, data: { max_leads_per_slot: value[0] } });
   };
 
   const handleAdd = () => {
@@ -189,6 +196,25 @@ function R2CloserAvailabilityForm({ closer }: { closer: R2Closer }) {
             style={{ backgroundColor: selectedColor }}
           />
         </div>
+      </div>
+
+      {/* Max Leads per Slot Slider */}
+      <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
+        <Label className="flex items-center gap-2">
+          <Users className="h-4 w-4" />
+          Leads por Reunião: <span className="font-bold text-primary">{maxLeads}</span>
+        </Label>
+        <Slider
+          value={[maxLeads]}
+          onValueChange={handleMaxLeadsChange}
+          min={1}
+          max={6}
+          step={1}
+          className="w-full"
+        />
+        <p className="text-xs text-muted-foreground">
+          Quantos leads podem ser agendados no mesmo horário (padrão: 4)
+        </p>
       </div>
 
       {/* Slots by Day */}

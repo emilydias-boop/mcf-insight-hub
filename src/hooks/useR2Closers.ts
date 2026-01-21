@@ -13,6 +13,7 @@ export interface R2Closer {
   employee_id: string | null;
   meeting_type: string | null;
   priority: number | null;
+  max_leads_per_slot: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -26,6 +27,7 @@ export interface R2CloserFormData {
   calendly_default_link?: string;
   employee_id?: string;
   priority?: number;
+  max_leads_per_slot?: number;
 }
 
 export function useR2ClosersList() {
