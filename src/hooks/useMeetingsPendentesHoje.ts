@@ -11,6 +11,8 @@ export function useMeetingsPendentesHoje() {
       const startISO = startOfDay(today).toISOString();
       const endISO = endOfDay(today).toISOString();
 
+      console.log("[Pendentes Hoje] Buscando de", startISO, "até", endISO);
+
       // Query meeting_slot_attendees (same source as R1 Agendada KPI)
       const { data, error } = await supabase
         .from("meeting_slot_attendees")
@@ -23,14 +25,25 @@ export function useMeetingsPendentesHoje() {
 
       if (error) throw error;
 
+      console.log("[Pendentes Hoje] Total attendees:", data?.length);
+      console.log("[Pendentes Hoje] Por status:", 
+        data?.reduce((acc, a) => {
+          acc[a.status || 'null'] = (acc[a.status || 'null'] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      );
+
       // Pendentes = leads with status indicating "hasn't happened yet"
       const pendentes = (data || []).filter(
         (a) => ["scheduled", "invited", "rescheduled"].includes(a.status || "")
       );
 
+      console.log("[Pendentes Hoje] Resultado final:", pendentes.length);
+
       return pendentes.length;
     },
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000, // Auto-refresh a cada 1 minuto
+    staleTime: 10 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
