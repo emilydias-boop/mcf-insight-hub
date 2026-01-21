@@ -14,6 +14,8 @@ import { R2ForaDoCarrinhoList } from '@/components/crm/R2ForaDoCarrinhoList';
 import { useR2ForaDoCarrinhoData } from '@/hooks/useR2ForaDoCarrinhoData';
 import { R2AgendadasList } from '@/components/crm/R2AgendadasList';
 import { R2MetricsPanel } from '@/components/crm/R2MetricsPanel';
+import { R2VendasList } from '@/components/crm/R2VendasList';
+import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function R2Carrinho() {
@@ -33,6 +35,7 @@ export default function R2Carrinho() {
   const { data: agendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekDate, 'agendadas');
   const { data: foraCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekDate);
   const { data: aprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekDate, 'aprovados');
+  const { data: vendasData = [] } = useR2CarrinhoVendas(weekDate);
 
   const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
   const handleNextWeek = () => setWeekDate(addWeeks(weekDate, 1));
@@ -42,6 +45,7 @@ export default function R2Carrinho() {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
     queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
+    queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
   };
 
   const handleReschedule = (meetingId: string) => {
@@ -117,9 +121,9 @@ export default function R2Carrinho() {
         ))}
       </div>
 
-      {/* Tabs - Nova ordem: R2 Agendada | Fora do Carrinho | Aprovados | Métricas */}
+      {/* Tabs - Nova ordem: R2 Agendada | Fora do Carrinho | Aprovados | Vendas | Métricas */}
       <Tabs defaultValue="metricas" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
             R2 Agendadas
             <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
@@ -136,6 +140,12 @@ export default function R2Carrinho() {
             ✓ Aprovados
             <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 px-2 py-0.5 rounded-full">
               {aprovadosData.length}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="vendas" className="flex items-center gap-2">
+            💰 Vendas
+            <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 px-2 py-0.5 rounded-full">
+              {vendasData.length}
             </span>
           </TabsTrigger>
           <TabsTrigger value="metricas" className="flex items-center gap-2">
@@ -162,6 +172,13 @@ export default function R2Carrinho() {
             attendees={aprovadosData} 
             isLoading={aprovadosLoading}
             weekEnd={weekEnd}
+          />
+        </TabsContent>
+
+        <TabsContent value="vendas">
+          <R2VendasList 
+            weekStart={weekStart} 
+            weekEnd={weekEnd} 
           />
         </TabsContent>
 

@@ -1,0 +1,476 @@
+import { useState, useMemo } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Plus, RefreshCw, Download, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { useR2CarrinhoVendas, R2CarrinhoVenda } from '@/hooks/useR2CarrinhoVendas';
+import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
+import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
+import { IncorporadorTransactionDrawer } from '@/components/incorporador/IncorporadorTransactionDrawer';
+import { useQueryClient } from '@tanstack/react-query';
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
+
+interface R2VendasListProps {
+  weekStart: Date;
+  weekEnd: Date;
+}
+
+const formatCurrency = (value: number | null) => {
+  if (value === null || value === undefined) return 'R$ 0,00';
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+};
+
+export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
+  const queryClient = useQueryClient();
+  const { data: vendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart);
+  const deleteTransaction = useDeleteTransaction();
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
+  const [selectedVenda, setSelectedVenda] = useState<R2CarrinhoVenda | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [vendaToDelete, setVendaToDelete] = useState<R2CarrinhoVenda | null>(null);
+
+  // Calcular totais
+  const totals = useMemo(() => {
+    const brutoTotal = vendas.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
+    const liquidoTotal = vendas.reduce((sum, v) => sum + (v.net_value || 0), 0);
+    return {
+      count: vendas.length,
+      bruto: brutoTotal,
+      liquido: liquidoTotal,
+    };
+  }, [vendas]);
+
+  // Paginação
+  const totalPages = Math.ceil(vendas.length / pageSize);
+  const paginatedVendas = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return vendas.slice(start, start + pageSize);
+  }, [vendas, currentPage, pageSize]);
+
+  const handleRefresh = () => {
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
+  };
+
+  const handleExport = () => {
+    if (vendas.length === 0) {
+      toast.error('Nenhuma venda para exportar');
+      return;
+    }
+
+    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte', 'Closer'];
+    const rows = vendas.map((v) => [
+      format(new Date(v.sale_date), 'dd/MM/yyyy HH:mm'),
+      v.product_name || '',
+      v.customer_name || '',
+      v.customer_email || '',
+      `${v.installment_number || 1}/${v.total_installments || 1}`,
+      getDeduplicatedGross(v).toFixed(2),
+      (v.net_value || 0).toFixed(2),
+      v.source || '',
+      v.r2_closer_name || '',
+    ]);
+
+    const csvContent = [headers.join(';'), ...rows.map((row) => row.join(';'))].join('\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `vendas-r2-carrinho-${format(weekStart, 'dd-MM-yyyy')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV exportado com sucesso!');
+  };
+
+  const handleViewDetails = (venda: R2CarrinhoVenda) => {
+    setSelectedVenda(venda);
+    setDetailsDrawerOpen(true);
+  };
+
+  const handleEdit = (venda: R2CarrinhoVenda) => {
+    setSelectedVenda(venda);
+    setEditDialogOpen(true);
+  };
+
+  const handleDelete = (venda: R2CarrinhoVenda) => {
+    setVendaToDelete(venda);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!vendaToDelete) return;
+    try {
+      await deleteTransaction.mutateAsync(vendaToDelete.id);
+      toast.success('Transação excluída com sucesso');
+      refetch();
+    } catch (error) {
+      toast.error('Erro ao excluir transação');
+    } finally {
+      setDeleteDialogOpen(false);
+      setVendaToDelete(null);
+    }
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    setPageSize(Number(value));
+    setCurrentPage(1);
+  };
+
+  // Mapear venda para formato esperado pelo drawer
+  const mapVendaToTransaction = (venda: R2CarrinhoVenda | null) => {
+    if (!venda) return null;
+    return {
+      id: venda.id,
+      hubla_id: venda.hubla_id,
+      product_name: venda.product_name || '',
+      product_price: venda.product_price,
+      net_value: venda.net_value,
+      customer_name: venda.customer_name,
+      customer_email: venda.customer_email,
+      customer_phone: venda.customer_phone,
+      sale_date: venda.sale_date,
+      installment_number: venda.installment_number,
+      total_installments: venda.total_installments,
+      source: venda.source,
+      gross_override: venda.gross_override,
+    };
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">
+            Vendas de Parceria - Semana de {format(weekStart, 'dd/MM', { locale: ptBR })} a {format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Transações de parceria vinculadas aos leads aprovados
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setCreateDialogOpen(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Nova Transação
+          </Button>
+          <Button variant="outline" size="icon" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={handleExport}>
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-10 rounded-full bg-blue-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Total Transações</p>
+                <p className="text-2xl font-bold">
+                  {isLoading ? '...' : totals.count}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-10 rounded-full bg-green-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Bruto Total</p>
+                <p className="text-2xl font-bold">
+                  {isLoading ? '...' : formatCurrency(totals.bruto)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-10 rounded-full bg-emerald-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Líquido Total</p>
+                <p className="text-2xl font-bold">
+                  {isLoading ? '...' : formatCurrency(totals.liquido)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabela */}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data</TableHead>
+                <TableHead>Produto</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead className="text-center">Parcela</TableHead>
+                <TableHead className="text-right">Bruto</TableHead>
+                <TableHead className="text-right">Líquido</TableHead>
+                <TableHead>Fonte</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <TableCell key={j}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : paginatedVendas.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    Nenhuma venda de parceria encontrada para os leads aprovados desta semana
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedVendas.map((venda) => (
+                  <TableRow key={venda.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {format(new Date(venda.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(venda.sale_date), 'HH:mm')}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="max-w-[200px] truncate" title={venda.product_name || ''}>
+                        {venda.product_name || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium truncate max-w-[150px]" title={venda.customer_name || ''}>
+                          {venda.customer_name || '-'}
+                        </span>
+                        {venda.r2_closer_name && (
+                          <span 
+                            className="text-xs px-1.5 py-0.5 rounded-full w-fit mt-1"
+                            style={{ 
+                              backgroundColor: venda.r2_closer_color ? `${venda.r2_closer_color}20` : 'hsl(var(--muted))',
+                              color: venda.r2_closer_color || 'hsl(var(--muted-foreground))'
+                            }}
+                          >
+                            {venda.r2_closer_name}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline">
+                        {venda.installment_number || 1}/{venda.total_installments || 1}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatCurrency(getDeduplicatedGross(venda))}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-emerald-600">
+                      {formatCurrency(venda.net_value)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="capitalize">
+                        {venda.source || 'hubla'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleViewDetails(venda)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleEdit(venda)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        {venda.source === 'manual' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(venda)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Paginação */}
+      {vendas.length > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Itens por página:</span>
+            <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+              <SelectTrigger className="w-[70px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">
+              Mostrando {Math.min((currentPage - 1) * pageSize + 1, vendas.length)} -{' '}
+              {Math.min(currentPage * pageSize, vendas.length)} de {vendas.length}
+            </span>
+          </div>
+
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
+                  const page = i + 1;
+                  return (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        onClick={() => setCurrentPage(page)}
+                        isActive={currentPage === page}
+                        className="cursor-pointer"
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
+      )}
+
+      {/* Dialogs */}
+      <TransactionFormDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        mode="create"
+        onSuccess={handleRefresh}
+      />
+
+      <TransactionFormDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        mode="edit"
+        transaction={selectedVenda ? mapVendaToTransaction(selectedVenda) : null}
+        onSuccess={handleRefresh}
+      />
+
+      <IncorporadorTransactionDrawer
+        transaction={mapVendaToTransaction(selectedVenda)}
+        open={detailsDrawerOpen}
+        onOpenChange={setDetailsDrawerOpen}
+      />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta transação? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
