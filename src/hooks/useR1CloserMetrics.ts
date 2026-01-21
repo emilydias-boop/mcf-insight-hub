@@ -11,6 +11,7 @@ export interface R1CloserMetric {
   r1_realizada: number;
   noshow: number;
   contrato_pago: number;
+  outside: number;
   r2_agendada: number;
 }
 
@@ -125,6 +126,92 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
         });
       });
 
+      // ========== OUTSIDE DETECTION ==========
+      // Outside = lead bought contract BEFORE their R1 meeting
+      
+      // Collect all contact_ids from R1 meetings in period
+      const contactIds = new Set<string>();
+      const attendeeContactMap = new Map<string, { closerId: string; meetingDate: string }[]>();
+      
+      meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          // We need to get contact_id from deal - but attendees don't have contact_id directly
+          // We'll need to match by email instead using the deal's contact
+        });
+      });
+
+      // Get all deal_ids from the meetings
+      const dealIds = new Set<string>();
+      meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (att.deal_id) dealIds.add(att.deal_id);
+        });
+      });
+
+      // Fetch deals with their contact emails
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select('id, contact:crm_contacts(id, email)')
+        .in('id', Array.from(dealIds));
+
+      // Map deal_id -> email
+      const dealEmailMap = new Map<string, string>();
+      deals?.forEach(deal => {
+        const contact = deal.contact as { id: string; email: string | null } | null;
+        if (contact?.email) {
+          dealEmailMap.set(deal.id, contact.email.toLowerCase());
+        }
+      });
+
+      // Get unique emails from deals in this period
+      const attendeeEmails = [...new Set(Array.from(dealEmailMap.values()))];
+
+      // Fetch contract transactions for these emails
+      const { data: contracts } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email, sale_date')
+        .in('customer_email', attendeeEmails.length > 0 ? attendeeEmails : [''])
+        .ilike('product_name', '%Contrato%')
+        .eq('sale_status', 'completed')
+        .order('sale_date', { ascending: true });
+
+      // Map email -> earliest contract date
+      const emailContractDate = new Map<string, Date>();
+      contracts?.forEach(c => {
+        const email = c.customer_email?.toLowerCase();
+        if (email) {
+          const date = new Date(c.sale_date);
+          if (!emailContractDate.has(email) || date < emailContractDate.get(email)!) {
+            emailContractDate.set(email, date);
+          }
+        }
+      });
+
+      // Count outsides per closer (contract purchased BEFORE meeting)
+      const outsideByCloser = new Map<string, number>();
+      meetings?.forEach(meeting => {
+        if (!meeting.closer_id) return;
+        
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (!att.deal_id) return;
+          
+          // Only count if booked by valid SDR
+          const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
+          if (!bookedByEmail || !validSdrEmails.has(bookedByEmail)) return;
+          
+          const email = dealEmailMap.get(att.deal_id);
+          if (email && emailContractDate.has(email)) {
+            const contractDate = emailContractDate.get(email)!;
+            const meetingDate = new Date(meeting.scheduled_at);
+            
+            // Outside = contract purchased BEFORE meeting
+            if (contractDate < meetingDate) {
+              outsideByCloser.set(meeting.closer_id, (outsideByCloser.get(meeting.closer_id) || 0) + 1);
+            }
+          }
+        });
+      });
+
       // Calculate metrics for each R1 closer
       const metricsMap = new Map<string, R1CloserMetric>();
 
@@ -138,6 +225,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
           r1_realizada: 0,
           noshow: 0,
           contrato_pago: 0,
+          outside: outsideByCloser.get(closer.id) || 0,
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
         });
       });
@@ -159,6 +247,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
             r1_realizada: 0,
             noshow: 0,
             contrato_pago: 0,
+            outside: outsideByCloser.get(closerId) || 0,
             r2_agendada: r2CountByCloser.get(closerId) || 0,
           };
           metricsMap.set(closerId, metric);
