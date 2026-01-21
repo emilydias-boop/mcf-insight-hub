@@ -111,32 +111,131 @@ export function R2MeetingDetailDrawer({
 
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
-            {/* Meeting Info */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="font-medium">
-                    {format(parseISO(meeting.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {format(parseISO(meeting.scheduled_at), 'HH:mm')} - 30min
-                  </div>
-                </div>
+            {/* Participant Selection (if multiple) */}
+            {meeting.attendees && meeting.attendees.length > 1 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Participante
+                </Label>
+                <Select
+                  value={attendee?.id}
+                  onValueChange={setSelectedAttendeeId}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {meeting.attendees.map(att => (
+                      <SelectItem key={att.id} value={att.id}>
+                        {att.name || att.deal?.contact?.name || 'Lead'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+            )}
 
-              <div className="flex items-center gap-3">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Closer R2</div>
-                  <div className="font-medium">{meeting.closer?.name}</div>
+            {/* 1. Lead Information - First Section */}
+            {attendee && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground flex items-center gap-2">
+                  <User className="h-3 w-3" />
+                  Informações do Lead
+                </Label>
+                <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                  {/* Nome */}
+                  <div className="font-medium text-lg">
+                    {attendee.name || attendee.deal?.contact?.name || 'Lead'}
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {/* Email */}
+                    <div>
+                      <span className="text-muted-foreground text-xs">Email</span>
+                      <div>{attendee.deal?.contact?.email || '—'}</div>
+                    </div>
+                    
+                    {/* Telefone */}
+                    <div>
+                      <span className="text-muted-foreground text-xs">Telefone</span>
+                      <div className="flex items-center gap-2">
+                        {contactPhone ? (
+                          <>
+                            <a href={`tel:${contactPhone}`} className="hover:underline">
+                              {contactPhone}
+                            </a>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleWhatsApp}>
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                          </>
+                        ) : '—'}
+                      </div>
+                    </div>
+                    
+                    {/* Estado */}
+                    {attendee.deal?.custom_fields?.estado && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">📍 Estado</span>
+                        <div>{attendee.deal.custom_fields.estado}</div>
+                      </div>
+                    )}
+                    
+                    {/* Profissão */}
+                    {attendee.deal?.custom_fields?.profissao && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">👤 Profissão</span>
+                        <div>{attendee.deal.custom_fields.profissao}</div>
+                      </div>
+                    )}
+                    
+                    {/* Renda */}
+                    {attendee.deal?.custom_fields?.renda && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">💰 Renda</span>
+                        <div>{attendee.deal.custom_fields.renda}</div>
+                      </div>
+                    )}
+                    
+                    {/* Possui Imóvel / Terreno */}
+                    {(attendee.deal?.custom_fields?.terreno || attendee.deal?.custom_fields?.possui_imovel) && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">🏡 Terreno/Imóvel</span>
+                        <div>{attendee.deal.custom_fields.terreno || attendee.deal.custom_fields.possui_imovel}</div>
+                      </div>
+                    )}
+                    
+                    {/* Investimento */}
+                    {attendee.deal?.custom_fields?.investimento && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">💵 Investimento</span>
+                        <div>{attendee.deal.custom_fields.investimento}</div>
+                      </div>
+                    )}
+                    
+                    {/* Sócio */}
+                    {attendee.deal?.custom_fields?.tem_socio && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">🤝 Sócio</span>
+                        <div>{attendee.deal.custom_fields.nome_socio || attendee.deal.custom_fields.tem_socio}</div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Solução que busca */}
+                  {attendee.deal?.custom_fields?.solucao && (
+                    <div className="pt-2 border-t text-sm">
+                      <span className="text-muted-foreground text-xs">🎯 Solução que busca</span>
+                      <div>{attendee.deal.custom_fields.solucao}</div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
 
             <Separator />
 
-            {/* Histórico do Funil */}
+            {/* 2. Histórico do Funil */}
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground flex items-center gap-2">
                 <History className="h-3 w-3" />
@@ -168,6 +267,11 @@ export function R2MeetingDetailDrawer({
                   <span className="text-muted-foreground">Agendou R2:</span>
                   <span className="font-medium">
                     {meeting.booked_by?.name || '—'}
+                    {meeting.created_at && (
+                      <span className="text-muted-foreground ml-1">
+                        ({format(parseISO(meeting.created_at), "dd/MM 'às' HH:mm")})
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -175,50 +279,34 @@ export function R2MeetingDetailDrawer({
 
             <Separator />
 
-            {/* Participant Selection (if multiple) */}
-            {meeting.attendees && meeting.attendees.length > 1 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Participante
-                </Label>
-                <Select
-                  value={attendee?.id}
-                  onValueChange={setSelectedAttendeeId}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {meeting.attendees.map(att => (
-                      <SelectItem key={att.id} value={att.id}>
-                        {att.name || att.deal?.contact?.name || 'Lead'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* 3. Agendamento R2 */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <div className="font-medium">
+                    {format(parseISO(meeting.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {format(parseISO(meeting.scheduled_at), 'HH:mm')} - 30min
+                  </div>
+                </div>
               </div>
-            )}
 
-            {/* Attendee Details Form */}
+              <div className="flex items-center gap-3">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <div className="text-sm text-muted-foreground">Closer R2</div>
+                  <div className="font-medium">{meeting.closer?.name}</div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* 4. Editable Fields */}
             {attendee && (
               <div className="space-y-4">
-                <div className="bg-muted/30 rounded-lg p-3 space-y-3">
-                  <div className="font-medium">
-                    {attendee.name || attendee.deal?.contact?.name || 'Lead'}
-                  </div>
-                  {contactPhone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <a href={`tel:${contactPhone}`} className="text-sm hover:underline">
-                        {contactPhone}
-                      </a>
-                      <Button variant="ghost" size="sm" onClick={handleWhatsApp}>
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
 
                 {/* Editable Fields */}
                 <div className="grid gap-4">

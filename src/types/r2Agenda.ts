@@ -43,6 +43,18 @@ export interface R2AttendeeExtended {
   deal?: {
     id: string;
     name: string;
+    custom_fields?: {
+      profissao?: string;
+      estado?: string;
+      renda?: string;
+      terreno?: string;
+      investimento?: string;
+      solucao?: string;
+      tem_socio?: string;
+      nome_socio?: string;
+      possui_imovel?: string;
+      [key: string]: unknown;
+    } | null;
     contact?: {
       name: string;
       email: string | null;
