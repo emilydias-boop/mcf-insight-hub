@@ -96,7 +96,7 @@ export function R2MeetingDetailDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col">
+      <SheetContent side="right" className="w-full sm:w-[40vw] sm:min-w-[400px] sm:max-w-none p-0 flex flex-col">
         <SheetHeader className="border-b p-4">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-lg flex items-center gap-2">
