@@ -79,9 +79,15 @@ export function R2MeetingDetailDrawer({
   const [showNotes, setShowNotes] = useState(false);
   const [showPurchases, setShowPurchases] = useState(false);
   
-  // Optimistic UI state for decision maker fields
+  // Optimistic UI state for all editable fields
   const [localDecisionMaker, setLocalDecisionMaker] = useState<boolean | null>(null);
   const [localDecisionMakerType, setLocalDecisionMakerType] = useState<string | null>(null);
+  const [localLeadProfile, setLocalLeadProfile] = useState<string | null>(null);
+  const [localVideoStatus, setLocalVideoStatus] = useState<string>('pendente');
+  const [localR2StatusId, setLocalR2StatusId] = useState<string | null>(null);
+  const [localThermometerId, setLocalThermometerId] = useState<string | null>(null);
+  const [localMeetingLink, setLocalMeetingLink] = useState<string>('');
+  const [localR2Observations, setLocalR2Observations] = useState<string>('');
   
   const updateAttendee = useUpdateR2Attendee();
   const updateMeetingStatus = useUpdateR2MeetingStatus();
@@ -97,8 +103,16 @@ export function R2MeetingDetailDrawer({
     if (attendee) {
       setLocalDecisionMaker(attendee.is_decision_maker ?? null);
       setLocalDecisionMakerType(attendee.decision_maker_type ?? null);
+      setLocalLeadProfile(attendee.lead_profile ?? null);
+      setLocalVideoStatus(attendee.video_status ?? 'pendente');
+      setLocalR2StatusId(attendee.r2_status_id ?? null);
+      setLocalThermometerId(attendee.thermometer_ids?.[0] ?? null);
+      setLocalMeetingLink(attendee.meeting_link ?? '');
+      setLocalR2Observations(attendee.r2_observations ?? '');
     }
-  }, [attendee?.id, attendee?.is_decision_maker, attendee?.decision_maker_type]);
+  }, [attendee?.id, attendee?.is_decision_maker, attendee?.decision_maker_type,
+      attendee?.lead_profile, attendee?.video_status, attendee?.r2_status_id,
+      attendee?.thermometer_ids, attendee?.meeting_link, attendee?.r2_observations]);
   
   // Computed value for UI (local state takes precedence)
   const isDecisionMaker = localDecisionMaker ?? attendee?.is_decision_maker ?? true;
@@ -156,6 +170,47 @@ export function R2MeetingDetailDrawer({
     updateAttendee.mutate({
       attendeeId: attendee.id,
       updates: { decision_maker_type: type }
+    });
+  };
+  
+  // Generic optimistic update handler for select fields
+  const handleOptimisticSelectUpdate = (
+    field: string, 
+    value: unknown, 
+    setLocalState: (v: any) => void
+  ) => {
+    if (!attendee) return;
+    setLocalState(value);
+    updateAttendee.mutate({
+      attendeeId: attendee.id,
+      updates: { [field]: value }
+    });
+  };
+  
+  // Handler for thermometer (array field)
+  const handleThermometerChange = (value: string | null) => {
+    if (!attendee) return;
+    setLocalThermometerId(value);
+    updateAttendee.mutate({
+      attendeeId: attendee.id,
+      updates: { thermometer_ids: value ? [value] : [] }
+    });
+  };
+  
+  // Handlers for text fields (save on blur)
+  const handleMeetingLinkBlur = () => {
+    if (!attendee) return;
+    updateAttendee.mutate({
+      attendeeId: attendee.id,
+      updates: { meeting_link: localMeetingLink || null }
+    });
+  };
+  
+  const handleObservationsBlur = () => {
+    if (!attendee) return;
+    updateAttendee.mutate({
+      attendeeId: attendee.id,
+      updates: { r2_observations: localR2Observations || null }
     });
   };
 
@@ -407,8 +462,8 @@ export function R2MeetingDetailDrawer({
                   <div className="space-y-1.5">
                     <Label className="text-xs">Perfil do Lead</Label>
                     <Select
-                      value={attendee.lead_profile || ''}
-                      onValueChange={(v) => handleAttendeeUpdate('lead_profile', v || null)}
+                      value={localLeadProfile || ''}
+                      onValueChange={(v) => handleOptimisticSelectUpdate('lead_profile', v || null, setLocalLeadProfile)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
@@ -429,8 +484,8 @@ export function R2MeetingDetailDrawer({
                       Status do Vídeo
                     </Label>
                     <Select
-                      value={attendee.video_status || 'pendente'}
-                      onValueChange={(v) => handleAttendeeUpdate('video_status', v)}
+                      value={localVideoStatus}
+                      onValueChange={(v) => handleOptimisticSelectUpdate('video_status', v, setLocalVideoStatus)}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -451,8 +506,8 @@ export function R2MeetingDetailDrawer({
                   <div className="space-y-1.5">
                     <Label className="text-xs">Status Final</Label>
                     <Select
-                      value={attendee.r2_status_id || '__none__'}
-                      onValueChange={(v) => handleAttendeeUpdate('r2_status_id', v === '__none__' ? null : v)}
+                      value={localR2StatusId || '__none__'}
+                      onValueChange={(v) => handleOptimisticSelectUpdate('r2_status_id', v === '__none__' ? null : v, setLocalR2StatusId)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
@@ -477,8 +532,8 @@ export function R2MeetingDetailDrawer({
                   <div className="space-y-1.5">
                     <Label className="text-xs">Termômetro</Label>
                     <Select
-                      value={attendee.thermometer_ids?.[0] || '__none__'}
-                      onValueChange={(v) => handleAttendeeUpdate('thermometer_ids', v === '__none__' ? [] : [v])}
+                      value={localThermometerId || '__none__'}
+                      onValueChange={(v) => handleThermometerChange(v === '__none__' ? null : v)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
@@ -505,8 +560,9 @@ export function R2MeetingDetailDrawer({
                 <div className="space-y-1.5">
                   <Label className="text-xs">Link da Reunião</Label>
                   <Input
-                    value={attendee.meeting_link || ''}
-                    onChange={(e) => handleAttendeeUpdate('meeting_link', e.target.value || null)}
+                    value={localMeetingLink}
+                    onChange={(e) => setLocalMeetingLink(e.target.value)}
+                    onBlur={handleMeetingLinkBlur}
                     placeholder="https://..."
                   />
                 </div>
@@ -518,8 +574,9 @@ export function R2MeetingDetailDrawer({
                     Observações R2
                   </Label>
                   <Textarea
-                    value={attendee.r2_observations || ''}
-                    onChange={(e) => handleAttendeeUpdate('r2_observations', e.target.value || null)}
+                    value={localR2Observations}
+                    onChange={(e) => setLocalR2Observations(e.target.value)}
+                    onBlur={handleObservationsBlur}
                     placeholder="Anotações sobre a reunião..."
                     rows={3}
                   />
