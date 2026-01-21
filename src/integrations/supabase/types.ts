@@ -6558,6 +6558,8 @@ export type Database = {
         Returns: {
           customer_email: string
           customer_name: string
+          customer_phone: string
+          gross_override: number
           gross_winner: boolean
           id: string
           installment_number: number
