@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -79,6 +79,10 @@ export function R2MeetingDetailDrawer({
   const [showNotes, setShowNotes] = useState(false);
   const [showPurchases, setShowPurchases] = useState(false);
   
+  // Optimistic UI state for decision maker fields
+  const [localDecisionMaker, setLocalDecisionMaker] = useState<boolean | null>(null);
+  const [localDecisionMakerType, setLocalDecisionMakerType] = useState<string | null>(null);
+  
   const updateAttendee = useUpdateR2Attendee();
   const updateMeetingStatus = useUpdateR2MeetingStatus();
   
@@ -87,6 +91,17 @@ export function R2MeetingDetailDrawer({
   
   const { data: leadNotes } = useLeadNotes(attendee?.deal_id, attendee?.id);
   const { data: purchaseHistory } = useLeadPurchaseHistory(contactEmail);
+  
+  // Sync local state with server data when attendee changes
+  useEffect(() => {
+    if (attendee) {
+      setLocalDecisionMaker(attendee.is_decision_maker ?? null);
+      setLocalDecisionMakerType(attendee.decision_maker_type ?? null);
+    }
+  }, [attendee?.id, attendee?.is_decision_maker, attendee?.decision_maker_type]);
+  
+  // Computed value for UI (local state takes precedence)
+  const isDecisionMaker = localDecisionMaker ?? attendee?.is_decision_maker ?? true;
 
   if (!meeting) return null;
 
@@ -113,11 +128,35 @@ export function R2MeetingDetailDrawer({
     }
   };
 
-  const handleDecisionMakerChange = (isDecisionMaker: boolean) => {
-    handleAttendeeUpdate('is_decision_maker', isDecisionMaker);
-    if (isDecisionMaker) {
-      handleAttendeeUpdate('decision_maker_type', null);
+  const handleDecisionMakerChange = (value: boolean) => {
+    if (!attendee) return;
+    
+    // Optimistic UI update
+    setLocalDecisionMaker(value);
+    if (value) {
+      setLocalDecisionMakerType(null);
     }
+    
+    // Single mutation call with both fields
+    updateAttendee.mutate({
+      attendeeId: attendee.id,
+      updates: { 
+        is_decision_maker: value,
+        ...(value && { decision_maker_type: null })
+      }
+    });
+  };
+  
+  const handleDecisionMakerTypeChange = (type: string | null) => {
+    if (!attendee) return;
+    
+    // Optimistic UI update
+    setLocalDecisionMakerType(type);
+    
+    updateAttendee.mutate({
+      attendeeId: attendee.id,
+      updates: { decision_maker_type: type }
+    });
   };
 
   return (
@@ -328,7 +367,7 @@ export function R2MeetingDetailDrawer({
                   <div className="space-y-1.5">
                     <Label className="text-xs">É o Decisor?</Label>
                     <Select
-                      value={attendee.is_decision_maker === false ? 'nao' : 'sim'}
+                      value={isDecisionMaker === false ? 'nao' : 'sim'}
                       onValueChange={(v) => handleDecisionMakerChange(v === 'sim')}
                     >
                       <SelectTrigger>
@@ -341,12 +380,12 @@ export function R2MeetingDetailDrawer({
                     </Select>
                   </div>
 
-                  {attendee.is_decision_maker === false && (
+                  {isDecisionMaker === false && (
                     <div className="space-y-1.5">
                       <Label className="text-xs">Quem é o Decisor?</Label>
                       <Select
-                        value={attendee.decision_maker_type || ''}
-                        onValueChange={(v) => handleAttendeeUpdate('decision_maker_type', v || null)}
+                        value={localDecisionMakerType || ''}
+                        onValueChange={(v) => handleDecisionMakerTypeChange(v || null)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione" />
