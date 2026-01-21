@@ -46,14 +46,15 @@ export function CloserSummaryTable({
       r1_realizada: acc.r1_realizada + row.r1_realizada,
       noshow: acc.noshow + row.noshow,
       contrato_pago: acc.contrato_pago + row.contrato_pago,
+      outside: acc.outside + row.outside,
       r2_agendada: acc.r2_agendada + row.r2_agendada,
     }),
-    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, r2_agendada: 0 }
+    { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0 }
   );
 
-  // Calculate total conversion rate (Contrato / Realizada)
+  // Calculate total conversion rate ((Contrato + Outside) / Realizada)
   const totalTaxaConversao = totals.r1_realizada > 0 
-    ? ((totals.contrato_pago / totals.r1_realizada) * 100)
+    ? (((totals.contrato_pago + totals.outside) / totals.r1_realizada) * 100)
     : 0;
 
   // Calculate total no-show rate (No-Show / Agendada)
@@ -73,15 +74,16 @@ export function CloserSummaryTable({
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Outside</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R2 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.map((row) => {
-              // Calculate taxa de conversão (Contrato Pago / R1 Realizada)
+              // Calculate taxa de conversão ((Contrato Pago + Outside) / R1 Realizada)
               const taxaConversao = row.r1_realizada > 0 
-                ? ((row.contrato_pago / row.r1_realizada) * 100)
+                ? (((row.contrato_pago + row.outside) / row.r1_realizada) * 100)
                 : 0;
               const taxaConversaoFormatted = taxaConversao.toFixed(1);
 
@@ -132,6 +134,9 @@ export function CloserSummaryTable({
                     <span className="text-amber-400 font-medium">{row.contrato_pago}</span>
                   </TableCell>
                   <TableCell className="text-center">
+                    <span className="text-orange-400 font-medium">{row.outside}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
                     <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
                       {row.r2_agendada}
                     </Badge>
@@ -170,6 +175,9 @@ export function CloserSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 <span className="text-amber-400">{totals.contrato_pago}</span>
+              </TableCell>
+              <TableCell className="text-center">
+                <span className="text-orange-400">{totals.outside}</span>
               </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
