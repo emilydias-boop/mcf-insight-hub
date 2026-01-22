@@ -32,7 +32,6 @@ import {
 
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
-import { useFirstTransactionIds } from '@/hooks/useFirstTransactionIds';
 import { formatCurrency } from '@/lib/formatters';
 import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
 
@@ -61,9 +60,6 @@ export default function TransacoesIncorp() {
   };
 
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
-  
-  // Busca IDs globais das primeiras transações (ignora filtro de data)
-  const { data: globalFirstIds = new Set<string>() } = useFirstTransactionIds();
 
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
@@ -75,22 +71,20 @@ export default function TransacoesIncorp() {
     return transactions.slice(start, start + itemsPerPage);
   }, [transactions, currentPage, itemsPerPage]);
 
-  // Identificar primeiras transações - agora usa IDs GLOBAIS
-  const firstTransactionIds = globalFirstIds;
-
-  // Totais - Bruto usa deduplicação por cliente+produto
+  // Totais - Bruto usa gross_winner calculado pelo RPC
   const totals = useMemo(() => {
     let bruto = 0;
     let liquido = 0;
     
     transactions.forEach(t => {
-      const isFirst = firstTransactionIds.has(t.id);
+      // Usa gross_winner do RPC - já considera todo histórico e regras de negócio
+      const isFirst = t.gross_winner === true;
       bruto += getDeduplicatedGross(t, isFirst);
       liquido += t.net_value || 0;
     });
     
     return { count: transactions.length, bruto, liquido };
-  }, [transactions, firstTransactionIds]);
+  }, [transactions]);
 
   // Handlers
   const handleRefresh = async () => {
@@ -113,7 +107,7 @@ export default function TransacoesIncorp() {
 
     const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte', 'Duplicado'];
     const rows = transactions.map(t => {
-      const isFirst = firstTransactionIds.has(t.id);
+      const isFirst = t.gross_winner === true;
       return [
         t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
         t.product_name || '',
@@ -338,7 +332,7 @@ export default function TransacoesIncorp() {
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {(() => {
-                            const isFirst = firstTransactionIds.has(t.id);
+                            const isFirst = t.gross_winner === true;
                             const brutoValue = getDeduplicatedGross(t, isFirst);
                             return (
                               <span className={!isFirst ? "text-muted-foreground" : ""}>

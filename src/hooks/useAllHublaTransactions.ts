@@ -17,6 +17,7 @@ export interface HublaTransaction {
   total_installments: number | null;
   source: string | null;
   gross_override: number | null;
+  gross_winner: boolean | null;
 }
 
 export interface TransactionFilters {
