@@ -68,7 +68,7 @@ function IncorporadorMetricsCard() {
 
 export default function ReunioesEquipe() {
   const { role } = useAuth();
-  const isSdr = role === 'sdr';
+  const isRestrictedRole = role === 'sdr' || role === 'closer';
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Initialize state from URL params
@@ -538,7 +538,7 @@ export default function ReunioesEquipe() {
               data={filteredBySDR}
               isLoading={isLoading}
               ghostCountBySdr={ghostCountBySdr}
-              disableNavigation={isSdr}
+              disableNavigation={isRestrictedRole}
               sdrMetaMap={sdrMetaMap}
               diasUteisNoPeriodo={diasUteisNoPeriodo}
             />
