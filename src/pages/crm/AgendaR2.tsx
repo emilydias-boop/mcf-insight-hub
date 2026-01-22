@@ -474,9 +474,12 @@ export default function AgendaR2() {
                   closerFilter={closerFilter === "all" ? null : closerFilter}
                   viewMode={viewMode}
                   meetingType="r2"
-                  onSelectMeeting={(meeting) => {
-                    const originalMeeting = meetings.find((m) => m.id === meeting.id);
-                    if (originalMeeting) handleSelectMeeting(originalMeeting);
+                onSelectMeeting={(meeting) => {
+                    // Buscar no array consolidado por closer+horário
+                    const consolidatedMeeting = filteredMeetings.find(
+                      (m) => m.closer?.id === meeting.closer_id && m.scheduled_at === meeting.scheduled_at
+                    );
+                    if (consolidatedMeeting) handleSelectMeeting(consolidatedMeeting);
                   }}
                   onSelectSlot={(day, hour, minute, closerId) => {
                     const selectedDateTime = new Date(day);
@@ -506,8 +509,11 @@ export default function AgendaR2() {
                   selectedDate={selectedDate}
                   configuredSlotsMap={r2ConfiguredSlotsMap}
                   onSelectMeeting={(m) => {
-                    const meeting = meetings.find((mt) => mt.id === m.id);
-                    if (meeting) handleSelectMeeting(meeting);
+                    // Buscar no array consolidado por closer+horário
+                    const consolidatedMeeting = filteredMeetings.find(
+                      (mt) => mt.closer?.id === m.closer?.id && mt.scheduled_at === m.scheduled_at
+                    );
+                    if (consolidatedMeeting) handleSelectMeeting(consolidatedMeeting);
                   }}
                   onSelectSlot={handleSelectSlot}
                 />
