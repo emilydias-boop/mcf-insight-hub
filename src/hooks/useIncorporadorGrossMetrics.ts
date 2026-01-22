@@ -37,8 +37,13 @@ export function useIncorporadorGrossMetrics(): IncorporadorGrossMetrics {
   const { data, isLoading, error } = useQuery({
     queryKey: ['incorporador-gross-metrics', weekStart.toISOString(), monthStart.toISOString(), yearStart.toISOString()],
     queryFn: async () => {
-      // Fetch transactions for each period using the RPC
-      // The RPC already filters by source, status, excludes products, and calculates gross_winner
+      // 1. Fetch global first transaction IDs for deduplication
+      const { data: firstIdsData, error: firstIdsError } = await supabase.rpc('get_first_transaction_ids');
+      if (firstIdsError) throw firstIdsError;
+      
+      const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
+
+      // 2. Fetch transactions for each period using the RPC
       const [weeklyData, monthlyData, annualData] = await Promise.all([
         supabase.rpc('get_all_hubla_transactions', {
           p_search: null,
@@ -64,10 +69,13 @@ export function useIncorporadorGrossMetrics(): IncorporadorGrossMetrics {
       if (monthlyData.error) throw monthlyData.error;
       if (annualData.error) throw annualData.error;
 
-      // Calculate gross totals using the shared deduplication logic
-      const calculateGross = (transactions: TransactionForGross[] | null): number => {
+      // 3. Calculate gross totals with proper deduplication
+      const calculateGross = (transactions: (TransactionForGross & { id: string })[] | null): number => {
         if (!transactions) return 0;
-        return transactions.reduce((sum, t) => sum + getDeduplicatedGross(t), 0);
+        return transactions.reduce((sum, t) => {
+          const isFirst = firstIdSet.has(t.id);
+          return sum + getDeduplicatedGross(t, isFirst);
+        }, 0);
       };
 
       return {
