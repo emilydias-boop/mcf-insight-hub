@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export type NoteType = 'initial' | 'reschedule' | 'general';
+export type NoteType = 'initial' | 'reschedule' | 'general' | 'r2';
 
 export interface AttendeeNote {
   id: string;
@@ -103,6 +103,7 @@ export function useAddAttendeeNote() {
     onSuccess: (_, variables) => {
       queryClient.refetchQueries({ queryKey: ['attendee-notes', variables.attendeeId] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['lead-notes'] });
     },
   });
 }

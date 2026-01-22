@@ -42,6 +42,12 @@ const NOTE_TYPE_CONFIG: Record<NoteType, { icon: typeof Tag; label: string; bgCo
     bgColor: 'bg-muted/50',
     textColor: 'text-muted-foreground'
   },
+  r2: { 
+    icon: MessageCircle, 
+    label: 'Nota R2', 
+    bgColor: 'bg-indigo-500/10',
+    textColor: 'text-indigo-600 dark:text-indigo-400'
+  },
 };
 
 function NoteItem({ 
