@@ -1,0 +1,327 @@
+import { useMemo } from 'react';
+import { useR1CloserMetrics, R1CloserMetric } from './useR1CloserMetrics';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { startOfDay, endOfDay, format } from 'date-fns';
+
+export interface CloserTeamAverages {
+  avgR1Agendada: number;
+  avgR1Realizada: number;
+  avgNoShow: number;
+  avgContratoPago: number;
+  avgOutside: number;
+  avgR2Agendada: number;
+  avgTaxaConversao: number;
+  avgTaxaNoShow: number;
+}
+
+export interface CloserRanking {
+  r1Realizada: number;
+  taxaConversao: number;
+  taxaNoShow: number;
+  contratoPago: number;
+  total: number;
+}
+
+export interface CloserLead {
+  attendee_id: string;
+  deal_id: string;
+  deal_name: string;
+  contact_name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  status: string;
+  scheduled_at: string;
+  booked_by_name: string | null;
+  origin_name: string | null;
+}
+
+export interface CloserDetailData {
+  closerInfo: {
+    id: string;
+    name: string;
+    email: string;
+    color: string | null;
+    meetingType: string | null;
+  } | null;
+  closerMetrics: R1CloserMetric | null;
+  teamAverages: CloserTeamAverages;
+  ranking: CloserRanking;
+  leads: CloserLead[];
+  allClosers: R1CloserMetric[];
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => void;
+}
+
+interface UseCloserDetailParams {
+  closerId: string;
+  startDate: Date;
+  endDate: Date;
+}
+
+export function useCloserDetailData({
+  closerId,
+  startDate,
+  endDate,
+}: UseCloserDetailParams): CloserDetailData {
+  const start = startOfDay(startDate).toISOString();
+  const end = endOfDay(endDate).toISOString();
+
+  // Fetch all closer metrics for the period
+  const {
+    data: allClosers = [],
+    isLoading: isLoadingMetrics,
+    error: metricsError,
+    refetch: refetchMetrics,
+  } = useR1CloserMetrics(startDate, endDate);
+
+  // Fetch closer basic info
+  const {
+    data: closerInfo,
+    isLoading: isLoadingCloser,
+  } = useQuery({
+    queryKey: ['closer-info', closerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('closers')
+        .select('id, name, email, color, meeting_type')
+        .eq('id', closerId)
+        .single();
+
+      if (error) throw error;
+      return {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        color: data.color,
+        meetingType: data.meeting_type,
+      };
+    },
+    enabled: !!closerId,
+  });
+
+  // Fetch leads for this closer (completed/contract_paid)
+  const {
+    data: leads = [],
+    isLoading: isLoadingLeads,
+    refetch: refetchLeads,
+  } = useQuery({
+    queryKey: ['closer-leads', closerId, start, end],
+    queryFn: async () => {
+      // Fetch meeting slots for this closer with their attendees
+      const { data: meetings, error: meetingsError } = await supabase
+        .from('meeting_slots')
+        .select(`
+          id,
+          scheduled_at,
+          meeting_slot_attendees (
+            id,
+            status,
+            deal_id,
+            attendee_name,
+            attendee_phone,
+            booked_by
+          )
+        `)
+        .eq('closer_id', closerId)
+        .eq('meeting_type', 'r1')
+        .gte('scheduled_at', start)
+        .lte('scheduled_at', end);
+
+      if (meetingsError) throw meetingsError;
+
+      // Filter attendees with completed or contract_paid status
+      const relevantStatuses = ['completed', 'contract_paid'];
+      const attendeesWithDeals: {
+        attendeeId: string;
+        status: string;
+        dealId: string;
+        attendeeName: string | null;
+        attendeePhone: string | null;
+        bookedBy: string | null;
+        scheduledAt: string;
+      }[] = [];
+
+      meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (att.deal_id && relevantStatuses.includes(att.status)) {
+            attendeesWithDeals.push({
+              attendeeId: att.id,
+              status: att.status,
+              dealId: att.deal_id,
+              attendeeName: att.attendee_name,
+              attendeePhone: att.attendee_phone,
+              bookedBy: att.booked_by,
+              scheduledAt: meeting.scheduled_at,
+            });
+          }
+        });
+      });
+
+      if (attendeesWithDeals.length === 0) return [];
+
+      // Fetch deal and contact info
+      const dealIds = [...new Set(attendeesWithDeals.map(a => a.dealId))];
+      const { data: deals } = await supabase
+        .from('crm_deals')
+        .select(`
+          id,
+          name,
+          origin:crm_origins(name),
+          contact:crm_contacts(id, name, email, phone)
+        `)
+        .in('id', dealIds);
+
+      const dealsMap = new Map<string, {
+        name: string;
+        originName: string | null;
+        contactName: string | null;
+        contactEmail: string | null;
+        contactPhone: string | null;
+      }>();
+
+      deals?.forEach(deal => {
+        const origin = Array.isArray(deal.origin) ? deal.origin[0] : deal.origin;
+        const contact = Array.isArray(deal.contact) ? deal.contact[0] : deal.contact;
+        dealsMap.set(deal.id, {
+          name: deal.name,
+          originName: origin?.name || null,
+          contactName: contact?.name || null,
+          contactEmail: contact?.email || null,
+          contactPhone: contact?.phone || null,
+        });
+      });
+
+      // Fetch booked_by profiles
+      const bookedByIds = [...new Set(attendeesWithDeals.map(a => a.bookedBy).filter(Boolean))] as string[];
+      let profilesMap: Record<string, string> = {};
+      
+      if (bookedByIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', bookedByIds);
+
+        profiles?.forEach(p => {
+          profilesMap[p.id] = p.full_name || 'Desconhecido';
+        });
+      }
+
+      // Build leads array
+      return attendeesWithDeals.map(att => {
+        const dealInfo = dealsMap.get(att.dealId);
+        return {
+          attendee_id: att.attendeeId,
+          deal_id: att.dealId,
+          deal_name: dealInfo?.name || 'Sem nome',
+          contact_name: att.attendeeName || dealInfo?.contactName || 'Sem nome',
+          contact_email: dealInfo?.contactEmail,
+          contact_phone: att.attendeePhone || dealInfo?.contactPhone,
+          status: att.status,
+          scheduled_at: att.scheduledAt,
+          booked_by_name: att.bookedBy ? profilesMap[att.bookedBy] || null : null,
+          origin_name: dealInfo?.originName,
+        };
+      }).sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+    },
+    enabled: !!closerId,
+  });
+
+  // Get metrics for the specific closer
+  const closerMetrics = useMemo(() => {
+    return allClosers.find(c => c.closer_id === closerId) || null;
+  }, [allClosers, closerId]);
+
+  // Calculate team averages
+  const teamAverages = useMemo((): CloserTeamAverages => {
+    if (allClosers.length === 0) {
+      return {
+        avgR1Agendada: 0,
+        avgR1Realizada: 0,
+        avgNoShow: 0,
+        avgContratoPago: 0,
+        avgOutside: 0,
+        avgR2Agendada: 0,
+        avgTaxaConversao: 0,
+        avgTaxaNoShow: 0,
+      };
+    }
+
+    const totals = allClosers.reduce(
+      (acc, c) => ({
+        r1Agendada: acc.r1Agendada + c.r1_agendada,
+        r1Realizada: acc.r1Realizada + c.r1_realizada,
+        noShow: acc.noShow + c.noshow,
+        contratoPago: acc.contratoPago + c.contrato_pago,
+        outside: acc.outside + c.outside,
+        r2Agendada: acc.r2Agendada + c.r2_agendada,
+      }),
+      { r1Agendada: 0, r1Realizada: 0, noShow: 0, contratoPago: 0, outside: 0, r2Agendada: 0 }
+    );
+
+    const count = allClosers.length;
+    const avgR1Realizada = totals.r1Realizada / count;
+    const avgContratoPago = totals.contratoPago / count;
+    const avgOutside = totals.outside / count;
+    const avgR1Agendada = totals.r1Agendada / count;
+    const avgNoShow = totals.noShow / count;
+
+    return {
+      avgR1Agendada,
+      avgR1Realizada,
+      avgNoShow,
+      avgContratoPago,
+      avgOutside,
+      avgR2Agendada: totals.r2Agendada / count,
+      avgTaxaConversao: avgR1Realizada > 0 ? ((avgContratoPago + avgOutside) / avgR1Realizada) * 100 : 0,
+      avgTaxaNoShow: avgR1Agendada > 0 ? (avgNoShow / avgR1Agendada) * 100 : 0,
+    };
+  }, [allClosers]);
+
+  // Calculate ranking
+  const ranking = useMemo((): CloserRanking => {
+    if (!closerMetrics || allClosers.length === 0) {
+      return { r1Realizada: 0, taxaConversao: 0, taxaNoShow: 0, contratoPago: 0, total: 0 };
+    }
+
+    // Sort by each metric and find position
+    const sortedByR1Realizada = [...allClosers].sort((a, b) => b.r1_realizada - a.r1_realizada);
+    const sortedByContratoPago = [...allClosers].sort((a, b) => b.contrato_pago - a.contrato_pago);
+    
+    // Calculate conversion rates for sorting
+    const withRates = allClosers.map(c => ({
+      ...c,
+      taxaConversao: c.r1_realizada > 0 ? ((c.contrato_pago + c.outside) / c.r1_realizada) * 100 : 0,
+      taxaNoShow: c.r1_agendada > 0 ? (c.noshow / c.r1_agendada) * 100 : 0,
+    }));
+    
+    const sortedByTaxaConversao = [...withRates].sort((a, b) => b.taxaConversao - a.taxaConversao);
+    const sortedByTaxaNoShow = [...withRates].sort((a, b) => a.taxaNoShow - b.taxaNoShow); // Lower is better
+
+    return {
+      r1Realizada: sortedByR1Realizada.findIndex(c => c.closer_id === closerId) + 1,
+      contratoPago: sortedByContratoPago.findIndex(c => c.closer_id === closerId) + 1,
+      taxaConversao: sortedByTaxaConversao.findIndex(c => c.closer_id === closerId) + 1,
+      taxaNoShow: sortedByTaxaNoShow.findIndex(c => c.closer_id === closerId) + 1,
+      total: allClosers.length,
+    };
+  }, [closerMetrics, allClosers, closerId]);
+
+  const refetch = () => {
+    refetchMetrics();
+    refetchLeads();
+  };
+
+  return {
+    closerInfo: closerInfo || null,
+    closerMetrics,
+    teamAverages,
+    ranking,
+    leads,
+    allClosers,
+    isLoading: isLoadingMetrics || isLoadingCloser || isLoadingLeads,
+    error: metricsError,
+    refetch,
+  };
+}
