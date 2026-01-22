@@ -1504,12 +1504,14 @@ export function useUpdateAttendeeAndSlotStatus() {
       }
     },
     onSuccess: () => {
-      // Invalidate all relevant queries
+      // Invalidate all relevant queries (R1 + R2)
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-stats'] });
       queryClient.invalidateQueries({ queryKey: ['upcoming-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['closer-metrics'] });
-      queryClient.invalidateQueries({ queryKey: ['crm-deals'] }); // Refresh CRM too
+      queryClient.invalidateQueries({ queryKey: ['crm-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       toast.success('Status atualizado');
     },
     onError: () => {
