@@ -43,7 +43,7 @@ export function OwnerChangeDialog({
   const transferMutation = useTransferDealOwner();
 
   // Buscar SDRs e Closers disponíveis
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, error, refetch } = useQuery({
     queryKey: ["sdr-closer-users"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -55,7 +55,10 @@ export function OwnerChangeDialog({
         `)
         .in("role", ["sdr", "closer"]);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Erro ao buscar usuários para transferência:", error);
+        throw error;
+      }
 
       return (data || []).map((ur: any) => ({
         email: ur.profiles.email,
@@ -156,6 +159,13 @@ export function OwnerChangeDialog({
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 p-4">
+              <p className="text-sm text-destructive text-center">Erro ao carregar usuários</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                Tentar novamente
+              </Button>
             </div>
           ) : filteredUsers.length === 0 ? (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
