@@ -6846,6 +6846,12 @@ export type Database = {
           phone_suffix: string
         }[]
       }
+      get_first_transaction_ids: {
+        Args: never
+        Returns: {
+          id: string
+        }[]
+      }
       get_hubla_transactions_by_bu: {
         Args: {
           p_end_date?: string
