@@ -24,6 +24,8 @@ import { toast } from "sonner";
 import { extractPhoneFromDeal, findPhoneByEmail, normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phoneUtils";
 import { ActivitySummary } from "@/hooks/useDealActivitySummary";
 import { format } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { OwnerChangeDialog } from "./OwnerChangeDialog";
 
 interface DealKanbanCardProps {
   deal: any;
@@ -35,8 +37,13 @@ interface DealKanbanCardProps {
 
 export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySummary }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
+  const { role } = useAuth();
   const isTestDeal = isTestPipeline(deal.origin_id);
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
+  const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
+  
+  // Apenas admin, manager e coordenador podem transferir leads
+  const canChangeOwner = role === 'admin' || role === 'manager' || role === 'coordenador';
 
   // Dados derivados
   const contact = deal.crm_contacts || deal.contact;
@@ -230,11 +237,28 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
         <div className="flex items-center justify-between text-xs border-t border-border/50 pt-1.5">
           {/* Lado esquerdo: Avatar + Ações */}
           <div className="flex items-center gap-1.5">
-            <Avatar className="h-5 w-5">
-              <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
-                {sdrInitials || getInitials(contactName || deal.name)}
-              </AvatarFallback>
-            </Avatar>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Avatar 
+                  className={`h-5 w-5 ${canChangeOwner ? 'cursor-pointer hover:ring-2 hover:ring-primary transition-all' : ''}`}
+                  onClick={(e) => {
+                    if (canChangeOwner) {
+                      e.stopPropagation();
+                      setOwnerDialogOpen(true);
+                    }
+                  }}
+                >
+                  <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
+                    {sdrInitials || getInitials(contactName || deal.name)}
+                  </AvatarFallback>
+                </Avatar>
+              </TooltipTrigger>
+              {canChangeOwner && (
+                <TooltipContent side="top" className="text-xs">
+                  Clique para transferir lead
+                </TooltipContent>
+              )}
+            </Tooltip>
 
             {isSearchingPhone ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -297,6 +321,15 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
           </div>
         </TooltipContent>
       </Tooltip>
+      
+      {/* Dialog de Transferência de Owner */}
+      <OwnerChangeDialog
+        open={ownerDialogOpen}
+        onOpenChange={setOwnerDialogOpen}
+        dealId={deal.id}
+        dealName={contactName || deal.name}
+        currentOwner={deal.owner_id}
+      />
     </TooltipProvider>
   );
 };

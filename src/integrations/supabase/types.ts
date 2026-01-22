@@ -3653,6 +3653,50 @@ export type Database = {
           },
         ]
       }
+      lead_distribution_config: {
+        Row: {
+          created_at: string | null
+          current_count: number | null
+          id: string
+          is_active: boolean | null
+          origin_id: string
+          percentage: number
+          updated_at: string | null
+          user_email: string
+          user_name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          origin_id: string
+          percentage?: number
+          updated_at?: string | null
+          user_email: string
+          user_name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          origin_id?: string
+          percentage?: number
+          updated_at?: string | null
+          user_email?: string
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_distribution_config_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_tracking: {
         Row: {
           closer: string | null
@@ -6910,6 +6954,7 @@ export type Database = {
               total_installments: number
             }[]
           }
+      get_next_lead_owner: { Args: { p_origin_id: string }; Returns: string }
       get_novo_lead_count:
         | { Args: { target_date: string }; Returns: Json }
         | {
@@ -7025,6 +7070,10 @@ export type Database = {
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
       refresh_deal_current_stages: { Args: never; Returns: undefined }
+      reset_distribution_counters: {
+        Args: { p_origin_id: string }
+        Returns: undefined
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       upsert_deals_smart: { Args: { deals_data: Json }; Returns: undefined }

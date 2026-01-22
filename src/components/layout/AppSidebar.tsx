@@ -263,12 +263,13 @@ const menuItems: MenuItem[] = [
   {
     title: "Administração",
     icon: Shield,
-    requiredRoles: ["admin"],
+    requiredRoles: ["admin", "manager"],
     items: [
-      { title: "Usuários", url: "/usuarios" },
-      { title: "Closers", url: "/crm/configurar-closers" },
-      { title: "Permissões", url: "/admin/permissoes" },
-      { title: "Produtos", url: "/admin/produtos" },
+      { title: "Usuários", url: "/usuarios", requiredRoles: ["admin"] },
+      { title: "Closers", url: "/crm/configurar-closers", requiredRoles: ["admin"] },
+      { title: "Permissões", url: "/admin/permissoes", requiredRoles: ["admin"] },
+      { title: "Produtos", url: "/admin/produtos", requiredRoles: ["admin"] },
+      { title: "Distribuição Leads", url: "/admin/distribuicao-leads" },
     ],
   },
 ];

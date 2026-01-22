@@ -86,6 +86,7 @@ import ConsorcioIndex from "./pages/bu-consorcio/Index";
 import ConsorcioImportar from "./pages/bu-consorcio/Importar";
 import AdminPermissoes from "./pages/admin/Permissoes";
 import ConfiguracaoProdutos from "./pages/admin/ConfiguracaoProdutos";
+import LeadDistribution from "./pages/admin/LeadDistribution";
 import BUCreditoIndex from "./pages/bu-credito/Index";
 import CreditoOverview from "./pages/bu-credito/Overview";
 import CreditoDeals from "./pages/bu-credito/Deals";
@@ -194,6 +195,7 @@ const App = () => (
               <Route path="usuarios" element={<ResourceGuard resource="usuarios"><GerenciamentoUsuarios /></ResourceGuard>} />
               <Route path="admin/permissoes" element={<RoleGuard allowedRoles={['admin']}><AdminPermissoes /></RoleGuard>} />
               <Route path="admin/produtos" element={<RoleGuard allowedRoles={['admin']}><ConfiguracaoProdutos /></RoleGuard>} />
+              <Route path="admin/distribuicao-leads" element={<RoleGuard allowedRoles={['admin', 'manager']}><LeadDistribution /></RoleGuard>} />
               
               <Route path="fechamento-sdr" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRList /></ResourceGuard>} />
               <Route path="fechamento-sdr/configuracoes" element={<ResourceGuard resource="fechamento_sdr"><FechamentoSDRConfiguracoes /></ResourceGuard>} />
