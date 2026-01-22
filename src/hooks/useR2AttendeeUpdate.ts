@@ -96,3 +96,27 @@ export function useQuickUpdateAttendeeStatus() {
     }
   });
 }
+
+// Remove attendee from meeting slot
+export function useRemoveR2Attendee() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (attendeeId: string) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .delete()
+        .eq('id', attendeeId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      toast.success('Participante removido');
+    },
+    onError: () => {
+      toast.error('Erro ao remover participante');
+    }
+  });
+}
