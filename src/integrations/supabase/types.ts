@@ -6804,7 +6804,6 @@ export type Database = {
           customer_name: string
           customer_phone: string
           gross_override: number
-          gross_winner: boolean
           id: string
           installment_number: number
           net_value: number
