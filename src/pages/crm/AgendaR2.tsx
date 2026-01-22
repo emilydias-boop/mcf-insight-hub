@@ -263,16 +263,16 @@ export default function AgendaR2() {
     setRescheduleModalOpen(true);
   };
 
-  // Convert R2MeetingRow to R2Meeting for child components
+  // Convert R2MeetingRow to R2Meeting for child components (use filteredMeetings for consolidation)
   const meetingsAsR2Meeting = useMemo(() => {
-    return meetings.map((m) => ({
+    return filteredMeetings.map((m) => ({
       ...m,
       attendees: m.attendees.map((a) => ({
         ...a,
         deal: a.deal ? { ...a.deal } : null,
       })),
     })) as unknown as R2Meeting[];
-  }, [meetings]);
+  }, [filteredMeetings]);
 
   // Keyboard shortcuts
   useEffect(() => {

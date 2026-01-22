@@ -36,6 +36,7 @@ export function useUpdateR2Attendee() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       toast.success('Atualizado');
     },
     onError: () => {
@@ -64,6 +65,7 @@ export function useBatchUpdateR2Attendees() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       toast.success('Atualizações salvas');
     },
     onError: () => {
@@ -90,6 +92,7 @@ export function useQuickUpdateAttendeeStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
     },
     onError: () => {
       toast.error('Erro ao atualizar status');
