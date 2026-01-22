@@ -94,7 +94,7 @@ export const PipelineContextMenu = ({
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+            className="h-5 w-5 flex-shrink-0 opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <MoreVertical className="h-4 w-4" />

@@ -177,7 +177,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
           indented && "pl-6"
         )}
       >
-        {/* Botão de favorito - agora em fluxo normal, não absoluto */}
+        {/* Botão de favorito */}
         {showFavorite && (
           <Button
             variant="ghost"
@@ -206,7 +206,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         <Button
           variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
           className={cn(
-            "flex-1 min-w-0 justify-between h-auto py-2 text-left overflow-hidden",
+            "flex-1 min-w-0 justify-between h-auto py-2 text-left overflow-hidden pr-1",
             selectedOriginId === origin.id && "bg-primary/10"
           )}
           onClick={() => onSelectOrigin(origin.id)}
@@ -215,21 +215,24 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
             <span className="truncate text-xs">{displayName}</span>
           </span>
-          {dealCount > 0 && (
-            <Badge variant="secondary" className="text-xs ml-2 flex-shrink-0">
-              {dealCount}
-            </Badge>
-          )}
+          <span className="flex items-center gap-1 flex-shrink-0">
+            {dealCount > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {dealCount}
+              </Badge>
+            )}
+            {/* Menu de 3 pontos - dentro do botão */}
+            <span onClick={(e) => e.stopPropagation()}>
+              <PipelineContextMenu
+                targetType="origin"
+                targetId={origin.id}
+                targetName={displayName}
+                onConfigure={() => setConfigTarget({ type: 'origin', id: origin.id, name: displayName })}
+                onSelect={() => onSelectOrigin(origin.id)}
+              />
+            </span>
+          </span>
         </Button>
-
-        {/* Menu de 3 pontos */}
-        <PipelineContextMenu
-          targetType="origin"
-          targetId={origin.id}
-          targetName={displayName}
-          onConfigure={() => setConfigTarget({ type: 'origin', id: origin.id, name: displayName })}
-          onSelect={() => onSelectOrigin(origin.id)}
-        />
       </div>
     );
   };
@@ -251,7 +254,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="flex-1 justify-between h-auto py-2 font-medium"
+              className="flex-1 justify-between h-auto py-2 font-medium pr-1"
             >
               <span className="flex items-center gap-2 min-w-0 flex-1">
                 <ChevronDown 
@@ -263,25 +266,27 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
                 <Icon className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate text-xs">{displayName}</span>
               </span>
-              {totalDeals > 0 && (
-                <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
-                  {totalDeals}
-                </Badge>
-              )}
+              <span className="flex items-center gap-1 flex-shrink-0">
+                {totalDeals > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {totalDeals}
+                  </Badge>
+                )}
+                {/* Menu de 3 pontos - dentro do botão */}
+                <span onClick={(e) => e.stopPropagation()}>
+                  <PipelineContextMenu
+                    targetType="group"
+                    targetId={group.id}
+                    targetName={displayName}
+                    onConfigure={() => setConfigTarget({ type: 'group', id: group.id, name: displayName })}
+                    onSelect={() => {
+                      setExpandedGroups(prev => new Set([...prev, group.id]));
+                    }}
+                  />
+                </span>
+              </span>
             </Button>
           </CollapsibleTrigger>
-          
-          {/* Menu de 3 pontos para grupo */}
-          <PipelineContextMenu
-            targetType="group"
-            targetId={group.id}
-            targetName={displayName}
-            onConfigure={() => setConfigTarget({ type: 'group', id: group.id, name: displayName })}
-            onSelect={() => {
-              // Expandir grupo quando selecionado
-              setExpandedGroups(prev => new Set([...prev, group.id]));
-            }}
-          />
         </div>
         
         <CollapsibleContent className="space-y-1">
