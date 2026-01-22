@@ -11,11 +11,17 @@ export function useFirstTransactionIds() {
   return useQuery({
     queryKey: ['first-transaction-ids-global'],
     queryFn: async () => {
-      // Usa query direta pois o RPC ainda não está no types.ts
+      // Busca transações via JOIN com product_configurations para usar target_bu
       const { data, error } = await supabase
         .from('hubla_transactions')
-        .select('id, customer_email, product_name, sale_date')
-        .eq('product_category', 'incorporador')
+        .select(`
+          id, 
+          customer_email, 
+          product_name, 
+          sale_date,
+          product_configurations!inner(target_bu)
+        `)
+        .eq('product_configurations.target_bu', 'incorporador')
         .order('sale_date', { ascending: true });
       
       if (error) {
