@@ -107,7 +107,7 @@ export default function AgendaR2() {
   const closerIds = useMemo(() => closers.map((c) => c.id), [closers]);
   const { data: r2ConfiguredSlotsMap } = useR2DailySlotsForView(rangeStart, rangeEnd, closerIds);
 
-  // Filter meetings by closer and status
+  // Filter meetings by closer and status, then consolidate meetings with same closer+time
   const filteredMeetings = useMemo(() => {
     let filtered = meetings;
     if (closerFilter !== "all") {
@@ -116,7 +116,20 @@ export default function AgendaR2() {
     if (statusFilter !== "all") {
       filtered = filtered.filter((m) => m.status === statusFilter);
     }
-    return filtered;
+    
+    // Group meetings by closer_id + scheduled_at to consolidate attendees
+    const groups: Record<string, typeof filtered> = {};
+    filtered.forEach((m) => {
+      const key = `${m.closer?.id}|${m.scheduled_at}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(m);
+    });
+    
+    // Consolidate each group into a single meeting with all attendees
+    return Object.values(groups).map((group) => ({
+      ...group[0],
+      attendees: group.flatMap((m) => m.attendees || []),
+    }));
   }, [meetings, closerFilter, statusFilter]);
 
   // Filter closers based on filter
@@ -516,19 +529,27 @@ export default function AgendaR2() {
               ) : (
                 <div className="space-y-2">
                   {filteredMeetings.map((meeting) => {
-                    const attendee = meeting.attendees?.[0];
+                    const attendeesCount = meeting.attendees?.length || 0;
+                    const firstAttendee = meeting.attendees?.[0];
                     return (
                       <div
-                        key={meeting.id}
+                        key={`${meeting.id}-${meeting.scheduled_at}`}
                         onClick={() => handleSelectMeeting(meeting)}
                         className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-1 h-12 rounded-full bg-purple-500" />
+                          <div className="w-1 h-12 rounded-full bg-primary" />
                           <div>
-                            <p className="font-medium">
-                              {attendee?.name || attendee?.deal?.contact?.name || "Sem participante"}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">
+                                {firstAttendee?.name || firstAttendee?.deal?.contact?.name || "Sem participante"}
+                              </p>
+                              {attendeesCount > 1 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  +{attendeesCount - 1}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground">
                               {format(new Date(meeting.scheduled_at), "EEEE, d 'de' MMMM 'às' HH:mm", { locale: ptBR })}
                             </p>

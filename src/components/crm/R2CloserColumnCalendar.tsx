@@ -51,8 +51,9 @@ export function R2CloserColumnCalendar({
   onSelectSlot,
 }: R2CloserColumnCalendarProps) {
 
-  const getMeetingForSlot = (closerId: string, hour: number, minute: number) => {
-    return meetings.find((m) => {
+  // Get all meetings for a specific slot (may have multiple for same time/closer)
+  const getMeetingsForSlot = (closerId: string, hour: number, minute: number) => {
+    return meetings.filter((m) => {
       if (m.closer?.id !== closerId) return false;
       const meetingTime = parseISO(m.scheduled_at);
       return (
@@ -61,6 +62,19 @@ export function R2CloserColumnCalendar({
         meetingTime.getMinutes() === minute
       );
     });
+  };
+
+  // Get consolidated meeting with all attendees from multiple meetings in same slot
+  const getConsolidatedMeetingForSlot = (closerId: string, hour: number, minute: number): R2Meeting | undefined => {
+    const slotMeetings = getMeetingsForSlot(closerId, hour, minute);
+    if (slotMeetings.length === 0) return undefined;
+    if (slotMeetings.length === 1) return slotMeetings[0];
+    
+    // Consolidate all attendees from multiple meetings into one
+    return {
+      ...slotMeetings[0],
+      attendees: slotMeetings.flatMap(m => m.attendees || [])
+    };
   };
 
   // Check if a slot is configured for a specific closer
@@ -77,7 +91,7 @@ export function R2CloserColumnCalendar({
     // First check if slot is configured for this closer
     if (!isSlotConfiguredForCloser(closerId, hour, minute)) return false;
     // Then check if there's no meeting
-    return !getMeetingForSlot(closerId, hour, minute);
+    return getMeetingsForSlot(closerId, hour, minute).length === 0;
   };
 
   // Filter time slots to only show times that have at least one configured slot
@@ -181,7 +195,7 @@ export function R2CloserColumnCalendar({
               </div>
 
               {closers.map((closer) => {
-                const meeting = getMeetingForSlot(closer.id, slot.hour, slot.minute);
+                const meeting = getConsolidatedMeetingForSlot(closer.id, slot.hour, slot.minute);
                 const available = isSlotAvailable(closer.id, slot.hour, slot.minute);
 
                 return (
