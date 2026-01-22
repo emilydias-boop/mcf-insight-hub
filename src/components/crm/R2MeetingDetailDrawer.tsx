@@ -5,8 +5,9 @@ import {
   Phone, Calendar, CheckCircle, XCircle, 
   ExternalLink, Clock, User, Users, Video,
   MessageSquare, History, RotateCcw, ShoppingCart,
-  FileText, ChevronDown, Trash2
+  FileText, ChevronDown, Trash2, Plus, Send
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
@@ -33,6 +34,7 @@ import { useUpdateR2Attendee, useRemoveR2Attendee } from '@/hooks/useR2AttendeeU
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
 import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
+import { useAddAttendeeNote } from '@/hooks/useAttendeeNotes';
 import { RefundModal } from './RefundModal';
 
 interface R2MeetingDetailDrawerProps {
@@ -81,6 +83,8 @@ export function R2MeetingDetailDrawer({
   const [showNotes, setShowNotes] = useState(false);
   const [showPurchases, setShowPurchases] = useState(false);
   const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [showAddNoteForm, setShowAddNoteForm] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
   
   // Optimistic UI state for all editable fields
   const [localDecisionMaker, setLocalDecisionMaker] = useState<boolean | null>(null);
@@ -95,6 +99,7 @@ export function R2MeetingDetailDrawer({
   const updateAttendee = useUpdateR2Attendee();
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
+  const addNote = useAddAttendeeNote();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
   const contactEmail = attendee?.deal?.contact?.email;
@@ -695,9 +700,72 @@ export function R2MeetingDetailDrawer({
                       </div>
                     </Button>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2">
+                  <CollapsibleContent className="mt-2 space-y-2">
+                    {/* Formulário para adicionar nota */}
+                    {!showAddNoteForm ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setShowAddNoteForm(true)}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Adicionar Nota
+                      </Button>
+                    ) : (
+                      <div className="space-y-2 bg-muted/30 rounded-lg p-3">
+                        <Textarea
+                          value={newNoteText}
+                          onChange={(e) => setNewNoteText(e.target.value)}
+                          placeholder="Digite sua nota sobre este lead..."
+                          rows={3}
+                          className="bg-background"
+                          autoFocus
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setShowAddNoteForm(false);
+                              setNewNoteText('');
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              if (!newNoteText.trim() || !attendee?.id) {
+                                toast.error('Digite uma nota');
+                                return;
+                              }
+                              addNote.mutate(
+                                { attendeeId: attendee.id, note: newNoteText.trim(), noteType: 'r2' },
+                                {
+                                  onSuccess: () => {
+                                    setNewNoteText('');
+                                    setShowAddNoteForm(false);
+                                    toast.success('Nota adicionada!');
+                                  },
+                                  onError: () => {
+                                    toast.error('Erro ao adicionar nota');
+                                  }
+                                }
+                              );
+                            }}
+                            disabled={addNote.isPending || !newNoteText.trim()}
+                          >
+                            <Send className="h-3 w-3 mr-1" />
+                            Salvar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lista de notas */}
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {(!leadNotes || leadNotes.length === 0) && (
+                      {(!leadNotes || leadNotes.length === 0) && !showAddNoteForm && (
                         <p className="text-xs text-muted-foreground text-center py-2">
                           Nenhuma nota encontrada
                         </p>
