@@ -63,7 +63,7 @@ export function useRelatorioConsolidado(anoMes: string) {
     queryKey: ["relatorio-consolidado", anoMes],
     queryFn: async (): Promise<ConsolidadoData> => {
       // Fetch all payouts for the month with SDR details
-      const { data: payouts, error } = await supabase
+      const { data: payouts, error } = await (supabase as any)
         .from("sdr_payouts")
         .select(`
           *,
