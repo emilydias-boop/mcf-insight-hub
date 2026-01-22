@@ -43,12 +43,19 @@ export const PipelineContextMenu = ({
 
   const archiveMutation = useMutation({
     mutationFn: async () => {
-      const table = targetType === 'origin' ? 'crm_origins' : 'crm_groups';
-      const { error } = await supabase
-        .from(table)
-        .update({ is_archived: true })
-        .eq('id', targetId);
-      if (error) throw error;
+      if (targetType === 'origin') {
+        const { error } = await supabase
+          .from('crm_origins')
+          .update({ is_archived: true } as any)
+          .eq('id', targetId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('crm_groups')
+          .update({ is_archived: true } as any)
+          .eq('id', targetId);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       toast.success(`${targetType === 'origin' ? 'Origem' : 'Pipeline'} arquivada!`);

@@ -22,11 +22,13 @@ interface PipelineStagesEditorProps {
   targetId: string;
 }
 
+type StageType = 'normal' | 'won' | 'lost';
+
 interface LocalStage {
   id: string;
   name: string;
   color: string;
-  stage_type: 'normal' | 'won' | 'lost';
+  stage_type: StageType;
   stage_order: number;
 }
 
@@ -44,8 +46,16 @@ const stageColors = [
 export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEditorProps) => {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', color: '', stage_type: 'normal' as const });
-  const [newStage, setNewStage] = useState({ name: '', color: '#6b7280', stage_type: 'normal' as const });
+  const [editForm, setEditForm] = useState<{ name: string; color: string; stage_type: StageType }>({ 
+    name: '', 
+    color: '', 
+    stage_type: 'normal' 
+  });
+  const [newStage, setNewStage] = useState<{ name: string; color: string; stage_type: StageType }>({ 
+    name: '', 
+    color: '#6b7280', 
+    stage_type: 'normal' 
+  });
   const [showNewForm, setShowNewForm] = useState(false);
 
   // Fetch local stages
@@ -185,18 +195,10 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
     createMutation.mutate(newStage);
   };
 
-  const getStageTypeLabel = (type: string) => {
-    switch (type) {
-      case 'won': return 'Ganho';
-      case 'lost': return 'Perdido';
-      default: return 'Normal';
-    }
-  };
-
   const getStageTypeBadge = (type: string) => {
     switch (type) {
       case 'won':
-        return <Badge variant="default" className="bg-green-500">Ganho</Badge>;
+        return <Badge className="bg-green-600">Ganho</Badge>;
       case 'lost':
         return <Badge variant="destructive">Perdido</Badge>;
       default:
@@ -267,7 +269,7 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
               <Label>Tipo</Label>
               <Select
                 value={newStage.stage_type}
-                onValueChange={(v) => setNewStage(prev => ({ ...prev, stage_type: v as any }))}
+                onValueChange={(v) => setNewStage(prev => ({ ...prev, stage_type: v as StageType }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -362,7 +364,7 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
                             </Select>
                             <Select
                               value={editForm.stage_type}
-                              onValueChange={(v) => setEditForm(prev => ({ ...prev, stage_type: v as any }))}
+                              onValueChange={(v) => setEditForm(prev => ({ ...prev, stage_type: v as StageType }))}
                             >
                               <SelectTrigger className="w-24 h-8">
                                 <SelectValue />
@@ -377,7 +379,7 @@ export const PipelineStagesEditor = ({ targetType, targetId }: PipelineStagesEdi
                               <Check className="h-4 w-4 text-green-600" />
                             </Button>
                             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingId(null)}>
-                              <X className="h-4 w-4 text-red-600" />
+                              <X className="h-4 w-4 text-destructive" />
                             </Button>
                           </>
                         ) : (

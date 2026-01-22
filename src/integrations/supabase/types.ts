@@ -2212,6 +2212,7 @@ export type Database = {
           description: string | null
           display_name: string | null
           id: string
+          is_archived: boolean | null
           is_favorite: boolean | null
           name: string
           updated_at: string | null
@@ -2222,6 +2223,7 @@ export type Database = {
           description?: string | null
           display_name?: string | null
           id?: string
+          is_archived?: boolean | null
           is_favorite?: boolean | null
           name: string
           updated_at?: string | null
@@ -2232,6 +2234,7 @@ export type Database = {
           description?: string | null
           display_name?: string | null
           id?: string
+          is_archived?: boolean | null
           is_favorite?: boolean | null
           name?: string
           updated_at?: string | null
@@ -2247,6 +2250,7 @@ export type Database = {
           display_name: string | null
           group_id: string | null
           id: string
+          is_archived: boolean | null
           name: string
           parent_id: string | null
           pipeline_type: string | null
@@ -2260,6 +2264,7 @@ export type Database = {
           display_name?: string | null
           group_id?: string | null
           id?: string
+          is_archived?: boolean | null
           name: string
           parent_id?: string | null
           pipeline_type?: string | null
@@ -2273,6 +2278,7 @@ export type Database = {
           display_name?: string | null
           group_id?: string | null
           id?: string
+          is_archived?: boolean | null
           name?: string
           parent_id?: string | null
           pipeline_type?: string | null
