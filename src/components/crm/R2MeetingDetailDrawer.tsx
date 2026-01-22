@@ -5,7 +5,7 @@ import {
   Phone, Calendar, CheckCircle, XCircle, 
   ExternalLink, Clock, User, Users, Video,
   MessageSquare, History, RotateCcw, ShoppingCart,
-  FileText, ChevronDown
+  FileText, ChevronDown, Trash2
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -29,7 +29,7 @@ import {
   R2MeetingRow, R2StatusOption, R2ThermometerOption,
   LEAD_PROFILE_OPTIONS, VIDEO_STATUS_OPTIONS, DECISION_MAKER_TYPE_OPTIONS
 } from '@/types/r2Agenda';
-import { useUpdateR2Attendee } from '@/hooks/useR2AttendeeUpdate';
+import { useUpdateR2Attendee, useRemoveR2Attendee } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData';
 import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
 import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
@@ -93,12 +93,20 @@ export function R2MeetingDetailDrawer({
   
   const updateAttendee = useUpdateR2Attendee();
   const updateMeetingStatus = useUpdateR2MeetingStatus();
+  const removeAttendee = useRemoveR2Attendee();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
   const contactEmail = attendee?.deal?.contact?.email;
   
   const { data: leadNotes } = useLeadNotes(attendee?.deal_id, attendee?.id);
   const { data: purchaseHistory } = useLeadPurchaseHistory(contactEmail);
+  
+  // Initialize selection when meeting changes
+  useEffect(() => {
+    if (meeting?.attendees?.length && !selectedAttendeeId) {
+      setSelectedAttendeeId(meeting.attendees[0].id);
+    }
+  }, [meeting?.id, meeting?.attendees, selectedAttendeeId]);
   
   // Sync local state with server data when attendee changes
   useEffect(() => {
@@ -141,6 +149,17 @@ export function R2MeetingDetailDrawer({
     if (contactPhone) {
       const phone = contactPhone.replace(/\D/g, '');
       window.open(`https://wa.me/55${phone}`, '_blank');
+    }
+  };
+
+  const handleRemoveAttendee = (attendeeId: string) => {
+    if (confirm('Deseja remover este participante da reunião?')) {
+      removeAttendee.mutate(attendeeId);
+      // Select another attendee if available
+      const remaining = meeting?.attendees?.filter(a => a.id !== attendeeId);
+      if (remaining?.length) {
+        setSelectedAttendeeId(remaining[0].id);
+      }
     }
   };
 
@@ -233,32 +252,92 @@ export function R2MeetingDetailDrawer({
 
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
-            {/* Participant Selection (if multiple) */}
-            {meeting.attendees && meeting.attendees.length > 1 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Participante
-                </Label>
-                <Select
-                  value={attendee?.id}
-                  onValueChange={setSelectedAttendeeId}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {meeting.attendees.map(att => (
-                      <SelectItem key={att.id} value={att.id}>
-                        {att.name || att.deal?.contact?.name || 'Lead'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {/* Participant Selection - Clickable List */}
+            {meeting.attendees && meeting.attendees.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    <span className="font-medium text-sm">
+                      Participantes ({meeting.attendees.length})
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  {meeting.attendees.map((att) => {
+                    const isSelected = selectedAttendeeId === att.id || (!selectedAttendeeId && att.id === meeting.attendees[0].id);
+                    const attStatusInfo = MEETING_STATUS_LABELS[att.status || 'scheduled'];
+                    
+                    return (
+                      <div
+                        key={att.id}
+                        className={cn(
+                          "flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all",
+                          isSelected
+                            ? "bg-primary/20 ring-2 ring-primary"
+                            : "bg-muted/30 hover:bg-muted/50"
+                        )}
+                        onClick={() => setSelectedAttendeeId(att.id)}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Avatar */}
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
+                            style={{ backgroundColor: meeting.closer?.color || '#8B5CF6' }}
+                          >
+                            {(att.name || att.deal?.contact?.name || 'L').charAt(0).toUpperCase()}
+                          </div>
+                          
+                          {/* Info */}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm truncate">
+                                {att.name || att.deal?.contact?.name || 'Lead'}
+                              </span>
+                              {isSelected && (
+                                <Badge className="text-xs bg-primary text-primary-foreground shrink-0">
+                                  Selecionado
+                                </Badge>
+                              )}
+                              {att.status && att.status !== 'scheduled' && attStatusInfo && (
+                                <Badge className={cn('text-xs text-white shrink-0', attStatusInfo.color)}>
+                                  {attStatusInfo.label}
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {att.phone || att.deal?.contact?.phone || 'Sem telefone'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Remove Button */}
+                        {meeting.attendees.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveAttendee(att.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <p className="text-xs text-muted-foreground text-center">
+                  Clique em um participante para ver detalhes e ações
+                </p>
               </div>
             )}
 
-            {/* 1. Lead Information */}
+            <Separator />
             {attendee && (
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-2">
