@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/select';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { EnviarNfseFechamentoModal } from '@/components/sdr-fechamento/EnviarNfseFechamentoModal';
-import { useOwnPayout, useOwnSdr } from '@/hooks/useSdrFechamento';
+import { SdrFechamentoView } from '@/components/fechamento/SdrFechamentoView';
+import { CloserFechamentoView } from '@/components/fechamento/CloserFechamentoView';
+import { useOwnFechamento } from '@/hooks/useOwnFechamento';
 import { useMyEmployee } from '@/hooks/useMyEmployee';
 import { formatCurrency } from '@/lib/formatters';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,12 +24,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   Eye,
   RefreshCw,
-  DollarSign,
-  Target,
-  Wallet,
-  CreditCard,
-  TrendingUp,
-  UtensilsCrossed,
   FileText,
   CheckCircle,
   AlertTriangle,
@@ -41,11 +37,14 @@ const MeuFechamento = () => {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [showNfseModal, setShowNfseModal] = useState(false);
 
-  const { data: sdr, isLoading: sdrLoading } = useOwnSdr();
-  const { data: payout, isLoading: payoutLoading } = useOwnPayout(selectedMonth);
+  const { 
+    userType, 
+    userRecord, 
+    payout, 
+    closerMetrics,
+    isLoading 
+  } = useOwnFechamento(selectedMonth);
   const { data: myEmployee } = useMyEmployee();
-
-  const isLoading = sdrLoading || payoutLoading;
 
   // Generate last 12 months options
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
@@ -55,19 +54,6 @@ const MeuFechamento = () => {
       label: format(date, 'MMMM yyyy', { locale: ptBR }),
     };
   });
-
-  const calculateGlobalPct = () => {
-    if (!payout) return 0;
-    const pcts = [
-      payout.pct_reunioes_agendadas,
-      payout.pct_reunioes_realizadas,
-      payout.pct_tentativas,
-      payout.pct_organizacao,
-    ].filter((p) => p !== null) as number[];
-
-    if (pcts.length === 0) return 0;
-    return pcts.reduce((a, b) => a + b, 0) / pcts.length;
-  };
 
   const handleDownloadNfse = async () => {
     if (!payout?.nfse_id) return;
@@ -111,11 +97,11 @@ const MeuFechamento = () => {
     );
   }
 
-  if (!sdr) {
+  if (!userRecord) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">
-          Você não está cadastrado como SDR no sistema.
+          Você não está cadastrado no sistema de fechamento.
         </p>
         <p className="text-sm text-muted-foreground mt-2">
           Entre em contato com seu gestor para mais informações.
@@ -124,7 +110,11 @@ const MeuFechamento = () => {
     );
   }
 
-  const globalPct = calculateGlobalPct();
+  const getRoleLabel = () => {
+    if (userType === 'closer') return 'Closer';
+    if (userType === 'sdr') return 'SDR';
+    return '';
+  };
 
   return (
     <div className="space-y-5">
@@ -132,7 +122,7 @@ const MeuFechamento = () => {
         <div>
           <h1 className="text-xl font-semibold">Meu Fechamento</h1>
           <p className="text-sm text-muted-foreground">
-            Olá, {sdr.name}! Acompanhe seu fechamento mensal.
+            Olá, {userRecord.name}! Acompanhe seu fechamento mensal{getRoleLabel() ? ` como ${getRoleLabel()}` : ''}.
           </p>
         </div>
 
@@ -185,10 +175,10 @@ const MeuFechamento = () => {
 
           {/* NFSe Card - Show when APPROVED */}
           {payout.status === 'APPROVED' && !payout.nfse_id && myEmployee && (
-            <Card className="border-amber-500/50 bg-amber-500/10">
+            <Card className="border-warning/50 bg-warning/10">
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  <AlertTriangle className="h-5 w-5 text-warning" />
                   <div>
                     <p className="font-medium">Fechamento Aprovado!</p>
                     <p className="text-sm text-muted-foreground">
@@ -206,12 +196,12 @@ const MeuFechamento = () => {
 
           {/* NFSe Sent Card */}
           {payout.nfse_id && (
-            <Card className="border-green-500/50 bg-green-500/10">
+            <Card className="border-success/50 bg-success/10">
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <CheckCircle className="h-5 w-5 text-success" />
                   <div>
-                    <p className="font-medium text-green-600">NFSe Enviada</p>
+                    <p className="font-medium text-success">NFSe Enviada</p>
                     <p className="text-sm text-muted-foreground">
                       Aguardando confirmação do financeiro
                     </p>
@@ -225,146 +215,11 @@ const MeuFechamento = () => {
             </Card>
           )}
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-                  <TrendingUp className="h-3.5 w-3.5" />
-                  % Meta Global
-                </div>
-                <div
-                  className={`text-xl font-bold mt-1 ${
-                    globalPct >= 100
-                      ? 'text-green-400'
-                      : globalPct >= 70
-                      ? 'text-yellow-400'
-                      : 'text-red-400'
-                  }`}
-                >
-                  {globalPct.toFixed(1)}%
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-                  <Target className="h-3.5 w-3.5" />
-                  OTE
-                </div>
-                <div className="text-xl font-bold mt-1">
-                  {formatCurrency(4000)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-                  <Wallet className="h-3.5 w-3.5" />
-                  Fixo
-                </div>
-                <div className="text-xl font-bold mt-1">
-                  {formatCurrency(payout.valor_fixo || 0)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-                  <DollarSign className="h-3.5 w-3.5" />
-                  Variável
-                </div>
-                <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(payout.valor_variavel_total || 0)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-primary/10 border-primary/20">
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-1.5 text-primary text-xs">
-                  <CreditCard className="h-3.5 w-3.5" />
-                  Total Conta
-                </div>
-                <div className="text-xl font-bold mt-1 text-primary">
-                  {formatCurrency(payout.total_conta || 0)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-                  <UtensilsCrossed className="h-3.5 w-3.5" />
-                  Total iFood
-                </div>
-                <div className="text-xl font-bold mt-1">
-                  {formatCurrency(payout.total_ifood || 0)}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Indicators Preview */}
-          <Card>
-            <CardHeader className="py-3">
-              <CardTitle className="text-sm font-semibold">Resumo dos Indicadores</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <div className="text-xs text-muted-foreground/70">
-                    Reuniões Agendadas
-                  </div>
-                  <div className="text-lg font-semibold mt-0.5">
-                    {(payout.pct_reunioes_agendadas || 0).toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-muted-foreground/70">
-                    Mult: {payout.mult_reunioes_agendadas || 0}x
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <div className="text-xs text-muted-foreground/70">
-                    Reuniões Realizadas
-                  </div>
-                  <div className="text-lg font-semibold mt-0.5">
-                    {(payout.pct_reunioes_realizadas || 0).toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-muted-foreground/70">
-                    Mult: {payout.mult_reunioes_realizadas || 0}x
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <div className="text-xs text-muted-foreground/70">
-                    Tentativas
-                  </div>
-                  <div className="text-lg font-semibold mt-0.5">
-                    {(payout.pct_tentativas || 0).toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-muted-foreground/70">
-                    Mult: {payout.mult_tentativas || 0}x
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <div className="text-xs text-muted-foreground/70">
-                    Organização
-                  </div>
-                  <div className="text-lg font-semibold mt-0.5">
-                    {(payout.pct_organizacao || 0).toFixed(1)}%
-                  </div>
-                  <div className="text-xs text-muted-foreground/70">
-                    Mult: {payout.mult_organizacao || 0}x
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Render view based on user type */}
+          {userType === 'sdr' && <SdrFechamentoView payout={payout} />}
+          {userType === 'closer' && (
+            <CloserFechamentoView payout={payout} closerMetrics={closerMetrics} />
+          )}
         </>
       )}
 
