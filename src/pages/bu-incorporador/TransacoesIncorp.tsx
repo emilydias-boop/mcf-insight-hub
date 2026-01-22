@@ -32,9 +32,8 @@ import {
 
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
-import { useFirstTransactionIds } from '@/hooks/useFirstTransactionIds';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross, getFixedGrossPrice, getFirstTransactionIds } from '@/lib/incorporadorPricing';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 
@@ -61,7 +60,6 @@ export default function TransacoesIncorp() {
   };
 
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
-  const { data: firstTransactionIds = new Set<string>() } = useFirstTransactionIds();
 
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
@@ -73,13 +71,17 @@ export default function TransacoesIncorp() {
     return transactions.slice(start, start + itemsPerPage);
   }, [transactions, currentPage, itemsPerPage]);
 
-  // Totais - Bruto usa deduplicação via hook global
+  // Identificar primeiras transações de cada cliente+produto para deduplicação de Bruto
+  const firstTransactionIds = useMemo(() => {
+    return getFirstTransactionIds(transactions);
+  }, [transactions]);
+
+  // Totais - Bruto usa deduplicação por cliente+produto
   const totals = useMemo(() => {
     let bruto = 0;
     let liquido = 0;
     
     transactions.forEach(t => {
-      // Usa firstTransactionIds do hook - considera todo histórico global
       const isFirst = firstTransactionIds.has(t.id);
       bruto += getDeduplicatedGross(t, isFirst);
       liquido += t.net_value || 0;
