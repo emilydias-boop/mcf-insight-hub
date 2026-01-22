@@ -22,6 +22,10 @@ export interface Sdr {
   aprovado_em: string | null;
   created_at: string;
   updated_at: string;
+  // Campos adicionais para fechamento adaptativo
+  role_type?: 'sdr' | 'closer';
+  squad?: string;
+  closer_id?: string;
 }
 
 export interface SdrCompPlan {
