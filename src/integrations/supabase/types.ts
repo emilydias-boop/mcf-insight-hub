@@ -634,6 +634,62 @@ export type Database = {
           },
         ]
       }
+      cargo_metricas_config: {
+        Row: {
+          ativo: boolean | null
+          cargo_catalogo_id: string
+          created_at: string | null
+          fonte_dados: string | null
+          id: string
+          label_exibicao: string
+          meta_padrao: number | null
+          nome_metrica: string
+          ordem: number | null
+          peso_percentual: number | null
+          squad: string | null
+          tipo_calculo: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cargo_catalogo_id: string
+          created_at?: string | null
+          fonte_dados?: string | null
+          id?: string
+          label_exibicao: string
+          meta_padrao?: number | null
+          nome_metrica: string
+          ordem?: number | null
+          peso_percentual?: number | null
+          squad?: string | null
+          tipo_calculo?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cargo_catalogo_id?: string
+          created_at?: string | null
+          fonte_dados?: string | null
+          id?: string
+          label_exibicao?: string
+          meta_padrao?: number | null
+          nome_metrica?: string
+          ordem?: number | null
+          peso_percentual?: number | null
+          squad?: string | null
+          tipo_calculo?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargo_metricas_config_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cargos_catalogo: {
         Row: {
           area: string
@@ -4116,6 +4172,57 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      organograma: {
+        Row: {
+          ativo: boolean | null
+          cargo_catalogo_id: string | null
+          created_at: string | null
+          departamento: string | null
+          id: string
+          parent_id: string | null
+          posicao_ordem: number | null
+          squad: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cargo_catalogo_id?: string | null
+          created_at?: string | null
+          departamento?: string | null
+          id?: string
+          parent_id?: string | null
+          posicao_ordem?: number | null
+          squad?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cargo_catalogo_id?: string | null
+          created_at?: string | null
+          departamento?: string | null
+          id?: string
+          parent_id?: string | null
+          posicao_ordem?: number | null
+          squad?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organograma_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organograma_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "organograma"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pipeline_permissions: {
         Row: {
