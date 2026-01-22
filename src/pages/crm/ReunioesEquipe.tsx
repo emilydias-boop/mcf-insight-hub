@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as XLSX from "xlsx";
@@ -68,6 +68,7 @@ function IncorporadorMetricsCard() {
 
 export default function ReunioesEquipe() {
   const { role } = useAuth();
+  const navigate = useNavigate();
   const isRestrictedRole = role === 'sdr' || role === 'closer';
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -546,6 +547,17 @@ export default function ReunioesEquipe() {
             <CloserSummaryTable
               data={closerMetrics}
               isLoading={closerLoading}
+              onCloserClick={isRestrictedRole ? undefined : (closerId: string) => {
+                const params = new URLSearchParams();
+                params.set("preset", datePreset);
+                if (datePreset === "month") {
+                  params.set("month", format(selectedMonth, "yyyy-MM"));
+                } else if (datePreset === "custom" && customStartDate && customEndDate) {
+                  params.set("start", format(customStartDate, "yyyy-MM-dd"));
+                  params.set("end", format(customEndDate, "yyyy-MM-dd"));
+                }
+                navigate(`/crm/reunioes-equipe/closer/${closerId}?${params.toString()}`);
+              }}
             />
           )}
         </CardContent>

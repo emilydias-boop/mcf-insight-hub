@@ -1319,16 +1319,18 @@ export function useUpdateAttendeeStatus() {
 }
 
 // Helper function to sync deal stage from agenda status
+// Also handles ownership transfer: completed/contract_paid -> closer becomes owner
 async function syncDealStageFromAgenda(
   dealId: string, 
   agendaStatus: string,
-  meetingType: 'r1' | 'r2' = 'r1'
+  meetingType: 'r1' | 'r2' = 'r1',
+  closerEmail?: string  // NEW: optional closer email for ownership transfer
 ): Promise<void> {
   try {
     // 1. Fetch deal to get origin_id and current stage
     const { data: deal, error: dealError } = await supabase
       .from('crm_deals')
-      .select('origin_id, stage_id')
+      .select('origin_id, stage_id, owner_id')
       .eq('id', dealId)
       .single();
 
@@ -1375,33 +1377,63 @@ async function syncDealStageFromAgenda(
       return;
     }
 
-    // 4. Skip if already in target stage
-    if (deal.stage_id === targetStage.id) return;
+    // 4. Determine if we should transfer ownership
+    // Transfer ownership to closer when: completed or contract_paid
+    const ownershipTransferStatuses = ['completed', 'contract_paid'];
+    const shouldTransferOwnership = ownershipTransferStatuses.includes(agendaStatus) && closerEmail;
 
-    // 5. Update deal stage
+    // 5. Skip if already in target stage AND no ownership transfer needed
+    if (deal.stage_id === targetStage.id && !shouldTransferOwnership) return;
+
+    // 6. Build update object
+    const updateData: Record<string, unknown> = {};
+    
+    if (deal.stage_id !== targetStage.id) {
+      updateData.stage_id = targetStage.id;
+    }
+    
+    // Transfer ownership to closer for completed/contract_paid
+    // No-show keeps the SDR as owner so they can reschedule
+    if (shouldTransferOwnership) {
+      updateData.owner_id = closerEmail;
+      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (status: ${agendaStatus})`);
+    }
+
+    if (Object.keys(updateData).length === 0) return;
+
+    // 7. Update deal
     const { error: updateError } = await supabase
       .from('crm_deals')
-      .update({ stage_id: targetStage.id })
+      .update(updateData)
       .eq('id', dealId);
 
     if (updateError) {
-      console.error('Failed to update deal stage:', updateError);
+      console.error('Failed to update deal:', updateError);
       return;
     }
 
-    // 6. Log activity
+    // 8. Log activity
     await supabase
       .from('deal_activities')
       .insert({
         deal_id: dealId,
         activity_type: 'stage_change',
-        description: `Status atualizado via Agenda: ${agendaStatus}`,
+        description: shouldTransferOwnership 
+          ? `Status atualizado via Agenda: ${agendaStatus}. Responsável transferido para Closer.`
+          : `Status atualizado via Agenda: ${agendaStatus}`,
         from_stage: deal.stage_id,
         to_stage: targetStage.id,
-        metadata: { via: 'agenda_sync', status: agendaStatus, meetingType }
+        metadata: { 
+          via: 'agenda_sync', 
+          status: agendaStatus, 
+          meetingType,
+          ownershipTransferred: shouldTransferOwnership,
+          newOwner: shouldTransferOwnership ? closerEmail : undefined,
+          previousOwner: shouldTransferOwnership ? deal.owner_id : undefined,
+        }
       });
     
-    console.log(`CRM synced: Deal ${dealId} moved to stage ${targetStage.id} (${agendaStatus})`);
+    console.log(`CRM synced: Deal ${dealId} moved to stage ${targetStage.id} (${agendaStatus})${shouldTransferOwnership ? ` - owner: ${closerEmail}` : ''}`);
   } catch (error) {
     console.error('Error syncing deal stage from agenda:', error);
   }
@@ -1427,14 +1459,27 @@ export function useUpdateAttendeeAndSlotStatus() {
       syncSlot?: boolean;
       meetingType?: 'r1' | 'r2';
     }) => {
-      // 1. Fetch attendee to get deal_id for CRM sync
+      // 1. Fetch attendee to get deal_id and meeting_slot_id for CRM sync
       const { data: attendee } = await supabase
         .from('meeting_slot_attendees')
-        .select('deal_id')
+        .select('deal_id, meeting_slot_id')
         .eq('id', attendeeId)
         .single();
 
-      // 2. Update attendee status
+      // 2. Fetch closer email for ownership transfer
+      let closerEmail: string | undefined;
+      if (attendee?.meeting_slot_id) {
+        const { data: slot } = await supabase
+          .from('meeting_slots')
+          .select('closer:closers(email)')
+          .eq('id', attendee.meeting_slot_id)
+          .single();
+        
+        const closer = slot?.closer as { email: string } | null;
+        closerEmail = closer?.email;
+      }
+
+      // 3. Update attendee status
       const { error: attendeeError } = await supabase
         .from('meeting_slot_attendees')
         .update({ status })
@@ -1442,7 +1487,7 @@ export function useUpdateAttendeeAndSlotStatus() {
 
       if (attendeeError) throw attendeeError;
 
-      // 3. Optionally sync meeting_slots status (for principal participants)
+      // 4. Optionally sync meeting_slots status (for principal participants)
       if (syncSlot && meetingId) {
         const { error: slotError } = await supabase
           .from('meeting_slots')
@@ -1452,10 +1497,10 @@ export function useUpdateAttendeeAndSlotStatus() {
         if (slotError) throw slotError;
       }
 
-      // 4. Sync deal stage in CRM if applicable
+      // 5. Sync deal stage in CRM if applicable (with ownership transfer)
       const statusesToSync = ['no_show', 'completed', 'contract_paid'];
       if (attendee?.deal_id && statusesToSync.includes(status)) {
-        await syncDealStageFromAgenda(attendee.deal_id, status, meetingType);
+        await syncDealStageFromAgenda(attendee.deal_id, status, meetingType, closerEmail);
       }
     },
     onSuccess: () => {

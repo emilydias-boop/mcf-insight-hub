@@ -77,6 +77,7 @@ import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
 import ReunioesEquipe from "./pages/crm/ReunioesEquipe";
 import SdrMeetingsDetailPage from "./pages/crm/SdrMeetingsDetailPage";
+import CloserMeetingsDetailPage from "./pages/crm/CloserMeetingsDetailPage";
 import Webhooks from "./pages/crm/Webhooks";
 import NotFound from "./pages/NotFound";
 import DashboardSemanas from "./pages/dashboard/Semanas";
@@ -208,6 +209,7 @@ const App = () => (
               <Route path="sdr/minhas-reunioes" element={<ResourceGuard resource="crm"><MinhasReunioes /></ResourceGuard>} />
               <Route path="crm/reunioes-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><ReunioesEquipe /></RoleGuard>} />
               <Route path="crm/reunioes-equipe/:sdrEmail" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><SdrMeetingsDetailPage /></RoleGuard>} />
+              <Route path="crm/reunioes-equipe/closer/:closerId" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CloserMeetingsDetailPage /></RoleGuard>} />
               <Route path="crm/configurar-closers" element={<ResourceGuard resource="configuracoes"><ConfigurarClosers /></ResourceGuard>} />
               <Route path="crm" element={<ResourceGuard resource="crm"><CRM /></ResourceGuard>}>
                 <Route index element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CRMOverview /></RoleGuard>} />
