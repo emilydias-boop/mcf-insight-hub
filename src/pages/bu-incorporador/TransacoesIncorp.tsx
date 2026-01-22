@@ -32,8 +32,9 @@ import {
 
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
+import { useFirstTransactionIds } from '@/hooks/useFirstTransactionIds';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice, getFirstTransactionIds } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 
@@ -60,6 +61,9 @@ export default function TransacoesIncorp() {
   };
 
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
+  
+  // Busca IDs globais das primeiras transações (ignora filtro de data)
+  const { data: globalFirstIds = new Set<string>() } = useFirstTransactionIds();
 
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
@@ -71,10 +75,8 @@ export default function TransacoesIncorp() {
     return transactions.slice(start, start + itemsPerPage);
   }, [transactions, currentPage, itemsPerPage]);
 
-  // Identificar primeiras transações de cada cliente+produto para deduplicação de Bruto
-  const firstTransactionIds = useMemo(() => {
-    return getFirstTransactionIds(transactions);
-  }, [transactions]);
+  // Identificar primeiras transações - agora usa IDs GLOBAIS
+  const firstTransactionIds = globalFirstIds;
 
   // Totais - Bruto usa deduplicação por cliente+produto
   const totals = useMemo(() => {
