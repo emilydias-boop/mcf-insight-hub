@@ -60,6 +60,7 @@ const NOTE_TYPE_STYLES: Record<NoteType, { bg: string; label: string }> = {
   call: { bg: 'bg-amber-50 border-amber-200', label: 'Ligação' },
   closer: { bg: 'bg-green-50 border-green-200', label: 'Closer' },
   r2: { bg: 'bg-indigo-50 border-indigo-200', label: 'R2' },
+  qualification: { bg: 'bg-teal-50 border-teal-200', label: 'Qualificação' },
 };
 
 const PURCHASE_STATUS_ICONS: Record<string, { icon: string; color: string }> = {
