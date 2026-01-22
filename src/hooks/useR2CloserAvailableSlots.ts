@@ -73,6 +73,7 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
         .from('meeting_slots')
         .select('scheduled_at')
         .eq('closer_id', closerId)
+        .eq('meeting_type', 'r2')
         .gte('scheduled_at', startOfDayStr)
         .lte('scheduled_at', endOfDayStr);
 
