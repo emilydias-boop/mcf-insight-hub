@@ -30,7 +30,7 @@ import {
   LEAD_PROFILE_OPTIONS, VIDEO_STATUS_OPTIONS, DECISION_MAKER_TYPE_OPTIONS
 } from '@/types/r2Agenda';
 import { useUpdateR2Attendee, useRemoveR2Attendee } from '@/hooks/useR2AttendeeUpdate';
-import { useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData';
+import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
 import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
 import { RefundModal } from './RefundModal';
@@ -92,7 +92,7 @@ export function R2MeetingDetailDrawer({
   const [localR2Observations, setLocalR2Observations] = useState<string>('');
   
   const updateAttendee = useUpdateR2Attendee();
-  const updateMeetingStatus = useUpdateR2MeetingStatus();
+  const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
@@ -141,8 +141,23 @@ export function R2MeetingDetailDrawer({
     });
   };
 
-  const handleStatusChange = (newStatus: string) => {
-    updateMeetingStatus.mutate({ meetingId: meeting.id, status: newStatus });
+  // Handler para atualizar status INDIVIDUAL do participante selecionado
+  const handleParticipantStatusChange = (newStatus: string) => {
+    if (!attendee) return;
+    
+    // Para R2, sincronizar slot apenas em completed/contract_paid do participante principal
+    // Um participante é "principal" se não tiver partner_name (não é parceiro de outro lead)
+    const statusesToSyncSlot = ['completed', 'contract_paid'];
+    const isPrincipal = !attendee.partner_name;
+    const shouldSyncSlot = statusesToSyncSlot.includes(newStatus) && isPrincipal;
+
+    updateAttendeeAndSlotStatus.mutate({
+      attendeeId: attendee.id,
+      status: newStatus,
+      meetingId: meeting.id,
+      syncSlot: shouldSyncSlot,
+      meetingType: 'r2',
+    });
   };
 
   const handleWhatsApp = () => {
@@ -759,7 +774,7 @@ export function R2MeetingDetailDrawer({
             <Button 
               variant="outline" 
               className="text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950"
-              onClick={() => handleStatusChange('completed')}
+              onClick={() => handleParticipantStatusChange('completed')}
             >
               <CheckCircle className="h-4 w-4 mr-2" />
               Realizada
@@ -767,7 +782,7 @@ export function R2MeetingDetailDrawer({
             <Button 
               variant="outline"
               className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-950"
-              onClick={() => handleStatusChange('no_show')}
+              onClick={() => handleParticipantStatusChange('no_show')}
             >
               <XCircle className="h-4 w-4 mr-2" />
               No-show
