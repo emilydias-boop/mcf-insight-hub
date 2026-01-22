@@ -230,13 +230,13 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["sdr", "closer"],
   },
 
-  // Metas da Equipe (SDRs da BU Incorporador)
+  // Metas da Equipe (SDRs e Closers da BU Incorporador)
   {
     title: "Metas da Equipe",
     url: "/crm/reunioes-equipe",
     icon: BarChart3,
     resource: "crm",
-    requiredRoles: ["sdr"],
+    requiredRoles: ["sdr", "closer"],
     requiredBU: ["incorporador"],
   },
 
