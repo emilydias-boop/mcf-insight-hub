@@ -173,7 +173,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
       <div 
         key={origin.id} 
         className={cn(
-          "group flex items-center gap-1",
+          "group flex items-center gap-1 min-w-0",
           indented && "pl-6"
         )}
       >
@@ -206,7 +206,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         <Button
           variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
           className={cn(
-            "flex-1 justify-between h-auto py-2 text-left",
+            "flex-1 min-w-0 justify-between h-auto py-2 text-left overflow-hidden",
             selectedOriginId === origin.id && "bg-primary/10"
           )}
           onClick={() => onSelectOrigin(origin.id)}
@@ -294,7 +294,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   return (
     <div className={cn(
       "border-r bg-muted/10 flex flex-col h-full transition-all duration-300",
-      isCollapsed ? "w-12" : "w-64"
+      isCollapsed ? "w-12" : "w-72"
     )}>
       {/* Header com toggle */}
       <div className="p-4 border-b flex items-center justify-between">
