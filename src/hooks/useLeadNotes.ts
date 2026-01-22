@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export type NoteType = 'manual' | 'scheduling' | 'call' | 'closer' | 'r2';
+export type NoteType = 'manual' | 'scheduling' | 'call' | 'closer' | 'r2' | 'qualification';
 
 export interface LeadNote {
   id: string;
@@ -13,6 +13,7 @@ export interface LeadNote {
 
 /**
  * Fetch all notes related to a lead from various sources
+ * Now fetches notes from ALL attendees of a deal (R1, R2, etc.)
  */
 export function useLeadNotes(dealId: string | null | undefined, attendeeId: string | null | undefined) {
   return useQuery({
@@ -20,13 +21,33 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
     queryFn: async (): Promise<LeadNote[]> => {
       const notes: LeadNote[] = [];
       
-      // 1. Fetch deal activities (manual notes)
+      // =============================================
+      // Fetch ALL attendeeIds for this deal
+      // This ensures we get notes from R1, R2, etc.
+      // =============================================
+      let allAttendeeIds: string[] = [];
+      
+      if (dealId) {
+        const { data: allAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id')
+          .eq('deal_id', dealId);
+        
+        allAttendeeIds = (allAttendees || []).map(a => a.id);
+      }
+      
+      // Add current attendeeId if not already in the list
+      if (attendeeId && !allAttendeeIds.includes(attendeeId)) {
+        allAttendeeIds.push(attendeeId);
+      }
+      
+      // 1. Fetch deal activities (manual notes + qualification notes)
       if (dealId) {
         const { data: activities } = await supabase
           .from('deal_activities')
           .select('id, activity_type, description, created_at, user_id')
           .eq('deal_id', dealId)
-          .eq('activity_type', 'note')
+          .in('activity_type', ['note', 'qualification_note'])
           .order('created_at', { ascending: false });
         
         if (activities) {
@@ -51,7 +72,7 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
             if (act.description) {
               notes.push({
                 id: act.id,
-                type: 'manual',
+                type: act.activity_type === 'qualification_note' ? 'qualification' : 'manual',
                 content: act.description,
                 author: act.user_id ? userMap[act.user_id] || null : null,
                 created_at: act.created_at || new Date().toISOString(),
@@ -61,12 +82,12 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
         }
       }
       
-      // 2. Fetch attendee notes (closer notes)
-      if (attendeeId) {
+      // 2. Fetch attendee notes from ALL attendees of this deal
+      if (allAttendeeIds.length > 0) {
         const { data: attendeeNotes } = await supabase
           .from('attendee_notes')
           .select('id, note, note_type, created_at, created_by')
-          .eq('attendee_id', attendeeId)
+          .in('attendee_id', allAttendeeIds)
           .order('created_at', { ascending: false });
         
         if (attendeeNotes) {
@@ -98,7 +119,30 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
         }
       }
       
-      // 3. Fetch call notes
+      // 3. Fetch scheduling notes from meeting_slot_attendees.notes
+      if (allAttendeeIds.length > 0) {
+        const { data: schedulingNotes } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id, notes, created_at')
+          .in('id', allAttendeeIds)
+          .not('notes', 'is', null);
+        
+        if (schedulingNotes) {
+          schedulingNotes.forEach(sn => {
+            if (sn.notes) {
+              notes.push({
+                id: `scheduling-${sn.id}`,
+                type: 'scheduling',
+                content: sn.notes,
+                author: null,
+                created_at: sn.created_at || new Date().toISOString(),
+              });
+            }
+          });
+        }
+      }
+      
+      // 4. Fetch call notes
       if (dealId) {
         const { data: calls } = await supabase
           .from('calls')
