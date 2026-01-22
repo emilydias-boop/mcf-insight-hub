@@ -47,6 +47,8 @@ export const R2_BOOKERS_LIST = [
   { id: 'dd76c153-a4a5-432e-ab4c-0b48f6141659', nome: 'Julio Caetano' },
   { id: 'c8fd2b83-2aee-41a4-9154-e812f492bc5f', nome: 'Cristiane Gomes' },
   { id: '6bb81a27-fd8f-4af8-bce0-377f3576124f', nome: 'Thaynar Tavares' },
+  { id: '6cb06155-26dd-4be9-87ce-53e60a59a4e7', nome: 'Leticia Rodrigues' },
+  { id: 'a6802c50-1b85-4646-b20e-f40ae89c3157', nome: 'Jéssica Bellini' },
 ];
 
 // ID da origem PIPELINE INSIDE SALES
