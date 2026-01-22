@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, Trash2, Eye } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, Trash2, Eye, UserPlus, UserCheck } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -33,7 +35,7 @@ import {
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice, getFirstTransactionIds } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 
@@ -61,6 +63,17 @@ export default function TransacoesIncorp() {
 
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
 
+  // Buscar IDs de primeira compra GLOBAL via RPC (consistente com Dashboard)
+  const { data: globalFirstIds = new Set<string>() } = useQuery({
+    queryKey: ['global-first-transaction-ids'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_first_transaction_ids');
+      if (error) throw error;
+      return new Set((data || []).map((r: { id: string }) => r.id));
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutos
+  });
+
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
 
@@ -71,24 +84,19 @@ export default function TransacoesIncorp() {
     return transactions.slice(start, start + itemsPerPage);
   }, [transactions, currentPage, itemsPerPage]);
 
-  // Identificar primeiras transações de cada cliente+produto para deduplicação de Bruto
-  const firstTransactionIds = useMemo(() => {
-    return getFirstTransactionIds(transactions);
-  }, [transactions]);
-
-  // Totais - Bruto usa deduplicação por cliente+produto
+  // Totais - Bruto usa deduplicação GLOBAL (consistente com Dashboard)
   const totals = useMemo(() => {
     let bruto = 0;
     let liquido = 0;
     
     transactions.forEach(t => {
-      const isFirst = firstTransactionIds.has(t.id);
+      const isFirst = globalFirstIds.has(t.id);
       bruto += getDeduplicatedGross(t, isFirst);
       liquido += t.net_value || 0;
     });
     
     return { count: transactions.length, bruto, liquido };
-  }, [transactions, firstTransactionIds]);
+  }, [transactions, globalFirstIds]);
 
   // Handlers
   const handleRefresh = async () => {
@@ -109,9 +117,9 @@ export default function TransacoesIncorp() {
       return;
     }
 
-    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte', 'Duplicado'];
+    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte', 'Tipo', 'Duplicado'];
     const rows = transactions.map(t => {
-      const isFirst = firstTransactionIds.has(t.id);
+      const isFirst = globalFirstIds.has(t.id);
       return [
         t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
         t.product_name || '',
@@ -121,6 +129,7 @@ export default function TransacoesIncorp() {
         getDeduplicatedGross(t, isFirst).toFixed(2),
         t.net_value?.toFixed(2) || '0',
         t.source || '',
+        isFirst ? 'Novo' : 'Recorrente',
         isFirst ? 'Não' : 'Sim',
       ];
     });
@@ -287,6 +296,7 @@ export default function TransacoesIncorp() {
                     <TableHead className="w-28 text-right">Bruto</TableHead>
                     <TableHead className="w-28 text-right">Líquido</TableHead>
                     <TableHead className="w-24">Fonte</TableHead>
+                    <TableHead className="w-24 text-center">Tipo</TableHead>
                     <TableHead className="w-20">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -301,12 +311,13 @@ export default function TransacoesIncorp() {
                         <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-16 mx-auto" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                       </TableRow>
                     ))
                   ) : paginatedTransactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                         Nenhuma transação encontrada
                       </TableCell>
                     </TableRow>
@@ -336,7 +347,7 @@ export default function TransacoesIncorp() {
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {(() => {
-                            const isFirst = firstTransactionIds.has(t.id);
+                            const isFirst = globalFirstIds.has(t.id);
                             const brutoValue = getDeduplicatedGross(t, isFirst);
                             return (
                               <span className={!isFirst ? "text-muted-foreground" : ""}>
@@ -360,6 +371,25 @@ export default function TransacoesIncorp() {
                           <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-muted">
                             {t.source || 'hubla'}
                           </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {globalFirstIds.has(t.id) ? (
+                            <span 
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              title="Primeira compra deste cliente neste produto"
+                            >
+                              <UserPlus className="h-3 w-3" />
+                              Novo
+                            </span>
+                          ) : (
+                            <span 
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                              title="Cliente já comprou este produto anteriormente"
+                            >
+                              <UserCheck className="h-3 w-3" />
+                              Recorrente
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
