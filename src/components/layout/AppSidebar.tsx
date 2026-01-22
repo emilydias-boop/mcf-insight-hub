@@ -221,6 +221,16 @@ const menuItems: MenuItem[] = [
     separator: true,
   },
 
+  // Meu Desempenho (apenas Closer)
+  {
+    title: "Meu Desempenho",
+    url: "/closer/meu-desempenho",
+    icon: BarChart3,
+    resource: "crm",
+    requiredRoles: ["closer"],
+    separator: true,
+  },
+
   // Agenda (SDR e Closer)
   {
     title: "Agenda",
