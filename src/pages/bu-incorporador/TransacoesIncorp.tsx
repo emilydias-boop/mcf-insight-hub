@@ -33,7 +33,7 @@ import {
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross, getFixedGrossPrice, getFirstTransactionIds } from '@/lib/incorporadorPricing';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 
@@ -71,12 +71,24 @@ export default function TransacoesIncorp() {
     return transactions.slice(start, start + itemsPerPage);
   }, [transactions, currentPage, itemsPerPage]);
 
-  // Totais
-  const totals = useMemo(() => {
-    const bruto = transactions.reduce((sum, t) => sum + getDeduplicatedGross(t), 0);
-    const liquido = transactions.reduce((sum, t) => sum + (t.net_value || 0), 0);
-    return { count: transactions.length, bruto, liquido };
+  // Identificar primeiras transações de cada cliente+produto para deduplicação de Bruto
+  const firstTransactionIds = useMemo(() => {
+    return getFirstTransactionIds(transactions);
   }, [transactions]);
+
+  // Totais - Bruto usa deduplicação por cliente+produto
+  const totals = useMemo(() => {
+    let bruto = 0;
+    let liquido = 0;
+    
+    transactions.forEach(t => {
+      const isFirst = firstTransactionIds.has(t.id);
+      bruto += getDeduplicatedGross(t, isFirst);
+      liquido += t.net_value || 0;
+    });
+    
+    return { count: transactions.length, bruto, liquido };
+  }, [transactions, firstTransactionIds]);
 
   // Handlers
   const handleRefresh = async () => {
@@ -97,17 +109,21 @@ export default function TransacoesIncorp() {
       return;
     }
 
-    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte'];
-    const rows = transactions.map(t => [
-      t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
-      t.product_name || '',
-      t.customer_name || '',
-      t.customer_email || '',
-      t.installment_number && t.total_installments ? `${t.installment_number}/${t.total_installments}` : '1/1',
-      getDeduplicatedGross(t).toFixed(2),
-      t.net_value?.toFixed(2) || '0',
-      t.source || '',
-    ]);
+    const headers = ['Data', 'Produto', 'Cliente', 'Email', 'Parcela', 'Bruto', 'Líquido', 'Fonte', 'Duplicado'];
+    const rows = transactions.map(t => {
+      const isFirst = firstTransactionIds.has(t.id);
+      return [
+        t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yyyy HH:mm') : '',
+        t.product_name || '',
+        t.customer_name || '',
+        t.customer_email || '',
+        t.installment_number && t.total_installments ? `${t.installment_number}/${t.total_installments}` : '1/1',
+        getDeduplicatedGross(t, isFirst).toFixed(2),
+        t.net_value?.toFixed(2) || '0',
+        t.source || '',
+        isFirst ? 'Não' : 'Sim',
+      ];
+    });
 
     const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -319,7 +335,23 @@ export default function TransacoesIncorp() {
                             : '1/1'}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatCurrency(getDeduplicatedGross(t))}
+                          {(() => {
+                            const isFirst = firstTransactionIds.has(t.id);
+                            const brutoValue = getDeduplicatedGross(t, isFirst);
+                            return (
+                              <span className={!isFirst ? "text-muted-foreground" : ""}>
+                                {formatCurrency(brutoValue)}
+                                {!isFirst && (
+                                  <span 
+                                    className="ml-1 text-xs" 
+                                    title="Bruto zerado - cliente já contabilizado neste produto"
+                                  >
+                                    (dup)
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-right text-green-600 font-medium">
                           {formatCurrency(t.net_value || 0)}

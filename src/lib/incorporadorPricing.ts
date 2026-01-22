@@ -48,9 +48,20 @@ export interface TransactionForGross {
   gross_override?: number | null;  // Override manual do valor bruto
 }
 
+// Interface estendida para transações com campos de deduplicação por cliente+produto
+export interface TransactionForDedup extends TransactionForGross {
+  id: string;
+  customer_email: string | null;
+  sale_date: string;
+}
+
 // Calcula o valor bruto de uma transação
 // Usa override manual se definido, senão calcula baseado no preço fixo do produto
-export const getDeduplicatedGross = (transaction: TransactionForGross): number => {
+// NOVO: isFirstOfGroup indica se é a primeira transação do grupo cliente+produto
+export const getDeduplicatedGross = (
+  transaction: TransactionForGross, 
+  isFirstOfGroup: boolean = true
+): number => {
   const installment = transaction.installment_number || 1;
   
   // Regra 1: Parcela > 1 sempre tem bruto zerado
@@ -58,12 +69,17 @@ export const getDeduplicatedGross = (transaction: TransactionForGross): number =
     return 0;
   }
   
-  // Regra 2: Se há override manual, usa ele diretamente (permite zerar bruto)
+  // Regra 2: NÃO é a primeira transação do grupo cliente+produto = bruto zerado
+  if (!isFirstOfGroup) {
+    return 0;
+  }
+  
+  // Regra 3: Se há override manual, usa ele diretamente (permite zerar bruto)
   if (transaction.gross_override !== null && transaction.gross_override !== undefined) {
     return transaction.gross_override;
   }
   
-  // Regra 3: Calcula baseado no preço fixo do produto
+  // Regra 4: Calcula baseado no preço fixo do produto
   return getFixedGrossPrice(transaction.product_name, transaction.product_price || 0);
 };
 
@@ -83,4 +99,34 @@ export const normalizeProductKey = (productName: string | null): string => {
   
   // Fallback: primeiros 40 chars
   return upper.substring(0, 40);
+};
+
+// Gera chave única por cliente + produto normalizado para deduplicação
+export const getClientProductKey = (
+  email: string | null, 
+  productName: string | null
+): string => {
+  const normalizedEmail = (email || 'unknown').toLowerCase().trim();
+  const normalizedProduct = normalizeProductKey(productName);
+  return `${normalizedEmail}|${normalizedProduct}`;
+};
+
+// Retorna Set com IDs das transações que são a PRIMEIRA de cada cliente+produto
+// Usado para identificar qual transação deve manter o valor Bruto
+export const getFirstTransactionIds = (
+  transactions: TransactionForDedup[]
+): Set<string> => {
+  const firstByGroup = new Map<string, { id: string; date: Date }>();
+  
+  transactions.forEach(tx => {
+    const key = getClientProductKey(tx.customer_email, tx.product_name);
+    const txDate = new Date(tx.sale_date);
+    
+    const existing = firstByGroup.get(key);
+    if (!existing || txDate < existing.date) {
+      firstByGroup.set(key, { id: tx.id, date: txDate });
+    }
+  });
+  
+  return new Set(Array.from(firstByGroup.values()).map(v => v.id));
 };
