@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Search, Layers, ChevronLeft, ChevronRight, ChevronDown, Star,
   Store, Users, Building2, Briefcase, Package, Megaphone, Globe, 
-  ShoppingCart, Target, Handshake, type LucideIcon
+  ShoppingCart, Target, Handshake, MoreVertical, Settings, Archive, Trash2,
+  type LucideIcon
 } from 'lucide-react';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { PipelineSelector } from './PipelineSelector';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { PipelineContextMenu } from './PipelineContextMenu';
+import { PipelineConfigModal } from './PipelineConfigModal';
 
 interface OriginsSidebarProps {
   pipelineId?: string | null;
@@ -94,6 +97,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
+  const [configTarget, setConfigTarget] = useState<{ type: 'origin' | 'group'; id: string; name: string } | null>(null);
   
   const { data: originData, isLoading } = useCRMOriginsByPipeline(pipelineId);
   
@@ -217,6 +221,15 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             </Badge>
           )}
         </Button>
+
+        {/* Menu de 3 pontos */}
+        <PipelineContextMenu
+          targetType="origin"
+          targetId={origin.id}
+          targetName={displayName}
+          onConfigure={() => setConfigTarget({ type: 'origin', id: origin.id, name: displayName })}
+          onSelect={() => onSelectOrigin(origin.id)}
+        />
       </div>
     );
   };
@@ -234,28 +247,43 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         open={isExpanded}
         onOpenChange={() => toggleGroup(group.id)}
       >
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="w-full justify-between h-auto py-2 font-medium"
-          >
-            <span className="flex items-center gap-2 min-w-0 flex-1">
-              <ChevronDown 
-                className={cn(
-                  "h-3 w-3 transition-transform flex-shrink-0",
-                  !isExpanded && "-rotate-90"
-                )}
-              />
-              <Icon className="h-3 w-3 flex-shrink-0" />
-              <span className="truncate text-xs">{displayName}</span>
-            </span>
-            {totalDeals > 0 && (
-              <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
-                {totalDeals}
-              </Badge>
-            )}
-          </Button>
-        </CollapsibleTrigger>
+        <div className="group flex items-center">
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="flex-1 justify-between h-auto py-2 font-medium"
+            >
+              <span className="flex items-center gap-2 min-w-0 flex-1">
+                <ChevronDown 
+                  className={cn(
+                    "h-3 w-3 transition-transform flex-shrink-0",
+                    !isExpanded && "-rotate-90"
+                  )}
+                />
+                <Icon className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate text-xs">{displayName}</span>
+              </span>
+              {totalDeals > 0 && (
+                <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
+                  {totalDeals}
+                </Badge>
+              )}
+            </Button>
+          </CollapsibleTrigger>
+          
+          {/* Menu de 3 pontos para grupo */}
+          <PipelineContextMenu
+            targetType="group"
+            targetId={group.id}
+            targetName={displayName}
+            onConfigure={() => setConfigTarget({ type: 'group', id: group.id, name: displayName })}
+            onSelect={() => {
+              // Expandir grupo quando selecionado
+              setExpandedGroups(prev => new Set([...prev, group.id]));
+            }}
+          />
+        </div>
+        
         <CollapsibleContent className="space-y-1">
           {group.children.map(child => renderOriginItem(child, true))}
         </CollapsibleContent>
@@ -396,6 +424,16 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             })}
           </div>
         </ScrollArea>
+      )}
+
+      {/* Modal de configurações */}
+      {configTarget && (
+        <PipelineConfigModal
+          open={!!configTarget}
+          onOpenChange={(open) => !open && setConfigTarget(null)}
+          targetType={configTarget.type}
+          targetId={configTarget.id}
+        />
       )}
     </div>
   );
