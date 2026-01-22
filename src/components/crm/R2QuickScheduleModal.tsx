@@ -394,10 +394,7 @@ export function R2QuickScheduleModal({
               <Label className="text-xs">Responsável pelo agendamento</Label>
               <Select value={bookedBy} onValueChange={setBookedBy}>
                 <SelectTrigger className="h-9">
-                  <div className="flex items-center gap-2 flex-1">
-                    <UserCheck className="h-4 w-4 shrink-0" />
-                    <SelectValue placeholder="Selecione responsável" />
-                  </div>
+                  <SelectValue placeholder="Selecione responsável" />
                 </SelectTrigger>
                 <SelectContent>
                   {R2_BOOKERS_LIST.map(booker => (
@@ -414,10 +411,7 @@ export function R2QuickScheduleModal({
               <Label className="text-xs">Sócio</Label>
               <Select value={selectedCloser} onValueChange={setSelectedCloser}>
                 <SelectTrigger className="h-9">
-                  <div className="flex items-center gap-2 flex-1">
-                    <User className="h-4 w-4 shrink-0" />
-                    <SelectValue placeholder="Selecione um sócio" />
-                  </div>
+                  <SelectValue placeholder="Selecione um sócio" />
                 </SelectTrigger>
                 <SelectContent>
                   {closers.map(closer => (
