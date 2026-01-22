@@ -55,12 +55,12 @@ const MEETING_STATUS_LABELS: Record<string, { label: string; color: string }> = 
 };
 
 const NOTE_TYPE_STYLES: Record<NoteType, { bg: string; label: string }> = {
-  manual: { bg: 'bg-blue-50 border-blue-200', label: 'Nota SDR' },
-  scheduling: { bg: 'bg-purple-50 border-purple-200', label: 'Agendamento' },
-  call: { bg: 'bg-amber-50 border-amber-200', label: 'Ligação' },
-  closer: { bg: 'bg-green-50 border-green-200', label: 'Closer' },
-  r2: { bg: 'bg-indigo-50 border-indigo-200', label: 'R2' },
-  qualification: { bg: 'bg-teal-50 border-teal-200', label: 'Qualificação' },
+  manual: { bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800', label: 'Nota SDR' },
+  scheduling: { bg: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800', label: 'Agendamento' },
+  call: { bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800', label: 'Ligação' },
+  closer: { bg: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800', label: 'Closer' },
+  r2: { bg: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800', label: 'R2' },
+  qualification: { bg: 'bg-teal-50 border-teal-200 dark:bg-teal-950/30 dark:border-teal-800', label: 'Qualificação' },
 };
 
 const PURCHASE_STATUS_ICONS: Record<string, { icon: string; color: string }> = {
