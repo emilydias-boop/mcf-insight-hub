@@ -6872,6 +6872,8 @@ export type Database = {
         Returns: {
           customer_email: string
           customer_name: string
+          customer_phone: string
+          gross_override: number
           id: string
           installment_number: number
           net_value: number
