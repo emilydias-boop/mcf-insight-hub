@@ -6849,7 +6849,7 @@ export type Database = {
       get_first_transaction_ids: {
         Args: never
         Returns: {
-          first_id: string
+          id: string
         }[]
       }
       get_hubla_transactions_by_bu: {
