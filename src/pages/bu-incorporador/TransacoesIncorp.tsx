@@ -33,8 +33,7 @@ import {
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getClientProductKey } from '@/lib/incorporadorPricing';
-import { useFirstTransactionHistory } from '@/hooks/useFirstTransactionHistory';
+import { getDeduplicatedGross, getFixedGrossPrice, getFirstTransactionIds } from '@/lib/incorporadorPricing';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 
@@ -61,9 +60,6 @@ export default function TransacoesIncorp() {
   };
 
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
-  
-  // Hook para buscar histórico global de primeiras transações
-  const { firstTransactionMap, isLoading: historyLoading } = useFirstTransactionHistory();
 
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
@@ -75,24 +71,12 @@ export default function TransacoesIncorp() {
     return transactions.slice(start, start + itemsPerPage);
   }, [transactions, currentPage, itemsPerPage]);
 
-  // Identificar primeiras transações usando histórico GLOBAL (não apenas do período filtrado)
+  // Identificar primeiras transações de cada cliente+produto para deduplicação de Bruto
   const firstTransactionIds = useMemo(() => {
-    const firstIds = new Set<string>();
-    
-    transactions.forEach(t => {
-      const key = getClientProductKey(t.customer_email, t.product_name);
-      const historicalFirstId = firstTransactionMap.get(key);
-      
-      // Só é "primeira" se for O MESMO ID da primeira transação histórica global
-      if (historicalFirstId === t.id) {
-        firstIds.add(t.id);
-      }
-    });
-    
-    return firstIds;
-  }, [transactions, firstTransactionMap]);
+    return getFirstTransactionIds(transactions);
+  }, [transactions]);
 
-  // Totais - Bruto usa deduplicação por cliente+produto com histórico global
+  // Totais - Bruto usa deduplicação por cliente+produto
   const totals = useMemo(() => {
     let bruto = 0;
     let liquido = 0;

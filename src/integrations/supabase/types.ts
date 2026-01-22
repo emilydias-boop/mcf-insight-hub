@@ -6846,15 +6846,6 @@ export type Database = {
           phone_suffix: string
         }[]
       }
-      get_first_transaction_dates: {
-        Args: never
-        Returns: {
-          customer_email: string
-          first_sale_date: string
-          first_transaction_id: string
-          product_key: string
-        }[]
-      }
       get_first_transaction_ids: {
         Args: never
         Returns: {
