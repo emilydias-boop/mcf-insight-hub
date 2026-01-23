@@ -445,7 +445,7 @@ export default function AgendaR2() {
             {/* List View - Primary */}
             <TabsContent value="list" className="mt-0">
               <R2ListViewTable
-                meetings={meetings}
+                meetings={filteredMeetings}
                 statusOptions={statusOptions}
                 thermometerOptions={thermometerOptions}
                 onSelectMeeting={handleSelectMeeting}
