@@ -3440,6 +3440,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           event_type: string
+          excluded_from_cart: boolean | null
           gross_override: number | null
           hubla_id: string
           id: string
@@ -3471,6 +3472,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           event_type: string
+          excluded_from_cart?: boolean | null
           gross_override?: number | null
           hubla_id: string
           id?: string
@@ -3502,6 +3504,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           event_type?: string
+          excluded_from_cart?: boolean | null
           gross_override?: number | null
           hubla_id?: string
           id?: string
