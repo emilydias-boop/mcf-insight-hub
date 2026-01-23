@@ -108,6 +108,7 @@ import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
 import ConsorcioCRM from "./pages/bu-consorcio/CRM";
 import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
+import Chairman from "./pages/Chairman";
 
 const queryClient = new QueryClient();
 
@@ -136,6 +137,9 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
+              {/* Chairman Dashboard - Executive View */}
+              <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} />
+              
               <Route index element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
               <Route path="dashboard/semanas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DashboardSemanas /></RoleGuard>} />
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
