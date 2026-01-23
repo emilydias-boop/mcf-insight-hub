@@ -175,8 +175,8 @@ export function useR2MetricsData(weekDate: Date) {
             }
           }
 
-          // Check meeting status for no-show
-          if (meeting.status === 'no_show') {
+        // Check ATTENDEE status for no-show (not meeting status)
+        if (att.status === 'no_show') {
             noShow++;
             noShowAttendees.push({
               id: att.id,
