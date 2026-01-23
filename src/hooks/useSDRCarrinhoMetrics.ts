@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
+import { SDR_LIST } from "@/constants/team";
 
 export interface SDRCarrinhoMetric {
   sdr_id: string;
@@ -13,6 +14,10 @@ export interface SDRCarrinhoMetric {
 export function useSDRCarrinhoMetrics(weekDate: Date) {
   const weekStart = getCustomWeekStart(weekDate);
   const weekEnd = getCustomWeekEnd(weekDate);
+
+  // Build set of valid SDR emails
+  const validSdrEmails = new Set(SDR_LIST.map(s => s.email.toLowerCase()));
+  const sdrNameMap = new Map(SDR_LIST.map(s => [s.email.toLowerCase(), s.nome]));
 
   return useQuery({
     queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
@@ -68,7 +73,7 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
         return [];
       }
 
-      // 4. Fetch profiles for SDR names
+      // 4. Fetch profiles for SDR emails
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name, email')
@@ -79,29 +84,34 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
         return [];
       }
 
-      const profilesMap = new Map<string, { name: string; email: string }>();
+      // Map profile ID to email (lowercase)
+      const profileEmailMap = new Map<string, string>();
       profiles?.forEach((p: any) => {
-        profilesMap.set(p.id, { 
-          name: p.full_name || p.email?.split('@')[0] || 'Unknown',
-          email: p.email || ''
-        });
+        if (p.email) {
+          profileEmailMap.set(p.id, p.email.toLowerCase());
+        }
       });
 
-      // 5. Aggregate by SDR
+      // 5. Aggregate by SDR - ONLY include valid SDRs from SDR_LIST
       const sdrMap = new Map<string, SDRCarrinhoMetric>();
 
       attendees?.forEach((att: any) => {
         const sdrId = att.booked_by;
         if (!sdrId) return;
 
-        const profile = profilesMap.get(sdrId);
-        if (!profile) return;
+        const sdrEmail = profileEmailMap.get(sdrId);
+        if (!sdrEmail) return;
+
+        // FILTER: Only count if booked by a valid SDR from SDR_LIST
+        if (!validSdrEmails.has(sdrEmail)) return;
+
+        const sdrName = sdrNameMap.get(sdrEmail) || sdrEmail.split('@')[0];
 
         if (!sdrMap.has(sdrId)) {
           sdrMap.set(sdrId, {
             sdr_id: sdrId,
-            sdr_name: profile.name,
-            sdr_email: profile.email,
+            sdr_name: sdrName,
+            sdr_email: sdrEmail,
             aprovados: 0,
           });
         }
