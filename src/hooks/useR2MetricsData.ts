@@ -195,7 +195,7 @@ export function useR2MetricsData(weekDate: Date) {
         .eq('product_category', 'parceria')
         .gte('sale_date', weekStart.toISOString())
         .lte('sale_date', endOfDay(weekEnd).toISOString())
-        .eq('sale_status', 'paid');
+        .in('sale_status', ['paid', 'completed']);
 
       if (hublaError) throw hublaError;
 

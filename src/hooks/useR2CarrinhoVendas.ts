@@ -42,7 +42,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
           meeting_slot:meeting_slots!inner (
             id,
             scheduled_at,
-            type,
+            meeting_type,
             closer:closers (
               id,
               name,
