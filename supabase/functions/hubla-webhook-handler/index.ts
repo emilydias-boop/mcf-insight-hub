@@ -937,9 +937,9 @@ serve(async (req) => {
             });
           }
 
-          // Se for incorporador, não for offer, e for primeira parcela, auto-marcar reunião R1 como contrato pago
-          if (productCategory === 'incorporador' && !isOffer && installment === 1) {
-            console.log(`🎯 [INCORPORADOR] Pagamento detectado, buscando reunião para auto-marcar...`);
+          // Se for contrato, não for offer, e for primeira parcela, auto-marcar reunião R1 como contrato pago
+          if (productCategory === 'contrato' && !isOffer && installment === 1) {
+            console.log(`🎯 [CONTRATO] Pagamento detectado, buscando reunião R1 para auto-marcar...`);
             await autoMarkContractPaid(supabase, {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
