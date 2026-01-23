@@ -2131,6 +2131,7 @@ export type Database = {
           next_action_note: string | null
           next_action_type: string | null
           origin_id: string | null
+          original_sdr_email: string | null
           owner_id: string | null
           probability: number | null
           product_name: string | null
@@ -2152,6 +2153,7 @@ export type Database = {
           next_action_note?: string | null
           next_action_type?: string | null
           origin_id?: string | null
+          original_sdr_email?: string | null
           owner_id?: string | null
           probability?: number | null
           product_name?: string | null
@@ -2173,6 +2175,7 @@ export type Database = {
           next_action_note?: string | null
           next_action_type?: string | null
           origin_id?: string | null
+          original_sdr_email?: string | null
           owner_id?: string | null
           probability?: number | null
           product_name?: string | null

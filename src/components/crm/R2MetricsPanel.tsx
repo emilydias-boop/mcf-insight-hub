@@ -12,12 +12,15 @@ import {
   Percent,
   Bell,
   Loader2,
-  RefreshCcw
+  RefreshCcw,
+  User
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useR2MetricsData } from '@/hooks/useR2MetricsData';
+import { useSDRR2Metrics } from '@/hooks/useSDRR2Metrics';
 import { SemiCircleGauge } from './SemiCircleGauge';
 import { AddExternalSaleModal } from './AddExternalSaleModal';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
@@ -67,6 +70,7 @@ function MetricCard({ icon, label, value, color, badge, onClick }: MetricCardPro
 export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
   const weekStart = getCustomWeekStart(weekDate);
   const { data: metrics, isLoading } = useR2MetricsData(weekDate);
+  const { data: sdrMetrics, isLoading: sdrLoading } = useSDRR2Metrics(weekDate);
 
   const handleRescheduleNoShows = () => {
     window.location.href = '/crm/agenda-r2?filter=no_show';
@@ -135,7 +139,7 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
             color="#F97316"
             badge={
               metrics.proximaSemana > 0 && (
-                <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100">
+                <Badge variant="outline" className="text-xs bg-orange-100/80 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200 border-orange-300 dark:border-orange-700">
                   Atenção
                 </Badge>
               )
@@ -239,6 +243,98 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Seção 4: Conversão por SDR */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <User className="h-5 w-5 text-muted-foreground" />
+            Conversão por SDR
+          </CardTitle>
+          <CardDescription>
+            Leads aprovados que compraram parceria (atribuídos ao SDR original)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {sdrLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : !sdrMetrics || sdrMetrics.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>Nenhum lead aprovado com SDR identificado nesta semana</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SDR</TableHead>
+                  <TableHead className="text-center">Aprovados</TableHead>
+                  <TableHead className="text-center">Vendas</TableHead>
+                  <TableHead className="text-center">Taxa</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sdrMetrics.map((sdr) => (
+                  <TableRow key={sdr.sdrEmail}>
+                    <TableCell className="font-medium">{sdr.sdrName}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
+                        {sdr.leadsAprovados}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30">
+                        {sdr.vendasRealizadas}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge 
+                        variant={sdr.taxaConversao >= 50 ? 'default' : 'secondary'}
+                        className={sdr.taxaConversao >= 50 
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' 
+                          : ''
+                        }
+                      >
+                        {sdr.taxaConversao.toFixed(0)}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {/* Total row */}
+                {sdrMetrics.length > 1 && (
+                  <TableRow className="bg-muted/30 font-semibold">
+                    <TableCell className="text-muted-foreground">Total</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary" className="bg-blue-500/20 text-blue-700 dark:text-blue-300">
+                        {sdrMetrics.reduce((acc, s) => acc + s.leadsAprovados, 0)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary" className="bg-green-500/20 text-green-700 dark:text-green-300">
+                        {sdrMetrics.reduce((acc, s) => acc + s.vendasRealizadas, 0)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        const totalAprovados = sdrMetrics.reduce((acc, s) => acc + s.leadsAprovados, 0);
+                        const totalVendas = sdrMetrics.reduce((acc, s) => acc + s.vendasRealizadas, 0);
+                        const taxaTotal = totalAprovados > 0 ? (totalVendas / totalAprovados) * 100 : 0;
+                        return (
+                          <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                            {taxaTotal.toFixed(0)}%
+                          </Badge>
+                        );
+                      })()}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
