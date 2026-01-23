@@ -2,9 +2,9 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Target, Settings2 } from "lucide-react";
-import { GaugeSemicircle } from "./GaugeSemicircle";
+import { GoalsMatrixTable } from "./GoalsMatrixTable";
 import { TeamGoalsEditModal } from "./TeamGoalsEditModal";
-import { useSdrTeamTargets, SDR_TARGET_CONFIGS, SdrTargetType } from "@/hooks/useSdrTeamTargets";
+import { useSdrTeamTargets, SdrTargetType } from "@/hooks/useSdrTeamTargets";
 import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -39,51 +39,47 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
     return target?.target_value ?? 0;
   };
 
-  // Day gauges configuration
-  const dayGauges = useMemo(() => [
-    { titulo: 'Agendamento', valor: dayValues.agendamento, meta: getTargetValue('sdr_agendamento_dia') },
-    { titulo: 'R1 Agendada', valor: dayValues.r1Agendada, meta: getTargetValue('sdr_r1_agendada_dia') },
-    { titulo: 'R1 Realizada', valor: dayValues.r1Realizada, meta: getTargetValue('sdr_r1_realizada_dia') },
-    { titulo: 'No-Show', valor: dayValues.noShow, meta: getTargetValue('sdr_noshow_dia') },
-    { titulo: 'Contrato Pago', valor: dayValues.contrato, meta: getTargetValue('sdr_contrato_dia') },
-    { titulo: 'R2 Agendada', valor: dayValues.r2Agendada, meta: getTargetValue('sdr_r2_agendada_dia') },
-    { titulo: 'R2 Realizada', valor: dayValues.r2Realizada, meta: getTargetValue('sdr_r2_realizada_dia') },
-    { titulo: 'Vendas Realizadas', valor: dayValues.vendaRealizada, meta: getTargetValue('sdr_venda_realizada_dia') },
-  ], [dayValues, targets]);
+  // Day targets
+  const dayTargets = useMemo(() => ({
+    agendamento: getTargetValue('sdr_agendamento_dia'),
+    r1Agendada: getTargetValue('sdr_r1_agendada_dia'),
+    r1Realizada: getTargetValue('sdr_r1_realizada_dia'),
+    noShow: getTargetValue('sdr_noshow_dia'),
+    contrato: getTargetValue('sdr_contrato_dia'),
+    r2Agendada: getTargetValue('sdr_r2_agendada_dia'),
+    r2Realizada: getTargetValue('sdr_r2_realizada_dia'),
+    vendaRealizada: getTargetValue('sdr_venda_realizada_dia'),
+  }), [targets]);
 
-  // Week gauges configuration
-  const weekGauges = useMemo(() => [
-    { titulo: 'Agendamento', valor: weekValues.agendamento, meta: getTargetValue('sdr_agendamento_semana') },
-    { titulo: 'R1 Agendada', valor: weekValues.r1Agendada, meta: getTargetValue('sdr_r1_agendada_semana') },
-    { titulo: 'R1 Realizada', valor: weekValues.r1Realizada, meta: getTargetValue('sdr_r1_realizada_semana') },
-    { titulo: 'No-Show', valor: weekValues.noShow, meta: getTargetValue('sdr_noshow_semana') },
-    { titulo: 'Contrato Pago', valor: weekValues.contrato, meta: getTargetValue('sdr_contrato_semana') },
-    { titulo: 'R2 Agendada', valor: weekValues.r2Agendada, meta: getTargetValue('sdr_r2_agendada_semana') },
-    { titulo: 'R2 Realizada', valor: weekValues.r2Realizada, meta: getTargetValue('sdr_r2_realizada_semana') },
-    { titulo: 'Vendas Realizadas', valor: weekValues.vendaRealizada, meta: getTargetValue('sdr_venda_realizada_semana') },
-  ], [weekValues, targets]);
+  // Week targets
+  const weekTargets = useMemo(() => ({
+    agendamento: getTargetValue('sdr_agendamento_semana'),
+    r1Agendada: getTargetValue('sdr_r1_agendada_semana'),
+    r1Realizada: getTargetValue('sdr_r1_realizada_semana'),
+    noShow: getTargetValue('sdr_noshow_semana'),
+    contrato: getTargetValue('sdr_contrato_semana'),
+    r2Agendada: getTargetValue('sdr_r2_agendada_semana'),
+    r2Realizada: getTargetValue('sdr_r2_realizada_semana'),
+    vendaRealizada: getTargetValue('sdr_venda_realizada_semana'),
+  }), [targets]);
 
-  // Month gauges configuration
-  const monthGauges = useMemo(() => [
-    { titulo: 'Agendamento', valor: monthValues.agendamento, meta: getTargetValue('sdr_agendamento_mes') },
-    { titulo: 'R1 Agendada', valor: monthValues.r1Agendada, meta: getTargetValue('sdr_r1_agendada_mes') },
-    { titulo: 'R1 Realizada', valor: monthValues.r1Realizada, meta: getTargetValue('sdr_r1_realizada_mes') },
-    { titulo: 'No-Show', valor: monthValues.noShow, meta: getTargetValue('sdr_noshow_mes') },
-    { titulo: 'Contrato Pago', valor: monthValues.contrato, meta: getTargetValue('sdr_contrato_mes') },
-    { titulo: 'R2 Agendada', valor: monthValues.r2Agendada, meta: getTargetValue('sdr_r2_agendada_mes') },
-    { titulo: 'R2 Realizada', valor: monthValues.r2Realizada, meta: getTargetValue('sdr_r2_realizada_mes') },
-    { titulo: 'Vendas Realizadas', valor: monthValues.vendaRealizada, meta: getTargetValue('sdr_venda_realizada_mes') },
-  ], [monthValues, targets]);
+  // Month targets
+  const monthTargets = useMemo(() => ({
+    agendamento: getTargetValue('sdr_agendamento_mes'),
+    r1Agendada: getTargetValue('sdr_r1_agendada_mes'),
+    r1Realizada: getTargetValue('sdr_r1_realizada_mes'),
+    noShow: getTargetValue('sdr_noshow_mes'),
+    contrato: getTargetValue('sdr_contrato_mes'),
+    r2Agendada: getTargetValue('sdr_r2_agendada_mes'),
+    r2Realizada: getTargetValue('sdr_r2_realizada_mes'),
+    vendaRealizada: getTargetValue('sdr_venda_realizada_mes'),
+  }), [targets]);
 
   if (isLoading) {
     return (
       <Card className="bg-card border-border">
         <CardContent className="p-3 sm:p-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-            {[...Array(8)].map((_, i) => (
-              <Skeleton key={i} className="h-24 sm:h-32 w-full" />
-            ))}
-          </div>
+          <Skeleton className="h-[300px] w-full rounded-lg" />
         </CardContent>
       </Card>
     );
@@ -111,51 +107,15 @@ export function TeamGoalsPanel({ dayValues, weekValues, monthValues }: TeamGoals
             )}
           </div>
         </CardHeader>
-        <CardContent className="pt-0 space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
-          {/* Day section */}
-          <div>
-            <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Dia</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2">
-              {dayGauges.map((gauge, index) => (
-                <GaugeSemicircle
-                  key={`day-${index}`}
-                  titulo={gauge.titulo}
-                  valor={gauge.valor}
-                  meta={gauge.meta}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Week section */}
-          <div>
-            <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Semana</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2">
-              {weekGauges.map((gauge, index) => (
-                <GaugeSemicircle
-                  key={`week-${index}`}
-                  titulo={gauge.titulo}
-                  valor={gauge.valor}
-                  meta={gauge.meta}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Month section */}
-          <div>
-            <h3 className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Mês</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2">
-              {monthGauges.map((gauge, index) => (
-                <GaugeSemicircle
-                  key={`month-${index}`}
-                  titulo={gauge.titulo}
-                  valor={gauge.valor}
-                  meta={gauge.meta}
-                />
-              ))}
-            </div>
-          </div>
+        <CardContent className="pt-0 px-3 sm:px-6 pb-3 sm:pb-6">
+          <GoalsMatrixTable
+            dayValues={dayValues}
+            weekValues={weekValues}
+            monthValues={monthValues}
+            dayTargets={dayTargets}
+            weekTargets={weekTargets}
+            monthTargets={monthTargets}
+          />
         </CardContent>
       </Card>
 
