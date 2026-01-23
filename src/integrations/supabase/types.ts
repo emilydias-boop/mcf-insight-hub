@@ -7154,6 +7154,7 @@ export type Database = {
         | "coordenador"
         | "rh"
         | "financeiro"
+        | "closer_sombra"
       auction_status: "ativo" | "encerrado" | "cancelado"
       flag_category:
         | "desempenho"
@@ -7349,6 +7350,7 @@ export const Constants = {
         "coordenador",
         "rh",
         "financeiro",
+        "closer_sombra",
       ],
       auction_status: ["ativo", "encerrado", "cancelado"],
       flag_category: [
