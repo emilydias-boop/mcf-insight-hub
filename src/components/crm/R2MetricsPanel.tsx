@@ -230,7 +230,7 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
             <div>
               <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Closers
+                Sócios
               </h4>
               <div className="flex flex-wrap gap-4 justify-start">
                 {metrics.closerConversions.map((closer) => (
@@ -285,7 +285,7 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
                 {metrics.closerConversions.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span className="text-muted-foreground">Closers:</span>
+                    <span className="text-muted-foreground">Sócios:</span>
                     <span className="font-medium">
                       {metrics.closerConversions.reduce((acc, c) => acc + c.vendas, 0)} vendas / {metrics.closerConversions.reduce((acc, c) => acc + c.aprovados, 0)} aprovados
                     </span>

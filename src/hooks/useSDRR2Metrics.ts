@@ -35,7 +35,8 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
         return [];
       }
 
-      // 2. Fetch approved R2 attendees with deal, contact, and slot info (including booked_by)
+      // 2. Fetch approved R2 attendees with deal, contact, and slot info
+      // booked_by is fetched directly from attendee (98% filled vs 93% from slot)
       const { data: approvedAttendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -43,6 +44,7 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
           attendee_name,
           attendee_phone,
           carrinho_status,
+          booked_by,
           deal:crm_deals(
             id,
             owner_id,
@@ -55,8 +57,7 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
           meeting_slot:meeting_slots!inner(
             id,
             scheduled_at,
-            meeting_type,
-            booked_by
+            meeting_type
           )
         `)
         .eq('r2_status_id', aprovadoStatusId)
@@ -65,10 +66,10 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
         .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString());
 
       // 3. Fetch profiles to resolve booked_by UUIDs to emails
+      // Use booked_by from attendee (priority) as it's more reliable
       const bookedByIds = new Set<string>();
       approvedAttendees?.forEach((att: any) => {
-        const bookedBy = att.meeting_slot?.booked_by;
-        if (bookedBy) bookedByIds.add(bookedBy);
+        if (att.booked_by) bookedByIds.add(att.booked_by);
       });
 
       let profilesMap = new Map<string, string>();
@@ -133,15 +134,21 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
 
       approvedAttendees.forEach((att: any) => {
         const deal = att.deal;
-        const slot = att.meeting_slot;
         
-        // Get SDR email - priority: original_sdr_email > booked_by (via profiles) > owner_id
-        let sdrEmail = deal?.original_sdr_email;
+        // Get SDR email - priority: attendee.booked_by (98%) > original_sdr_email > owner_id
+        let sdrEmail: string | undefined;
         
-        if (!sdrEmail && slot?.booked_by) {
-          sdrEmail = profilesMap.get(slot.booked_by);
+        // 1. Try attendee.booked_by first (most reliable - 98% filled)
+        if (att.booked_by) {
+          sdrEmail = profilesMap.get(att.booked_by);
         }
         
+        // 2. Fallback to original_sdr_email
+        if (!sdrEmail) {
+          sdrEmail = deal?.original_sdr_email;
+        }
+        
+        // 3. Last resort: owner_id
         if (!sdrEmail) {
           sdrEmail = deal?.owner_id;
         }
