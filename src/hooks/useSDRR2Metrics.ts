@@ -35,7 +35,7 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
         return [];
       }
 
-      // 2. Fetch approved R2 attendees with deal and contact info
+      // 2. Fetch approved R2 attendees with deal, contact, and slot info (including booked_by)
       const { data: approvedAttendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -55,13 +55,33 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
           meeting_slot:meeting_slots!inner(
             id,
             scheduled_at,
-            meeting_type
+            meeting_type,
+            booked_by
           )
         `)
         .eq('r2_status_id', aprovadoStatusId)
         .eq('meeting_slot.meeting_type', 'r2')
         .gte('meeting_slot.scheduled_at', startOfDay(weekStart).toISOString())
         .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString());
+
+      // 3. Fetch profiles to resolve booked_by UUIDs to emails
+      const bookedByIds = new Set<string>();
+      approvedAttendees?.forEach((att: any) => {
+        const bookedBy = att.meeting_slot?.booked_by;
+        if (bookedBy) bookedByIds.add(bookedBy);
+      });
+
+      let profilesMap = new Map<string, string>();
+      if (bookedByIds.size > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, email, full_name')
+          .in('id', Array.from(bookedByIds));
+        
+        profiles?.forEach((p: any) => {
+          profilesMap.set(p.id, p.email || p.full_name || p.id);
+        });
+      }
 
       if (attendeesError) {
         console.error('Error fetching approved attendees:', attendeesError);
@@ -72,7 +92,7 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
         return [];
       }
 
-      // 3. Collect emails and phones for matching with sales
+      // 4. Collect emails and phones for matching with sales
       const emailsSet = new Set<string>();
       const phonesSet = new Set<string>();
       
@@ -87,7 +107,7 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
         if (phone && phone.length >= 10) phonesSet.add(phone);
       });
 
-      // 4. Fetch partnership sales for the week
+      // 5. Fetch partnership sales for the week
       const { data: sales, error: salesError } = await supabase
         .from('hubla_transactions')
         .select('customer_email, customer_phone')
@@ -108,24 +128,35 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
         sales?.map(s => normalizePhoneNumber(s.customer_phone)).filter(p => p && p.length >= 10) || []
       );
 
-      // 5. Aggregate by SDR
+      // 6. Aggregate by SDR
       const sdrMap = new Map<string, SDRR2Metrics>();
 
       approvedAttendees.forEach((att: any) => {
         const deal = att.deal;
-        if (!deal) return;
+        const slot = att.meeting_slot;
         
-        // Get SDR email - prefer original_sdr_email, fallback to owner_id
-        const sdrEmail = deal.original_sdr_email || deal.owner_id;
+        // Get SDR email - priority: original_sdr_email > booked_by (via profiles) > owner_id
+        let sdrEmail = deal?.original_sdr_email;
+        
+        if (!sdrEmail && slot?.booked_by) {
+          sdrEmail = profilesMap.get(slot.booked_by);
+        }
+        
+        if (!sdrEmail) {
+          sdrEmail = deal?.owner_id;
+        }
+        
         if (!sdrEmail) return;
 
         // Initialize SDR entry if needed
         if (!sdrMap.has(sdrEmail)) {
-          // Extract name from email (before @)
-          const sdrName = sdrEmail.split('@')[0]
-            .split('.')
-            .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
-            .join(' ');
+          // Extract name from email (before @) or use the profile name
+          const sdrName = sdrEmail.includes('@') 
+            ? sdrEmail.split('@')[0]
+                .split('.')
+                .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ')
+            : sdrEmail;
           
           sdrMap.set(sdrEmail, {
             sdrEmail,
@@ -156,7 +187,7 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
         }
       });
 
-      // 6. Calculate conversion rates and sort by leads
+      // 7. Calculate conversion rates and sort by leads
       let result = Array.from(sdrMap.values());
       result.forEach(stats => {
         stats.taxaConversao = stats.leadsAprovados > 0

@@ -18,7 +18,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useR2MetricsData } from '@/hooks/useR2MetricsData';
 import { useSDRR2Metrics } from '@/hooks/useSDRR2Metrics';
 import { SemiCircleGauge } from './SemiCircleGauge';
@@ -214,124 +213,103 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
         </div>
       </div>
 
-      {/* Seção 3: Conversão Individual dos Sócios */}
-      {metrics.closerConversions.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
-            Conversão Individual dos Sócios (R2 Closers)
-          </h3>
-          <div className="flex flex-wrap gap-4 justify-start">
-            {metrics.closerConversions.map((closer) => (
-              <SemiCircleGauge
-                key={closer.closerId}
-                value={closer.conversion}
-                label={closer.closerName}
-                sublabel={`${closer.vendas} de ${closer.aprovados}`}
-                color={closer.closerColor}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Empty state for closers */}
-      {metrics.closerConversions.length === 0 && metrics.selecionados > 0 && (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p>Nenhum closer com aprovados nesta semana</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Seção 4: Conversão por SDR */}
+      {/* Seção 3: Conversão Individual (Closers + SDRs unificados) */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <User className="h-5 w-5 text-muted-foreground" />
-            Conversão por SDR
+            <Percent className="h-5 w-5 text-muted-foreground" />
+            Conversão Individual (R2 → Parceria)
           </CardTitle>
           <CardDescription>
-            Leads aprovados que compraram parceria (atribuídos ao SDR original)
+            Taxa de conversão de leads aprovados que compraram parceria
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {sdrLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : !sdrMetrics || sdrMetrics.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>Nenhum lead aprovado com SDR identificado nesta semana</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SDR</TableHead>
-                  <TableHead className="text-center">Aprovados</TableHead>
-                  <TableHead className="text-center">Vendas</TableHead>
-                  <TableHead className="text-center">Taxa</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sdrMetrics.map((sdr) => (
-                  <TableRow key={sdr.sdrEmail}>
-                    <TableCell className="font-medium">{sdr.sdrName}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
-                        {sdr.leadsAprovados}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30">
-                        {sdr.vendasRealizadas}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge 
-                        variant={sdr.taxaConversao >= 50 ? 'default' : 'secondary'}
-                        className={sdr.taxaConversao >= 50 
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' 
-                          : ''
-                        }
-                      >
-                        {sdr.taxaConversao.toFixed(0)}%
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
+        <CardContent className="space-y-6">
+          {/* Closers */}
+          {metrics.closerConversions.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Closers
+              </h4>
+              <div className="flex flex-wrap gap-4 justify-start">
+                {metrics.closerConversions.map((closer) => (
+                  <SemiCircleGauge
+                    key={closer.closerId}
+                    value={closer.conversion}
+                    label={closer.closerName}
+                    sublabel={`${closer.vendas} de ${closer.aprovados}`}
+                    color={closer.closerColor}
+                    size={100}
+                  />
                 ))}
-                {/* Total row */}
-                {sdrMetrics.length > 1 && (
-                  <TableRow className="bg-muted/30 font-semibold">
-                    <TableCell className="text-muted-foreground">Total</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="secondary" className="bg-blue-500/20 text-blue-700 dark:text-blue-300">
-                        {sdrMetrics.reduce((acc, s) => acc + s.leadsAprovados, 0)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="secondary" className="bg-green-500/20 text-green-700 dark:text-green-300">
-                        {sdrMetrics.reduce((acc, s) => acc + s.vendasRealizadas, 0)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(() => {
-                        const totalAprovados = sdrMetrics.reduce((acc, s) => acc + s.leadsAprovados, 0);
-                        const totalVendas = sdrMetrics.reduce((acc, s) => acc + s.vendasRealizadas, 0);
-                        const taxaTotal = totalAprovados > 0 ? (totalVendas / totalAprovados) * 100 : 0;
-                        return (
-                          <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
-                            {taxaTotal.toFixed(0)}%
-                          </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                  </TableRow>
+              </div>
+            </div>
+          )}
+
+          {/* SDRs */}
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              SDRs
+            </h4>
+            {sdrLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : !sdrMetrics || sdrMetrics.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                <User className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                <p>Nenhum lead aprovado com SDR identificado</p>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-4 justify-start">
+                {sdrMetrics.map((sdr) => (
+                  <SemiCircleGauge
+                    key={sdr.sdrEmail}
+                    value={sdr.taxaConversao}
+                    label={sdr.sdrName}
+                    sublabel={`${sdr.vendasRealizadas} de ${sdr.leadsAprovados}`}
+                    color="#3B82F6"
+                    size={100}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Totais */}
+          {(metrics.closerConversions.length > 0 || (sdrMetrics && sdrMetrics.length > 0)) && (
+            <div className="pt-4 border-t border-border">
+              <div className="flex flex-wrap gap-6 text-sm">
+                {metrics.closerConversions.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-muted-foreground">Closers:</span>
+                    <span className="font-medium">
+                      {metrics.closerConversions.reduce((acc, c) => acc + c.vendas, 0)} vendas / {metrics.closerConversions.reduce((acc, c) => acc + c.aprovados, 0)} aprovados
+                    </span>
+                  </div>
                 )}
-              </TableBody>
-            </Table>
+                {sdrMetrics && sdrMetrics.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span className="text-muted-foreground">SDRs:</span>
+                    <span className="font-medium">
+                      {sdrMetrics.reduce((acc, s) => acc + s.vendasRealizadas, 0)} vendas / {sdrMetrics.reduce((acc, s) => acc + s.leadsAprovados, 0)} aprovados
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state quando não há nenhum dos dois */}
+          {metrics.closerConversions.length === 0 && (!sdrMetrics || sdrMetrics.length === 0) && !sdrLoading && (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>Nenhum lead aprovado nesta semana</p>
+            </div>
           )}
         </CardContent>
       </Card>
