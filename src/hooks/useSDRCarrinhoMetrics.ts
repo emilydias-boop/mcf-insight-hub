@@ -131,19 +131,32 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
 
       // 8. Aggregate by SDR - ONLY include valid SDRs from SDR_LIST
       const sdrMap = new Map<string, SDRCarrinhoMetric>();
+      let unassignedCount = 0;
 
       r2Attendees?.forEach((att: any) => {
         const dealId = att.deal_id;
-        if (!dealId) return;
+        if (!dealId) {
+          unassignedCount++;
+          return;
+        }
 
         const sdrId = dealToBookedBy.get(dealId);
-        if (!sdrId) return;
+        if (!sdrId) {
+          unassignedCount++;
+          return;
+        }
 
         const sdrEmail = profileEmailMap.get(sdrId);
-        if (!sdrEmail) return;
+        if (!sdrEmail) {
+          unassignedCount++;
+          return;
+        }
 
         // FILTER: Only count if booked by a valid SDR from SDR_LIST
-        if (!validSdrEmails.has(sdrEmail)) return;
+        if (!validSdrEmails.has(sdrEmail)) {
+          unassignedCount++;
+          return;
+        }
 
         const sdrName = sdrNameMap.get(sdrEmail) || sdrEmail.split('@')[0];
 
@@ -161,7 +174,19 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
       });
 
       // Sort by aprovados desc
-      return Array.from(sdrMap.values()).sort((a, b) => b.aprovados - a.aprovados);
+      const result = Array.from(sdrMap.values()).sort((a, b) => b.aprovados - a.aprovados);
+
+      // Add unassigned leads as a special entry
+      if (unassignedCount > 0) {
+        result.push({
+          sdr_id: 'unassigned',
+          sdr_name: 'Sem SDR',
+          sdr_email: '',
+          aprovados: unassignedCount,
+        });
+      }
+
+      return result;
     },
     refetchInterval: 30000,
   });

@@ -252,13 +252,21 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
                 {sdrCarrinhoMetrics.map((sdr) => (
                   <div 
                     key={sdr.sdr_id} 
-                    className="flex flex-col items-center p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 min-w-[100px]"
+                    className={`flex flex-col items-center p-3 rounded-lg min-w-[100px] ${
+                      sdr.sdr_id === 'unassigned' 
+                        ? 'bg-muted/50 border border-dashed border-muted-foreground/30' 
+                        : 'bg-blue-50 dark:bg-blue-950/30'
+                    }`}
                   >
-                    <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    <span className={`text-2xl font-bold ${
+                      sdr.sdr_id === 'unassigned' 
+                        ? 'text-muted-foreground' 
+                        : 'text-blue-600 dark:text-blue-400'
+                    }`}>
                       {sdr.aprovados}
                     </span>
                     <span className="text-xs text-muted-foreground truncate max-w-[90px]" title={sdr.sdr_name}>
-                      {sdr.sdr_name.split(' ')[0]}
+                      {sdr.sdr_id === 'unassigned' ? '⚠️ Sem SDR' : sdr.sdr_name.split(' ')[0]}
                     </span>
                     <span className="text-[10px] text-muted-foreground/70">no carrinho</span>
                   </div>
@@ -288,17 +296,21 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
                 {closerCarrinhoMetrics.map((closer) => (
                   <div 
                     key={closer.closer_id} 
-                    className="flex flex-col items-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 min-w-[100px]"
-                    style={{ borderLeft: `3px solid ${closer.closer_color || '#F59E0B'}` }}
+                    className={`flex flex-col items-center p-3 rounded-lg min-w-[100px] ${
+                      closer.closer_id === 'unassigned'
+                        ? 'bg-muted/50 border border-dashed border-muted-foreground/30'
+                        : 'bg-amber-50 dark:bg-amber-950/30'
+                    }`}
+                    style={{ borderLeft: closer.closer_id !== 'unassigned' ? `3px solid ${closer.closer_color || '#F59E0B'}` : undefined }}
                   >
                     <span 
-                      className="text-2xl font-bold"
-                      style={{ color: closer.closer_color || '#F59E0B' }}
+                      className={`text-2xl font-bold ${closer.closer_id === 'unassigned' ? 'text-muted-foreground' : ''}`}
+                      style={{ color: closer.closer_id !== 'unassigned' ? (closer.closer_color || '#F59E0B') : undefined }}
                     >
                       {closer.aprovados}
                     </span>
                     <span className="text-xs text-muted-foreground truncate max-w-[90px]" title={closer.closer_name}>
-                      {closer.closer_name.split(' ')[0]}
+                      {closer.closer_id === 'unassigned' ? '⚠️ Sem Closer' : closer.closer_name.split(' ')[0]}
                     </span>
                     <span className="text-[10px] text-muted-foreground/70">no carrinho</span>
                   </div>

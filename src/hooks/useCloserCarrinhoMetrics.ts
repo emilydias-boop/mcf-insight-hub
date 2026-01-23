@@ -125,16 +125,26 @@ export function useCloserCarrinhoMetrics(weekDate: Date) {
 
       // 8. Aggregate by Closer R1
       const closerMap = new Map<string, CloserCarrinhoMetric>();
+      let unassignedCount = 0;
 
       r2Attendees?.forEach((att: any) => {
         const dealId = att.deal_id;
-        if (!dealId) return;
+        if (!dealId) {
+          unassignedCount++;
+          return;
+        }
 
         const closerId = dealToCloserId.get(dealId);
-        if (!closerId) return;
+        if (!closerId) {
+          unassignedCount++;
+          return;
+        }
 
         const closerInfo = closerInfoMap.get(closerId);
-        if (!closerInfo) return;
+        if (!closerInfo) {
+          unassignedCount++;
+          return;
+        }
 
         if (!closerMap.has(closerId)) {
           closerMap.set(closerId, {
@@ -150,9 +160,21 @@ export function useCloserCarrinhoMetrics(weekDate: Date) {
       });
 
       // Sort by aprovados desc
-      return Array.from(closerMap.values())
+      const result = Array.from(closerMap.values())
         .filter(m => m.aprovados > 0)
         .sort((a, b) => b.aprovados - a.aprovados);
+
+      // Add unassigned leads as a special entry
+      if (unassignedCount > 0) {
+        result.push({
+          closer_id: 'unassigned',
+          closer_name: 'Sem Closer',
+          closer_color: '#6B7280',
+          aprovados: unassignedCount,
+        });
+      }
+
+      return result;
     },
     refetchInterval: 30000,
   });
