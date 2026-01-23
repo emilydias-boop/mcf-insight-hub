@@ -18,6 +18,7 @@ export interface R2CarrinhoVenda {
   source: string | null;
   gross_override: number | null;
   count_in_dashboard: boolean | null;
+  excluded_from_cart: boolean | null;
   // Dados do lead R2
   r2_attendee_name: string | null;
   r2_closer_name: string | null;
@@ -166,6 +167,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
             source: tx.source,
             gross_override: tx.gross_override,
             count_in_dashboard: tx.count_in_dashboard,
+            excluded_from_cart: tx.excluded_from_cart,
             r2_attendee_name: attendeeData?.name || null,
             r2_closer_name: attendeeData?.closerName || null,
             r2_closer_color: attendeeData?.closerColor || null,

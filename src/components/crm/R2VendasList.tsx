@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, RefreshCw, Download, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -76,9 +77,11 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vendaToDelete, setVendaToDelete] = useState<R2CarrinhoVenda | null>(null);
 
-  // Calcular totais
+  // Calcular totais - Bruto exclui itens com excluded_from_cart=true
   const totals = useMemo(() => {
-    const brutoTotal = vendas.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
+    const brutoTotal = vendas
+      .filter(v => !v.excluded_from_cart)
+      .reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
     const liquidoTotal = vendas.reduce((sum, v) => sum + (v.net_value || 0), 0);
     return {
       count: vendas.length,
@@ -161,6 +164,24 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const handlePageSizeChange = (value: string) => {
     setPageSize(Number(value));
     setCurrentPage(1);
+  };
+
+  // Toggle excluir do carrinho (bruto)
+  const handleToggleExcludeFromCart = async (venda: R2CarrinhoVenda) => {
+    const newValue = !venda.excluded_from_cart;
+    
+    const { error } = await supabase
+      .from('hubla_transactions')
+      .update({ excluded_from_cart: newValue })
+      .eq('id', venda.id);
+    
+    if (error) {
+      toast.error('Erro ao atualizar transação');
+      console.error('Error toggling exclude:', error);
+    } else {
+      toast.success(newValue ? 'Transação excluída do carrinho' : 'Transação restaurada no carrinho');
+      refetch();
+    }
   };
 
   // Mapear venda para formato esperado pelo drawer
@@ -287,7 +308,10 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                 </TableRow>
               ) : (
                 paginatedVendas.map((venda) => (
-                  <TableRow key={venda.id}>
+                  <TableRow 
+                    key={venda.id}
+                    className={venda.excluded_from_cart ? 'opacity-50' : ''}
+                  >
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium">
@@ -327,15 +351,28 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {formatCurrency(getDeduplicatedGross(venda))}
+                      {venda.excluded_from_cart ? (
+                        <span className="text-muted-foreground line-through">
+                          {formatCurrency(getDeduplicatedGross(venda))}
+                        </span>
+                      ) : (
+                        formatCurrency(getDeduplicatedGross(venda))
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-medium text-emerald-600">
                       {formatCurrency(venda.net_value)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="capitalize">
-                        {venda.source || 'hubla'}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary" className="capitalize">
+                          {venda.source || 'hubla'}
+                        </Badge>
+                        {venda.excluded_from_cart && (
+                          <Badge variant="outline" className="text-orange-500 border-orange-500/50">
+                            Excluído
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
@@ -344,6 +381,7 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => handleViewDetails(venda)}
+                          title="Ver detalhes"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -352,8 +390,18 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => handleEdit(venda)}
+                          title="Editar"
                         >
                           <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${venda.excluded_from_cart ? 'text-orange-500 hover:text-orange-600' : 'text-muted-foreground hover:text-foreground'}`}
+                          onClick={() => handleToggleExcludeFromCart(venda)}
+                          title={venda.excluded_from_cart ? 'Restaurar no carrinho' : 'Excluir do carrinho (não conta no Bruto)'}
+                        >
+                          {venda.excluded_from_cart ? <Undo2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                         </Button>
                         {venda.source === 'manual' && (
                           <Button
@@ -361,6 +409,7 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                             size="icon"
                             className="h-8 w-8 text-destructive hover:text-destructive"
                             onClick={() => handleDelete(venda)}
+                            title="Excluir permanentemente"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
