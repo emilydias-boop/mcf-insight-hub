@@ -14,7 +14,10 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { useR2CarrinhoData } from '@/hooks/useR2CarrinhoData';
+import { useAllApprovedAttendees } from '@/hooks/useAllApprovedAttendees';
 import { useLinkTransactionToAttendee } from '@/hooks/useLinkTransactionToAttendee';
 
 interface LinkAttendeeDialogProps {
@@ -33,8 +36,14 @@ export function LinkAttendeeDialog({
   weekDate,
 }: LinkAttendeeDialogProps) {
   const [search, setSearch] = useState('');
-  const { data: attendees = [], isLoading } = useR2CarrinhoData(weekDate, 'aprovados');
+  const [searchAllWeeks, setSearchAllWeeks] = useState(false);
+  
+  const { data: currentWeekAttendees = [], isLoading: isLoadingCurrent } = useR2CarrinhoData(weekDate, 'aprovados');
+  const { data: allAttendees = [], isLoading: isLoadingAll } = useAllApprovedAttendees();
   const linkMutation = useLinkTransactionToAttendee();
+
+  const attendees = searchAllWeeks ? allAttendees : currentWeekAttendees;
+  const isLoading = searchAllWeeks ? isLoadingAll : isLoadingCurrent;
 
   const filteredAttendees = useMemo(() => {
     if (!search.trim()) return attendees;
@@ -72,24 +81,37 @@ export function LinkAttendeeDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, email ou telefone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-          {search && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-              onClick={() => setSearch('')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+            <Label htmlFor="search-all-weeks" className="text-sm cursor-pointer">
+              Buscar em outras semanas
+            </Label>
+            <Switch 
+              id="search-all-weeks"
+              checked={searchAllWeeks} 
+              onCheckedChange={setSearchAllWeeks} 
+            />
+          </div>
+          
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, email ou telefone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+            {search && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                onClick={() => setSearch('')}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
         <ScrollArea className="flex-1 -mx-6 px-6">
@@ -116,7 +138,7 @@ export function LinkAttendeeDialog({
                       <p className="font-medium truncate">{att.attendee_name}</p>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span className="truncate">{att.contact_email || att.attendee_phone || '-'}</span>
-                        {att.closer_name && (
+                      {att.closer_name && (
                           <Badge 
                             variant="outline" 
                             className="text-xs flex-shrink-0"
@@ -126,6 +148,11 @@ export function LinkAttendeeDialog({
                             }}
                           >
                             {att.closer_name}
+                          </Badge>
+                        )}
+                        {searchAllWeeks && 'week_label' in att && (
+                          <Badge variant="secondary" className="text-xs flex-shrink-0">
+                            {att.week_label}
                           </Badge>
                         )}
                       </div>
