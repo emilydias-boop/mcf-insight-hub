@@ -11,7 +11,8 @@ import {
   ShoppingBag,
   Percent,
   Bell,
-  Loader2
+  Loader2,
+  RefreshCcw
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -102,7 +103,7 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
         <h3 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
           Leads do Carrinho
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
           <MetricCard
             icon={<Users className="h-5 w-5" />}
             label="Total Leads"
@@ -114,6 +115,12 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
             label="Desistentes"
             value={metrics.desistentes}
             color="#9333EA"
+          />
+          <MetricCard
+            icon={<RefreshCcw className="h-5 w-5" />}
+            label="Reembolsos"
+            value={metrics.reembolsos}
+            color="#EF4444"
           />
           <MetricCard
             icon={<XCircle className="h-5 w-5" />}
