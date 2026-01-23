@@ -1342,7 +1342,7 @@ async function syncDealStageFromAgenda(
     // 1. Fetch deal to get origin_id and current stage
     const { data: deal, error: dealError } = await supabase
       .from('crm_deals')
-      .select('origin_id, stage_id, owner_id')
+      .select('origin_id, stage_id, owner_id, original_sdr_email')
       .eq('id', dealId)
       .single();
 
@@ -1406,9 +1406,14 @@ async function syncDealStageFromAgenda(
     
     // Transfer ownership to closer for completed/contract_paid
     // No-show keeps the SDR as owner so they can reschedule
+    // Also save the original SDR email before transferring
     if (shouldTransferOwnership) {
+      // Preserve original SDR email if not already set
+      if (!deal.original_sdr_email && deal.owner_id) {
+        updateData.original_sdr_email = deal.owner_id;
+      }
       updateData.owner_id = closerEmail;
-      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (status: ${agendaStatus})`);
+      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (status: ${agendaStatus}), original SDR: ${deal.owner_id || 'N/A'}`);
     }
 
     if (Object.keys(updateData).length === 0) return;
