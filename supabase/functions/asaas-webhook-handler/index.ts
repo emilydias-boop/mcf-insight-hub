@@ -284,8 +284,8 @@ Deno.serve(async (req) => {
     
     logId = logData?.id;
 
-    // Apenas processar eventos de pagamento confirmado
-    const validEvents = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED'];
+    // Processar eventos de pagamento confirmado (padrão Asaas) e purchase.completed (formato customizado)
+    const validEvents = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'purchase.completed'];
     if (!validEvents.includes(event)) {
       console.log(`[Asaas] Evento ignorado: ${event}`);
       
@@ -302,45 +302,74 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!payment) {
-      console.log('[Asaas] Payload sem payment');
+    // Detectar formato do payload e extrair dados
+    let productName = '';
+    let customerName = '';
+    let customerEmail = '';
+    let customerPhone = '';
+    let netValue = 0;
+    let grossValue = 0;
+    let saleDate = '';
+    let paymentId = '';
+
+    if (body.payment) {
+      // Formato padrão Asaas: { event, payment: { ... } }
+      const payment = body.payment;
+      paymentId = payment.id;
+      productName = payment.description || '';
+      grossValue = payment.value || 0;
+      netValue = payment.netValue || grossValue;
+      saleDate = payment.confirmedDate || payment.paymentDate || payment.clientPaymentDate || new Date().toISOString().split('T')[0];
+      
+      if (typeof payment.customer === 'object' && payment.customer !== null) {
+        customerName = payment.customer.name || '';
+        customerEmail = payment.customer.email || '';
+        customerPhone = payment.customer.phone || payment.customer.mobilePhone || '';
+      } else {
+        customerName = payment.customerName || payment.customer_name || '';
+        customerEmail = payment.customerEmail || payment.customer_email || '';
+        customerPhone = payment.customerPhone || payment.customer_phone || '';
+      }
+      
+      console.log(`[Asaas] Formato padrão detectado: payment.id = ${paymentId}`);
+      
+    } else if (body.data) {
+      // Formato customizado: { event, data: { ... } }
+      const data = body.data;
+      paymentId = data.purchase_id || data.id || `custom_${Date.now()}`;
+      productName = data.product_name || data.productName || '';
+      grossValue = data.amount || data.value || 0;
+      netValue = data.net_amount || data.netAmount || grossValue;
+      saleDate = data.created_at || data.createdAt || data.sale_date || new Date().toISOString();
+      customerName = data.customer_name || data.customerName || '';
+      customerEmail = data.customer_email || data.customerEmail || '';
+      customerPhone = data.customer_phone || data.customerPhone || '';
+      
+      console.log(`[Asaas] Formato customizado detectado: data.purchase_id = ${paymentId}`);
+      
+    } else {
+      // Payload não reconhecido
+      console.log('[Asaas] Payload sem payment ou data - formato desconhecido');
+      
+      if (logId) {
+        await supabase
+          .from('bu_webhook_logs')
+          .update({ status: 'skipped', processed_at: new Date().toISOString() })
+          .eq('id', logId);
+      }
+      
       return new Response(
-        JSON.stringify({ received: true, skipped: true, reason: 'No payment data' }),
+        JSON.stringify({ received: true, skipped: true, reason: 'Unknown payload format' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const productName = payment.description || '';
+    // Determinar categoria do produto
     const productCategory = getProductCategory(productName);
-    
     console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory}`);
 
-    // Extrair dados do cliente
-    // Asaas pode enviar customer como objeto ou como string (ID)
-    let customerName = '';
-    let customerEmail = '';
-    let customerPhone = '';
-    
-    if (typeof payment.customer === 'object' && payment.customer !== null) {
-      customerName = payment.customer.name || '';
-      customerEmail = payment.customer.email || '';
-      customerPhone = payment.customer.phone || payment.customer.mobilePhone || '';
-    } else {
-      // Dados diretos do payment
-      customerName = payment.customerName || payment.customer_name || '';
-      customerEmail = payment.customerEmail || payment.customer_email || '';
-      customerPhone = payment.customerPhone || payment.customer_phone || '';
-    }
-
-    // Valores monetários (Asaas envia em reais, não centavos)
-    const netValue = payment.netValue || payment.value || 0;
-    const grossValue = payment.value || netValue;
-
-    // Data da venda
-    const saleDate = payment.confirmedDate || payment.paymentDate || payment.clientPaymentDate || new Date().toISOString().split('T')[0];
-
     // Gerar hubla_id único para evitar duplicatas
-    const hublaId = `asaas_${payment.id}`;
+    const hublaId = `asaas_${paymentId}`;
 
     // Verificar se já existe
     const { data: existing } = await supabase
