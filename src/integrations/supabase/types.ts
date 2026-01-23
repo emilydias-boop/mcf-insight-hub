@@ -3447,6 +3447,7 @@ export type Database = {
           installment_fee_cents: number | null
           installment_number: number | null
           is_offer: boolean | null
+          linked_attendee_id: string | null
           net_value: number | null
           payment_method: string | null
           product_category: string | null
@@ -3479,6 +3480,7 @@ export type Database = {
           installment_fee_cents?: number | null
           installment_number?: number | null
           is_offer?: boolean | null
+          linked_attendee_id?: string | null
           net_value?: number | null
           payment_method?: string | null
           product_category?: string | null
@@ -3511,6 +3513,7 @@ export type Database = {
           installment_fee_cents?: number | null
           installment_number?: number | null
           is_offer?: boolean | null
+          linked_attendee_id?: string | null
           net_value?: number | null
           payment_method?: string | null
           product_category?: string | null
@@ -3529,7 +3532,15 @@ export type Database = {
           utm_medium?: string | null
           utm_source?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "hubla_transactions_linked_attendee_id_fkey"
+            columns: ["linked_attendee_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_slot_attendees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       hubla_webhook_logs: {
         Row: {

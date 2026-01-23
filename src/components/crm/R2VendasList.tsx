@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2 } from 'lucide-react';
+import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2, Link2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -42,9 +42,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { useR2CarrinhoVendas, R2CarrinhoVenda } from '@/hooks/useR2CarrinhoVendas';
+import { useUnlinkedTransactions } from '@/hooks/useUnlinkedTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
 import { IncorporadorTransactionDrawer } from '@/components/incorporador/IncorporadorTransactionDrawer';
+import { LinkAttendeeDialog } from '@/components/crm/LinkAttendeeDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
@@ -66,6 +68,7 @@ const formatCurrency = (value: number | null) => {
 export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const queryClient = useQueryClient();
   const { data: vendas = [], isLoading, refetch } = useR2CarrinhoVendas(weekStart);
+  const { data: unlinkedTransactions = [], isLoading: isLoadingUnlinked } = useUnlinkedTransactions(weekStart);
   const deleteTransaction = useDeleteTransaction();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,6 +79,8 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const [selectedVenda, setSelectedVenda] = useState<R2CarrinhoVenda | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vendaToDelete, setVendaToDelete] = useState<R2CarrinhoVenda | null>(null);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [transactionToLink, setTransactionToLink] = useState<{ id: string; name: string } | null>(null);
 
   // Calcular totais - Bruto exclui itens com excluded_from_cart=true
   const totals = useMemo(() => {
@@ -100,6 +105,12 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const handleRefresh = () => {
     refetch();
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
+    queryClient.invalidateQueries({ queryKey: ['unlinked-transactions'] });
+  };
+
+  const handleOpenLinkDialog = (id: string, name: string) => {
+    setTransactionToLink({ id, name });
+    setLinkDialogOpen(true);
   };
 
   const handleExport = () => {
@@ -363,10 +374,16 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                       {formatCurrency(venda.net_value)}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <Badge variant="secondary" className="capitalize">
                           {venda.source || 'hubla'}
                         </Badge>
+                        {venda.is_manual_link && (
+                          <Badge variant="outline" className="text-blue-500 border-blue-500/50">
+                            <Link2 className="h-3 w-3 mr-1" />
+                            Manual
+                          </Badge>
+                        )}
                         {venda.excluded_from_cart && (
                           <Badge variant="outline" className="text-orange-500 border-orange-500/50">
                             Excluído
@@ -423,6 +440,86 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Vendas Não Vinculadas */}
+      {unlinkedTransactions.length > 0 && (
+        <Card className="border-amber-500/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Vendas Sem Vínculo ({unlinkedTransactions.length})
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Transações de parceria que não deram match automático. Vincule manualmente a um lead aprovado.
+            </p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Email/Telefone</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead>Fonte</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoadingUnlinked ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <Skeleton className="h-8 w-full" />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  unlinkedTransactions.map((tx) => (
+                    <TableRow key={tx.id}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {format(new Date(tx.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(tx.sale_date), 'HH:mm')}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {tx.customer_name || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col text-sm text-muted-foreground">
+                          {tx.customer_email && <span>{tx.customer_email}</span>}
+                          {tx.customer_phone && <span>{tx.customer_phone}</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(tx.product_price)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="capitalize">
+                          {tx.source || 'hubla'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenLinkDialog(tx.id, tx.customer_name || 'Cliente')}
+                        >
+                          <Link2 className="h-4 w-4 mr-1" />
+                          Vincular
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Paginação */}
       {vendas.length > 0 && (
@@ -520,6 +617,16 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {transactionToLink && (
+        <LinkAttendeeDialog
+          open={linkDialogOpen}
+          onOpenChange={setLinkDialogOpen}
+          transactionId={transactionToLink.id}
+          transactionName={transactionToLink.name}
+          weekDate={weekStart}
+        />
+      )}
     </div>
   );
 }

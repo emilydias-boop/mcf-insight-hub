@@ -25,10 +25,13 @@ export interface R2CarrinhoVenda {
   gross_override: number | null;
   count_in_dashboard: boolean | null;
   excluded_from_cart: boolean | null;
+  linked_attendee_id: string | null;
   // Dados do lead R2
   r2_attendee_name: string | null;
   r2_closer_name: string | null;
   r2_closer_color: string | null;
+  // Flag indicando se foi match manual ou automático
+  is_manual_link: boolean;
 }
 
 export function useR2CarrinhoVendas(weekDate: Date) {
@@ -63,8 +66,8 @@ export function useR2CarrinhoVendas(weekDate: Date) {
             )
           )
         `)
-        .gte('meeting_slot.scheduled_at', weekStart.toISOString())
-        .lte('meeting_slot.scheduled_at', weekEnd.toISOString())
+      .gte('meeting_slot.scheduled_at', weekStart.toISOString())
+      .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString())
         .eq('meeting_slot.meeting_type', 'r2')
         .eq('r2_status_id', '24d9a326-378b-4191-a4b3-d0ec8b9d23eb');
 
@@ -132,7 +135,38 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         return [];
       }
 
-      // 4. Filtrar transações que matcham por email ou telefone
+      // 4. Buscar attendees que foram vinculados manualmente
+      const linkedAttendeeIds = transactions
+        .filter((tx: any) => tx.linked_attendee_id)
+        .map((tx: any) => tx.linked_attendee_id);
+
+      let linkedAttendeesMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null }>();
+
+      if (linkedAttendeeIds.length > 0) {
+        const { data: linkedAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            id,
+            attendee_name,
+            meeting_slot:meeting_slots!inner (
+              closer:closers (
+                name,
+                color
+              )
+            )
+          `)
+          .in('id', linkedAttendeeIds);
+
+        linkedAttendees?.forEach((att: any) => {
+          linkedAttendeesMap.set(att.id, {
+            name: att.attendee_name,
+            closerName: att.meeting_slot?.closer?.name || null,
+            closerColor: att.meeting_slot?.closer?.color || null,
+          });
+        });
+      }
+
+      // 5. Filtrar transações que matcham por email, telefone OU vinculação manual
       const matchedTransactions: R2CarrinhoVenda[] = [];
 
       transactions.forEach((tx: any) => {
@@ -140,6 +174,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         const txPhone = tx.customer_phone ? normalizeForMatch(tx.customer_phone) : null;
 
         let matched = false;
+        let isManualLink = false;
         let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null } | undefined;
 
         // Match por email
@@ -153,6 +188,16 @@ export function useR2CarrinhoVendas(weekDate: Date) {
           if (phonesSet.has(txPhone)) {
             matched = true;
             attendeeData = attendeeMap.get(txPhone);
+          }
+        }
+
+        // Match manual (linked_attendee_id)
+        if (!matched && tx.linked_attendee_id) {
+          const linkedData = linkedAttendeesMap.get(tx.linked_attendee_id);
+          if (linkedData) {
+            matched = true;
+            isManualLink = true;
+            attendeeData = linkedData;
           }
         }
 
@@ -173,9 +218,11 @@ export function useR2CarrinhoVendas(weekDate: Date) {
             gross_override: tx.gross_override,
             count_in_dashboard: tx.count_in_dashboard,
             excluded_from_cart: tx.excluded_from_cart,
+            linked_attendee_id: tx.linked_attendee_id,
             r2_attendee_name: attendeeData?.name || null,
             r2_closer_name: attendeeData?.closerName || null,
             r2_closer_color: attendeeData?.closerColor || null,
+            is_manual_link: isManualLink,
           });
         }
       });
