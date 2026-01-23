@@ -20,6 +20,7 @@ interface EmployeePermissionsTabProps {
 const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: 'sdr', label: 'SDR' },
   { value: 'closer', label: 'Closer' },
+  { value: 'closer_sombra', label: 'Closer Sombra' },
   { value: 'coordenador', label: 'Coordenador' },
   { value: 'manager', label: 'Gestor' },
   { value: 'rh', label: 'RH' },

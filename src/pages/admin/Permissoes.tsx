@@ -9,7 +9,7 @@ import { Loader2, Save, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { PermissionLevel, AppRole, ResourceType, RESOURCE_LABELS } from '@/types/user-management';
 
-const ROLES: AppRole[] = ['admin', 'manager', 'coordenador', 'sdr', 'closer', 'financeiro', 'rh', 'viewer'];
+const ROLES: AppRole[] = ['admin', 'manager', 'coordenador', 'sdr', 'closer', 'closer_sombra', 'financeiro', 'rh', 'viewer'];
 
 const ROLE_LABELS: Record<AppRole, string> = {
   admin: 'Admin',
@@ -17,6 +17,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
   coordenador: 'Coordenador',
   sdr: 'SDR',
   closer: 'Closer',
+  closer_sombra: 'Closer Sombra',
   financeiro: 'Financeiro',
   rh: 'RH',
   viewer: 'Viewer',

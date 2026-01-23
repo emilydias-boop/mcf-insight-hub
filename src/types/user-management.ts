@@ -163,6 +163,7 @@ export const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   coordenador: { label: 'Coordenador', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
   sdr: { label: 'SDR', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
   closer: { label: 'Closer', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+  closer_sombra: { label: 'Closer Sombra', color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
   viewer: { label: 'Viewer', color: 'bg-muted text-muted-foreground border-border' },
   financeiro: { label: 'Financeiro', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   rh: { label: 'RH', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
