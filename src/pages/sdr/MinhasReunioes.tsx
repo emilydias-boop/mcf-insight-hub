@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { WEEK_STARTS_ON } from "@/lib/businessDays";
@@ -25,7 +25,9 @@ import { MeetingsTable } from "@/components/sdr/MeetingsTable";
 import { SdrMeetingActionsDrawer } from "@/components/sdr/SdrMeetingActionsDrawer";
 import { ReviewRequestModal } from "@/components/sdr/ReviewRequestModal";
 import { CallMetricsCards } from "@/components/sdr/CallMetricsCards";
+import { SdrR2ConversionCard } from "@/components/sdr/SdrR2ConversionCard";
 import { useSdrCallMetrics } from "@/hooks/useSdrCallMetrics";
+import { useSDRR2Metrics } from "@/hooks/useSDRR2Metrics";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -81,6 +83,24 @@ export default function MinhasReunioes() {
     startDate,
     endDate
   );
+  
+  // Buscar métricas de conversão R2 do SDR
+  const { data: sdrR2Metrics, isLoading: r2MetricsLoading } = useSDRR2Metrics(
+    startDate || new Date(),
+    user?.email
+  );
+  
+  // Pegar métricas do SDR logado
+  const mySdrR2Metrics = useMemo(() => {
+    if (!sdrR2Metrics || sdrR2Metrics.length === 0) {
+      return { aprovados: 0, vendas: 0 };
+    }
+    const myMetrics = sdrR2Metrics[0]; // Filtrado pelo email, só terá 1
+    return {
+      aprovados: myMetrics?.leadsAprovados || 0,
+      vendas: myMetrics?.vendasRealizadas || 0
+    };
+  }, [sdrR2Metrics]);
 
   // Filtrar reuniões localmente
   const filteredMeetings = meetings.filter(m => {
@@ -211,6 +231,15 @@ export default function MinhasReunioes() {
         <MeetingSummaryCards 
           summary={summary} 
           isLoading={isLoading} 
+        />
+      </div>
+      
+      {/* R2 Conversion Card */}
+      <div className="flex-shrink-0 mt-4">
+        <SdrR2ConversionCard
+          aprovados={mySdrR2Metrics.aprovados}
+          vendas={mySdrR2Metrics.vendas}
+          isLoading={r2MetricsLoading}
         />
       </div>
       

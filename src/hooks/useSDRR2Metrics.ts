@@ -12,7 +12,7 @@ export interface SDRR2Metrics {
   taxaConversao: number;   // vendasRealizadas / leadsAprovados * 100
 }
 
-export function useSDRR2Metrics(weekDate: Date) {
+export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
   const weekStart = getCustomWeekStart(weekDate);
   const weekEnd = getCustomWeekEnd(weekDate);
 
@@ -157,12 +157,17 @@ export function useSDRR2Metrics(weekDate: Date) {
       });
 
       // 6. Calculate conversion rates and sort by leads
-      const result = Array.from(sdrMap.values());
+      let result = Array.from(sdrMap.values());
       result.forEach(stats => {
         stats.taxaConversao = stats.leadsAprovados > 0
           ? (stats.vendasRealizadas / stats.leadsAprovados) * 100
           : 0;
       });
+
+      // Filter by specific SDR if provided
+      if (sdrEmailFilter) {
+        result = result.filter(s => s.sdrEmail.toLowerCase() === sdrEmailFilter.toLowerCase());
+      }
 
       // Sort by leads approved (descending)
       result.sort((a, b) => b.leadsAprovados - a.leadsAprovados);
