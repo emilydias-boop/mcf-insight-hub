@@ -239,3 +239,6 @@ verify_jwt = false
 
 [functions.asaas-webhook-handler]
 verify_jwt = false
+
+[functions.create-manual-approved-lead]
+verify_jwt = false
