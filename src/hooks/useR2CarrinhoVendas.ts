@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
-import { normalizePhoneNumber } from '@/lib/phoneUtils';
+import { endOfDay } from 'date-fns';
+
+// Helper para normalização consistente (apenas dígitos, últimos 11)
+const normalizeForMatch = (phone: string | null): string | null => {
+  if (!phone) return null;
+  return phone.replace(/\D/g, '').slice(-11);
+};
 
 export interface R2CarrinhoVenda {
   id: string;
@@ -76,7 +82,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
       approvedAttendees.forEach((att: any) => {
         const email = att.deal?.contact?.email?.toLowerCase();
         const phone = att.attendee_phone || att.deal?.contact?.phone;
-        const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+        const normalizedPhone = phone ? normalizeForMatch(phone) : null;
         
         const closerData = {
           name: att.attendee_name,
@@ -101,11 +107,13 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         return [];
       }
 
-      // 3. Buscar transações de parceria que matcham com os leads aprovados
+      // 3. Buscar transações de parceria da semana que matcham com os leads aprovados
       let query = supabase
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
+        .gte('sale_date', weekStart.toISOString())
+        .lte('sale_date', endOfDay(weekEnd).toISOString())
         .order('sale_date', { ascending: false });
 
       // Construir filtro OR para emails e telefones
@@ -129,7 +137,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
 
       transactions.forEach((tx: any) => {
         const txEmail = tx.customer_email?.toLowerCase();
-        const txPhone = tx.customer_phone ? normalizePhoneNumber(tx.customer_phone) : null;
+        const txPhone = tx.customer_phone ? normalizeForMatch(tx.customer_phone) : null;
 
         let matched = false;
         let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null } | undefined;
@@ -140,14 +148,11 @@ export function useR2CarrinhoVendas(weekDate: Date) {
           attendeeData = attendeeMap.get(txEmail);
         }
 
-        // Match por telefone
+        // Match por telefone (comparação exata após normalização)
         if (!matched && txPhone && txPhone.length >= 10) {
-          for (const phone of phonesSet) {
-            if (txPhone.includes(phone) || phone.includes(txPhone)) {
-              matched = true;
-              attendeeData = attendeeMap.get(phone);
-              break;
-            }
+          if (phonesSet.has(txPhone)) {
+            matched = true;
+            attendeeData = attendeeMap.get(txPhone);
           }
         }
 
