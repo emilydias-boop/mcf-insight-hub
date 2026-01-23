@@ -501,6 +501,157 @@ async function generateTasksForDeal(supabase: any, params: {
   }
 }
 
+// ============= HELPER: Auto-marcar Contrato Pago para Incorporador =============
+interface AutoMarkData {
+  customerEmail: string | null;
+  customerPhone: string | null;
+  customerName: string | null;
+  saleDate: string;
+}
+
+async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<void> {
+  if (!data.customerEmail && !data.customerPhone) {
+    console.log('🎯 [AUTO-PAGO] Sem email ou telefone para buscar reunião');
+    return;
+  }
+
+  console.log(`🎯 [AUTO-PAGO] Buscando reunião R1 para: ${data.customerEmail || data.customerPhone}`);
+
+  try {
+    // Normalizar telefone para busca
+    const phoneDigits = data.customerPhone?.replace(/\D/g, '') || '';
+    const phoneSuffix = phoneDigits.slice(-9);
+
+    // 1. Buscar contatos pelo email ou telefone
+    let contactIds: string[] = [];
+
+    if (data.customerEmail) {
+      const { data: contactsByEmail } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', data.customerEmail)
+        .limit(5);
+      
+      if (contactsByEmail?.length) {
+        contactIds = contactsByEmail.map((c: any) => c.id);
+      }
+    }
+
+    if (contactIds.length === 0 && phoneSuffix.length >= 8) {
+      const { data: contactsByPhone } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('phone', `%${phoneSuffix}%`)
+        .limit(5);
+      
+      if (contactsByPhone?.length) {
+        contactIds = contactsByPhone.map((c: any) => c.id);
+      }
+    }
+
+    if (contactIds.length === 0) {
+      console.log('🎯 [AUTO-PAGO] Nenhum contato encontrado');
+      return;
+    }
+
+    console.log(`🎯 [AUTO-PAGO] ${contactIds.length} contatos encontrados`);
+
+    // 2. Buscar attendees com reunião R1 ativa para esses contatos
+    const { data: attendees, error } = await supabase
+      .from('meeting_slot_attendees')
+      .select(`
+        id,
+        status,
+        meeting_slot_id,
+        contact_id,
+        attendee_name,
+        meeting_slots!inner(
+          id,
+          scheduled_at,
+          status,
+          meeting_type,
+          closer_id
+        )
+      `)
+      .in('contact_id', contactIds)
+      .eq('meeting_slots.meeting_type', 'r1')
+      .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled'])
+      .in('status', ['scheduled', 'invited', 'completed'])
+      .order('meeting_slots(scheduled_at)', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error('🎯 [AUTO-PAGO] Erro ao buscar attendees:', error.message);
+      return;
+    }
+
+    if (!attendees || attendees.length === 0) {
+      console.log('🎯 [AUTO-PAGO] Nenhuma reunião R1 ativa encontrada');
+      return;
+    }
+
+    // Pegar a reunião mais recente
+    const matchingAttendee = attendees[0];
+    const meeting = matchingAttendee.meeting_slots;
+    
+    console.log(`✅ [AUTO-PAGO] Match encontrado! Reunião: ${meeting.id}, Attendee: ${matchingAttendee.id}`);
+
+    // 3. Atualizar attendee para contract_paid com a data da reunião (não de hoje)
+    const { error: updateError } = await supabase
+      .from('meeting_slot_attendees')
+      .update({
+        status: 'contract_paid',
+        contract_paid_at: meeting.scheduled_at // Usar data da reunião!
+      })
+      .eq('id', matchingAttendee.id);
+
+    if (updateError) {
+      console.error('🎯 [AUTO-PAGO] Erro ao atualizar attendee:', updateError.message);
+      return;
+    }
+
+    // 4. Atualizar reunião para completed se ainda não estiver
+    if (meeting.status === 'scheduled' || meeting.status === 'rescheduled') {
+      await supabase
+        .from('meeting_slots')
+        .update({ status: 'completed' })
+        .eq('id', meeting.id);
+      
+      console.log(`✅ [AUTO-PAGO] Reunião marcada como completed`);
+    }
+
+    // 5. Criar notificação para o closer agendar R2
+    if (meeting.closer_id) {
+      const { error: notifError } = await supabase
+        .from('user_notifications')
+        .insert({
+          user_id: meeting.closer_id,
+          type: 'contract_paid',
+          title: '💰 Contrato Pago - Agendar R2',
+          message: `${data.customerName || 'Cliente'} pagou o contrato! Agende a R2.`,
+          data: {
+            attendee_id: matchingAttendee.id,
+            meeting_id: meeting.id,
+            customer_name: data.customerName,
+            sale_date: data.saleDate,
+            attendee_name: matchingAttendee.attendee_name
+          },
+          read: false
+        });
+
+      if (notifError) {
+        console.error('🎯 [AUTO-PAGO] Erro ao criar notificação:', notifError.message);
+      } else {
+        console.log(`🔔 [AUTO-PAGO] Notificação criada para closer: ${meeting.closer_id}`);
+      }
+    }
+
+    console.log(`🎉 [AUTO-PAGO] Contrato marcado como pago automaticamente!`);
+  } catch (err: any) {
+    console.error('🎯 [AUTO-PAGO] Erro:', err.message);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -783,6 +934,17 @@ serve(async (req) => {
               originName: 'A010 Hubla',
               productName: productName,
               value: itemNetValue
+            });
+          }
+
+          // Se for incorporador, não for offer, e for primeira parcela, auto-marcar reunião R1 como contrato pago
+          if (productCategory === 'incorporador' && !isOffer && installment === 1) {
+            console.log(`🎯 [INCORPORADOR] Pagamento detectado, buscando reunião para auto-marcar...`);
+            await autoMarkContractPaid(supabase, {
+              customerEmail: transactionData.customer_email,
+              customerPhone: transactionData.customer_phone,
+              customerName: transactionData.customer_name,
+              saleDate: saleDate
             });
           }
         }

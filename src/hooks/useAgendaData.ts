@@ -626,12 +626,24 @@ export function useMarkContractPaid() {
 
   return useMutation({
     mutationFn: async ({ meetingId, attendeeId }: { meetingId: string; attendeeId?: string }) => {
+      // Buscar a data da reunião para usar como contract_paid_at
+      const { data: meetingData } = await supabase
+        .from('meeting_slots')
+        .select('scheduled_at')
+        .eq('id', meetingId)
+        .single();
+
+      const contractPaidAt = meetingData?.scheduled_at || new Date().toISOString();
+
       // Update only the attendee status (not the meeting slot)
       // This allows other attendees in the same meeting to still appear in search
       if (attendeeId) {
         const { error: attendeeError } = await supabase
           .from('meeting_slot_attendees')
-          .update({ status: 'contract_paid' })
+          .update({ 
+            status: 'contract_paid',
+            contract_paid_at: contractPaidAt // Usar data da reunião, não data atual
+          })
           .eq('id', attendeeId);
 
         if (attendeeError) throw attendeeError;
