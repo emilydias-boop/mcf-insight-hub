@@ -26,6 +26,7 @@ import {
   Calculator,
   Users2,
   ShoppingCart,
+  Crown,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -97,6 +98,14 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   // ===== DASHBOARD =====
+  // Visão Chairman - Executive Dashboard
+  {
+    title: "Visão Chairman",
+    url: "/chairman",
+    icon: Crown,
+    requiredRoles: ["admin", "manager"],
+  },
+  
   {
     title: "Dashboard",
     icon: LayoutDashboard,
