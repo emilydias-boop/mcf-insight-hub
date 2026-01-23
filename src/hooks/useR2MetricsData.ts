@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
-import { format } from 'date-fns';
+import { format, endOfDay } from 'date-fns';
 
 export interface CloserConversion {
   closerId: string;
@@ -76,7 +76,7 @@ export function useR2MetricsData(weekDate: Date) {
         `)
         .eq('meeting_type', 'r2')
         .gte('scheduled_at', weekStart.toISOString())
-        .lte('scheduled_at', weekEnd.toISOString())
+        .lte('scheduled_at', endOfDay(weekEnd).toISOString())
         .not('status', 'in', '(cancelled,rescheduled)');
 
       if (meetingsError) throw meetingsError;
@@ -194,7 +194,7 @@ export function useR2MetricsData(weekDate: Date) {
         .select('id, customer_email, customer_phone, net_value')
         .eq('product_category', 'parceria')
         .gte('sale_date', weekStart.toISOString())
-        .lte('sale_date', weekEnd.toISOString())
+        .lte('sale_date', endOfDay(weekEnd).toISOString())
         .eq('sale_status', 'paid');
 
       if (hublaError) throw hublaError;
