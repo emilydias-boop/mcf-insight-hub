@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { RefreshCw, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCw, TrendingUp, ChevronLeft, ChevronRight, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
 import { useMyCloser } from "@/hooks/useMyCloser";
 import { useCloserDetailData } from "@/hooks/useCloserDetailData";
+import { useCloserR2Metrics } from "@/hooks/useCloserR2Metrics";
 import { CloserDetailKPICards } from "@/components/closer/CloserDetailKPICards";
 import { CloserRankingBlock } from "@/components/closer/CloserRankingBlock";
 import { CloserLeadsTable } from "@/components/closer/CloserLeadsTable";
@@ -54,7 +56,14 @@ export default function MeuDesempenhoCloser() {
     closerId: myCloser?.id || "",
     startDate,
     endDate,
-  });
+});
+
+  // Métricas R2 Carrinho do Closer
+  const { data: r2Metrics, isLoading: isLoadingR2 } = useCloserR2Metrics(
+    myCloser?.id || null,
+    startDate,
+    endDate
+  );
 
   const isLoading = isLoadingCloser || isLoadingData;
 
@@ -249,6 +258,40 @@ export default function MeuDesempenhoCloser() {
                       <span className="text-sm text-muted-foreground">R2 Agendadas</span>
                       <span className="font-semibold">{closerMetrics?.r2_agendada || 0}</span>
                     </div>
+                    
+                    {/* R2 Carrinho Section */}
+                    <Separator className="my-3" />
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShoppingCart className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">R2 Carrinho</span>
+                    </div>
+                    {isLoadingR2 ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((i) => (
+                          <Skeleton key={i} className="h-5 w-full" />
+                        ))}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Leads Aprovados</span>
+                          <span className="font-semibold">{r2Metrics?.aprovados || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Vendas Parceria</span>
+                          <span className="font-semibold text-green-500">{r2Metrics?.vendas || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Taxa Carrinho → Venda</span>
+                          <Badge 
+                            variant="secondary" 
+                            className={(r2Metrics?.taxaConversao || 0) >= 50 ? 'bg-green-500/20 text-green-500' : ''}
+                          >
+                            {(r2Metrics?.taxaConversao || 0).toFixed(1)}%
+                          </Badge>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </CardContent>
