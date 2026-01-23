@@ -5,13 +5,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, asaas-access-token',
 };
 
-// Produtos de parceria que devem ser processados
-const PARCERIA_PRODUCTS = ['A009', 'A001'];
-
-function isParceriaProduct(description: string): boolean {
-  if (!description) return false;
-  const upper = description.toUpperCase();
-  return PARCERIA_PRODUCTS.some(p => upper.includes(p));
+// Determinar categoria do produto baseada na descrição
+function getProductCategory(productName: string): string {
+  if (!productName) return 'outros';
+  const upper = productName.toUpperCase();
+  
+  if (upper.includes('A009') || upper.includes('A001')) {
+    return 'parceria';
+  }
+  if (upper.includes('A000') && upper.includes('CONTRATO')) {
+    return 'contrato';
+  }
+  if (upper.includes('A010') || upper.includes('INCORPORADOR')) {
+    return 'incorporador';
+  }
+  // Categoria padrão para produtos não mapeados
+  return 'outros';
 }
 
 // Helper to normalize phone numbers for matching
@@ -302,23 +311,9 @@ Deno.serve(async (req) => {
     }
 
     const productName = payment.description || '';
+    const productCategory = getProductCategory(productName);
     
-    // Filtrar: APENAS produtos de parceria (A009, A001)
-    if (!isParceriaProduct(productName)) {
-      console.log(`[Asaas] Produto ignorado (não é parceria): ${productName}`);
-      
-      if (logId) {
-        await supabase
-          .from('bu_webhook_logs')
-          .update({ status: 'skipped', processed_at: new Date().toISOString() })
-          .eq('id', logId);
-      }
-      
-      return new Response(
-        JSON.stringify({ received: true, skipped: true, reason: 'Not a partnership product' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log(`[Asaas] Produto: "${productName}" | Categoria: ${productCategory}`);
 
     // Extrair dados do cliente
     // Asaas pode enviar customer como objeto ou como string (ID)
@@ -375,7 +370,7 @@ Deno.serve(async (req) => {
       hubla_id: hublaId,
       event_type: event,
       product_name: productName,
-      product_category: 'parceria',
+      product_category: productCategory,
       net_value: netValue,
       product_price: grossValue,
       customer_name: customerName,
@@ -403,14 +398,20 @@ Deno.serve(async (req) => {
 
     console.log(`✅ [Asaas] Transação inserida: ${inserted.id}`);
 
-    // Automação: mover deal para "Venda Realizada"
-    const autoResult = await autoMarkSaleComplete(supabase, {
-      customerEmail: customerEmail.toLowerCase(),
-      customerPhone: customerPhone,
-      productName: productName,
-      saleDate: transactionData.sale_date,
-      netValue: netValue
-    });
+    // Automação: mover deal para "Venda Realizada" APENAS para produtos de parceria
+    let autoResult = { success: false, message: 'Skipped - not a parceria product' };
+    
+    if (productCategory === 'parceria') {
+      autoResult = await autoMarkSaleComplete(supabase, {
+        customerEmail: customerEmail.toLowerCase(),
+        customerPhone: customerPhone,
+        productName: productName,
+        saleDate: transactionData.sale_date,
+        netValue: netValue
+      });
+    } else {
+      console.log(`[Asaas] Automação CRM ignorada para categoria: ${productCategory}`);
+    }
 
     const processingTime = Date.now() - startTime;
 
