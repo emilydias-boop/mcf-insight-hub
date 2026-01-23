@@ -61,7 +61,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceType } from "@/types/user-management";
 
-type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "coordenador" | "rh" | "financeiro";
+type AppRole = "admin" | "manager" | "viewer" | "sdr" | "closer" | "closer_sombra" | "coordenador" | "rh" | "financeiro";
 
 // Sub-sub-item (3º nível)
 interface SubSubItem {
@@ -231,22 +231,22 @@ const menuItems: MenuItem[] = [
     separator: true,
   },
 
-  // Agenda (SDR e Closer)
+  // Agenda (SDR, Closer e Closer Sombra)
   {
     title: "Agenda",
     url: "/crm/agenda",
     icon: Calendar,
     resource: "crm",
-    requiredRoles: ["sdr", "closer"],
+    requiredRoles: ["sdr", "closer", "closer_sombra"],
   },
 
-  // Metas da Equipe (SDRs e Closers da BU Incorporador)
+  // Metas da Equipe (SDRs, Closers e Closer Sombra da BU Incorporador)
   {
     title: "Metas da Equipe",
     url: "/crm/reunioes-equipe",
     icon: BarChart3,
     resource: "crm",
-    requiredRoles: ["sdr", "closer"],
+    requiredRoles: ["sdr", "closer", "closer_sombra"],
     requiredBU: ["incorporador"],
   },
 

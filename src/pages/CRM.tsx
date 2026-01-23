@@ -10,7 +10,7 @@ const CRM = () => {
   const location = useLocation();
   
   // Roles que só podem ver Agenda (exceto se estiver na whitelist R2 ou Negócios)
-  const agendaOnlyRoles = ['sdr', 'closer'];
+  const agendaOnlyRoles = ['sdr', 'closer', 'closer_sombra'];
   const isAgendaOnly = role && agendaOnlyRoles.includes(role);
   
   // Verificar se usuário tem permissão especial para R2
