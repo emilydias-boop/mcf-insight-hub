@@ -17,6 +17,7 @@ export interface R2MetricsData {
   totalLeads: number;
   desistentes: number;
   reprovados: number;
+  reembolsos: number;
   proximaSemana: number;
   noShow: number;
   leadsPerdidosPercent: number;
@@ -103,6 +104,7 @@ export function useR2MetricsData(weekDate: Date) {
       let totalLeads = 0;
       let desistentes = 0;
       let reprovados = 0;
+      let reembolsos = 0;
       let proximaSemana = 0;
       let noShow = 0;
       const noShowAttendees: R2MetricsData['noShowAttendees'] = [];
@@ -150,10 +152,12 @@ export function useR2MetricsData(weekDate: Date) {
           const statusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
           
           // Count by status
-          if (statusName.includes('desistente') || statusName.includes('desistência')) {
+          if (statusName.includes('desistente')) {
             desistentes++;
           } else if (statusName.includes('reprovado')) {
             reprovados++;
+          } else if (statusName.includes('reembolso')) {
+            reembolsos++;
           } else if (statusName.includes('próxima semana') || statusName.includes('proxima semana')) {
             proximaSemana++;
           } else if (statusName.includes('aprovado') || statusName.includes('approved')) {
@@ -242,7 +246,7 @@ export function useR2MetricsData(weekDate: Date) {
       });
 
       // Calculate percentages
-      const leadsPerdidos = desistentes + reprovados + noShow;
+      const leadsPerdidos = desistentes + reprovados + reembolsos + noShow;
       const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidos / totalLeads) * 100 : 0;
       
       const selecionados = aprovados;
@@ -266,6 +270,7 @@ export function useR2MetricsData(weekDate: Date) {
         totalLeads,
         desistentes,
         reprovados,
+        reembolsos,
         proximaSemana,
         noShow,
         leadsPerdidosPercent,
