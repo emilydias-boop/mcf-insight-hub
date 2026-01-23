@@ -22,6 +22,7 @@ export interface R2CarrinhoAttendee {
   closer_color: string | null;
   deal_name: string | null;
   contact_phone: string | null;
+  contact_email: string | null;
   partner_name: string | null;
 }
 
@@ -74,7 +75,8 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
               id,
               name,
               contact:crm_contacts(
-                phone
+                phone,
+                email
               )
             )
           )
@@ -115,7 +117,7 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
           carrinho_updated_at: string | null;
           deal_id: string | null;
           partner_name: string | null;
-          deal: { id: string; name: string; contact: { phone: string | null } | null } | null;
+          deal: { id: string; name: string; contact: { phone: string | null; email: string | null } | null } | null;
         }>;
 
         for (const att of attendeesArr) {
@@ -142,6 +144,7 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
             closer_color: closerData?.color || null,
             deal_name: att.deal?.name || null,
             contact_phone: att.deal?.contact?.phone || null,
+            contact_email: att.deal?.contact?.email || null,
             partner_name: att.partner_name,
           });
         }
