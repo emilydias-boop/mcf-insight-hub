@@ -38,12 +38,12 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
         return [];
       }
 
-      // 2. Fetch R2 attendees with "aprovado" status for the week
-      const { data: attendees, error: attendeesError } = await supabase
+      // 2. Fetch R2 attendees with "aprovado" status for the week (get deal_id)
+      const { data: r2Attendees, error: r2Error } = await supabase
         .from('meeting_slot_attendees')
         .select(`
           id,
-          booked_by,
+          deal_id,
           r2_status_id,
           meeting_slot:meeting_slots!inner(
             id,
@@ -58,22 +58,59 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
         .lte('meeting_slot.scheduled_at', weekEnd.toISOString())
         .not('meeting_slot.status', 'in', '("cancelled","rescheduled")');
 
-      if (attendeesError) {
-        console.error('Error fetching R2 attendees:', attendeesError);
+      if (r2Error) {
+        console.error('Error fetching R2 attendees:', r2Error);
         return [];
       }
 
-      // 3. Get unique booked_by IDs
-      const bookedByIds = new Set<string>();
-      attendees?.forEach((att: any) => {
-        if (att.booked_by) bookedByIds.add(att.booked_by);
+      // 3. Get unique deal_ids from R2 approved attendees
+      const dealIds = new Set<string>();
+      r2Attendees?.forEach((att: any) => {
+        if (att.deal_id) dealIds.add(att.deal_id);
       });
 
+      if (dealIds.size === 0) {
+        return [];
+      }
+
+      // 4. Fetch R1 attendees for these deals to get the original booked_by (SDR)
+      const { data: r1Attendees, error: r1Error } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          deal_id,
+          booked_by,
+          meeting_slot:meeting_slots!inner(
+            id,
+            meeting_type
+          )
+        `)
+        .in('deal_id', Array.from(dealIds))
+        .eq('meeting_slot.meeting_type', 'r1');
+
+      if (r1Error) {
+        console.error('Error fetching R1 attendees:', r1Error);
+        return [];
+      }
+
+      // 5. Build map: deal_id -> booked_by (SDR who booked R1)
+      const dealToBookedBy = new Map<string, string>();
+      r1Attendees?.forEach((att: any) => {
+        if (att.deal_id && att.booked_by) {
+          // Keep the first booked_by found (original R1)
+          if (!dealToBookedBy.has(att.deal_id)) {
+            dealToBookedBy.set(att.deal_id, att.booked_by);
+          }
+        }
+      });
+
+      // 6. Get unique booked_by IDs
+      const bookedByIds = new Set<string>(dealToBookedBy.values());
       if (bookedByIds.size === 0) {
         return [];
       }
 
-      // 4. Fetch profiles for SDR emails
+      // 7. Fetch profiles for SDR emails
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name, email')
@@ -92,11 +129,14 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
         }
       });
 
-      // 5. Aggregate by SDR - ONLY include valid SDRs from SDR_LIST
+      // 8. Aggregate by SDR - ONLY include valid SDRs from SDR_LIST
       const sdrMap = new Map<string, SDRCarrinhoMetric>();
 
-      attendees?.forEach((att: any) => {
-        const sdrId = att.booked_by;
+      r2Attendees?.forEach((att: any) => {
+        const dealId = att.deal_id;
+        if (!dealId) return;
+
+        const sdrId = dealToBookedBy.get(dealId);
         if (!sdrId) return;
 
         const sdrEmail = profileEmailMap.get(sdrId);

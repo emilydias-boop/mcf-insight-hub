@@ -33,61 +33,120 @@ export function useCloserCarrinhoMetrics(weekDate: Date) {
         return [];
       }
 
-      // 2. Fetch R2 meetings with approved attendees for the week
-      const { data: slots, error: slotsError } = await supabase
-        .from('meeting_slots')
+      // 2. Fetch R2 attendees with "aprovado" status for the week (get deal_id)
+      const { data: r2Attendees, error: r2Error } = await supabase
+        .from('meeting_slot_attendees')
         .select(`
           id,
-          closer_id,
-          status,
-          scheduled_at,
-          closer:closers(
+          deal_id,
+          r2_status_id,
+          meeting_slot:meeting_slots!inner(
             id,
-            name,
-            color
-          ),
-          attendees:meeting_slot_attendees(
-            id,
-            r2_status_id
+            scheduled_at,
+            meeting_type,
+            status
           )
         `)
-        .eq('meeting_type', 'r2')
-        .gte('scheduled_at', weekStart.toISOString())
-        .lte('scheduled_at', weekEnd.toISOString())
-        .not('status', 'in', '("cancelled","rescheduled")');
+        .eq('meeting_slot.meeting_type', 'r2')
+        .in('r2_status_id', aprovadoStatusIds)
+        .gte('meeting_slot.scheduled_at', weekStart.toISOString())
+        .lte('meeting_slot.scheduled_at', weekEnd.toISOString())
+        .not('meeting_slot.status', 'in', '("cancelled","rescheduled")');
 
-      if (slotsError) {
-        console.error('Error fetching R2 slots:', slotsError);
+      if (r2Error) {
+        console.error('Error fetching R2 attendees:', r2Error);
         return [];
       }
 
-      // 3. Aggregate by closer - count approved attendees
+      // 3. Get unique deal_ids from R2 approved attendees
+      const dealIds = new Set<string>();
+      r2Attendees?.forEach((att: any) => {
+        if (att.deal_id) dealIds.add(att.deal_id);
+      });
+
+      if (dealIds.size === 0) {
+        return [];
+      }
+
+      // 4. Fetch R1 attendees for these deals to get meeting_slot_id
+      const { data: r1Attendees, error: r1Error } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          deal_id,
+          meeting_slot_id,
+          meeting_slot:meeting_slots!inner(
+            id,
+            meeting_type,
+            closer_id
+          )
+        `)
+        .in('deal_id', Array.from(dealIds))
+        .eq('meeting_slot.meeting_type', 'r1');
+
+      if (r1Error) {
+        console.error('Error fetching R1 attendees:', r1Error);
+        return [];
+      }
+
+      // 5. Build map: deal_id -> closer_id (from R1 slot)
+      const dealToCloserId = new Map<string, string>();
+      r1Attendees?.forEach((att: any) => {
+        if (att.deal_id && att.meeting_slot?.closer_id) {
+          // Keep the first closer_id found (original R1)
+          if (!dealToCloserId.has(att.deal_id)) {
+            dealToCloserId.set(att.deal_id, att.meeting_slot.closer_id);
+          }
+        }
+      });
+
+      // 6. Get unique closer IDs
+      const closerIds = new Set<string>(dealToCloserId.values());
+      if (closerIds.size === 0) {
+        return [];
+      }
+
+      // 7. Fetch closers info
+      const { data: closers, error: closersError } = await supabase
+        .from('closers')
+        .select('id, name, color')
+        .in('id', Array.from(closerIds));
+
+      if (closersError) {
+        console.error('Error fetching closers:', closersError);
+        return [];
+      }
+
+      // Map closer ID to info
+      const closerInfoMap = new Map<string, { name: string; color: string | null }>();
+      closers?.forEach((c: any) => {
+        closerInfoMap.set(c.id, { name: c.name, color: c.color });
+      });
+
+      // 8. Aggregate by Closer R1
       const closerMap = new Map<string, CloserCarrinhoMetric>();
 
-      slots?.forEach((slot: any) => {
-        const closerId = slot.closer_id;
-        const closer = slot.closer;
-        
-        if (!closerId || !closer) return;
+      r2Attendees?.forEach((att: any) => {
+        const dealId = att.deal_id;
+        if (!dealId) return;
+
+        const closerId = dealToCloserId.get(dealId);
+        if (!closerId) return;
+
+        const closerInfo = closerInfoMap.get(closerId);
+        if (!closerInfo) return;
 
         if (!closerMap.has(closerId)) {
           closerMap.set(closerId, {
             closer_id: closerId,
-            closer_name: closer.name,
-            closer_color: closer.color,
+            closer_name: closerInfo.name,
+            closer_color: closerInfo.color,
             aprovados: 0,
           });
         }
 
         const metric = closerMap.get(closerId)!;
-        
-        // Count approved attendees in this slot
-        const attendees = slot.attendees || [];
-        attendees.forEach((att: any) => {
-          if (aprovadoStatusIds.includes(att.r2_status_id)) {
-            metric.aprovados++;
-          }
-        });
+        metric.aprovados++;
       });
 
       // Sort by aprovados desc
