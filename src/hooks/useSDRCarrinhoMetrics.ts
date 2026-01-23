@@ -1,28 +1,45 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOfDay, endOfDay, format } from "date-fns";
+import { format } from "date-fns";
+import { getCustomWeekStart, getCustomWeekEnd } from "@/lib/dateHelpers";
 
-export interface SDRR1Metric {
+export interface SDRCarrinhoMetric {
   sdr_id: string;
   sdr_name: string;
   sdr_email: string;
-  agendada: number;
-  realizada: number;
-  noShow: number;
-  taxaRealizacao: number;
+  aprovados: number;
 }
 
-export function useSDRR1Metrics(weekStart: Date, weekEnd: Date) {
+export function useSDRCarrinhoMetrics(weekDate: Date) {
+  const weekStart = getCustomWeekStart(weekDate);
+  const weekEnd = getCustomWeekEnd(weekDate);
+
   return useQuery({
-    queryKey: ['sdr-r1-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
-    queryFn: async (): Promise<SDRR1Metric[]> => {
-      // 1. Fetch R1 attendees with booked_by for the week
+    queryKey: ['sdr-carrinho-metrics', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
+    queryFn: async (): Promise<SDRCarrinhoMetric[]> => {
+      // 1. Fetch R2 status options to find "aprovado"
+      const { data: statusOptions, error: statusError } = await supabase
+        .from('r2_status_options')
+        .select('id, name')
+        .ilike('name', '%aprov%');
+
+      if (statusError) {
+        console.error('Error fetching R2 status options:', statusError);
+        return [];
+      }
+
+      const aprovadoStatusIds = statusOptions?.map(s => s.id) || [];
+      if (aprovadoStatusIds.length === 0) {
+        return [];
+      }
+
+      // 2. Fetch R2 attendees with "aprovado" status for the week
       const { data: attendees, error: attendeesError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
           id,
-          status,
           booked_by,
+          r2_status_id,
           meeting_slot:meeting_slots!inner(
             id,
             scheduled_at,
@@ -30,17 +47,18 @@ export function useSDRR1Metrics(weekStart: Date, weekEnd: Date) {
             status
           )
         `)
-        .eq('meeting_slot.meeting_type', 'r1')
-        .gte('meeting_slot.scheduled_at', startOfDay(weekStart).toISOString())
-        .lte('meeting_slot.scheduled_at', endOfDay(weekEnd).toISOString())
+        .eq('meeting_slot.meeting_type', 'r2')
+        .in('r2_status_id', aprovadoStatusIds)
+        .gte('meeting_slot.scheduled_at', weekStart.toISOString())
+        .lte('meeting_slot.scheduled_at', weekEnd.toISOString())
         .not('meeting_slot.status', 'in', '("cancelled","rescheduled")');
 
       if (attendeesError) {
-        console.error('Error fetching R1 attendees:', attendeesError);
+        console.error('Error fetching R2 attendees:', attendeesError);
         return [];
       }
 
-      // 2. Get unique booked_by IDs
+      // 3. Get unique booked_by IDs
       const bookedByIds = new Set<string>();
       attendees?.forEach((att: any) => {
         if (att.booked_by) bookedByIds.add(att.booked_by);
@@ -50,7 +68,7 @@ export function useSDRR1Metrics(weekStart: Date, weekEnd: Date) {
         return [];
       }
 
-      // 3. Fetch profiles for SDR names
+      // 4. Fetch profiles for SDR names
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name, email')
@@ -69,8 +87,8 @@ export function useSDRR1Metrics(weekStart: Date, weekEnd: Date) {
         });
       });
 
-      // 4. Aggregate by SDR
-      const sdrMap = new Map<string, SDRR1Metric>();
+      // 5. Aggregate by SDR
+      const sdrMap = new Map<string, SDRCarrinhoMetric>();
 
       attendees?.forEach((att: any) => {
         const sdrId = att.booked_by;
@@ -84,32 +102,16 @@ export function useSDRR1Metrics(weekStart: Date, weekEnd: Date) {
             sdr_id: sdrId,
             sdr_name: profile.name,
             sdr_email: profile.email,
-            agendada: 0,
-            realizada: 0,
-            noShow: 0,
-            taxaRealizacao: 0,
+            aprovados: 0,
           });
         }
 
         const metric = sdrMap.get(sdrId)!;
-        metric.agendada++;
-        
-        if (att.status === 'completed' || att.status === 'contract_paid') {
-          metric.realizada++;
-        }
-        if (att.status === 'no_show') {
-          metric.noShow++;
-        }
+        metric.aprovados++;
       });
 
-      // 5. Calculate conversion rates
-      const results = Array.from(sdrMap.values()).map(m => ({
-        ...m,
-        taxaRealizacao: m.agendada > 0 ? (m.realizada / m.agendada) * 100 : 0,
-      }));
-
-      // Sort by agendada desc
-      return results.sort((a, b) => b.agendada - a.agendada);
+      // Sort by aprovados desc
+      return Array.from(sdrMap.values()).sort((a, b) => b.aprovados - a.aprovados);
     },
     refetchInterval: 30000,
   });
