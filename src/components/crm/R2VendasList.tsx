@@ -80,7 +80,7 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vendaToDelete, setVendaToDelete] = useState<R2CarrinhoVenda | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [transactionToLink, setTransactionToLink] = useState<{ id: string; name: string } | null>(null);
+  const [transactionToLink, setTransactionToLink] = useState<{ id: string; name: string; email?: string; phone?: string } | null>(null);
 
   // Calcular totais - Bruto exclui itens com excluded_from_cart=true
   const totals = useMemo(() => {
@@ -108,8 +108,8 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
     queryClient.invalidateQueries({ queryKey: ['unlinked-transactions'] });
   };
 
-  const handleOpenLinkDialog = (id: string, name: string) => {
-    setTransactionToLink({ id, name });
+  const handleOpenLinkDialog = (id: string, name: string, email?: string, phone?: string) => {
+    setTransactionToLink({ id, name, email, phone });
     setLinkDialogOpen(true);
   };
 
@@ -506,7 +506,7 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleOpenLinkDialog(tx.id, tx.customer_name || 'Cliente')}
+                          onClick={() => handleOpenLinkDialog(tx.id, tx.customer_name || 'Cliente', tx.customer_email, tx.customer_phone)}
                         >
                           <Link2 className="h-4 w-4 mr-1" />
                           Vincular
@@ -624,6 +624,8 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
           onOpenChange={setLinkDialogOpen}
           transactionId={transactionToLink.id}
           transactionName={transactionToLink.name}
+          transactionEmail={transactionToLink.email}
+          transactionPhone={transactionToLink.phone}
           weekDate={weekStart}
         />
       )}

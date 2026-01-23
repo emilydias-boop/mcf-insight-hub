@@ -33,7 +33,7 @@ export function useAllApprovedAttendees() {
 
       if (!aprovadoStatusId) return [];
 
-      // 2. Buscar meetings com attendees aprovados
+      // 2. Buscar meetings com attendees aprovados, incluindo deal->contact para email/phone
       const { data: meetings, error } = await supabase
         .from('meeting_slots')
         .select(`
@@ -46,9 +46,14 @@ export function useAllApprovedAttendees() {
           attendees:meeting_slot_attendees(
             id,
             attendee_name,
-            contact_email,
             attendee_phone,
-            r2_status_id
+            r2_status_id,
+            deal:crm_deals(
+              contact:crm_contacts(
+                email,
+                phone
+              )
+            )
           )
         `)
         .eq('meeting_type', 'r2')
@@ -70,11 +75,15 @@ export function useAllApprovedAttendees() {
             ? `Semana de ${format(scheduledDate, "dd/MM", { locale: ptBR })}`
             : 'Data desconhecida';
 
+          // Extrair email/phone do deal->contact
+          const contactEmail = att.deal?.contact?.email || null;
+          const contactPhone = att.attendee_phone || att.deal?.contact?.phone || null;
+
           result.push({
             id: att.id,
             attendee_name: att.attendee_name,
-            contact_email: att.contact_email,
-            attendee_phone: att.attendee_phone,
+            contact_email: contactEmail,
+            attendee_phone: contactPhone,
             scheduled_at: meeting.scheduled_at,
             closer_name: (meeting.closer as any)?.name || null,
             closer_color: (meeting.closer as any)?.color || null,
