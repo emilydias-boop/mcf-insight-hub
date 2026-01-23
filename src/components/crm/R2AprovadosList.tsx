@@ -72,7 +72,7 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
           const searchNormalized = search.replace(/\D/g, '');
           
           const matchesName = name.includes(search);
-          const matchesPhone = phone.includes(searchNormalized) || searchNormalized.length < 4;
+          const matchesPhone = searchNormalized.length > 0 && phone.includes(searchNormalized);
           const matchesEmail = email.includes(search);
           
           if (!matchesName && !matchesPhone && !matchesEmail) {
