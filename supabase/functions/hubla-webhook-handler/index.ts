@@ -937,9 +937,19 @@ serve(async (req) => {
             });
           }
 
+          // Detectar se é um pagamento de contrato (categoria 'contrato' OU produto A000 com valor ~R$ 497)
+          // Isso cobre casos onde A000-Contrato é categorizado como 'incorporador' mas é realmente um contrato
+          const itemPriceForContractCheck = isOffer ? itemPrice : grossValue;
+          const isContratoPago = (
+            productCategory === 'contrato' || 
+            (productCategory === 'incorporador' && itemPriceForContractCheck >= 490 && itemPriceForContractCheck <= 510) ||
+            (productName.toUpperCase().includes('A000') && productName.toUpperCase().includes('CONTRATO'))
+          );
+
           // Se for contrato, não for offer, e for primeira parcela, auto-marcar reunião R1 como contrato pago
-          if (productCategory === 'contrato' && !isOffer && installment === 1) {
-            console.log(`🎯 [CONTRATO] Pagamento detectado, buscando reunião R1 para auto-marcar...`);
+          // NOTA: Este webhook só processa dados da Hubla (source = 'hubla'), nunca do Make
+          if (isContratoPago && !isOffer && installment === 1) {
+            console.log(`🎯 [CONTRATO HUBLA] Pagamento detectado (categoria: ${productCategory}, produto: ${productName}, valor: R$ ${itemPriceForContractCheck}), buscando reunião R1...`);
             await autoMarkContractPaid(supabase, {
               customerEmail: transactionData.customer_email,
               customerPhone: transactionData.customer_phone,
