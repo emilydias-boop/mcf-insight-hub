@@ -59,8 +59,8 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         `)
         .gte('meeting_slot.scheduled_at', weekStart.toISOString())
         .lte('meeting_slot.scheduled_at', weekEnd.toISOString())
-        .eq('meeting_slot.type', 'r2')
-        .eq('r2_status_id', 'aprovado');
+        .eq('meeting_slot.meeting_type', 'r2')
+        .eq('r2_status_id', '24d9a326-378b-4191-a4b3-d0ec8b9d23eb');
 
       if (attendeesError) throw attendeesError;
 
