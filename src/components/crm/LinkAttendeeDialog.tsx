@@ -131,7 +131,7 @@ export function LinkAttendeeDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {showManualCreate ? (
@@ -268,8 +268,8 @@ export function LinkAttendeeDialog({
               </div>
             </div>
 
-            <ScrollArea className="flex-1 -mx-6 px-6">
-              <div className="space-y-2 py-2">
+            <ScrollArea className="flex-1 min-h-0 max-h-[50vh] -mx-6 px-6">
+              <div className="space-y-2 py-2 pb-4">
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <Skeleton key={i} className="h-16 w-full" />
