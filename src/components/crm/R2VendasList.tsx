@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2, Link2, AlertCircle } from 'lucide-react';
+import { Plus, RefreshCw, Download, Eye, Pencil, Trash2, XCircle, Undo2, Link2, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Table,
   TableBody,
@@ -81,6 +82,7 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const [vendaToDelete, setVendaToDelete] = useState<R2CarrinhoVenda | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [transactionToLink, setTransactionToLink] = useState<{ id: string; name: string; email?: string; phone?: string } | null>(null);
+  const [unlinkedOpen, setUnlinkedOpen] = useState(false);
 
   // Calcular totais - Bruto exclui itens com excluded_from_cart=true
   const totals = useMemo(() => {
@@ -441,84 +443,99 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
         </CardContent>
       </Card>
 
-      {/* Vendas Não Vinculadas */}
+      {/* Vendas Não Vinculadas - Colapsável */}
       {unlinkedTransactions.length > 0 && (
-        <Card className="border-amber-500/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
-              Vendas Sem Vínculo ({unlinkedTransactions.length})
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Transações de parceria que não deram match automático. Vincule manualmente a um lead aprovado.
-            </p>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Email/Telefone</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead>Fonte</TableHead>
-                  <TableHead className="text-right">Ação</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoadingUnlinked ? (
-                  <TableRow>
-                    <TableCell colSpan={6}>
-                      <Skeleton className="h-8 w-full" />
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  unlinkedTransactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">
-                            {format(new Date(tx.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(tx.sale_date), 'HH:mm')}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {tx.customer_name || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col text-sm text-muted-foreground">
-                          {tx.customer_email && <span>{tx.customer_email}</span>}
-                          {tx.customer_phone && <span>{tx.customer_phone}</span>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(tx.product_price)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="capitalize">
-                          {tx.source || 'hubla'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOpenLinkDialog(tx.id, tx.customer_name || 'Cliente', tx.customer_email, tx.customer_phone)}
-                        >
-                          <Link2 className="h-4 w-4 mr-1" />
-                          Vincular
-                        </Button>
-                      </TableCell>
+        <Collapsible open={unlinkedOpen} onOpenChange={setUnlinkedOpen}>
+          <Card className="border-amber-500/30">
+            <CardHeader className="pb-3">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center justify-between cursor-pointer group">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AlertCircle className="h-5 w-5 text-amber-500" />
+                    Vendas Sem Vínculo ({unlinkedTransactions.length})
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    {unlinkedOpen ? (
+                      <ChevronDown className="h-4 w-4 transition-transform" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 transition-transform" />
+                    )}
+                  </Button>
+                </div>
+              </CollapsibleTrigger>
+              <p className="text-sm text-muted-foreground mt-1">
+                Transações de parceria que não deram match automático. Clique para expandir e vincular manualmente.
+              </p>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Email/Telefone</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead>Fonte</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingUnlinked ? (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <Skeleton className="h-8 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      unlinkedTransactions.map((tx) => (
+                        <TableRow key={tx.id}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {format(new Date(tx.sale_date), 'dd/MM/yyyy', { locale: ptBR })}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(tx.sale_date), 'HH:mm')}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {tx.customer_name || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col text-sm text-muted-foreground">
+                              {tx.customer_email && <span>{tx.customer_email}</span>}
+                              {tx.customer_phone && <span>{tx.customer_phone}</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(tx.product_price)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="capitalize">
+                              {tx.source || 'hubla'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenLinkDialog(tx.id, tx.customer_name || 'Cliente', tx.customer_email, tx.customer_phone)}
+                            >
+                              <Link2 className="h-4 w-4 mr-1" />
+                              Vincular
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {/* Paginação */}
