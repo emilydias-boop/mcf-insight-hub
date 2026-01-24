@@ -188,18 +188,40 @@ export function useR2MetricsData(weekDate: Date) {
         });
       });
 
-      // 5. Match with Hubla transactions (parceria category)
+      // 5. Match with Hubla transactions (parceria category) - include linked_attendee_id
       const { data: hublaVendas, error: hublaError } = await supabase
         .from('hubla_transactions')
-        .select('id, customer_email, customer_phone, net_value')
+        .select('id, customer_email, customer_phone, net_value, linked_attendee_id')
         .eq('product_category', 'parceria')
         .gte('sale_date', weekStart.toISOString())
-        .lte('sale_date', endOfDay(weekEnd).toISOString())
-        .in('sale_status', ['paid', 'completed']);
+        .lte('sale_date', endOfDay(weekEnd).toISOString());
+      // Removed sale_status filter to match Vendas tab behavior
 
       if (hublaError) throw hublaError;
 
-      // Match sales by email or phone - CONSOLIDATE by customer to avoid counting P2/installments
+      // Build map of approved attendee IDs to their closers (for linked_attendee_id matching)
+      const approvedAttendeeIds = new Set<string>();
+      const attendeeIdToCloser = new Map<string, string>();
+
+      meetings?.forEach(meeting => {
+        const closerData = meeting.closer as { id: string } | null;
+        const closerId = closerData?.id;
+        
+        const attendees = meeting.attendees as Array<{
+          id: string;
+          r2_status_id: string | null;
+        }> || [];
+        
+        attendees.forEach(att => {
+          const attStatusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
+          if (attStatusName.includes('aprovado')) {
+            approvedAttendeeIds.add(att.id);
+            if (closerId) attendeeIdToCloser.set(att.id, closerId);
+          }
+        });
+      });
+
+      // Match sales by email, phone, OR linked_attendee_id - CONSOLIDATE by customer
       const matchedClosers = new Map<string, number>();
       const countedSaleKeys = new Set<string>(); // Track unique sales by customer
 
@@ -209,40 +231,47 @@ export function useR2MetricsData(weekDate: Date) {
         
         const emailMatch = vendaEmail && approvedEmails.includes(vendaEmail);
         const phoneMatch = vendaPhone && approvedPhones.includes(vendaPhone);
+        const linkedMatch = venda.linked_attendee_id && approvedAttendeeIds.has(venda.linked_attendee_id);
         
-        if (emailMatch || phoneMatch) {
-          // Create a unique key per customer (prefer email, fallback to phone)
+        if (emailMatch || phoneMatch || linkedMatch) {
+          // Create a unique key per customer (prefer email, fallback to phone, then transaction id)
           const saleKey = vendaEmail || vendaPhone || venda.id;
           
           // Skip if this customer was already counted (consolidate P1+P2 into one sale)
           if (countedSaleKeys.has(saleKey)) return;
           countedSaleKeys.add(saleKey);
           
-          // Find which closer this sale belongs to - STOP at first match
+          // Find which closer this sale belongs to
           let matchedCloserId: string | null = null;
           
-          outerLoop:
-          for (const meeting of meetings || []) {
-            const closerData = meeting.closer as { id: string } | null;
-            const closerId = closerData?.id;
-            
-            const attendees = meeting.attendees as Array<{
-              attendee_phone: string | null;
-              r2_status_id: string | null;
-              deal: { contact: { email: string | null; phone: string | null } | null } | null;
-            }> || [];
-            
-            for (const att of attendees) {
-              // Only match approved attendees
-              const attStatusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
-              if (!attStatusName.includes('aprovado')) continue;
+          // If linked via manual link, get closer directly from the map
+          if (linkedMatch && venda.linked_attendee_id) {
+            matchedCloserId = attendeeIdToCloser.get(venda.linked_attendee_id) || null;
+          } else {
+            // Loop through meetings to find closer by email/phone match
+            outerLoop:
+            for (const meeting of meetings || []) {
+              const closerData = meeting.closer as { id: string } | null;
+              const closerId = closerData?.id;
               
-              const attEmail = att.deal?.contact?.email?.toLowerCase();
-              const attPhone = normalizePhone(att.deal?.contact?.phone || att.attendee_phone);
+              const attendees = meeting.attendees as Array<{
+                attendee_phone: string | null;
+                r2_status_id: string | null;
+                deal: { contact: { email: string | null; phone: string | null } | null } | null;
+              }> || [];
               
-              if ((vendaEmail && attEmail === vendaEmail) || (vendaPhone && attPhone === vendaPhone)) {
-                matchedCloserId = closerId || null;
-                break outerLoop;
+              for (const att of attendees) {
+                // Only match approved attendees
+                const attStatusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
+                if (!attStatusName.includes('aprovado')) continue;
+                
+                const attEmail = att.deal?.contact?.email?.toLowerCase();
+                const attPhone = normalizePhone(att.deal?.contact?.phone || att.attendee_phone);
+                
+                if ((vendaEmail && attEmail === vendaEmail) || (vendaPhone && attPhone === vendaPhone)) {
+                  matchedCloserId = closerId || null;
+                  break outerLoop;
+                }
               }
             }
           }
