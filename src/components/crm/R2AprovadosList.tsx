@@ -117,7 +117,7 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
   const generateReport = () => {
     const dateStr = format(weekEnd, 'dd/MM', { locale: ptBR });
     let report = `*Carrinho ${dateStr}*\n\n`;
-    report += `EM ACOMPANHAMENTO\t${displayedAttendees.length}\n\n`;
+    report += `*SELECIONADOS\t${attendees.length}*\t\tLISTA DOS QUE NÃO COMPRARAM AINDA\n\n`;
 
     displayedAttendees.forEach((att, idx) => {
       const name = att.attendee_name || att.deal_name || 'Sem nome';
@@ -127,8 +127,6 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
       
       if (att.carrinho_status === 'vai_comprar') {
         suffix = ' - VAI COMPRAR 🔥';
-      } else if (att.carrinho_status === 'comprou') {
-        suffix = ' - ✅ COMPROU';
       } else if (att.carrinho_status === 'negociando') {
         suffix = ' - NEGOCIANDO';
       } else if (att.carrinho_status === 'quer_desistir') {
