@@ -117,9 +117,9 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
   const generateReport = () => {
     const dateStr = format(weekEnd, 'dd/MM', { locale: ptBR });
     let report = `*Carrinho ${dateStr}*\n\n`;
-    report += `APROVADOS\t${attendees.length}\n\n`;
+    report += `EM ACOMPANHAMENTO\t${displayedAttendees.length}\n\n`;
 
-    attendees.forEach((att, idx) => {
+    displayedAttendees.forEach((att, idx) => {
       const name = att.attendee_name || att.deal_name || 'Sem nome';
       const phone = att.attendee_phone || att.contact_phone || '-';
       const closer = att.closer_name || '-';
