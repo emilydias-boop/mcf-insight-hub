@@ -111,12 +111,11 @@ export function useR2CarrinhoVendas(weekDate: Date) {
       }
 
       // 3. Buscar transações de parceria da semana que matcham com os leads aprovados
-      // Excluir transações genéricas "Parceria" (logs de integração incompletos)
+      // Matching por email/telefone já garante relevância - não filtrar por product_name
       let query = supabase
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
-        .neq('product_name', 'Parceria')
         .gte('sale_date', weekStart.toISOString())
         .lte('sale_date', endOfDay(weekEnd).toISOString())
         .order('sale_date', { ascending: false });
