@@ -9,6 +9,18 @@ const normalizeForMatch = (phone: string | null): string | null => {
   return phone.replace(/\D/g, '').slice(-11);
 };
 
+// Helper para obter preço de referência por código de produto
+const getProductReferencePrice = (productName: string | null): number | null => {
+  if (!productName) return null;
+  const upper = productName.toUpperCase();
+  if (upper.includes('A009')) return 19500;
+  if (upper.includes('A001')) return 14500;
+  if (upper.includes('A004')) return 5500;
+  if (upper.includes('A003')) return 7500;
+  if (upper.includes('A005') || upper.includes('P2')) return 0; // P2 usa valor real
+  return null;
+};
+
 export interface R2CarrinhoVenda {
   id: string;
   hubla_id: string;
@@ -38,6 +50,8 @@ export interface R2CarrinhoVenda {
   p2_total?: number;
   consolidated_gross?: number;
   related_transactions?: R2CarrinhoVenda[];
+  // Preço de referência enriquecido do Hubla
+  enriched_reference_price?: number;
 }
 
 export function useR2CarrinhoVendas(weekDate: Date) {
@@ -234,6 +248,79 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         }
       });
 
+      // 5.5 Enriquecer transações genéricas "Parceria" com dados do Hubla
+      // Identificar transações genéricas que precisam de enriquecimento
+      const genericTransactions = matchedTransactions.filter(
+        tx => tx.product_name?.toLowerCase().trim() === 'parceria'
+      );
+
+      if (genericTransactions.length > 0) {
+        // Buscar emails únicos das transações genéricas
+        const emailsToEnrich = [...new Set(
+          genericTransactions
+            .map(tx => tx.customer_email?.toLowerCase())
+            .filter(Boolean) as string[]
+        )];
+
+        if (emailsToEnrich.length > 0) {
+          // Buscar transações correspondentes no Hubla com nomes de produto corretos
+          const { data: hublaMatches } = await supabase
+            .from('hubla_transactions')
+            .select('customer_email, product_name, product_price, sale_date')
+            .in('customer_email', emailsToEnrich)
+            .eq('source', 'hubla')
+            .gte('sale_date', weekStart.toISOString())
+            .lte('sale_date', endOfDay(weekEnd).toISOString());
+
+          // Criar mapa de email -> produto correto (priorizar A009, depois A001, etc.)
+          const hublaProductMap = new Map<string, { product_name: string; reference_price: number }>();
+          
+          // Ordenar para priorizar produtos com código identificável
+          const sortedMatches = (hublaMatches || []).sort((a, b) => {
+            const aName = a.product_name?.toUpperCase() || '';
+            const bName = b.product_name?.toUpperCase() || '';
+            // Priorizar A009 > A001 > A004 > A003 > outros
+            const getPriority = (name: string) => {
+              if (name.includes('A009')) return 1;
+              if (name.includes('A001')) return 2;
+              if (name.includes('A004')) return 3;
+              if (name.includes('A003')) return 4;
+              return 5;
+            };
+            return getPriority(aName) - getPriority(bName);
+          });
+          
+          sortedMatches.forEach(match => {
+            const email = match.customer_email?.toLowerCase();
+            const productName = match.product_name || '';
+            
+            // Só enriquecer se encontrar um produto com código válido
+            const referencePrice = getProductReferencePrice(productName);
+            
+            if (email && referencePrice !== null && !hublaProductMap.has(email)) {
+              hublaProductMap.set(email, {
+                product_name: productName,
+                reference_price: referencePrice
+              });
+            }
+          });
+
+          // Enriquecer transações genéricas com dados do Hubla
+          matchedTransactions.forEach(tx => {
+            if (tx.product_name?.toLowerCase().trim() === 'parceria') {
+              const email = tx.customer_email?.toLowerCase();
+              if (email) {
+                const hublaData = hublaProductMap.get(email);
+                if (hublaData) {
+                  tx.product_name = hublaData.product_name;
+                  tx.enriched_reference_price = hublaData.reference_price;
+                }
+              }
+            }
+          });
+        }
+      }
+
       // 6. Agrupar transações por cliente para consolidar P1 + P2
       const groupedByClient = new Map<string, R2CarrinhoVenda[]>();
 
@@ -272,13 +359,24 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         let consolidatedGross = 0;
         
         if (mainProduct) {
-          // Produto principal identificado - usar seu preço de referência
-          consolidatedGross = mainProduct.product_price || 0;
+          // Produto principal identificado - usar preço de referência enriquecido ou calculado
+          consolidatedGross = mainProduct.enriched_reference_price ?? 
+                              getProductReferencePrice(mainProduct.product_name) ?? 
+                              mainProduct.product_price ?? 0;
         } else {
-          // Sem produto principal - somar todos os product_price (entrada parcelada)
-          consolidatedGross = txGroup
-            .filter(tx => !p2Transactions.includes(tx))
-            .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+          // Sem produto principal - verificar se primeira transação tem preço enriquecido
+          const firstTx = txGroup[0];
+          if (firstTx.enriched_reference_price !== undefined) {
+            consolidatedGross = firstTx.enriched_reference_price;
+          } else if (firstTx.product_name?.toLowerCase().trim() === 'parceria') {
+            // Transação genérica sem enriquecimento - usar product_price real
+            consolidatedGross = firstTx.product_price || 0;
+          } else {
+            // Somar todos os product_price (entrada parcelada)
+            consolidatedGross = txGroup
+              .filter(tx => !p2Transactions.includes(tx))
+              .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+          }
         }
         
         // Adicionar P2s ao bruto
