@@ -23,11 +23,12 @@ export function useUnlinkedTransactions(weekDate: Date) {
   return useQuery({
     queryKey: ['unlinked-transactions', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
-      // Buscar todas as transações de parceria da semana
+      // Buscar transações de parceria da semana (apenas fontes com dados completos)
       const { data: transactions, error: txError } = await supabase
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
+        .in('source', ['hubla', 'asaas', 'kiwify'])
         .gte('sale_date', weekStart.toISOString())
         .lte('sale_date', endOfDay(weekEnd).toISOString())
         .is('linked_attendee_id', null)
