@@ -213,27 +213,39 @@ export function useR2MetricsData(weekDate: Date) {
         if (emailMatch || phoneMatch) {
           vendas++;
           
-          // Find which closer this sale belongs to
-          meetings?.forEach(meeting => {
+          // Find which closer this sale belongs to - STOP at first match to avoid duplication
+          let matchedCloserId: string | null = null;
+          
+          outerLoop:
+          for (const meeting of meetings || []) {
             const closerData = meeting.closer as { id: string } | null;
             const closerId = closerData?.id;
             
             const attendees = meeting.attendees as Array<{
               attendee_phone: string | null;
+              r2_status_id: string | null;
               deal: { contact: { email: string | null; phone: string | null } | null } | null;
             }> || [];
             
-            attendees.forEach(att => {
+            for (const att of attendees) {
+              // Only match approved attendees
+              const attStatusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
+              if (!attStatusName.includes('aprovado')) continue;
+              
               const attEmail = att.deal?.contact?.email?.toLowerCase();
               const attPhone = normalizePhone(att.deal?.contact?.phone || att.attendee_phone);
               
               if ((vendaEmail && attEmail === vendaEmail) || (vendaPhone && attPhone === vendaPhone)) {
-                if (closerId) {
-                  matchedClosers.set(closerId, (matchedClosers.get(closerId) || 0) + 1);
-                }
+                matchedCloserId = closerId || null;
+                break outerLoop; // Stop at first match - each sale counts only once
               }
-            });
-          });
+            }
+          }
+          
+          // Increment count only for the matched closer
+          if (matchedCloserId) {
+            matchedClosers.set(matchedCloserId, (matchedClosers.get(matchedCloserId) || 0) + 1);
+          }
         }
       });
 
