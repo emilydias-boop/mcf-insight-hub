@@ -513,6 +513,418 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_blacklist: {
+        Row: {
+          channel: Database["public"]["Enums"]["automation_channel"] | null
+          contact_id: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          phone: string | null
+          reason: string | null
+        }
+        Insert: {
+          channel?: Database["public"]["Enums"]["automation_channel"] | null
+          contact_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone?: string | null
+          reason?: string | null
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["automation_channel"] | null
+          contact_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_blacklist_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_flows: {
+        Row: {
+          business_hours_end: string | null
+          business_hours_start: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          exclude_weekends: boolean | null
+          id: string
+          is_active: boolean | null
+          name: string
+          origin_id: string | null
+          respect_business_hours: boolean | null
+          stage_id: string | null
+          trigger_on: Database["public"]["Enums"]["automation_trigger"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          business_hours_end?: string | null
+          business_hours_start?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          exclude_weekends?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          origin_id?: string | null
+          respect_business_hours?: boolean | null
+          stage_id?: string | null
+          trigger_on?: Database["public"]["Enums"]["automation_trigger"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          business_hours_end?: string | null
+          business_hours_start?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          exclude_weekends?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          origin_id?: string | null
+          respect_business_hours?: boolean | null
+          stage_id?: string | null
+          trigger_on?: Database["public"]["Enums"]["automation_trigger"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_flows_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flows_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_logs: {
+        Row: {
+          channel: Database["public"]["Enums"]["automation_channel"]
+          contact_id: string | null
+          content_sent: string | null
+          created_at: string | null
+          deal_id: string | null
+          delivered_at: string | null
+          error_message: string | null
+          external_id: string | null
+          external_status: string | null
+          flow_id: string | null
+          id: string
+          metadata: Json | null
+          read_at: string | null
+          recipient: string
+          replied_at: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["automation_status"]
+          step_id: string | null
+          template_id: string | null
+        }
+        Insert: {
+          channel: Database["public"]["Enums"]["automation_channel"]
+          contact_id?: string | null
+          content_sent?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          delivered_at?: string | null
+          error_message?: string | null
+          external_id?: string | null
+          external_status?: string | null
+          flow_id?: string | null
+          id?: string
+          metadata?: Json | null
+          read_at?: string | null
+          recipient: string
+          replied_at?: string | null
+          sent_at?: string | null
+          status: Database["public"]["Enums"]["automation_status"]
+          step_id?: string | null
+          template_id?: string | null
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["automation_channel"]
+          contact_id?: string | null
+          content_sent?: string | null
+          created_at?: string | null
+          deal_id?: string | null
+          delivered_at?: string | null
+          error_message?: string | null
+          external_id?: string | null
+          external_status?: string | null
+          flow_id?: string | null
+          id?: string
+          metadata?: Json | null
+          read_at?: string | null
+          recipient?: string
+          replied_at?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["automation_status"]
+          step_id?: string | null
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "automation_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "automation_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_queue: {
+        Row: {
+          attempts: number | null
+          contact_id: string | null
+          created_at: string | null
+          deal_id: string
+          error_message: string | null
+          flow_id: string
+          id: string
+          last_attempt_at: string | null
+          processed_at: string | null
+          scheduled_at: string
+          status: Database["public"]["Enums"]["automation_status"] | null
+          step_id: string
+        }
+        Insert: {
+          attempts?: number | null
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id: string
+          error_message?: string | null
+          flow_id: string
+          id?: string
+          last_attempt_at?: string | null
+          processed_at?: string | null
+          scheduled_at: string
+          status?: Database["public"]["Enums"]["automation_status"] | null
+          step_id: string
+        }
+        Update: {
+          attempts?: number | null
+          contact_id?: string | null
+          created_at?: string | null
+          deal_id?: string
+          error_message?: string | null
+          flow_id?: string
+          id?: string
+          last_attempt_at?: string | null
+          processed_at?: string | null
+          scheduled_at?: string
+          status?: Database["public"]["Enums"]["automation_status"] | null
+          step_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "crm_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_queue_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_queue_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_queue_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "automation_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_settings: {
+        Row: {
+          description: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      automation_steps: {
+        Row: {
+          channel: Database["public"]["Enums"]["automation_channel"]
+          conditions: Json | null
+          created_at: string | null
+          delay_days: number | null
+          delay_hours: number | null
+          delay_minutes: number | null
+          flow_id: string
+          id: string
+          is_active: boolean | null
+          order_index: number | null
+          template_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          channel: Database["public"]["Enums"]["automation_channel"]
+          conditions?: Json | null
+          created_at?: string | null
+          delay_days?: number | null
+          delay_hours?: number | null
+          delay_minutes?: number | null
+          flow_id: string
+          id?: string
+          is_active?: boolean | null
+          order_index?: number | null
+          template_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          channel?: Database["public"]["Enums"]["automation_channel"]
+          conditions?: Json | null
+          created_at?: string | null
+          delay_days?: number | null
+          delay_hours?: number | null
+          delay_minutes?: number | null
+          flow_id?: string
+          id?: string
+          is_active?: boolean | null
+          order_index?: number | null
+          template_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_steps_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "automation_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_templates: {
+        Row: {
+          activecampaign_template_id: string | null
+          channel: Database["public"]["Enums"]["automation_channel"]
+          content: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          subject: string | null
+          twilio_template_sid: string | null
+          updated_at: string | null
+          variables: string[] | null
+        }
+        Insert: {
+          activecampaign_template_id?: string | null
+          channel: Database["public"]["Enums"]["automation_channel"]
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          subject?: string | null
+          twilio_template_sid?: string | null
+          updated_at?: string | null
+          variables?: string[] | null
+        }
+        Update: {
+          activecampaign_template_id?: string | null
+          channel?: Database["public"]["Enums"]["automation_channel"]
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          subject?: string | null
+          twilio_template_sid?: string | null
+          updated_at?: string | null
+          variables?: string[] | null
+        }
+        Relationships: []
+      }
       bu_webhook_logs: {
         Row: {
           bu_type: string
@@ -7156,6 +7568,17 @@ export type Database = {
         | "financeiro"
         | "closer_sombra"
       auction_status: "ativo" | "encerrado" | "cancelado"
+      automation_channel: "whatsapp" | "email" | "sms"
+      automation_status:
+        | "pending"
+        | "processing"
+        | "sent"
+        | "delivered"
+        | "read"
+        | "replied"
+        | "failed"
+        | "cancelled"
+      automation_trigger: "enter" | "exit"
       flag_category:
         | "desempenho"
         | "comportamento"
@@ -7353,6 +7776,18 @@ export const Constants = {
         "closer_sombra",
       ],
       auction_status: ["ativo", "encerrado", "cancelado"],
+      automation_channel: ["whatsapp", "email", "sms"],
+      automation_status: [
+        "pending",
+        "processing",
+        "sent",
+        "delivered",
+        "read",
+        "replied",
+        "failed",
+        "cancelled",
+      ],
+      automation_trigger: ["enter", "exit"],
       flag_category: [
         "desempenho",
         "comportamento",
