@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle } from 'lucide-react';
+import { Copy, Check, ShoppingCart, X, Download, Search, Filter, XCircle, MessageSquare, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -97,7 +97,7 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
       });
   }, [attendees, searchTerm, closerFilter, dateFilter]);
 
-  const handleSetStatus = (attendeeId: string, status: 'vai_comprar' | 'comprou' | 'nao_comprou' | null) => {
+  const handleSetStatus = (attendeeId: string, status: 'vai_comprar' | 'comprou' | 'nao_comprou' | 'negociando' | 'quer_desistir' | null) => {
     updateStatus.mutate({ attendeeId, status });
   };
 
@@ -126,9 +126,13 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
       let suffix = '';
       
       if (att.carrinho_status === 'vai_comprar') {
-        suffix = ' - VAI COMPRAR';
+        suffix = ' - VAI COMPRAR 🔥';
       } else if (att.carrinho_status === 'comprou') {
         suffix = ' - ✅ COMPROU';
+      } else if (att.carrinho_status === 'negociando') {
+        suffix = ' - NEGOCIANDO';
+      } else if (att.carrinho_status === 'quer_desistir') {
+        suffix = ' - quer desistir';
       }
 
       report += `${idx + 1} ${name}\t${phone}\t*Aprovado*\t${closer}${suffix}\n`;
@@ -156,7 +160,9 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
       att.closer_name || '-',
       att.carrinho_status === 'vai_comprar' ? 'Vai Comprar' :
       att.carrinho_status === 'comprou' ? 'Comprou' :
-      att.carrinho_status === 'nao_comprou' ? 'Não Comprou' : '-',
+      att.carrinho_status === 'nao_comprou' ? 'Não Comprou' :
+      att.carrinho_status === 'negociando' ? 'Negociando' :
+      att.carrinho_status === 'quer_desistir' ? 'Quer Desistir' : '-',
       format(new Date(att.scheduled_at), 'dd/MM/yyyy'),
     ]);
 
@@ -311,6 +317,18 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
                           Vai Comprar
                         </Badge>
                       )}
+                      {att.carrinho_status === 'negociando' && (
+                        <Badge variant="outline" className="w-fit mt-1 text-xs bg-yellow-500/20 text-yellow-600 border-yellow-500">
+                          <MessageSquare className="h-3 w-3 mr-1" />
+                          Negociando
+                        </Badge>
+                      )}
+                      {att.carrinho_status === 'quer_desistir' && (
+                        <Badge variant="outline" className="w-fit mt-1 text-xs bg-orange-500/20 text-orange-600 border-orange-500">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Quer Desistir
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">
@@ -350,6 +368,40 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Vai Comprar</TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={att.carrinho_status === 'negociando' ? 'default' : 'ghost'}
+                            size="sm"
+                            className={`h-8 px-2 ${att.carrinho_status === 'negociando' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : ''}`}
+                            onClick={() => handleSetStatus(
+                              att.id, 
+                              att.carrinho_status === 'negociando' ? null : 'negociando'
+                            )}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Negociando</TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={att.carrinho_status === 'quer_desistir' ? 'default' : 'ghost'}
+                            size="sm"
+                            className={`h-8 px-2 ${att.carrinho_status === 'quer_desistir' ? 'bg-orange-500 hover:bg-orange-600 text-white' : ''}`}
+                            onClick={() => handleSetStatus(
+                              att.id, 
+                              att.carrinho_status === 'quer_desistir' ? null : 'quer_desistir'
+                            )}
+                          >
+                            <AlertTriangle className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Quer Desistir</TooltipContent>
                       </Tooltip>
 
                       <Tooltip>

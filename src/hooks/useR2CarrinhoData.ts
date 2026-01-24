@@ -164,7 +164,7 @@ export function useUpdateCarrinhoStatus() {
       status 
     }: { 
       attendeeId: string; 
-      status: 'vai_comprar' | 'comprou' | 'nao_comprou' | null;
+      status: 'vai_comprar' | 'comprou' | 'nao_comprou' | 'negociando' | 'quer_desistir' | null;
     }) => {
       const { error } = await supabase
         .from('meeting_slot_attendees')
