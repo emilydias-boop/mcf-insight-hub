@@ -12,6 +12,8 @@ import {
   Filter,
   ArrowLeft
 } from "lucide-react";
+import { PendingMetricsAlert } from "@/components/dashboard/PendingMetricsAlert";
+import { MetricsApprovalDialog } from "@/components/dashboard/MetricsApprovalDialog";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +48,7 @@ import { WeeklyMetricsDetailDrawer } from "@/components/dashboard/WeeklyMetricsD
 export default function Semanas() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   
   const { data: weeks, isLoading, refetch } = useWeeklyMetricsList({ 
     limit: 52, 
@@ -101,6 +104,13 @@ export default function Semanas() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Alertas de métricas pendentes */}
+      <PendingMetricsAlert onReviewClick={() => setApprovalDialogOpen(true)} />
+      <MetricsApprovalDialog 
+        open={approvalDialogOpen} 
+        onOpenChange={setApprovalDialogOpen} 
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

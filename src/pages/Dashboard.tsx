@@ -1,11 +1,9 @@
 // Dashboard - Director Panel with sector metrics
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { ResourceGuard } from "@/components/auth/ResourceGuard";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
-import { PendingMetricsAlert } from "@/components/dashboard/PendingMetricsAlert";
-import { MetricsApprovalDialog } from "@/components/dashboard/MetricsApprovalDialog";
 import { SetorRow } from "@/components/dashboard/SetorRow";
 import { EfeitoAlavancaRow } from "@/components/dashboard/EfeitoAlavancaRow";
 import { TotalGeralRow } from "@/components/dashboard/TotalGeralRow";
@@ -15,7 +13,6 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
-  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
 
   // Hook para dados dos setores (busca semana/mês/ano automaticamente)
   const { data, isLoading, error } = useSetoresDashboard();
@@ -55,14 +52,6 @@ export default function Dashboard() {
   return (
     <ResourceGuard resource="dashboard">
       <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
-        {/* Alert para métricas pendentes de aprovação */}
-        <PendingMetricsAlert onReviewClick={() => setApprovalDialogOpen(true)} />
-        
-        {/* Dialog de aprovação */}
-        <MetricsApprovalDialog 
-          open={approvalDialogOpen} 
-          onOpenChange={setApprovalDialogOpen} 
-        />
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
