@@ -336,8 +336,20 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-[200px] truncate" title={venda.product_name || ''}>
-                        {venda.product_name || '-'}
+                      <div className="flex flex-col gap-1">
+                        <div className="max-w-[200px] truncate" title={venda.product_name || ''}>
+                          {venda.product_name || '-'}
+                        </div>
+                        {venda.has_p2 && (
+                          <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30 w-fit text-xs">
+                            +{venda.p2_count} P2 ({formatCurrency(venda.p2_total || 0)})
+                          </Badge>
+                        )}
+                        {venda.related_transactions && venda.related_transactions.length > 1 && !venda.has_p2 && (
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 w-fit text-xs">
+                            {venda.related_transactions.length} pagamentos
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>

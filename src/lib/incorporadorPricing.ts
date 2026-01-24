@@ -55,14 +55,25 @@ export interface TransactionForDedup extends TransactionForGross {
   sale_date: string;
 }
 
+// Interface estendida para transações com campos de consolidação
+export interface TransactionForGrossConsolidated extends TransactionForGross {
+  consolidated_gross?: number;
+}
+
 // Calcula o valor bruto de uma transação
 // Usa override manual se definido, senão calcula baseado no preço fixo do produto
 // NOVO: isFirstOfGroup indica se é a primeira transação do grupo cliente+produto
+// NOVO: Suporta consolidated_gross para transações agrupadas (P1 + P2)
 export const getDeduplicatedGross = (
-  transaction: TransactionForGross, 
+  transaction: TransactionForGrossConsolidated, 
   isFirstOfGroup: boolean = true
 ): number => {
   const installment = transaction.installment_number || 1;
+  
+  // Regra 0: Se há consolidated_gross (transação agrupada), usar diretamente
+  if (transaction.consolidated_gross !== undefined && transaction.consolidated_gross !== null) {
+    return transaction.consolidated_gross;
+  }
   
   // Regra 1: Parcela > 1 sempre tem bruto zerado
   if (installment > 1) {
@@ -79,7 +90,12 @@ export const getDeduplicatedGross = (
     return transaction.gross_override;
   }
   
-  // Regra 4: Calcula baseado no preço fixo do produto
+  // Regra 4: Se product_name é "Parceria" (genérico), usar product_price real
+  if (transaction.product_name?.toLowerCase().trim() === 'parceria') {
+    return transaction.product_price || 0;
+  }
+  
+  // Regra 5: Calcula baseado no preço fixo do produto
   return getFixedGrossPrice(transaction.product_name, transaction.product_price || 0);
 };
 

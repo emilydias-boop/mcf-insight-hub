@@ -32,6 +32,12 @@ export interface R2CarrinhoVenda {
   r2_closer_color: string | null;
   // Flag indicando se foi match manual ou automático
   is_manual_link: boolean;
+  // Campos para agrupamento de transações (P1 + P2)
+  has_p2?: boolean;
+  p2_count?: number;
+  p2_total?: number;
+  consolidated_gross?: number;
+  related_transactions?: R2CarrinhoVenda[];
 }
 
 export function useR2CarrinhoVendas(weekDate: Date) {
@@ -228,7 +234,81 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         }
       });
 
-      return matchedTransactions;
+      // 6. Agrupar transações por cliente para consolidar P1 + P2
+      const groupedByClient = new Map<string, R2CarrinhoVenda[]>();
+
+      matchedTransactions.forEach(tx => {
+        const key = tx.customer_email?.toLowerCase() || tx.id;
+        const group = groupedByClient.get(key) || [];
+        group.push(tx);
+        groupedByClient.set(key, group);
+      });
+
+      // 7. Consolidar grupos - identificar produto principal e somar valores
+      const consolidatedVendas: R2CarrinhoVenda[] = [];
+
+      groupedByClient.forEach((txGroup) => {
+        // Encontrar o produto principal (A001, A009, A003, A004 - não P2)
+        const mainProduct = txGroup.find(tx => {
+          const name = tx.product_name?.toUpperCase() || '';
+          return (name.includes('A001') || name.includes('A009') || 
+                  name.includes('A003') || name.includes('A004')) &&
+                 !name.includes('P2') && !name.includes('A005');
+        });
+        
+        // Identificar transações P2
+        const p2Transactions = txGroup.filter(tx => {
+          const name = tx.product_name?.toUpperCase() || '';
+          return name.includes('P2') || name.includes('A005');
+        });
+        
+        // Calcular valores consolidados
+        const totalNet = txGroup.reduce((sum, tx) => sum + (tx.net_value || 0), 0);
+        
+        // Calcular bruto consolidado:
+        // - Produto principal: usar product_price
+        // - P2s: somar product_price de cada um
+        // - Se só tem "Parceria" genérico: usar product_price como bruto
+        let consolidatedGross = 0;
+        
+        if (mainProduct) {
+          // Produto principal identificado - usar seu preço de referência
+          consolidatedGross = mainProduct.product_price || 0;
+        } else {
+          // Sem produto principal - somar todos os product_price (entrada parcelada)
+          consolidatedGross = txGroup
+            .filter(tx => !p2Transactions.includes(tx))
+            .reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+        }
+        
+        // Adicionar P2s ao bruto
+        const p2Total = p2Transactions.reduce((sum, tx) => sum + (tx.product_price || 0), 0);
+        consolidatedGross += p2Total;
+        
+        // Usar dados do produto principal ou primeiro da lista
+        const baseTransaction = mainProduct || txGroup[0];
+        
+        // Determinar o nome do produto a exibir
+        let displayProductName = baseTransaction.product_name;
+        if (displayProductName?.toLowerCase().trim() === 'parceria' && txGroup.length === 1) {
+          // Manter "Parceria" mas o bruto será o product_price real
+        }
+        
+        consolidatedVendas.push({
+          ...baseTransaction,
+          // Substituir valores agregados
+          net_value: totalNet,
+          consolidated_gross: consolidatedGross,
+          // Marcar se tem P2 incluído
+          has_p2: p2Transactions.length > 0,
+          p2_count: p2Transactions.length,
+          p2_total: p2Total,
+          // Lista de todas transações do cliente (para detalhes)
+          related_transactions: txGroup.length > 1 ? txGroup : undefined,
+        });
+      });
+
+      return consolidatedVendas;
     },
     refetchInterval: 30000,
   });
