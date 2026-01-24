@@ -379,9 +379,9 @@ export function useR2CarrinhoVendas(weekDate: Date) {
           }
         }
         
-        // Adicionar P2s ao bruto
+        // P2s NÃO somam no bruto - apenas no líquido (já incluso em totalNet)
         const p2Total = p2Transactions.reduce((sum, tx) => sum + (tx.product_price || 0), 0);
-        consolidatedGross += p2Total;
+        // consolidatedGross permanece apenas com valor do produto principal
         
         // Usar dados do produto principal ou primeiro da lista
         const baseTransaction = mainProduct || txGroup[0];
