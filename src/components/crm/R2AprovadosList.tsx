@@ -9,9 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { R2CarrinhoAttendee, useUpdateCarrinhoStatus } from '@/hooks/useR2CarrinhoData';
+import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { AprovadoDetailDrawer } from './AprovadoDetailDrawer';
 import { toast } from 'sonner';
-
 interface R2AprovadosListProps {
   attendees: R2CarrinhoAttendee[];
   isLoading?: boolean;
@@ -27,11 +27,12 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
   const [drawerOpen, setDrawerOpen] = useState(false);
   
   const updateStatus = useUpdateCarrinhoStatus();
-
-  // Count sold items (for display purposes)
-  const soldCount = useMemo(() => {
-    return attendees.filter(att => att.carrinho_status === 'comprou').length;
-  }, [attendees]);
+  
+  // Fetch real sales data (same source as Vendas tab)
+  const { data: vendasData = [] } = useR2CarrinhoVendas(weekEnd);
+  
+  // Use real sales count from transactions (not manual status)
+  const soldCount = vendasData.length;
 
   // Get unique closers for filter
   const closers = useMemo(() => {
