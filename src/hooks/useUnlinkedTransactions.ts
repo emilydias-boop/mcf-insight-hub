@@ -23,12 +23,11 @@ export function useUnlinkedTransactions(weekDate: Date) {
   return useQuery({
     queryKey: ['unlinked-transactions', weekStart.toISOString(), weekEnd.toISOString()],
     queryFn: async () => {
-      // Excluir transações genéricas "Parceria" (logs de integração incompletos)
+      // Buscar todas transações de parceria da semana (matching por email/telefone filtra relevância)
       const { data: transactions, error: txError } = await supabase
         .from('hubla_transactions')
         .select('*')
         .eq('product_category', 'parceria')
-        .neq('product_name', 'Parceria')
         .gte('sale_date', weekStart.toISOString())
         .lte('sale_date', endOfDay(weekEnd).toISOString())
         .is('linked_attendee_id', null)
