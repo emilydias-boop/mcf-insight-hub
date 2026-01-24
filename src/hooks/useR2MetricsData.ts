@@ -199,9 +199,9 @@ export function useR2MetricsData(weekDate: Date) {
 
       if (hublaError) throw hublaError;
 
-      // Match sales by email or phone
-      let vendas = 0;
+      // Match sales by email or phone - CONSOLIDATE by customer to avoid counting P2/installments
       const matchedClosers = new Map<string, number>();
+      const countedSaleKeys = new Set<string>(); // Track unique sales by customer
 
       hublaVendas?.forEach(venda => {
         const vendaEmail = venda.customer_email?.toLowerCase();
@@ -211,9 +211,14 @@ export function useR2MetricsData(weekDate: Date) {
         const phoneMatch = vendaPhone && approvedPhones.includes(vendaPhone);
         
         if (emailMatch || phoneMatch) {
-          vendas++;
+          // Create a unique key per customer (prefer email, fallback to phone)
+          const saleKey = vendaEmail || vendaPhone || venda.id;
           
-          // Find which closer this sale belongs to - STOP at first match to avoid duplication
+          // Skip if this customer was already counted (consolidate P1+P2 into one sale)
+          if (countedSaleKeys.has(saleKey)) return;
+          countedSaleKeys.add(saleKey);
+          
+          // Find which closer this sale belongs to - STOP at first match
           let matchedCloserId: string | null = null;
           
           outerLoop:
@@ -237,7 +242,7 @@ export function useR2MetricsData(weekDate: Date) {
               
               if ((vendaEmail && attEmail === vendaEmail) || (vendaPhone && attPhone === vendaPhone)) {
                 matchedCloserId = closerId || null;
-                break outerLoop; // Stop at first match - each sale counts only once
+                break outerLoop;
               }
             }
           }
@@ -248,6 +253,9 @@ export function useR2MetricsData(weekDate: Date) {
           }
         }
       });
+
+      // vendas = unique consolidated sales count
+      const vendas = countedSaleKeys.size;
 
       // Update closer vendas counts
       matchedClosers.forEach((count, closerId) => {
