@@ -482,21 +482,51 @@ export function AgendaCalendar({
     return Array.from(allCloserIdsSet).sort();
   }, [meetingType, r2DailySlotsMap, meetingLinkSlots]);
 
-  // Calculate fixed column position for a closer on a specific day
-  // Always use horizontal columns layout, with compact mode for 3+ closers
-  const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined, viewModeOverride?: ViewMode) => {
-    const effectiveViewMode = viewModeOverride || viewMode;
+  // Get closers that have meetings at a specific time slot
+  const getMeetingClosersForSlot = useCallback((day: Date, hour: number, minute: number) => {
+    const slotTime = setMinutes(setHours(new Date(day), hour), minute);
     
+    const slotMeetings = filteredMeetings.filter(meeting => {
+      const meetingStart = parseISO(meeting.scheduled_at);
+      if (!isSameDay(meetingStart, day)) return false;
+      
+      const duration = meeting.duration_minutes || 30;
+      const meetingEnd = new Date(meetingStart.getTime() + duration * 60 * 1000);
+      
+      return slotTime >= meetingStart && slotTime < meetingEnd;
+    });
+    
+    return [...new Set(slotMeetings.map(m => m.closer_id).filter(Boolean))].sort() as string[];
+  }, [filteredMeetings]);
+
+  // Get ALL closers (with meetings OR availability) for a specific slot
+  // This ensures consistent column layout within each time slot
+  const getAllClosersForSlot = useCallback((day: Date, hour: number, minute: number) => {
+    const meetingClosers = getMeetingClosersForSlot(day, hour, minute);
+    const availableClosers = getAvailableClosersForSlot(day, hour, minute);
+    
+    // Combine and deduplicate, then sort for consistent order
+    const allClosers = [...new Set([...meetingClosers, ...availableClosers])].sort();
+    return allClosers;
+  }, [getMeetingClosersForSlot, getAvailableClosersForSlot]);
+
+  // Calculate column position based on closers in THIS SPECIFIC SLOT
+  // (not the entire day - this prevents empty columns and misalignment)
+  const getSlotColumnPosition = useCallback((
+    day: Date, 
+    hour: number, 
+    minute: number, 
+    closerId: string | undefined
+  ) => {
     if (!closerId) {
       return { widthPercent: 100, leftPercent: 0, totalClosers: 1, isCompact: false, stackIndex: 0 };
     }
-    // Use ALL configured closers (not just those with meetings) for consistent column layout
-    const activeClosers = getAllConfiguredClosersForDay(day);
-    const totalClosers = activeClosers.length || 1;
-    const columnIndex = activeClosers.indexOf(closerId);
     
-    // For daily view with multiple closers, use dedicated columns
-    // For week view, always use horizontal columns but compact when 3+ closers
+    // Get only the closers that are present in THIS specific slot
+    const slotClosers = getAllClosersForSlot(day, hour, minute);
+    const totalClosers = slotClosers.length || 1;
+    const columnIndex = slotClosers.indexOf(closerId);
+    
     const isCompact = totalClosers >= 3;
     
     return {
@@ -506,7 +536,32 @@ export function AgendaCalendar({
       isCompact,
       stackIndex: columnIndex
     };
-  }, [getAllConfiguredClosersForDay, viewMode]);
+  }, [getAllClosersForSlot]);
+
+  // Legacy function - keep for backwards compatibility but prefer getSlotColumnPosition
+  const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined, hour?: number, minute?: number) => {
+    // If hour/minute provided, use slot-specific positioning
+    if (hour !== undefined && minute !== undefined) {
+      return getSlotColumnPosition(day, hour, minute, closerId);
+    }
+    
+    // Fallback to day-level positioning (for cases where slot time isn't available)
+    if (!closerId) {
+      return { widthPercent: 100, leftPercent: 0, totalClosers: 1, isCompact: false, stackIndex: 0 };
+    }
+    const activeClosers = getAllConfiguredClosersForDay(day);
+    const totalClosers = activeClosers.length || 1;
+    const columnIndex = activeClosers.indexOf(closerId);
+    const isCompact = totalClosers >= 3;
+    
+    return {
+      widthPercent: 100 / totalClosers,
+      leftPercent: columnIndex >= 0 ? (columnIndex * 100 / totalClosers) : 0,
+      totalClosers,
+      isCompact,
+      stackIndex: columnIndex
+    };
+  }, [getSlotColumnPosition, getAllConfiguredClosersForDay]);
 
   const getCloserColor = (closerId: string | undefined, closerName: string | undefined) => {
     const closer = closers.find(c => c.id === closerId);
@@ -1183,8 +1238,8 @@ export function AgendaCalendar({
                                   const closerColor = getCloserColor(closerId, closer?.name);
                                   const firstName = closer?.name?.split(' ')[0] || 'Closer';
                                   
-                                  // Use the SAME column positioning logic as meeting cards
-                                  const { widthPercent, leftPercent, totalClosers, isCompact } = getCloserColumnPosition(day, closerId);
+                                  // Use slot-specific column positioning (not day-level)
+                                  const { widthPercent, leftPercent, totalClosers, isCompact } = getSlotColumnPosition(day, hour, minute, closerId);
                                   
                                   return (
                                     <button
@@ -1218,8 +1273,8 @@ export function AgendaCalendar({
                           {groupedSlots.map((group, groupIndex) => {
                             const closerColor = getCloserColor(group.closerId, group.closer?.name);
                             const slotsNeeded = getSlotsNeeded(group.duration);
-                            // Use fixed columns per closer for the entire day (prevents overlap)
-                            const { widthPercent, leftPercent, totalClosers, isCompact } = getCloserColumnPosition(day, group.closerId);
+                            // Use slot-specific column positioning for consistent alignment
+                            const { widthPercent, leftPercent, totalClosers, isCompact } = getSlotColumnPosition(day, hour, minute, group.closerId);
                             
                             // Calculate card height - always use full height
                             const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
