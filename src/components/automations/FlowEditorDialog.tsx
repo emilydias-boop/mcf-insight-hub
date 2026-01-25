@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Save, Zap, ArrowRight, Clock, Calendar, FileText } from "lucide-react";
@@ -344,7 +344,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
               </TabsTrigger>
             </TabsList>
 
-            <ScrollArea className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               <TabsContent value="config" className="mt-0 px-6 py-6">
                 <FormContent />
               </TabsContent>
@@ -354,15 +354,15 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
                   <FlowStepList flowId={flowId} steps={steps || []} isLoading={stepsLoading} />
                 </TabsContent>
               )}
-            </ScrollArea>
+            </div>
           </Tabs>
         ) : (
           // Create mode: Show form directly without tabs
-          <ScrollArea className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="px-6 py-6">
               <FormContent />
             </div>
-          </ScrollArea>
+          </div>
         )}
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-6 py-5 border-t bg-muted/20 flex-shrink-0">
