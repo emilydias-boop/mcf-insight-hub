@@ -1002,6 +1002,25 @@ async function handleDealStageChanged(supabase: any, data: any) {
   // 5. CRIAR MEETING_SLOT se for estágio de reunião agendada e tiver dados de reunião
   const meetingResult = await tryCreateMeetingSlotFromClint(supabase, dealId, contactId, newStage.stage_name, data);
   
+  // 6. ENQUEUE AUTOMATIONS for the new stage
+  let automationResult = null;
+  if (currentStageId !== newStage.id || !currentStageId) {
+    try {
+      automationResult = await enqueueAutomationsForDeal(supabase, {
+        dealId,
+        contactId,
+        newStageId: newStage.id,
+        oldStageId: currentStageId,
+        originId,
+        triggerType: 'enter'
+      });
+      console.log('[DEAL.STAGE_CHANGED] Automation enqueue result:', automationResult);
+    } catch (automationError: any) {
+      console.error('[DEAL.STAGE_CHANGED] Error enqueueing automations:', automationError.message);
+      // Don't fail the webhook if automation fails
+    }
+  }
+  
   console.log('[DEAL.STAGE_CHANGED] Success');
   return { 
     action: 'stage_changed', 
@@ -1009,7 +1028,8 @@ async function handleDealStageChanged(supabase: any, data: any) {
     from_stage: currentStageName,
     to_stage: newStage.stage_name,
     was_created: !currentStageId, // true se foi criado agora
-    meeting_slot: meetingResult
+    meeting_slot: meetingResult,
+    automations: automationResult
   };
 }
 
@@ -1477,6 +1497,63 @@ function parseClintDateTime(dateStr: string, timeStr?: string): string | null {
     return dateObj.toISOString();
   } catch (err) {
     console.error('[PARSE_DATETIME] Error parsing:', dateStr, timeStr, err);
+    return null;
+  }
+}
+
+// ============= AUTOMATION INTEGRATION =============
+
+interface AutomationEnqueueParams {
+  dealId: string;
+  contactId: string | null;
+  newStageId: string;
+  oldStageId?: string | null;
+  originId?: string | null;
+  triggerType: 'enter' | 'exit';
+}
+
+/**
+ * Enqueues automation flows for a deal that changed stage
+ * This calls the automation-enqueue edge function
+ */
+async function enqueueAutomationsForDeal(
+  supabase: any,
+  params: AutomationEnqueueParams
+): Promise<{ enqueued: number } | null> {
+  const { dealId, contactId, newStageId, oldStageId, originId, triggerType } = params;
+
+  if (!dealId || !newStageId) {
+    console.log('[AUTOMATION] Missing dealId or newStageId, skipping');
+    return null;
+  }
+
+  if (!contactId) {
+    console.log('[AUTOMATION] No contactId, skipping automation enqueue');
+    return null;
+  }
+
+  try {
+    // Call the automation-enqueue function
+    const { data, error } = await supabase.functions.invoke('automation-enqueue', {
+      body: {
+        dealId,
+        contactId,
+        newStageId,
+        oldStageId,
+        originId,
+        triggerType
+      }
+    });
+
+    if (error) {
+      console.error('[AUTOMATION] Error calling automation-enqueue:', error);
+      return null;
+    }
+
+    console.log('[AUTOMATION] Enqueue result:', data);
+    return { enqueued: data?.enqueued || 0 };
+  } catch (err: any) {
+    console.error('[AUTOMATION] Exception calling automation-enqueue:', err.message);
     return null;
   }
 }

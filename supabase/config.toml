@@ -242,3 +242,21 @@ verify_jwt = false
 
 [functions.create-manual-approved-lead]
 verify_jwt = false
+
+[functions.automation-enqueue]
+verify_jwt = false
+
+[functions.automation-processor]
+verify_jwt = false
+
+[functions.twilio-whatsapp-send]
+verify_jwt = false
+
+[functions.twilio-whatsapp-webhook]
+verify_jwt = false
+
+[functions.activecampaign-send]
+verify_jwt = false
+
+[functions.activecampaign-webhook]
+verify_jwt = false
