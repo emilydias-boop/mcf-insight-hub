@@ -8,6 +8,7 @@ interface KPICardProps {
   icon?: LucideIcon;
   variant?: 'success' | 'danger' | 'neutral';
   compact?: boolean;
+  mini?: boolean;
 }
 export function KPICard({
   title,
@@ -15,33 +16,74 @@ export function KPICard({
   change,
   icon: Icon,
   variant = 'neutral',
-  compact = false
+  compact = false,
+  mini = false
 }: KPICardProps) {
   const variantStyles = {
     success: 'text-success',
     danger: 'text-destructive',
     neutral: 'text-muted-foreground'
   };
-  return <Card className="bg-card border-border hover:shadow-md transition-shadow h-full">
-      <CardContent className={compact ? "p-3" : "p-6"}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              {Icon && <div className={cn(compact ? "p-1.5 rounded-lg" : "p-2 rounded-lg", variant === 'success' ? 'bg-success/10' : variant === 'danger' ? 'bg-destructive/10' : 'bg-muted')}>
-                  <Icon className={cn(compact ? "h-4 w-4" : "h-5 w-5", variantStyles[variant])} />
-                </div>}
-              <p className={cn("font-semibold text-foreground", compact ? "text-sm" : "text-base")}>{title}</p>
+
+  const getPadding = () => {
+    if (mini) return "p-2";
+    if (compact) return "p-3";
+    return "p-6";
+  };
+
+  const getIconSize = () => {
+    if (mini) return "h-3 w-3";
+    if (compact) return "h-4 w-4";
+    return "h-5 w-5";
+  };
+
+  const getIconPadding = () => {
+    if (mini) return "p-1 rounded";
+    if (compact) return "p-1.5 rounded-lg";
+    return "p-2 rounded-lg";
+  };
+
+  const getTitleSize = () => {
+    if (mini) return "text-xs";
+    if (compact) return "text-sm";
+    return "text-base";
+  };
+
+  const getValueSize = () => {
+    if (mini) return "text-lg";
+    if (compact) return "text-xl";
+    return "text-2xl";
+  };
+
+  return (
+    <Card className="bg-card border-border hover:shadow-md transition-shadow h-full">
+      <CardContent className={getPadding()}>
+        <div className="flex items-start justify-between gap-2">
+          <div className={cn("flex-1", mini ? "space-y-1" : "space-y-2")}>
+            <div className={cn("flex items-center", mini ? "gap-1.5" : "gap-2")}>
+              {Icon && (
+                <div className={cn(
+                  getIconPadding(),
+                  variant === 'success' ? 'bg-success/10' : variant === 'danger' ? 'bg-destructive/10' : 'bg-muted'
+                )}>
+                  <Icon className={cn(getIconSize(), variantStyles[variant])} />
+                </div>
+              )}
+              <p className={cn("font-semibold text-foreground", getTitleSize())}>{title}</p>
             </div>
             
-            <div className="space-y-1">
-              <p className={cn("font-bold text-foreground", compact ? "text-xl" : "text-2xl")}>{value}</p>
-              {change !== undefined && <p className={cn("text-sm font-medium flex items-center gap-1", change >= 0 ? 'text-success' : 'text-destructive')}>
+            <div className={mini ? "space-y-0" : "space-y-1"}>
+              <p className={cn("font-bold text-foreground", getValueSize())}>{value}</p>
+              {change !== undefined && !mini && (
+                <p className={cn("text-sm font-medium flex items-center gap-1", change >= 0 ? 'text-success' : 'text-destructive')}>
                   <span>{change > 0 ? '+' : ''}{change.toFixed(1)}%</span>
                   <span className="text-xs text-muted-foreground">vs período anterior</span>
-                </p>}
+                </p>
+              )}
             </div>
           </div>
         </div>
       </CardContent>
-    </Card>;
+    </Card>
+  );
 }
