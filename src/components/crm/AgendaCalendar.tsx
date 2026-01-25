@@ -1374,28 +1374,31 @@ export function AgendaCalendar({
                                                 const remainingCount = allAttendees.length - maxToShow;
                                                 
                                                 return (
-                                                  <div className="space-y-0 flex-1 overflow-hidden">
+                                                  <div className="space-y-0.5 flex-1 overflow-hidden">
                                                     {displayAttendees.slice(0, maxToShow).map(att => (
-                                                      <div key={att.id} className="text-[9px] truncate flex items-center gap-0.5">
-                                                        {att.meetingSdr && (
-                                                          <>
-                                                            <span className="text-muted-foreground font-semibold">
-                                                              {getInitials(att.meetingSdr)}
-                                                            </span>
-                                                            <span className="text-muted-foreground">•</span>
-                                                          </>
-                                                        )}
-                                                        <span className="truncate flex-1">
+                                                      <div key={att.id} className="text-[9px] flex items-center gap-1 pr-0.5">
+                                                        {/* Sigla SDR (largura fixa) */}
+                                                        <span className="font-semibold w-5 flex-shrink-0 text-muted-foreground">
+                                                          {att.meetingSdr ? getInitials(att.meetingSdr) : '--'}
+                                                        </span>
+                                                        <span className="text-muted-foreground flex-shrink-0">•</span>
+                                                        
+                                                        {/* Nome do Lead (ocupa espaço disponível) */}
+                                                        <span className="truncate flex-1 text-left">
                                                           {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
-                                                        {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
-                                                          <span className={cn(
-                                                            "text-[8px] font-bold",
-                                                            ATTENDEE_STATUS_CONFIG[att.status].colorClass
-                                                          )}>
-                                                            {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
-                                                          </span>
-                                                        )}
+                                                        
+                                                        {/* Status (largura fixa, alinhado à direita) */}
+                                                        <span className={cn(
+                                                          "text-[9px] font-bold flex-shrink-0 w-6 text-right",
+                                                          att.status && ATTENDEE_STATUS_CONFIG[att.status] 
+                                                            ? ATTENDEE_STATUS_CONFIG[att.status].colorClass 
+                                                            : "text-muted-foreground"
+                                                        )}>
+                                                          {att.status && ATTENDEE_STATUS_CONFIG[att.status] 
+                                                            ? ATTENDEE_STATUS_CONFIG[att.status].shortLabel 
+                                                            : '--'}
+                                                        </span>
                                                       </div>
                                                     ))}
                                                     {remainingCount > 0 && (
