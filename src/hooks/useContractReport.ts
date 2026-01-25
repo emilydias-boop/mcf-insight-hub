@@ -44,12 +44,11 @@ export const useContractReport = (
       let query = supabase
         .from('meeting_slot_attendees')
         .select(`
-          id,
-          attendee_name,
-          attendee_phone,
-          status,
-          contract_paid_at,
-          deal_id,
+        id,
+        attendee_name,
+        attendee_phone,
+        status,
+        deal_id,
           meeting_slots!inner (
             id,
             scheduled_at,
@@ -155,7 +154,7 @@ export const useContractReport = (
           sdrName: sdrNameMap[sdrEmail] || sdrEmail,
           originName: origin?.display_name || origin?.name || 'N/A',
           currentStage: stage?.stage_name || 'N/A',
-          contractPaidAt: row.contract_paid_at || '',
+          contractPaidAt: slot?.scheduled_at || '',
           customFields,
         };
       });
