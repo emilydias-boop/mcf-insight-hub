@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Calendar, CheckCircle, XCircle, 
-  ExternalLink, Clock, User, Users, Video,
-  MessageSquare, History, RotateCcw, ShoppingCart,
-  FileText, ChevronDown, Trash2, Plus, Send
+  ExternalLink, Clock, User, Users, History, RotateCcw, Trash2
 } from 'lucide-react';
-import { toast } from 'sonner';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
@@ -15,27 +12,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import {
-  Select, SelectContent, SelectItem, 
-  SelectTrigger, SelectValue
-} from '@/components/ui/select';
-import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger
-} from '@/components/ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { 
-  R2MeetingRow, R2StatusOption, R2ThermometerOption,
-  LEAD_PROFILE_OPTIONS, VIDEO_STATUS_OPTIONS, DECISION_MAKER_TYPE_OPTIONS
-} from '@/types/r2Agenda';
-import { useUpdateR2Attendee, useRemoveR2Attendee } from '@/hooks/useR2AttendeeUpdate';
+import { R2MeetingRow, R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
+import { useRemoveR2Attendee } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
-import { useLeadNotes, NoteType } from '@/hooks/useLeadNotes';
-import { useLeadPurchaseHistory } from '@/hooks/useLeadPurchaseHistory';
-import { useAddAttendeeNote } from '@/hooks/useAttendeeNotes';
 import { RefundModal } from './RefundModal';
+import { R2QualificationTab } from './r2-drawer/R2QualificationTab';
+import { R2EvaluationTab } from './r2-drawer/R2EvaluationTab';
+import { R2NotesTab } from './r2-drawer/R2NotesTab';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
@@ -56,21 +41,6 @@ const MEETING_STATUS_LABELS: Record<string, { label: string; color: string }> = 
   refunded: { label: 'Reembolsado', color: 'bg-orange-500' },
 };
 
-const NOTE_TYPE_STYLES: Record<NoteType, { bg: string; label: string }> = {
-  manual: { bg: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800', label: 'Nota SDR' },
-  scheduling: { bg: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800', label: 'Agendamento' },
-  call: { bg: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800', label: 'Ligação' },
-  closer: { bg: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800', label: 'Closer' },
-  r2: { bg: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-800', label: 'R2' },
-  qualification: { bg: 'bg-teal-50 border-teal-200 dark:bg-teal-950/30 dark:border-teal-800', label: 'Qualificação' },
-};
-
-const PURCHASE_STATUS_ICONS: Record<string, { icon: string; color: string }> = {
-  completed: { icon: '✓', color: 'text-green-600' },
-  refunded: { icon: '↩', color: 'text-orange-500' },
-  pending: { icon: '⏳', color: 'text-yellow-600' },
-};
-
 export function R2MeetingDetailDrawer({
   meeting,
   statusOptions,
@@ -80,79 +50,29 @@ export function R2MeetingDetailDrawer({
   onReschedule
 }: R2MeetingDetailDrawerProps) {
   const [selectedAttendeeId, setSelectedAttendeeId] = useState<string | null>(null);
-  const [showNotes, setShowNotes] = useState(false);
-  const [showPurchases, setShowPurchases] = useState(false);
   const [refundModalOpen, setRefundModalOpen] = useState(false);
-  const [showAddNoteForm, setShowAddNoteForm] = useState(false);
-  const [newNoteText, setNewNoteText] = useState('');
   
-  // Optimistic UI state for all editable fields
-  const [localDecisionMaker, setLocalDecisionMaker] = useState<boolean | null>(null);
-  const [localDecisionMakerType, setLocalDecisionMakerType] = useState<string | null>(null);
-  const [localLeadProfile, setLocalLeadProfile] = useState<string | null>(null);
-  const [localVideoStatus, setLocalVideoStatus] = useState<string>('pendente');
-  const [localR2StatusId, setLocalR2StatusId] = useState<string | null>(null);
-  const [localThermometerId, setLocalThermometerId] = useState<string | null>(null);
-  const [localMeetingLink, setLocalMeetingLink] = useState<string>('');
-  const [localR2Observations, setLocalR2Observations] = useState<string>('');
-  
-  const updateAttendee = useUpdateR2Attendee();
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
-  const addNote = useAddAttendeeNote();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
-  const contactEmail = attendee?.deal?.contact?.email;
-  
-  const { data: leadNotes } = useLeadNotes(attendee?.deal_id, attendee?.id);
-  const { data: purchaseHistory } = useLeadPurchaseHistory(contactEmail);
-  
+
   // Initialize selection when meeting changes
   useEffect(() => {
     if (meeting?.attendees?.length && !selectedAttendeeId) {
       setSelectedAttendeeId(meeting.attendees[0].id);
     }
   }, [meeting?.id, meeting?.attendees, selectedAttendeeId]);
-  
-  // Sync local state with server data when attendee changes
-  useEffect(() => {
-    if (attendee) {
-      setLocalDecisionMaker(attendee.is_decision_maker ?? null);
-      setLocalDecisionMakerType(attendee.decision_maker_type ?? null);
-      setLocalLeadProfile(attendee.lead_profile ?? null);
-      setLocalVideoStatus(attendee.video_status ?? 'pendente');
-      setLocalR2StatusId(attendee.r2_status_id ?? null);
-      setLocalThermometerId(attendee.thermometer_ids?.[0] ?? null);
-      setLocalMeetingLink(attendee.meeting_link ?? '');
-      setLocalR2Observations(attendee.r2_observations ?? '');
-    }
-  }, [attendee?.id, attendee?.is_decision_maker, attendee?.decision_maker_type,
-      attendee?.lead_profile, attendee?.video_status, attendee?.r2_status_id,
-      attendee?.thermometer_ids, attendee?.meeting_link, attendee?.r2_observations]);
-  
-  // Computed value for UI (local state takes precedence)
-  const isDecisionMaker = localDecisionMaker ?? attendee?.is_decision_maker ?? true;
 
   if (!meeting) return null;
 
   const statusInfo = MEETING_STATUS_LABELS[meeting.status] || MEETING_STATUS_LABELS.scheduled;
-  const isPending = meeting.status === 'scheduled' || meeting.status === 'rescheduled';
   const contactPhone = attendee?.phone || attendee?.deal?.contact?.phone;
-
-  const handleAttendeeUpdate = (field: string, value: unknown) => {
-    if (!attendee) return;
-    updateAttendee.mutate({
-      attendeeId: attendee.id,
-      updates: { [field]: value }
-    });
-  };
 
   // Handler para atualizar status INDIVIDUAL do participante selecionado
   const handleParticipantStatusChange = (newStatus: string) => {
     if (!attendee) return;
     
-    // Para R2, sincronizar slot apenas em completed/contract_paid do participante principal
-    // Um participante é "principal" se não tiver partner_name (não é parceiro de outro lead)
     const statusesToSyncSlot = ['completed', 'contract_paid'];
     const isPrincipal = !attendee.partner_name;
     const shouldSyncSlot = statusesToSyncSlot.includes(newStatus) && isPrincipal;
@@ -176,84 +96,11 @@ export function R2MeetingDetailDrawer({
   const handleRemoveAttendee = (attendeeId: string) => {
     if (confirm('Deseja remover este participante da reunião?')) {
       removeAttendee.mutate(attendeeId);
-      // Select another attendee if available
       const remaining = meeting?.attendees?.filter(a => a.id !== attendeeId);
       if (remaining?.length) {
         setSelectedAttendeeId(remaining[0].id);
       }
     }
-  };
-
-  const handleDecisionMakerChange = (value: boolean) => {
-    if (!attendee) return;
-    
-    // Optimistic UI update
-    setLocalDecisionMaker(value);
-    if (value) {
-      setLocalDecisionMakerType(null);
-    }
-    
-    // Single mutation call with both fields
-    updateAttendee.mutate({
-      attendeeId: attendee.id,
-      updates: { 
-        is_decision_maker: value,
-        ...(value && { decision_maker_type: null })
-      }
-    });
-  };
-  
-  const handleDecisionMakerTypeChange = (type: string | null) => {
-    if (!attendee) return;
-    
-    // Optimistic UI update
-    setLocalDecisionMakerType(type);
-    
-    updateAttendee.mutate({
-      attendeeId: attendee.id,
-      updates: { decision_maker_type: type }
-    });
-  };
-  
-  // Generic optimistic update handler for select fields
-  const handleOptimisticSelectUpdate = (
-    field: string, 
-    value: unknown, 
-    setLocalState: (v: any) => void
-  ) => {
-    if (!attendee) return;
-    setLocalState(value);
-    updateAttendee.mutate({
-      attendeeId: attendee.id,
-      updates: { [field]: value }
-    });
-  };
-  
-  // Handler for thermometer (array field)
-  const handleThermometerChange = (value: string | null) => {
-    if (!attendee) return;
-    setLocalThermometerId(value);
-    updateAttendee.mutate({
-      attendeeId: attendee.id,
-      updates: { thermometer_ids: value ? [value] : [] }
-    });
-  };
-  
-  // Handlers for text fields (save on blur)
-  const handleMeetingLinkBlur = () => {
-    if (!attendee) return;
-    updateAttendee.mutate({
-      attendeeId: attendee.id,
-      updates: { meeting_link: localMeetingLink || null }
-    });
-  };
-  
-  const handleObservationsBlur = () => {
-    if (!attendee) return;
-    updateAttendee.mutate({
-      attendeeId: attendee.id,
-      updates: { r2_observations: localR2Observations || null }
-    });
   };
 
   return (
@@ -273,16 +120,14 @@ export function R2MeetingDetailDrawer({
 
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-4">
-            {/* Participant Selection - Clickable List */}
+            {/* Participant Selection */}
             {meeting.attendees && meeting.attendees.length > 0 && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <span className="font-medium text-sm">
-                      Participantes ({meeting.attendees.length})
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">
+                    Participantes ({meeting.attendees.length})
+                  </span>
                 </div>
                 
                 <div className="space-y-2">
@@ -302,7 +147,6 @@ export function R2MeetingDetailDrawer({
                         onClick={() => setSelectedAttendeeId(att.id)}
                       >
                         <div className="flex items-center gap-3">
-                          {/* Avatar */}
                           <div
                             className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
                             style={{ backgroundColor: meeting.closer?.color || '#8B5CF6' }}
@@ -310,7 +154,6 @@ export function R2MeetingDetailDrawer({
                             {(att.name || att.deal?.contact?.name || 'L').charAt(0).toUpperCase()}
                           </div>
                           
-                          {/* Info */}
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-sm truncate">
@@ -333,7 +176,6 @@ export function R2MeetingDetailDrawer({
                           </div>
                         </div>
                         
-                        {/* Remove Button */}
                         {meeting.attendees.length > 1 && (
                           <Button
                             variant="ghost"
@@ -351,108 +193,54 @@ export function R2MeetingDetailDrawer({
                     );
                   })}
                 </div>
-                
-                <p className="text-xs text-muted-foreground text-center">
-                  Clique em um participante para ver detalhes e ações
-                </p>
               </div>
             )}
 
             <Separator />
-            {attendee && (
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-2">
-                  <User className="h-3 w-3" />
-                  Informações do Lead
-                </Label>
-                <div className="bg-muted/30 rounded-lg p-4 space-y-3">
-                  <div className="font-medium text-lg">
-                    {attendee.name || attendee.deal?.contact?.name || 'Lead'}
+
+            {/* Meeting Info */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <div className="font-medium">
+                    {format(parseISO(meeting.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <span className="text-muted-foreground text-xs">Email</span>
-                      <div>{attendee.deal?.contact?.email || '—'}</div>
-                    </div>
-                    
-                    <div>
-                      <span className="text-muted-foreground text-xs">Telefone</span>
-                      <div className="flex items-center gap-2">
-                        {contactPhone ? (
-                          <>
-                            <a href={`tel:${contactPhone}`} className="hover:underline">
-                              {contactPhone}
-                            </a>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleWhatsApp}>
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                          </>
-                        ) : '—'}
-                      </div>
-                    </div>
-                    
-                    {attendee.deal?.custom_fields?.estado && (
-                      <div>
-                        <span className="text-muted-foreground text-xs">📍 Estado</span>
-                        <div>{attendee.deal.custom_fields.estado}</div>
-                      </div>
-                    )}
-                    
-                    {attendee.deal?.custom_fields?.profissao && (
-                      <div>
-                        <span className="text-muted-foreground text-xs">👤 Profissão</span>
-                        <div>{attendee.deal.custom_fields.profissao}</div>
-                      </div>
-                    )}
-                    
-                    {attendee.deal?.custom_fields?.renda && (
-                      <div>
-                        <span className="text-muted-foreground text-xs">💰 Renda</span>
-                        <div>{attendee.deal.custom_fields.renda}</div>
-                      </div>
-                    )}
-                    
-                    {(attendee.deal?.custom_fields?.terreno || attendee.deal?.custom_fields?.possui_imovel) && (
-                      <div>
-                        <span className="text-muted-foreground text-xs">🏡 Terreno/Imóvel</span>
-                        <div>{attendee.deal.custom_fields.terreno || attendee.deal.custom_fields.possui_imovel}</div>
-                      </div>
-                    )}
-                    
-                    {attendee.deal?.custom_fields?.investimento && (
-                      <div>
-                        <span className="text-muted-foreground text-xs">💵 Investimento</span>
-                        <div>{attendee.deal.custom_fields.investimento}</div>
-                      </div>
-                    )}
-                    
-                    {attendee.deal?.custom_fields?.tem_socio && (
-                      <div>
-                        <span className="text-muted-foreground text-xs">🤝 Sócio</span>
-                        <div>{attendee.deal.custom_fields.nome_socio || attendee.deal.custom_fields.tem_socio}</div>
-                      </div>
-                    )}
+                  <div className="text-sm text-muted-foreground">
+                    {format(parseISO(meeting.scheduled_at), 'HH:mm')} - 30min
                   </div>
-                  
-                  {attendee.deal?.custom_fields?.solucao && (
-                    <div className="pt-2 border-t text-sm">
-                      <span className="text-muted-foreground text-xs">🎯 Solução que busca</span>
-                      <div>{attendee.deal.custom_fields.solucao}</div>
-                    </div>
-                  )}
                 </div>
               </div>
-            )}
 
-            <Separator />
+              <div className="flex items-center gap-3">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <div className="text-sm text-muted-foreground">Closer R2</div>
+                  <div className="font-medium">{meeting.closer?.name}</div>
+                </div>
+              </div>
+              
+              {contactPhone && (
+                <div className="flex items-center gap-3">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-2">
+                    <a href={`tel:${contactPhone}`} className="hover:underline text-sm">
+                      {contactPhone}
+                    </a>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleWhatsApp}>
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
 
-            {/* 2. Histórico do Funil */}
+            {/* Histórico do Funil */}
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground flex items-center gap-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <History className="h-3 w-3" />
                 Histórico do Funil
-              </Label>
+              </div>
               <div className="bg-muted/30 rounded-lg p-3 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">SDR:</span>
@@ -491,353 +279,36 @@ export function R2MeetingDetailDrawer({
 
             <Separator />
 
-            {/* 3. Agendamento R2 */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="font-medium">
-                    {format(parseISO(meeting.scheduled_at), "EEEE, d 'de' MMMM", { locale: ptBR })}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {format(parseISO(meeting.scheduled_at), 'HH:mm')} - 30min
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <div className="text-sm text-muted-foreground">Closer R2</div>
-                  <div className="font-medium">{meeting.closer?.name}</div>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 4. Editable Fields - Side by Side Layout */}
+            {/* Tabbed Content */}
             {attendee && (
-              <div className="space-y-4">
-                {/* Row 1: Sócio Decisor */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">É o Decisor?</Label>
-                    <Select
-                      value={isDecisionMaker === false ? 'nao' : 'sim'}
-                      onValueChange={(v) => handleDecisionMakerChange(v === 'sim')}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sim">Sim</SelectItem>
-                        <SelectItem value="nao">Não</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {isDecisionMaker === false && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Quem é o Decisor?</Label>
-                      <Select
-                        value={localDecisionMakerType || ''}
-                        onValueChange={(v) => handleDecisionMakerTypeChange(v || null)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DECISION_MAKER_TYPE_OPTIONS.map(opt => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                </div>
-
-                {/* Row 2: Perfil do Lead + Status do Vídeo */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Perfil do Lead</Label>
-                    <Select
-                      value={localLeadProfile || ''}
-                      onValueChange={(v) => handleOptimisticSelectUpdate('lead_profile', v || null, setLocalLeadProfile)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {LEAD_PROFILE_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs flex items-center gap-1">
-                      <Video className="h-3 w-3" />
-                      Status do Vídeo
-                    </Label>
-                    <Select
-                      value={localVideoStatus}
-                      onValueChange={(v) => handleOptimisticSelectUpdate('video_status', v, setLocalVideoStatus)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {VIDEO_STATUS_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Row 3: Status Final + Termômetro */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Status Final</Label>
-                    <Select
-                      value={localR2StatusId || '__none__'}
-                      onValueChange={(v) => handleOptimisticSelectUpdate('r2_status_id', v === '__none__' ? null : v, setLocalR2StatusId)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— Sem status —</SelectItem>
-                        {statusOptions.map(opt => (
-                          <SelectItem key={opt.id} value={opt.id}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="h-2 w-2 rounded-full" 
-                                style={{ backgroundColor: opt.color }} 
-                              />
-                              {opt.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Termômetro</Label>
-                    <Select
-                      value={localThermometerId || '__none__'}
-                      onValueChange={(v) => handleThermometerChange(v === '__none__' ? null : v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— Nenhum —</SelectItem>
-                        {thermometerOptions.map(opt => (
-                          <SelectItem key={opt.id} value={opt.id}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="h-2 w-2 rounded-full" 
-                                style={{ backgroundColor: opt.color }} 
-                              />
-                              {opt.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Link da Reunião */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Link da Reunião</Label>
-                  <Input
-                    value={localMeetingLink}
-                    onChange={(e) => setLocalMeetingLink(e.target.value)}
-                    onBlur={handleMeetingLinkBlur}
-                    placeholder="https://..."
+              <Tabs defaultValue="qualificacao" className="w-full">
+                <TabsList className="w-full grid grid-cols-3">
+                  <TabsTrigger value="qualificacao" className="text-xs">Qualificação</TabsTrigger>
+                  <TabsTrigger value="avaliacao" className="text-xs">Avaliação R2</TabsTrigger>
+                  <TabsTrigger value="notas" className="text-xs">Notas</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="qualificacao" className="mt-4">
+                  <R2QualificationTab attendee={attendee} />
+                </TabsContent>
+                
+                <TabsContent value="avaliacao" className="mt-4">
+                  <R2EvaluationTab 
+                    attendee={attendee}
+                    statusOptions={statusOptions}
+                    thermometerOptions={thermometerOptions}
                   />
-                </div>
-
-                {/* Observações */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs flex items-center gap-1">
-                    <MessageSquare className="h-3 w-3" />
-                    Observações R2
-                  </Label>
-                  <Textarea
-                    value={localR2Observations}
-                    onChange={(e) => setLocalR2Observations(e.target.value)}
-                    onBlur={handleObservationsBlur}
-                    placeholder="Anotações sobre a reunião..."
-                    rows={3}
-                  />
-                </div>
-
-                <Separator />
-
-                {/* 5. Notas do Lead */}
-                <Collapsible open={showNotes} onOpenChange={setShowNotes}>
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full justify-between">
-                      <span className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        📝 Notas do Lead
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{leadNotes?.length || 0}</Badge>
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", showNotes && "rotate-180")} />
-                      </div>
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 space-y-2">
-                    {/* Formulário para adicionar nota */}
-                    {!showAddNoteForm ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => setShowAddNoteForm(true)}
-                      >
-                        <Plus className="h-3 w-3 mr-1" />
-                        Adicionar Nota
-                      </Button>
-                    ) : (
-                      <div className="space-y-2 bg-muted/30 rounded-lg p-3">
-                        <Textarea
-                          value={newNoteText}
-                          onChange={(e) => setNewNoteText(e.target.value)}
-                          placeholder="Digite sua nota sobre este lead..."
-                          rows={3}
-                          className="bg-background"
-                          autoFocus
-                        />
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setShowAddNoteForm(false);
-                              setNewNoteText('');
-                            }}
-                          >
-                            Cancelar
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              if (!newNoteText.trim() || !attendee?.id) {
-                                toast.error('Digite uma nota');
-                                return;
-                              }
-                              addNote.mutate(
-                                { attendeeId: attendee.id, note: newNoteText.trim(), noteType: 'r2' },
-                                {
-                                  onSuccess: () => {
-                                    setNewNoteText('');
-                                    setShowAddNoteForm(false);
-                                    toast.success('Nota adicionada!');
-                                  },
-                                  onError: () => {
-                                    toast.error('Erro ao adicionar nota');
-                                  }
-                                }
-                              );
-                            }}
-                            disabled={addNote.isPending || !newNoteText.trim()}
-                          >
-                            <Send className="h-3 w-3 mr-1" />
-                            Salvar
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Lista de notas */}
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {(!leadNotes || leadNotes.length === 0) && !showAddNoteForm && (
-                        <p className="text-xs text-muted-foreground text-center py-2">
-                          Nenhuma nota encontrada
-                        </p>
-                      )}
-                      {leadNotes?.map(note => {
-                        const style = NOTE_TYPE_STYLES[note.type] || NOTE_TYPE_STYLES.manual;
-                        return (
-                          <div key={note.id} className={cn("rounded-lg p-2 border text-sm", style.bg)}>
-                            <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
-                              <span className="font-medium">{style.label}</span>
-                              <span>
-                                {note.author && `${note.author} • `}
-                                {formatDistanceToNow(parseISO(note.created_at), { addSuffix: true, locale: ptBR })}
-                              </span>
-                            </div>
-                            <p className="text-foreground">{note.content}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-
-                {/* 6. Histórico de Compras */}
-                <Collapsible open={showPurchases} onOpenChange={setShowPurchases}>
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full justify-between">
-                      <span className="flex items-center gap-2">
-                        <ShoppingCart className="h-4 w-4" />
-                        🛒 Histórico de Compras
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{purchaseHistory?.length || 0}</Badge>
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", showPurchases && "rotate-180")} />
-                      </div>
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2">
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {(!purchaseHistory || purchaseHistory.length === 0) && (
-                        <p className="text-xs text-muted-foreground text-center py-2">
-                          Nenhuma compra encontrada
-                        </p>
-                      )}
-                      {purchaseHistory?.map(purchase => {
-                        const statusStyle = PURCHASE_STATUS_ICONS[purchase.sale_status] || PURCHASE_STATUS_ICONS.pending;
-                        return (
-                          <div key={purchase.id} className="flex justify-between items-center p-2 border rounded-lg text-sm">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className={statusStyle.color}>{statusStyle.icon}</span>
-                                <span className="font-medium">{purchase.product_name}</span>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {format(parseISO(purchase.sale_date), 'dd/MM/yyyy')} • {purchase.sale_status}
-                              </div>
-                            </div>
-                            <div className="font-medium">
-                              R$ {purchase.product_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
+                </TabsContent>
+                
+                <TabsContent value="notas" className="mt-4">
+                  <R2NotesTab attendee={attendee} />
+                </TabsContent>
+              </Tabs>
             )}
           </div>
         </ScrollArea>
 
-        {/* Footer Actions - Grid 2x2 */}
+        {/* Footer Actions */}
         <div className="border-t p-4 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <Button 
