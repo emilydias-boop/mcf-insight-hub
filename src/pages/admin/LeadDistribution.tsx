@@ -74,21 +74,37 @@ interface LocalConfig {
 }
 
 export default function LeadDistribution() {
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const [localConfigs, setLocalConfigs] = useState<LocalConfig[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Buscar origins
-  const { data: origins = [] } = useQuery({
-    queryKey: ["crm-origins-for-distribution"],
+  // Buscar grupos (pipelines)
+  const { data: groups = [] } = useQuery({
+    queryKey: ["crm-groups-for-distribution"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("crm_origins")
-        .select("id, name")
+        .from("crm_groups")
+        .select("id, name, display_name")
         .order("name");
       if (error) throw error;
       return data;
     },
+  });
+
+  // Buscar origins filtradas pelo grupo selecionado
+  const { data: origins = [], isLoading: isLoadingOrigins } = useQuery({
+    queryKey: ["crm-origins-for-distribution", selectedGroupId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("crm_origins")
+        .select("id, name, display_name")
+        .eq("group_id", selectedGroupId!)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedGroupId,
   });
 
   // Buscar SDRs e Closers
@@ -259,22 +275,61 @@ export default function LeadDistribution() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Seletor de Origin */}
+          {/* Seletor de Grupo (Pipeline) */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Pipeline / Origin</label>
-            <Select value={selectedOriginId || ""} onValueChange={setSelectedOriginId}>
+            <label className="text-sm font-medium">Pipeline (Grupo)</label>
+            <Select 
+              value={selectedGroupId || ""} 
+              onValueChange={(value) => {
+                setSelectedGroupId(value);
+                setSelectedOriginId(null); // Reset origin ao mudar grupo
+                setLocalConfigs([]);
+                setHasChanges(false);
+              }}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione uma pipeline..." />
+                <SelectValue placeholder="Selecione um pipeline..." />
               </SelectTrigger>
               <SelectContent>
-                {origins.map((origin) => (
-                  <SelectItem key={origin.id} value={origin.id}>
-                    {origin.name}
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id}>
+                    {group.display_name || group.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Seletor de Origin (só aparece após selecionar grupo) */}
+          {selectedGroupId && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Origin (Sub-pipeline)</label>
+              <Select 
+                value={selectedOriginId || ""} 
+                onValueChange={(value) => {
+                  setSelectedOriginId(value);
+                  setHasChanges(false);
+                }}
+                disabled={isLoadingOrigins}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={isLoadingOrigins ? "Carregando..." : "Selecione uma origin..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {origins.map((origin) => (
+                    <SelectItem key={origin.id} value={origin.id}>
+                      {origin.display_name || origin.name}
+                    </SelectItem>
+                  ))}
+                  {origins.length === 0 && !isLoadingOrigins && (
+                    <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                      Nenhuma origin encontrada neste pipeline
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {selectedOriginId && (
             <>
