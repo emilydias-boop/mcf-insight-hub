@@ -129,6 +129,7 @@ const menuItems: MenuItem[] = [
       { title: "Fechamento Equipe", url: "/fechamento-sdr" },
       { title: "Vendas", url: "/bu-incorporador/transacoes" },
       { title: "CRM", url: "/crm" },
+      { title: "Relatórios", url: "/bu-incorporador/relatorios" },
     ],
   },
 
@@ -140,12 +141,12 @@ const menuItems: MenuItem[] = [
     requiredProducts: ["consorcio"],
     items: [
       { title: "Fechamento", url: "/consorcio/fechamento" },
-      { title: "Relatório", url: "/consorcio/relatorio" },
       { title: "CRM", url: "/consorcio/crm" },
       { title: "Painel Equipe", url: "/consorcio/painel-equipe" },
       { title: "Vendas", url: "/consorcio/vendas" },
       { title: "Controle Consorcio", url: "/consorcio" },
       { title: "Importar", url: "/consorcio/importar" },
+      { title: "Relatórios", url: "/consorcio/relatorio" },
     ],
   },
 
@@ -161,6 +162,7 @@ const menuItems: MenuItem[] = [
       { title: "Sócios", url: "/bu-credito/socios" },
       { title: "Clientes", url: "/bu-credito/clientes" },
       { title: "Gestão Legado", url: "/credito" },
+      { title: "Relatórios", url: "/bu-credito/relatorios" },
     ],
   },
 
@@ -169,7 +171,10 @@ const menuItems: MenuItem[] = [
     title: "BU - Projetos",
     icon: FolderKanban,
     resource: "projetos",
-    items: [{ title: "Gestão de Projetos", url: "/projetos" }],
+    items: [
+      { title: "Gestão de Projetos", url: "/projetos" },
+      { title: "Relatórios", url: "/bu-projetos/relatorios" },
+    ],
   },
 
   // LEILÃO
@@ -206,7 +211,6 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Visão Geral", url: "/relatorios" },
       { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
-      { title: "Contratos por Closer", url: "/relatorios/contratos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
