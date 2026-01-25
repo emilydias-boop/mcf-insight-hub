@@ -111,7 +111,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
 
   // Flatten origins for select
   const flatOrigins = origins?.flatMap(group => 
-    (group as any).origins?.map((origin: any) => ({
+    (group as any).children?.map((origin: any) => ({
       id: origin.id,
       name: `${group.name} > ${origin.name}`,
       groupName: group.name,
