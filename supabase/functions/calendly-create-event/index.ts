@@ -593,36 +593,92 @@ serve(async (req) => {
         .single();
       
       if (dealForStage?.origin_id) {
-        // Encontrar estágio correspondente na mesma pipeline
+        let targetStageId: string | null = null;
+        let targetStageName: string | null = null;
+        let newOriginId = dealForStage.origin_id;
+        
+        // 1. Tentar encontrar estágio na pipeline atual
         for (const stageName of stageNames) {
           const { data: targetStage } = await supabase
             .from('crm_stages')
-            .select('id')
+            .select('id, stage_name')
             .eq('origin_id', dealForStage.origin_id)
             .ilike('stage_name', `%${stageName}%`)
             .limit(1);
           
-          if (targetStage?.[0] && targetStage[0].id !== dealForStage.stage_id) {
-            console.log(`📍 Moving deal to stage: ${stageName}`);
-            
-            await supabase
-              .from('crm_deals')
-              .update({ stage_id: targetStage[0].id })
-              .eq('id', dealId);
-            
-            // Registrar atividade de mudança de estágio
-            await supabase.from('deal_activities').insert({
-              deal_id: dealId,
-              activity_type: 'stage_change',
-              description: `Movido automaticamente ao agendar ${meetingType.toUpperCase()}`,
-              from_stage: dealForStage.stage_id,
-              to_stage: targetStage[0].id,
-              metadata: { via: 'agenda_scheduling', meeting_slot_id: slotId }
-            });
-            
-            console.log(`✅ Deal moved to ${stageName} stage`);
+          if (targetStage?.[0]) {
+            targetStageId = targetStage[0].id;
+            targetStageName = targetStage[0].stage_name;
             break;
           }
+        }
+        
+        // 2. FALLBACK: Se não encontrar na pipeline atual, buscar na PIPELINE INSIDE SALES
+        if (!targetStageId) {
+          console.log('⚠️ Stage not found in current pipeline, using INSIDE SALES fallback');
+          
+          const { data: insideSalesOrigin } = await supabase
+            .from('crm_origins')
+            .select('id')
+            .eq('name', 'PIPELINE INSIDE SALES')
+            .limit(1);
+          
+          if (insideSalesOrigin?.[0]) {
+            for (const stageName of stageNames) {
+              const { data: targetStage } = await supabase
+                .from('crm_stages')
+                .select('id, stage_name')
+                .eq('origin_id', insideSalesOrigin[0].id)
+                .ilike('stage_name', `%${stageName}%`)
+                .limit(1);
+              
+              if (targetStage?.[0]) {
+                targetStageId = targetStage[0].id;
+                targetStageName = targetStage[0].stage_name;
+                newOriginId = insideSalesOrigin[0].id;
+                console.log(`📍 Found fallback stage in INSIDE SALES: ${targetStageName}`);
+                break;
+              }
+            }
+          }
+        }
+        
+        // 3. Mover o deal (e mudar origin se necessário)
+        if (targetStageId && targetStageId !== dealForStage.stage_id) {
+          const originChanged = newOriginId !== dealForStage.origin_id;
+          const updateData: Record<string, string> = { stage_id: targetStageId };
+          
+          if (originChanged) {
+            updateData.origin_id = newOriginId;
+            console.log('📍 Moving deal to INSIDE SALES pipeline');
+          }
+          
+          console.log(`📍 Moving deal to stage: ${targetStageName}`);
+          
+          await supabase
+            .from('crm_deals')
+            .update(updateData)
+            .eq('id', dealId);
+          
+          // Registrar atividade de mudança de estágio
+          await supabase.from('deal_activities').insert({
+            deal_id: dealId,
+            activity_type: 'stage_change',
+            description: originChanged 
+              ? `Movido automaticamente ao agendar ${meetingType.toUpperCase()} (pipeline alterada para INSIDE SALES)`
+              : `Movido automaticamente ao agendar ${meetingType.toUpperCase()}`,
+            from_stage: dealForStage.stage_id,
+            to_stage: targetStageId,
+            metadata: { 
+              via: 'agenda_scheduling', 
+              meeting_slot_id: slotId,
+              origin_changed: originChanged,
+              from_origin_id: originChanged ? dealForStage.origin_id : undefined,
+              to_origin_id: originChanged ? newOriginId : undefined
+            }
+          });
+          
+          console.log(`✅ Deal moved to ${targetStageName} stage${originChanged ? ' (pipeline changed)' : ''}`);
         }
       }
     } catch (stageError) {

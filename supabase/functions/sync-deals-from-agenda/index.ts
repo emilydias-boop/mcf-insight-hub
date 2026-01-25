@@ -111,8 +111,10 @@ serve(async (req) => {
         const stageNamesR2 = ['Reunião 02 Agendada', 'Reunião 2 Agendada', 'R2 Agendada'];
         const targetStageNames = meetingType === 'r2' ? stageNamesR2 : stageNamesR1;
 
-        // Buscar estágio alvo na mesma pipeline (origin_id)
-        let targetStage = null;
+        // 1. Buscar estágio alvo na mesma pipeline (origin_id)
+        let targetStage: { id: string; stage_name: string } | null = null;
+        let newOriginId = deal.origin_id;
+        
         for (const stageName of targetStageNames) {
           const { data: stage } = await supabase
             .from('crm_stages')
@@ -127,8 +129,37 @@ serve(async (req) => {
           }
         }
 
+        // 2. FALLBACK: Se não encontrar na pipeline atual, buscar na PIPELINE INSIDE SALES
         if (!targetStage) {
-          console.log(`⚠️ Target stage not found for deal "${deal.name}" in origin ${deal.origin_id}`);
+          console.log(`⚠️ Stage not found in current pipeline for "${deal.name}", trying INSIDE SALES fallback`);
+          
+          const { data: insideSalesOrigin } = await supabase
+            .from('crm_origins')
+            .select('id')
+            .eq('name', 'PIPELINE INSIDE SALES')
+            .limit(1);
+          
+          if (insideSalesOrigin && insideSalesOrigin.length > 0) {
+            for (const stageName of targetStageNames) {
+              const { data: stage } = await supabase
+                .from('crm_stages')
+                .select('id, stage_name')
+                .eq('origin_id', insideSalesOrigin[0].id)
+                .ilike('stage_name', stageName)
+                .limit(1);
+
+              if (stage && stage.length > 0) {
+                targetStage = stage[0];
+                newOriginId = insideSalesOrigin[0].id;
+                console.log(`📍 Found fallback stage in INSIDE SALES: ${targetStage.stage_name}`);
+                break;
+              }
+            }
+          }
+        }
+
+        if (!targetStage) {
+          console.log(`⚠️ Target stage not found for deal "${deal.name}" in any pipeline`);
           results.errors++;
           continue;
         }
@@ -139,13 +170,19 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`✨ Will sync deal "${deal.name}": "${currentStageName}" → "${targetStage.stage_name}"`);
+        const originChanged = newOriginId !== deal.origin_id;
+        console.log(`✨ Will sync deal "${deal.name}": "${currentStageName}" → "${targetStage.stage_name}"${originChanged ? ' (changing pipeline)' : ''}`);
 
         if (!dryRun) {
-          // Atualizar o deal
+          // Atualizar o deal (stage e origin se necessário)
+          const updateData: Record<string, string> = { stage_id: targetStage.id };
+          if (originChanged) {
+            updateData.origin_id = newOriginId;
+          }
+          
           const { error: updateError } = await supabase
             .from('crm_deals')
-            .update({ stage_id: targetStage.id })
+            .update(updateData)
             .eq('id', dealId);
 
           if (updateError) {
@@ -158,10 +195,18 @@ serve(async (req) => {
           await supabase.from('deal_activities').insert({
             deal_id: dealId,
             activity_type: 'stage_change',
-            description: 'Sincronizado automaticamente - reunião já agendada na agenda',
+            description: originChanged 
+              ? 'Sincronizado automaticamente - reunião já agendada (pipeline alterada para INSIDE SALES)'
+              : 'Sincronizado automaticamente - reunião já agendada na agenda',
             from_stage: deal.stage_id,
             to_stage: targetStage.id,
-            metadata: { via: 'sync_deals_from_agenda', meeting_slot_id: (attendee.meeting_slots as any)?.id }
+            metadata: { 
+              via: 'sync_deals_from_agenda', 
+              meeting_slot_id: (attendee.meeting_slots as any)?.id,
+              origin_changed: originChanged,
+              from_origin_id: originChanged ? deal.origin_id : undefined,
+              to_origin_id: originChanged ? newOriginId : undefined
+            }
           });
         }
 
