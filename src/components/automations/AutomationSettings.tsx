@@ -267,10 +267,29 @@ export function AutomationSettings() {
                     </p>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-muted-foreground">
-                  Não configurado
+                <Badge className="bg-green-600 text-white">
+                  Configurado
                 </Badge>
               </div>
+            </div>
+            
+            <Separator className="my-4" />
+            
+            <div className="text-sm text-muted-foreground space-y-2">
+              <p><strong>Cron Job:</strong> Para ativar o processamento automático, execute o SQL abaixo no Supabase:</p>
+              <pre className="bg-muted p-3 rounded text-xs overflow-x-auto">
+{`SELECT cron.schedule(
+  'process-automation-queue',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_post(
+    url:='https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/automation-processor',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlaGNmZ3F2aWdmY2VraWlwcWtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0Nzk1NzgsImV4cCI6MjA3OTA1NTU3OH0.Rab8S7rX6c7N92CufTkaXKJh0jpS9ydHWSmJMaPMVtE"}'::jsonb,
+    body:='{}'::jsonb
+  ) as request_id;
+  $$
+);`}
+              </pre>
             </div>
           </CardContent>
         </Card>

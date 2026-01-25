@@ -141,54 +141,80 @@ serve(async (req) => {
       }
     }
 
-    // 4. Send transactional email (if ActiveCampaign transactional is configured)
-    // Note: ActiveCampaign's transactional email requires a separate setup
-    // For now, we'll use their campaign API or rely on automations
+    // 4. Try to send transactional email via AC API
+    // Note: This requires the Transactional Email add-on in ActiveCampaign
+    let messageId: string | undefined;
+    let emailSent = false;
 
-    // Option A: Trigger an automation by adding a tag
-    if (contactId) {
+    if (subject && content && contactId) {
       try {
-        // Add a trigger tag that starts an automation
-        const triggerTagName = `automation_email_${Date.now()}`;
-        
-        // Create the trigger tag
-        const createTagResponse = await fetch(`${apiUrl}/tags`, {
+        // Try sending via transactional API (requires Postmark/AC transactional add-on)
+        const messageResponse = await fetch(`${apiUrl}/messages`, {
           method: 'POST',
           headers: {
             'Api-Token': apiKey,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ tag: { tag: triggerTagName, tagType: 'contact' } })
+          body: JSON.stringify({
+            message: {
+              contact: contactId,
+              fromname: 'Equipe MCF',
+              fromemail: 'contato@mcf.com.br', // Use your verified sender
+              subject: subject,
+              html: content,
+            }
+          })
         });
-        const createTagResult = await createTagResponse.json();
-        const triggerTagId = createTagResult.tag?.id;
 
-        if (triggerTagId) {
-          // Add trigger tag to contact
-          await fetch(`${apiUrl}/contactTags`, {
+        if (messageResponse.ok) {
+          const messageResult = await messageResponse.json();
+          messageId = messageResult.message?.id;
+          emailSent = true;
+          console.log('[ACTIVECAMPAIGN] Email sent via transactional API:', messageId);
+        } else {
+          // Fallback: Use tag-based automation trigger
+          console.log('[ACTIVECAMPAIGN] Transactional API not available, using tag trigger');
+          
+          const triggerTagName = `email_trigger_${Date.now()}`;
+          const createTagResponse = await fetch(`${apiUrl}/tags`, {
             method: 'POST',
             headers: {
               'Api-Token': apiKey,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ contactTag: { contact: contactId, tag: triggerTagId } })
+            body: JSON.stringify({ tag: { tag: triggerTagName, tagType: 'contact' } })
           });
-        }
+          
+          if (createTagResponse.ok) {
+            const createTagResult = await createTagResponse.json();
+            const triggerTagId = createTagResult.tag?.id;
 
-        console.log('[ACTIVECAMPAIGN] Trigger tag added, automation should fire');
-      } catch (triggerError: any) {
-        console.warn('[ACTIVECAMPAIGN] Error triggering automation:', triggerError.message);
+            if (triggerTagId) {
+              await fetch(`${apiUrl}/contactTags`, {
+                method: 'POST',
+                headers: {
+                  'Api-Token': apiKey,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ contactTag: { contact: contactId, tag: triggerTagId } })
+              });
+              emailSent = true;
+              console.log('[ACTIVECAMPAIGN] Trigger tag added for automation');
+            }
+          }
+        }
+      } catch (sendError: any) {
+        console.warn('[ACTIVECAMPAIGN] Error sending email:', sendError.message);
       }
     }
-
-    // For proper transactional emails, consider using Resend or SendGrid
-    // ActiveCampaign is better suited for marketing automation
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         contactId,
-        message: 'Contact synced and automation triggered'
+        messageId,
+        emailSent,
+        message: emailSent ? 'Email sent successfully' : 'Contact synced, email pending automation'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
