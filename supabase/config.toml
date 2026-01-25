@@ -260,3 +260,6 @@ verify_jwt = false
 
 [functions.activecampaign-webhook]
 verify_jwt = false
+
+[functions.webhook-live-leads]
+verify_jwt = false
