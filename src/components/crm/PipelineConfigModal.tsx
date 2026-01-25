@@ -22,6 +22,12 @@ import {
   Shuffle,
   Layers,
   Webhook,
+  LayoutGrid,
+  ClipboardList,
+  Zap,
+  Radio,
+  FileText,
+  Code,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,6 +51,10 @@ type GeneralSection =
   | 'field-visibility'
   | 'notifications';
 
+type StagesSection = 'kanban-stages' | 'activities' | 'automations';
+
+type IntegrationSection = 'webhooks' | 'leads-live' | 'leads-forms' | 'leads-api';
+
 const generalSections = [
   { id: 'settings' as const, label: 'Configurações Gerais', icon: Settings },
   { id: 'loss-reasons' as const, label: 'Motivo de Perda', icon: XCircle },
@@ -55,6 +65,19 @@ const generalSections = [
   { id: 'notifications' as const, label: 'Notificações', icon: Bell },
 ];
 
+const stagesSections = [
+  { id: 'kanban-stages' as const, label: 'Etapas do Kanban', icon: LayoutGrid },
+  { id: 'activities' as const, label: 'Atividades', icon: ClipboardList },
+  { id: 'automations' as const, label: 'Automações de etapa', icon: Zap },
+];
+
+const integrationSections = [
+  { id: 'webhooks' as const, label: 'Webhooks', icon: Webhook },
+  { id: 'leads-live' as const, label: 'Leads Live', icon: Radio },
+  { id: 'leads-forms' as const, label: 'Leads Forms', icon: FileText },
+  { id: 'leads-api' as const, label: 'API Externa', icon: Code },
+];
+
 export const PipelineConfigModal = ({
   open,
   onOpenChange,
@@ -63,6 +86,8 @@ export const PipelineConfigModal = ({
 }: PipelineConfigModalProps) => {
   const [activeTab, setActiveTab] = useState<'general' | 'stages' | 'integrations'>('general');
   const [activeSection, setActiveSection] = useState<GeneralSection>('settings');
+  const [activeStagesSection, setActiveStagesSection] = useState<StagesSection>('kanban-stages');
+  const [activeIntegrationSection, setActiveIntegrationSection] = useState<IntegrationSection>('webhooks');
   const queryClient = useQueryClient();
 
   // Fetch target data
@@ -331,38 +356,151 @@ export const PipelineConfigModal = ({
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="stages" className="m-0 h-[500px]">
-            <ScrollArea className="h-full">
+          <TabsContent value="stages" className="m-0 flex h-[500px]">
+            {/* Left menu */}
+            <div className="w-56 border-r bg-muted/30">
+              <ScrollArea className="h-full">
+                <div className="p-2 space-y-1">
+                  {stagesSections.map((section) => {
+                    const Icon = section.icon;
+                    return (
+                      <Button
+                        key={section.id}
+                        variant="ghost"
+                        className={cn(
+                          'w-full justify-start gap-2 text-sm',
+                          activeStagesSection === section.id && 'bg-muted'
+                        )}
+                        onClick={() => setActiveStagesSection(section.id)}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {section.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </div>
+
+            {/* Right content */}
+            <ScrollArea className="flex-1">
               <div className="p-6">
-                <PipelineStagesEditor 
-                  targetType={targetType} 
-                  targetId={targetId} 
-                />
+                <h3 className="font-medium mb-4">
+                  {stagesSections.find((s) => s.id === activeStagesSection)?.label}
+                </h3>
+                {activeStagesSection === 'kanban-stages' && (
+                  <PipelineStagesEditor 
+                    targetType={targetType} 
+                    targetId={targetId} 
+                  />
+                )}
+                {activeStagesSection === 'activities' && (
+                  <p className="text-sm text-muted-foreground italic">
+                    Configure atividades automáticas por etapa. Em desenvolvimento...
+                  </p>
+                )}
+                {activeStagesSection === 'automations' && (
+                  <p className="text-sm text-muted-foreground italic">
+                    Configure automações ao entrar/sair de etapas. Em desenvolvimento...
+                  </p>
+                )}
               </div>
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="integrations" className="m-0 h-[500px]">
-            <ScrollArea className="h-full">
-              <div className="p-6 space-y-4">
-                <div className="flex items-center gap-3 p-4 border rounded-lg">
-                  <div className="p-2 bg-muted rounded">
-                    <Webhook className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium">Webhook</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Envie dados para sistemas externos quando eventos ocorrerem
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Configurar
-                  </Button>
+          <TabsContent value="integrations" className="m-0 flex h-[500px]">
+            {/* Left menu */}
+            <div className="w-56 border-r bg-muted/30">
+              <ScrollArea className="h-full">
+                <div className="p-2 space-y-1">
+                  {integrationSections.map((section) => {
+                    const Icon = section.icon;
+                    return (
+                      <Button
+                        key={section.id}
+                        variant="ghost"
+                        className={cn(
+                          'w-full justify-start gap-2 text-sm',
+                          activeIntegrationSection === section.id && 'bg-muted'
+                        )}
+                        onClick={() => setActiveIntegrationSection(section.id)}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {section.label}
+                      </Button>
+                    );
+                  })}
                 </div>
+              </ScrollArea>
+            </div>
 
-                <p className="text-sm text-muted-foreground italic text-center py-8">
-                  Mais integrações em breve...
-                </p>
+            {/* Right content */}
+            <ScrollArea className="flex-1">
+              <div className="p-6">
+                <h3 className="font-medium mb-4">
+                  {integrationSections.find((s) => s.id === activeIntegrationSection)?.label}
+                </h3>
+                
+                {activeIntegrationSection === 'webhooks' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Envie dados para sistemas externos quando eventos ocorrerem.
+                    </p>
+                    <div className="flex items-center gap-3 p-4 border rounded-lg">
+                      <div className="p-2 bg-muted rounded">
+                        <Webhook className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium">Webhook Genérico</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Dispare eventos para URLs externas
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Configurar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {activeIntegrationSection === 'leads-live' && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Recebe leads do formulário de Lives e distribui automaticamente.
+                    </p>
+                    <div className="flex items-center gap-3 p-4 border rounded-lg bg-accent/50 border-accent">
+                      <div className="p-2 bg-accent rounded">
+                        <Radio className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium">Webhook Live Leads</h4>
+                          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
+                            Ativo
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Origin: LEAD GRATUITO • Etapa: Base • Tag: Lead-Live
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Ver logs
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {activeIntegrationSection === 'leads-forms' && (
+                  <p className="text-sm text-muted-foreground italic">
+                    Configure integrações com formulários externos. Em desenvolvimento...
+                  </p>
+                )}
+                
+                {activeIntegrationSection === 'leads-api' && (
+                  <p className="text-sm text-muted-foreground italic">
+                    Configure integrações via API externa. Em desenvolvimento...
+                  </p>
+                )}
               </div>
             </ScrollArea>
           </TabsContent>
