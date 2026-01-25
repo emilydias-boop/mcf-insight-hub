@@ -37,7 +37,6 @@ import CustosDespesas from "./pages/custos/Despesas";
 import CustosPorCategoria from "./pages/custos/PorCategoria";
 import Relatorios from "./pages/Relatorios";
 import LeadsSemTag from "./pages/relatorios/LeadsSemTag";
-import ContratoReport from "./pages/relatorios/ContratoReport";
 import Alertas from "./pages/Alertas";
 import EfeitoAlavanca from "./pages/EfeitoAlavanca";
 import Projetos from "./pages/Projetos";
@@ -72,6 +71,7 @@ import FechamentoSDRConfiguracoes from "./pages/fechamento-sdr/Configuracoes";
 import MeuFechamento from "./pages/fechamento-sdr/MeuFechamento";
 import MeuPlaybook from "./pages/playbook/MeuPlaybook";
 import TransacoesIncorp from "./pages/bu-incorporador/TransacoesIncorp";
+import IncorporadorRelatorios from "./pages/bu-incorporador/Relatorios";
 
 import RHColaboradores from "./pages/rh/Colaboradores";
 import Financeiro from "./pages/Financeiro";
@@ -95,10 +95,12 @@ import CreditoDeals from "./pages/bu-credito/Deals";
 import CreditoSocios from "./pages/bu-credito/Socios";
 import CreditoClientes from "./pages/bu-credito/Clientes";
 import CreditoVendas from "./pages/bu-credito/Vendas";
+import CreditoRelatorios from "./pages/bu-credito/Relatorios";
 
 // BU Projetos
 import BUProjetosIndex from "./pages/bu-projetos/Index";
 import ProjetosVendas from "./pages/bu-projetos/Vendas";
+import ProjetosRelatorios from "./pages/bu-projetos/Relatorios";
 
 // BU Outros
 import BUOutrosIndex from "./pages/bu-outros/Index";
@@ -160,7 +162,6 @@ const App = () => (
               </Route>
               <Route path="relatorios" element={<ResourceGuard resource="relatorios"><Relatorios /></ResourceGuard>} />
               <Route path="relatorios/leads-sem-tag" element={<ResourceGuard resource="relatorios"><LeadsSemTag /></ResourceGuard>} />
-              <Route path="relatorios/contratos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ContratoReport /></RoleGuard>} />
               <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
               
               {/* BU Consórcio Routes - Unificado */}
@@ -184,12 +185,14 @@ const App = () => (
                 <Route path="clientes" element={<CreditoClientes />} />
                 <Route path="vendas" element={<CreditoVendas />} />
               </Route>
+              <Route path="bu-credito/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CreditoRelatorios /></RoleGuard>} />
               
               {/* BU Projetos Routes */}
               <Route path="bu-projetos" element={<BUProjetosIndex />}>
                 <Route index element={<ProjetosVendas />} />
                 <Route path="vendas" element={<ProjetosVendas />} />
               </Route>
+              <Route path="bu-projetos/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProjetosRelatorios /></RoleGuard>} />
               
               {/* BU Outros Routes */}
               <Route path="bu-outros" element={<BUOutrosIndex />}>
@@ -212,6 +215,7 @@ const App = () => (
               
               {/* BU Incorporador Routes */}
               <Route path="bu-incorporador/transacoes" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><TransacoesIncorp /></RoleGuard>} />
+              <Route path="bu-incorporador/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><IncorporadorRelatorios /></RoleGuard>} />
               
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
