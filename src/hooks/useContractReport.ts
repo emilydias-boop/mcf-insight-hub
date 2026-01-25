@@ -82,8 +82,7 @@ export const useContractReport = (
         `)
         .eq('status', 'contract_paid')
         .gte('meeting_slots.scheduled_at', startISO)
-        .lte('meeting_slots.scheduled_at', endISO)
-        .order('meeting_slots(scheduled_at)', { ascending: false });
+        .lte('meeting_slots.scheduled_at', endISO);
       
       // Filter by specific closer if provided
       if (filters.closerId) {
@@ -98,18 +97,22 @@ export const useContractReport = (
         return [];
       }
       
-      // Note: Origin filter removed - crm_deals may not be linked to all attendees
-      // The data is already filtered by closer access permissions
-      
       const { data, error } = await query;
       
       if (error) throw error;
       
       if (!data) return [];
       
+      // Sort by meeting date (DESC - most recent first)
+      const sortedData = [...data].sort((a: any, b: any) => {
+        const dateA = a.meeting_slots?.scheduled_at || '';
+        const dateB = b.meeting_slots?.scheduled_at || '';
+        return dateB.localeCompare(dateA);
+      });
+      
       // Fetch SDR names from profiles based on owner_id (email)
       const sdrEmails = [...new Set(
-        data
+        sortedData
           .map((row: any) => row.crm_deals?.owner_id)
           .filter(Boolean)
       )];
@@ -131,7 +134,7 @@ export const useContractReport = (
       }
       
       // Transform data
-      return data.map((row: any) => {
+      return sortedData.map((row: any) => {
         const slot = row.meeting_slots;
         const closer = slot?.closers;
         const deal = row.crm_deals;
