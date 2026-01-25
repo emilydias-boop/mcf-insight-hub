@@ -117,7 +117,21 @@ serve(async (req) => {
       lead_channel: 'LIVE'
     };
 
-    // 4. Criar deal
+    // 4. Buscar próximo owner baseado na distribuição configurada
+    let assignedOwner: string | null = null;
+    const { data: nextOwner, error: ownerError } = await supabase
+      .rpc('get_next_lead_owner', { p_origin_id: LIVE_ORIGIN_ID });
+
+    if (ownerError) {
+      console.log('[LIVE-LEAD] ⚠️ Erro ao buscar owner:', ownerError.message);
+    } else if (nextOwner) {
+      assignedOwner = nextOwner;
+      console.log('[LIVE-LEAD] 👤 Owner atribuído automaticamente:', assignedOwner);
+    } else {
+      console.log('[LIVE-LEAD] ⚠️ Nenhum owner configurado para distribuição');
+    }
+
+    // 5. Criar deal com owner atribuído
     const dealCreatedAt = payload.timestamp || new Date().toISOString();
     const { data: deal, error: dealError } = await supabase
       .from('crm_deals')
@@ -128,6 +142,7 @@ serve(async (req) => {
         contact_id: contactId,
         origin_id: LIVE_ORIGIN_ID,
         stage_id: LIVE_INITIAL_STAGE_ID,
+        owner_id: assignedOwner,
         product_name: 'LIVE',
         tags: ['Lead-Live'],
         custom_fields: customFields,
@@ -143,6 +158,9 @@ serve(async (req) => {
     }
 
     console.log('[LIVE-LEAD] ✅ Deal criado com sucesso:', deal.id);
+    if (assignedOwner) {
+      console.log('[LIVE-LEAD] 👤 Atribuído para:', assignedOwner);
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -150,6 +168,7 @@ serve(async (req) => {
         action: 'created',
         deal_id: deal.id,
         contact_id: contactId,
+        assigned_owner: assignedOwner,
         origin: 'LEAD GRATUITO',
         stage: 'Base'
       }),

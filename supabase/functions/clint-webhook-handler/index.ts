@@ -55,6 +55,44 @@ serve(async (req) => {
     // FASE 2: NORMALIZAÇÃO - Converter formato direto para formato esperado
     const normalizedPayload = normalizeClintPayload(rawPayload);
     console.log('[WEBHOOK] Event type detectado:', normalizedPayload.event);
+
+    // ========== BLOQUEIO: Origin LIVE é gerenciada pelo webhook-live-leads ==========
+    const BLOCKED_ORIGIN_ID = 'fdac4941-f0a2-46a2-8e70-7578d922d21a';
+    const BLOCKED_ORIGIN_NAME = 'PIPELINE INSIDE SALES - LEAD GRATUITO';
+    
+    const originNameFromPayload = normalizedPayload.data.origin?.name || 
+                                   normalizedPayload.data.deal_origin || 
+                                   normalizedPayload.data.origin_name ||
+                                   rawPayload.deal_origin ||
+                                   rawPayload.origin_name;
+
+    if (originNameFromPayload && (
+        originNameFromPayload.includes('LEAD GRATUITO') || 
+        originNameFromPayload.includes('GRATUITO') ||
+        originNameFromPayload === BLOCKED_ORIGIN_NAME
+    )) {
+      console.log('[WEBHOOK] ⛔ BLOCKED: Lead para origin LIVE - ignorando Clint');
+      console.log('[WEBHOOK] Origin detectada:', originNameFromPayload);
+      
+      // Log do bloqueio
+      await supabase.from('webhook_events').insert({
+        event_type: `blocked_${normalizedPayload.event}`,
+        event_data: { ...rawPayload, blocked_reason: 'live_origin_managed_internally' },
+        status: 'blocked',
+        processed_at: new Date().toISOString()
+      });
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          action: 'blocked', 
+          reason: 'Origin LIVE é gerenciada pelo webhook-live-leads',
+          origin_detected: originNameFromPayload
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    // ========== FIM BLOQUEIO ==========
     console.log('[WEBHOOK] Payload normalizado:', JSON.stringify(normalizedPayload.data, null, 2));
 
     // Criar log do webhook (mesmo se houver erro depois)
