@@ -2,158 +2,97 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FileSpreadsheet, Users, TrendingUp, Target, Loader2 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { FileSpreadsheet, Users, TrendingUp, Target, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { formatCurrency } from '@/lib/formatters';
+import { DateRange } from 'react-day-picker';
+import { usePerformanceReport } from '@/hooks/usePerformanceReport';
+import { useGestorClosers } from '@/hooks/useGestorClosers';
+import { useAuth } from '@/contexts/AuthContext';
 import * as XLSX from 'xlsx';
 import { BusinessUnit } from '@/hooks/useMyBU';
-
-// BU to squad mapping
-const BU_SQUAD_MAP: Record<BusinessUnit, string> = {
-  incorporador: 'Comercial',
-  consorcio: 'Consórcio',
-  credito: 'Crédito',
-  projetos: 'Projetos',
-};
 
 interface PerformanceReportPanelProps {
   bu: BusinessUnit;
 }
 
-interface PerformanceData {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  metaGlobal: number;
-  reunioesAgendadas: number;
-  reunioesRealizadas: number;
-  tentativas: number;
-  valorVariavel: number;
-  totalConta: number;
-}
-
 export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
-  const currentMonth = startOfMonth(new Date());
-  const [selectedMonth, setSelectedMonth] = useState<string>(format(currentMonth, 'yyyy-MM'));
-  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const { role } = useAuth();
+  const defaultStart = startOfMonth(new Date());
+  const defaultEnd = endOfMonth(new Date());
   
-  // Generate last 6 months for selection
-  const monthOptions = useMemo(() => {
-    const options = [];
-    for (let i = 0; i < 6; i++) {
-      const date = subMonths(currentMonth, i);
-      options.push({
-        value: format(date, 'yyyy-MM'),
-        label: format(date, 'MMMM yyyy', { locale: ptBR }),
-      });
-    }
-    return options;
-  }, [currentMonth]);
-  
-  // Fetch performance data
-  const { data: performanceData = [], isLoading } = useQuery<PerformanceData[]>({
-    queryKey: ['performance-report', bu, selectedMonth],
-    queryFn: async (): Promise<PerformanceData[]> => {
-      const squad = BU_SQUAD_MAP[bu];
-      const [year, month] = selectedMonth.split('-');
-      const monthStart = `${selectedMonth}-01`;
-      const monthEnd = format(endOfMonth(new Date(parseInt(year), parseInt(month) - 1)), 'yyyy-MM-dd');
-      
-      // Fetch SDR payouts for this squad
-      const { data: payouts, error } = await supabase
-        .from('sdr_month_payout')
-        .select(`
-          id,
-          sdr_id,
-          valor_variavel,
-          total_em_conta,
-          meta_global_percentage,
-          reunioes_agendadas_percentage,
-          reunioes_realizadas_percentage,
-          tentativas_percentage,
-          sdr:sdr_id (
-            id,
-            email,
-            name,
-            squad
-          )
-        `)
-        .gte('competencia', monthStart)
-        .lte('competencia', monthEnd);
-      
-      if (error) throw error;
-      
-      // Filter by squad and transform
-      const filteredData = (payouts || [])
-        .filter((p: any) => p.sdr?.squad === squad)
-        .map((p: any) => ({
-          id: p.id,
-          name: p.sdr?.name || 'N/A',
-          email: p.sdr?.email || '',
-          role: 'SDR',
-          metaGlobal: p.meta_global_percentage || 0,
-          reunioesAgendadas: p.reunioes_agendadas_percentage || 0,
-          reunioesRealizadas: p.reunioes_realizadas_percentage || 0,
-          tentativas: p.tentativas_percentage || 0,
-          valorVariavel: p.valor_variavel || 0,
-          totalConta: p.total_em_conta || 0,
-        }));
-      
-      return filteredData;
-    },
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: defaultStart,
+    to: defaultEnd,
   });
+  const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   
-  // Filter by role
+  // Fetch closers for filter
+  const { data: closers = [], isLoading: loadingClosers } = useGestorClosers();
+  
+  // Build filters
+  const filters = useMemo(() => ({
+    startDate: dateRange?.from || defaultStart,
+    endDate: dateRange?.to || defaultEnd,
+    closerId: selectedCloserId !== 'all' ? selectedCloserId : undefined,
+  }), [dateRange, selectedCloserId, defaultStart, defaultEnd]);
+  
+  // Fetch performance data from agenda
+  const { data: performanceData = [], isLoading: loadingData } = usePerformanceReport(filters);
+  
+  // Filter by allowed closers for non-admin
   const filteredData = useMemo(() => {
-    if (roleFilter === 'all') return performanceData;
-    return performanceData.filter(p => p.role.toLowerCase() === roleFilter);
-  }, [performanceData, roleFilter]);
+    if (role === 'admin' || role === 'manager') return performanceData;
+    const allowedIds = closers.map(c => c.id);
+    return performanceData.filter(p => allowedIds.includes(p.closerId));
+  }, [performanceData, role, closers]);
   
   // Calculate stats
   const stats = useMemo(() => {
     const count = filteredData.length;
-    const avgMeta = count > 0 
-      ? filteredData.reduce((sum, p) => sum + p.metaGlobal, 0) / count 
+    const totalRealizadas = filteredData.reduce((sum, p) => sum + p.realizadas, 0);
+    const totalContratos = filteredData.reduce((sum, p) => sum + p.contratos, 0);
+    const avgComparecimento = count > 0 
+      ? filteredData.reduce((sum, p) => sum + p.percentComparecimento, 0) / count 
       : 0;
-    const totalVariavel = filteredData.reduce((sum, p) => sum + p.valorVariavel, 0);
-    const aboveMeta = filteredData.filter(p => p.metaGlobal >= 100).length;
+    const avgConversao = count > 0
+      ? filteredData.reduce((sum, p) => sum + p.percentConversao, 0) / count
+      : 0;
     
-    return { count, avgMeta, totalVariavel, aboveMeta };
+    return { count, totalRealizadas, totalContratos, avgComparecimento, avgConversao };
   }, [filteredData]);
   
   // Export to Excel
   const handleExportExcel = () => {
     const exportData = filteredData.map(row => ({
-      'Nome': row.name,
-      'Email': row.email,
-      'Cargo': row.role,
-      '% Meta Global': `${row.metaGlobal.toFixed(1)}%`,
-      '% Reuniões Agendadas': `${row.reunioesAgendadas.toFixed(1)}%`,
-      '% Reuniões Realizadas': `${row.reunioesRealizadas.toFixed(1)}%`,
-      '% Tentativas': `${row.tentativas.toFixed(1)}%`,
-      'Valor Variável': row.valorVariavel,
-      'Total em Conta': row.totalConta,
+      'Closer': row.closerName,
+      'Email': row.closerEmail,
+      'Total Agendadas': row.totalAgendadas,
+      'Realizadas': row.realizadas,
+      'No-Show': row.noShows,
+      'Contratos': row.contratos,
+      '% Comparecimento': `${row.percentComparecimento}%`,
+      '% Conversão': `${row.percentConversao}%`,
     }));
     
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Desempenho');
     
-    const fileName = `desempenho_${bu}_${selectedMonth}.xlsx`;
+    const fileName = `desempenho_${bu}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
   
-  const getMetaBadgeVariant = (meta: number) => {
-    if (meta >= 100) return 'default';
-    if (meta >= 70) return 'secondary';
+  const getConversionBadgeVariant = (percent: number) => {
+    if (percent >= 50) return 'default';
+    if (percent >= 30) return 'secondary';
     return 'destructive';
   };
+  
+  const isLoading = loadingClosers || loadingData;
   
   return (
     <div className="space-y-6">
@@ -161,32 +100,29 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-end">
-            <div className="w-[200px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Mês</label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Período</label>
+              <DatePickerCustom
+                mode="range"
+                selected={dateRange}
+                onSelect={(range) => range && setDateRange(range as DateRange)}
+                placeholder="Selecione o período"
+              />
             </div>
             
-            <div className="w-[150px]">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">Cargo</label>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <div className="w-[200px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Closer</label>
+              <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="sdr">SDR</SelectItem>
-                  <SelectItem value="closer">Closer</SelectItem>
+                  <SelectItem value="all">Todos os Closers</SelectItem>
+                  {closers.map(closer => (
+                    <SelectItem key={closer.id} value={closer.id}>
+                      {closer.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -200,7 +136,7 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
       </Card>
       
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -208,7 +144,7 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
                 <Users className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Pessoas</p>
+                <p className="text-sm text-muted-foreground">Closers</p>
                 <p className="text-3xl font-bold">{stats.count}</p>
               </div>
             </div>
@@ -219,11 +155,11 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-success/10">
-                <Target className="h-6 w-6 text-success" />
+                <CheckCircle className="h-6 w-6 text-success" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Média Meta Global</p>
-                <p className="text-3xl font-bold">{stats.avgMeta.toFixed(1)}%</p>
+                <p className="text-sm text-muted-foreground">Realizadas</p>
+                <p className="text-3xl font-bold">{stats.totalRealizadas}</p>
               </div>
             </div>
           </CardContent>
@@ -233,11 +169,11 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-full bg-warning/10">
-                <TrendingUp className="h-6 w-6 text-warning" />
+                <Target className="h-6 w-6 text-warning" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Acima da Meta</p>
-                <p className="text-3xl font-bold">{stats.aboveMeta}</p>
+                <p className="text-sm text-muted-foreground">Contratos</p>
+                <p className="text-3xl font-bold">{stats.totalContratos}</p>
               </div>
             </div>
           </CardContent>
@@ -250,8 +186,22 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
                 <TrendingUp className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Variável</p>
-                <p className="text-2xl font-bold">{formatCurrency(stats.totalVariavel)}</p>
+                <p className="text-sm text-muted-foreground">% Comparec.</p>
+                <p className="text-3xl font-bold">{stats.avgComparecimento.toFixed(0)}%</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-full bg-primary/10">
+                <TrendingUp className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">% Conversão</p>
+                <p className="text-3xl font-bold">{stats.avgConversao.toFixed(0)}%</p>
               </div>
             </div>
           </CardContent>
@@ -263,7 +213,7 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Desempenho da Equipe
+            Desempenho por Closer
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -280,36 +230,36 @@ export function PerformanceReportPanel({ bu }: PerformanceReportPanelProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Cargo</TableHead>
-                    <TableHead className="text-center">% Meta Global</TableHead>
-                    <TableHead className="text-center">% Agendadas</TableHead>
-                    <TableHead className="text-center">% Realizadas</TableHead>
-                    <TableHead className="text-center">% Tentativas</TableHead>
-                    <TableHead className="text-right">Variável</TableHead>
-                    <TableHead className="text-right">Total Conta</TableHead>
+                    <TableHead>Closer</TableHead>
+                    <TableHead className="text-center">Agendadas</TableHead>
+                    <TableHead className="text-center">Realizadas</TableHead>
+                    <TableHead className="text-center">No-Show</TableHead>
+                    <TableHead className="text-center">Contratos</TableHead>
+                    <TableHead className="text-center">% Comparec.</TableHead>
+                    <TableHead className="text-center">% Conversão</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.map(row => (
-                    <TableRow key={row.id}>
-                      <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{row.role}</Badge>
+                    <TableRow key={row.closerId}>
+                      <TableCell className="font-medium">{row.closerName}</TableCell>
+                      <TableCell className="text-center">{row.totalAgendadas}</TableCell>
+                      <TableCell className="text-center font-medium text-success">
+                        {row.realizadas}
+                      </TableCell>
+                      <TableCell className="text-center text-destructive">
+                        {row.noShows}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-primary">
+                        {row.contratos}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={getMetaBadgeVariant(row.metaGlobal)}>
-                          {row.metaGlobal.toFixed(1)}%
+                        <Badge variant="outline">{row.percentComparecimento}%</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={getConversionBadgeVariant(row.percentConversao)}>
+                          {row.percentConversao}%
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">{row.reunioesAgendadas.toFixed(1)}%</TableCell>
-                      <TableCell className="text-center">{row.reunioesRealizadas.toFixed(1)}%</TableCell>
-                      <TableCell className="text-center">{row.tentativas.toFixed(1)}%</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {formatCurrency(row.valorVariavel)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-success">
-                        {formatCurrency(row.totalConta)}
                       </TableCell>
                     </TableRow>
                   ))}
