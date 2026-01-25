@@ -456,6 +456,32 @@ export function AgendaCalendar({
     return uniqueCloserIds.sort(); // Consistent alphabetical order
   }, [filteredMeetings]);
 
+  // Get ALL closers that have ANY configured availability on this day
+  // (not just closers with meetings - this ensures consistent column layout)
+  const getAllConfiguredClosersForDay = useCallback((day: Date) => {
+    const allCloserIdsSet = new Set<string>();
+    
+    if (meetingType === 'r2' && r2DailySlotsMap) {
+      // For R2, check daily slots map
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dateSlots = r2DailySlotsMap[dateStr];
+      if (dateSlots) {
+        Object.values(dateSlots).forEach(slotInfo => {
+          slotInfo.closerIds.forEach(id => allCloserIdsSet.add(id));
+        });
+      }
+    } else {
+      // For R1, check weekday-based slots
+      const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
+      const slots = meetingLinkSlots?.[dayOfWeek] || [];
+      slots.forEach(slot => {
+        slot.closerIds.forEach(id => allCloserIdsSet.add(id));
+      });
+    }
+    
+    return Array.from(allCloserIdsSet).sort();
+  }, [meetingType, r2DailySlotsMap, meetingLinkSlots]);
+
   // Calculate fixed column position for a closer on a specific day
   // Always use horizontal columns layout, with compact mode for 3+ closers
   const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined, viewModeOverride?: ViewMode) => {
@@ -464,7 +490,8 @@ export function AgendaCalendar({
     if (!closerId) {
       return { widthPercent: 100, leftPercent: 0, totalClosers: 1, isCompact: false, stackIndex: 0 };
     }
-    const activeClosers = getActiveClosersForDay(day);
+    // Use ALL configured closers (not just those with meetings) for consistent column layout
+    const activeClosers = getAllConfiguredClosersForDay(day);
     const totalClosers = activeClosers.length || 1;
     const columnIndex = activeClosers.indexOf(closerId);
     
@@ -479,7 +506,7 @@ export function AgendaCalendar({
       isCompact,
       stackIndex: columnIndex
     };
-  }, [getActiveClosersForDay, viewMode]);
+  }, [getAllConfiguredClosersForDay, viewMode]);
 
   const getCloserColor = (closerId: string | undefined, closerName: string | undefined) => {
     const closer = closers.find(c => c.id === closerId);
