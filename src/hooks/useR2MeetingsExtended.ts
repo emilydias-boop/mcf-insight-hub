@@ -87,14 +87,16 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         return acc;
       }, {} as Record<string, R2ThermometerOption>);
 
-      // Collect all deal_ids from R2 meetings to find R1 closers
+      // Collect all deal_ids from R2 meetings to find R1 closers and notes
       const dealIds = (meetings || []).flatMap(m => {
         const attendeesArr = ((m as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
         return attendeesArr.map(a => a.deal_id as string).filter(Boolean);
       });
 
-      // Fetch R1 meetings for those deals to get R1 closers
+      // Fetch R1 meetings for those deals to get R1 closers and qualification notes
       let r1CloserMap: Record<string, { id: string; name: string; scheduled_at: string | null }> = {};
+      let r1NotesMap: Record<string, string> = {};
+      
       if (dealIds.length > 0) {
         const { data: r1Meetings } = await supabase
           .from('meeting_slots')
@@ -102,19 +104,25 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             id,
             scheduled_at,
             closer:closers!meeting_slots_closer_id_fkey(id, name),
-            attendees:meeting_slot_attendees(deal_id)
+            attendees:meeting_slot_attendees(deal_id, notes)
           `)
           .eq('meeting_type', 'r1')
           .limit(500);
 
-        // Map deal_id -> R1 closer with scheduled_at
+        // Map deal_id -> R1 closer with scheduled_at and notes
         (r1Meetings || []).forEach((r1: Record<string, unknown>) => {
           const r1Closer = r1.closer as { id: string; name: string } | null;
           const r1ScheduledAt = r1.scheduled_at as string | null;
-          const r1Attendees = (r1.attendees || []) as Array<{ deal_id: string | null }>;
+          const r1Attendees = (r1.attendees || []) as Array<{ deal_id: string | null; notes: string | null }>;
           r1Attendees.forEach(att => {
-            if (att.deal_id && r1Closer && dealIds.includes(att.deal_id)) {
-              r1CloserMap[att.deal_id] = { ...r1Closer, scheduled_at: r1ScheduledAt };
+            if (att.deal_id && dealIds.includes(att.deal_id)) {
+              if (r1Closer) {
+                r1CloserMap[att.deal_id] = { ...r1Closer, scheduled_at: r1ScheduledAt };
+              }
+              // Store the R1 note for this deal (most recent wins if multiple)
+              if (att.notes && !r1NotesMap[att.deal_id]) {
+                r1NotesMap[att.deal_id] = att.notes;
+              }
             }
           });
         });
@@ -192,23 +200,26 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           sdr,
           r1_closer: r1Closer,
           booked_by: bookedById ? profilesById[bookedById] || { id: bookedById, name: null } : null,
-          attendees: attendeesArr.map(att => {
-            const thermIds = (att.thermometer_ids as string[]) || [];
-            const statusId = att.r2_status_id as string | null;
-            
-            return {
-              ...att,
-              // Map database column names to expected property names
-              name: att.attendee_name as string | null,
-              phone: att.attendee_phone as string | null,
-              email: null, // email doesn't exist in meeting_slot_attendees
-              thermometer_ids: thermIds,
-              r2_status: statusId ? statusMap[statusId] : null,
-              thermometers: thermIds
-                .map(id => thermometerMap[id])
-                .filter(Boolean),
-            };
-          }),
+        attendees: attendeesArr.map(att => {
+          const thermIds = (att.thermometer_ids as string[]) || [];
+          const statusId = att.r2_status_id as string | null;
+          const attDealId = att.deal_id as string | null;
+          
+          return {
+            ...att,
+            // Map database column names to expected property names
+            name: att.attendee_name as string | null,
+            phone: att.attendee_phone as string | null,
+            email: null, // email doesn't exist in meeting_slot_attendees
+            thermometer_ids: thermIds,
+            r2_status: statusId ? statusMap[statusId] : null,
+            thermometers: thermIds
+              .map(id => thermometerMap[id])
+              .filter(Boolean),
+            // R1 qualification note from SDR
+            r1_qualification_note: attDealId ? r1NotesMap[attDealId] || null : null,
+          };
+        }),
         };
       }) as R2MeetingRow[];
     }

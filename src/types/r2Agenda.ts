@@ -40,6 +40,8 @@ export interface R2AttendeeExtended {
   meeting_link: string | null;
   updated_by: string | null;
   updated_at: string | null;
+  // R1 qualification note from SDR
+  r1_qualification_note: string | null;
   // Decision maker fields
   is_decision_maker: boolean | null;
   decision_maker_type: string | null;

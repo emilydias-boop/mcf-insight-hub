@@ -6,6 +6,12 @@ import {
   Select, SelectContent, SelectItem, 
   SelectTrigger, SelectValue
 } from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { FileText, ChevronDown } from 'lucide-react';
 import { 
   R2AttendeeExtended, 
   TEMPO_CONHECE_MCF_OPTIONS,
@@ -81,6 +87,8 @@ export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
     });
   };
 
+  const [isNoteOpen, setIsNoteOpen] = useState(true);
+
   return (
     <div className="space-y-4">
       {/* Sales Channel Badge */}
@@ -99,6 +107,22 @@ export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
           {salesChannel}
         </Badge>
       </div>
+
+      {/* R1 SDR Qualification Note */}
+      {attendee.r1_qualification_note && (
+        <Collapsible open={isNoteOpen} onOpenChange={setIsNoteOpen}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium flex-1 text-left">Qualificação do SDR (R1)</span>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isNoteOpen ? 'rotate-180' : ''}`} />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-2 p-3 bg-muted/30 rounded-md text-sm whitespace-pre-wrap border border-border/50">
+              {attendee.r1_qualification_note}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {/* Grid of editable fields */}
       <div className="grid grid-cols-2 gap-4">
