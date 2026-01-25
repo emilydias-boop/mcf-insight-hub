@@ -37,6 +37,7 @@ import CustosDespesas from "./pages/custos/Despesas";
 import CustosPorCategoria from "./pages/custos/PorCategoria";
 import Relatorios from "./pages/Relatorios";
 import LeadsSemTag from "./pages/relatorios/LeadsSemTag";
+import ContratoReport from "./pages/relatorios/ContratoReport";
 import Alertas from "./pages/Alertas";
 import EfeitoAlavanca from "./pages/EfeitoAlavanca";
 import Projetos from "./pages/Projetos";
@@ -159,6 +160,7 @@ const App = () => (
               </Route>
               <Route path="relatorios" element={<ResourceGuard resource="relatorios"><Relatorios /></ResourceGuard>} />
               <Route path="relatorios/leads-sem-tag" element={<ResourceGuard resource="relatorios"><LeadsSemTag /></ResourceGuard>} />
+              <Route path="relatorios/contratos" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ContratoReport /></RoleGuard>} />
               <Route path="alertas" element={<ResourceGuard resource="alertas"><Alertas /></ResourceGuard>} />
               
               {/* BU Consórcio Routes - Unificado */}
