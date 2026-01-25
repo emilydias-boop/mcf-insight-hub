@@ -98,10 +98,8 @@ export const useContractReport = (
         return [];
       }
       
-      // Filter by origin if provided
-      if (filters.originId) {
-        query = query.eq('crm_deals.origin_id', filters.originId);
-      }
+      // Note: Origin filter removed - crm_deals may not be linked to all attendees
+      // The data is already filtered by closer access permissions
       
       const { data, error } = await query;
       

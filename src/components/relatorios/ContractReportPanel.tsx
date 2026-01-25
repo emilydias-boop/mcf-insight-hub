@@ -17,13 +17,8 @@ import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
-// BU to pipeline mapping
-const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
-  incorporador: ['inside-sales', 'leilao'],
-  consorcio: ['consorcio'],
-  credito: ['credito'],
-  projetos: ['projetos'],
-};
+// BU config - no longer filtering by pipeline name since data comes from agenda
+// All contracts are fetched and shown regardless of BU
 
 interface ContractReportPanelProps {
   bu?: BusinessUnit;
@@ -51,20 +46,14 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   }
   
   const { data: origins = [] } = useQuery<OriginOption[]>({
-    queryKey: ['crm-origins-simple', bu],
+    queryKey: ['crm-origins-simple'],
     queryFn: async (): Promise<OriginOption[]> => {
       const client = supabase as any;
-      let query = client
+      const result = await client
         .from('crm_origins')
         .select('id, name, display_name')
         .eq('is_active', true);
       
-      // Filter by BU pipelines if specified
-      if (bu && BU_PIPELINE_MAP[bu]) {
-        query = query.in('name', BU_PIPELINE_MAP[bu]);
-      }
-      
-      const result = await query;
       if (result.error) throw result.error;
       const items = (result.data as OriginOption[]) || [];
       return items.sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
@@ -88,19 +77,9 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   // Fetch report data
   const { data: reportData = [], isLoading: loadingReport } = useContractReport(filters, allowedCloserIds);
   
-  // Filter by BU pipelines if applicable
-  const filteredReportData = useMemo(() => {
-    if (!bu) return reportData;
-    const buPipelines = BU_PIPELINE_MAP[bu] || [];
-    // If no specific pipeline selected, filter by BU pipelines
-    if (selectedOriginId === 'all' && buPipelines.length > 0) {
-      return reportData.filter(row => {
-        const originName = row.originName?.toLowerCase() || '';
-        return buPipelines.some(p => originName.includes(p.toLowerCase()));
-      });
-    }
-    return reportData;
-  }, [reportData, bu, selectedOriginId]);
+  // Use report data directly - no additional BU filtering needed
+  // All contract_paid attendees are relevant for the report
+  const filteredReportData = reportData;
   
   // Calculate stats
   const stats = useMemo(() => {
