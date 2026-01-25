@@ -130,12 +130,12 @@ export interface CloserMetrics {
 
 // ============ Meetings Hooks ============
 
-export function useAgendaMeetings(startDate: Date, endDate: Date) {
+export function useAgendaMeetings(startDate: Date, endDate: Date, meetingType: 'r1' | 'r2' | 'all' = 'r1') {
   return useQuery({
-    queryKey: ['agenda-meetings', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd')],
+    queryKey: ['agenda-meetings', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), meetingType],
     queryFn: async () => {
       // Fetch meetings
-      const { data: meetings, error } = await supabase
+      let query = supabase
         .from('meeting_slots')
         .select(`
           *,
@@ -173,8 +173,14 @@ export function useAgendaMeetings(startDate: Date, endDate: Date) {
           )
         `)
         .gte('scheduled_at', startDate.toISOString())
-        .lte('scheduled_at', endDate.toISOString())
-        .order('scheduled_at', { ascending: true });
+        .lte('scheduled_at', endDate.toISOString());
+      
+      // Filter by meeting type (default r1 to avoid R2 meetings showing in R1 agenda)
+      if (meetingType !== 'all') {
+        query = query.eq('meeting_type', meetingType);
+      }
+      
+      const { data: meetings, error } = await query.order('scheduled_at', { ascending: true });
 
       if (error) throw error;
 

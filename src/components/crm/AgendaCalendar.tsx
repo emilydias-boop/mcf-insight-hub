@@ -457,18 +457,34 @@ export function AgendaCalendar({
   }, [filteredMeetings]);
 
   // Calculate fixed column position for a closer on a specific day
+  // When 3+ closers, use stacked (vertical) layout instead of horizontal columns
   const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined) => {
     if (!closerId) {
-      return { widthPercent: 100, leftPercent: 0, totalClosers: 1 };
+      return { widthPercent: 100, leftPercent: 0, totalClosers: 1, useStackedLayout: false, stackIndex: 0 };
     }
     const activeClosers = getActiveClosersForDay(day);
     const totalClosers = activeClosers.length || 1;
     const columnIndex = activeClosers.indexOf(closerId);
     
+    // Use stacked (vertical) layout when 3+ closers to maintain readability
+    const useStackedLayout = totalClosers >= 3;
+    
+    if (useStackedLayout) {
+      return {
+        widthPercent: 100,
+        leftPercent: 0,
+        totalClosers,
+        useStackedLayout: true,
+        stackIndex: columnIndex >= 0 ? columnIndex : 0
+      };
+    }
+    
     return {
       widthPercent: 100 / totalClosers,
       leftPercent: columnIndex >= 0 ? (columnIndex * 100 / totalClosers) : 0,
-      totalClosers
+      totalClosers,
+      useStackedLayout: false,
+      stackIndex: 0
     };
   }, [getActiveClosersForDay]);
 
@@ -916,9 +932,23 @@ export function AgendaCalendar({
                           {groupedSlots.map((group, groupIndex) => {
                             const closerColor = getCloserColor(group.closerId, group.closer?.name);
                             const slotsNeeded = getSlotsNeeded(group.duration);
-                            const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
                             // Use fixed columns per closer for the entire day (prevents overlap)
-                            const { widthPercent, leftPercent, totalClosers } = getCloserColumnPosition(day, group.closerId);
+                            const { widthPercent, leftPercent, totalClosers, useStackedLayout, stackIndex } = getCloserColumnPosition(day, group.closerId);
+                            
+                            // Calculate card height and top position based on layout mode
+                            let cardHeight: number;
+                            let cardTop: number;
+                            
+                            if (useStackedLayout) {
+                              // Stacked layout: each card is shorter and positioned vertically
+                              const stackedCardHeight = Math.max(16, Math.floor((SLOT_HEIGHT * slotsNeeded - 4) / totalClosers));
+                              cardHeight = stackedCardHeight - 1;
+                              cardTop = stackIndex * stackedCardHeight + 2;
+                            } else {
+                              // Normal layout: cards span full height
+                              cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
+                              cardTop = 2;
+                            }
                             
                             // All meetings in this group
                             const meetings = group.meetings;
@@ -962,8 +992,8 @@ export function AgendaCalendar({
                                 meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
                               }))
                             );
-                            const displayAttendees = allAttendees.slice(0, 3);
-                            const remaining = allAttendees.length - 3;
+                            const displayAttendees = allAttendees.slice(0, useStackedLayout ? 1 : 3);
+                            const remaining = allAttendees.length - displayAttendees.length;
 
                             return (
                               <Draggable 
@@ -982,64 +1012,90 @@ export function AgendaCalendar({
                                           {...dragProvided.dragHandleProps}
                                           onClick={() => onSelectMeeting(firstMeeting)}
                                           className={cn(
-                                            'absolute top-0.5 text-left p-1.5 rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
+                                            'absolute text-left rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
+                                            useStackedLayout ? 'p-0.5 text-[10px]' : 'p-1.5',
                                             STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
                                             STATUS_BG_COLORS[firstMeeting.status] || 'bg-card',
                                             dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
                                           )}
                                           style={{ 
                                             height: `${cardHeight}px`,
-                                            left: totalClosers > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
-                                            right: totalClosers > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
+                                            top: `${cardTop}px`,
+                                            left: useStackedLayout ? '2px' : (totalClosers > 1 ? `calc(${leftPercent}% + 2px)` : '2px'),
+                                            right: useStackedLayout ? '2px' : (totalClosers > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px'),
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
-                                          {/* Header: Bolinha do closer + Horário + Nome do Closer */}
-                                          <div className="flex items-center gap-1.5 mb-0.5">
-                                            <div
-                                              className="w-2 h-2 rounded-full flex-shrink-0"
-                                              style={{ backgroundColor: closerColor }}
-                                            />
-                                            <span className="font-semibold text-xs">
-                                              {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground">•</span>
-                                            <span className="text-[10px] font-medium text-foreground truncate">
-                                              {group.closer?.name || 'N/A'}
-                                            </span>
-                                          </div>
-
-                                          {/* Lista de leads com sigla do SDR */}
-                                          <div className="space-y-0">
-                                            {displayAttendees.map(att => (
-                                              <div key={att.id} className="text-[11px] font-medium truncate leading-tight flex items-center gap-1">
-                                                {att.meetingSdr && (
-                                                  <>
-                                                    <span className="text-muted-foreground font-semibold">
-                                                      {getInitials(att.meetingSdr)}
-                                                    </span>
-                                                    <span className="text-muted-foreground">•</span>
-                                                  </>
-                                                )}
-                                                <span className="truncate flex-1">
-                                                  {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
+                                          {/* Stacked layout: compact single-line view */}
+                                          {useStackedLayout ? (
+                                            <div className="flex items-center gap-1 truncate">
+                                              <div
+                                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                                style={{ backgroundColor: closerColor }}
+                                              />
+                                              <span className="font-semibold truncate">
+                                                {group.closer?.name?.split(' ')[0] || 'N/A'}
+                                              </span>
+                                              <span className="text-muted-foreground">•</span>
+                                              <span className="truncate">
+                                                {displayAttendees[0] 
+                                                  ? (displayAttendees[0].attendee_name || displayAttendees[0].contact?.name || 'Lead').split(' ')[0]
+                                                  : 'Lead'}
+                                              </span>
+                                              {allAttendees.length > 1 && (
+                                                <span className="text-muted-foreground">+{allAttendees.length - 1}</span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <>
+                                              {/* Header: Bolinha do closer + Horário + Nome do Closer */}
+                                              <div className="flex items-center gap-1.5 mb-0.5">
+                                                <div
+                                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                                  style={{ backgroundColor: closerColor }}
+                                                />
+                                                <span className="font-semibold text-xs">
+                                                  {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
                                                 </span>
-                                                {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
-                                                  <span className={cn(
-                                                    "text-[9px] font-bold",
-                                                    ATTENDEE_STATUS_CONFIG[att.status].colorClass
-                                                  )}>
-                                                    {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
+                                                <span className="text-[10px] text-muted-foreground">•</span>
+                                                <span className="text-[10px] font-medium text-foreground truncate">
+                                                  {group.closer?.name || 'N/A'}
+                                                </span>
+                                              </div>
+
+                                              {/* Lista de leads com sigla do SDR */}
+                                              <div className="space-y-0">
+                                                {displayAttendees.map(att => (
+                                                  <div key={att.id} className="text-[11px] font-medium truncate leading-tight flex items-center gap-1">
+                                                    {att.meetingSdr && (
+                                                      <>
+                                                        <span className="text-muted-foreground font-semibold">
+                                                          {getInitials(att.meetingSdr)}
+                                                        </span>
+                                                        <span className="text-muted-foreground">•</span>
+                                                      </>
+                                                    )}
+                                                    <span className="truncate flex-1">
+                                                      {(att.attendee_name || att.contact?.name || att.deal?.name || 'Lead').split(' ')[0]}
+                                                    </span>
+                                                    {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
+                                                      <span className={cn(
+                                                        "text-[9px] font-bold",
+                                                        ATTENDEE_STATUS_CONFIG[att.status].colorClass
+                                                      )}>
+                                                        {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                                {remaining > 0 && (
+                                                  <span className="text-[10px] text-muted-foreground">
+                                                    +{remaining}
                                                   </span>
                                                 )}
                                               </div>
-                                            ))}
-                                            {remaining > 0 && (
-                                              <span className="text-[10px] text-muted-foreground">
-                                                +{remaining}
-                                              </span>
-                                            )}
-                                          </div>
+                                            </>
+                                          )}
                                         </button>
                                       </TooltipTrigger>
                                         <TooltipContent side="right" className="max-w-[320px]">
