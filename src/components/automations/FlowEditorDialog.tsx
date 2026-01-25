@@ -46,6 +46,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [stageId, setStageId] = useState<string>("");
+  const [groupId, setGroupId] = useState<string>("");
   const [originId, setOriginId] = useState<string>("");
   const [triggerOn, setTriggerOn] = useState<'enter' | 'exit'>('enter');
   const [respectBusinessHours, setRespectBusinessHours] = useState(true);
@@ -53,8 +54,11 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
   const [businessHoursEnd, setBusinessHoursEnd] = useState("18:00");
   const [excludeWeekends, setExcludeWeekends] = useState(true);
 
-  // Get stages for selected origin
-  const { data: stages } = useCRMStages(originId || undefined);
+  // Get stages for selected origin (or group if no origin selected)
+  const { data: stages } = useCRMStages(originId || groupId || undefined);
+
+  // Get origins for selected group
+  const selectedGroupOrigins = origins?.find(g => (g as any).id === groupId)?.children || [];
 
   // Find selected stage for preview
   const selectedStage = stages?.find((s: any) => s.id === stageId);
@@ -71,10 +75,21 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setBusinessHoursStart(flow.business_hours_start || "09:00");
       setBusinessHoursEnd(flow.business_hours_end || "18:00");
       setExcludeWeekends(flow.exclude_weekends);
+      
+      // Find the group for the selected origin
+      if (flow.origin_id && origins) {
+        const foundGroup = origins.find((g: any) => 
+          g.children?.some((o: any) => o.id === flow.origin_id)
+        );
+        setGroupId((foundGroup as any)?.id || "");
+      } else {
+        setGroupId("");
+      }
     } else {
       setName("");
       setDescription("");
       setStageId("");
+      setGroupId("");
       setOriginId("");
       setTriggerOn('enter');
       setRespectBusinessHours(true);
@@ -82,7 +97,7 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
       setBusinessHoursEnd("18:00");
       setExcludeWeekends(true);
     }
-  }, [flow, open]);
+  }, [flow, open, origins]);
 
   const handleSave = async () => {
     const data: Partial<AutomationFlow> = {
@@ -109,15 +124,6 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
   const isSaving = createFlow.isPending || updateFlow.isPending;
   const isLoading = flowLoading;
 
-  // Flatten origins for select
-  const flatOrigins = origins?.flatMap(group => 
-    (group as any).children?.map((origin: any) => ({
-      id: origin.id,
-      name: `${group.name} > ${origin.name}`,
-      groupName: group.name,
-      originName: origin.name,
-    })) || []
-  ) || [];
 
   // Form content component to avoid duplication
   const FormContent = () => (
@@ -165,19 +171,47 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid sm:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Pipeline (Origem)</Label>
-              <Select value={originId || "__all__"} onValueChange={(val) => {
-                setOriginId(val === "__all__" ? "" : val);
-                setStageId("");
-              }}>
+              <Label>Grupo/Pipeline</Label>
+              <Select 
+                value={groupId || "__all__"} 
+                onValueChange={(val) => {
+                  setGroupId(val === "__all__" ? "" : val);
+                  setOriginId("");
+                  setStageId("");
+                }}
+              >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Selecione o pipeline" />
+                  <SelectValue placeholder="Todos os grupos" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover z-50">
-                  <SelectItem value="__all__">Todos os pipelines</SelectItem>
-                  {flatOrigins.map((origin) => (
+                  <SelectItem value="__all__">Todos os grupos</SelectItem>
+                  {origins?.map((group: any) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Origem</Label>
+              <Select 
+                value={originId || "__all__"} 
+                onValueChange={(val) => {
+                  setOriginId(val === "__all__" ? "" : val);
+                  setStageId("");
+                }}
+                disabled={!groupId}
+              >
+                <SelectTrigger className={`w-full ${!groupId ? "opacity-50" : ""}`}>
+                  <SelectValue placeholder={groupId ? "Todas as origens" : "Selecione um grupo"} />
+                </SelectTrigger>
+                <SelectContent className="bg-popover z-50">
+                  <SelectItem value="__all__">Todas as origens</SelectItem>
+                  {selectedGroupOrigins.map((origin: any) => (
                     <SelectItem key={origin.id} value={origin.id}>
                       {origin.name}
                     </SelectItem>
