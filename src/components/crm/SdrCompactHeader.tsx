@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Package, ShoppingBag } from 'lucide-react';
+import { MapPin, Package, ShoppingBag, Tv } from 'lucide-react';
 import { useA010Journey } from '@/hooks/useA010Journey';
 
 interface SdrCompactHeaderProps {
@@ -12,14 +12,10 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
   
   const customFields = deal?.custom_fields as Record<string, any> | null;
   const originName = deal?.crm_origins?.name || customFields?.origem || 'Não informada';
-  const productName = deal?.product_name || customFields?.produto || customFields?.product_name || 'A010';
+  const productName = deal?.product_name || customFields?.produto || customFields?.product_name || null;
   
-  // Formatar resumo A010
-  const getA010Summary = () => {
-    if (!a010Data) return null;
-    if (!a010Data.hasA010) return 'Nunca comprou';
-    return `${a010Data.purchaseCount} compra${a010Data.purchaseCount > 1 ? 's' : ''} • R$ ${a010Data.totalPaid.toLocaleString('pt-BR')}`;
-  };
+  // Detect sales channel based on actual purchase data
+  const isA010 = a010Data?.hasA010 === true;
   
   return (
     <div className="bg-secondary/50 border-b border-border p-4 space-y-3">
@@ -28,8 +24,8 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
         <h2 className="text-lg font-bold text-foreground truncate flex-1">
           {deal.name}
         </h2>
-              <span className="text-lg font-bold text-primary whitespace-nowrap">
-                R$ {((deal.value && deal.value > 0) ? deal.value : (a010Data?.totalPaid || 0)).toLocaleString('pt-BR')}
+        <span className="text-lg font-bold text-primary whitespace-nowrap">
+          R$ {((deal.value && deal.value > 0) ? deal.value : (a010Data?.totalPaid || 0)).toLocaleString('pt-BR')}
         </span>
       </div>
       
@@ -46,23 +42,40 @@ export const SdrCompactHeader = ({ deal, contact }: SdrCompactHeaderProps) => {
         </Badge>
       )}
       
-      {/* Linha 3: Chips de contexto (Origem, Produto, A010) */}
+      {/* Linha 3: Chips de contexto (Canal, Origem, Produto, Compras A010) */}
       <div className="flex flex-wrap gap-2">
+        {/* Badge de Canal de Venda (A010 vs LIVE) - baseado em compra real */}
+        <Badge 
+          variant="outline" 
+          className={`text-xs ${
+            isA010 
+              ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400' 
+              : 'border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950 dark:text-purple-400'
+          }`}
+        >
+          {isA010 ? (
+            <><ShoppingBag className="h-3 w-3 mr-1" />A010</>
+          ) : (
+            <><Tv className="h-3 w-3 mr-1" />LIVE</>
+          )}
+        </Badge>
+        
+        {/* Detalhes de compras A010 (só se tiver comprado) */}
+        {isA010 && a010Data && (
+          <Badge variant="outline" className="text-xs border-primary/50 text-primary bg-primary/5">
+            {a010Data.purchaseCount} compra{a010Data.purchaseCount > 1 ? 's' : ''} • R$ {a010Data.totalPaid.toLocaleString('pt-BR')}
+          </Badge>
+        )}
+        
         <Badge variant="outline" className="text-xs bg-background/50">
           <MapPin className="h-3 w-3 mr-1" />
           {originName}
         </Badge>
-        <Badge variant="outline" className="text-xs bg-background/50">
-          <Package className="h-3 w-3 mr-1" />
-          {productName}
-        </Badge>
-        {a010Data && (
-          <Badge 
-            variant="outline" 
-            className={`text-xs bg-background/50 ${a010Data.hasA010 ? 'border-primary/50 text-primary' : 'border-muted-foreground/30'}`}
-          >
-            <ShoppingBag className="h-3 w-3 mr-1" />
-            A010: {getA010Summary()}
+        
+        {productName && (
+          <Badge variant="outline" className="text-xs bg-background/50">
+            <Package className="h-3 w-3 mr-1" />
+            {productName}
           </Badge>
         )}
       </div>
