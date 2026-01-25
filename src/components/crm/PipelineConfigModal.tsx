@@ -33,6 +33,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { PipelineStagesEditor } from './PipelineStagesEditor';
 import { LeadDistributionConfig } from './LeadDistributionConfig';
+import { WebhookConfigEditor } from './webhooks/WebhookConfigEditor';
 
 interface PipelineConfigModalProps {
   open: boolean;
@@ -427,25 +428,7 @@ export const PipelineConfigModal = ({
                 </h3>
                 
                 {activeIntegrationSection === 'webhooks' && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Envie dados para sistemas externos quando eventos ocorrerem.
-                    </p>
-                    <div className="flex items-center gap-3 p-4 border rounded-lg">
-                      <div className="p-2 bg-muted rounded">
-                        <Webhook className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium">Webhook Genérico</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Dispare eventos para URLs externas
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Configurar
-                      </Button>
-                    </div>
-                  </div>
+                  <WebhookConfigEditor originId={targetId} />
                 )}
                 
                 {activeIntegrationSection === 'leads-live' && (
