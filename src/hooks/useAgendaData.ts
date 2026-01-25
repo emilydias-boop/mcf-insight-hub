@@ -1332,19 +1332,28 @@ export function useUpdateAttendeeStatus() {
 
 // Helper function to sync deal stage from agenda status
 // Also handles ownership transfer: completed/contract_paid -> closer becomes owner
-async function syncDealStageFromAgenda(
+// Preserves complete ownership chain: SDR → Closer R1 → Closer R2
+export async function syncDealStageFromAgenda(
   dealId: string, 
   agendaStatus: string,
   meetingType: 'r1' | 'r2' = 'r1',
-  closerEmail?: string  // NEW: optional closer email for ownership transfer
+  closerEmail?: string  // optional closer email for ownership transfer
 ): Promise<void> {
   try {
-    // 1. Fetch deal to get origin_id and current stage
+    // 1. Fetch deal to get origin_id and current stage (including new closer fields)
     const { data: deal, error: dealError } = await supabase
       .from('crm_deals')
-      .select('origin_id, stage_id, owner_id, original_sdr_email')
+      .select('origin_id, stage_id, owner_id, original_sdr_email, r1_closer_email, r2_closer_email')
       .eq('id', dealId)
       .single();
+
+    // 1b. Fetch all active closers to determine if current owner is a closer
+    const { data: closersList } = await supabase
+      .from('closers')
+      .select('email')
+      .eq('is_active', true);
+    
+    const closerEmails = closersList?.map(c => c.email.toLowerCase()) || [];
 
     if (dealError || !deal) {
       console.warn('Deal not found for CRM sync:', dealId);
@@ -1411,14 +1420,34 @@ async function syncDealStageFromAgenda(
     
     // Transfer ownership to closer for completed/contract_paid
     // No-show keeps the SDR as owner so they can reschedule
-    // Also save the original SDR email before transferring
+    // Preserve complete ownership chain: SDR → Closer R1 → Closer R2
     if (shouldTransferOwnership) {
-      // Preserve original SDR email if not already set
-      if (!deal.original_sdr_email && deal.owner_id) {
+      const currentOwnerLower = deal.owner_id?.toLowerCase() || '';
+      const isOwnerCloser = closerEmails.includes(currentOwnerLower);
+      
+      // Preserve original SDR email only if:
+      // 1. Not already set
+      // 2. Current owner exists  
+      // 3. Current owner is NOT a closer (R1 or R2)
+      if (!deal.original_sdr_email && deal.owner_id && !isOwnerCloser) {
         updateData.original_sdr_email = deal.owner_id;
+        console.log(`Preserved original SDR: ${deal.owner_id}`);
       }
+      
+      // Save R1 closer email when R1 meeting is completed
+      if (meetingType === 'r1' && !deal.r1_closer_email && closerEmail) {
+        updateData.r1_closer_email = closerEmail;
+        console.log(`Saved R1 Closer: ${closerEmail}`);
+      }
+      
+      // Save R2 closer email when R2 meeting is completed  
+      if (meetingType === 'r2' && !deal.r2_closer_email && closerEmail) {
+        updateData.r2_closer_email = closerEmail;
+        console.log(`Saved R2 Closer: ${closerEmail}`);
+      }
+      
       updateData.owner_id = closerEmail;
-      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (status: ${agendaStatus}), original SDR: ${deal.owner_id || 'N/A'}`);
+      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (status: ${agendaStatus}, type: ${meetingType})`);
     }
 
     if (Object.keys(updateData).length === 0) return;
@@ -1542,8 +1571,7 @@ export function useUpdateAttendeeAndSlotStatus() {
   });
 }
 
-// Export helper for external use (e.g., R2 scheduling)
-export { syncDealStageFromAgenda };
+// syncDealStageFromAgenda is now exported directly in its declaration
 
 export function useUpdateAttendeeNotes() {
   const queryClient = useQueryClient();

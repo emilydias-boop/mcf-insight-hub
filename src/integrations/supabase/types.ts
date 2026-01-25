@@ -2547,6 +2547,8 @@ export type Database = {
           owner_id: string | null
           probability: number | null
           product_name: string | null
+          r1_closer_email: string | null
+          r2_closer_email: string | null
           stage_id: string | null
           tags: string[] | null
           updated_at: string | null
@@ -2569,6 +2571,8 @@ export type Database = {
           owner_id?: string | null
           probability?: number | null
           product_name?: string | null
+          r1_closer_email?: string | null
+          r2_closer_email?: string | null
           stage_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
@@ -2591,6 +2595,8 @@ export type Database = {
           owner_id?: string | null
           probability?: number | null
           product_name?: string | null
+          r1_closer_email?: string | null
+          r2_closer_email?: string | null
           stage_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
