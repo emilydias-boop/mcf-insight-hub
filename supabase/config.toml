@@ -263,3 +263,6 @@ verify_jwt = false
 
 [functions.webhook-live-leads]
 verify_jwt = false
+
+[functions.webhook-lead-receiver]
+verify_jwt = false
