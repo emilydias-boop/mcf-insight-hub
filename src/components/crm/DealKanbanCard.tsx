@@ -26,6 +26,7 @@ import { ActivitySummary } from "@/hooks/useDealActivitySummary";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { OwnerChangeDialog } from "./OwnerChangeDialog";
+import { useA010Journey } from "@/hooks/useA010Journey";
 
 interface DealKanbanCardProps {
   deal: any;
@@ -49,6 +50,21 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   const contact = deal.crm_contacts || deal.contact;
   const contactName = contact?.name;
   const contactEmail = contact?.email;
+  const contactPhone = contact?.phone;
+
+  // Hook para detectar canal de venda (A010 vs LIVE)
+  const { data: a010Data } = useA010Journey(contactEmail, contactPhone);
+  const isA010 = a010Data?.hasA010 === true;
+
+  // Formatar mês de entrada: Jan/26, Fev/26, etc.
+  const getEntryMonth = (createdAt: string) => {
+    if (!createdAt) return null;
+    const date = new Date(createdAt);
+    const month = date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+    const year = date.getFullYear().toString().slice(-2);
+    return `${month.charAt(0).toUpperCase() + month.slice(1)}/${year}`;
+  };
+  const entryMonth = getEntryMonth(deal.created_at);
 
   // Prioridade baseada em tags
   const getPriorityInfo = () => {
@@ -180,7 +196,7 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   const timeAgoShort = deal.updated_at ? getShortTimeAgo(deal.updated_at) : null;
   const totalCalls = activitySummary?.totalCalls || 0;
   const maxAttempts = activitySummary?.maxAttempts || 5;
-  const contactPhone = contact?.phone || extractPhoneFromDeal(deal, contact);
+  const displayPhone = contactPhone || extractPhoneFromDeal(deal, contact);
 
   // Formatar valor: evitar "R$ 0k" para valores pequenos
   const formatDealValue = (value: number | null | undefined) => {
@@ -206,12 +222,34 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
       onClick={onClick}
     >
       <CardContent className="p-2.5 space-y-1.5">
-        {/* Linha 1: Tags + Prioridade + Remarcado */}
+        {/* Linha 1: Canal + Mês + Tags + Prioridade */}
         <div className="flex items-center gap-1 flex-wrap">
+          {/* Badge de Canal de Venda (A010 vs LIVE) */}
+          <Badge 
+            variant="outline" 
+            className={`text-[10px] px-1.5 py-0 font-semibold ${
+              isA010 
+                ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-700' 
+                : 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-700'
+            }`}
+          >
+            {isA010 ? 'A010' : 'LIVE'}
+          </Badge>
+          
+          {/* Badge de Mês de Entrada */}
+          {entryMonth && (
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground border-border"
+            >
+              {entryMonth}
+            </Badge>
+          )}
+          
           {isRescheduled && (
             <Badge 
               variant="outline" 
-              className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5"
+              className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-700 gap-0.5"
             >
               <RefreshCw className="h-2.5 w-2.5" />
               Remarcado
@@ -303,10 +341,10 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
               </div>
             )}
             
-            {contactPhone && (
+            {displayPhone && (
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Phone className="h-3 w-3 flex-shrink-0" />
-                <span>{contactPhone}</span>
+                <span>{displayPhone}</span>
               </div>
             )}
             
