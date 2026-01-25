@@ -174,10 +174,21 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         key={origin.id} 
         className={cn(
           "group flex items-center gap-1 min-w-0",
-          indented && "pl-6"
+          indented && "pl-4"
         )}
       >
-        {/* Botão de favorito */}
+        {/* Menu de 3 pontos - PRIMEIRO (sempre visível à esquerda) */}
+        <span onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
+          <PipelineContextMenu
+            targetType="origin"
+            targetId={origin.id}
+            targetName={displayName}
+            onConfigure={() => setConfigTarget({ type: 'origin', id: origin.id, name: displayName })}
+            onSelect={() => onSelectOrigin(origin.id)}
+          />
+        </span>
+        
+        {/* Botão de favorito - SEGUNDO */}
         {showFavorite && (
           <Button
             variant="ghost"
@@ -203,10 +214,11 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
           </Button>
         )}
         
+        {/* Botão principal com nome e badge */}
         <Button
           variant={selectedOriginId === origin.id ? "secondary" : "ghost"}
           className={cn(
-            "flex-1 min-w-0 justify-between h-auto py-2 text-left overflow-hidden pr-1",
+            "flex-1 min-w-0 justify-between h-auto py-2 text-left overflow-hidden",
             selectedOriginId === origin.id && "bg-primary/10"
           )}
           onClick={() => onSelectOrigin(origin.id)}
@@ -215,23 +227,11 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
             <span className="truncate text-xs">{displayName}</span>
           </span>
-          <span className="flex items-center gap-1 flex-shrink-0">
-            {dealCount > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {dealCount}
-              </Badge>
-            )}
-            {/* Menu de 3 pontos - dentro do botão */}
-            <span onClick={(e) => e.stopPropagation()}>
-              <PipelineContextMenu
-                targetType="origin"
-                targetId={origin.id}
-                targetName={displayName}
-                onConfigure={() => setConfigTarget({ type: 'origin', id: origin.id, name: displayName })}
-                onSelect={() => onSelectOrigin(origin.id)}
-              />
-            </span>
-          </span>
+          {dealCount > 0 && (
+            <Badge variant="secondary" className="text-xs ml-1 flex-shrink-0">
+              {dealCount}
+            </Badge>
+          )}
         </Button>
       </div>
     );
@@ -250,11 +250,25 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
         open={isExpanded}
         onOpenChange={() => toggleGroup(group.id)}
       >
-        <div className="group flex items-center">
+        <div className="group flex items-center gap-1">
+          {/* Menu de 3 pontos - PRIMEIRO (sempre visível à esquerda) */}
+          <span onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
+            <PipelineContextMenu
+              targetType="group"
+              targetId={group.id}
+              targetName={displayName}
+              onConfigure={() => setConfigTarget({ type: 'group', id: group.id, name: displayName })}
+              onSelect={() => {
+                setExpandedGroups(prev => new Set([...prev, group.id]));
+              }}
+            />
+          </span>
+          
+          {/* Botão do grupo (CollapsibleTrigger) */}
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="flex-1 justify-between h-auto py-2 font-medium pr-1"
+              className="flex-1 justify-between h-auto py-2 font-medium"
             >
               <span className="flex items-center gap-2 min-w-0 flex-1">
                 <ChevronDown 
@@ -266,25 +280,11 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
                 <Icon className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate text-xs">{displayName}</span>
               </span>
-              <span className="flex items-center gap-1 flex-shrink-0">
-                {totalDeals > 0 && (
-                  <Badge variant="outline" className="text-xs">
-                    {totalDeals}
-                  </Badge>
-                )}
-                {/* Menu de 3 pontos - dentro do botão */}
-                <span onClick={(e) => e.stopPropagation()}>
-                  <PipelineContextMenu
-                    targetType="group"
-                    targetId={group.id}
-                    targetName={displayName}
-                    onConfigure={() => setConfigTarget({ type: 'group', id: group.id, name: displayName })}
-                    onSelect={() => {
-                      setExpandedGroups(prev => new Set([...prev, group.id]));
-                    }}
-                  />
-                </span>
-              </span>
+              {totalDeals > 0 && (
+                <Badge variant="outline" className="text-xs ml-1 flex-shrink-0">
+                  {totalDeals}
+                </Badge>
+              )}
             </Button>
           </CollapsibleTrigger>
         </div>
