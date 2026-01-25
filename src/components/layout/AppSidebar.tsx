@@ -206,6 +206,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Visão Geral", url: "/relatorios" },
       { title: "Leads sem Tag", url: "/relatorios/leads-sem-tag" },
+      { title: "Contratos por Closer", url: "/relatorios/contratos", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
 
