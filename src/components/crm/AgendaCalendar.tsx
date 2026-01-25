@@ -563,7 +563,8 @@ export function AgendaCalendar({
 
   // Status config with short labels and colors
   const ATTENDEE_STATUS_CONFIG: Record<string, { shortLabel: string; colorClass: string }> = {
-    invited: { shortLabel: 'AG', colorClass: 'text-blue-400' },
+    scheduled: { shortLabel: 'Ag', colorClass: 'text-blue-400' },
+    invited: { shortLabel: 'Ag', colorClass: 'text-blue-400' },
     completed: { shortLabel: 'OK', colorClass: 'text-green-500' },
     no_show: { shortLabel: 'NS', colorClass: 'text-red-500' },
     contract_paid: { shortLabel: 'CP', colorClass: 'text-emerald-500' },
@@ -1346,26 +1347,51 @@ export function AgendaCalendar({
                                                       ...dragProvided.draggableProps.style,
                                                     }}
                                                   >
-                                          {/* Compact layout for 3+ closers: closer name + time + lead + count */}
+                                          {/* Compact layout for 3+ closers: header + participants list */}
                                           {isCompact ? (
-                                            <div className="flex items-center gap-1 truncate h-full px-1">
-                                              <div
-                                                className="w-2 h-2 rounded-full flex-shrink-0"
-                                                style={{ backgroundColor: closerColor }}
-                                              />
-                                              <span className="font-semibold text-[10px] flex-shrink-0">
-                                                {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
-                                              </span>
-                                              <span className="text-[9px] truncate flex-1">
-                                                {displayAttendees[0] 
-                                                  ? (displayAttendees[0].attendee_name || displayAttendees[0].contact?.name || 'Lead').split(' ')[0]
-                                                  : 'Lead'}
-                                              </span>
-                                              {allAttendees.length > 0 && (
-                                                <span className="text-[8px] font-bold text-muted-foreground bg-muted/50 rounded px-0.5 flex-shrink-0">
-                                                  {allAttendees.length}
+                                            <div className="flex flex-col h-full p-0.5 overflow-hidden">
+                                              {/* Header: Bolinha + Horário + Closer */}
+                                              <div className="flex items-center gap-1 text-[9px] mb-0.5">
+                                                <div
+                                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                                  style={{ backgroundColor: closerColor }}
+                                                />
+                                                <span className="font-semibold">
+                                                  {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
                                                 </span>
-                                              )}
+                                                <span className="text-muted-foreground truncate">
+                                                  • {group.closer?.name?.split(' ')[0] || 'N/A'}
+                                                </span>
+                                              </div>
+                                              {/* Lista de participantes: Sigla SDR • Nome Lead Status */}
+                                              <div className="space-y-0 flex-1 overflow-hidden">
+                                                {displayAttendees.slice(0, 2).map(att => (
+                                                  <div key={att.id} className="text-[9px] truncate flex items-center gap-0.5">
+                                                    {att.meetingSdr && (
+                                                      <>
+                                                        <span className="text-muted-foreground font-semibold">
+                                                          {getInitials(att.meetingSdr)}
+                                                        </span>
+                                                        <span className="text-muted-foreground">•</span>
+                                                      </>
+                                                    )}
+                                                    <span className="truncate flex-1">
+                                                      {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
+                                                    </span>
+                                                    {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
+                                                      <span className={cn(
+                                                        "text-[8px] font-bold",
+                                                        ATTENDEE_STATUS_CONFIG[att.status].colorClass
+                                                      )}>
+                                                        {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                                {remaining > 0 && (
+                                                  <span className="text-[8px] text-muted-foreground">+{remaining}</span>
+                                                )}
+                                              </div>
                                             </div>
                                           ) : (
                                             <>
