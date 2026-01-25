@@ -437,7 +437,7 @@ export function AgendaCalendar({
       });
       
       return !hasMeeting;
-    }).sort();  // Garantir ordem alfabética consistente
+    });
   }, [meetingLinkSlots, r2DailySlotsMap, meetingType, filteredMeetings]);
 
   const getMeetingsForDay = (day: Date) => {
@@ -510,59 +510,23 @@ export function AgendaCalendar({
     return allClosers;
   }, [getMeetingClosersForSlot, getAvailableClosersForSlot]);
 
-  // Calculate column position with FIXED ordering based on all day closers
-  // This ensures consistent horizontal alignment across all time slots
-  const getSlotColumnPosition = useCallback((
-    day: Date, 
-    hour: number, 
-    minute: number, 
-    closerId: string | undefined
-  ) => {
-    if (!closerId) {
-      return { widthPercent: 100, leftPercent: 0, totalClosers: 1, isCompact: false, stackIndex: 0 };
-    }
-    
-    // Use ALL closers configured for the day as fixed reference for column order
+  // Get the CSS Grid column index for a closer (1-indexed for CSS Grid)
+  const getCloserGridColumn = useCallback((closerId: string, day: Date): number => {
     const allDayClosers = getAllConfiguredClosersForDay(day);
-    const totalDayClosers = allDayClosers.length || 1;
-    
-    // Global column index based on day-wide position (fixed)
-    const globalColumnIndex = allDayClosers.indexOf(closerId);
-    
-    // Get closers present in this specific slot for width calculation
-    const slotClosers = getAllClosersForSlot(day, hour, minute);
-    const totalSlotClosers = slotClosers.length || 1;
-    
-    const isCompact = totalDayClosers >= 3;
-    
-    // Count how many closers BEFORE this one are present in the slot
-    // This determines the actual position while maintaining relative order
-    const closersBeforeInSlot = allDayClosers
-      .slice(0, globalColumnIndex)
-      .filter(id => slotClosers.includes(id))
-      .length;
-    
-    // Width is based on slot closers, position is based on relative order
-    const widthPercent = 100 / totalSlotClosers;
-    const leftPercent = closersBeforeInSlot * widthPercent;
-    
-    return {
-      widthPercent,
-      leftPercent,
-      totalClosers: totalSlotClosers,
-      isCompact,
-      stackIndex: closersBeforeInSlot
-    };
-  }, [getAllClosersForSlot, getAllConfiguredClosersForDay]);
+    const index = allDayClosers.indexOf(closerId);
+    return index >= 0 ? index + 1 : 1; // CSS Grid columns are 1-indexed
+  }, [getAllConfiguredClosersForDay]);
 
-  // Legacy function - keep for backwards compatibility but prefer getSlotColumnPosition
-  const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined, hour?: number, minute?: number) => {
-    // If hour/minute provided, use slot-specific positioning
-    if (hour !== undefined && minute !== undefined) {
-      return getSlotColumnPosition(day, hour, minute, closerId);
-    }
-    
-    // Fallback to day-level positioning (for cases where slot time isn't available)
+  // Get grid layout info for a slot
+  const getSlotGridInfo = useCallback((day: Date) => {
+    const allDayClosers = getAllConfiguredClosersForDay(day);
+    const totalClosers = allDayClosers.length || 1;
+    const isCompact = totalClosers >= 3;
+    return { allDayClosers, totalClosers, isCompact };
+  }, [getAllConfiguredClosersForDay]);
+
+  // Legacy function for day-level positioning (used in some edge cases)
+  const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined) => {
     if (!closerId) {
       return { widthPercent: 100, leftPercent: 0, totalClosers: 1, isCompact: false, stackIndex: 0 };
     }
@@ -578,7 +542,7 @@ export function AgendaCalendar({
       isCompact,
       stackIndex: columnIndex
     };
-  }, [getSlotColumnPosition, getAllConfiguredClosersForDay]);
+  }, [getAllConfiguredClosersForDay]);
 
   const getCloserColor = (closerId: string | undefined, closerName: string | undefined) => {
     const closer = closers.find(c => c.id === closerId);
@@ -1243,20 +1207,27 @@ export function AgendaCalendar({
                             isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && 'bg-white/80 dark:bg-white/5'
                           )}
                         >
-                          {/* Available slot indicators - one button per available closer, positioned in columns */}
+                          {/* CSS Grid container for proper column alignment */}
                           {!isOccupied && groupedSlots.length === 0 && onSelectSlot && (() => {
+                            const { allDayClosers, totalClosers, isCompact } = getSlotGridInfo(day);
                             const availableClosers = getAvailableClosersForSlot(day, hour, minute);
                             if (availableClosers.length === 0) return null;
                             
                             return (
-                              <>
-                                {availableClosers.map(closerId => {
+                              <div 
+                                className="absolute inset-0 grid gap-0.5 p-0.5"
+                                style={{ gridTemplateColumns: `repeat(${totalClosers}, 1fr)` }}
+                              >
+                                {allDayClosers.map(closerId => {
+                                  const isAvailable = availableClosers.includes(closerId);
+                                  if (!isAvailable) {
+                                    // Empty placeholder to maintain grid column
+                                    return <div key={closerId} />;
+                                  }
+                                  
                                   const closer = closers.find(c => c.id === closerId);
                                   const closerColor = getCloserColor(closerId, closer?.name);
                                   const firstName = closer?.name?.split(' ')[0] || 'Closer';
-                                  
-                                  // Use slot-specific column positioning (not day-level)
-                                  const { widthPercent, leftPercent, totalClosers, isCompact } = getSlotColumnPosition(day, hour, minute, closerId);
                                   
                                   return (
                                     <button
@@ -1266,17 +1237,13 @@ export function AgendaCalendar({
                                         onSelectSlot(day, hour, minute, closerId);
                                       }}
                                       className={cn(
-                                        "absolute rounded font-medium flex items-center justify-center gap-0.5 border border-dashed hover:opacity-80 transition-all z-[5]",
+                                        "rounded font-medium flex items-center justify-center gap-0.5 border border-dashed hover:opacity-80 transition-all h-full",
                                         isCompact ? "text-[8px]" : "text-[9px]"
                                       )}
                                       style={{ 
                                         backgroundColor: `${closerColor}15`,
                                         borderColor: closerColor,
                                         color: closerColor,
-                                        top: '2px',
-                                        bottom: '2px',
-                                        left: totalClosers > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
-                                        right: totalClosers > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px'
                                       }}
                                     >
                                       <Plus className={cn(isCompact ? "h-2.5 w-2.5" : "h-3 w-3")} />
@@ -1284,96 +1251,101 @@ export function AgendaCalendar({
                                     </button>
                                   );
                                 })}
-                              </>
+                              </div>
                             );
                           })()}
-                          {groupedSlots.map((group, groupIndex) => {
-                            const closerColor = getCloserColor(group.closerId, group.closer?.name);
-                            const slotsNeeded = getSlotsNeeded(group.duration);
-                            // Use slot-specific column positioning for consistent alignment
-                            const { widthPercent, leftPercent, totalClosers, isCompact } = getSlotColumnPosition(day, hour, minute, group.closerId);
+                          {/* CSS Grid container for meetings */}
+                          {groupedSlots.length > 0 && (() => {
+                            const { allDayClosers, totalClosers, isCompact } = getSlotGridInfo(day);
                             
-                            // Calculate card height - always use full height
-                            const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
-                            const cardTop = 2;
-                            
-                            // All meetings in this group
-                            const meetings = group.meetings;
-                            const firstMeeting = meetings[0];
-                            const leadNames = meetings.map(m => {
-                              if (m.attendees?.length) {
-                                const firstName = (m.attendees[0].attendee_name || m.attendees[0].contact?.name || m.attendees[0].deal?.name || m.deal?.name || 'Lead').split(' ')[0];
-                                return m.attendees.length > 1 ? `${firstName} +${m.attendees.length - 1}` : firstName;
+                            // Create a map of closerId -> group for this slot
+                            const closerToGroup = new Map<string, typeof groupedSlots[0]>();
+                            groupedSlots.forEach(group => {
+                              if (group.closerId) {
+                                closerToGroup.set(group.closerId, group);
                               }
-                              return m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead';
-                            }).join(', ');
-
-                            // Status border colors for clean visual hierarchy
-                            const STATUS_BORDER_COLORS: Record<string, string> = {
-                              scheduled: 'border-l-green-500',
-                              invited: 'border-l-green-500',
-                              completed: 'border-l-blue-500',
-                              no_show: 'border-l-red-500',
-                              contract_paid: 'border-l-emerald-600',
-                              cancelled: 'border-l-gray-400',
-                              canceled: 'border-l-gray-400',
-                              rescheduled: 'border-l-yellow-500',
-                            };
-
-                            // Background colors with low opacity to match border
-                            const STATUS_BG_COLORS: Record<string, string> = {
-                              scheduled: 'bg-green-500/10',
-                              invited: 'bg-green-500/10',
-                              completed: 'bg-blue-500/10',
-                              no_show: 'bg-red-500/10',
-                              contract_paid: 'bg-emerald-600/10',
-                              cancelled: 'bg-gray-400/10',
-                              canceled: 'bg-gray-400/10',
-                              rescheduled: 'bg-yellow-500/10',
-                            };
-
-                            // Get all attendees for display
-                            const allAttendees = meetings.flatMap(m => 
-                              (m.attendees || []).map(att => ({ 
-                                ...att, 
-                                meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
-                              }))
-                            );
-                            // Show fewer attendees in compact mode (3+ closers)
-                            const displayAttendees = allAttendees.slice(0, isCompact ? 1 : 3);
-                            const remaining = allAttendees.length - displayAttendees.length;
-
+                            });
+                            
+                            // Also get available closers for this slot
+                            const availableClosers = getAvailableClosersForSlot(day, hour, minute);
+                            
                             return (
-                              <Draggable 
-                                key={firstMeeting.id} 
-                                draggableId={firstMeeting.id} 
-                                index={groupIndex}
+                              <div 
+                                className="absolute inset-0 grid gap-0.5 p-0.5"
+                                style={{ gridTemplateColumns: `repeat(${totalClosers}, 1fr)` }}
                               >
-                                {(dragProvided, dragSnapshot) => (
-                                  <div className="relative group">
-                                    <TooltipProvider>
-                                      <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <button
-                                          ref={dragProvided.innerRef}
-                                          {...dragProvided.draggableProps}
-                                          {...dragProvided.dragHandleProps}
-                                          onClick={() => onSelectMeeting(firstMeeting)}
-                                          className={cn(
-                                            'absolute text-left rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
-                                            isCompact ? 'p-0.5 text-[10px]' : 'p-1.5',
-                                            STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
-                                            STATUS_BG_COLORS[firstMeeting.status] || 'bg-card',
-                                            dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
-                                          )}
-                                          style={{ 
-                                            height: `${cardHeight}px`,
-                                            top: `${cardTop}px`,
-                                            left: totalClosers > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
-                                            right: totalClosers > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px',
-                                            ...dragProvided.draggableProps.style,
-                                          }}
-                                        >
+                                {allDayClosers.map((closerId, colIndex) => {
+                                  const group = closerToGroup.get(closerId);
+                                  const isAvailable = availableClosers.includes(closerId);
+                                  
+                                  // If this closer has a meeting
+                                  if (group) {
+                                    const closerColor = getCloserColor(group.closerId, group.closer?.name);
+                                    const slotsNeeded = getSlotsNeeded(group.duration);
+                                    const cardHeight = SLOT_HEIGHT * slotsNeeded - 4;
+                                    
+                                    const meetings = group.meetings;
+                                    const firstMeeting = meetings[0];
+                                    
+                                    const STATUS_BORDER_COLORS: Record<string, string> = {
+                                      scheduled: 'border-l-green-500',
+                                      invited: 'border-l-green-500',
+                                      completed: 'border-l-blue-500',
+                                      no_show: 'border-l-red-500',
+                                      contract_paid: 'border-l-emerald-600',
+                                      cancelled: 'border-l-gray-400',
+                                      canceled: 'border-l-gray-400',
+                                      rescheduled: 'border-l-yellow-500',
+                                    };
+                                    
+                                    const STATUS_BG_COLORS: Record<string, string> = {
+                                      scheduled: 'bg-green-500/10',
+                                      invited: 'bg-green-500/10',
+                                      completed: 'bg-blue-500/10',
+                                      no_show: 'bg-red-500/10',
+                                      contract_paid: 'bg-emerald-600/10',
+                                      cancelled: 'bg-gray-400/10',
+                                      canceled: 'bg-gray-400/10',
+                                      rescheduled: 'bg-yellow-500/10',
+                                    };
+                                    
+                                    const allAttendees = meetings.flatMap(m => 
+                                      (m.attendees || []).map(att => ({ 
+                                        ...att, 
+                                        meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
+                                      }))
+                                    );
+                                    const displayAttendees = allAttendees.slice(0, isCompact ? 1 : 3);
+                                    const remaining = allAttendees.length - displayAttendees.length;
+                                    
+                                    return (
+                                      <Draggable 
+                                        key={firstMeeting.id} 
+                                        draggableId={firstMeeting.id} 
+                                        index={colIndex}
+                                      >
+                                        {(dragProvided, dragSnapshot) => (
+                                          <div className="relative h-full">
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <button
+                                                    ref={dragProvided.innerRef}
+                                                    {...dragProvided.draggableProps}
+                                                    {...dragProvided.dragHandleProps}
+                                                    onClick={() => onSelectMeeting(firstMeeting)}
+                                                    className={cn(
+                                                      'absolute inset-0 text-left rounded-md shadow-sm hover:shadow-md transition-all overflow-hidden z-10 border-l-4',
+                                                      isCompact ? 'p-0.5 text-[10px]' : 'p-1.5',
+                                                      STATUS_BORDER_COLORS[firstMeeting.status] || 'border-l-gray-300',
+                                                      STATUS_BG_COLORS[firstMeeting.status] || 'bg-card',
+                                                      dragSnapshot.isDragging && 'shadow-lg ring-2 ring-primary'
+                                                    )}
+                                                    style={{ 
+                                                      height: `${cardHeight}px`,
+                                                      ...dragProvided.draggableProps.style,
+                                                    }}
+                                                  >
                                           {/* Compact layout for 3+ closers: closer name + time + lead + count */}
                                           {isCompact ? (
                                             <div className="flex items-center gap-1 truncate h-full px-1">
@@ -1593,7 +1565,43 @@ export function AgendaCalendar({
                                 )}
                               </Draggable>
                             );
-                          })}
+                                  }
+                                  
+                                  // If this closer is available (no meeting)
+                                  if (isAvailable && onSelectSlot) {
+                                    const closer = closers.find(c => c.id === closerId);
+                                    const closerColor = getCloserColor(closerId, closer?.name);
+                                    const firstName = closer?.name?.split(' ')[0] || 'Closer';
+                                    
+                                    return (
+                                      <button
+                                        key={closerId}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onSelectSlot(day, hour, minute, closerId);
+                                        }}
+                                        className={cn(
+                                          "rounded font-medium flex items-center justify-center gap-0.5 border border-dashed hover:opacity-80 transition-all h-full",
+                                          isCompact ? "text-[8px]" : "text-[9px]"
+                                        )}
+                                        style={{ 
+                                          backgroundColor: `${closerColor}15`,
+                                          borderColor: closerColor,
+                                          color: closerColor,
+                                        }}
+                                      >
+                                        <Plus className={cn(isCompact ? "h-2.5 w-2.5" : "h-3 w-3")} />
+                                        {isCompact ? firstName.charAt(0) : firstName}
+                                      </button>
+                                    );
+                                  }
+                                  
+                                  // Empty placeholder
+                                  return <div key={closerId} />;
+                                })}
+                              </div>
+                            );
+                          })()}
                           {/* Full slot indicator */}
                           {isSlotFull && groupedSlots.length > 0 && (
                             <div className="absolute top-0.5 right-1 text-[8px] font-medium text-muted-foreground/60">
