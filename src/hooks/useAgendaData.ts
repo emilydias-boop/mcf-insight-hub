@@ -1352,8 +1352,11 @@ async function syncDealStageFromAgenda(
     }
 
     // 2. Map agenda status to target stage name
+    // R2 No-Shows go to a separate stage so SDRs don't see them
     const stageNameMap: Record<string, string[]> = {
-      'no_show': ['No-Show', 'NO-SHOW', 'No-show', 'NoShow'],
+      'no_show': meetingType === 'r2'
+        ? ['No-Show R2', 'No-Show Closer', 'NO-SHOW R2', 'No-show R2']
+        : ['No-Show', 'NO-SHOW', 'No-show', 'NoShow'],
       'rescheduled': meetingType === 'r2'
         ? ['Reunião 02 Agendada', 'Reunião 2 Agendada', 'R2 Agendada', 'REUNIÃO 2 AGENDADA']
         : ['Reunião 01 Agendada', 'Reunião 1 Agendada', 'R1 Agendada', 'REUNIÃO 1 AGENDADA'],
@@ -1390,9 +1393,11 @@ async function syncDealStageFromAgenda(
     }
 
     // 4. Determine if we should transfer ownership
-    // Transfer ownership to closer when: completed or contract_paid
+    // Transfer ownership to closer when: completed, contract_paid, or R2 no_show
+    // R2 no-shows stay with closer so Yanca (coordinator) can reschedule them
     const ownershipTransferStatuses = ['completed', 'contract_paid'];
-    const shouldTransferOwnership = ownershipTransferStatuses.includes(agendaStatus) && closerEmail;
+    const isR2NoShow = meetingType === 'r2' && agendaStatus === 'no_show';
+    const shouldTransferOwnership = (ownershipTransferStatuses.includes(agendaStatus) || isR2NoShow) && closerEmail;
 
     // 5. Skip if already in target stage AND no ownership transfer needed
     if (deal.stage_id === targetStage.id && !shouldTransferOwnership) return;
