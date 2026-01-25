@@ -1144,17 +1144,20 @@ export function AgendaCalendar({
                             isSlotAvailable(day, hour, minute) && !isOccupied && groupedSlots.length === 0 && 'bg-white/80 dark:bg-white/5'
                           )}
                         >
-                          {/* Available slot indicators - one button per available closer */}
+                          {/* Available slot indicators - one button per available closer, positioned in columns */}
                           {!isOccupied && groupedSlots.length === 0 && onSelectSlot && (() => {
                             const availableClosers = getAvailableClosersForSlot(day, hour, minute);
                             if (availableClosers.length === 0) return null;
                             
                             return (
-                              <div className="absolute inset-0.5 flex flex-wrap gap-0.5 p-0.5 overflow-hidden">
+                              <>
                                 {availableClosers.map(closerId => {
                                   const closer = closers.find(c => c.id === closerId);
                                   const closerColor = getCloserColor(closerId, closer?.name);
                                   const firstName = closer?.name?.split(' ')[0] || 'Closer';
+                                  
+                                  // Use the SAME column positioning logic as meeting cards
+                                  const { widthPercent, leftPercent, totalClosers, isCompact } = getCloserColumnPosition(day, closerId);
                                   
                                   return (
                                     <button
@@ -1163,19 +1166,26 @@ export function AgendaCalendar({
                                         e.stopPropagation();
                                         onSelectSlot(day, hour, minute, closerId);
                                       }}
-                                      className="flex-1 min-w-[45%] rounded text-[9px] font-medium flex items-center justify-center gap-0.5 border border-dashed hover:opacity-80 transition-all"
+                                      className={cn(
+                                        "absolute rounded font-medium flex items-center justify-center gap-0.5 border border-dashed hover:opacity-80 transition-all z-[5]",
+                                        isCompact ? "text-[8px]" : "text-[9px]"
+                                      )}
                                       style={{ 
                                         backgroundColor: `${closerColor}15`,
                                         borderColor: closerColor,
-                                        color: closerColor
+                                        color: closerColor,
+                                        top: '2px',
+                                        bottom: '2px',
+                                        left: totalClosers > 1 ? `calc(${leftPercent}% + 2px)` : '2px',
+                                        right: totalClosers > 1 ? `calc(${100 - leftPercent - widthPercent}% + 2px)` : '2px'
                                       }}
                                     >
-                                      <Plus className="h-3 w-3" />
-                                      {firstName}
+                                      <Plus className={cn(isCompact ? "h-2.5 w-2.5" : "h-3 w-3")} />
+                                      {isCompact ? firstName.charAt(0) : firstName}
                                     </button>
                                   );
                                 })}
-                              </div>
+                              </>
                             );
                           })()}
                           {groupedSlots.map((group, groupIndex) => {
@@ -1265,23 +1275,25 @@ export function AgendaCalendar({
                                             ...dragProvided.draggableProps.style,
                                           }}
                                         >
-                                          {/* Compact layout for 3+ closers: single line with essential info */}
+                                          {/* Compact layout for 3+ closers: closer name + time + lead + count */}
                                           {isCompact ? (
-                                            <div className="flex items-center gap-1 truncate h-full">
+                                            <div className="flex items-center gap-1 truncate h-full px-1">
                                               <div
                                                 className="w-2 h-2 rounded-full flex-shrink-0"
                                                 style={{ backgroundColor: closerColor }}
                                               />
-                                              <span className="font-semibold truncate">
+                                              <span className="font-semibold text-[10px] flex-shrink-0">
                                                 {format(parseISO(firstMeeting.scheduled_at), 'HH:mm')}
                                               </span>
-                                              <span className="truncate">
+                                              <span className="text-[9px] truncate flex-1">
                                                 {displayAttendees[0] 
                                                   ? (displayAttendees[0].attendee_name || displayAttendees[0].contact?.name || 'Lead').split(' ')[0]
                                                   : 'Lead'}
                                               </span>
-                                              {allAttendees.length > 1 && (
-                                                <span className="text-muted-foreground">+{allAttendees.length - 1}</span>
+                                              {allAttendees.length > 0 && (
+                                                <span className="text-[8px] font-bold text-muted-foreground bg-muted/50 rounded px-0.5 flex-shrink-0">
+                                                  {allAttendees.length}
+                                                </span>
                                               )}
                                             </div>
                                           ) : (
