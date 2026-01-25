@@ -437,7 +437,7 @@ export function AgendaCalendar({
       });
       
       return !hasMeeting;
-    });
+    }).sort();  // Garantir ordem alfabética consistente
   }, [meetingLinkSlots, r2DailySlotsMap, meetingType, filteredMeetings]);
 
   const getMeetingsForDay = (day: Date) => {
@@ -510,8 +510,8 @@ export function AgendaCalendar({
     return allClosers;
   }, [getMeetingClosersForSlot, getAvailableClosersForSlot]);
 
-  // Calculate column position based on closers in THIS SPECIFIC SLOT
-  // (not the entire day - this prevents empty columns and misalignment)
+  // Calculate column position with FIXED ordering based on all day closers
+  // This ensures consistent horizontal alignment across all time slots
   const getSlotColumnPosition = useCallback((
     day: Date, 
     hour: number, 
@@ -522,21 +522,38 @@ export function AgendaCalendar({
       return { widthPercent: 100, leftPercent: 0, totalClosers: 1, isCompact: false, stackIndex: 0 };
     }
     
-    // Get only the closers that are present in THIS specific slot
-    const slotClosers = getAllClosersForSlot(day, hour, minute);
-    const totalClosers = slotClosers.length || 1;
-    const columnIndex = slotClosers.indexOf(closerId);
+    // Use ALL closers configured for the day as fixed reference for column order
+    const allDayClosers = getAllConfiguredClosersForDay(day);
+    const totalDayClosers = allDayClosers.length || 1;
     
-    const isCompact = totalClosers >= 3;
+    // Global column index based on day-wide position (fixed)
+    const globalColumnIndex = allDayClosers.indexOf(closerId);
+    
+    // Get closers present in this specific slot for width calculation
+    const slotClosers = getAllClosersForSlot(day, hour, minute);
+    const totalSlotClosers = slotClosers.length || 1;
+    
+    const isCompact = totalDayClosers >= 3;
+    
+    // Count how many closers BEFORE this one are present in the slot
+    // This determines the actual position while maintaining relative order
+    const closersBeforeInSlot = allDayClosers
+      .slice(0, globalColumnIndex)
+      .filter(id => slotClosers.includes(id))
+      .length;
+    
+    // Width is based on slot closers, position is based on relative order
+    const widthPercent = 100 / totalSlotClosers;
+    const leftPercent = closersBeforeInSlot * widthPercent;
     
     return {
-      widthPercent: 100 / totalClosers,
-      leftPercent: columnIndex >= 0 ? (columnIndex * 100 / totalClosers) : 0,
-      totalClosers,
+      widthPercent,
+      leftPercent,
+      totalClosers: totalSlotClosers,
       isCompact,
-      stackIndex: columnIndex
+      stackIndex: closersBeforeInSlot
     };
-  }, [getAllClosersForSlot]);
+  }, [getAllClosersForSlot, getAllConfiguredClosersForDay]);
 
   // Legacy function - keep for backwards compatibility but prefer getSlotColumnPosition
   const getCloserColumnPosition = useCallback((day: Date, closerId: string | undefined, hour?: number, minute?: number) => {
