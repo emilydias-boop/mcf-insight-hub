@@ -27,6 +27,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { PipelineStagesEditor } from './PipelineStagesEditor';
+import { LeadDistributionConfig } from './LeadDistributionConfig';
 
 interface PipelineConfigModalProps {
   open: boolean;
@@ -183,15 +184,23 @@ export const PipelineConfigModal = ({
         );
 
       case 'distribution':
+        if (targetType !== 'origin') {
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                A distribuição de leads só está disponível para origins específicas, não para grupos/pipelines.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Selecione uma origin no menu lateral para configurar a distribuição.
+              </p>
+            </div>
+          );
+        }
         return (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Configure como os leads são distribuídos entre os responsáveis.
-            </p>
-            <p className="text-sm text-muted-foreground italic">
-              Em desenvolvimento...
-            </p>
-          </div>
+          <LeadDistributionConfig 
+            originId={targetId}
+            originName={displayName}
+          />
         );
 
       case 'permissions':
