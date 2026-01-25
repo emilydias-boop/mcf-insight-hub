@@ -6683,6 +6683,81 @@ export type Database = {
           },
         ]
       }
+      webhook_endpoints: {
+        Row: {
+          auth_header_name: string | null
+          auth_header_value: string | null
+          auto_tags: string[] | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          field_mapping: Json | null
+          id: string
+          is_active: boolean | null
+          last_lead_at: string | null
+          leads_received: number | null
+          name: string
+          origin_id: string | null
+          required_fields: string[] | null
+          slug: string
+          stage_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auth_header_name?: string | null
+          auth_header_value?: string | null
+          auto_tags?: string[] | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          field_mapping?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_lead_at?: string | null
+          leads_received?: number | null
+          name: string
+          origin_id?: string | null
+          required_fields?: string[] | null
+          slug: string
+          stage_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auth_header_name?: string | null
+          auth_header_value?: string | null
+          auto_tags?: string[] | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          field_mapping?: Json | null
+          id?: string
+          is_active?: boolean | null
+          last_lead_at?: string | null
+          leads_received?: number | null
+          name?: string
+          origin_id?: string | null
+          required_fields?: string[] | null
+          slug?: string
+          stage_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_endpoints_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_endpoints_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_events: {
         Row: {
           created_at: string

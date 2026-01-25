@@ -27,6 +27,7 @@ import {
   Radio,
   FileText,
   Code,
+  Download,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,6 +35,7 @@ import { toast } from 'sonner';
 import { PipelineStagesEditor } from './PipelineStagesEditor';
 import { LeadDistributionConfig } from './LeadDistributionConfig';
 import { WebhookConfigEditor } from './webhooks/WebhookConfigEditor';
+import { IncomingWebhookEditor } from './webhooks/IncomingWebhookEditor';
 
 interface PipelineConfigModalProps {
   open: boolean;
@@ -53,7 +55,7 @@ type GeneralSection =
 
 type StagesSection = 'kanban-stages' | 'activities' | 'automations';
 
-type IntegrationSection = 'webhooks' | 'leads-live' | 'leads-forms' | 'leads-api';
+type IntegrationSection = 'webhooks' | 'incoming-webhooks' | 'leads-live' | 'leads-forms' | 'leads-api';
 
 const generalSections = [
   { id: 'settings' as const, label: 'Configurações Gerais', icon: Settings },
@@ -72,7 +74,8 @@ const stagesSections = [
 ];
 
 const integrationSections = [
-  { id: 'webhooks' as const, label: 'Webhooks', icon: Webhook },
+  { id: 'webhooks' as const, label: 'Webhooks de Saída', icon: Webhook },
+  { id: 'incoming-webhooks' as const, label: 'Webhooks de Entrada', icon: Download },
   { id: 'leads-live' as const, label: 'Leads Live', icon: Radio },
   { id: 'leads-forms' as const, label: 'Leads Forms', icon: FileText },
   { id: 'leads-api' as const, label: 'API Externa', icon: Code },
@@ -429,6 +432,10 @@ export const PipelineConfigModal = ({
                 
                 {activeIntegrationSection === 'webhooks' && (
                   <WebhookConfigEditor originId={targetId} />
+                )}
+
+                {activeIntegrationSection === 'incoming-webhooks' && (
+                  <IncomingWebhookEditor originId={targetId} />
                 )}
                 
                 {activeIntegrationSection === 'leads-live' && (
