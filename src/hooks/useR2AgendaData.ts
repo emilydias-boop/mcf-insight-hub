@@ -34,7 +34,7 @@ export function useUpdateR2MeetingStatus() {
 
       if (error) throw error;
 
-      // 2. Fetch deal_id from first attendee for CRM sync
+      // 2. Fetch deal_id and closer email for CRM sync
       const { data: attendees } = await supabase
         .from('meeting_slot_attendees')
         .select('deal_id')
@@ -44,10 +44,19 @@ export function useUpdateR2MeetingStatus() {
 
       const dealId = attendees?.[0]?.deal_id;
 
-      // 3. Sync with CRM if deal is linked
+      // 3. Fetch closer email for ownership transfer
+      const { data: meeting } = await supabase
+        .from('meeting_slots')
+        .select('closer:closers(email)')
+        .eq('id', meetingId)
+        .single();
+
+      const closerEmail = (meeting?.closer as { email?: string } | null)?.email;
+
+      // 4. Sync with CRM if deal is linked (R2 no-shows go to separate stage + keep with closer)
       const statusesToSync = ['no_show', 'completed', 'contract_paid', 'refunded'];
       if (dealId && statusesToSync.includes(status)) {
-        await syncDealStageFromAgenda(dealId, status, 'r2');
+        await syncDealStageFromAgenda(dealId, status, 'r2', closerEmail);
       }
     },
     onSuccess: () => {
