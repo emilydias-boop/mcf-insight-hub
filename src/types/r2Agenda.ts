@@ -46,6 +46,10 @@ export interface R2AttendeeExtended {
   deal?: {
     id: string;
     name: string;
+    origin_id?: string | null;
+    origin?: {
+      name: string;
+    } | null;
     custom_fields?: {
       profissao?: string;
       estado?: string;
@@ -56,6 +60,9 @@ export interface R2AttendeeExtended {
       tem_socio?: string;
       nome_socio?: string;
       possui_imovel?: string;
+      idade?: string;
+      tempo_conhece_mcf?: string;
+      ja_constroi?: string;
       [key: string]: unknown;
     } | null;
     contact?: {
@@ -142,4 +149,44 @@ export const ATTENDANCE_STATUS_OPTIONS = [
 export const VIDEO_STATUS_OPTIONS = [
   { value: 'ok', label: 'Vídeo Ok' },
   { value: 'pendente', label: 'Pendente' },
+];
+
+// Tempo que conhece MCF options
+export const TEMPO_CONHECE_MCF_OPTIONS = [
+  { value: 'menos_1_mes', label: 'Menos de 1 mês' },
+  { value: '1_3_meses', label: '1 a 3 meses' },
+  { value: '3_6_meses', label: '3 a 6 meses' },
+  { value: '6_12_meses', label: '6 meses a 1 ano' },
+  { value: 'mais_1_ano', label: 'Mais de 1 ano' },
+];
+
+// Já constrói options
+export const JA_CONSTROI_OPTIONS = [
+  { value: 'sim', label: 'Sim, já construiu' },
+  { value: 'nao', label: 'Não' },
+  { value: 'pretende', label: 'Pretende começar' },
+];
+
+// Terreno options
+export const TERRENO_OPTIONS = [
+  { value: 'sim', label: 'Sim' },
+  { value: 'nao_pretende', label: 'Não, mas pretende comprar' },
+  { value: 'nao', label: 'Não e não pretende' },
+  { value: 'nao_informou', label: 'Não informou' },
+];
+
+// Imóvel options
+export const IMOVEL_OPTIONS = [
+  { value: 'sim', label: 'Sim' },
+  { value: 'nao', label: 'Não' },
+  { value: 'nao_informou', label: 'Não informou' },
+];
+
+// Renda options
+export const RENDA_OPTIONS = [
+  { value: 'ate_5000', label: 'Até R$ 5.000' },
+  { value: '5000_10000', label: 'R$ 5.000 a R$ 10.000' },
+  { value: '10000_20000', label: 'R$ 10.000 a R$ 20.000' },
+  { value: '20000_30000', label: 'R$ 20.000 a R$ 30.000' },
+  { value: 'mais_30000', label: '+R$ 30.000' },
 ];
