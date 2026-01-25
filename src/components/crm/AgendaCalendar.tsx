@@ -589,7 +589,7 @@ export function AgendaCalendar({
   // Calculate how many slots a meeting occupies
   // Each visual slot is 15 minutes
   const getSlotsNeeded = (durationMinutes: number) => {
-    return Math.ceil(durationMinutes / 15);
+    return Math.ceil(durationMinutes / 30);
   };
 
   // Handle drag and drop
@@ -1317,7 +1317,7 @@ export function AgendaCalendar({
                                         meetingSdr: att.booked_by_profile?.full_name || m.booked_by_profile?.full_name 
                                       }))
                                     );
-                                    const displayAttendees = allAttendees.slice(0, isCompact ? 1 : 3);
+                                    const displayAttendees = allAttendees.slice(0, isCompact ? 4 : 4);
                                     const remaining = allAttendees.length - displayAttendees.length;
                                     
                                     return (
@@ -1374,31 +1374,28 @@ export function AgendaCalendar({
                                                 const remainingCount = allAttendees.length - maxToShow;
                                                 
                                                 return (
-                                                  <div className="space-y-0.5 flex-1 overflow-hidden">
+                                                  <div className="space-y-0 flex-1 overflow-hidden">
                                                     {displayAttendees.slice(0, maxToShow).map(att => (
-                                                      <div key={att.id} className="text-[9px] flex items-center gap-1 pr-0.5">
-                                                        {/* Sigla SDR (largura fixa) */}
-                                                        <span className="font-semibold w-5 flex-shrink-0 text-muted-foreground">
-                                                          {att.meetingSdr ? getInitials(att.meetingSdr) : '--'}
-                                                        </span>
-                                                        <span className="text-muted-foreground flex-shrink-0">•</span>
-                                                        
-                                                        {/* Nome do Lead (ocupa espaço disponível) */}
-                                                        <span className="truncate flex-1 text-left">
+                                                      <div key={att.id} className="text-[9px] truncate flex items-center gap-0.5">
+                                                        {att.meetingSdr && (
+                                                          <>
+                                                            <span className="text-muted-foreground font-semibold">
+                                                              {getInitials(att.meetingSdr)}
+                                                            </span>
+                                                            <span className="text-muted-foreground">•</span>
+                                                          </>
+                                                        )}
+                                                        <span className="truncate flex-1">
                                                           {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
-                                                        
-                                                        {/* Status (largura fixa, alinhado à direita) */}
-                                                        <span className={cn(
-                                                          "text-[9px] font-bold flex-shrink-0 w-6 text-right",
-                                                          att.status && ATTENDEE_STATUS_CONFIG[att.status] 
-                                                            ? ATTENDEE_STATUS_CONFIG[att.status].colorClass 
-                                                            : "text-muted-foreground"
-                                                        )}>
-                                                          {att.status && ATTENDEE_STATUS_CONFIG[att.status] 
-                                                            ? ATTENDEE_STATUS_CONFIG[att.status].shortLabel 
-                                                            : '--'}
-                                                        </span>
+                                                        {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
+                                                          <span className={cn(
+                                                            "text-[8px] font-bold",
+                                                            ATTENDEE_STATUS_CONFIG[att.status].colorClass
+                                                          )}>
+                                                            {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
+                                                          </span>
+                                                        )}
                                                       </div>
                                                     ))}
                                                     {remainingCount > 0 && (
