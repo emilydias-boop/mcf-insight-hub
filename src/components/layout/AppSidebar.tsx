@@ -276,6 +276,7 @@ const menuItems: MenuItem[] = [
     items: [
       { title: "Usuários", url: "/usuarios", requiredRoles: ["admin"] },
       { title: "Closers", url: "/crm/configurar-closers", requiredRoles: ["admin"] },
+      { title: "Automações", url: "/admin/automacoes", requiredRoles: ["admin"] },
       { title: "Permissões", url: "/admin/permissoes", requiredRoles: ["admin"] },
       { title: "Produtos", url: "/admin/produtos", requiredRoles: ["admin"] },
       { title: "Distribuição Leads", url: "/admin/distribuicao-leads" },
