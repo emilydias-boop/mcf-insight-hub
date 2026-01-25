@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import {
   Settings,
@@ -281,69 +280,89 @@ export const PipelineConfigModal = ({
     }
   };
 
+  // Render sidebar menu
+  const renderSidebarMenu = (
+    sections: Array<{ id: string; label: string; icon: React.ComponentType<{ className?: string }> }>,
+    activeId: string,
+    onSelect: (id: string) => void
+  ) => (
+    <div className="p-2 space-y-1">
+      {sections.map((section) => {
+        const Icon = section.icon;
+        return (
+          <Button
+            key={section.id}
+            variant="ghost"
+            className={cn(
+              'w-full justify-start gap-2 text-sm',
+              activeId === section.id && 'bg-muted'
+            )}
+            onClick={() => onSelect(section.id)}
+          >
+            <Icon className="h-4 w-4" />
+            {section.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Layers className="h-5 w-5" />
-            Configurar: {displayName}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-4xl h-[80vh] p-0 overflow-hidden">
+        {/* Inner wrapper to control layout (avoids grid/flex conflict with Radix) */}
+        <div className="flex flex-col h-full">
+          {/* Fixed header */}
+          <DialogHeader className="px-6 py-4 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Configurar: {displayName}
+            </DialogTitle>
+          </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col overflow-hidden">
-          <div className="border-b px-6 flex-shrink-0">
-            <TabsList className="h-12 bg-transparent p-0 gap-4">
-              <TabsTrigger
-                value="general"
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-3"
-              >
-                Geral
-              </TabsTrigger>
-              <TabsTrigger
-                value="stages"
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-3"
-              >
-                Etapas e atividades
-              </TabsTrigger>
-              <TabsTrigger
-                value="integrations"
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-3"
-              >
-                Integrações
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="general" className="m-0 flex-1 flex overflow-hidden">
-            {/* Left menu */}
-            <div className="w-56 border-r bg-muted/30 flex-shrink-0">
-              <ScrollArea className="h-full">
-                <div className="p-2 space-y-1">
-                  {generalSections.map((section) => {
-                    const Icon = section.icon;
-                    return (
-                      <Button
-                        key={section.id}
-                        variant="ghost"
-                        className={cn(
-                          'w-full justify-start gap-2 text-sm',
-                          activeSection === section.id && 'bg-muted'
-                        )}
-                        onClick={() => setActiveSection(section.id)}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {section.label}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+          {/* Tabs container */}
+          <Tabs 
+            value={activeTab} 
+            onValueChange={(v) => setActiveTab(v as typeof activeTab)} 
+            className="flex flex-col flex-1 min-h-0"
+          >
+            {/* Fixed tab list */}
+            <div className="border-b px-6 shrink-0">
+              <TabsList className="h-12 bg-transparent p-0 gap-4">
+                <TabsTrigger
+                  value="general"
+                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-3"
+                >
+                  Geral
+                </TabsTrigger>
+                <TabsTrigger
+                  value="stages"
+                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-3"
+                >
+                  Etapas e atividades
+                </TabsTrigger>
+                <TabsTrigger
+                  value="integrations"
+                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-0 pb-3"
+                >
+                  Integrações
+                </TabsTrigger>
+              </TabsList>
             </div>
 
-            {/* Right content */}
-            <div className="flex-1 overflow-auto">
-              <div className="p-6">
+            {/* General Tab */}
+            <TabsContent value="general" className="flex-1 flex min-h-0 mt-0 data-[state=inactive]:hidden">
+              {/* Left sidebar - scrollable */}
+              <div className="w-56 border-r bg-muted/30 shrink-0 overflow-y-auto">
+                {renderSidebarMenu(
+                  generalSections,
+                  activeSection,
+                  (id) => setActiveSection(id as GeneralSection)
+                )}
+              </div>
+
+              {/* Right content - scrollable */}
+              <div className="flex-1 overflow-y-auto p-6">
                 <h3 className="font-medium mb-4">
                   {generalSections.find((s) => s.id === activeSection)?.label}
                 </h3>
@@ -353,38 +372,21 @@ export const PipelineConfigModal = ({
                   renderGeneralContent()
                 )}
               </div>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="stages" className="m-0 flex-1 flex overflow-hidden">
-            {/* Left menu */}
-            <div className="w-56 border-r bg-muted/30 flex-shrink-0">
-              <ScrollArea className="h-full">
-                <div className="p-2 space-y-1">
-                  {stagesSections.map((section) => {
-                    const Icon = section.icon;
-                    return (
-                      <Button
-                        key={section.id}
-                        variant="ghost"
-                        className={cn(
-                          'w-full justify-start gap-2 text-sm',
-                          activeStagesSection === section.id && 'bg-muted'
-                        )}
-                        onClick={() => setActiveStagesSection(section.id)}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {section.label}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </div>
+            {/* Stages Tab */}
+            <TabsContent value="stages" className="flex-1 flex min-h-0 mt-0 data-[state=inactive]:hidden">
+              {/* Left sidebar - scrollable */}
+              <div className="w-56 border-r bg-muted/30 shrink-0 overflow-y-auto">
+                {renderSidebarMenu(
+                  stagesSections,
+                  activeStagesSection,
+                  (id) => setActiveStagesSection(id as StagesSection)
+                )}
+              </div>
 
-            {/* Right content */}
-            <div className="flex-1 overflow-auto">
-              <div className="p-6">
+              {/* Right content - scrollable */}
+              <div className="flex-1 overflow-y-auto p-6">
                 <h3 className="font-medium mb-4">
                   {stagesSections.find((s) => s.id === activeStagesSection)?.label}
                 </h3>
@@ -405,38 +407,21 @@ export const PipelineConfigModal = ({
                   </p>
                 )}
               </div>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="integrations" className="m-0 flex-1 flex overflow-hidden">
-            {/* Left menu */}
-            <div className="w-56 border-r bg-muted/30 flex-shrink-0">
-              <ScrollArea className="h-full">
-                <div className="p-2 space-y-1">
-                  {integrationSections.map((section) => {
-                    const Icon = section.icon;
-                    return (
-                      <Button
-                        key={section.id}
-                        variant="ghost"
-                        className={cn(
-                          'w-full justify-start gap-2 text-sm',
-                          activeIntegrationSection === section.id && 'bg-muted'
-                        )}
-                        onClick={() => setActiveIntegrationSection(section.id)}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {section.label}
-                      </Button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </div>
+            {/* Integrations Tab */}
+            <TabsContent value="integrations" className="flex-1 flex min-h-0 mt-0 data-[state=inactive]:hidden">
+              {/* Left sidebar - scrollable */}
+              <div className="w-56 border-r bg-muted/30 shrink-0 overflow-y-auto">
+                {renderSidebarMenu(
+                  integrationSections,
+                  activeIntegrationSection,
+                  (id) => setActiveIntegrationSection(id as IntegrationSection)
+                )}
+              </div>
 
-            {/* Right content */}
-            <div className="flex-1 overflow-auto">
-              <div className="p-6">
+              {/* Right content - scrollable */}
+              <div className="flex-1 overflow-y-auto p-6">
                 <h3 className="font-medium mb-4">
                   {integrationSections.find((s) => s.id === activeIntegrationSection)?.label}
                 </h3>
@@ -502,9 +487,9 @@ export const PipelineConfigModal = ({
                   </p>
                 )}
               </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
