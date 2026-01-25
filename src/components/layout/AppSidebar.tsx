@@ -27,6 +27,7 @@ import {
   Users2,
   ShoppingCart,
   Crown,
+  CheckSquare,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -221,6 +222,14 @@ const menuItems: MenuItem[] = [
     resource: "rh" as any,
     requiredRoles: ["admin", "rh"],
     items: [{ title: "Colaboradores", url: "/rh/colaboradores" }],
+  },
+
+  // TAREFAS
+  {
+    title: "Tarefas",
+    url: "/tarefas",
+    icon: CheckSquare,
+    requiredRoles: ["admin", "manager", "coordenador"],
   },
 
   // ===== ITENS AVULSOS PARA SDR/CLOSER =====
