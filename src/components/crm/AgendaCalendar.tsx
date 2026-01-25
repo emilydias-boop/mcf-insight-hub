@@ -1364,34 +1364,45 @@ export function AgendaCalendar({
                                                 </span>
                                               </div>
                                               {/* Lista de participantes: Sigla SDR • Nome Lead Status */}
-                                              <div className="space-y-0 flex-1 overflow-hidden">
-                                                {displayAttendees.slice(0, 2).map(att => (
-                                                  <div key={att.id} className="text-[9px] truncate flex items-center gap-0.5">
-                                                    {att.meetingSdr && (
-                                                      <>
-                                                        <span className="text-muted-foreground font-semibold">
-                                                          {getInitials(att.meetingSdr)}
+                                              {/* Calcular quantos participantes cabem baseado na altura do card */}
+                                              {(() => {
+                                                const headerHeight = 16;
+                                                const participantHeight = 11;
+                                                const availableHeight = cardHeight - headerHeight - 2;
+                                                const maxToShow = Math.max(2, Math.min(displayAttendees.length, Math.floor(availableHeight / participantHeight)));
+                                                const remainingCount = allAttendees.length - maxToShow;
+                                                
+                                                return (
+                                                  <div className="space-y-0 flex-1 overflow-hidden">
+                                                    {displayAttendees.slice(0, maxToShow).map(att => (
+                                                      <div key={att.id} className="text-[9px] truncate flex items-center gap-0.5">
+                                                        {att.meetingSdr && (
+                                                          <>
+                                                            <span className="text-muted-foreground font-semibold">
+                                                              {getInitials(att.meetingSdr)}
+                                                            </span>
+                                                            <span className="text-muted-foreground">•</span>
+                                                          </>
+                                                        )}
+                                                        <span className="truncate flex-1">
+                                                          {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
                                                         </span>
-                                                        <span className="text-muted-foreground">•</span>
-                                                      </>
-                                                    )}
-                                                    <span className="truncate flex-1">
-                                                      {(att.attendee_name || att.contact?.name || 'Lead').split(' ')[0]}
-                                                    </span>
-                                                    {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
-                                                      <span className={cn(
-                                                        "text-[8px] font-bold",
-                                                        ATTENDEE_STATUS_CONFIG[att.status].colorClass
-                                                      )}>
-                                                        {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
-                                                      </span>
+                                                        {att.status && ATTENDEE_STATUS_CONFIG[att.status] && (
+                                                          <span className={cn(
+                                                            "text-[8px] font-bold",
+                                                            ATTENDEE_STATUS_CONFIG[att.status].colorClass
+                                                          )}>
+                                                            {ATTENDEE_STATUS_CONFIG[att.status].shortLabel}
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                    {remainingCount > 0 && (
+                                                      <span className="text-[8px] text-muted-foreground">+{remainingCount}</span>
                                                     )}
                                                   </div>
-                                                ))}
-                                                {remaining > 0 && (
-                                                  <span className="text-[8px] text-muted-foreground">+{remaining}</span>
-                                                )}
-                                              </div>
+                                                );
+                                              })()}
                                             </div>
                                           ) : (
                                             <>
