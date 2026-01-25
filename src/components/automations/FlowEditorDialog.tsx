@@ -195,15 +195,15 @@ export function FlowEditorDialog({ flowId, open, onOpenChange }: FlowEditorDialo
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Pipeline (Origem)</Label>
-                      <Select value={originId} onValueChange={(val) => {
-                        setOriginId(val);
+                      <Select value={originId || "__all__"} onValueChange={(val) => {
+                        setOriginId(val === "__all__" ? "" : val);
                         setStageId(""); // Reset stage when origin changes
                       }}>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione o pipeline" />
                         </SelectTrigger>
                         <SelectContent className="bg-popover z-50">
-                          <SelectItem value="">Todos os pipelines</SelectItem>
+                          <SelectItem value="__all__">Todos os pipelines</SelectItem>
                           {flatOrigins.map((origin) => (
                             <SelectItem key={origin.id} value={origin.id}>
                               {origin.name}
