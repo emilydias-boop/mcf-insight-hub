@@ -358,7 +358,8 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
       if (filters.stageId) query = query.eq('stage_id', filters.stageId);
       if (filters.contactId) query = query.eq('contact_id', filters.contactId);
       if (filters.ownerId) query = query.eq('owner_id', filters.ownerId);
-      if (filters.searchTerm) query = query.ilike('name', `%${filters.searchTerm}%`);
+      // Note: searchTerm filtering is done on the frontend (Negocios.tsx)
+      // to search across deal.name, contact.name, email, and phone
       
       const { data, error } = await query;
       
