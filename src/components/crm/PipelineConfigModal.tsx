@@ -283,16 +283,16 @@ export const PipelineConfigModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b">
+      <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5" />
             Configurar: {displayName}
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1">
-          <div className="border-b px-6">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col overflow-hidden">
+          <div className="border-b px-6 flex-shrink-0">
             <TabsList className="h-12 bg-transparent p-0 gap-4">
               <TabsTrigger
                 value="general"
@@ -315,9 +315,9 @@ export const PipelineConfigModal = ({
             </TabsList>
           </div>
 
-          <TabsContent value="general" className="m-0 flex h-[500px]">
+          <TabsContent value="general" className="m-0 flex-1 flex overflow-hidden">
             {/* Left menu */}
-            <div className="w-56 border-r bg-muted/30">
+            <div className="w-56 border-r bg-muted/30 flex-shrink-0">
               <ScrollArea className="h-full">
                 <div className="p-2 space-y-1">
                   {generalSections.map((section) => {
@@ -342,7 +342,7 @@ export const PipelineConfigModal = ({
             </div>
 
             {/* Right content */}
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-auto">
               <div className="p-6">
                 <h3 className="font-medium mb-4">
                   {generalSections.find((s) => s.id === activeSection)?.label}
@@ -353,12 +353,12 @@ export const PipelineConfigModal = ({
                   renderGeneralContent()
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </TabsContent>
 
-          <TabsContent value="stages" className="m-0 flex h-[500px]">
+          <TabsContent value="stages" className="m-0 flex-1 flex overflow-hidden">
             {/* Left menu */}
-            <div className="w-56 border-r bg-muted/30">
+            <div className="w-56 border-r bg-muted/30 flex-shrink-0">
               <ScrollArea className="h-full">
                 <div className="p-2 space-y-1">
                   {stagesSections.map((section) => {
@@ -383,7 +383,7 @@ export const PipelineConfigModal = ({
             </div>
 
             {/* Right content */}
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-auto">
               <div className="p-6">
                 <h3 className="font-medium mb-4">
                   {stagesSections.find((s) => s.id === activeStagesSection)?.label}
@@ -405,12 +405,12 @@ export const PipelineConfigModal = ({
                   </p>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </TabsContent>
 
-          <TabsContent value="integrations" className="m-0 flex h-[500px]">
+          <TabsContent value="integrations" className="m-0 flex-1 flex overflow-hidden">
             {/* Left menu */}
-            <div className="w-56 border-r bg-muted/30">
+            <div className="w-56 border-r bg-muted/30 flex-shrink-0">
               <ScrollArea className="h-full">
                 <div className="p-2 space-y-1">
                   {integrationSections.map((section) => {
@@ -435,7 +435,7 @@ export const PipelineConfigModal = ({
             </div>
 
             {/* Right content */}
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-auto">
               <div className="p-6">
                 <h3 className="font-medium mb-4">
                   {integrationSections.find((s) => s.id === activeIntegrationSection)?.label}
@@ -502,7 +502,7 @@ export const PipelineConfigModal = ({
                   </p>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
