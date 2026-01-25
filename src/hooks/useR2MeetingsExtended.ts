@@ -77,6 +77,35 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
         .select('*')
         .eq('is_active', true);
 
+      // Collect contact emails/phones to check for A010 purchases
+      const contactEmails: string[] = [];
+      const contactPhones: string[] = [];
+      (meetings || []).forEach(m => {
+        const attendeesArr = ((m as Record<string, unknown>).attendees || []) as Array<Record<string, unknown>>;
+        attendeesArr.forEach(att => {
+          const deal = att.deal as { contact?: { email?: string; phone?: string } } | null;
+          if (deal?.contact?.email) contactEmails.push(deal.contact.email.toLowerCase());
+          if (deal?.contact?.phone) contactPhones.push(deal.contact.phone);
+        });
+      });
+
+      // Fetch A010 confirmed purchases from hubla_transactions
+      let a010Emails = new Set<string>();
+      let a010Phones = new Set<string>();
+      
+      if (contactEmails.length > 0 || contactPhones.length > 0) {
+        const { data: a010Sales } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email, customer_phone')
+          .ilike('product_name', '%A010%')
+          .in('sale_status', ['paid', 'completed']);
+        
+        if (a010Sales) {
+          a010Emails = new Set(a010Sales.map(t => t.customer_email?.toLowerCase()).filter(Boolean) as string[]);
+          a010Phones = new Set(a010Sales.map(t => t.customer_phone).filter(Boolean) as string[]);
+        }
+      }
+
       const statusMap = (statusOptions || []).reduce((acc, s) => {
         acc[s.id] = s as R2StatusOption;
         return acc;
@@ -204,6 +233,14 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
           const thermIds = (att.thermometer_ids as string[]) || [];
           const statusId = att.r2_status_id as string | null;
           const attDealId = att.deal_id as string | null;
+          const deal = att.deal as { contact?: { email?: string; phone?: string } } | null;
+          
+          // Check if contact has A010 purchase
+          const contactEmail = deal?.contact?.email?.toLowerCase();
+          const contactPhone = deal?.contact?.phone;
+          const isA010 = 
+            (contactEmail && a010Emails.has(contactEmail)) ||
+            (contactPhone && a010Phones.has(contactPhone));
           
           return {
             ...att,
@@ -218,6 +255,8 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
               .filter(Boolean),
             // R1 qualification note from SDR
             r1_qualification_note: attDealId ? r1NotesMap[attDealId] || null : null,
+            // Sales channel based on A010 purchase
+            sales_channel: isA010 ? 'A010' : 'LIVE',
           };
         }),
         };

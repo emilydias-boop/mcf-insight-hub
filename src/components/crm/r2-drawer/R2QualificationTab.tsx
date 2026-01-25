@@ -57,13 +57,8 @@ export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
     setLocalTempoMcf(cf.tempo_conhece_mcf || '');
   }, [attendee.id, attendee.deal?.custom_fields]);
 
-  // Determine sales channel from origin
-  const originName = attendee.deal?.origin?.name || '';
-  const salesChannel = originName.toUpperCase().includes('A010') 
-    ? 'A010' 
-    : originName.toUpperCase().includes('LIVE') 
-      ? 'LIVE' 
-      : originName || 'N/A';
+  // Use pre-calculated sales channel from hook
+  const salesChannel = attendee.sales_channel;
   
   const handleFieldUpdate = (field: string, value: string, setLocal: (v: string) => void) => {
     if (!dealId) {
@@ -99,9 +94,7 @@ export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
           className={
             salesChannel === 'A010' 
               ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950' 
-              : salesChannel === 'LIVE'
-                ? 'border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950'
-                : 'border-muted'
+              : 'border-purple-500 text-purple-600 bg-purple-50 dark:bg-purple-950'
           }
         >
           {salesChannel}

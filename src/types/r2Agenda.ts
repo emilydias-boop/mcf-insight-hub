@@ -42,6 +42,8 @@ export interface R2AttendeeExtended {
   updated_at: string | null;
   // R1 qualification note from SDR
   r1_qualification_note: string | null;
+  // Sales channel (calculated from hubla_transactions)
+  sales_channel: 'A010' | 'LIVE';
   // Decision maker fields
   is_decision_maker: boolean | null;
   decision_maker_type: string | null;
