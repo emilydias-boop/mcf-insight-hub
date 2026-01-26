@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { PostgrestSingleResponse } from '@supabase/supabase-js';
 
+type A010QueryResult = PostgrestSingleResponse<{ customer_email: string | null }[]>;
 export type SalesChannel = 'a010' | 'bio' | 'live';
 
 interface DealChannelInfo {
@@ -53,6 +55,7 @@ export function detectSalesChannel(
  * Retorna um Map<email, isA010> para compatibilidade retroativa
  */
 const CHUNK_SIZE = 200;
+const MAX_CONCURRENT_REQUESTS = 5;
 
 /**
  * Divide array em chunks menores
@@ -63,6 +66,27 @@ function chunkArray<T>(array: T[], size: number): T[][] {
     chunks.push(array.slice(i, i + size));
   }
   return chunks;
+}
+
+/**
+ * Processa items em lotes controlados para evitar exceder limite de conexões do navegador
+ */
+async function processInBatches<T, R>(
+  items: T[],
+  batchSize: number,
+  processor: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = [];
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.allSettled(
+      batch.map(item => processor(item))
+    );
+    results.push(...batchResults);
+  }
+  
+  return results;
 }
 
 /**
@@ -86,16 +110,16 @@ export const useBulkA010Check = (emails: string[]) => {
       
       console.log(`[useBulkA010Check] Buscando A010 status para ${cleanEmails.length} emails em ${emailChunks.length} chunks`);
       
-      // Buscar cada chunk em paralelo
-      const results = await Promise.allSettled(
-        emailChunks.map(chunk => 
-          supabase
-            .from('hubla_transactions')
-            .select('customer_email')
-            .eq('product_category', 'a010')
-            .eq('sale_status', 'completed')
-            .in('customer_email', chunk)
-        )
+      // Buscar cada chunk com controle de concorrência (máximo 5 por vez)
+      const results = await processInBatches<string[], A010QueryResult>(
+        emailChunks,
+        MAX_CONCURRENT_REQUESTS,
+        async (chunk) => supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .eq('product_category', 'a010')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
       );
       
       // Combinar resultados de todos os chunks
@@ -158,16 +182,16 @@ export const useBulkChannelCheck = (
       
       console.log(`[useBulkChannelCheck] Buscando A010 status para ${cleanEmails.length} emails em ${emailChunks.length} chunks`);
       
-      // Buscar cada chunk em paralelo
-      const results = await Promise.allSettled(
-        emailChunks.map(chunk => 
-          supabase
-            .from('hubla_transactions')
-            .select('customer_email')
-            .eq('product_category', 'a010')
-            .eq('sale_status', 'completed')
-            .in('customer_email', chunk)
-        )
+      // Buscar cada chunk com controle de concorrência (máximo 5 por vez)
+      const results = await processInBatches<string[], A010QueryResult>(
+        emailChunks,
+        MAX_CONCURRENT_REQUESTS,
+        async (chunk) => supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .eq('product_category', 'a010')
+          .eq('sale_status', 'completed')
+          .in('customer_email', chunk)
       );
       
       // Combinar resultados de todos os chunks
