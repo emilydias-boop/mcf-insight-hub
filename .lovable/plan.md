@@ -1,55 +1,114 @@
 
-# Plano Implementado: Classificação de Canal de Leads (Bio Instagram vs LIVE)
+# Plano: Corrigir Classificação de Leads (Query com Chunks)
 
-## ✅ Status: Concluído
+## Problema Identificado
 
-## Mudanças Realizadas
+A query do hook `useBulkA010Check` está **falhando** quando há muitos deals:
 
-### 1. Webhook Clint - Parsing de Tags
-**Arquivo**: `supabase/functions/clint-webhook-handler/index.ts`
-- Adicionada função `parseClintTags()` para converter strings como `[A010 - Construa para Vender BIO - Instagram]` em arrays
-- Adicionada função `extractTagsFromClintPayload()` para extrair tags de múltiplas fontes
-- Atualizado `handleContactCreated()` para salvar tags parseadas
-- Atualizado `handleDealCreated()` para salvar tags parseadas nos deals
+```
+Erro ao buscar A010 status: TypeError: Failed to fetch
+```
 
-### 2. Hook de Detecção de Canal
+**Causa**: Com 5.000+ leads, a cláusula `.in('customer_email', [emails...])` gera uma URL HTTP muito longa, excedendo limites do navegador/servidor.
+
+**Efeito**: Quando a query falha, o hook retorna `false` para todos os emails, fazendo TODOS os leads aparecerem como "LIVE".
+
+---
+
+## Solução
+
+Dividir a busca em **chunks (lotes)** de no máximo 200 emails por vez e combinar os resultados.
+
+### Mudanças no Hook `useBulkA010Check`
+
 **Arquivo**: `src/hooks/useBulkA010Check.ts`
-- Adicionado tipo `SalesChannel = 'a010' | 'bio' | 'live'`
-- Adicionada função `detectSalesChannel()` com lógica de prioridade:
-  1. **A010**: Compra confirmada em hubla_transactions
-  2. **BIO**: Tag contém "bio" ou "instagram"
-  3. **LIVE**: Padrão para leads gratuitos
-- Adicionado hook `useBulkChannelCheck()` para detecção em batch
 
-### 3. Componente DealKanbanCard
-**Arquivo**: `src/components/crm/DealKanbanCard.tsx`
-- Removido uso do hook `useA010Journey` (substituído por prop)
-- Adicionada prop `salesChannel?: SalesChannel`
-- Badge agora suporta 3 cores:
-  - A010: Azul
-  - BIO: Verde
-  - LIVE: Roxo
+| Antes | Depois |
+|-------|--------|
+| Query única com todos os emails | Múltiplas queries em chunks de 200 |
+| Falha silenciosa com todos = false | Fallback para classificação por tags |
+| URL muito longa | URLs menores e dentro do limite |
 
-### 4. Filtros
-**Arquivo**: `src/components/crm/DealFilters.tsx`
-- Adicionado tipo `SalesChannelFilter`
-- Dropdown de canal agora inclui opção "BIO"
+### Lógica de Chunks
 
-### 5. Página Negocios
-**Arquivo**: `src/pages/crm/Negocios.tsx`
-- Criado `channelMap` que mapeia email → SalesChannel
-- Atualizada lógica de filtro para suportar 3 canais
-- Passando `channelMap` para `DealKanbanBoard`
+```text
+Exemplo com 1000 emails:
+- Chunk 1: emails[0..199]   → Query Supabase
+- Chunk 2: emails[200..399] → Query Supabase
+- Chunk 3: emails[400..599] → Query Supabase
+- Chunk 4: emails[600..799] → Query Supabase
+- Chunk 5: emails[800..999] → Query Supabase
+→ Combinar resultados de todos os chunks
+```
 
-### 6. DealKanbanBoard
-**Arquivo**: `src/components/crm/DealKanbanBoard.tsx`
-- Adicionada prop `channelMap`
-- Passando `salesChannel` para cada `DealKanbanCard`
+### Fallback Melhorado
 
-## Resultado
+Se ainda houver falha, usar a lógica de tags como backup:
+- Email no resultado A010 → **A010**
+- Tag contém "bio/instagram" → **BIO**
+- Padrão → **LIVE**
 
-- Leads Bio Instagram agora exibem badge verde "BIO"
-- Leads A010 (com compra) exibem badge azul "A010"
-- Leads LIVE (gratuitos) exibem badge roxo "LIVE"
-- Filtro permite selecionar cada canal separadamente
-- Tags do Clint são sincronizadas corretamente para o Supabase
+---
+
+## Arquivo a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useBulkA010Check.ts` | Implementar chunking na query |
+
+---
+
+## Detalhes Técnicos
+
+### Implementação de Chunking
+
+```typescript
+const CHUNK_SIZE = 200;
+
+// Dividir emails em chunks
+const chunks: string[][] = [];
+for (let i = 0; i < cleanEmails.length; i += CHUNK_SIZE) {
+  chunks.push(cleanEmails.slice(i, i + CHUNK_SIZE));
+}
+
+// Buscar cada chunk em paralelo
+const results = await Promise.allSettled(
+  chunks.map(chunk => 
+    supabase
+      .from('hubla_transactions')
+      .select('customer_email')
+      .eq('product_category', 'a010')
+      .eq('sale_status', 'completed')
+      .in('customer_email', chunk)
+  )
+);
+
+// Combinar resultados
+const a010Emails = new Set<string>();
+results.forEach(result => {
+  if (result.status === 'fulfilled' && result.value.data) {
+    result.value.data.forEach(t => {
+      if (t.customer_email) {
+        a010Emails.add(t.customer_email.toLowerCase());
+      }
+    });
+  }
+});
+```
+
+### Por que 200?
+
+- Cada email tem em média 25 caracteres
+- 200 emails × 25 chars = ~5KB de parâmetros
+- Margem segura para URL máxima (~8KB)
+- Boa performance com paralelismo
+
+---
+
+## Resultado Esperado
+
+- Queries funcionam mesmo com 10.000+ leads
+- Leads A010 aparecem com badge azul
+- Leads BIO aparecem com badge verde  
+- Leads LIVE aparecem com badge roxo
+- Filtros por canal funcionam corretamente
