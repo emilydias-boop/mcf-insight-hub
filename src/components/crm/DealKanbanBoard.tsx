@@ -13,7 +13,7 @@ import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
-import { Inbox, ChevronDown } from 'lucide-react';
+import { Inbox, ChevronDown, Square, CheckSquare, MinusSquare } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -35,6 +35,7 @@ interface DealKanbanBoardProps {
   selectionMode?: boolean;
   selectedDealIds?: Set<string>;
   onSelectionChange?: (dealId: string, selected: boolean) => void;
+  onSelectAllInStage?: (dealIds: string[], selected: boolean) => void;
   channelMap?: Map<string, SalesChannel>;
 }
 
@@ -47,6 +48,7 @@ export const DealKanbanBoard = ({
   selectionMode = false,
   selectedDealIds = new Set(),
   onSelectionChange,
+  onSelectAllInStage,
   channelMap,
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
@@ -116,6 +118,20 @@ export const DealKanbanBoard = ({
       ...prev,
       [stageId]: (prev[stageId] || INITIAL_VISIBLE_COUNT) + 50
     }));
+  };
+
+  const handleSelectAllInStage = (stageDeals: Deal[]) => {
+    const stageDealIds = stageDeals.map(d => d.id);
+    const allSelected = stageDealIds.every(id => selectedDealIds.has(id));
+    onSelectAllInStage?.(stageDealIds, !allSelected);
+  };
+
+  const getStageSelectionState = (stageDeals: Deal[]) => {
+    if (stageDeals.length === 0) return 'none';
+    const selectedCount = stageDeals.filter(d => selectedDealIds.has(d.id)).length;
+    if (selectedCount === 0) return 'none';
+    if (selectedCount === stageDeals.length) return 'all';
+    return 'some';
   };
 
   const handleDealClick = (dealId: string) => {
@@ -216,7 +232,29 @@ export const DealKanbanBoard = ({
                   <CardHeader className={`flex-shrink-0 py-3 ${stage.color || 'bg-muted'}`}>
                     <CardTitle className="text-sm font-medium flex items-center justify-between">
                       <span>{stage.stage_name}</span>
-                      <Badge variant="secondary">{stageDeals.length}</Badge>
+                      <div className="flex items-center gap-1">
+                        {selectionMode && stageDeals.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectAllInStage(stageDeals);
+                            }}
+                            className="h-6 w-6 p-0 hover:bg-background/50"
+                            title={`Selecionar todos (${stageDeals.length})`}
+                          >
+                            {getStageSelectionState(stageDeals) === 'all' ? (
+                              <CheckSquare className="h-4 w-4" />
+                            ) : getStageSelectionState(stageDeals) === 'some' ? (
+                              <MinusSquare className="h-4 w-4" />
+                            ) : (
+                              <Square className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+                        <Badge variant="secondary">{stageDeals.length}</Badge>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   

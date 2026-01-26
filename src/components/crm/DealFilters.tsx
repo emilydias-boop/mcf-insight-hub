@@ -61,7 +61,7 @@ export const DealFilters = ({
           email,
           user_roles!inner(role)
         `)
-        .in('user_roles.role', ['sdr', 'closer'])
+        .in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])
         .order('full_name');
       return data || [];
     }

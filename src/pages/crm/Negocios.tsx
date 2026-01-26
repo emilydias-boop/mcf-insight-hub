@@ -222,6 +222,20 @@ const Negocios = () => {
     setSelectedDealIds(new Set());
     setSelectionMode(false);
   };
+
+  const handleSelectAllInStage = (dealIds: string[], selected: boolean) => {
+    setSelectedDealIds(prev => {
+      const newSet = new Set(prev);
+      dealIds.forEach(id => {
+        if (selected) {
+          newSet.add(id);
+        } else {
+          newSet.delete(id);
+        }
+      });
+      return newSet;
+    });
+  };
   
   const handleToggleSelectionMode = () => {
     setSelectionMode(!selectionMode);
@@ -440,6 +454,7 @@ const Negocios = () => {
               selectionMode={selectionMode}
               selectedDealIds={selectedDealIds}
               onSelectionChange={handleSelectionChange}
+              onSelectAllInStage={handleSelectAllInStage}
               channelMap={channelMap}
             />
           )}
