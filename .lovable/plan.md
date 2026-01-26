@@ -1,232 +1,84 @@
 
-# Plano: Sistema Hierárquico de Tarefas (Setores > Pastas > Listas)
 
-## Visão Geral
+# Plano: Corrigir Clique nos Setores para Criar Pastas
 
-Implementar um sistema de organização hierárquica inspirado no ClickUp dentro da aba **TAREFAS**, com três níveis:
+## Problema Identificado
 
-1. **Setores** - Nível superior (ex: "BU - Diretoria")
-2. **Pastas** - Dentro dos setores (ex: "Documentos Pessoais")
-3. **Listas** - Dentro das pastas OU diretamente dentro dos setores
+O clique no setor não está funcionando corretamente porque:
 
-```text
-┌─────────────────────────────────────────────────┐
-│  Espaços                       ···  🔍  +       │
-├─────────────────────────────────────────────────┤
-│  ⚙️  Tudo                                       │
-│                                                 │
-│  📁 BU - Diretoria               🔒  ···  +     │
-│    └─ 📂 Documentos Pessoais     🔒  ···  +     │
-│         └─ 📋 List (selecionada)               │
-│                                                 │
-│  📁 Outro Setor                  🔒  ···  +     │
-│    └─ 📋 Lista direta                          │
-└─────────────────────────────────────────────────┘
-```
+1. **O `Collapsible` está capturando cliques indevidamente** - O componente `Collapsible` com `onOpenChange` na linha 112 pode estar interceptando cliques antes que cheguem aos handlers corretos
+2. **Os botões de ação não estão visíveis** - O botão "+" e menu de contexto ("⋮") têm `opacity-0` e só aparecem no hover, mas podem não estar aparecendo corretamente
 
----
+## Solução Proposta
 
-## Estrutura do Banco de Dados
+### Arquivo: `src/components/tasks/TaskSpacesSidebar.tsx`
 
-### Nova Tabela: `task_spaces`
+**Mudança 1: Separar cliques do Collapsible**
 
-Uma tabela única com auto-referência para suportar a hierarquia flexível:
-
-```sql
-CREATE TABLE task_spaces (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('setor', 'pasta', 'lista')),
-  parent_id UUID REFERENCES task_spaces(id) ON DELETE CASCADE,
-  icon TEXT DEFAULT NULL,
-  color TEXT DEFAULT NULL,
-  order_index INTEGER DEFAULT 0,
-  is_private BOOLEAN DEFAULT false,
-  created_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Índices para performance
-CREATE INDEX idx_task_spaces_parent ON task_spaces(parent_id);
-CREATE INDEX idx_task_spaces_type ON task_spaces(type);
-
--- RLS
-ALTER TABLE task_spaces ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Authenticated users can view task_spaces"
-  ON task_spaces FOR SELECT TO authenticated
-  USING (true);
-
-CREATE POLICY "Admins and managers can manage task_spaces"
-  ON task_spaces FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'manager', 'coordenador')
-    )
-  );
-```
-
----
-
-## Arquivos a Criar
-
-### 1. Hook: `src/hooks/useTaskSpaces.ts`
-
-Hook para gerenciar a hierarquia de espaços de tarefas:
-
-- `useTaskSpaces()` - Buscar todos os espaços
-- `useCreateTaskSpace()` - Criar setor/pasta/lista
-- `useUpdateTaskSpace()` - Atualizar nome, ordem, etc
-- `useDeleteTaskSpace()` - Remover (cascade nos filhos)
-- `buildTaskSpaceTree()` - Transformar lista flat em árvore
+Remover o `onOpenChange` do `Collapsible` e controlar a expansão apenas pelo `CollapsibleTrigger` (chevron):
 
 ```typescript
-// Estrutura do hook
-interface TaskSpace {
-  id: string;
-  name: string;
-  type: 'setor' | 'pasta' | 'lista';
-  parent_id: string | null;
-  icon?: string;
-  color?: string;
-  order_index: number;
-  is_private: boolean;
-  children?: TaskSpace[];
-}
+// ANTES (linha 112)
+<Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(space.id)}>
+
+// DEPOIS
+<Collapsible open={isExpanded}>
 ```
 
-### 2. Componente: `src/components/tasks/TaskSpacesSidebar.tsx`
+Isso evita que cliques em qualquer lugar da linha acionem o toggle de expansão.
 
-Sidebar navegável com a hierarquia, similar ao `OriginsSidebar.tsx`:
-
-**Funcionalidades:**
-- Header com "Espaços", botão de busca (🔍), e adicionar (+)
-- Item "Tudo" para ver todas as tarefas
-- Setores colapsáveis com:
-  - Ícone personalizado
-  - Nome truncado
-  - Ícone de cadeado (se privado)
-  - Menu de contexto (···)
-  - Botão adicionar (+) para criar pasta/lista dentro
-- Pastas aninhadas (mesmo padrão)
-- Listas com destaque visual quando selecionadas
-
-### 3. Componente: `src/components/tasks/CreateSpaceDialog.tsx`
-
-Modal para criar Setor, Pasta ou Lista:
+**Mudança 2: Manter botões de ação sempre visíveis (não apenas no hover)**
 
 ```typescript
-interface CreateSpaceDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  parentId?: string | null;
-  parentType?: 'setor' | 'pasta' | null;
-  defaultType?: 'setor' | 'pasta' | 'lista';
-}
+// ANTES (linha 73 do SpaceContextMenu e linha 173 do Sidebar)
+className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+
+// DEPOIS - sempre visível
+className="h-6 w-6"
 ```
 
-**Campos:**
-- Nome (obrigatório)
-- Tipo (radio: Setor / Pasta / Lista - baseado no contexto)
-- Ícone (opcional - selector com lucide icons)
-- Cor (opcional - color picker)
-- Privado (toggle)
+**Mudança 3: Garantir que o clique na linha principal selecione o espaço**
 
-### 4. Componente: `src/components/tasks/SpaceContextMenu.tsx`
+Adicionar `onClick` no container principal da linha para garantir a seleção:
 
-Menu de contexto (três pontos) com ações:
-- Renomear
-- Adicionar pasta/lista (se for setor ou pasta)
-- Mover para...
-- Duplicar
-- Arquivar
-- Excluir
-
-### 5. Página Atualizada: `src/pages/Tarefas.tsx`
-
-Layout de duas colunas:
-
-```text
-┌──────────────┬─────────────────────────────────┐
-│              │                                 │
-│   SIDEBAR    │          CONTENT AREA           │
-│   (280px)    │                                 │
-│              │   (Tarefas da lista/pasta       │
-│  - Espaços   │    selecionada ou "Tudo")       │
-│  - Setores   │                                 │
-│  - Pastas    │                                 │
-│  - Listas    │                                 │
-│              │                                 │
-└──────────────┴─────────────────────────────────┘
-```
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/Tarefas.tsx` | Adicionar layout de sidebar + conteúdo |
-| `src/integrations/supabase/types.ts` | Regenerado automaticamente após criar tabela |
-
----
-
-## Fluxo de Navegação
-
-1. Usuário entra em `/tarefas`
-2. Sidebar mostra todos os Setores (nível 1)
-3. Clicar em um Setor expande suas Pastas e Listas
-4. Clicar em uma Pasta expande suas Listas
-5. Clicar em uma Lista seleciona e mostra as tarefas no painel principal
-6. Botão "+" no header cria novo Setor
-7. Botão "+" em um Setor cria Pasta ou Lista dentro dele
-8. Botão "+" em uma Pasta cria Lista dentro dela
-
----
-
-## Detalhes Técnicos
-
-### Ícones por Tipo
 ```typescript
-const typeIcons = {
-  setor: Building2,    // ou ícone customizado
-  pasta: Folder,
-  lista: ListTodo,
-};
+// Linha 113-120: adicionar onClick no div principal
+<div
+  className={cn(
+    "group flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
+    isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted"
+  )}
+  style={{ paddingLeft: `${8 + depth * 16}px` }}
+  onClick={() => onSelectSpace(space.id)} // Adicionar aqui
+>
 ```
 
-### Estado Local
-- `selectedSpaceId` - ID do espaço selecionado
-- `expandedSpaces` - Set de IDs expandidos
-- `searchTerm` - Filtro de busca
+E remover o onClick do div interno (linha 146) para evitar duplicação.
 
-### Cores Padrão
-- Setor: bg-green-100 (como na imagem)
-- Pasta: bg-amber-100
-- Lista: highlight verde quando selecionada
+**Mudança 4: Prevenir propagação nos botões de ação**
 
----
+Garantir que todos os botões de ação tenham `e.stopPropagation()` para não acionar a seleção do espaço:
 
-## Resumo dos Arquivos
-
-| Arquivo | Tipo | Descrição |
-|---------|------|-----------|
-| `src/hooks/useTaskSpaces.ts` | Criar | Hook de CRUD para hierarquia |
-| `src/components/tasks/TaskSpacesSidebar.tsx` | Criar | Sidebar de navegação |
-| `src/components/tasks/CreateSpaceDialog.tsx` | Criar | Modal de criação |
-| `src/components/tasks/SpaceContextMenu.tsx` | Criar | Menu de contexto |
-| `src/pages/Tarefas.tsx` | Modificar | Layout com sidebar |
-| Tabela `task_spaces` | SQL | Nova tabela no Supabase |
+```typescript
+// Já existe no botão +, mas verificar no SpaceContextMenu
+onClick={(e) => e.stopPropagation()}
+```
 
 ---
 
-## Próximos Passos Após Aprovação
+## Resumo das Alterações
 
-1. Criar a tabela `task_spaces` no Supabase
-2. Implementar o hook `useTaskSpaces`
-3. Criar os componentes de UI
-4. Atualizar a página Tarefas com o layout
-5. Adicionar as funcionalidades de drag-and-drop para reordenação (futuro)
+| Arquivo | Alteração |
+|---------|-----------|
+| `TaskSpacesSidebar.tsx` | Remover `onOpenChange` do Collapsible |
+| `TaskSpacesSidebar.tsx` | Mover onClick para o div principal da linha |
+| `TaskSpacesSidebar.tsx` | Tornar botão "+" sempre visível |
+| `SpaceContextMenu.tsx` | Tornar botão "⋮" sempre visível |
+
+## Resultado Esperado
+
+- Clicar em um setor irá selecioná-lo (destaque visual)
+- O botão "+" estará sempre visível para criar pastas/listas
+- O menu "⋮" estará sempre visível para renomear/excluir
+- Apenas o chevron (>) controla a expansão/colapso
+
