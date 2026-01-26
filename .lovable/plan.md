@@ -1,67 +1,47 @@
 
 
-# Plano: Corrigir Clique nos Setores para Criar Pastas
+# Plano: Corrigir Visibilidade do Menu Suspenso
 
 ## Problema Identificado
 
-O clique no setor não está funcionando corretamente porque:
+O menu dropdown do contexto está sendo cortado porque:
 
-1. **O `Collapsible` está capturando cliques indevidamente** - O componente `Collapsible` com `onOpenChange` na linha 112 pode estar interceptando cliques antes que cheguem aos handlers corretos
-2. **Os botões de ação não estão visíveis** - O botão "+" e menu de contexto ("⋮") têm `opacity-0` e só aparecem no hover, mas podem não estar aparecendo corretamente
+1. **Container pai com `overflow-hidden`** - O container da linha do item (linha 148) tem a classe `overflow-hidden` que está cortando o menu dropdown quando ele abre
+2. **Posicionamento do dropdown** - O `DropdownMenuContent` precisa de melhor configuração de posicionamento para evitar ficar atrás de outros elementos
 
 ## Solução Proposta
 
-### Arquivo: `src/components/tasks/TaskSpacesSidebar.tsx`
+### Arquivo: `src/components/tasks/SpaceContextMenu.tsx`
 
-**Mudança 1: Separar cliques do Collapsible**
-
-Remover o `onOpenChange` do `Collapsible` e controlar a expansão apenas pelo `CollapsibleTrigger` (chevron):
+Adicionar configurações ao `DropdownMenuContent` para garantir que o menu apareça corretamente:
 
 ```typescript
-// ANTES (linha 112)
-<Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(space.id)}>
-
-// DEPOIS
-<Collapsible open={isExpanded}>
-```
-
-Isso evita que cliques em qualquer lugar da linha acionem o toggle de expansão.
-
-**Mudança 2: Manter botões de ação sempre visíveis (não apenas no hover)**
-
-```typescript
-// ANTES (linha 73 do SpaceContextMenu e linha 173 do Sidebar)
-className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-
-// DEPOIS - sempre visível
-className="h-6 w-6"
-```
-
-**Mudança 3: Garantir que o clique na linha principal selecione o espaço**
-
-Adicionar `onClick` no container principal da linha para garantir a seleção:
-
-```typescript
-// Linha 113-120: adicionar onClick no div principal
-<div
-  className={cn(
-    "group flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
-    isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted"
-  )}
-  style={{ paddingLeft: `${8 + depth * 16}px` }}
-  onClick={() => onSelectSpace(space.id)} // Adicionar aqui
+<DropdownMenuContent 
+  align="start"           // Mudar de "end" para "start" 
+  side="right"           // Abrir para a direita ao invés de para baixo
+  sideOffset={5}         // Adicionar espaçamento
+  className="w-48 bg-popover border shadow-md z-[100]"  // z-index mais alto
+  onClick={(e) => e.stopPropagation()}
 >
 ```
 
-E remover o onClick do div interno (linha 146) para evitar duplicação.
+### Arquivo: `src/components/tasks/TaskSpacesSidebar.tsx`
 
-**Mudança 4: Prevenir propagação nos botões de ação**
-
-Garantir que todos os botões de ação tenham `e.stopPropagation()` para não acionar a seleção do espaço:
+Remover o `overflow-hidden` do container que contém os botões de ação, pois ele está cortando o dropdown:
 
 ```typescript
-// Já existe no botão +, mas verificar no SpaceContextMenu
-onClick={(e) => e.stopPropagation()}
+// ANTES (linha 148)
+<div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+
+// DEPOIS - mover overflow apenas para o texto
+<div className="flex items-center gap-2 flex-1 min-w-0">
+```
+
+E garantir que apenas o texto seja truncado:
+
+```typescript
+// Linha 158
+<span className="truncate text-sm font-medium flex-1 min-w-0">{space.name}</span>
 ```
 
 ---
@@ -70,15 +50,12 @@ onClick={(e) => e.stopPropagation()}
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `TaskSpacesSidebar.tsx` | Remover `onOpenChange` do Collapsible |
-| `TaskSpacesSidebar.tsx` | Mover onClick para o div principal da linha |
-| `TaskSpacesSidebar.tsx` | Tornar botão "+" sempre visível |
-| `SpaceContextMenu.tsx` | Tornar botão "⋮" sempre visível |
+| `SpaceContextMenu.tsx` | Adicionar `side="right"`, `sideOffset={5}`, aumentar z-index para `z-[100]` |
+| `TaskSpacesSidebar.tsx` | Remover `overflow-hidden` do container principal e mover para o span do texto |
 
 ## Resultado Esperado
 
-- Clicar em um setor irá selecioná-lo (destaque visual)
-- O botão "+" estará sempre visível para criar pastas/listas
-- O menu "⋮" estará sempre visível para renomear/excluir
-- Apenas o chevron (>) controla a expansão/colapso
+- O menu dropdown abrirá para o lado direito do botão
+- O conteúdo do menu será totalmente visível
+- O nome do espaço continuará truncando corretamente quando muito longo
 
