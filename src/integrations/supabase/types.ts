@@ -6148,6 +6148,56 @@ export type Database = {
         }
         Relationships: []
       }
+      task_spaces: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          icon: string | null
+          id: string
+          is_private: boolean | null
+          name: string
+          order_index: number | null
+          parent_id: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          is_private?: boolean | null
+          name: string
+          order_index?: number | null
+          parent_id?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          icon?: string | null
+          id?: string
+          is_private?: boolean | null
+          name?: string
+          order_index?: number | null
+          parent_id?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_spaces_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "task_spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_targets: {
         Row: {
           created_at: string | null
