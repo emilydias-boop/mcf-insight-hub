@@ -19,6 +19,7 @@ export interface Employee {
   
   // Dados profissionais
   cargo: string | null;
+  cargo_catalogo_id: string | null;
   departamento: string | null;
   squad: string | null;
   gestor_id: string | null;

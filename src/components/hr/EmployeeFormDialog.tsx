@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import CargoSelect from './CargoSelect';
 
 interface EmployeeFormDialogProps {
   open: boolean;
@@ -16,7 +17,8 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
   const [formData, setFormData] = useState({
     nome_completo: '',
     cpf: '',
-    cargo: '',
+    cargo: '' as string | null,
+    cargo_catalogo_id: null as string | null,
     departamento: '',
     data_admissao: '',
     tipo_contrato: 'CLT',
@@ -32,7 +34,8 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
         setFormData({
           nome_completo: '',
           cpf: '',
-          cargo: '',
+          cargo: null,
+          cargo_catalogo_id: null,
           departamento: '',
           data_admissao: '',
           tipo_contrato: 'CLT',
@@ -79,10 +82,15 @@ export default function EmployeeFormDialog({ open, onOpenChange }: EmployeeFormD
             </div>
             <div>
               <Label>Cargo</Label>
-              <Input
-                value={formData.cargo}
-                onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-                placeholder="Ex: SDR, Closer, Analista"
+              <CargoSelect
+                cargoId={formData.cargo_catalogo_id}
+                cargoTexto={formData.cargo}
+                onChange={(cargoId, cargoTexto) => setFormData({ 
+                  ...formData, 
+                  cargo_catalogo_id: cargoId, 
+                  cargo: cargoTexto 
+                })}
+                showInfo={false}
               />
             </div>
             <div>
