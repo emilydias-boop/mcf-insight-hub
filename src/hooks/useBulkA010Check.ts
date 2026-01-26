@@ -52,6 +52,24 @@ export function detectSalesChannel(
  * Hook para verificar em batch quais emails são A010 (compradores)
  * Retorna um Map<email, isA010> para compatibilidade retroativa
  */
+const CHUNK_SIZE = 200;
+
+/**
+ * Divide array em chunks menores
+ */
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Hook para verificar em batch quais emails são A010 (compradores)
+ * Retorna um Map<email, isA010> para compatibilidade retroativa
+ * Usa chunking para evitar URLs muito longas com muitos emails
+ */
 export const useBulkA010Check = (emails: string[]) => {
   // Remover emails nulos/undefined e duplicados
   const cleanEmails = [...new Set(emails.filter(Boolean).map(e => e.toLowerCase()))];
@@ -63,25 +81,48 @@ export const useBulkA010Check = (emails: string[]) => {
       
       if (cleanEmails.length === 0) return resultMap;
       
-      // Buscar transações A010 completadas para esses emails
-      const { data, error } = await supabase
-        .from('hubla_transactions')
-        .select('customer_email')
-        .eq('product_category', 'a010')
-        .eq('sale_status', 'completed')
-        .in('customer_email', cleanEmails);
+      // Dividir emails em chunks para evitar URL muito longa
+      const emailChunks = chunkArray(cleanEmails, CHUNK_SIZE);
       
-      if (error) {
-        console.error('Erro ao buscar A010 status:', error);
-        // Retornar todos como false em caso de erro
-        cleanEmails.forEach(email => resultMap.set(email, false));
-        return resultMap;
-      }
+      console.log(`[useBulkA010Check] Buscando A010 status para ${cleanEmails.length} emails em ${emailChunks.length} chunks`);
       
-      // Criar set de emails A010
-      const a010Emails = new Set(
-        data?.map(t => t.customer_email?.toLowerCase()).filter(Boolean) || []
+      // Buscar cada chunk em paralelo
+      const results = await Promise.allSettled(
+        emailChunks.map(chunk => 
+          supabase
+            .from('hubla_transactions')
+            .select('customer_email')
+            .eq('product_category', 'a010')
+            .eq('sale_status', 'completed')
+            .in('customer_email', chunk)
+        )
       );
+      
+      // Combinar resultados de todos os chunks
+      const a010Emails = new Set<string>();
+      let successCount = 0;
+      let errorCount = 0;
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          if (result.value.error) {
+            console.error(`[useBulkA010Check] Erro no chunk ${index + 1}:`, result.value.error);
+            errorCount++;
+          } else {
+            successCount++;
+            result.value.data?.forEach(t => {
+              if (t.customer_email) {
+                a010Emails.add(t.customer_email.toLowerCase());
+              }
+            });
+          }
+        } else {
+          console.error(`[useBulkA010Check] Chunk ${index + 1} falhou:`, result.reason);
+          errorCount++;
+        }
+      });
+      
+      console.log(`[useBulkA010Check] Resultado: ${successCount} chunks OK, ${errorCount} erros, ${a010Emails.size} emails A010 encontrados`);
       
       // Mapear resultado
       cleanEmails.forEach(email => {
@@ -112,23 +153,42 @@ export const useBulkChannelCheck = (
       
       if (cleanEmails.length === 0) return resultMap;
       
-      // Buscar transações A010 completadas para esses emails
-      const { data, error } = await supabase
-        .from('hubla_transactions')
-        .select('customer_email')
-        .eq('product_category', 'a010')
-        .eq('sale_status', 'completed')
-        .in('customer_email', cleanEmails);
+      // Dividir emails em chunks para evitar URL muito longa
+      const emailChunks = chunkArray(cleanEmails, CHUNK_SIZE);
       
-      if (error) {
-        console.error('Erro ao buscar A010 status:', error);
-      }
+      console.log(`[useBulkChannelCheck] Buscando A010 status para ${cleanEmails.length} emails em ${emailChunks.length} chunks`);
       
-      // Criar set de emails A010
-      const a010Emails = new Set(
-        data?.map(t => t.customer_email?.toLowerCase()).filter(Boolean) || []
+      // Buscar cada chunk em paralelo
+      const results = await Promise.allSettled(
+        emailChunks.map(chunk => 
+          supabase
+            .from('hubla_transactions')
+            .select('customer_email')
+            .eq('product_category', 'a010')
+            .eq('sale_status', 'completed')
+            .in('customer_email', chunk)
+        )
       );
       
+      // Combinar resultados de todos os chunks
+      const a010Emails = new Set<string>();
+      let successCount = 0;
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && !result.value.error) {
+          successCount++;
+          result.value.data?.forEach(t => {
+            if (t.customer_email) {
+              a010Emails.add(t.customer_email.toLowerCase());
+            }
+          });
+        } else {
+          console.error(`[useBulkChannelCheck] Chunk ${index + 1} falhou`);
+        }
+      });
+      
+      console.log(`[useBulkChannelCheck] ${successCount}/${emailChunks.length} chunks OK, ${a010Emails.size} A010 encontrados`);
+
       // Mapear cada deal para seu canal
       deals.forEach(deal => {
         if (deal.email) {
