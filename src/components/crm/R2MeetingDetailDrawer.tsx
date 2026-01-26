@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { R2MeetingRow, R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
-import { useRemoveR2Attendee } from '@/hooks/useR2AttendeeUpdate';
+import { useRemoveR2Attendee, useCancelR2Meeting } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { RefundModal } from './RefundModal';
 import { R2QualificationTab } from './r2-drawer/R2QualificationTab';
@@ -54,6 +54,7 @@ export function R2MeetingDetailDrawer({
   
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
+  const cancelMeeting = useCancelR2Meeting();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
 
@@ -94,12 +95,33 @@ export function R2MeetingDetailDrawer({
   };
 
   const handleRemoveAttendee = (attendeeId: string) => {
-    if (confirm('Deseja remover este participante da reunião?')) {
-      removeAttendee.mutate(attendeeId);
-      const remaining = meeting?.attendees?.filter(a => a.id !== attendeeId);
-      if (remaining?.length) {
-        setSelectedAttendeeId(remaining[0].id);
-      }
+    const isLastAttendee = meeting?.attendees?.length === 1;
+    
+    const confirmMessage = isLastAttendee
+      ? 'Ao remover o único participante, a reunião será cancelada. Deseja continuar?'
+      : 'Deseja remover este participante da reunião?';
+    
+    if (confirm(confirmMessage)) {
+      removeAttendee.mutate(attendeeId, {
+        onSuccess: () => {
+          if (isLastAttendee) {
+            cancelMeeting.mutate(meeting.id);
+            onOpenChange(false);
+          } else {
+            const remaining = meeting?.attendees?.filter(a => a.id !== attendeeId);
+            if (remaining?.length) {
+              setSelectedAttendeeId(remaining[0].id);
+            }
+          }
+        }
+      });
+    }
+  };
+
+  const handleCancelMeeting = () => {
+    if (confirm('Deseja cancelar esta reunião? Todos os participantes serão afetados.')) {
+      cancelMeeting.mutate(meeting.id);
+      onOpenChange(false);
     }
   };
 
@@ -176,19 +198,17 @@ export function R2MeetingDetailDrawer({
                           </div>
                         </div>
                         
-                        {meeting.attendees.length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveAttendee(att.id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveAttendee(att.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     );
                   })}
@@ -346,6 +366,15 @@ export function R2MeetingDetailDrawer({
               Reembolso
             </Button>
           </div>
+
+          <Button 
+            variant="outline"
+            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={handleCancelMeeting}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Cancelar Reunião
+          </Button>
         </div>
       </SheetContent>
 
