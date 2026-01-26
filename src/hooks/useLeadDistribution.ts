@@ -123,18 +123,21 @@ export const useTransferDealOwner = () => {
       dealId, 
       newOwnerEmail, 
       newOwnerName,
+      newOwnerProfileId,
       previousOwner 
     }: { 
       dealId: string; 
       newOwnerEmail: string; 
       newOwnerName?: string;
+      newOwnerProfileId?: string;
       previousOwner?: string;
     }) => {
-      // 1. Atualizar owner_id no deal
+      // 1. Atualizar owner_id (email legacy) e owner_profile_id (UUID) no deal
       const { error: updateError } = await supabase
         .from('crm_deals')
         .update({ 
           owner_id: newOwnerEmail,
+          owner_profile_id: newOwnerProfileId || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', dealId);

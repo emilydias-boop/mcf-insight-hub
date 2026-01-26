@@ -99,7 +99,7 @@ export function DealFormDialog({
 
   // Fetch SDRs for this origin/pipeline (two-step query to avoid join issues)
   const { data: dealOwners = [] } = useQuery({
-    queryKey: ['deal-owners-sdr'],
+    queryKey: ['deal-owners-sdr-with-email'],
     queryFn: async () => {
       // 1. Buscar user_ids que têm role = 'sdr'
       const { data: sdrRoles, error: rolesError } = await supabase
@@ -116,11 +116,12 @@ export function DealFormDialog({
       
       const sdrUserIds = sdrRoles.map(r => r.user_id);
       
-      // 2. Buscar profiles desses users
+      // 2. Buscar profiles desses users (incluindo email para owner_id legacy)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, email')
         .in('id', sdrUserIds)
+        .eq('access_status', 'ativo')
         .order('full_name');
       
       if (profilesError) {
@@ -164,13 +165,17 @@ export function DealFormDialog({
       if (contactError) throw contactError;
 
       // 2. Create deal linked to contact
+      // Buscar email do profile selecionado para manter owner_id (legacy)
+      const selectedProfile = dealOwners.find((p: any) => p.id === data.owner_id);
+      
       const payload = {
         name: data.name,
         value: data.value,
         stage_id: data.stage,
         contact_id: newContact.id,
         origin_id: defaultOriginId,
-        owner_id: data.owner_id || undefined,
+        owner_id: selectedProfile?.email || undefined, // legacy (email)
+        owner_profile_id: data.owner_id || undefined,  // novo (UUID)
       };
 
       const newDeal = await createDealMutation.mutateAsync(payload);
