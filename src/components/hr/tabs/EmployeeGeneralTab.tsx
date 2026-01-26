@@ -11,6 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Save, X, ChevronDown, Briefcase, User, MapPin } from 'lucide-react';
+import ProfileLinkSection from '../ProfileLinkSection';
 
 interface EmployeeGeneralTabProps {
   employee: Employee;
@@ -61,6 +62,9 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
             <Save className="h-4 w-4 mr-1" /> Salvar
           </Button>
         </div>
+
+        {/* Seção de Vinculação com Usuário do Sistema */}
+        <ProfileLinkSection employee={employee} editing={true} />
 
         {/* Bloco 1: Dados de Emprego (PRIMEIRO) */}
         <Card>
@@ -295,6 +299,9 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
           <Pencil className="h-4 w-4 mr-1" /> Editar
         </Button>
       </div>
+
+      {/* Seção de Vinculação com Usuário do Sistema */}
+      <ProfileLinkSection employee={employee} editing={false} />
 
       {/* Bloco 1: Dados de Emprego */}
       <Card>
