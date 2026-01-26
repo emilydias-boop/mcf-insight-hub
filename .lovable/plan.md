@@ -1,147 +1,226 @@
 
-# Plano: Liberar CRM Negócios para Todas as Roles com Filtro por BU
+# Plano: Unificar Entidades do Sistema (Árvore Organizacional)
 
-## Objetivo
+## Diagnóstico: O Que Está "Solto"
 
-Permitir que **todos os usuários** acessem a aba Negócios, mas cada usuário verá apenas as pipelines associadas à sua Business Unit (BU).
+Após análise detalhada do banco de dados, identifiquei **7 desconexões críticas** que impedem o sistema de funcionar como uma árvore integrada:
 
-| BU | Pipelines/Origens Visíveis |
-|----|-----------------------------|
-| **incorporador** | PIPELINE INSIDE SALES (Perpétuo - X1) |
-| **consorcio** | PIPELINE - INSIDE SALES - VIVER DE ALUGUEL, Perpétuo - Construa para Alugar |
-| **credito** | A definir (padrão: PIPELINE INSIDE SALES) |
-| **projetos** | A definir (padrão: PIPELINE INSIDE SALES) |
+| # | Problema | Impacto |
+|---|----------|---------|
+| 1 | **Employees sem Profile** | 17 de 24 colaboradores no RH não têm vínculo com usuários do sistema |
+| 2 | **Organograma Vazio** | Estrutura hierárquica não utilizada (0 registros) |
+| 3 | **Cargo texto-livre** | Colaboradores usam texto livre em vez de `cargos_catalogo` |
+| 4 | **Gestor indefinido** | 20 de 24 sem gestor direto definido |
+| 5 | **CRM usa EMAIL** | `owner_id` usa emails como chave em vez de UUIDs |
+| 6 | **Squads duplicados** | `profiles.squad` vs `employees.squad` desalinhados |
+| 7 | **Sem Foreign Keys** | Nenhum FK entre profiles ↔ employees ↔ organograma |
 
----
-
-## Arquitetura da Solução
+## Visão da Árvore Unificada
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                        Negocios.tsx                             │
-├─────────────────────────────────────────────────────────────────┤
-│  1. Buscar BU do usuário (useMyBU)                              │
-│  2. Obter pipelines permitidas para essa BU (BU_PIPELINE_MAP)   │
-│  3. Selecionar automaticamente a primeira pipeline da BU        │
-│  4. Filtrar sidebar para mostrar apenas origens permitidas      │
-└─────────────────────────────────────────────────────────────────┘
+                    ┌────────────────────────┐
+                    │      auth.users        │
+                    │   (autenticação)       │
+                    └───────────┬────────────┘
+                                │
+                    ┌───────────▼────────────┐
+                    │       profiles         │
+                    │  (identidade sistema)  │
+                    │  email, squad, avatar  │
+                    └───────────┬────────────┘
+                                │ FK
+        ┌───────────────────────┼───────────────────────┐
+        │                       │                       │
+┌───────▼───────┐     ┌─────────▼────────┐     ┌───────▼───────┐
+│  user_roles   │     │    employees     │     │   crm_deals   │
+│  (permissões) │     │  (dados RH/PJ)   │     │  (negócios)   │
+└───────────────┘     └─────────┬────────┘     └───────────────┘
+                                │ FK
+                      ┌─────────▼────────┐
+                      │  cargos_catalogo │
+                      │  (cargo formal)  │
+                      └─────────┬────────┘
+                                │ FK
+                      ┌─────────▼────────┐
+                      │   organograma    │
+                      │  (hierarquia)    │
+                      └──────────────────┘
 ```
+
+## Solução em 4 Fases
 
 ---
 
-## Mudanças Necessárias
+### FASE 1: Vincular Employees aos Profiles
 
-### 1. NegociosAccessGuard.tsx
+**Objetivo:** Cada colaborador RH deve estar ligado a um usuário do sistema
 
-**Antes:** Acesso restrito a `['admin', 'manager', 'coordenador', 'sdr']`
+**Implementação:**
 
-**Depois:** Acesso liberado para TODAS as roles, pois o filtro será baseado na BU
+1. Criar tela de "Vinculação" no formulário de colaborador com dropdown de profiles disponíveis
+2. Adicionar botão "Vincular Usuário" na aba Geral do Employee
+3. Ao vincular, sincronizar automaticamente:
+   - `employees.profile_id` ← `profiles.id`
+   - `employees.squad` ← `profiles.squad` (ou vice-versa)
+
+**Arquivos a modificar:**
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `NegociosAccessGuard.tsx` | Remover restrição de roles, criar mapeamento BU → Pipelines |
+| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Adicionar seção "Usuário do Sistema" com Select de profiles |
+| `src/hooks/useEmployees.ts` | Query para buscar profiles não-vinculados |
+| `src/types/hr.ts` | Adicionar interface para profile vinculado |
 
-**Novo código:**
-```typescript
-// Mapeamento BU → Pipelines/Origens permitidas
-export const BU_PIPELINE_MAP: Record<string, string[]> = {
-  incorporador: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // PIPELINE INSIDE SALES
-  consorcio: [
-    '4e2b810a-6782-4ce9-9c0d-10d04c018636', // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
-    'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar (grupo)
-  ],
-  credito: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão
-  projetos: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão
-};
-
-// Grupo padrão para cada BU (para selecionar ao abrir)
-export const BU_DEFAULT_GROUP_MAP: Record<string, string> = {
-  incorporador: 'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Perpétuo - X1
-  consorcio: 'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar
-  credito: 'a6f3cbfc-0567-427f-a405-5a869aaa6010',
-  projetos: 'a6f3cbfc-0567-427f-a405-5a869aaa6010',
-};
+**UI proposta:**
+```text
+┌─────────────────────────────────────────────────┐
+│ 👤 Usuário do Sistema                           │
+├─────────────────────────────────────────────────┤
+│ Profile Vinculado: [___Emily Caroline Dias___▼] │
+│ Email: emily.dias@minhacasafinanciada.com       │
+│ Role: admin                                     │
+│                          [Desvincular]          │
+└─────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 2. Negocios.tsx
+### FASE 2: Normalizar Cargos com Catálogo
 
-**Mudanças:**
-- Importar `useMyBU` para obter a BU do usuário
-- Usar `BU_PIPELINE_MAP` para determinar origens visíveis
-- Pré-selecionar a pipeline/grupo padrão da BU
+**Objetivo:** Substituir texto-livre por referência ao `cargos_catalogo`
 
-**Lógica:**
+**Implementação:**
+
+1. Alterar campo "Cargo" para Select usando `cargos_catalogo`
+2. Manter campo texto como fallback para cargos não catalogados
+3. Migração: Script para sugerir mapeamento automático baseado em similaridade
+
+**Arquivos a modificar:**
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Select com `cargos_catalogo` em vez de texto |
+| `src/hooks/useOrganograma.ts` | Exportar hook `useCargos` já existente |
+| Schema DB | Criar FK `employees.cargo_catalogo_id` → `cargos_catalogo.id` |
+
+---
+
+### FASE 3: Definir Gestores e Hierarquia
+
+**Objetivo:** Estabelecer cadeia de comando formal
+
+**Implementação:**
+
+1. Popular `employees.gestor_id` para todos
+2. Gerar automaticamente registros no `organograma` baseado em:
+   - Cargo catalogado do employee
+   - Gestor definido (parent_id)
+   - Squad
+3. Criar botão "Gerar Organograma" na página admin
+
+**Arquivos a modificar:**
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/admin/Organograma.tsx` | Botão "Popular do RH" que cria nodes baseado em employees |
+| `src/hooks/useOrganograma.ts` | Mutation para criação em lote |
+
+---
+
+### FASE 4: Migrar CRM owner_id para UUID
+
+**Objetivo:** Padronizar referências usando UUIDs de profiles
+
+**Implementação:**
+
+1. Criar coluna `owner_profile_id UUID` em `crm_deals`
+2. Edge function para migrar dados existentes:
+   - Buscar profile por email
+   - Popular `owner_profile_id`
+3. Atualizar queries do CRM para usar nova coluna
+4. Manter `owner_id` (email) para compatibilidade durante transição
+
+**Arquivos a modificar:**
+
+| Arquivo | Alteração |
+|---------|-----------|
+| Schema DB | Adicionar `crm_deals.owner_profile_id` com FK para profiles |
+| Edge function | `migrate-crm-owners` para popular baseado em email |
+| `src/hooks/useDeals.ts` | Usar `owner_profile_id` em queries |
+| `src/components/crm/DealFilters.tsx` | Filtro por `owner_profile_id` |
+
+---
+
+## Ordem de Implementação Recomendada
+
+| Fase | Prioridade | Esforço | Dependências |
+|------|------------|---------|--------------|
+| 1. Vincular Employees/Profiles | ALTA | Médio | Nenhuma |
+| 2. Normalizar Cargos | MÉDIA | Baixo | Fase 1 |
+| 3. Popular Organograma | MÉDIA | Médio | Fase 1 + 2 |
+| 4. Migrar CRM owners | ALTA | Alto | Fase 1 |
+
+---
+
+## Benefícios Após Unificação
+
+1. **Visão 360° do colaborador:** Dados RH + Permissões + CRM em uma tela
+2. **Organograma automático:** Gerado a partir dos dados existentes
+3. **Relatórios integrados:** Performance CRM por gestor/squad/departamento
+4. **Consistência:** Uma fonte única de verdade para identidade de usuários
+5. **Métricas de fechamento:** Vinculadas ao cargo formal do catálogo
+
+---
+
+## Detalhes Técnicos
+
+### Fase 1 - Vincular Employees aos Profiles
+
+**Novo componente ProfileLinkSection:**
 ```typescript
-const { data: myBU } = useMyBU();
-
-// Origens autorizadas baseadas na BU
-const buAuthorizedOrigins = useMemo(() => {
-  if (!myBU) return []; // Sem BU = vê tudo (admin)
-  return BU_PIPELINE_MAP[myBU] || [];
-}, [myBU]);
-
-// Pipeline padrão baseada na BU
-useEffect(() => {
-  if (myBU && !hasSetDefault.current) {
-    hasSetDefault.current = true;
-    const defaultGroup = BU_DEFAULT_GROUP_MAP[myBU];
-    if (defaultGroup) {
-      setSelectedPipelineId(defaultGroup);
+// Em EmployeeGeneralTab.tsx
+function ProfileLinkSection({ employee }: { employee: Employee }) {
+  const { data: availableProfiles } = useQuery({
+    queryKey: ['available-profiles'],
+    queryFn: async () => {
+      // Buscar profiles que ainda não estão vinculados a nenhum employee
+      const { data } = await supabase
+        .from('profiles')
+        .select(`id, email, full_name, squad, user_roles!inner(role)`)
+        .eq('access_status', 'ativo');
+      return data;
     }
-  }
-}, [myBU]);
-```
-
----
-
-### 3. CRM.tsx
-
-**Mudança:** Liberar aba Negócios para todos
-
-```typescript
-// Verificar se usuário tem permissão para Negócios
-// ANTES: canUserAccessNegocios(role) verificava role
-// DEPOIS: Sempre true (baseado em BU, não role)
-const canViewNegocios = true;
-```
-
----
-
-### 4. OriginsSidebar.tsx
-
-**Mudança:** Receber e aplicar filtro por BU
-
-```typescript
-interface OriginsSidebarProps {
-  // ... props existentes
-  allowedOriginIds?: string[]; // IDs das origens permitidas pela BU
+  });
+  
+  const linkedProfile = availableProfiles?.find(p => p.id === employee.profile_id);
+  
+  // UI para vincular/desvincular
 }
+```
 
-// Na renderização, filtrar origens
-const filteredOrigins = allowedOriginIds && allowedOriginIds.length > 0
-  ? origins.filter(o => allowedOriginIds.includes(o.id))
-  : origins;
+### Fase 4 - Migração de Owners
+
+**Nova coluna:**
+```sql
+ALTER TABLE crm_deals 
+ADD COLUMN owner_profile_id UUID REFERENCES profiles(id);
+```
+
+**Script de migração:**
+```sql
+UPDATE crm_deals d
+SET owner_profile_id = p.id
+FROM profiles p
+WHERE d.owner_id = p.email
+  AND d.owner_profile_id IS NULL;
 ```
 
 ---
 
-## Resumo dos Arquivos a Modificar
+## Próximos Passos
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/auth/NegociosAccessGuard.tsx` | Adicionar mapeamento BU → Pipelines |
-| `src/pages/crm/Negocios.tsx` | Usar BU para filtrar pipelines e pré-selecionar |
-| `src/pages/CRM.tsx` | Liberar aba Negócios para todos |
-| `src/components/crm/OriginsSidebar.tsx` | Filtrar origens baseado na BU |
+Confirme qual fase você gostaria de implementar primeiro:
 
----
-
-## Resultado Esperado
-
-1. **Todos os usuários** podem acessar a aba Negócios
-2. Usuários de **Incorporador** veem apenas `PIPELINE INSIDE SALES`
-3. Usuários de **Consórcio** veem `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL` e `Perpétuo - Construa para Alugar`
-4. Usuários **sem BU** (admins) veem todas as pipelines
-5. A pipeline padrão é selecionada automaticamente ao abrir
+1. **Fase 1** - Vincular Employees aos Profiles (permite ver dados integrados)
+2. **Fase 4** - Migrar CRM owners (corrige dados corrompidos do CRM)
+3. **Todas as fases** - Implementação completa sequencial
