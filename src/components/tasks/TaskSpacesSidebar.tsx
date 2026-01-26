@@ -142,12 +142,12 @@ export function TaskSpacesSidebar({
 
             {/* Main clickable area */}
             <div
-              className="flex items-center gap-2 flex-1 min-w-0"
+              className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden"
               onClick={() => onSelectSpace(space.id)}
             >
               <div
                 className={cn(
-                  "p-1 rounded",
+                  "p-1 rounded flex-shrink-0",
                   space.color ? "" : typeColors[space.type]
                 )}
                 style={space.color ? { backgroundColor: `${space.color}20`, color: space.color } : undefined}
@@ -156,12 +156,12 @@ export function TaskSpacesSidebar({
               </div>
               <span className="truncate text-sm font-medium">{space.name}</span>
               {space.is_private && (
-                <Lock className="h-3 w-3 text-muted-foreground" />
+                <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
               )}
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-1">
+            {/* Actions - always visible with flex-shrink-0 */}
+            <div className="flex items-center gap-0.5 flex-shrink-0 ml-1">
               <SpaceContextMenu
                 space={space}
                 onAddChild={(type) => openCreateDialog(space.id, space.type, type)}
@@ -170,7 +170,7 @@ export function TaskSpacesSidebar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     openCreateDialog(
