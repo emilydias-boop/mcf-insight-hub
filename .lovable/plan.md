@@ -1,175 +1,240 @@
 
-# Plano: Fase 2 - Normalizar Cargos com Catálogo
+# Plano: Fase 3 - Definir Gestores e Hierarquia
 
 ## Objetivo
 
-Substituir o campo de texto-livre "Cargo" por um Select que usa a tabela `cargos_catalogo`, permitindo padronização dos cargos e integração com métricas de fechamento.
+Estabelecer uma cadeia de comando formal, populando o campo `gestor_id` dos colaboradores e gerando automaticamente o organograma a partir dos dados do RH.
 
 ## Estado Atual
 
-| Situação | Qtd |
-|----------|-----|
-| Colaboradores com `cargo_catalogo_id` preenchido | 13 |
-| Colaboradores usando texto-livre | 11 |
-| Total de cargos no catálogo | ~30 |
+| Situação | Quantidade |
+|----------|------------|
+| Colaboradores ativos | 22 |
+| Colaboradores **com** gestor definido | 4 |
+| Colaboradores **sem** gestor definido | 18 |
+| Registros no organograma | 0 |
+
+### Gestores Identificados
+- **Grimaldo** (CEO) - gestor de Emily Caroline e Emily Segundario
+- **Jéssica Bellini** (Coordenadora) - gestora de Antony e Cristiane
+
+## Arquitetura da Solução
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                    Admin → Organograma                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [Tab: Estrutura]                    [Tab: Métricas]            │
+│  ┌────────────────────────────────┐                             │
+│  │ [Gerar do RH]  [Limpar]        │                             │
+│  │                                │                             │
+│  │  CEO                           │                             │
+│  │  └── Coordenadora              │                             │
+│  │      ├── SDR N1                │                             │
+│  │      ├── SDR N2                │                             │
+│  │      └── Closer                │                             │
+│  └────────────────────────────────┘                             │
+│                                                                 │
+│  [Tab: Definir Gestores]  (NOVA)                                │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ Colaboradores sem gestor (18)        Ação Rápida           │ │
+│  │ ┌──────────────────────────────────────────────────────┐   │ │
+│  │ │ Carol Correa (SDR Inside N2)    [Selecionar Gestor ▼]│   │ │
+│  │ │ Carol Souza (SDR Inside N1)     [Selecionar Gestor ▼]│   │ │
+│  │ │ ...                                                  │   │ │
+│  │ └──────────────────────────────────────────────────────┘   │ │
+│  │                                                            │ │
+│  │ [Definir em lote: Todos SDR → Jéssica Bellini]             │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Mudanças Necessárias
 
-### 1. Atualizar Interface Employee
+### 1. Nova Tab "Definir Gestores" na página Organograma
 
-**Arquivo:** `src/types/hr.ts`
+**Arquivo:** `src/pages/admin/Organograma.tsx`
 
-Adicionar o campo `cargo_catalogo_id` na interface `Employee`:
+Criar nova aba que exibe:
+- Lista de colaboradores sem gestor
+- Select inline para definir gestor rapidamente
+- Ação em lote para definir gestor por cargo
 
-```typescript
-// Dados profissionais
-cargo: string | null;
-cargo_catalogo_id: string | null;  // NOVO
-departamento: string | null;
-```
+**Componente: GestoresTab**
 
-### 2. Atualizar EmployeeGeneralTab.tsx
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| Lista de pendentes | Colaboradores ativos sem `gestor_id` |
+| Inline edit | Select para escolher gestor diretamente na lista |
+| Bulk assign | Definir gestor para múltiplos colaboradores de uma vez |
+| Filtros | Por cargo, squad, departamento |
 
-**Arquivo:** `src/components/hr/tabs/EmployeeGeneralTab.tsx`
+### 2. Botão "Gerar Organograma do RH"
 
-Substituir o Select hardcoded de `CARGO_OPTIONS` por um Select dinâmico que usa `useCargos()`:
+**Arquivo:** `src/pages/admin/Organograma.tsx` (EstruturaTab)
 
+Adicionar botão que:
+1. Busca todos os colaboradores ativos com `cargo_catalogo_id` e `gestor_id`
+2. Cria nodes no `organograma` respeitando a hierarquia de gestores
+3. Agrupa por squad
+
+**Lógica:**
 ```text
-┌─────────────────────────────────────────────────┐
-│ Cargo / Função                                  │
-├─────────────────────────────────────────────────┤
-│ [____SDR Inside N1 - Inside Sales_________▼]    │
-│                                                 │
-│ Cargo Base: SDR                                 │
-│ Área: Inside Sales                              │
-│ OTE: R$ 3.500,00                                │
-└─────────────────────────────────────────────────┘
+Para cada colaborador:
+  1. Verificar se já existe node no organograma para seu cargo_catalogo_id + squad
+  2. Se não existir, criar node:
+     - cargo_catalogo_id: do colaborador
+     - squad: do colaborador
+     - parent_id: buscar node do gestor (se gestor tiver cargo no organograma)
+     - posicao_ordem: baseado no nível do cargo
 ```
 
-**Comportamento:**
-- Ao selecionar um cargo do catálogo:
-  - Preenche `cargo_catalogo_id` com o ID
-  - Preenche `cargo` com o `cargo_base` (para compatibilidade)
-  - Exibe área e valores do catálogo como info adicional
-- Opção "Outro" para cargos não catalogados (mantém texto-livre)
+### 3. Novo Hook: useGenerateOrganograma
 
-### 3. Atualizar EmployeeFormDialog.tsx
+**Arquivo:** `src/hooks/useOrganograma.ts`
 
-**Arquivo:** `src/components/hr/EmployeeFormDialog.tsx`
-
-Mesmo tratamento do GeneralTab - usar `useCargos()` para popular o Select de cargo no formulário de novo colaborador.
-
-### 4. Criar Componente CargoSelect
-
-**Novo arquivo:** `src/components/hr/CargoSelect.tsx`
-
-Componente reutilizável para seleção de cargo:
+Adicionar mutation para gerar organograma em lote:
 
 ```typescript
-interface CargoSelectProps {
-  value: string | null;  // cargo_catalogo_id
-  cargoTexto: string | null;  // cargo (texto)
-  onChange: (cargoId: string | null, cargoTexto: string | null) => void;
-  disabled?: boolean;
-}
+const generateFromHR = useMutation({
+  mutationFn: async () => {
+    // 1. Buscar employees ativos com cargo_catalogo_id
+    // 2. Agrupar por squad + cargo_catalogo_id
+    // 3. Criar nodes únicos
+    // 4. Estabelecer parent_id baseado em gestor_id
+  }
+});
 ```
 
-**Features:**
-- Agrupa cargos por área (Inside Sales, Consórcio, Crédito, etc.)
-- Mostra nível quando aplicável (ex: "SDR Inside N1", "SDR Inside N2")
-- Opção "Outro" no final para texto personalizado
-- Exibe badge com valores quando cargo selecionado
+### 4. Visualização de Árvore Melhorada
 
-### 5. Sincronizar Valores do Catálogo
+**Arquivo:** `src/pages/admin/Organograma.tsx` (EstruturaTab)
 
-Quando um cargo é selecionado, auto-preencher opcionalmente:
+Melhorar a visualização para mostrar hierarquia real:
+- Linhas de conexão visuais
+- Nomes dos colaboradores em cada posição
+- Contador de pessoas por cargo
 
-| Campo Employee | Fonte no Catálogo |
-|----------------|-------------------|
-| `salario_base` | `fixo_valor` |
-| `ote_mensal` | `ote_total` |
-| `nivel` | `nivel` |
-
-**Comportamento:** Sugerir ao usuário (não sobrescrever automaticamente)
-
-## Arquivos a Modificar
+## Arquivos a Modificar/Criar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/types/hr.ts` | Adicionar `cargo_catalogo_id` na interface |
-| `src/components/hr/CargoSelect.tsx` | **NOVO** - Componente reutilizável |
-| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Usar CargoSelect |
-| `src/components/hr/EmployeeFormDialog.tsx` | Usar CargoSelect |
+| `src/pages/admin/Organograma.tsx` | Adicionar GestoresTab, melhorar EstruturaTab |
+| `src/hooks/useOrganograma.ts` | Adicionar `useGenerateOrganograma` e `useBulkUpdateGestores` |
+| `src/hooks/useEmployees.ts` | Adicionar query para colaboradores sem gestor |
+
+## Detalhes Técnicos
+
+### GestoresTab - Componente Principal
+
+```typescript
+function GestoresTab() {
+  const { data: employees } = useEmployees();
+  const { updateEmployee } = useEmployeeMutations();
+  
+  // Colaboradores sem gestor
+  const semGestor = employees?.filter(e => 
+    e.status === 'ativo' && !e.gestor_id
+  ) || [];
+  
+  // Colaboradores que podem ser gestores (coordenadores, supervisores, diretores)
+  const possiveisGestores = employees?.filter(e => 
+    e.status === 'ativo' && 
+    ['Coordenador', 'Supervisor', 'Gerente', 'Diretor', 'CEO'].some(c => 
+      e.cargo?.includes(c)
+    )
+  ) || [];
+  
+  return (
+    <div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Colaboradores sem Gestor ({semGestor.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {semGestor.map(emp => (
+            <div key={emp.id} className="flex items-center justify-between py-2">
+              <div>
+                <span>{emp.nome_completo}</span>
+                <Badge>{emp.cargo}</Badge>
+              </div>
+              <Select onValueChange={(gestorId) => updateEmployee.mutate({
+                id: emp.id,
+                data: { gestor_id: gestorId }
+              })}>
+                {possiveisGestores.map(g => (
+                  <SelectItem key={g.id} value={g.id}>{g.nome_completo}</SelectItem>
+                ))}
+              </Select>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+```
+
+### Geração de Organograma
+
+```typescript
+const generateOrganogramaFromHR = useMutation({
+  mutationFn: async () => {
+    // 1. Buscar employees com cargo_catalogo_id
+    const { data: employees } = await supabase
+      .from('employees')
+      .select('id, cargo_catalogo_id, gestor_id, squad, departamento')
+      .eq('status', 'ativo')
+      .not('cargo_catalogo_id', 'is', null);
+    
+    // 2. Criar mapa de cargos únicos por squad
+    const cargoSquadMap = new Map();
+    for (const emp of employees) {
+      const key = `${emp.cargo_catalogo_id}-${emp.squad || 'geral'}`;
+      if (!cargoSquadMap.has(key)) {
+        cargoSquadMap.set(key, {
+          cargo_catalogo_id: emp.cargo_catalogo_id,
+          squad: emp.squad,
+          departamento: emp.departamento,
+        });
+      }
+    }
+    
+    // 3. Inserir nodes no organograma
+    const nodes = Array.from(cargoSquadMap.values()).map((n, i) => ({
+      ...n,
+      posicao_ordem: i + 1,
+      ativo: true,
+    }));
+    
+    await supabase.from('organograma').insert(nodes);
+  }
+});
+```
 
 ## Fluxo de Implementação
 
 ```text
-1. Atualizar tipo Employee
+1. Adicionar GestoresTab no Organograma.tsx
           ↓
-2. Criar CargoSelect.tsx
+2. Implementar lista de colaboradores sem gestor
           ↓
-3. Integrar no EmployeeGeneralTab
+3. Adicionar inline select para definir gestor
           ↓
-4. Integrar no EmployeeFormDialog
+4. Implementar ação em lote
           ↓
-5. Testar vinculação com fechamento
+5. Criar hook useGenerateOrganograma
+          ↓
+6. Adicionar botão "Gerar do RH" na EstruturaTab
+          ↓
+7. Melhorar visualização da árvore
 ```
 
 ## Benefícios
 
-1. **Padronização:** Todos usam os mesmos nomes de cargo
-2. **Integração com Fechamento:** `cargo_catalogo_id` liga ao sistema de métricas
-3. **Valores Sugeridos:** Salário e OTE do catálogo como referência
-4. **Compatibilidade:** Campo `cargo` texto mantido para relatórios legados
-5. **Flexibilidade:** Opção "Outro" para cargos especiais
-
-## Detalhes Técnicos
-
-### CargoSelect - Estrutura do Select Agrupado
-
-```typescript
-// Agrupar por área
-const cargosByArea = useMemo(() => {
-  return cargos?.reduce((acc, cargo) => {
-    const area = cargo.area || 'Outros';
-    if (!acc[area]) acc[area] = [];
-    acc[area].push(cargo);
-    return acc;
-  }, {} as Record<string, CargoCatalogo[]>) || {};
-}, [cargos]);
-
-// Renderização
-<SelectContent>
-  {Object.entries(cargosByArea).map(([area, cargos]) => (
-    <SelectGroup key={area}>
-      <SelectLabel>{area}</SelectLabel>
-      {cargos.map(cargo => (
-        <SelectItem key={cargo.id} value={cargo.id}>
-          {cargo.nome_exibicao}
-          {cargo.nivel && ` - N${cargo.nivel}`}
-        </SelectItem>
-      ))}
-    </SelectGroup>
-  ))}
-  <SelectSeparator />
-  <SelectItem value="_outro">Outro (texto livre)</SelectItem>
-</SelectContent>
-```
-
-### Info Card quando cargo selecionado
-
-```typescript
-{selectedCargo && (
-  <div className="mt-2 p-2 bg-muted rounded text-xs">
-    <div className="flex justify-between">
-      <span>Base: {selectedCargo.cargo_base}</span>
-      <span>Área: {selectedCargo.area}</span>
-    </div>
-    {selectedCargo.ote_total > 0 && (
-      <div className="text-green-600">
-        OTE: {formatCurrency(selectedCargo.ote_total)}
-      </div>
-    )}
-  </div>
-)}
-```
+1. **Gestão visual**: Ver todos colaboradores sem gestor em um lugar
+2. **Agilidade**: Definir gestores inline, sem abrir formulário
+3. **Organograma automático**: Gerado a partir dos dados existentes
+4. **Hierarquia formal**: Cadeia de comando documentada
+5. **Base para métricas**: Estrutura para calcular performance por equipe
