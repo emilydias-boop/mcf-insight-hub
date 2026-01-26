@@ -7,6 +7,8 @@ import { DealKanbanBoard } from '@/components/crm/DealKanbanBoard';
 import { OriginsSidebar } from '@/components/crm/OriginsSidebar';
 import { DealFilters, DealFiltersState } from '@/components/crm/DealFilters';
 import { DealFormDialog } from '@/components/crm/DealFormDialog';
+import { BulkActionsBar } from '@/components/crm/BulkActionsBar';
+import { BulkTransferDialog } from '@/components/crm/BulkTransferDialog';
 import { useCRMPipelines } from '@/components/crm/PipelineSelector';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { useStagePermissions } from '@/hooks/useStagePermissions';
@@ -22,6 +24,10 @@ import {
   SDR_AUTHORIZED_ORIGIN_ID 
 } from '@/components/auth/NegociosAccessGuard';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
+import { useBulkA010Check } from '@/hooks/useBulkA010Check';
+import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
+import { useBulkTransfer } from '@/hooks/useBulkTransfer';
+import { differenceInDays } from 'date-fns';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -38,7 +44,15 @@ const Negocios = () => {
     dateRange: undefined,
     owner: null,
     dealStatus: 'all',
+    inactivityDays: null,
+    salesChannel: 'all',
   });
+  
+  // Estado para modo de seleção e transferência em massa
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const bulkTransfer = useBulkTransfer();
   
   // Verificar se é SDR (acesso restrito ao Pipeline Inside Sales)
   const isSdr = isSdrRole(role);
@@ -128,6 +142,30 @@ const Negocios = () => {
   const syncMutation = useSyncClintData();
   const visibleStages = getVisibleStages();
   
+  // Extrair deal IDs e stage IDs para buscar atividades em batch
+  const dealIds = useMemo(() => (dealsData || []).map((d: any) => d.id), [dealsData]);
+  const stageIdsMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (dealsData || []).forEach((d: any) => {
+      if (d.stage_id) map.set(d.id, d.stage_id);
+    });
+    return map;
+  }, [dealsData]);
+  
+  // Buscar activity summaries para filtro de inatividade
+  const { data: activitySummaries } = useBatchDealActivitySummary(dealIds, stageIdsMap);
+  
+  // Extrair emails para verificação de A010 em batch
+  const dealEmails = useMemo(() => 
+    (dealsData || [])
+      .map((d: any) => d.crm_contacts?.email)
+      .filter(Boolean) as string[],
+    [dealsData]
+  );
+  
+  // Verificar A010 em batch
+  const { data: a010StatusMap } = useBulkA010Check(dealEmails);
+  
   // Verificar se é SDR ou Closer (veem apenas próprios deals)
   const isRestrictedRole = role === 'sdr' || role === 'closer';
   
@@ -139,55 +177,104 @@ const Negocios = () => {
     });
   };
   
-  const filteredDeals = (dealsData || []).filter((deal: any) => {
-    if (!deal || !deal.id || !deal.name) return false;
-    
-    // Filtro por role: SDR/Closer veem apenas seus próprios deals
-    if (isRestrictedRole && userProfile?.email) {
-      if (deal.owner_id !== userProfile.email) return false;
-    }
-    
-    // Busca expandida: nome do deal, nome do contato, email e telefone
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      const searchRaw = filters.search;
-      
-      const matchesDealName = deal.name?.toLowerCase().includes(searchLower);
-      const matchesContactName = deal.crm_contacts?.name?.toLowerCase().includes(searchLower);
-      const matchesEmail = deal.crm_contacts?.email?.toLowerCase().includes(searchLower);
-      const matchesPhone = deal.crm_contacts?.phone?.includes(searchRaw);
-      
-      if (!matchesDealName && !matchesContactName && !matchesEmail && !matchesPhone) {
-        return false;
+  // Handlers de seleção
+  const handleSelectionChange = (dealId: string, selected: boolean) => {
+    setSelectedDealIds(prev => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(dealId);
+      } else {
+        newSet.delete(dealId);
       }
+      return newSet;
+    });
+  };
+  
+  const handleClearSelection = () => {
+    setSelectedDealIds(new Set());
+    setSelectionMode(false);
+  };
+  
+  const handleToggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    if (selectionMode) {
+      setSelectedDealIds(new Set());
     }
-    
-    // Filtro por data de criação
-    if (filters.dateRange?.from) {
-      const dealDate = new Date(deal.created_at);
-      const fromDate = new Date(filters.dateRange.from);
-      fromDate.setHours(0, 0, 0, 0);
+  };
+  
+  const filteredDeals = useMemo(() => {
+    return (dealsData || []).filter((deal: any) => {
+      if (!deal || !deal.id || !deal.name) return false;
       
-      if (dealDate < fromDate) return false;
-      
-      if (filters.dateRange.to) {
-        const toDate = new Date(filters.dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        if (dealDate > toDate) return false;
+      // Filtro por role: SDR/Closer veem apenas seus próprios deals
+      if (isRestrictedRole && userProfile?.email) {
+        if (deal.owner_id !== userProfile.email) return false;
       }
-    }
-    
-    if (filters.owner && deal.owner_id !== filters.owner) return false;
-    
-    // Filtro por status do negócio (baseado no estágio)
-    if (filters.dealStatus !== 'all') {
-      const stageName = deal.crm_stages?.stage_name;
-      const dealStatus = getDealStatusFromStage(stageName);
-      if (dealStatus !== filters.dealStatus) return false;
-    }
-    
-    return true;
-  });
+      
+      // Busca expandida: nome do deal, nome do contato, email e telefone
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        const searchRaw = filters.search;
+        
+        const matchesDealName = deal.name?.toLowerCase().includes(searchLower);
+        const matchesContactName = deal.crm_contacts?.name?.toLowerCase().includes(searchLower);
+        const matchesEmail = deal.crm_contacts?.email?.toLowerCase().includes(searchLower);
+        const matchesPhone = deal.crm_contacts?.phone?.includes(searchRaw);
+        
+        if (!matchesDealName && !matchesContactName && !matchesEmail && !matchesPhone) {
+          return false;
+        }
+      }
+      
+      // Filtro por data de criação
+      if (filters.dateRange?.from) {
+        const dealDate = new Date(deal.created_at);
+        const fromDate = new Date(filters.dateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+        
+        if (dealDate < fromDate) return false;
+        
+        if (filters.dateRange.to) {
+          const toDate = new Date(filters.dateRange.to);
+          toDate.setHours(23, 59, 59, 999);
+          if (dealDate > toDate) return false;
+        }
+      }
+      
+      if (filters.owner && deal.owner_id !== filters.owner) return false;
+      
+      // Filtro por status do negócio (baseado no estágio)
+      if (filters.dealStatus !== 'all') {
+        const stageName = deal.crm_stages?.stage_name;
+        const dealStatus = getDealStatusFromStage(stageName);
+        if (dealStatus !== filters.dealStatus) return false;
+      }
+      
+      // Filtro por inatividade
+      if (filters.inactivityDays !== null) {
+        const summary = activitySummaries?.get(deal.id);
+        const lastActivity = summary?.lastContactAttempt;
+        
+        if (!lastActivity) {
+          // Sem atividade = muito tempo inativo (sempre passa no filtro)
+        } else {
+          const daysSince = differenceInDays(new Date(), new Date(lastActivity));
+          if (daysSince < filters.inactivityDays) return false;
+        }
+      }
+      
+      // Filtro por canal de entrada (A010 vs LIVE)
+      if (filters.salesChannel !== 'all') {
+        const email = deal.crm_contacts?.email?.toLowerCase();
+        const isA010 = email ? (a010StatusMap?.get(email) ?? false) : false;
+        
+        if (filters.salesChannel === 'a010' && !isA010) return false;
+        if (filters.salesChannel === 'live' && isA010) return false;
+      }
+      
+      return true;
+    });
+  }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap]);
   
   const clearFilters = () => {
     setFilters({
@@ -195,6 +282,8 @@ const Negocios = () => {
       dateRange: undefined,
       owner: null,
       dealStatus: 'all',
+      inactivityDays: null,
+      salesChannel: 'all',
     });
   };
   
@@ -262,6 +351,8 @@ const Negocios = () => {
           filters={filters}
           onChange={setFilters}
           onClear={clearFilters}
+          selectionMode={selectionMode}
+          onToggleSelectionMode={handleToggleSelectionMode}
         />
         
         <div className="flex-1 overflow-hidden p-2 sm:p-4">
@@ -300,17 +391,36 @@ const Negocios = () => {
               </div>
             </div>
           ) : (
-          <DealKanbanBoard 
+            <DealKanbanBoard 
               deals={filteredDeals.map((deal: any) => ({
                 ...deal,
                 stage: deal.crm_stages?.stage_name || 'Sem estágio',
               }))}
               originId={effectiveOriginId}
               showLostDeals={filters.dealStatus === 'lost'}
+              selectionMode={selectionMode}
+              selectedDealIds={selectedDealIds}
+              onSelectionChange={handleSelectionChange}
             />
           )}
         </div>
       </div>
+      
+      {/* Barra de ações em massa */}
+      <BulkActionsBar
+        selectedCount={selectedDealIds.size}
+        onTransfer={() => setTransferDialogOpen(true)}
+        onClearSelection={handleClearSelection}
+        isTransferring={bulkTransfer.isPending}
+      />
+      
+      {/* Dialog de transferência em massa */}
+      <BulkTransferDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        selectedDealIds={Array.from(selectedDealIds)}
+        onSuccess={handleClearSelection}
+      />
     </div>
   );
 };

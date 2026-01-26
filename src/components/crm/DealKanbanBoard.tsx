@@ -31,11 +31,21 @@ interface DealKanbanBoardProps {
   deals: Deal[];
   originId?: string;
   showLostDeals?: boolean;
+  selectionMode?: boolean;
+  selectedDealIds?: Set<string>;
+  onSelectionChange?: (dealId: string, selected: boolean) => void;
 }
 
 const INITIAL_VISIBLE_COUNT = 50;
 
-export const DealKanbanBoard = ({ deals, originId, showLostDeals = false }: DealKanbanBoardProps) => {
+export const DealKanbanBoard = ({ 
+  deals, 
+  originId, 
+  showLostDeals = false,
+  selectionMode = false,
+  selectedDealIds = new Set(),
+  onSelectionChange,
+}: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
@@ -232,6 +242,9 @@ export const DealKanbanBoard = ({ deals, originId, showLostDeals = false }: Deal
                                     provided={provided}
                                     onClick={() => handleDealClick(deal.id)}
                                     activitySummary={activitySummaries?.get(deal.id)}
+                                    selectionMode={selectionMode}
+                                    isSelected={selectedDealIds.has(deal.id)}
+                                    onSelect={onSelectionChange}
                                   />
                                 )}
                               </Draggable>

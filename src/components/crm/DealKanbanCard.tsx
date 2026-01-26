@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
   TooltipContent,
@@ -34,9 +35,21 @@ interface DealKanbanCardProps {
   provided: any;
   onClick?: () => void;
   activitySummary?: ActivitySummary;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (dealId: string, selected: boolean) => void;
 }
 
-export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySummary }: DealKanbanCardProps) => {
+export const DealKanbanCard = ({ 
+  deal, 
+  isDragging, 
+  provided, 
+  onClick, 
+  activitySummary,
+  selectionMode = false,
+  isSelected = false,
+  onSelect,
+}: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
   const { role } = useAuth();
   const isTestDeal = isTestPipeline(deal.origin_id);
@@ -45,6 +58,11 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
   
   // Apenas admin, manager e coordenador podem transferir leads
   const canChangeOwner = role === 'admin' || role === 'manager' || role === 'coordenador';
+  
+  const handleCheckboxChange = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect?.(deal.id, !isSelected);
+  };
 
   // Dados derivados
   const contact = deal.crm_contacts || deal.contact;
@@ -218,12 +236,22 @@ export const DealKanbanCard = ({ deal, isDragging, provided, onClick, activitySu
       {...provided.dragHandleProps}
       className={`cursor-pointer hover:shadow-md transition-shadow ${
         isDragging ? "shadow-lg ring-2 ring-primary" : ""
-      } ${activitySummary?.attemptsExhausted ? "border-l-2 border-l-destructive" : ""}`}
+      } ${activitySummary?.attemptsExhausted ? "border-l-2 border-l-destructive" : ""} ${
+        isSelected ? "ring-2 ring-primary bg-primary/5" : ""
+      }`}
       onClick={onClick}
     >
       <CardContent className="p-2.5 space-y-1.5">
-        {/* Linha 1: Canal + Mês + Tags + Prioridade */}
+        {/* Linha 1: Checkbox (modo seleção) + Canal + Mês + Tags + Prioridade */}
         <div className="flex items-center gap-1 flex-wrap">
+          {selectionMode && (
+            <div onClick={handleCheckboxChange} className="mr-1">
+              <Checkbox 
+                checked={isSelected} 
+                className="data-[state=checked]:bg-primary"
+              />
+            </div>
+          )}
           {/* Badge de Canal de Venda (A010 vs LIVE) */}
           <Badge 
             variant="outline" 
