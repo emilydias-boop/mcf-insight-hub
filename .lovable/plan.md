@@ -1,79 +1,44 @@
 
-# Plano: Corrigir Classificação A010 - Limitar Requisições Paralelas
+# Plano: Corrigir Filtro de Responsáveis e Adicionar Seleção por Stage
 
-## Problema Raiz
+## Problema 1: Jessica Bellini não aparece no filtro
 
-Os logs mostram erros **"Failed to fetch"** nos chunks 19-23+:
+### Diagnóstico
+- Jessica Bellini tem role **admin** (não SDR/Closer)
+- O filtro de responsáveis (`DealFilters.tsx`) busca APENAS usuários com roles `sdr` ou `closer`
+- Ela tem **86 deals** atribuídos a ela que não podem ser filtrados
 
-```
-[useBulkA010Check] Erro no chunk 19: TypeError: Failed to fetch
-[useBulkA010Check] Erro no chunk 20: TypeError: Failed to fetch
-...
-```
+### Solução
+Expandir a query para incluir **todos os roles que podem ter deals atribuídos**:
+- `sdr`
+- `closer`
+- `admin`
+- `manager`
+- `coordenador`
 
-**Causa**: Com ~5.000 emails divididos em chunks de 200 (~25 chunks), todas as requisições são feitas em paralelo via `Promise.allSettled`. Navegadores têm **limite de 6-8 conexões simultâneas por domínio**. Quando esse limite é excedido, requisições falham com "Failed to fetch".
+| Query Atual | Query Nova |
+|-------------|------------|
+| `.in('user_roles.role', ['sdr', 'closer'])` | `.in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])` |
 
-**Efeito**: Emails nos chunks que falharam são marcados como `false` (não A010), exibindo incorretamente o badge "LIVE".
-
----
-
-## Solução
-
-Implementar **controle de concorrência** para limitar o número de requisições paralelas (máximo 5 de cada vez), usando uma função `processInBatches` que aguarda a conclusão de um lote antes de iniciar o próximo.
-
-### Mudanças no Hook
-
-**Arquivo**: `src/hooks/useBulkA010Check.ts`
-
-| Antes | Depois |
-|-------|--------|
-| `Promise.allSettled(chunks.map(...))` | Processar em lotes de 5 chunks por vez |
-| Todas requisições simultâneas | Aguardar cada lote terminar antes do próximo |
-| Falhas por limite de conexão | Requisições controladas, sem falhas |
+Também preciso atualizar a mesma query no `BulkTransferDialog.tsx` para que a transferência em massa possa atribuir para qualquer usuário operacional.
 
 ---
 
-## Detalhes Técnicos
+## Problema 2: Sem opção de selecionar todos de uma stage
 
-### Função de Controle de Concorrência
+### Diagnóstico
+- O modo de seleção atual permite apenas clicar em cards individuais
+- Não há botão para selecionar/desselecionar todos os cards de uma coluna (stage)
+- Isso dificulta transferências em massa quando há muitos leads em uma stage
 
-```typescript
-async function processInBatches<T>(
-  items: T[],
-  batchSize: number,
-  processor: (item: T) => Promise<any>
-): Promise<PromiseSettledResult<any>[]> {
-  const results: PromiseSettledResult<any>[] = [];
-  
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    const batchResults = await Promise.allSettled(
-      batch.map(item => processor(item))
-    );
-    results.push(...batchResults);
-  }
-  
-  return results;
-}
-```
+### Solução
+Adicionar um **botão "Selecionar todos"** no header de cada coluna do Kanban quando o modo de seleção estiver ativo:
 
-### Uso no Hook
-
-```typescript
-// Processar no máximo 5 chunks por vez (5 x 200 = 1000 emails por lote)
-const MAX_CONCURRENT_REQUESTS = 5;
-
-const results = await processInBatches(
-  emailChunks,
-  MAX_CONCURRENT_REQUESTS,
-  (chunk) => supabase
-    .from('hubla_transactions')
-    .select('customer_email')
-    .eq('product_category', 'a010')
-    .eq('sale_status', 'completed')
-    .in('customer_email', chunk)
-);
-```
+| Estado | Comportamento |
+|--------|---------------|
+| Nenhum selecionado | Botão "☐" exibe count → seleciona todos visíveis |
+| Alguns selecionados | Botão "◐" exibe count → seleciona todos visíveis |
+| Todos selecionados | Botão "☑" exibe count → desseleciona todos |
 
 ---
 
@@ -81,14 +46,105 @@ const results = await processInBatches(
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useBulkA010Check.ts` | Adicionar `processInBatches` e aplicar nos hooks |
+| `src/components/crm/DealFilters.tsx` | Expandir roles na query de responsáveis |
+| `src/components/crm/BulkTransferDialog.tsx` | Expandir roles para destino de transferência |
+| `src/components/crm/DealKanbanBoard.tsx` | Adicionar botão "Selecionar todos" por stage |
+
+---
+
+## Detalhes Técnicos
+
+### 1. Atualizar Query de Responsáveis (DealFilters.tsx)
+
+**Linha 64 - Antes:**
+```typescript
+.in('user_roles.role', ['sdr', 'closer'])
+```
+
+**Depois:**
+```typescript
+.in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])
+```
+
+### 2. Atualizar Query de Transferência (BulkTransferDialog.tsx)
+
+**Linha 37 - Antes:**
+```typescript
+.in('user_roles.role', ['sdr', 'closer'])
+```
+
+**Depois:**
+```typescript
+.in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])
+```
+
+### 3. Adicionar Seleção por Stage (DealKanbanBoard.tsx)
+
+Adicionar no header de cada coluna (quando `selectionMode === true`):
+
+```typescript
+// No CardHeader, ao lado do Badge de contagem
+{selectionMode && (
+  <Button
+    variant="ghost"
+    size="sm"
+    onClick={() => handleSelectAllInStage(stage.id, stageDeals)}
+    className="h-6 w-6 p-0"
+  >
+    {/* Ícone de checkbox baseado no estado */}
+    {allSelected ? <CheckSquare /> : someSelected ? <MinusSquare /> : <Square />}
+  </Button>
+)}
+```
+
+**Nova função:**
+```typescript
+const handleSelectAllInStage = (stageId: string, stageDeals: Deal[]) => {
+  const stageDealIds = stageDeals.map(d => d.id);
+  const allSelected = stageDealIds.every(id => selectedDealIds.has(id));
+  
+  stageDealIds.forEach(id => {
+    onSelectionChange?.(id, !allSelected);
+  });
+};
+```
+
+---
+
+## Props Necessárias
+
+O `DealKanbanBoard` precisa receber mais uma prop do `Negocios.tsx`:
+
+```typescript
+interface DealKanbanBoardProps {
+  // ... props existentes
+  onSelectAllInStage?: (dealIds: string[], selected: boolean) => void;
+}
+```
+
+E em `Negocios.tsx`, adicionar handler:
+
+```typescript
+const handleSelectAllInStage = (dealIds: string[], selected: boolean) => {
+  setSelectedDealIds(prev => {
+    const newSet = new Set(prev);
+    dealIds.forEach(id => {
+      if (selected) {
+        newSet.add(id);
+      } else {
+        newSet.delete(id);
+      }
+    });
+    return newSet;
+  });
+};
+```
 
 ---
 
 ## Resultado Esperado
 
-- Requisições controladas em lotes de 5 (dentro do limite do navegador)
-- Zero erros "Failed to fetch"
-- Todos os emails A010 corretamente identificados com badge azul
-- Leads BIO com badge verde
-- Leads LIVE com badge roxo
+1. Jessica Bellini e outros admins/managers aparecem no dropdown de responsáveis
+2. Transferência em massa pode atribuir para admins/managers também
+3. Em modo de seleção, cada coluna tem um checkbox no header para selecionar/desselecionar todos os cards visíveis daquela stage
+4. O checkbox indica visualmente se todos, alguns ou nenhum estão selecionados
