@@ -24,7 +24,7 @@ import {
   SDR_AUTHORIZED_ORIGIN_ID 
 } from '@/components/auth/NegociosAccessGuard';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
-import { useBulkA010Check } from '@/hooks/useBulkA010Check';
+import { useBulkA010Check, detectSalesChannel, SalesChannel } from '@/hooks/useBulkA010Check';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { differenceInDays } from 'date-fns';
@@ -166,6 +166,34 @@ const Negocios = () => {
   // Verificar A010 em batch
   const { data: a010StatusMap } = useBulkA010Check(dealEmails);
   
+  // Criar mapa de canais (email -> SalesChannel) para passar ao board
+  const channelMap = useMemo(() => {
+    if (!a010StatusMap || !dealsData) return new Map<string, SalesChannel>();
+    
+    const map = new Map<string, SalesChannel>();
+    
+    // Criar set de emails A010
+    const a010Emails = new Set(
+      Array.from(a010StatusMap.entries())
+        .filter(([_, isA010]) => isA010)
+        .map(([email]) => email)
+    );
+    
+    // Mapear cada deal para seu canal
+    (dealsData as any[]).forEach((deal: any) => {
+      const email = deal.crm_contacts?.email?.toLowerCase();
+      if (email) {
+        const channel = detectSalesChannel(email, a010Emails, {
+          tags: deal.tags,
+          customFields: deal.custom_fields,
+        });
+        map.set(email, channel);
+      }
+    });
+    
+    return map;
+  }, [a010StatusMap, dealsData]);
+  
   // Verificar se é SDR ou Closer (veem apenas próprios deals)
   const isRestrictedRole = role === 'sdr' || role === 'closer';
   
@@ -263,13 +291,24 @@ const Negocios = () => {
         }
       }
       
-      // Filtro por canal de entrada (A010 vs LIVE)
+      // Filtro por canal de entrada (A010 vs BIO vs LIVE)
       if (filters.salesChannel !== 'all') {
         const email = deal.crm_contacts?.email?.toLowerCase();
         const isA010 = email ? (a010StatusMap?.get(email) ?? false) : false;
         
-        if (filters.salesChannel === 'a010' && !isA010) return false;
-        if (filters.salesChannel === 'live' && isA010) return false;
+        // Detectar canal completo usando tags e custom_fields
+        const a010Emails = new Set(
+          Array.from(a010StatusMap?.entries() || [])
+            .filter(([_, isA010]) => isA010)
+            .map(([email]) => email)
+        );
+        
+        const channel = detectSalesChannel(email, a010Emails, {
+          tags: deal.tags,
+          customFields: deal.custom_fields,
+        });
+        
+        if (filters.salesChannel !== channel) return false;
       }
       
       return true;
@@ -401,6 +440,7 @@ const Negocios = () => {
               selectionMode={selectionMode}
               selectedDealIds={selectedDealIds}
               onSelectionChange={handleSelectionChange}
+              channelMap={channelMap}
             />
           )}
         </div>

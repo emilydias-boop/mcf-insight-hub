@@ -309,6 +309,99 @@ function normalizePhone(phone: string | null): string | null {
   return '+' + clean;
 }
 
+// ============= HELPER: Parsear tags do Clint =============
+/**
+ * Converte a string de tags do Clint em um array de tags
+ * Exemplos de entrada:
+ *   "[A010 - Construa para Vender BIO - Instagram]" → ["A010 - Construa para Vender", "BIO - Instagram"]
+ *   "Tag1, Tag2" → ["Tag1", "Tag2"]
+ *   "[Tag Única]" → ["Tag Única"]
+ */
+function parseClintTags(tagString: string | null | undefined): string[] {
+  if (!tagString || typeof tagString !== 'string') return [];
+  
+  // Remover colchetes externos se presentes
+  let cleaned = tagString.trim();
+  if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  
+  // Tentar detectar padrões de múltiplas tags dentro da string
+  // Padrão comum do Clint: "A010 - Algo BIO - Instagram" (separado por categoria - descrição)
+  const tagPatterns = [
+    /\b(A010\s*-\s*[^,\[\]]+)/gi,
+    /\b(BIO\s*-\s*[^,\[\]]+)/gi,
+    /\b(LIVE\s*-\s*[^,\[\]]+)/gi,
+    /\b(LEAD\s*-\s*[^,\[\]]+)/gi,
+  ];
+  
+  const extractedTags: string[] = [];
+  let remainingString = cleaned;
+  
+  // Extrair tags que seguem padrões conhecidos
+  for (const pattern of tagPatterns) {
+    const matches = cleaned.match(pattern);
+    if (matches) {
+      for (const match of matches) {
+        const trimmed = match.trim();
+        if (trimmed && !extractedTags.includes(trimmed)) {
+          extractedTags.push(trimmed);
+          remainingString = remainingString.replace(match, '').trim();
+        }
+      }
+    }
+  }
+  
+  // Se não encontrou padrões conhecidos, tentar separar por vírgula
+  if (extractedTags.length === 0) {
+    const commaSplit = cleaned.split(',').map(t => t.trim()).filter(Boolean);
+    if (commaSplit.length > 1) {
+      return commaSplit;
+    }
+    
+    // Se é uma única string não vazia, retornar como array de 1 elemento
+    if (cleaned.trim()) {
+      return [cleaned.trim()];
+    }
+  }
+  
+  return extractedTags;
+}
+
+/**
+ * Extrai tags de várias fontes possíveis no payload do Clint
+ */
+function extractTagsFromClintPayload(data: any): string[] {
+  // 1. Tags já em formato array
+  if (Array.isArray(data.tags) && data.tags.length > 0) {
+    return data.tags.map((t: any) => typeof t === 'string' ? t : t.name || String(t));
+  }
+  
+  // 2. Campo contact_tag (string do Clint)
+  if (data.contact_tag) {
+    return parseClintTags(data.contact_tag);
+  }
+  
+  // 3. Campo tags como string
+  if (typeof data.tags === 'string') {
+    return parseClintTags(data.tags);
+  }
+  
+  // 4. Verificar em deal ou contact aninhados
+  const dealTags = data.deal?.tags;
+  const contactTags = data.contact?.tags;
+  
+  if (Array.isArray(dealTags)) {
+    return dealTags.map((t: any) => typeof t === 'string' ? t : t.name || String(t));
+  }
+  
+  if (Array.isArray(contactTags)) {
+    return contactTags.map((t: any) => typeof t === 'string' ? t : t.name || String(t));
+  }
+  
+  return [];
+}
+
 // ============= HANDLERS DE CONTATOS =============
 
 async function handleContactCreated(supabase: any, data: any) {
@@ -318,6 +411,10 @@ async function handleContactCreated(supabase: any, data: any) {
   const email = contactData.email || data.email;
   const phone = contactData.phone || data.phone;
   const normalizedPhone = normalizePhone(phone);
+
+  // Extrair tags do payload do Clint
+  const parsedTags = extractTagsFromClintPayload(data);
+  console.log('[CONTACT.CREATED] Parsed tags:', parsedTags);
 
   // Verificar se já existe pelo email
   if (email) {
@@ -341,14 +438,15 @@ async function handleContactCreated(supabase: any, data: any) {
       email: email,
       phone: normalizedPhone, // TELEFONE NORMALIZADO
       organization_name: data.organization?.name,
-      tags: data.tags || [],
+      tags: parsedTags.length > 0 ? parsedTags : (data.tags || []),
       custom_fields: data.custom_fields || {}
     });
 
   if (error) throw error;
-  console.log('[CONTACT.CREATED] Success with normalized phone:', normalizedPhone);
-  return { action: 'created', contact: contactData.name };
+  console.log('[CONTACT.CREATED] Success with normalized phone:', normalizedPhone, 'tags:', parsedTags);
+  return { action: 'created', contact: contactData.name, tags: parsedTags };
 }
+
 
 async function handleContactUpdated(supabase: any, data: any) {
   const contactData = data.contact || data;
@@ -529,6 +627,10 @@ async function handleDealCreated(supabase: any, data: any) {
   });
   console.log('[DEAL.CREATED] Custom fields:', customFields);
 
+  // 6.1. Extrair e processar tags do Clint (incluindo contact_tag)
+  const parsedTags = extractTagsFromClintPayload(data);
+  console.log('[DEAL.CREATED] Parsed tags:', parsedTags);
+
   // 7. Criar deal com UPSERT para evitar duplicação
   const { data: deal, error } = await supabase
     .from('crm_deals')
@@ -540,7 +642,7 @@ async function handleDealCreated(supabase: any, data: any) {
       contact_id: contactId,
       origin_id: originId,
       owner_id: ownerId,
-      tags: data.tags || dealData.tags || [],
+      tags: parsedTags.length > 0 ? parsedTags : (data.tags || dealData.tags || []),
       probability: data.probability || dealData.probability,
       expected_close_date: data.expected_close_date || dealData.expected_close_date,
       custom_fields: customFields,

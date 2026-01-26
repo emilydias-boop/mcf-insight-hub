@@ -21,13 +21,15 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 
+export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
+
 export interface DealFiltersState {
   search: string;
   dateRange: DateRange | undefined;
   owner: string | null;
   dealStatus: 'all' | 'open' | 'won' | 'lost';
   inactivityDays: number | null;
-  salesChannel: 'all' | 'a010' | 'live';
+  salesChannel: SalesChannelFilter;
 }
 
 interface DealFiltersProps {
@@ -168,7 +170,7 @@ export const DealFilters = ({
         value={filters.salesChannel}
         onValueChange={(value) => onChange({ 
           ...filters, 
-          salesChannel: value as 'all' | 'a010' | 'live' 
+          salesChannel: value as SalesChannelFilter 
         })}
       >
         <SelectTrigger className="w-[130px]">
@@ -183,6 +185,12 @@ export const DealFilters = ({
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500" />
               A010
+            </span>
+          </SelectItem>
+          <SelectItem value="bio">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              BIO
             </span>
           </SelectItem>
           <SelectItem value="live">

@@ -27,7 +27,7 @@ import { ActivitySummary } from "@/hooks/useDealActivitySummary";
 import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { OwnerChangeDialog } from "./OwnerChangeDialog";
-import { useA010Journey } from "@/hooks/useA010Journey";
+import { SalesChannel, detectSalesChannel } from "@/hooks/useBulkA010Check";
 
 interface DealKanbanCardProps {
   deal: any;
@@ -38,6 +38,7 @@ interface DealKanbanCardProps {
   selectionMode?: boolean;
   isSelected?: boolean;
   onSelect?: (dealId: string, selected: boolean) => void;
+  salesChannel?: SalesChannel;
 }
 
 export const DealKanbanCard = ({ 
@@ -49,6 +50,7 @@ export const DealKanbanCard = ({
   selectionMode = false,
   isSelected = false,
   onSelect,
+  salesChannel = 'live',
 }: DealKanbanCardProps) => {
   const { makeCall, isTestPipeline, deviceStatus, initializeDevice } = useTwilio();
   const { role } = useAuth();
@@ -70,9 +72,29 @@ export const DealKanbanCard = ({
   const contactEmail = contact?.email;
   const contactPhone = contact?.phone;
 
-  // Hook para detectar canal de venda (A010 vs LIVE)
-  const { data: a010Data } = useA010Journey(contactEmail, contactPhone);
-  const isA010 = a010Data?.hasA010 === true;
+  // Badge de canal baseado na prop salesChannel
+  const getChannelBadge = () => {
+    switch (salesChannel) {
+      case 'a010':
+        return {
+          label: 'A010',
+          className: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-700'
+        };
+      case 'bio':
+        return {
+          label: 'BIO',
+          className: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400 dark:border-green-700'
+        };
+      case 'live':
+      default:
+        return {
+          label: 'LIVE',
+          className: 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-700'
+        };
+    }
+  };
+  
+  const channelBadge = getChannelBadge();
 
   // Formatar mês de entrada: Jan/26, Fev/26, etc.
   const getEntryMonth = (createdAt: string) => {
@@ -252,16 +274,12 @@ export const DealKanbanCard = ({
               />
             </div>
           )}
-          {/* Badge de Canal de Venda (A010 vs LIVE) */}
+          {/* Badge de Canal de Venda (A010 vs BIO vs LIVE) */}
           <Badge 
             variant="outline" 
-            className={`text-[10px] px-1.5 py-0 font-semibold ${
-              isA010 
-                ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-700' 
-                : 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-700'
-            }`}
+            className={`text-[10px] px-1.5 py-0 font-semibold ${channelBadge.className}`}
           >
-            {isA010 ? 'A010' : 'LIVE'}
+            {channelBadge.label}
           </Badge>
           
           {/* Badge de Mês de Entrada */}
