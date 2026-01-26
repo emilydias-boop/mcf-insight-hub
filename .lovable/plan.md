@@ -1,240 +1,323 @@
 
-# Plano: Fase 3 - Definir Gestores e Hierarquia
+# Plano: Fase 4 - Migrar CRM owner_id para UUID (com Profiles Inativos)
 
 ## Objetivo
 
-Estabelecer uma cadeia de comando formal, populando o campo `gestor_id` dos colaboradores e gerando automaticamente o organograma a partir dos dados do RH.
+Padronizar referências de responsáveis no CRM usando UUIDs de `profiles` em vez de emails, **criando profiles inativos** para ex-funcionários que possuem deals históricos, permitindo reativação futura.
 
 ## Estado Atual
 
-| Situação | Quantidade |
-|----------|------------|
-| Colaboradores ativos | 22 |
-| Colaboradores **com** gestor definido | 4 |
-| Colaboradores **sem** gestor definido | 18 |
-| Registros no organograma | 0 |
+| Situação | Quantidade | % |
+|----------|------------|---|
+| Deals com owner_id (email) | 2.893 | 100% |
+| **Mapeáveis** para profiles existentes | 2.447 | 85% |
+| **Ex-funcionários** (precisam de profile) | 446 | 15% |
+| Profiles atuais | 41 | todos "ativo" |
 
-### Gestores Identificados
-- **Grimaldo** (CEO) - gestor de Emily Caroline e Emily Segundario
-- **Jéssica Bellini** (Coordenadora) - gestora de Antony e Cristiane
+### Ex-funcionários a Criar Profiles
+
+| Email | Deals | Status Sugerido |
+|-------|-------|-----------------|
+| angelina.maia@... | 215 | desativado |
+| thayna.tavares@... | 45 | desativado |
+| victor.hugo@... | 33 | desativado |
+| isadora.magri@... | 31 | desativado |
+| jessica.bellini.r2@... | 31 | desativado |
+| leticia.faustino@... | 23 | desativado |
+| caroline.alves@... | 22 | desativado |
+| deisiele.silva@... | 15 | desativado |
+| matheus.garcia@... | 15 | desativado |
+| emily.dias@... | 3 | desativado |
 
 ## Arquitetura da Solução
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    Admin → Organograma                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  [Tab: Estrutura]                    [Tab: Métricas]            │
-│  ┌────────────────────────────────┐                             │
-│  │ [Gerar do RH]  [Limpar]        │                             │
-│  │                                │                             │
-│  │  CEO                           │                             │
-│  │  └── Coordenadora              │                             │
-│  │      ├── SDR N1                │                             │
-│  │      ├── SDR N2                │                             │
-│  │      └── Closer                │                             │
-│  └────────────────────────────────┘                             │
-│                                                                 │
-│  [Tab: Definir Gestores]  (NOVA)                                │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │ Colaboradores sem gestor (18)        Ação Rápida           │ │
-│  │ ┌──────────────────────────────────────────────────────┐   │ │
-│  │ │ Carol Correa (SDR Inside N2)    [Selecionar Gestor ▼]│   │ │
-│  │ │ Carol Souza (SDR Inside N1)     [Selecionar Gestor ▼]│   │ │
-│  │ │ ...                                                  │   │ │
-│  │ └──────────────────────────────────────────────────────┘   │ │
-│  │                                                            │ │
-│  │ [Definir em lote: Todos SDR → Jéssica Bellini]             │ │
-│  └────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+ANTES:                              DEPOIS:
+┌──────────────┐                   ┌──────────────┐
+│  crm_deals   │                   │  crm_deals   │
+├──────────────┤                   ├──────────────┤
+│ owner_id     │──(email)──?       │ owner_id     │ (mantido legacy)
+│              │                   │ owner_profile_id ├──FK──┐
+└──────────────┘                   └──────────────┘        │
+                                                           │
+                                   ┌──────────────┐        │
+                                   │   profiles   │◄───────┘
+                                   ├──────────────┤
+                                   │ access_status│
+                                   │ ├─ ativo     │ (41 usuários)
+                                   │ └─ desativado│ (10+ ex-func)
+                                   └──────────────┘
 ```
 
-## Mudanças Necessárias
+## Implementação em 5 Etapas
 
-### 1. Nova Tab "Definir Gestores" na página Organograma
+---
 
-**Arquivo:** `src/pages/admin/Organograma.tsx`
+### Etapa 1: Criar Profiles Inativos para Ex-funcionários
 
-Criar nova aba que exibe:
-- Lista de colaboradores sem gestor
-- Select inline para definir gestor rapidamente
-- Ação em lote para definir gestor por cargo
+**Tipo:** Migração de dados
 
-**Componente: GestoresTab**
+Criar profiles com `access_status = 'desativado'` para cada email único que:
+- Existe em `crm_deals.owner_id`
+- Não existe em `profiles.email`
+- É um email válido (contém @)
 
-| Funcionalidade | Descrição |
-|----------------|-----------|
-| Lista de pendentes | Colaboradores ativos sem `gestor_id` |
-| Inline edit | Select para escolher gestor diretamente na lista |
-| Bulk assign | Definir gestor para múltiplos colaboradores de uma vez |
-| Filtros | Por cargo, squad, departamento |
-
-### 2. Botão "Gerar Organograma do RH"
-
-**Arquivo:** `src/pages/admin/Organograma.tsx` (EstruturaTab)
-
-Adicionar botão que:
-1. Busca todos os colaboradores ativos com `cargo_catalogo_id` e `gestor_id`
-2. Cria nodes no `organograma` respeitando a hierarquia de gestores
-3. Agrupa por squad
-
-**Lógica:**
-```text
-Para cada colaborador:
-  1. Verificar se já existe node no organograma para seu cargo_catalogo_id + squad
-  2. Se não existir, criar node:
-     - cargo_catalogo_id: do colaborador
-     - squad: do colaborador
-     - parent_id: buscar node do gestor (se gestor tiver cargo no organograma)
-     - posicao_ordem: baseado no nível do cargo
+```sql
+-- Identificar emails sem profile
+INSERT INTO profiles (id, email, full_name, access_status)
+SELECT 
+  gen_random_uuid(),
+  d.owner_id,
+  split_part(d.owner_id, '@', 1) as full_name,  -- "angelina.maia" 
+  'desativado'
+FROM (
+  SELECT DISTINCT owner_id 
+  FROM crm_deals 
+  WHERE owner_id LIKE '%@%'
+) d
+LEFT JOIN profiles p ON d.owner_id = p.email
+WHERE p.id IS NULL;
 ```
 
-### 3. Novo Hook: useGenerateOrganograma
+**Resultado:** ~10 novos profiles desativados
 
-**Arquivo:** `src/hooks/useOrganograma.ts`
+---
 
-Adicionar mutation para gerar organograma em lote:
+### Etapa 2: Adicionar Coluna owner_profile_id
+
+**Tipo:** Migração de schema
+
+```sql
+-- Adicionar coluna
+ALTER TABLE crm_deals 
+ADD COLUMN owner_profile_id UUID REFERENCES profiles(id);
+
+-- Criar índice
+CREATE INDEX idx_crm_deals_owner_profile_id 
+ON crm_deals(owner_profile_id);
+```
+
+---
+
+### Etapa 3: Migrar Dados (Preencher owner_profile_id)
+
+**Tipo:** Migração de dados
+
+```sql
+UPDATE crm_deals d
+SET owner_profile_id = p.id
+FROM profiles p
+WHERE d.owner_id = p.email
+  AND d.owner_profile_id IS NULL;
+```
+
+**Resultado esperado:** ~2.893 deals atualizados (100%)
+
+---
+
+### Etapa 4: Atualizar Código Frontend
+
+#### 4.1 DealFilters.tsx
+
+Alterar filtro para usar UUID em vez de email:
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/crm/DealFilters.tsx` | Linha 137: `value={user.email}` → `value={user.id}` |
+
+Incluir também ex-funcionários (desativados) como opção no filtro, com indicador visual.
+
+#### 4.2 useCRMData.ts
+
+Alterar query para filtrar por `owner_profile_id`:
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useCRMData.ts` | Linha 360: `.eq('owner_id', ...)` → `.eq('owner_profile_id', ...)` |
+
+#### 4.3 DealFormDialog.tsx
+
+Ao criar deal, popular ambos os campos:
 
 ```typescript
-const generateFromHR = useMutation({
-  mutationFn: async () => {
-    // 1. Buscar employees ativos com cargo_catalogo_id
-    // 2. Agrupar por squad + cargo_catalogo_id
-    // 3. Criar nodes únicos
-    // 4. Estabelecer parent_id baseado em gestor_id
-  }
-});
+const payload = {
+  ...formData,
+  owner_id: selectedProfile.email,        // legacy (para sync externo)
+  owner_profile_id: selectedProfile.id,   // novo (para joins)
+};
 ```
 
-### 4. Visualização de Árvore Melhorada
+#### 4.4 OwnerChangeDialog.tsx
 
-**Arquivo:** `src/pages/admin/Organograma.tsx` (EstruturaTab)
+Atualizar transferência de deals para usar UUID.
 
-Melhorar a visualização para mostrar hierarquia real:
-- Linhas de conexão visuais
-- Nomes dos colaboradores em cada posição
-- Contador de pessoas por cargo
+---
 
-## Arquivos a Modificar/Criar
+### Etapa 5: Atualizar Relatórios
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/admin/Organograma.tsx` | Adicionar GestoresTab, melhorar EstruturaTab |
-| `src/hooks/useOrganograma.ts` | Adicionar `useGenerateOrganograma` e `useBulkUpdateGestores` |
-| `src/hooks/useEmployees.ts` | Adicionar query para colaboradores sem gestor |
+#### useContractReport.ts
+
+Substituir busca por `owner_id` (email) por join com profiles via `owner_profile_id`.
+
+#### useSDRR2Metrics.ts
+
+Manter lógica atual de fallback que já usa `booked_by` (UUID) quando disponível.
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Tipo | Alteração |
+|---------|------|-----------|
+| **Banco de dados** | Schema | Adicionar coluna `owner_profile_id` |
+| **Banco de dados** | Dados | Criar profiles desativados + migrar dados |
+| `src/components/crm/DealFilters.tsx` | Frontend | Usar UUID no Select, mostrar ex-funcionários |
+| `src/hooks/useCRMData.ts` | Frontend | Filtrar por `owner_profile_id` |
+| `src/components/crm/DealFormDialog.tsx` | Frontend | Salvar ambos campos |
+| `src/components/crm/OwnerChangeDialog.tsx` | Frontend | Usar `owner_profile_id` |
+| `src/hooks/useContractReport.ts` | Frontend | Join otimizado |
+
+---
 
 ## Detalhes Técnicos
 
-### GestoresTab - Componente Principal
+### DealFilters.tsx - Mostrar Ex-funcionários
 
 ```typescript
-function GestoresTab() {
-  const { data: employees } = useEmployees();
-  const { updateEmployee } = useEmployeeMutations();
-  
-  // Colaboradores sem gestor
-  const semGestor = employees?.filter(e => 
-    e.status === 'ativo' && !e.gestor_id
-  ) || [];
-  
-  // Colaboradores que podem ser gestores (coordenadores, supervisores, diretores)
-  const possiveisGestores = employees?.filter(e => 
-    e.status === 'ativo' && 
-    ['Coordenador', 'Supervisor', 'Gerente', 'Diretor', 'CEO'].some(c => 
-      e.cargo?.includes(c)
-    )
-  ) || [];
-  
-  return (
-    <div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Colaboradores sem Gestor ({semGestor.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {semGestor.map(emp => (
-            <div key={emp.id} className="flex items-center justify-between py-2">
-              <div>
-                <span>{emp.nome_completo}</span>
-                <Badge>{emp.cargo}</Badge>
-              </div>
-              <Select onValueChange={(gestorId) => updateEmployee.mutate({
-                id: emp.id,
-                data: { gestor_id: gestorId }
-              })}>
-                {possiveisGestores.map(g => (
-                  <SelectItem key={g.id} value={g.id}>{g.nome_completo}</SelectItem>
-                ))}
-              </Select>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-```
-
-### Geração de Organograma
-
-```typescript
-const generateOrganogramaFromHR = useMutation({
-  mutationFn: async () => {
-    // 1. Buscar employees com cargo_catalogo_id
-    const { data: employees } = await supabase
-      .from('employees')
-      .select('id, cargo_catalogo_id, gestor_id, squad, departamento')
-      .eq('status', 'ativo')
-      .not('cargo_catalogo_id', 'is', null);
+// Query atualizada para incluir desativados
+const { data: dealOwners } = useQuery({
+  queryKey: ['deal-owners-all'],
+  queryFn: async () => {
+    // Ativos com roles específicos
+    const { data: activeUsers } = await supabase
+      .from('profiles')
+      .select(`id, full_name, email, access_status, user_roles(role)`)
+      .eq('access_status', 'ativo')
+      .in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador']);
     
-    // 2. Criar mapa de cargos únicos por squad
-    const cargoSquadMap = new Map();
-    for (const emp of employees) {
-      const key = `${emp.cargo_catalogo_id}-${emp.squad || 'geral'}`;
-      if (!cargoSquadMap.has(key)) {
-        cargoSquadMap.set(key, {
-          cargo_catalogo_id: emp.cargo_catalogo_id,
-          squad: emp.squad,
-          departamento: emp.departamento,
-        });
-      }
-    }
+    // Desativados que têm deals
+    const { data: inactiveUsers } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, access_status')
+      .eq('access_status', 'desativado');
     
-    // 3. Inserir nodes no organograma
-    const nodes = Array.from(cargoSquadMap.values()).map((n, i) => ({
-      ...n,
-      posicao_ordem: i + 1,
-      ativo: true,
-    }));
-    
-    await supabase.from('organograma').insert(nodes);
+    return {
+      active: activeUsers || [],
+      inactive: inactiveUsers || [],
+    };
   }
 });
+
+// No Select, agrupar por status
+<SelectGroup>
+  <SelectLabel>Ativos</SelectLabel>
+  {dealOwners.active.map(user => (
+    <SelectItem key={user.id} value={user.id}>
+      {user.full_name} ({user.role})
+    </SelectItem>
+  ))}
+</SelectGroup>
+<SelectGroup>
+  <SelectLabel className="text-muted-foreground">Ex-funcionários</SelectLabel>
+  {dealOwners.inactive.map(user => (
+    <SelectItem key={user.id} value={user.id}>
+      <span className="text-muted-foreground">{user.full_name}</span>
+    </SelectItem>
+  ))}
+</SelectGroup>
 ```
+
+### Possibilidade de Reativação
+
+Quando um ex-funcionário retorna:
+1. Admin vai em Gestão de Usuários
+2. Busca pelo profile (agora visível como "desativado")
+3. Altera `access_status` para "ativo"
+4. Cria user em auth.users e vincula ao profile existente
+5. Todos os deals históricos já estão conectados!
+
+---
 
 ## Fluxo de Implementação
 
 ```text
-1. Adicionar GestoresTab no Organograma.tsx
+1. Criar profiles inativos para ex-funcionários
           ↓
-2. Implementar lista de colaboradores sem gestor
+2. Adicionar coluna owner_profile_id
           ↓
-3. Adicionar inline select para definir gestor
+3. Migrar dados (UPDATE em lote)
           ↓
-4. Implementar ação em lote
+4. Atualizar DealFilters.tsx (UUID + grupos)
           ↓
-5. Criar hook useGenerateOrganograma
+5. Atualizar useCRMData.ts 
           ↓
-6. Adicionar botão "Gerar do RH" na EstruturaTab
+6. Atualizar DealFormDialog.tsx
           ↓
-7. Melhorar visualização da árvore
+7. Atualizar OwnerChangeDialog.tsx
+          ↓
+8. Testar filtros, criação e transferência
 ```
+
+---
 
 ## Benefícios
 
-1. **Gestão visual**: Ver todos colaboradores sem gestor em um lugar
-2. **Agilidade**: Definir gestores inline, sem abrir formulário
-3. **Organograma automático**: Gerado a partir dos dados existentes
-4. **Hierarquia formal**: Cadeia de comando documentada
-5. **Base para métricas**: Estrutura para calcular performance por equipe
+1. **Integridade Histórica:** Nenhum deal fica órfão
+2. **Reativação Simples:** Ex-funcionário retorna com histórico intacto
+3. **Performance:** Joins por UUID são mais eficientes
+4. **Visibilidade:** Admin pode ver quem eram os responsáveis históricos
+5. **Compatibilidade:** `owner_id` (email) mantido para sistemas externos
+6. **Auditoria:** Rastreabilidade completa de responsabilidades
+
+---
+
+## Scripts SQL Completos
+
+### 1. Criar Profiles Inativos
+
+```sql
+-- Identificar e criar profiles para emails sem correspondência
+INSERT INTO profiles (id, email, full_name, access_status)
+SELECT 
+  gen_random_uuid() as id,
+  owner_email,
+  INITCAP(REPLACE(SPLIT_PART(owner_email, '@', 1), '.', ' ')) as full_name,
+  'desativado' as access_status
+FROM (
+  SELECT DISTINCT owner_id as owner_email
+  FROM crm_deals 
+  WHERE owner_id LIKE '%@%'
+    AND owner_id NOT IN (SELECT email FROM profiles WHERE email IS NOT NULL)
+) orphan_emails;
+```
+
+### 2. Adicionar Coluna
+
+```sql
+ALTER TABLE crm_deals 
+ADD COLUMN owner_profile_id UUID REFERENCES profiles(id);
+
+CREATE INDEX idx_crm_deals_owner_profile_id 
+ON crm_deals(owner_profile_id);
+```
+
+### 3. Migrar Dados
+
+```sql
+UPDATE crm_deals d
+SET owner_profile_id = p.id
+FROM profiles p
+WHERE d.owner_id = p.email
+  AND d.owner_profile_id IS NULL;
+```
+
+### 4. Verificar Migração
+
+```sql
+SELECT 
+  COUNT(*) FILTER (WHERE owner_profile_id IS NOT NULL) as migrated,
+  COUNT(*) FILTER (WHERE owner_profile_id IS NULL AND owner_id IS NOT NULL) as still_orphan,
+  COUNT(*) as total
+FROM crm_deals;
+-- Esperado: migrated = ~2893, still_orphan = 0
+```
