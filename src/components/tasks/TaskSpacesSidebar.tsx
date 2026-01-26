@@ -109,7 +109,7 @@ export function TaskSpacesSidebar({
 
     return (
       <div key={space.id}>
-        <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(space.id)}>
+      <Collapsible open={isExpanded}>
           <div
             className={cn(
               "group flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer transition-colors",
@@ -118,17 +118,21 @@ export function TaskSpacesSidebar({
                 : "hover:bg-muted"
             )}
             style={{ paddingLeft: `${8 + depth * 16}px` }}
+            onClick={() => onSelectSpace(space.id)}
           >
             {/* Expand/Collapse button */}
             {canExpand && hasChildren ? (
               <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 p-0 hover:bg-transparent"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ChevronRight
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 p-0 hover:bg-transparent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleExpanded(space.id);
+                }}
+              >
+                <ChevronRight
                     className={cn(
                       "h-4 w-4 transition-transform",
                       isExpanded && "rotate-90"
@@ -141,10 +145,7 @@ export function TaskSpacesSidebar({
             )}
 
             {/* Main clickable area */}
-            <div
-              className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden"
-              onClick={() => onSelectSpace(space.id)}
-            >
+            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
               <div
                 className={cn(
                   "p-1 rounded flex-shrink-0",
@@ -167,10 +168,10 @@ export function TaskSpacesSidebar({
                 onAddChild={(type) => openCreateDialog(space.id, space.type, type)}
               />
               {(space.type === "setor" || space.type === "pasta") && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 flex-shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     openCreateDialog(
