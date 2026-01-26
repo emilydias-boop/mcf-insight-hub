@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Employee, EMPLOYEE_STATUS_LABELS, CARGO_OPTIONS, SQUAD_OPTIONS, TIPO_VINCULO_OPTIONS, DEPARTAMENTO_OPTIONS } from '@/types/hr';
+import { Employee, EMPLOYEE_STATUS_LABELS, SQUAD_OPTIONS, TIPO_VINCULO_OPTIONS, DEPARTAMENTO_OPTIONS } from '@/types/hr';
 import { useEmployeeMutations, useEmployees } from '@/hooks/useEmployees';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Save, X, ChevronDown, Briefcase, User, MapPin } from 'lucide-react';
 import ProfileLinkSection from '../ProfileLinkSection';
+import CargoSelect from '../CargoSelect';
+import { useCargos } from '@/hooks/useOrganograma';
 
 interface EmployeeGeneralTabProps {
   employee: Employee;
@@ -77,18 +79,16 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
           <CardContent className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Cargo / Função</Label>
-              <Select
-                value={formData.cargo || '_none'}
-                onValueChange={(v) => setFormData({ ...formData, cargo: v === '_none' ? null : v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">Selecione...</SelectItem>
-                  {CARGO_OPTIONS.map((cargo) => (
-                    <SelectItem key={cargo} value={cargo}>{cargo}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CargoSelect
+                cargoId={formData.cargo_catalogo_id}
+                cargoTexto={formData.cargo}
+                onChange={(cargoId, cargoTexto) => setFormData({ 
+                  ...formData, 
+                  cargo_catalogo_id: cargoId, 
+                  cargo: cargoTexto 
+                })}
+                showInfo={false}
+              />
             </div>
             <div className="space-y-2">
               <Label>Departamento</Label>
