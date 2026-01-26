@@ -1,226 +1,175 @@
 
-# Plano: Unificar Entidades do Sistema (Árvore Organizacional)
+# Plano: Fase 2 - Normalizar Cargos com Catálogo
 
-## Diagnóstico: O Que Está "Solto"
+## Objetivo
 
-Após análise detalhada do banco de dados, identifiquei **7 desconexões críticas** que impedem o sistema de funcionar como uma árvore integrada:
+Substituir o campo de texto-livre "Cargo" por um Select que usa a tabela `cargos_catalogo`, permitindo padronização dos cargos e integração com métricas de fechamento.
 
-| # | Problema | Impacto |
-|---|----------|---------|
-| 1 | **Employees sem Profile** | 17 de 24 colaboradores no RH não têm vínculo com usuários do sistema |
-| 2 | **Organograma Vazio** | Estrutura hierárquica não utilizada (0 registros) |
-| 3 | **Cargo texto-livre** | Colaboradores usam texto livre em vez de `cargos_catalogo` |
-| 4 | **Gestor indefinido** | 20 de 24 sem gestor direto definido |
-| 5 | **CRM usa EMAIL** | `owner_id` usa emails como chave em vez de UUIDs |
-| 6 | **Squads duplicados** | `profiles.squad` vs `employees.squad` desalinhados |
-| 7 | **Sem Foreign Keys** | Nenhum FK entre profiles ↔ employees ↔ organograma |
+## Estado Atual
 
-## Visão da Árvore Unificada
+| Situação | Qtd |
+|----------|-----|
+| Colaboradores com `cargo_catalogo_id` preenchido | 13 |
+| Colaboradores usando texto-livre | 11 |
+| Total de cargos no catálogo | ~30 |
 
-```text
-                    ┌────────────────────────┐
-                    │      auth.users        │
-                    │   (autenticação)       │
-                    └───────────┬────────────┘
-                                │
-                    ┌───────────▼────────────┐
-                    │       profiles         │
-                    │  (identidade sistema)  │
-                    │  email, squad, avatar  │
-                    └───────────┬────────────┘
-                                │ FK
-        ┌───────────────────────┼───────────────────────┐
-        │                       │                       │
-┌───────▼───────┐     ┌─────────▼────────┐     ┌───────▼───────┐
-│  user_roles   │     │    employees     │     │   crm_deals   │
-│  (permissões) │     │  (dados RH/PJ)   │     │  (negócios)   │
-└───────────────┘     └─────────┬────────┘     └───────────────┘
-                                │ FK
-                      ┌─────────▼────────┐
-                      │  cargos_catalogo │
-                      │  (cargo formal)  │
-                      └─────────┬────────┘
-                                │ FK
-                      ┌─────────▼────────┐
-                      │   organograma    │
-                      │  (hierarquia)    │
-                      └──────────────────┘
+## Mudanças Necessárias
+
+### 1. Atualizar Interface Employee
+
+**Arquivo:** `src/types/hr.ts`
+
+Adicionar o campo `cargo_catalogo_id` na interface `Employee`:
+
+```typescript
+// Dados profissionais
+cargo: string | null;
+cargo_catalogo_id: string | null;  // NOVO
+departamento: string | null;
 ```
 
-## Solução em 4 Fases
+### 2. Atualizar EmployeeGeneralTab.tsx
 
----
+**Arquivo:** `src/components/hr/tabs/EmployeeGeneralTab.tsx`
 
-### FASE 1: Vincular Employees aos Profiles
+Substituir o Select hardcoded de `CARGO_OPTIONS` por um Select dinâmico que usa `useCargos()`:
 
-**Objetivo:** Cada colaborador RH deve estar ligado a um usuário do sistema
-
-**Implementação:**
-
-1. Criar tela de "Vinculação" no formulário de colaborador com dropdown de profiles disponíveis
-2. Adicionar botão "Vincular Usuário" na aba Geral do Employee
-3. Ao vincular, sincronizar automaticamente:
-   - `employees.profile_id` ← `profiles.id`
-   - `employees.squad` ← `profiles.squad` (ou vice-versa)
-
-**Arquivos a modificar:**
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Adicionar seção "Usuário do Sistema" com Select de profiles |
-| `src/hooks/useEmployees.ts` | Query para buscar profiles não-vinculados |
-| `src/types/hr.ts` | Adicionar interface para profile vinculado |
-
-**UI proposta:**
 ```text
 ┌─────────────────────────────────────────────────┐
-│ 👤 Usuário do Sistema                           │
+│ Cargo / Função                                  │
 ├─────────────────────────────────────────────────┤
-│ Profile Vinculado: [___Emily Caroline Dias___▼] │
-│ Email: emily.dias@minhacasafinanciada.com       │
-│ Role: admin                                     │
-│                          [Desvincular]          │
+│ [____SDR Inside N1 - Inside Sales_________▼]    │
+│                                                 │
+│ Cargo Base: SDR                                 │
+│ Área: Inside Sales                              │
+│ OTE: R$ 3.500,00                                │
 └─────────────────────────────────────────────────┘
 ```
 
----
+**Comportamento:**
+- Ao selecionar um cargo do catálogo:
+  - Preenche `cargo_catalogo_id` com o ID
+  - Preenche `cargo` com o `cargo_base` (para compatibilidade)
+  - Exibe área e valores do catálogo como info adicional
+- Opção "Outro" para cargos não catalogados (mantém texto-livre)
 
-### FASE 2: Normalizar Cargos com Catálogo
+### 3. Atualizar EmployeeFormDialog.tsx
 
-**Objetivo:** Substituir texto-livre por referência ao `cargos_catalogo`
+**Arquivo:** `src/components/hr/EmployeeFormDialog.tsx`
 
-**Implementação:**
+Mesmo tratamento do GeneralTab - usar `useCargos()` para popular o Select de cargo no formulário de novo colaborador.
 
-1. Alterar campo "Cargo" para Select usando `cargos_catalogo`
-2. Manter campo texto como fallback para cargos não catalogados
-3. Migração: Script para sugerir mapeamento automático baseado em similaridade
+### 4. Criar Componente CargoSelect
 
-**Arquivos a modificar:**
+**Novo arquivo:** `src/components/hr/CargoSelect.tsx`
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Select com `cargos_catalogo` em vez de texto |
-| `src/hooks/useOrganograma.ts` | Exportar hook `useCargos` já existente |
-| Schema DB | Criar FK `employees.cargo_catalogo_id` → `cargos_catalogo.id` |
+Componente reutilizável para seleção de cargo:
 
----
-
-### FASE 3: Definir Gestores e Hierarquia
-
-**Objetivo:** Estabelecer cadeia de comando formal
-
-**Implementação:**
-
-1. Popular `employees.gestor_id` para todos
-2. Gerar automaticamente registros no `organograma` baseado em:
-   - Cargo catalogado do employee
-   - Gestor definido (parent_id)
-   - Squad
-3. Criar botão "Gerar Organograma" na página admin
-
-**Arquivos a modificar:**
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/admin/Organograma.tsx` | Botão "Popular do RH" que cria nodes baseado em employees |
-| `src/hooks/useOrganograma.ts` | Mutation para criação em lote |
-
----
-
-### FASE 4: Migrar CRM owner_id para UUID
-
-**Objetivo:** Padronizar referências usando UUIDs de profiles
-
-**Implementação:**
-
-1. Criar coluna `owner_profile_id UUID` em `crm_deals`
-2. Edge function para migrar dados existentes:
-   - Buscar profile por email
-   - Popular `owner_profile_id`
-3. Atualizar queries do CRM para usar nova coluna
-4. Manter `owner_id` (email) para compatibilidade durante transição
-
-**Arquivos a modificar:**
-
-| Arquivo | Alteração |
-|---------|-----------|
-| Schema DB | Adicionar `crm_deals.owner_profile_id` com FK para profiles |
-| Edge function | `migrate-crm-owners` para popular baseado em email |
-| `src/hooks/useDeals.ts` | Usar `owner_profile_id` em queries |
-| `src/components/crm/DealFilters.tsx` | Filtro por `owner_profile_id` |
-
----
-
-## Ordem de Implementação Recomendada
-
-| Fase | Prioridade | Esforço | Dependências |
-|------|------------|---------|--------------|
-| 1. Vincular Employees/Profiles | ALTA | Médio | Nenhuma |
-| 2. Normalizar Cargos | MÉDIA | Baixo | Fase 1 |
-| 3. Popular Organograma | MÉDIA | Médio | Fase 1 + 2 |
-| 4. Migrar CRM owners | ALTA | Alto | Fase 1 |
-
----
-
-## Benefícios Após Unificação
-
-1. **Visão 360° do colaborador:** Dados RH + Permissões + CRM em uma tela
-2. **Organograma automático:** Gerado a partir dos dados existentes
-3. **Relatórios integrados:** Performance CRM por gestor/squad/departamento
-4. **Consistência:** Uma fonte única de verdade para identidade de usuários
-5. **Métricas de fechamento:** Vinculadas ao cargo formal do catálogo
-
----
-
-## Detalhes Técnicos
-
-### Fase 1 - Vincular Employees aos Profiles
-
-**Novo componente ProfileLinkSection:**
 ```typescript
-// Em EmployeeGeneralTab.tsx
-function ProfileLinkSection({ employee }: { employee: Employee }) {
-  const { data: availableProfiles } = useQuery({
-    queryKey: ['available-profiles'],
-    queryFn: async () => {
-      // Buscar profiles que ainda não estão vinculados a nenhum employee
-      const { data } = await supabase
-        .from('profiles')
-        .select(`id, email, full_name, squad, user_roles!inner(role)`)
-        .eq('access_status', 'ativo');
-      return data;
-    }
-  });
-  
-  const linkedProfile = availableProfiles?.find(p => p.id === employee.profile_id);
-  
-  // UI para vincular/desvincular
+interface CargoSelectProps {
+  value: string | null;  // cargo_catalogo_id
+  cargoTexto: string | null;  // cargo (texto)
+  onChange: (cargoId: string | null, cargoTexto: string | null) => void;
+  disabled?: boolean;
 }
 ```
 
-### Fase 4 - Migração de Owners
+**Features:**
+- Agrupa cargos por área (Inside Sales, Consórcio, Crédito, etc.)
+- Mostra nível quando aplicável (ex: "SDR Inside N1", "SDR Inside N2")
+- Opção "Outro" no final para texto personalizado
+- Exibe badge com valores quando cargo selecionado
 
-**Nova coluna:**
-```sql
-ALTER TABLE crm_deals 
-ADD COLUMN owner_profile_id UUID REFERENCES profiles(id);
+### 5. Sincronizar Valores do Catálogo
+
+Quando um cargo é selecionado, auto-preencher opcionalmente:
+
+| Campo Employee | Fonte no Catálogo |
+|----------------|-------------------|
+| `salario_base` | `fixo_valor` |
+| `ote_mensal` | `ote_total` |
+| `nivel` | `nivel` |
+
+**Comportamento:** Sugerir ao usuário (não sobrescrever automaticamente)
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/types/hr.ts` | Adicionar `cargo_catalogo_id` na interface |
+| `src/components/hr/CargoSelect.tsx` | **NOVO** - Componente reutilizável |
+| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Usar CargoSelect |
+| `src/components/hr/EmployeeFormDialog.tsx` | Usar CargoSelect |
+
+## Fluxo de Implementação
+
+```text
+1. Atualizar tipo Employee
+          ↓
+2. Criar CargoSelect.tsx
+          ↓
+3. Integrar no EmployeeGeneralTab
+          ↓
+4. Integrar no EmployeeFormDialog
+          ↓
+5. Testar vinculação com fechamento
 ```
 
-**Script de migração:**
-```sql
-UPDATE crm_deals d
-SET owner_profile_id = p.id
-FROM profiles p
-WHERE d.owner_id = p.email
-  AND d.owner_profile_id IS NULL;
+## Benefícios
+
+1. **Padronização:** Todos usam os mesmos nomes de cargo
+2. **Integração com Fechamento:** `cargo_catalogo_id` liga ao sistema de métricas
+3. **Valores Sugeridos:** Salário e OTE do catálogo como referência
+4. **Compatibilidade:** Campo `cargo` texto mantido para relatórios legados
+5. **Flexibilidade:** Opção "Outro" para cargos especiais
+
+## Detalhes Técnicos
+
+### CargoSelect - Estrutura do Select Agrupado
+
+```typescript
+// Agrupar por área
+const cargosByArea = useMemo(() => {
+  return cargos?.reduce((acc, cargo) => {
+    const area = cargo.area || 'Outros';
+    if (!acc[area]) acc[area] = [];
+    acc[area].push(cargo);
+    return acc;
+  }, {} as Record<string, CargoCatalogo[]>) || {};
+}, [cargos]);
+
+// Renderização
+<SelectContent>
+  {Object.entries(cargosByArea).map(([area, cargos]) => (
+    <SelectGroup key={area}>
+      <SelectLabel>{area}</SelectLabel>
+      {cargos.map(cargo => (
+        <SelectItem key={cargo.id} value={cargo.id}>
+          {cargo.nome_exibicao}
+          {cargo.nivel && ` - N${cargo.nivel}`}
+        </SelectItem>
+      ))}
+    </SelectGroup>
+  ))}
+  <SelectSeparator />
+  <SelectItem value="_outro">Outro (texto livre)</SelectItem>
+</SelectContent>
 ```
 
----
+### Info Card quando cargo selecionado
 
-## Próximos Passos
-
-Confirme qual fase você gostaria de implementar primeiro:
-
-1. **Fase 1** - Vincular Employees aos Profiles (permite ver dados integrados)
-2. **Fase 4** - Migrar CRM owners (corrige dados corrompidos do CRM)
-3. **Todas as fases** - Implementação completa sequencial
+```typescript
+{selectedCargo && (
+  <div className="mt-2 p-2 bg-muted rounded text-xs">
+    <div className="flex justify-between">
+      <span>Base: {selectedCargo.cargo_base}</span>
+      <span>Área: {selectedCargo.area}</span>
+    </div>
+    {selectedCargo.ote_total > 0 && (
+      <div className="text-green-600">
+        OTE: {formatCurrency(selectedCargo.ote_total)}
+      </div>
+    )}
+  </div>
+)}
+```
