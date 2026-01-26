@@ -2,9 +2,35 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ShieldAlert } from 'lucide-react';
 import { AppRole } from '@/types/user-management';
+import { BusinessUnit } from '@/hooks/useMyBU';
 
-// Roles que têm acesso padrão à aba Negócios
-const NEGOCIOS_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador', 'sdr'];
+// ============ MAPEAMENTO BU → PIPELINES ============
+// Define quais origens/grupos cada Business Unit pode ver
+export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
+  incorporador: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // PIPELINE INSIDE SALES
+  consorcio: [
+    '4e2b810a-6782-4ce9-9c0d-10d04c018636', // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
+    'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar (grupo)
+  ],
+  credito: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão
+  projetos: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão
+};
+
+// Grupo/Origem padrão para cada BU (para selecionar ao abrir)
+export const BU_DEFAULT_ORIGIN_MAP: Record<BusinessUnit, string> = {
+  incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
+  consorcio: '4e2b810a-6782-4ce9-9c0d-10d04c018636', // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
+  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+  projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+};
+
+// Grupo padrão para cada BU (para navegação na sidebar)
+export const BU_DEFAULT_GROUP_MAP: Record<BusinessUnit, string> = {
+  incorporador: 'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Perpétuo - X1
+  consorcio: 'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar
+  credito: 'a6f3cbfc-0567-427f-a405-5a869aaa6010',
+  projetos: 'a6f3cbfc-0567-427f-a405-5a869aaa6010',
+};
 
 // ============ CONFIGURAÇÃO GLOBAL DE SDRs ============
 // ID da origem autorizada para TODOS os SDRs (PIPELINE INSIDE SALES)
@@ -18,12 +44,14 @@ interface NegociosAccessGuardProps {
   fallback?: React.ReactNode;
 }
 
+// Componente Guard (agora permite todos - filtro é por BU)
 export const NegociosAccessGuard = ({ children, fallback }: NegociosAccessGuardProps) => {
   const { role } = useAuth();
+  
+  // AGORA: Todos têm acesso (filtro é baseado na BU, não na role)
+  const hasAccess = true;
 
-  const hasRoleAccess = role && NEGOCIOS_ALLOWED_ROLES.includes(role);
-
-  if (!hasRoleAccess) {
+  if (!hasAccess) {
     if (fallback) {
       return <>{fallback}</>;
     }
@@ -44,11 +72,18 @@ export const NegociosAccessGuard = ({ children, fallback }: NegociosAccessGuardP
 };
 
 // Helper para verificar se usuário pode ver aba Negócios
-export const canUserAccessNegocios = (role: AppRole | null): boolean => {
-  return role !== null && NEGOCIOS_ALLOWED_ROLES.includes(role);
+// AGORA: Todos podem acessar (filtro é baseado na BU)
+export const canUserAccessNegocios = (_role: AppRole | null): boolean => {
+  return true; // Acesso liberado para todos
 };
 
-// Helper para obter origens permitidas baseado na role
+// Helper para obter origens permitidas baseado na BU
+export const getAuthorizedOriginsForBU = (bu: BusinessUnit | null): string[] => {
+  if (!bu) return []; // Sem BU = vê tudo (admin)
+  return BU_PIPELINE_MAP[bu] || [];
+};
+
+// Helper para obter origens permitidas baseado na role (legado - mantido para compatibilidade)
 export const getAuthorizedOriginsForRole = (role: AppRole | null): string[] => {
   if (role === 'sdr') {
     return [SDR_AUTHORIZED_ORIGIN_ID];
