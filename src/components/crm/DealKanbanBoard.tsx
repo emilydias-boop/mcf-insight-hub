@@ -12,6 +12,7 @@ import { StageChangeModal } from './StageChangeModal';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
+import { SalesChannel } from '@/hooks/useBulkA010Check';
 import { Inbox, ChevronDown } from 'lucide-react';
 
 interface Deal {
@@ -34,6 +35,7 @@ interface DealKanbanBoardProps {
   selectionMode?: boolean;
   selectedDealIds?: Set<string>;
   onSelectionChange?: (dealId: string, selected: boolean) => void;
+  channelMap?: Map<string, SalesChannel>;
 }
 
 const INITIAL_VISIBLE_COUNT = 50;
@@ -45,6 +47,7 @@ export const DealKanbanBoard = ({
   selectionMode = false,
   selectedDealIds = new Set(),
   onSelectionChange,
+  channelMap,
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
@@ -233,22 +236,28 @@ export const DealKanbanBoard = ({
                           </div>
                         ) : (
                           <>
-                            {visibleDeals.map((deal, index) => (
-                              <Draggable key={deal.id} draggableId={deal.id} index={index}>
-                                {(provided, snapshot) => (
-                                  <DealKanbanCard
-                                    deal={deal}
-                                    isDragging={snapshot.isDragging}
-                                    provided={provided}
-                                    onClick={() => handleDealClick(deal.id)}
-                                    activitySummary={activitySummaries?.get(deal.id)}
-                                    selectionMode={selectionMode}
-                                    isSelected={selectedDealIds.has(deal.id)}
-                                    onSelect={onSelectionChange}
-                                  />
-                                )}
-                              </Draggable>
-                            ))}
+                            {visibleDeals.map((deal, index) => {
+                              const email = (deal as any).crm_contacts?.email?.toLowerCase();
+                              const salesChannel = email ? (channelMap?.get(email) || 'live') : 'live';
+                              
+                              return (
+                                <Draggable key={deal.id} draggableId={deal.id} index={index}>
+                                  {(provided, snapshot) => (
+                                    <DealKanbanCard
+                                      deal={deal}
+                                      isDragging={snapshot.isDragging}
+                                      provided={provided}
+                                      onClick={() => handleDealClick(deal.id)}
+                                      activitySummary={activitySummaries?.get(deal.id)}
+                                      selectionMode={selectionMode}
+                                      isSelected={selectedDealIds.has(deal.id)}
+                                      onSelect={onSelectionChange}
+                                      salesChannel={salesChannel}
+                                    />
+                                  )}
+                                </Draggable>
+                              );
+                            })}
                             {remainingCount > 0 && (
                               <Button 
                                 variant="ghost" 
