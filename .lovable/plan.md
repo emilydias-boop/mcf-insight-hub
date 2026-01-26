@@ -1,61 +1,120 @@
 
+# Plano: Adicionar Funcionalidade de Criar Novos Usuários
 
-# Plano: Corrigir Visibilidade do Menu Suspenso
+## Visão Geral
 
-## Problema Identificado
+Você poderá criar novos usuários diretamente na página de Gerenciamento de Usuários. O novo usuário receberá um email com um link para definir sua senha e acessar o sistema.
 
-O menu dropdown do contexto está sendo cortado porque:
+## Fluxo do Usuário
 
-1. **Container pai com `overflow-hidden`** - O container da linha do item (linha 148) tem a classe `overflow-hidden` que está cortando o menu dropdown quando ele abre
-2. **Posicionamento do dropdown** - O `DropdownMenuContent` precisa de melhor configuração de posicionamento para evitar ficar atrás de outros elementos
+1. Na página de Gerenciamento de Usuários, você clica em **"Adicionar Usuário"**
+2. Preenche um formulário com:
+   - Nome completo
+   - Email
+   - Role (SDR, Closer, Admin, etc.)
+   - Business Unit (opcional)
+3. Clica em "Criar Usuário"
+4. O sistema cria a conta e envia automaticamente um email para o novo usuário
+5. O novo usuário clica no link do email e define sua própria senha
 
-## Solução Proposta
+## Componentes a Serem Criados
 
-### Arquivo: `src/components/tasks/SpaceContextMenu.tsx`
+### 1. Edge Function: `create-user`
 
-Adicionar configurações ao `DropdownMenuContent` para garantir que o menu apareça corretamente:
+Uma função backend segura que usa a API Admin do Supabase para:
+- Criar o usuário na tabela `auth.users`
+- O profile é criado automaticamente pelo trigger existente
+- Atribuir a role na tabela `user_roles`
+- Enviar email de convite com link para criar senha
 
-```typescript
-<DropdownMenuContent 
-  align="start"           // Mudar de "end" para "start" 
-  side="right"           // Abrir para a direita ao invés de para baixo
-  sideOffset={5}         // Adicionar espaçamento
-  className="w-48 bg-popover border shadow-md z-[100]"  // z-index mais alto
-  onClick={(e) => e.stopPropagation()}
->
-```
+### 2. Dialog de Criação: `CreateUserDialog`
 
-### Arquivo: `src/components/tasks/TaskSpacesSidebar.tsx`
+Modal com formulário contendo:
+- Campo de nome completo
+- Campo de email (com validação)
+- Seletor de role
+- Seletor de Business Unit
+- Botão de criar
 
-Remover o `overflow-hidden` do container que contém os botões de ação, pois ele está cortando o dropdown:
+### 3. Hook de Mutation: `useCreateUser`
 
-```typescript
-// ANTES (linha 148)
-<div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-
-// DEPOIS - mover overflow apenas para o texto
-<div className="flex items-center gap-2 flex-1 min-w-0">
-```
-
-E garantir que apenas o texto seja truncado:
-
-```typescript
-// Linha 158
-<span className="truncate text-sm font-medium flex-1 min-w-0">{space.name}</span>
-```
+Hook React Query para chamar a edge function e gerenciar estados de loading/erro.
 
 ---
 
-## Resumo das Alterações
+## Detalhes Técnicos
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `SpaceContextMenu.tsx` | Adicionar `side="right"`, `sideOffset={5}`, aumentar z-index para `z-[100]` |
-| `TaskSpacesSidebar.tsx` | Remover `overflow-hidden` do container principal e mover para o span do texto |
+### Edge Function `create-user`
+
+```text
+supabase/functions/create-user/
+└── index.ts
+```
+
+A função irá:
+1. Receber: `{ email, full_name, role, squad }`
+2. Validar que o usuário chamando é admin
+3. Usar `supabase.auth.admin.createUser()` com:
+   - `email_confirm: false` - para enviar email de confirmação
+   - `user_metadata: { full_name }` - para popular o profile
+4. Inserir role na tabela `user_roles`
+5. Atualizar squad na tabela `profiles` se informado
+6. Retornar sucesso ou erro
+
+### Modificações na Página
+
+**Arquivo:** `src/pages/GerenciamentoUsuarios.tsx`
+- Adicionar botão "Adicionar Usuário" no cabeçalho
+- Integrar o novo `CreateUserDialog`
+
+**Novo Componente:** `src/components/user-management/CreateUserDialog.tsx`
+- Dialog/Modal com formulário
+- Validação com Zod
+- Integração com o hook de criação
+
+**Novo Hook:** `src/hooks/useUserMutations.ts` (adicionar)
+- `useCreateUser` - chama a edge function
+
+### Estrutura do Formulário
+
+| Campo | Tipo | Obrigatório |
+|-------|------|-------------|
+| Nome Completo | texto | Sim |
+| Email | email | Sim |
+| Role | select | Sim |
+| Business Unit | select | Não |
+
+### Segurança
+
+- Edge function valida JWT do usuário
+- Verifica se o usuário é admin antes de criar
+- Usa SUPABASE_SERVICE_ROLE_KEY apenas no backend
+- Validação de email no frontend e backend
+
+### Email Enviado
+
+O Supabase enviará automaticamente um email ao novo usuário com:
+- Link para confirmar email
+- Ao confirmar, usuário é direcionado para a página de login
+- Usuário pode usar "Esqueci a senha" para definir sua senha
+
+**Alternativa mais direta:** Usar `resetPasswordForEmail` após criar o usuário para enviar diretamente o link de redefinição de senha.
+
+---
+
+## Resumo dos Arquivos
+
+| Ação | Arquivo |
+|------|---------|
+| Criar | `supabase/functions/create-user/index.ts` |
+| Criar | `src/components/user-management/CreateUserDialog.tsx` |
+| Editar | `src/hooks/useUserMutations.ts` |
+| Editar | `src/pages/GerenciamentoUsuarios.tsx` |
+| Editar | `supabase/config.toml` |
 
 ## Resultado Esperado
 
-- O menu dropdown abrirá para o lado direito do botão
-- O conteúdo do menu será totalmente visível
-- O nome do espaço continuará truncando corretamente quando muito longo
-
+- Botão "Adicionar Usuário" visível na página de gerenciamento
+- Modal para preencher dados do novo usuário
+- Após criação, usuário aparece na lista com status "Ativo"
+- Novo usuário recebe email para definir senha e acessar o sistema
