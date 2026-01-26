@@ -48,7 +48,7 @@ export const BulkTransferDialog = ({
           email,
           user_roles!inner(role)
         `)
-        .in('user_roles.role', ['sdr', 'closer'])
+        .in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])
         .order('full_name');
       return data || [];
     },
@@ -91,7 +91,7 @@ export const BulkTransferDialog = ({
           </label>
           <Select value={selectedUser || ''} onValueChange={setSelectedUser}>
             <SelectTrigger>
-              <SelectValue placeholder="Selecione o SDR ou Closer" />
+              <SelectValue placeholder="Selecione o responsável" />
             </SelectTrigger>
             <SelectContent>
               {loadingUsers ? (
