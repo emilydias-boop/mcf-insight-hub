@@ -3,6 +3,7 @@ import { RoleGuard } from "@/components/auth/RoleGuard";
 import { useUsers } from "@/hooks/useUsers";
 import { UserStatsCards } from "@/components/user-management/UserStatsCards";
 import { UserDetailsDrawer } from "@/components/user-management/UserDetailsDrawer";
+import { CreateUserDialog } from "@/components/user-management/CreateUserDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,11 +36,14 @@ export default function GerenciamentoUsuarios() {
   return (
     <RoleGuard allowedRoles={["admin"]}>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Gerenciamento de Usuários</h1>
-          <p className="text-muted-foreground">
-            Gerencie contas de acesso, roles e permissões do sistema
-          </p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Gerenciamento de Usuários</h1>
+            <p className="text-muted-foreground">
+              Gerencie contas de acesso, roles e permissões do sistema
+            </p>
+          </div>
+          <CreateUserDialog />
         </div>
 
         {isLoading ? (
