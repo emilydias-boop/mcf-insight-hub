@@ -266,3 +266,6 @@ verify_jwt = false
 
 [functions.webhook-lead-receiver]
 verify_jwt = false
+
+[functions.create-user]
+verify_jwt = false

@@ -3,6 +3,50 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AppRole, PermissionLevel, ResourceType, AccessStatus } from "@/types/user-management";
 
+// ===== MUTATION: Criar novo usuário via Edge Function =====
+export const useCreateUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      email: string;
+      full_name: string;
+      role: string;
+      squad?: string | null;
+    }) => {
+      const { data: result, error } = await supabase.functions.invoke("create-user", {
+        body: data,
+      });
+
+      if (error) {
+        throw new Error(error.message || "Erro ao criar usuário");
+      }
+
+      if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      return result;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      toast({ 
+        title: "Usuário criado com sucesso",
+        description: result?.reset_link_sent 
+          ? "Um email foi enviado para o usuário definir sua senha."
+          : "O usuário pode usar 'Esqueci a senha' para definir sua senha.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Erro ao criar usuário", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+};
+
 export const useUpdateUserRole = () => {
   const queryClient = useQueryClient();
 
