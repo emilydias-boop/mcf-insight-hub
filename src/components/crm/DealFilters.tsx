@@ -14,7 +14,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, CheckSquare, Clock, Radio } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -26,15 +26,25 @@ export interface DealFiltersState {
   dateRange: DateRange | undefined;
   owner: string | null;
   dealStatus: 'all' | 'open' | 'won' | 'lost';
+  inactivityDays: number | null;
+  salesChannel: 'all' | 'a010' | 'live';
 }
 
 interface DealFiltersProps {
   filters: DealFiltersState;
   onChange: (filters: DealFiltersState) => void;
   onClear: () => void;
+  selectionMode?: boolean;
+  onToggleSelectionMode?: () => void;
 }
 
-export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) => {
+export const DealFilters = ({ 
+  filters, 
+  onChange, 
+  onClear, 
+  selectionMode = false,
+  onToggleSelectionMode 
+}: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   
   // Buscar apenas SDRs e Closers do Supabase local
@@ -60,6 +70,8 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
     filters.dateRange?.from,
     filters.owner,
     filters.dealStatus !== 'all',
+    filters.inactivityDays !== null,
+    filters.salesChannel !== 'all',
   ].filter(Boolean).length;
   
   return (
@@ -127,6 +139,61 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
         </SelectContent>
       </Select>
       
+      {/* Filtro de Inatividade */}
+      <Select
+        value={filters.inactivityDays?.toString() || 'all'}
+        onValueChange={(value) => onChange({ 
+          ...filters, 
+          inactivityDays: value === 'all' ? null : parseInt(value) 
+        })}
+      >
+        <SelectTrigger className="w-[160px]">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Sem atividade" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Qualquer</SelectItem>
+          <SelectItem value="1">+ de 1 dia</SelectItem>
+          <SelectItem value="3">+ de 3 dias</SelectItem>
+          <SelectItem value="7">+ de 7 dias</SelectItem>
+          <SelectItem value="15">+ de 15 dias</SelectItem>
+          <SelectItem value="30">+ de 30 dias</SelectItem>
+        </SelectContent>
+      </Select>
+      
+      {/* Filtro de Canal de Entrada */}
+      <Select
+        value={filters.salesChannel}
+        onValueChange={(value) => onChange({ 
+          ...filters, 
+          salesChannel: value as 'all' | 'a010' | 'live' 
+        })}
+      >
+        <SelectTrigger className="w-[130px]">
+          <div className="flex items-center gap-2">
+            <Radio className="h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Canal" />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="a010">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              A010
+            </span>
+          </SelectItem>
+          <SelectItem value="live">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-500" />
+              LIVE
+            </span>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      
       {/* Filtro de Data */}
       <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
         <PopoverTrigger asChild>
@@ -164,6 +231,19 @@ export const DealFilters = ({ filters, onChange, onClear }: DealFiltersProps) =>
         <Button variant="ghost" size="sm" onClick={onClear}>
           <X className="h-4 w-4 mr-1" />
           Limpar ({activeFiltersCount})
+        </Button>
+      )}
+      
+      {/* Botão de Modo Seleção */}
+      {onToggleSelectionMode && (
+        <Button 
+          variant={selectionMode ? "default" : "outline"} 
+          size="sm" 
+          onClick={onToggleSelectionMode}
+          className="ml-auto"
+        >
+          <CheckSquare className="h-4 w-4 mr-1" />
+          {selectionMode ? "Sair do modo" : "Modo Seleção"}
         </Button>
       )}
     </div>
