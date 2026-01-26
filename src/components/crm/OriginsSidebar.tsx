@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ interface OriginsSidebarProps {
   selectedOriginId: string | null;
   onSelectOrigin: (originId: string | null) => void;
   onSelectPipeline: (pipelineId: string | null) => void;
+  allowedOriginIds?: string[]; // IDs das origens permitidas pela BU
 }
 
 interface Group {
@@ -92,7 +93,7 @@ const useFavorites = () => {
   return { favorites, toggleFavorite, isFavorite };
 };
 
-export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline }: OriginsSidebarProps) => {
+export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline, allowedOriginIds }: OriginsSidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -100,6 +101,37 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   const [configTarget, setConfigTarget] = useState<{ type: 'origin' | 'group'; id: string; name: string } | null>(null);
   
   const { data: originData, isLoading } = useCRMOriginsByPipeline(pipelineId);
+  
+  // Filtrar dados por BU (se allowedOriginIds estiver definido)
+  const hasBUFilter = allowedOriginIds && allowedOriginIds.length > 0;
+  
+  const filteredByBU = useMemo(() => {
+    if (!originData || !hasBUFilter) return originData;
+    
+    // Verificar se é uma lista flat ou árvore
+    if (Array.isArray(originData) && originData.length > 0 && 'children' in originData[0]) {
+      // É árvore (grupos com children)
+      return (originData as Group[])
+        .map(group => {
+          // Verificar se o grupo inteiro está permitido
+          if (allowedOriginIds!.includes(group.id)) {
+            return group;
+          }
+          // Filtrar apenas origens permitidas dentro do grupo
+          const filteredChildren = group.children.filter(child => 
+            allowedOriginIds!.includes(child.id)
+          );
+          if (filteredChildren.length === 0) return null;
+          return { ...group, children: filteredChildren };
+        })
+        .filter(Boolean) as Group[];
+    } else {
+      // É lista flat
+      return (originData as Origin[]).filter(origin => 
+        allowedOriginIds!.includes(origin.id)
+      );
+    }
+  }, [originData, allowedOriginIds, hasBUFilter]);
   
   // Query separada para buscar grupos (para o modo collapsed)
   const { data: allGroups } = useQuery({
@@ -113,8 +145,11 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     },
   });
   
+  // Usar dados filtrados por BU
+  const dataToUse = filteredByBU || originData;
+  
   // Verificar se é uma lista flat (pipeline específico) ou árvore (todos os funis)
-  const isGroupedTree = originData && Array.isArray(originData) && originData.length > 0 && 'children' in originData[0];
+  const isGroupedTree = dataToUse && Array.isArray(dataToUse) && dataToUse.length > 0 && 'children' in dataToUse[0];
   
   // Filtrar origens por busca
   const filterBySearch = (items: any[]) => {
@@ -136,16 +171,16 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     });
   };
   
-  const filteredData = filterBySearch(originData || []);
+  const filteredData = filterBySearch(dataToUse || []);
   
   // Obter lista flat de todas as origens para favoritos
   const getAllOrigins = (): Origin[] => {
-    if (!originData) return [];
+    if (!dataToUse) return [];
     
     if (isGroupedTree) {
-      return (originData as Group[]).flatMap(group => group.children);
+      return (dataToUse as Group[]).flatMap(group => group.children);
     }
-    return originData as Origin[];
+    return dataToUse as Origin[];
   };
   
   // Origens favoritas

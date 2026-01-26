@@ -21,12 +21,16 @@ import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 import { 
   isSdrRole, 
   getAuthorizedOriginsForRole,
-  SDR_AUTHORIZED_ORIGIN_ID 
+  getAuthorizedOriginsForBU,
+  SDR_AUTHORIZED_ORIGIN_ID,
+  BU_PIPELINE_MAP,
+  BU_DEFAULT_ORIGIN_MAP,
 } from '@/components/auth/NegociosAccessGuard';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 import { useBulkA010Check, detectSalesChannel, SalesChannel } from '@/hooks/useBulkA010Check';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
+import { useMyBU } from '@/hooks/useMyBU';
 import { differenceInDays } from 'date-fns';
 
 const Negocios = () => {
@@ -54,9 +58,18 @@ const Negocios = () => {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   
+  // Buscar BU do usuário para filtrar pipelines
+  const { data: myBU, isLoading: isLoadingBU } = useMyBU();
+  
   // Verificar se é SDR (acesso restrito ao Pipeline Inside Sales)
   const isSdr = isSdrRole(role);
   const authorizedOrigins = getAuthorizedOriginsForRole(role);
+  
+  // Origens autorizadas baseadas na BU do usuário
+  const buAuthorizedOrigins = useMemo(() => {
+    if (!myBU) return []; // Sem BU = vê tudo (admin)
+    return BU_PIPELINE_MAP[myBU] || [];
+  }, [myBU]);
   
   // Ref para garantir que só define o default UMA VEZ
   const hasSetDefault = useRef(false);
@@ -93,7 +106,7 @@ const Negocios = () => {
   
   // Definir pipeline padrão APENAS na primeira montagem
   useEffect(() => {
-    if (pipelines && pipelines.length > 0 && !hasSetDefault.current) {
+    if (pipelines && pipelines.length > 0 && !hasSetDefault.current && !isLoadingBU) {
       hasSetDefault.current = true;
       
       // Se for SDR, pré-selecionar a origem autorizada (PIPELINE INSIDE SALES)
@@ -102,6 +115,13 @@ const Negocios = () => {
         return;
       }
       
+      // Se tem BU definida, usar a origem padrão da BU
+      if (myBU && BU_DEFAULT_ORIGIN_MAP[myBU]) {
+        setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[myBU]);
+        return;
+      }
+      
+      // Fallback: Tentar encontrar PIPELINE INSIDE SALES ou usar o primeiro
       const insideSales = pipelines.find(p => 
         p.name === 'PIPELINE INSIDE SALES' || 
         p.display_name?.includes('Inside Sales')
@@ -112,7 +132,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdr]);
+  }, [pipelines, isSdr, myBU, isLoadingBU]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
@@ -346,16 +366,20 @@ const Negocios = () => {
     setSelectedOriginId(null); // Reset sub-origem ao trocar pipeline
   };
   
+  // Determinar se deve mostrar a sidebar (não para SDRs, e se tem BU, filtrar)
+  const showSidebar = !isSdr;
+  
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
       {/* Sidebar - hidden on mobile, hidden for SDRs */}
-      {!isSdr && (
+      {showSidebar && (
         <div className="hidden md:block">
           <OriginsSidebar
             pipelineId={selectedPipelineId}
             selectedOriginId={selectedOriginId}
             onSelectOrigin={setSelectedOriginId}
             onSelectPipeline={handlePipelineChange}
+            allowedOriginIds={buAuthorizedOrigins}
           />
         </div>
       )}
