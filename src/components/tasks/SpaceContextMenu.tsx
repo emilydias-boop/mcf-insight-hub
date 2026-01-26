@@ -77,8 +77,10 @@ export function SpaceContextMenu({ space, onAddChild }: SpaceContextMenuProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent 
-          align="end" 
-          className="w-48 bg-popover border shadow-md z-50"
+          align="start" 
+          side="right"
+          sideOffset={5}
+          className="w-48 bg-popover border shadow-md z-[100]"
           onClick={(e) => e.stopPropagation()}
         >
           <DropdownMenuItem onClick={() => {
