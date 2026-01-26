@@ -1,120 +1,266 @@
 
-# Plano: Adicionar Funcionalidade de Criar Novos Usuários
+# Plano: Transferência em Massa + Filtros Avançados no Kanban de Negócios
 
 ## Visão Geral
 
-Você poderá criar novos usuários diretamente na página de Gerenciamento de Usuários. O novo usuário receberá um email com um link para definir sua senha e acessar o sistema.
+Este plano implementa três novas funcionalidades na página de Negócios:
 
-## Fluxo do Usuário
+1. **Transferência em massa de leads** - Selecionar múltiplos leads e transferir para um SDR
+2. **Filtro por atividade** - Filtrar leads por tempo desde a última atividade
+3. **Filtro por canal de entrada** - Filtrar por tipo de lead (LIVE, A010, etc.)
 
-1. Na página de Gerenciamento de Usuários, você clica em **"Adicionar Usuário"**
-2. Preenche um formulário com:
-   - Nome completo
-   - Email
-   - Role (SDR, Closer, Admin, etc.)
-   - Business Unit (opcional)
-3. Clica em "Criar Usuário"
-4. O sistema cria a conta e envia automaticamente um email para o novo usuário
-5. O novo usuário clica no link do email e define sua própria senha
+---
 
-## Componentes a Serem Criados
+## 1. Transferência em Massa
 
-### 1. Edge Function: `create-user`
+### Experiência do Usuário
 
-Uma função backend segura que usa a API Admin do Supabase para:
-- Criar o usuário na tabela `auth.users`
-- O profile é criado automaticamente pelo trigger existente
-- Atribuir a role na tabela `user_roles`
-- Enviar email de convite com link para criar senha
+1. Um botão "Modo de Seleção" ativa checkboxes nos cards do Kanban
+2. Ao selecionar leads, uma barra de ações aparece mostrando:
+   - Quantidade selecionada
+   - Botão "Transferir para..." que abre o diálogo de seleção de SDR
+   - Botão para cancelar seleção
+3. Ao confirmar, todos os leads são transferidos e o sistema registra atividade em cada um
 
-### 2. Dialog de Criação: `CreateUserDialog`
+### Componentes a Criar/Modificar
 
-Modal com formulário contendo:
-- Campo de nome completo
-- Campo de email (com validação)
-- Seletor de role
-- Seletor de Business Unit
-- Botão de criar
+| Arquivo | Ação |
+|---------|------|
+| `src/components/crm/BulkActionsBar.tsx` | **Criar** - Barra flutuante com ações em massa |
+| `src/components/crm/BulkTransferDialog.tsx` | **Criar** - Diálogo para transferência em massa (reutiliza lógica do OwnerChangeDialog) |
+| `src/hooks/useBulkTransfer.ts` | **Criar** - Hook para transferir múltiplos deals |
+| `src/components/crm/DealKanbanCard.tsx` | **Modificar** - Adicionar checkbox quando modo de seleção ativo |
+| `src/components/crm/DealKanbanBoard.tsx` | **Modificar** - Gerenciar estado de seleção |
+| `src/pages/crm/Negocios.tsx` | **Modificar** - Integrar modo de seleção e barra de ações |
 
-### 3. Hook de Mutation: `useCreateUser`
+### Lógica de Transferência em Massa
 
-Hook React Query para chamar a edge function e gerenciar estados de loading/erro.
+```text
+useBulkTransfer.ts:
+  Para cada dealId no array:
+    1. UPDATE crm_deals SET owner_id = newOwnerEmail
+    2. INSERT deal_activities (activity_type: 'owner_change', ...)
+  
+  Usar Promise.allSettled para processar em paralelo
+  Mostrar progresso e resultado (X de Y transferidos)
+```
+
+---
+
+## 2. Filtro por Tempo de Atividade
+
+### Experiência do Usuário
+
+No painel de filtros, adicionar:
+- **"Sem atividade há"**: Dropdown com opções:
+  - Qualquer
+  - Mais de 1 dia
+  - Mais de 3 dias
+  - Mais de 7 dias
+  - Mais de 15 dias
+  - Mais de 30 dias
+
+### Implementação
+
+Como já existe o `useBatchDealActivitySummary` que retorna `lastContactAttempt` por deal, podemos filtrar no frontend:
+
+```text
+filteredDeals = deals.filter(deal => {
+  if (!filters.inactivityDays) return true;
+  
+  const lastActivity = activitySummaries.get(deal.id)?.lastContactAttempt;
+  if (!lastActivity) return true; // Sem atividade = muito tempo inativo
+  
+  const daysSince = differenceInDays(new Date(), new Date(lastActivity));
+  return daysSince >= filters.inactivityDays;
+});
+```
+
+### Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/crm/DealFilters.tsx` | Adicionar dropdown de inatividade |
+| `src/pages/crm/Negocios.tsx` | Passar activitySummaries para filtro e aplicar lógica |
+
+---
+
+## 3. Filtro por Canal de Entrada
+
+### Experiência do Usuário
+
+No painel de filtros, adicionar:
+- **"Canal"**: Dropdown com opções:
+  - Todos
+  - A010 (leads que compraram produto A010)
+  - LIVE (leads gratuitos de lives)
+
+### Implementação
+
+O hook `useA010Journey` já identifica se um lead é A010 ou LIVE. Para filtro em massa, precisamos:
+
+1. Buscar dados de `hubla_transactions` para todos os emails dos deals exibidos
+2. Criar um Map de email → isA010
+3. Filtrar deals baseado nesse Map
+
+### Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/crm/DealFilters.tsx` | Adicionar dropdown de canal |
+| `src/pages/crm/Negocios.tsx` | Integrar filtro de canal |
+| `src/hooks/useBulkA010Check.ts` | **Criar** - Hook para verificar A010 em batch |
+
+---
+
+## Interface Atualizada dos Filtros
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 🔍 Buscar por nome, email ou telefone...                                     │
+├────────────────┬────────────────┬────────────────┬─────────────┬─────────────┤
+│   Status ▼     │ Responsável ▼  │  Sem ativ. ▼   │   Canal ▼   │ 📅 Data    │
+│   Todos        │ Todos          │  Qualquer      │   Todos     │             │
+└────────────────┴────────────────┴────────────────┴─────────────┴─────────────┘
+                                                       [ Modo Seleção ]
+```
 
 ---
 
 ## Detalhes Técnicos
 
-### Edge Function `create-user`
+### DealFiltersState Atualizado
 
-```text
-supabase/functions/create-user/
-└── index.ts
+```typescript
+export interface DealFiltersState {
+  search: string;
+  dateRange: DateRange | undefined;
+  owner: string | null;
+  dealStatus: 'all' | 'open' | 'won' | 'lost';
+  // NOVOS CAMPOS:
+  inactivityDays: number | null;  // null = qualquer, 1, 3, 7, 15, 30
+  salesChannel: 'all' | 'a010' | 'live';
+}
 ```
 
-A função irá:
-1. Receber: `{ email, full_name, role, squad }`
-2. Validar que o usuário chamando é admin
-3. Usar `supabase.auth.admin.createUser()` com:
-   - `email_confirm: false` - para enviar email de confirmação
-   - `user_metadata: { full_name }` - para popular o profile
-4. Inserir role na tabela `user_roles`
-5. Atualizar squad na tabela `profiles` se informado
-6. Retornar sucesso ou erro
+### BulkActionsBar Component
 
-### Modificações na Página
+```typescript
+interface BulkActionsBarProps {
+  selectedCount: number;
+  onTransfer: () => void;
+  onClearSelection: () => void;
+  isTransferring: boolean;
+}
+```
 
-**Arquivo:** `src/pages/GerenciamentoUsuarios.tsx`
-- Adicionar botão "Adicionar Usuário" no cabeçalho
-- Integrar o novo `CreateUserDialog`
+Aparece fixo na parte inferior quando há seleções:
 
-**Novo Componente:** `src/components/user-management/CreateUserDialog.tsx`
-- Dialog/Modal com formulário
-- Validação com Zod
-- Integração com o hook de criação
+```text
+┌────────────────────────────────────────────────────────────────┐
+│  ✓ 12 leads selecionados    [ Transferir para... ]  [ Limpar ] │
+└────────────────────────────────────────────────────────────────┘
+```
 
-**Novo Hook:** `src/hooks/useUserMutations.ts` (adicionar)
-- `useCreateUser` - chama a edge function
+### useBulkTransfer Hook
 
-### Estrutura do Formulário
+```typescript
+interface BulkTransferParams {
+  dealIds: string[];
+  newOwnerEmail: string;
+  newOwnerName: string;
+}
 
-| Campo | Tipo | Obrigatório |
-|-------|------|-------------|
-| Nome Completo | texto | Sim |
-| Email | email | Sim |
-| Role | select | Sim |
-| Business Unit | select | Não |
+export const useBulkTransfer = () => {
+  return useMutation({
+    mutationFn: async ({ dealIds, newOwnerEmail, newOwnerName }) => {
+      const results = await Promise.allSettled(
+        dealIds.map(async (dealId) => {
+          // 1. Buscar owner atual
+          const { data: deal } = await supabase
+            .from('crm_deals')
+            .select('owner_id')
+            .eq('id', dealId)
+            .single();
+          
+          // 2. Atualizar owner
+          await supabase
+            .from('crm_deals')
+            .update({ owner_id: newOwnerEmail })
+            .eq('id', dealId);
+          
+          // 3. Registrar atividade
+          await supabase
+            .from('deal_activities')
+            .insert({
+              deal_id: dealId,
+              activity_type: 'owner_change',
+              description: `Transferido para ${newOwnerName} (em massa)`,
+              metadata: { ... }
+            });
+        })
+      );
+      
+      return {
+        total: dealIds.length,
+        success: results.filter(r => r.status === 'fulfilled').length,
+        failed: results.filter(r => r.status === 'rejected').length
+      };
+    }
+  });
+};
+```
 
-### Segurança
+### useBulkA010Check Hook
 
-- Edge function valida JWT do usuário
-- Verifica se o usuário é admin antes de criar
-- Usa SUPABASE_SERVICE_ROLE_KEY apenas no backend
-- Validação de email no frontend e backend
-
-### Email Enviado
-
-O Supabase enviará automaticamente um email ao novo usuário com:
-- Link para confirmar email
-- Ao confirmar, usuário é direcionado para a página de login
-- Usuário pode usar "Esqueci a senha" para definir sua senha
-
-**Alternativa mais direta:** Usar `resetPasswordForEmail` após criar o usuário para enviar diretamente o link de redefinição de senha.
+```typescript
+export const useBulkA010Check = (emails: string[]) => {
+  return useQuery({
+    queryKey: ['bulk-a010-check', emails.sort().join(',')],
+    queryFn: async () => {
+      if (emails.length === 0) return new Map();
+      
+      const { data } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email')
+        .eq('product_category', 'a010')
+        .eq('sale_status', 'completed')
+        .in('customer_email', emails);
+      
+      const a010Emails = new Set(data?.map(t => t.customer_email?.toLowerCase()) || []);
+      
+      return new Map(emails.map(email => [
+        email.toLowerCase(), 
+        a010Emails.has(email.toLowerCase())
+      ]));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+```
 
 ---
 
 ## Resumo dos Arquivos
 
-| Ação | Arquivo |
-|------|---------|
-| Criar | `supabase/functions/create-user/index.ts` |
-| Criar | `src/components/user-management/CreateUserDialog.tsx` |
-| Editar | `src/hooks/useUserMutations.ts` |
-| Editar | `src/pages/GerenciamentoUsuarios.tsx` |
-| Editar | `supabase/config.toml` |
+| Ação | Arquivo | Descrição |
+|------|---------|-----------|
+| Criar | `src/components/crm/BulkActionsBar.tsx` | Barra flutuante com ações em massa |
+| Criar | `src/components/crm/BulkTransferDialog.tsx` | Modal de transferência em massa |
+| Criar | `src/hooks/useBulkTransfer.ts` | Mutation para transferir múltiplos deals |
+| Criar | `src/hooks/useBulkA010Check.ts` | Query para verificar A010 em batch |
+| Editar | `src/components/crm/DealFilters.tsx` | Adicionar filtros de inatividade e canal |
+| Editar | `src/components/crm/DealKanbanCard.tsx` | Adicionar checkbox em modo seleção |
+| Editar | `src/components/crm/DealKanbanBoard.tsx` | Gerenciar estado de seleção |
+| Editar | `src/pages/crm/Negocios.tsx` | Integrar todos os novos recursos |
+
+---
 
 ## Resultado Esperado
 
-- Botão "Adicionar Usuário" visível na página de gerenciamento
-- Modal para preencher dados do novo usuário
-- Após criação, usuário aparece na lista com status "Ativo"
-- Novo usuário recebe email para definir senha e acessar o sistema
+- Botão "Modo Seleção" permite selecionar múltiplos leads com checkboxes
+- Barra de ações aparece na parte inferior mostrando quantidade selecionada
+- Transferência em massa funciona para qualquer quantidade de leads
+- Filtro de inatividade mostra leads "esquecidos" sem atividade recente
+- Filtro de canal diferencia leads A010 (compradores) de LIVE (gratuitos)
+- Todos os filtros funcionam combinados
