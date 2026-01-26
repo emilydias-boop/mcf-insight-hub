@@ -1,323 +1,190 @@
 
-# Plano: Fase 4 - Migrar CRM owner_id para UUID (com Profiles Inativos)
+# Plano: Adicionar Exclusão de Participante Único e Cancelamento de Reunião
 
-## Objetivo
+## Problema Identificado
 
-Padronizar referências de responsáveis no CRM usando UUIDs de `profiles` em vez de emails, **criando profiles inativos** para ex-funcionários que possuem deals históricos, permitindo reativação futura.
+Quando uma reunião R2 tem apenas **1 participante**, não existe forma de:
+1. Excluir esse participante
+2. Cancelar a reunião inteira
 
-## Estado Atual
+O botão de lixeira só aparece quando há mais de 1 participante (linha 179: `meeting.attendees.length > 1`).
 
-| Situação | Quantidade | % |
-|----------|------------|---|
-| Deals com owner_id (email) | 2.893 | 100% |
-| **Mapeáveis** para profiles existentes | 2.447 | 85% |
-| **Ex-funcionários** (precisam de profile) | 446 | 15% |
-| Profiles atuais | 41 | todos "ativo" |
+## Solução Proposta
 
-### Ex-funcionários a Criar Profiles
+### Comportamento Desejado
 
-| Email | Deals | Status Sugerido |
-|-------|-------|-----------------|
-| angelina.maia@... | 215 | desativado |
-| thayna.tavares@... | 45 | desativado |
-| victor.hugo@... | 33 | desativado |
-| isadora.magri@... | 31 | desativado |
-| jessica.bellini.r2@... | 31 | desativado |
-| leticia.faustino@... | 23 | desativado |
-| caroline.alves@... | 22 | desativado |
-| deisiele.silva@... | 15 | desativado |
-| matheus.garcia@... | 15 | desativado |
-| emily.dias@... | 3 | desativado |
+| Situação | Ação "Excluir Participante" | Resultado |
+|----------|----------------------------|-----------|
+| Múltiplos participantes | Remove só o selecionado | Reunião continua com os demais |
+| **Participante único** | Remove o participante | Reunião é **cancelada** automaticamente |
+
+Adicionar também um botão "Cancelar Reunião" que cancela tudo de uma vez (slot + todos participantes).
+
+## Mudanças Necessárias
+
+### 1. Criar Hook para Cancelar Reunião R2
+
+**Arquivo:** `src/hooks/useR2AttendeeUpdate.ts`
+
+Adicionar novo hook `useCancelR2Meeting` que:
+- Atualiza status do `meeting_slot` para "canceled"
+- Invalida os caches corretos do R2
+
+### 2. Criar Hook para Remover Último Participante
+
+**Arquivo:** `src/hooks/useR2AttendeeUpdate.ts`
+
+Modificar ou criar `useRemoveR2AttendeeAndCancelIfEmpty` que:
+- Remove o participante
+- Se era o último, cancela o meeting_slot automaticamente
+
+### 3. Atualizar R2MeetingDetailDrawer
+
+**Arquivo:** `src/components/crm/R2MeetingDetailDrawer.tsx`
+
+**Mudanças:**
+
+1. **Remover condição** `meeting.attendees.length > 1` (linha 179)
+   - Mostrar botão de lixeira sempre
+
+2. **Alterar lógica do handleRemoveAttendee**:
+   - Se há mais de 1 participante: apenas remove
+   - Se é o último: confirma e cancela a reunião também
+
+3. **Adicionar botão "Cancelar Reunião"** no footer:
+   - Permite cancelar toda a reunião de uma vez
+   - Útil quando quer desmarcar sem excluir o lead do histórico
 
 ## Arquitetura da Solução
 
 ```text
-ANTES:                              DEPOIS:
-┌──────────────┐                   ┌──────────────┐
-│  crm_deals   │                   │  crm_deals   │
-├──────────────┤                   ├──────────────┤
-│ owner_id     │──(email)──?       │ owner_id     │ (mantido legacy)
-│              │                   │ owner_profile_id ├──FK──┐
-└──────────────┘                   └──────────────┘        │
-                                                           │
-                                   ┌──────────────┐        │
-                                   │   profiles   │◄───────┘
-                                   ├──────────────┤
-                                   │ access_status│
-                                   │ ├─ ativo     │ (41 usuários)
-                                   │ └─ desativado│ (10+ ex-func)
-                                   └──────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    R2MeetingDetailDrawer                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Participantes (1)                                          │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ 🔴 Odesmar Martins da Silva    [Selecionado] [🗑️]    │  │
+│  └───────────────────────────────────────────────────────┘  │
+│       ↓                                                     │
+│  Clicou no 🗑️ do único participante?                       │
+│       ↓                                                     │
+│  Confirmar: "Ao remover o único participante, a reunião     │
+│             será cancelada. Deseja continuar?"              │
+│       ↓                                                     │
+│  1. DELETE meeting_slot_attendees                           │
+│  2. UPDATE meeting_slots SET status = 'canceled'            │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  FOOTER (atual + novo botão):                               │
+│  ┌──────────────┐  ┌──────────────┐                         │
+│  │ ✓ Realizada  │  │ ✗ No-show    │                         │
+│  └──────────────┘  └──────────────┘                         │
+│  ┌──────────────┐  ┌──────────────┐                         │
+│  │ 🕐 Reagendar │  │ ↩ Reembolso  │                         │
+│  └──────────────┘  └──────────────┘                         │
+│  ┌─────────────────────────────────┐  ← NOVO                │
+│  │ 🗑️ Cancelar Reunião            │                         │
+│  └─────────────────────────────────┘                        │
+└─────────────────────────────────────────────────────────────┘
 ```
-
-## Implementação em 5 Etapas
-
----
-
-### Etapa 1: Criar Profiles Inativos para Ex-funcionários
-
-**Tipo:** Migração de dados
-
-Criar profiles com `access_status = 'desativado'` para cada email único que:
-- Existe em `crm_deals.owner_id`
-- Não existe em `profiles.email`
-- É um email válido (contém @)
-
-```sql
--- Identificar emails sem profile
-INSERT INTO profiles (id, email, full_name, access_status)
-SELECT 
-  gen_random_uuid(),
-  d.owner_id,
-  split_part(d.owner_id, '@', 1) as full_name,  -- "angelina.maia" 
-  'desativado'
-FROM (
-  SELECT DISTINCT owner_id 
-  FROM crm_deals 
-  WHERE owner_id LIKE '%@%'
-) d
-LEFT JOIN profiles p ON d.owner_id = p.email
-WHERE p.id IS NULL;
-```
-
-**Resultado:** ~10 novos profiles desativados
-
----
-
-### Etapa 2: Adicionar Coluna owner_profile_id
-
-**Tipo:** Migração de schema
-
-```sql
--- Adicionar coluna
-ALTER TABLE crm_deals 
-ADD COLUMN owner_profile_id UUID REFERENCES profiles(id);
-
--- Criar índice
-CREATE INDEX idx_crm_deals_owner_profile_id 
-ON crm_deals(owner_profile_id);
-```
-
----
-
-### Etapa 3: Migrar Dados (Preencher owner_profile_id)
-
-**Tipo:** Migração de dados
-
-```sql
-UPDATE crm_deals d
-SET owner_profile_id = p.id
-FROM profiles p
-WHERE d.owner_id = p.email
-  AND d.owner_profile_id IS NULL;
-```
-
-**Resultado esperado:** ~2.893 deals atualizados (100%)
-
----
-
-### Etapa 4: Atualizar Código Frontend
-
-#### 4.1 DealFilters.tsx
-
-Alterar filtro para usar UUID em vez de email:
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/crm/DealFilters.tsx` | Linha 137: `value={user.email}` → `value={user.id}` |
-
-Incluir também ex-funcionários (desativados) como opção no filtro, com indicador visual.
-
-#### 4.2 useCRMData.ts
-
-Alterar query para filtrar por `owner_profile_id`:
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useCRMData.ts` | Linha 360: `.eq('owner_id', ...)` → `.eq('owner_profile_id', ...)` |
-
-#### 4.3 DealFormDialog.tsx
-
-Ao criar deal, popular ambos os campos:
-
-```typescript
-const payload = {
-  ...formData,
-  owner_id: selectedProfile.email,        // legacy (para sync externo)
-  owner_profile_id: selectedProfile.id,   // novo (para joins)
-};
-```
-
-#### 4.4 OwnerChangeDialog.tsx
-
-Atualizar transferência de deals para usar UUID.
-
----
-
-### Etapa 5: Atualizar Relatórios
-
-#### useContractReport.ts
-
-Substituir busca por `owner_id` (email) por join com profiles via `owner_profile_id`.
-
-#### useSDRR2Metrics.ts
-
-Manter lógica atual de fallback que já usa `booked_by` (UUID) quando disponível.
-
----
 
 ## Arquivos a Modificar
 
-| Arquivo | Tipo | Alteração |
-|---------|------|-----------|
-| **Banco de dados** | Schema | Adicionar coluna `owner_profile_id` |
-| **Banco de dados** | Dados | Criar profiles desativados + migrar dados |
-| `src/components/crm/DealFilters.tsx` | Frontend | Usar UUID no Select, mostrar ex-funcionários |
-| `src/hooks/useCRMData.ts` | Frontend | Filtrar por `owner_profile_id` |
-| `src/components/crm/DealFormDialog.tsx` | Frontend | Salvar ambos campos |
-| `src/components/crm/OwnerChangeDialog.tsx` | Frontend | Usar `owner_profile_id` |
-| `src/hooks/useContractReport.ts` | Frontend | Join otimizado |
-
----
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useR2AttendeeUpdate.ts` | Adicionar `useCancelR2Meeting` |
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Remover condição, adicionar botão cancelar |
 
 ## Detalhes Técnicos
 
-### DealFilters.tsx - Mostrar Ex-funcionários
+### Novo Hook: useCancelR2Meeting
 
 ```typescript
-// Query atualizada para incluir desativados
-const { data: dealOwners } = useQuery({
-  queryKey: ['deal-owners-all'],
-  queryFn: async () => {
-    // Ativos com roles específicos
-    const { data: activeUsers } = await supabase
-      .from('profiles')
-      .select(`id, full_name, email, access_status, user_roles(role)`)
-      .eq('access_status', 'ativo')
-      .in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador']);
-    
-    // Desativados que têm deals
-    const { data: inactiveUsers } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, access_status')
-      .eq('access_status', 'desativado');
-    
-    return {
-      active: activeUsers || [],
-      inactive: inactiveUsers || [],
-    };
-  }
-});
+export function useCancelR2Meeting() {
+  const queryClient = useQueryClient();
 
-// No Select, agrupar por status
-<SelectGroup>
-  <SelectLabel>Ativos</SelectLabel>
-  {dealOwners.active.map(user => (
-    <SelectItem key={user.id} value={user.id}>
-      {user.full_name} ({user.role})
-    </SelectItem>
-  ))}
-</SelectGroup>
-<SelectGroup>
-  <SelectLabel className="text-muted-foreground">Ex-funcionários</SelectLabel>
-  {dealOwners.inactive.map(user => (
-    <SelectItem key={user.id} value={user.id}>
-      <span className="text-muted-foreground">{user.full_name}</span>
-    </SelectItem>
-  ))}
-</SelectGroup>
+  return useMutation({
+    mutationFn: async (meetingId: string) => {
+      const { error } = await supabase
+        .from('meeting_slots')
+        .update({ status: 'canceled' })
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      toast.success('Reunião cancelada');
+    },
+  });
+}
 ```
 
-### Possibilidade de Reativação
+### Lógica Atualizada do handleRemoveAttendee
 
-Quando um ex-funcionário retorna:
-1. Admin vai em Gestão de Usuários
-2. Busca pelo profile (agora visível como "desativado")
-3. Altera `access_status` para "ativo"
-4. Cria user em auth.users e vincula ao profile existente
-5. Todos os deals históricos já estão conectados!
+```typescript
+const handleRemoveAttendee = (attendeeId: string) => {
+  const isLastAttendee = meeting.attendees?.length === 1;
+  
+  const confirmMessage = isLastAttendee
+    ? 'Ao remover o único participante, a reunião será cancelada. Deseja continuar?'
+    : 'Deseja remover este participante da reunião?';
+  
+  if (confirm(confirmMessage)) {
+    removeAttendee.mutate(attendeeId, {
+      onSuccess: () => {
+        if (isLastAttendee) {
+          cancelMeeting.mutate(meeting.id);
+          onOpenChange(false); // Fecha o drawer
+        } else {
+          const remaining = meeting.attendees?.filter(a => a.id !== attendeeId);
+          if (remaining?.length) {
+            setSelectedAttendeeId(remaining[0].id);
+          }
+        }
+      }
+    });
+  }
+};
+```
 
----
+### Botão Cancelar Reunião
+
+```typescript
+<Button 
+  variant="outline"
+  className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+  onClick={() => {
+    if (confirm('Deseja cancelar esta reunião? Todos os participantes serão afetados.')) {
+      cancelMeeting.mutate(meeting.id);
+      onOpenChange(false);
+    }
+  }}
+>
+  <Trash2 className="h-4 w-4 mr-2" />
+  Cancelar Reunião
+</Button>
+```
 
 ## Fluxo de Implementação
 
 ```text
-1. Criar profiles inativos para ex-funcionários
+1. Adicionar useCancelR2Meeting no hook
           ↓
-2. Adicionar coluna owner_profile_id
+2. Remover condição length > 1 do botão lixeira
           ↓
-3. Migrar dados (UPDATE em lote)
+3. Atualizar lógica handleRemoveAttendee
           ↓
-4. Atualizar DealFilters.tsx (UUID + grupos)
+4. Adicionar botão "Cancelar Reunião" no footer
           ↓
-5. Atualizar useCRMData.ts 
-          ↓
-6. Atualizar DealFormDialog.tsx
-          ↓
-7. Atualizar OwnerChangeDialog.tsx
-          ↓
-8. Testar filtros, criação e transferência
+5. Testar cenários: único participante e múltiplos
 ```
-
----
 
 ## Benefícios
 
-1. **Integridade Histórica:** Nenhum deal fica órfão
-2. **Reativação Simples:** Ex-funcionário retorna com histórico intacto
-3. **Performance:** Joins por UUID são mais eficientes
-4. **Visibilidade:** Admin pode ver quem eram os responsáveis históricos
-5. **Compatibilidade:** `owner_id` (email) mantido para sistemas externos
-6. **Auditoria:** Rastreabilidade completa de responsabilidades
-
----
-
-## Scripts SQL Completos
-
-### 1. Criar Profiles Inativos
-
-```sql
--- Identificar e criar profiles para emails sem correspondência
-INSERT INTO profiles (id, email, full_name, access_status)
-SELECT 
-  gen_random_uuid() as id,
-  owner_email,
-  INITCAP(REPLACE(SPLIT_PART(owner_email, '@', 1), '.', ' ')) as full_name,
-  'desativado' as access_status
-FROM (
-  SELECT DISTINCT owner_id as owner_email
-  FROM crm_deals 
-  WHERE owner_id LIKE '%@%'
-    AND owner_id NOT IN (SELECT email FROM profiles WHERE email IS NOT NULL)
-) orphan_emails;
-```
-
-### 2. Adicionar Coluna
-
-```sql
-ALTER TABLE crm_deals 
-ADD COLUMN owner_profile_id UUID REFERENCES profiles(id);
-
-CREATE INDEX idx_crm_deals_owner_profile_id 
-ON crm_deals(owner_profile_id);
-```
-
-### 3. Migrar Dados
-
-```sql
-UPDATE crm_deals d
-SET owner_profile_id = p.id
-FROM profiles p
-WHERE d.owner_id = p.email
-  AND d.owner_profile_id IS NULL;
-```
-
-### 4. Verificar Migração
-
-```sql
-SELECT 
-  COUNT(*) FILTER (WHERE owner_profile_id IS NOT NULL) as migrated,
-  COUNT(*) FILTER (WHERE owner_profile_id IS NULL AND owner_id IS NOT NULL) as still_orphan,
-  COUNT(*) as total
-FROM crm_deals;
--- Esperado: migrated = ~2893, still_orphan = 0
-```
+1. **Flexibilidade**: Pode remover participante único sem travar
+2. **Consistência**: Reunião sem participantes é automaticamente cancelada
+3. **Clareza**: Mensagem de confirmação diferente para cada cenário
+4. **Ação Rápida**: Botão para cancelar reunião inteira de uma vez
