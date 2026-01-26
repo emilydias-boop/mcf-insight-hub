@@ -26,6 +26,7 @@ interface OwnerChangeDialogProps {
 }
 
 interface UserOption {
+  id: string;
   email: string;
   name: string;
   role: string;
@@ -42,18 +43,19 @@ export function OwnerChangeDialog({
   const [selectedUser, setSelectedUser] = useState<UserOption | null>(null);
   const transferMutation = useTransferDealOwner();
 
-  // Buscar SDRs e Closers disponíveis
+  // Buscar SDRs e Closers disponíveis (ativos)
   const { data: users = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["sdr-closer-users"],
+    queryKey: ["sdr-closer-users-active"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_roles")
         .select(`
           user_id,
           role,
-          profiles!inner(id, email, full_name)
+          profiles!inner(id, email, full_name, access_status)
         `)
-        .in("role", ["sdr", "closer"]);
+        .in("role", ["sdr", "closer"])
+        .eq("profiles.access_status", "ativo");
 
       if (error) {
         console.error("Erro ao buscar usuários para transferência:", error);
@@ -61,6 +63,7 @@ export function OwnerChangeDialog({
       }
 
       return (data || []).map((ur: any) => ({
+        id: ur.profiles.id,
         email: ur.profiles.email,
         name: ur.profiles.full_name || ur.profiles.email.split("@")[0],
         role: ur.role,
@@ -87,6 +90,7 @@ export function OwnerChangeDialog({
       dealId,
       newOwnerEmail: selectedUser.email,
       newOwnerName: selectedUser.name,
+      newOwnerProfileId: selectedUser.id, // UUID para owner_profile_id
       previousOwner: currentOwner || undefined,
     });
 

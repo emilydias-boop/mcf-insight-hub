@@ -2545,6 +2545,7 @@ export type Database = {
           origin_id: string | null
           original_sdr_email: string | null
           owner_id: string | null
+          owner_profile_id: string | null
           probability: number | null
           product_name: string | null
           r1_closer_email: string | null
@@ -2569,6 +2570,7 @@ export type Database = {
           origin_id?: string | null
           original_sdr_email?: string | null
           owner_id?: string | null
+          owner_profile_id?: string | null
           probability?: number | null
           product_name?: string | null
           r1_closer_email?: string | null
@@ -2593,6 +2595,7 @@ export type Database = {
           origin_id?: string | null
           original_sdr_email?: string | null
           owner_id?: string | null
+          owner_profile_id?: string | null
           probability?: number | null
           product_name?: string | null
           r1_closer_email?: string | null
@@ -2616,6 +2619,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "crm_origins"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_deals_owner_profile_id_fkey"
+            columns: ["owner_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_deals_owner_profile_id_fkey"
+            columns: ["owner_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "crm_deals_stage_id_fkey"

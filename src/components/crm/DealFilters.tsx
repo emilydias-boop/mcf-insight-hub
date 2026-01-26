@@ -49,21 +49,41 @@ export const DealFilters = ({
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   
-  // Buscar apenas SDRs e Closers do Supabase local
+  // Buscar ativos e ex-funcionários (desativados) para filtro de responsável
   const { data: dealOwners } = useQuery({
-    queryKey: ['deal-owners-sdr-closer'],
+    queryKey: ['deal-owners-all-with-inactive'],
     queryFn: async () => {
-      const { data } = await supabase
+      // Ativos com roles específicos
+      const { data: activeUsers } = await supabase
         .from('profiles')
         .select(`
           id,
           full_name,
           email,
-          user_roles!inner(role)
+          access_status,
+          user_roles(role)
         `)
-        .in('user_roles.role', ['sdr', 'closer', 'admin', 'manager', 'coordenador'])
+        .eq('access_status', 'ativo')
         .order('full_name');
-      return data || [];
+      
+      // Desativados (ex-funcionários)
+      const { data: inactiveUsers } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, access_status')
+        .eq('access_status', 'desativado')
+        .order('full_name');
+      
+      // Filtrar ativos que têm roles relevantes
+      const filteredActive = (activeUsers || []).filter((u: any) => 
+        u.user_roles?.some((r: any) => 
+          ['sdr', 'closer', 'admin', 'manager', 'coordenador'].includes(r.role)
+        )
+      );
+      
+      return {
+        active: filteredActive,
+        inactive: inactiveUsers || [],
+      };
     }
   });
   
@@ -123,7 +143,7 @@ export const DealFilters = ({
         </SelectContent>
       </Select>
       
-      {/* Filtro de Responsável (SDRs e Closers) */}
+      {/* Filtro de Responsável (SDRs, Closers e Ex-funcionários) */}
       <Select
         value={filters.owner || 'all'}
         onValueChange={(value) => onChange({ ...filters, owner: value === 'all' ? null : value })}
@@ -133,11 +153,31 @@ export const DealFilters = ({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos os responsáveis</SelectItem>
-          {dealOwners?.map((user: any) => (
-            <SelectItem key={user.id} value={user.email}>
-              {user.full_name} ({user.user_roles?.[0]?.role?.toUpperCase()})
-            </SelectItem>
-          ))}
+          {/* Ativos */}
+          {dealOwners?.active && dealOwners.active.length > 0 && (
+            <>
+              {dealOwners.active.map((user: any) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.full_name || user.email?.split('@')[0]} ({user.user_roles?.[0]?.role?.toUpperCase() || 'SDR'})
+                </SelectItem>
+              ))}
+            </>
+          )}
+          {/* Ex-funcionários (desativados) */}
+          {dealOwners?.inactive && dealOwners.inactive.length > 0 && (
+            <>
+              <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
+                ── Ex-funcionários ──
+              </SelectItem>
+              {dealOwners.inactive.map((user: any) => (
+                <SelectItem key={user.id} value={user.id}>
+                  <span className="text-muted-foreground">
+                    {user.full_name || user.email?.split('@')[0]}
+                  </span>
+                </SelectItem>
+              ))}
+            </>
+          )}
         </SelectContent>
       </Select>
       
