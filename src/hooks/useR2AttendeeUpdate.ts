@@ -123,3 +123,27 @@ export function useRemoveR2Attendee() {
     }
   });
 }
+
+// Cancel R2 meeting (update slot status to canceled)
+export function useCancelR2Meeting() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (meetingId: string) => {
+      const { error } = await supabase
+        .from('meeting_slots')
+        .update({ status: 'canceled' })
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      toast.success('Reunião cancelada');
+    },
+    onError: () => {
+      toast.error('Erro ao cancelar reunião');
+    }
+  });
+}
