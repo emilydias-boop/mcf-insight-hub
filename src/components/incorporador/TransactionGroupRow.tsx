@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, Eye, Pencil, Trash2, UserPlus, UserCheck, Pa
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TableCell, TableRow } from '@/components/ui/table';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
 
 import { HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
@@ -322,14 +322,10 @@ export function TransactionGroupRow({
   }
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger asChild>
-        <MainRow />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ExpandedRows />
-      </CollapsibleContent>
-    </Collapsible>
+    <>
+      <MainRow />
+      {isOpen && <ExpandedRows />}
+    </>
   );
 }
 
