@@ -269,3 +269,6 @@ verify_jwt = false
 
 [functions.create-user]
 verify_jwt = false
+
+[functions.reprocess-contract-payments]
+verify_jwt = false
