@@ -4,10 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Search, Layers, ChevronLeft, ChevronRight, ChevronDown, Star,
+  Search, Layers, ChevronLeft, ChevronRight, ChevronDown, Star, Plus,
   Store, Users, Building2, Briefcase, Package, Megaphone, Globe, 
-  ShoppingCart, Target, Handshake, MoreVertical, Settings, Archive, Trash2,
-  type LucideIcon
+  ShoppingCart, Target, Handshake, type LucideIcon
 } from 'lucide-react';
 import { useCRMOriginsByPipeline } from '@/hooks/useCRMOriginsByPipeline';
 import { cn } from '@/lib/utils';
@@ -17,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { PipelineContextMenu } from './PipelineContextMenu';
 import { PipelineConfigModal } from './PipelineConfigModal';
+import { CreatePipelineWizard } from './wizard/CreatePipelineWizard';
 
 interface OriginsSidebarProps {
   pipelineId?: string | null;
@@ -99,6 +99,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const [configTarget, setConfigTarget] = useState<{ type: 'origin' | 'group'; id: string; name: string } | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   
   const { data: originData, isLoading } = useCRMOriginsByPipeline(pipelineId);
   
@@ -367,6 +368,15 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
               selectedPipelineId={pipelineId || null}
               onSelectPipeline={onSelectPipeline}
             />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-2" 
+              onClick={() => setWizardOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Criar Pipeline
+            </Button>
           </div>
           
           {/* Busca */}
@@ -475,6 +485,17 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
           targetId={configTarget.id}
         />
       )}
+
+      {/* Wizard de criação de pipeline */}
+      <CreatePipelineWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onSuccess={(result) => {
+          if (result.originId) {
+            onSelectOrigin(result.originId);
+          }
+        }}
+      />
     </div>
   );
 };
