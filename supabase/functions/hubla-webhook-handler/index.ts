@@ -886,6 +886,23 @@ serve(async (req) => {
               value: netValue
             });
           }
+          
+          // 🎯 CORREÇÃO: Detectar contrato pago mesmo quando items.length === 0
+          const isContratoPago = (
+            productCategory === 'contrato' || 
+            (productCategory === 'incorporador' && grossValue >= 490 && grossValue <= 510) ||
+            (productName.toUpperCase().includes('A000') && productName.toUpperCase().includes('CONTRATO'))
+          );
+          
+          if (isContratoPago && installment === 1) {
+            console.log(`🎯 [CONTRATO HUBLA] Pagamento detectado (sem items), buscando reunião R1...`);
+            await autoMarkContractPaid(supabase, {
+              customerEmail: transactionData.customer_email,
+              customerPhone: transactionData.customer_phone,
+              customerName: transactionData.customer_name,
+              saleDate: saleDate
+            });
+          }
         }
 
         // Processar items individuais
