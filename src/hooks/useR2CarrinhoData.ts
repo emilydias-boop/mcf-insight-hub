@@ -88,7 +88,8 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
 
       // Apply meeting status filter
       if (filter === 'agendadas') {
-        query = query.in('status', ['scheduled', 'invited', 'pending']);
+        // Mostrar TODOS os attendees R2 da semana (exceto cancelados e reagendados)
+        query = query.not('status', 'in', '(cancelled,rescheduled)');
       } else if (filter === 'no_show') {
         query = query.eq('status', 'no_show');
       } else if (filter === 'realizadas') {

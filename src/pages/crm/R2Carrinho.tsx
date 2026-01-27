@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useR2CarrinhoKPIs } from '@/hooks/useR2CarrinhoKPIs';
-import { useR2CarrinhoData } from '@/hooks/useR2CarrinhoData';
-import { useR2StatusOptions } from '@/hooks/useR2StatusOptions';
+import { useR2CarrinhoData, R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
+import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
 import { R2AprovadosList } from '@/components/crm/R2AprovadosList';
 import { R2ForaDoCarrinhoList } from '@/components/crm/R2ForaDoCarrinhoList';
@@ -16,10 +16,14 @@ import { R2AgendadasList } from '@/components/crm/R2AgendadasList';
 import { R2MetricsPanel } from '@/components/crm/R2MetricsPanel';
 import { R2VendasList } from '@/components/crm/R2VendasList';
 import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
+import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
+import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const weekStart = getCustomWeekStart(weekDate);
@@ -30,12 +34,22 @@ export default function R2Carrinho() {
   
   // Fetch status options
   const { data: statusOptions = [] } = useR2StatusOptions();
+  const { data: thermometerOptions = [] } = useR2ThermometerOptions();
 
   // Fetch data for each tab
   const { data: agendadasData = [], isLoading: agendadasLoading } = useR2CarrinhoData(weekDate, 'agendadas');
   const { data: foraCarrinhoData = [], isLoading: foraCarrinhoLoading } = useR2ForaDoCarrinhoData(weekDate);
   const { data: aprovadosData = [], isLoading: aprovadosLoading } = useR2CarrinhoData(weekDate, 'aprovados');
   const { data: vendasData = [] } = useR2CarrinhoVendas(weekDate);
+
+  // Fetch extended meeting data for the drawer
+  const { data: meetingsExtended = [] } = useR2MeetingsExtended(weekStart, weekEnd);
+
+  // Find the selected meeting for the drawer
+  const selectedMeeting = useMemo(() => {
+    if (!selectedMeetingId) return null;
+    return meetingsExtended.find(m => m.id === selectedMeetingId) || null;
+  }, [selectedMeetingId, meetingsExtended]);
 
   const handlePrevWeek = () => setWeekDate(subWeeks(weekDate, 1));
   const handleNextWeek = () => setWeekDate(addWeeks(weekDate, 1));
@@ -46,11 +60,17 @@ export default function R2Carrinho() {
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
     queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
     queryClient.invalidateQueries({ queryKey: ['r2-carrinho-vendas'] });
+    queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
   };
 
   const handleReschedule = (meetingId: string) => {
     // Open the R2 agenda with the meeting selected for rescheduling
     window.location.href = `/crm/agenda-r2?reschedule=${meetingId}`;
+  };
+
+  const handleSelectAttendee = (attendee: R2CarrinhoAttendee) => {
+    setSelectedMeetingId(attendee.meeting_id);
+    setDrawerOpen(true);
   };
 
   const weekLabel = useMemo(() => {
@@ -157,6 +177,7 @@ export default function R2Carrinho() {
           <R2AgendadasList 
             attendees={agendadasData} 
             isLoading={agendadasLoading}
+            onSelectAttendee={handleSelectAttendee}
           />
         </TabsContent>
 
@@ -186,6 +207,20 @@ export default function R2Carrinho() {
           <R2MetricsPanel weekDate={weekDate} />
         </TabsContent>
       </Tabs>
+
+      {/* R2 Meeting Detail Drawer */}
+      <R2MeetingDetailDrawer
+        meeting={selectedMeeting}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onReschedule={() => {
+          if (selectedMeetingId) {
+            handleReschedule(selectedMeetingId);
+          }
+        }}
+      />
     </div>
   );
 }
