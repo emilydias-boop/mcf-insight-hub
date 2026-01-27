@@ -118,7 +118,7 @@ const formSchema = z.object({
   parcelas_pagas_empresa: z.number().min(0).optional(),
   data_contratacao: z.date(),
   dia_vencimento: z.number().min(1).max(31),
-  origem: z.enum(['socio', 'gr', 'indicacao', 'outros']),
+  origem: z.string().min(1, 'Origem é obrigatória'),
   origem_detalhe: z.string().optional(),
   vendedor_id: z.string().optional(),
   
