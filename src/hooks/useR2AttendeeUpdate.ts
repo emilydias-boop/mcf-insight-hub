@@ -124,23 +124,32 @@ export function useRemoveR2Attendee() {
   });
 }
 
-// Cancel R2 meeting (update slot status to canceled)
+// Cancel R2 meeting (delete attendees and slot completely)
 export function useCancelR2Meeting() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (meetingId: string) => {
-      const { error } = await supabase
+      // 1. Delete all attendees from this slot
+      const { error: deleteAttendeesError } = await supabase
+        .from('meeting_slot_attendees')
+        .delete()
+        .eq('meeting_slot_id', meetingId);
+
+      if (deleteAttendeesError) throw deleteAttendeesError;
+
+      // 2. Delete the meeting slot itself
+      const { error: deleteSlotError } = await supabase
         .from('meeting_slots')
-        .update({ status: 'canceled' })
+        .delete()
         .eq('id', meetingId);
 
-      if (error) throw error;
+      if (deleteSlotError) throw deleteSlotError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
-      toast.success('Reunião cancelada');
+      toast.success('Reunião cancelada e removida');
     },
     onError: () => {
       toast.error('Erro ao cancelar reunião');
