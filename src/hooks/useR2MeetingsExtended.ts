@@ -42,6 +42,8 @@ export function useR2MeetingsExtended(startDate: Date, endDate: Date) {
             updated_at,
             is_decision_maker,
             decision_maker_type,
+            is_reschedule,
+            parent_attendee_id,
             deal:crm_deals(
               id,
               name,

@@ -62,6 +62,8 @@ export function useR2AgendaMeetings(startDate: Date, endDate: Date) {
             deal_id,
             already_builds,
             lead_profile,
+            is_reschedule,
+            parent_attendee_id,
             deal:crm_deals(
               id,
               name,
@@ -120,7 +122,9 @@ export function useR2MeetingsByCloser(closerId: string, startDate: Date, endDate
             status,
             deal_id,
             already_builds,
-            lead_profile
+            lead_profile,
+            is_reschedule,
+            parent_attendee_id
           )
         `)
         .eq('meeting_type', 'r2')

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from "react";
 import { format, parseISO, isSameDay, setHours, setMinutes, isAfter } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus } from "lucide-react";
+import { Plus, ArrowRightLeft } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
@@ -232,9 +232,16 @@ export function R2CloserColumnCalendar({
                                 {meeting.attendees?.length ? (
                                   meeting.attendees.slice(0, 2).map((att) => (
                                     <div key={att.id} className="flex items-center justify-between gap-1">
-                                      <span className="truncate font-medium">
-                                        {att.name || att.deal?.contact?.name || "Lead"}
-                                      </span>
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <span className="truncate font-medium">
+                                          {att.name || att.deal?.contact?.name || "Lead"}
+                                        </span>
+                                        {(att as any).is_reschedule && (
+                                          <span className="flex items-center bg-orange-500/40 rounded px-0.5 shrink-0">
+                                            <ArrowRightLeft className="h-2.5 w-2.5 text-white" />
+                                          </span>
+                                        )}
+                                      </div>
                                       <Badge
                                         variant="outline"
                                         className={cn(
@@ -263,7 +270,15 @@ export function R2CloserColumnCalendar({
                               {meeting.attendees?.length ? (
                                 meeting.attendees.map((att) => (
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
-                                    <span>• {att.name || att.deal?.contact?.name || "Lead"}</span>
+                                    <div className="flex items-center gap-1">
+                                      <span>• {att.name || att.deal?.contact?.name || "Lead"}</span>
+                                      {(att as any).is_reschedule && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
+                                          <ArrowRightLeft className="h-2.5 w-2.5" />
+                                          Reagendado
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <Badge variant="outline" className="text-[9px] px-1 py-0">
                                       {ATTENDEE_STATUS_CONFIG[att.status]?.label || att.status}
                                     </Badge>
