@@ -522,79 +522,120 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     const phoneDigits = data.customerPhone?.replace(/\D/g, '') || '';
     const phoneSuffix = phoneDigits.slice(-9);
 
-    // 1. Buscar contatos pelo email ou telefone
-    let contactIds: string[] = [];
-
-    if (data.customerEmail) {
-      const { data: contactsByEmail } = await supabase
-        .from('crm_contacts')
-        .select('id')
-        .ilike('email', data.customerEmail)
-        .limit(5);
-      
-      if (contactsByEmail?.length) {
-        contactIds = contactsByEmail.map((c: any) => c.id);
-      }
-    }
-
-    if (contactIds.length === 0 && phoneSuffix.length >= 8) {
-      const { data: contactsByPhone } = await supabase
-        .from('crm_contacts')
-        .select('id')
-        .ilike('phone', `%${phoneSuffix}%`)
-        .limit(5);
-      
-      if (contactsByPhone?.length) {
-        contactIds = contactsByPhone.map((c: any) => c.id);
-      }
-    }
-
-    if (contactIds.length === 0) {
-      console.log('🎯 [AUTO-PAGO] Nenhum contato encontrado');
-      return;
-    }
-
-    console.log(`🎯 [AUTO-PAGO] ${contactIds.length} contatos encontrados`);
-
-    // 2. Buscar attendees com reunião R1 ativa para esses contatos
-    const { data: attendees, error } = await supabase
-      .from('meeting_slot_attendees')
-      .select(`
-        id,
-        status,
-        meeting_slot_id,
-        contact_id,
-        attendee_name,
-        meeting_slots!inner(
-          id,
-          scheduled_at,
-          status,
-          meeting_type,
-          closer_id
-        )
-      `)
-      .in('contact_id', contactIds)
-      .eq('meeting_slots.meeting_type', 'r1')
-      .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled'])
-      .in('status', ['scheduled', 'invited', 'completed'])
-      .order('meeting_slots(scheduled_at)', { ascending: false })
-      .limit(5);
-
-    if (error) {
-      console.error('🎯 [AUTO-PAGO] Erro ao buscar attendees:', error.message);
-      return;
-    }
-
-    if (!attendees || attendees.length === 0) {
-      console.log('🎯 [AUTO-PAGO] Nenhuma reunião R1 ativa encontrada');
-      return;
-    }
-
-    // Pegar a reunião mais recente
-    const matchingAttendee = attendees[0];
-    const meeting = matchingAttendee.meeting_slots;
+    // NOVA ABORDAGEM: Buscar attendees diretamente por deal->contact email/phone
+    // Em vez de buscar contact primeiro e depois attendee
+    // Isso evita pegar o attendee errado quando há múltiplos no mesmo slot
     
-    console.log(`✅ [AUTO-PAGO] Match encontrado! Reunião: ${meeting.id}, Attendee: ${matchingAttendee.id}`);
+    let matchingAttendee: any = null;
+    let meeting: any = null;
+
+    // 1. Tentar buscar por email do contato vinculado ao deal (match preciso)
+    if (data.customerEmail) {
+      console.log(`🎯 [AUTO-PAGO] Tentando match por email: ${data.customerEmail}`);
+      
+      // Buscar attendees que tenham deal com contato com este email
+      const { data: attendees, error: queryError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          meeting_slot_id,
+          attendee_name,
+          deal_id,
+          deal:crm_deals!inner(
+            id,
+            contact:crm_contacts!inner(
+              id,
+              email
+            )
+          ),
+          meeting_slots!inner(
+            id,
+            scheduled_at,
+            status,
+            meeting_type,
+            closer_id
+          )
+        `)
+        .eq('meeting_slots.meeting_type', 'r1')
+        .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+        .in('status', ['scheduled', 'invited', 'completed']) // NÃO buscar já contract_paid
+        .order('meeting_slots(scheduled_at)', { ascending: false });
+
+      if (queryError) {
+        console.error('🎯 [AUTO-PAGO] Erro na query por email:', queryError.message);
+      } else if (attendees?.length) {
+        // Filtrar localmente pelo email (case-insensitive)
+        const emailLower = data.customerEmail.toLowerCase();
+        const matched = attendees.find((a: any) => 
+          a.deal?.contact?.email?.toLowerCase() === emailLower
+        );
+        
+        if (matched) {
+          matchingAttendee = matched;
+          meeting = matched.meeting_slots;
+          console.log(`✅ [AUTO-PAGO] Match por EMAIL: ${matched.attendee_name} (${matched.id})`);
+        }
+      }
+    }
+
+    // 2. Se não encontrou por email, tentar por telefone
+    if (!matchingAttendee && phoneSuffix.length >= 8) {
+      console.log(`🎯 [AUTO-PAGO] Tentando match por telefone: ...${phoneSuffix}`);
+      
+      const { data: attendees, error: queryError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          meeting_slot_id,
+          attendee_name,
+          attendee_phone,
+          deal_id,
+          deal:crm_deals!inner(
+            id,
+            contact:crm_contacts!inner(
+              id,
+              phone
+            )
+          ),
+          meeting_slots!inner(
+            id,
+            scheduled_at,
+            status,
+            meeting_type,
+            closer_id
+          )
+        `)
+        .eq('meeting_slots.meeting_type', 'r1')
+        .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+        .in('status', ['scheduled', 'invited', 'completed'])
+        .order('meeting_slots(scheduled_at)', { ascending: false });
+
+      if (queryError) {
+        console.error('🎯 [AUTO-PAGO] Erro na query por telefone:', queryError.message);
+      } else if (attendees?.length) {
+        // Filtrar localmente pelo sufixo do telefone
+        const matched = attendees.find((a: any) => {
+          const contactPhone = a.deal?.contact?.phone?.replace(/\D/g, '') || '';
+          const attendeePhone = a.attendee_phone?.replace(/\D/g, '') || '';
+          return contactPhone.endsWith(phoneSuffix) || attendeePhone.endsWith(phoneSuffix);
+        });
+        
+        if (matched) {
+          matchingAttendee = matched;
+          meeting = matched.meeting_slots;
+          console.log(`✅ [AUTO-PAGO] Match por TELEFONE: ${matched.attendee_name} (${matched.id})`);
+        }
+      }
+    }
+
+    if (!matchingAttendee) {
+      console.log('🎯 [AUTO-PAGO] Nenhuma reunião R1 ativa encontrada para este cliente');
+      return;
+    }
+
+    console.log(`✅ [AUTO-PAGO] Match: Attendee ${matchingAttendee.id} (${matchingAttendee.attendee_name}) - Reunião: ${meeting.id}`);
 
     // 3. Atualizar attendee para contract_paid com a data da reunião (não de hoje)
     const { error: updateError } = await supabase
@@ -610,6 +651,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       return;
     }
 
+    console.log(`✅ [AUTO-PAGO] Attendee ${matchingAttendee.id} marcado como contract_paid`);
+
     // 4. Atualizar reunião para completed se ainda não estiver
     if (meeting.status === 'scheduled' || meeting.status === 'rescheduled') {
       await supabase
@@ -617,7 +660,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
         .update({ status: 'completed' })
         .eq('id', meeting.id);
       
-      console.log(`✅ [AUTO-PAGO] Reunião marcada como completed`);
+      console.log(`✅ [AUTO-PAGO] Reunião ${meeting.id} marcada como completed`);
     }
 
     // 5. Criar notificação para o closer agendar R2
@@ -628,7 +671,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
           user_id: meeting.closer_id,
           type: 'contract_paid',
           title: '💰 Contrato Pago - Agendar R2',
-          message: `${data.customerName || 'Cliente'} pagou o contrato! Agende a R2.`,
+          message: `${data.customerName || matchingAttendee.attendee_name || 'Cliente'} pagou o contrato! Agende a R2.`,
           data: {
             attendee_id: matchingAttendee.id,
             meeting_id: meeting.id,
