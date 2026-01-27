@@ -1,186 +1,181 @@
 
+# Plano: Corrigir Bug de Matching na Funcao autoMarkContractPaid
 
-# Plano: Melhorar a Aba "R2 Agendadas" no Carrinho R2
+## Problema Identificado
 
-## Resumo das Mudancas Solicitadas
+Dois contratos pagos ontem (26/01) nao foram marcados automaticamente como `contract_paid`:
 
-1. **Mostrar TODOS os 34 attendees da semana** - Independente do status (agendada, no-show, realizada, reprovada, etc.)
-2. **A data exibida deve ser a data da REUNIAO** (scheduled_at) com horarios - Atualmente ja usa scheduled_at, mas precisa confirmar que esta correto
-3. **Ao clicar em uma linha, abrir o drawer de detalhes** - Integrar o R2MeetingDetailDrawer
+| Cliente | Telefone | Pagamento | Problema |
+|---------|----------|-----------|----------|
+| Claudia Ciarlini Martins | 5999279991 | 27/01 00:33 | Email diferente: pagou com `gmail`, CRM tem `hotmail` |
+| Juliano Locatelli | 49999362228 | 26/01 23:04 | Email correto, mas NAO foi encontrado |
 
----
+### Analise Tecnica
 
-## Problema Atual
+**Dados do Juliano (deveria ter funcionado):**
+- Email no pagamento: `juliano.locatelli@yahoo.com.br`
+- Email no CRM: `juliano.locatelli@yahoo.com.br` (IGUAL)
+- Reuniao R1: 26/01 22:15 com Julio (status: invited, meeting: completed)
+- Transacao registrada: Sim, categoria `incorporador`, valor R$ 497
 
-### Filtro Restritivo no Hook useR2CarrinhoData
+**Dados da Claudia:**
+- Email no pagamento: `claudiaciarlini@gmail.com`
+- Email no CRM: `claudiaciarlini@hotmail.com` (DIFERENTE)
+- Telefone: `+5585999279991` (IGUAL nos dois)
+- Reuniao R1: 26/01 23:30 com Julio (status: invited)
 
-Na linha 90-91 do arquivo `src/hooks/useR2CarrinhoData.ts`:
+### Causas Raiz
 
-```typescript
-if (filter === 'agendadas') {
-  query = query.in('status', ['scheduled', 'invited', 'pending']);
-}
-```
-
-Isso filtra apenas reunioes com status "agendada", excluindo:
-- `completed` (Realizada)
-- `no_show`
-- `cancelled`
-- `rescheduled`
-- `contract_paid`
-
-### Sem Integracao com o Drawer de Detalhes
-
-A aba R2 Agendadas nao tem integracao com o drawer de detalhes. O componente `R2AgendadasList` recebe `onSelectAttendee` mas a pagina `R2Carrinho.tsx` nao passa essa prop nem tem estado para controlar o drawer.
+1. **Query retorna 470 attendees** - A funcao busca TODOS os attendees R1 pendentes da base, iterando um a um para fazer o matching
+2. **Ordenacao nested pode nao funcionar** - A sintaxe `.order('meeting_slots(scheduled_at)')` pode nao ordenar corretamente no Supabase
+3. **Match por email antes de telefone** - Se o email nao bate (Claudia), o codigo continua para telefone, mas pode nao encontrar
+4. **Sem limite temporal** - Busca attendees de semanas/meses atras, aumentando chance de match incorreto
 
 ---
 
-## Mudancas Propostas
+## Solucao Proposta
 
-### 1. Criar Nova Opcao de Filtro no Hook (ou remover filtro para agendadas)
+### Modificacao 1: Limitar Busca a Reunioes Recentes (14 dias)
 
-**Arquivo:** `src/hooks/useR2CarrinhoData.ts`
-
-Modificar o filtro `agendadas` para incluir TODOS os attendees da semana (exceto cancelados):
+Adicionar filtro de data para buscar apenas reunioes dos ultimos 14 dias, reduzindo de 470 para ~50-100 attendees:
 
 ```typescript
-if (filter === 'agendadas') {
-  // Mostrar TODOS os attendees R2 da semana (exceto cancelados e reagendados)
-  query = query.not('status', 'in', '(cancelled,rescheduled)');
+const twoWeeksAgo = new Date();
+twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+const { data: attendees } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`...`)
+  .eq('meeting_slots.meeting_type', 'r1')
+  .gte('meeting_slots.scheduled_at', twoWeeksAgo.toISOString()) // NOVO
+  .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+  .in('status', ['scheduled', 'invited', 'completed']);
+```
+
+### Modificacao 2: Ordenar no JavaScript (mais confiavel)
+
+Remover a ordenacao do Supabase e ordenar em JavaScript para garantir que reunioes mais recentes sejam processadas primeiro:
+
+```typescript
+// Ordenar por data mais recente primeiro
+attendees.sort((a, b) => {
+  const dateA = new Date(a.meeting_slots?.scheduled_at || 0);
+  const dateB = new Date(b.meeting_slots?.scheduled_at || 0);
+  return dateB.getTime() - dateA.getTime();
+});
+```
+
+### Modificacao 3: Melhorar Match por Telefone
+
+Se o email nao bater, fazer match por telefone imediatamente (em vez de esperar o proximo attendee):
+
+```typescript
+for (const attendee of attendees) {
+  const { data: deal } = await supabase
+    .from('crm_deals')
+    .select('contact:crm_contacts(email, phone)')
+    .eq('id', attendee.deal_id)
+    .maybeSingle();
+
+  const contactEmail = deal?.contact?.email?.toLowerCase() || '';
+  const contactPhone = deal?.contact?.phone?.replace(/\D/g, '') || '';
+
+  // Match por EMAIL (prioridade 1)
+  if (emailLower && contactEmail === emailLower) {
+    matchingAttendee = attendee;
+    matchType = 'email';
+    break;
+  }
+
+  // Match por TELEFONE (prioridade 2) - verificar MESMO se email nao bateu
+  if (phoneSuffix.length >= 8) {
+    const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
+    if (contactPhone.endsWith(phoneSuffix) || attendeePhoneClean.endsWith(phoneSuffix)) {
+      // Guardar como candidato, mas continuar buscando match por email
+      if (!phoneMatchCandidate) {
+        phoneMatchCandidate = { attendee, meeting: attendee.meeting_slots };
+      }
+    }
+  }
+}
+
+// Se nao encontrou por email, usar match por telefone
+if (!matchingAttendee && phoneMatchCandidate) {
+  matchingAttendee = phoneMatchCandidate.attendee;
+  meeting = phoneMatchCandidate.meeting;
+  matchType = 'telefone';
 }
 ```
 
-### 2. Atualizar R2AgendadasList para Mostrar Status Dinâmico
+### Modificacao 4: Adicionar Logs Detalhados de Matching
 
-**Arquivo:** `src/components/crm/R2AgendadasList.tsx`
-
-Modificar para:
-- Exibir o status REAL de cada attendee (Agendada, Realizada, No-show, etc.)
-- Badge com cor correspondente ao status
-- Manter o agrupamento por data da reuniao (scheduled_at)
-- Confirmar que ja usa a data correta (scheduled_at = data da reuniao)
-
-Mapa de status a ser adicionado:
 ```typescript
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  scheduled: { label: 'Agendada', color: 'bg-blue-500 text-white' },
-  invited: { label: 'Convidado', color: 'bg-purple-500 text-white' },
-  completed: { label: 'Realizada', color: 'bg-green-500 text-white' },
-  no_show: { label: 'No-show', color: 'bg-red-500 text-white' },
-  contract_paid: { label: 'Contrato Pago', color: 'bg-emerald-600 text-white' },
-  refunded: { label: 'Reembolsado', color: 'bg-orange-500 text-white' },
-  pending: { label: 'Pendente', color: 'bg-yellow-500 text-black' },
-};
+console.log(`🎯 [AUTO-PAGO] Buscando match para: email=${emailLower}, phone_suffix=${phoneSuffix}`);
+console.log(`🎯 [AUTO-PAGO] ${attendees.length} attendees encontrados (ultimos 14 dias)`);
+
+// No loop
+console.log(`🔍 Verificando: ${attendee.attendee_name} (email: ${contactEmail}, phone: ${contactPhone})`);
+
+// Match final
+console.log(`✅ Match por ${matchType}: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
 ```
 
-### 3. Integrar Drawer de Detalhes na Pagina R2Carrinho
+---
 
-**Arquivo:** `src/pages/crm/R2Carrinho.tsx`
+## Arquivos a Modificar
 
-Adicionar:
-- Estado para armazenar o attendee selecionado
-- Estado para controlar abertura do drawer
-- Funcao para converter R2CarrinhoAttendee para R2MeetingRow (formato esperado pelo drawer)
-- Buscar dados adicionais via useR2MeetingsExtended ou criar hook simplificado
-- Integrar o R2MeetingDetailDrawer no componente
+| Arquivo | Tipo de Mudanca |
+|---------|-----------------|
+| `supabase/functions/hubla-webhook-handler/index.ts` | Refatorar funcao `autoMarkContractPaid` (linhas 512-700) |
 
 ---
 
 ## Detalhes Tecnicos
 
-### Arquivo 1: `src/hooks/useR2CarrinhoData.ts`
+### Funcao Completa Refatorada
 
-**Linha 90-91** - Modificar filtro:
+A funcao `autoMarkContractPaid` sera atualizada para:
 
-```typescript
-// ANTES
-if (filter === 'agendadas') {
-  query = query.in('status', ['scheduled', 'invited', 'pending']);
-}
+1. **Filtrar por data** - Apenas reunioes dos ultimos 14 dias
+2. **Ordenar em JS** - Garantir que reunioes mais recentes venham primeiro
+3. **Match em duas fases** - Primeiro por email, depois por telefone como fallback
+4. **Logs detalhados** - Facilitar debugging de casos futuros
 
-// DEPOIS
-if (filter === 'agendadas') {
-  // Mostrar TODOS os attendees R2 da semana, exceto cancelados
-  query = query.not('status', 'in', '(cancelled,rescheduled)');
-}
-```
+### Fluxo Corrigido
 
-### Arquivo 2: `src/components/crm/R2AgendadasList.tsx`
-
-Modificacoes:
-1. Adicionar mapa de status com labels e cores
-2. Usar o status real do attendee para exibir badge
-3. Confirmar que onSelectAttendee esta sendo chamado corretamente
-
-### Arquivo 3: `src/pages/crm/R2Carrinho.tsx`
-
-Adicionar imports e estado:
-```typescript
-import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
-import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
-import { useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
-import { R2MeetingRow, R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
-
-// Adicionar estados
-const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
-const [drawerOpen, setDrawerOpen] = useState(false);
-
-// Buscar dados estendidos para o drawer
-const { data: meetingsExtended = [] } = useR2MeetingsExtended(weekStart, weekEnd);
-const { data: thermometerOptions = [] } = useR2ThermometerOptions();
-```
-
-Adicionar handler para selecao:
-```typescript
-const handleSelectAttendee = (attendee: R2CarrinhoAttendee) => {
-  setSelectedMeetingId(attendee.meeting_id);
-  setDrawerOpen(true);
-};
-
-// Encontrar a meeting correspondente nos dados estendidos
-const selectedMeeting = useMemo(() => {
-  if (!selectedMeetingId) return null;
-  return meetingsExtended.find(m => m.id === selectedMeetingId) || null;
-}, [selectedMeetingId, meetingsExtended]);
-```
-
-Passar handler para R2AgendadasList:
-```typescript
-<R2AgendadasList 
-  attendees={agendadasData} 
-  isLoading={agendadasLoading}
-  onSelectAttendee={handleSelectAttendee}
-/>
-```
-
-Adicionar drawer no final do componente:
-```typescript
-<R2MeetingDetailDrawer
-  meeting={selectedMeeting}
-  statusOptions={statusOptions}
-  thermometerOptions={thermometerOptions}
-  open={drawerOpen}
-  onOpenChange={setDrawerOpen}
-  onReschedule={() => {}}
-/>
+```text
+Webhook recebe pagamento de contrato (R$ 497)
+           |
+           v
+Buscar attendees R1 dos ULTIMOS 14 DIAS
+           |
+           v
+Ordenar por data (mais recente primeiro)
+           |
+           v
+Para cada attendee:
+  - Buscar email/phone do contato via deal_id
+  - Se email = email do pagamento -> MATCH IMEDIATO
+  - Se telefone termina igual -> GUARDAR como candidato
+           |
+           v
+Se nao achou por email, usar candidato de telefone
+           |
+           v
+Marcar attendee como contract_paid
 ```
 
 ---
 
 ## Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Mostra apenas status "scheduled/invited/pending" | Mostra TODOS os 34 attendees da semana |
-| Badge sempre "Agendada" | Badge dinamico (Agendada/Realizada/No-show/etc.) |
-| Clique nao faz nada | Clique abre drawer de detalhes completo |
-| Data correta (scheduled_at) | Mantido - data da reuniao com horario |
+| Cenario | Antes | Depois |
+|---------|-------|--------|
+| Email igual | Funciona (as vezes) | Funciona (sempre) |
+| Email diferente, telefone igual | NAO funciona | Funciona via telefone |
+| Muitos attendees (470) | Lento/timeout | Rapido (~50-100) |
+| Logs | Insuficientes | Detalhados |
 
-### Arquivos a Modificar
-
-| Arquivo | Tipo de Mudanca |
-|---------|-----------------|
-| `src/hooks/useR2CarrinhoData.ts` | Alterar filtro de status na query |
-| `src/components/crm/R2AgendadasList.tsx` | Adicionar mapa de status e badge dinamico |
-| `src/pages/crm/R2Carrinho.tsx` | Integrar drawer de detalhes e estados |
-
+### Casos que serao resolvidos:
+- Claudia Ciarlini: Match por telefone (emails diferentes)
+- Juliano Locatelli: Match por email (com ordenacao correta)
