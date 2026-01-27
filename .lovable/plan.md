@@ -1,113 +1,90 @@
 
-# Plano: Corrigir Automação de Contrato Pago e Sincronizar Dados
+# Plano: Completar Transferencia de Ownership dos Leads com Contrato Pago
 
 ## Problema Identificado
 
-A função `autoMarkContractPaid` no webhook `hubla-webhook-handler` **não está sendo chamada** para a maioria dos pagamentos de contrato porque:
+A migracao SQL que corrigiu o status dos 5 leads para `contract_paid` nao executou a logica de transferencia de ownership. Resultado:
 
-1. Os logs mostram "Processando **0 items** da invoice..." para pagamentos A000
-2. Quando `items.length === 0`, o código entra no bloco das linhas 816-889
-3. Esse bloco **não chama** `autoMarkContractPaid`
-4. A chamada está apenas no loop de items (linha 994), que só executa quando `items.length > 0`
+| Lead | Closer R1 | Owner Atual | Deveria Ser |
+|------|-----------|-------------|-------------|
+| Lorena das Graca | Julio | rangel.vinicius@ | julio.caetano@ |
+| CAIS ENGENHARIA | Julio | julia.caroline@ | julio.caetano@ |
+| Ana luzia maranini | Julio | NULL | julio.caetano@ |
+| Robson Moreira | Thayna | jessica.martins@ | thaynar.tavares@ |
+| Mauricio Albuquerque | Cristiane | alex.dias@ | cristiane.gomes@ |
 
-### Impacto Atual
+Por isso a Lorena nao aparece para o Julio no Kanban - o filtro de "Meus Negocios" usa `owner_id`, que ainda aponta para o SDR original.
 
-| Métrica | Esperado | Exibido |
-|---------|----------|---------|
-| Vendas A000 (27/01) | 7 | 7 ✅ |
-| Contratos no Relatório | 7 | 4 ❌ |
-| Contratos Julio | 4 | 1 ❌ |
+## Solucao Proposta
 
-### Leads do Julio que pagaram mas não foram vinculados:
-- **CAIS ENGENHARIA** (lawrence.leite@gmail.com) - status: `invited`
-- **Lorena das Graça** - status: `invited`
-- **Ana luzia maranini** - status: `invited`
+Executar uma migracao SQL para:
+1. Preservar o SDR original em `original_sdr_email`
+2. Salvar o closer da R1 em `r1_closer_email`
+3. Transferir `owner_id` para o email do closer
 
-## Solução Proposta
-
-### 1. Adicionar chamada de `autoMarkContractPaid` no bloco `items.length === 0`
-
-Modificar `supabase/functions/hubla-webhook-handler/index.ts` para incluir a lógica de detecção de contrato também quando não há items:
-
-```typescript
-// Após linha 888 (fim do bloco if items.length === 0):
-// Adicionar a mesma lógica de detecção de contrato pago
-
-// Detectar se é um pagamento de contrato
-const itemPriceForContractCheck = grossValue;
-const isContratoPago = (
-  productCategory === 'contrato' || 
-  (productCategory === 'incorporador' && itemPriceForContractCheck >= 490 && itemPriceForContractCheck <= 510) ||
-  (productName.toUpperCase().includes('A000') && productName.toUpperCase().includes('CONTRATO'))
-);
-
-// Se for contrato e primeira parcela, auto-marcar reunião R1
-if (isContratoPago && installment === 1) {
-  console.log(`🎯 [CONTRATO HUBLA] Pagamento detectado (sem items), buscando reunião R1...`);
-  await autoMarkContractPaid(supabase, {
-    customerEmail: transactionData.customer_email,
-    customerPhone: transactionData.customer_phone,
-    customerName: transactionData.customer_name,
-    saleDate: saleDate
-  });
-}
-```
-
-### 2. Correção Retroativa
-
-Executar uma migração SQL para corrigir os attendees que já pagaram contrato mas não foram marcados:
+### Migracao SQL
 
 ```sql
--- Identificar attendees com pagamento de contrato mas status ainda 'invited' ou 'completed'
-WITH paid_contracts AS (
-  SELECT DISTINCT 
-    ht.customer_email,
-    ht.customer_phone,
-    ht.sale_date
-  FROM hubla_transactions ht
-  WHERE ht.product_name ILIKE '%A000%Contrato%'
-    AND ht.sale_status = 'completed'
-    AND ht.sale_date >= '2026-01-27T00:00:00'
-),
-attendees_to_update AS (
-  SELECT msa.id as attendee_id, ms.scheduled_at
-  FROM meeting_slot_attendees msa
-  JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
-  JOIN crm_deals d ON d.id = msa.deal_id
-  JOIN crm_contacts c ON c.id = d.contact_id
-  WHERE ms.meeting_type = 'r1'
-    AND msa.status IN ('invited', 'scheduled', 'completed')
-    AND EXISTS (
-      SELECT 1 FROM paid_contracts pc
-      WHERE LOWER(c.email) = LOWER(pc.customer_email)
-    )
-)
-UPDATE meeting_slot_attendees 
-SET status = 'contract_paid', 
-    contract_paid_at = (SELECT MIN(ms.scheduled_at) FROM meeting_slots ms WHERE ms.id = meeting_slot_attendees.meeting_slot_id)
-WHERE id IN (SELECT attendee_id FROM attendees_to_update);
+-- Correcao retroativa: Transferir ownership para os closers da R1
+-- e preservar a cadeia de ownership
+
+-- 1. Lorena das Graca -> Julio
+UPDATE crm_deals SET 
+  original_sdr_email = COALESCE(original_sdr_email, owner_id),
+  r1_closer_email = 'julio.caetano@minhacasafinanciada.com',
+  owner_id = 'julio.caetano@minhacasafinanciada.com',
+  updated_at = NOW()
+WHERE id = '685a245d-49f7-404e-922e-1d194f82632a';
+
+-- 2. CAIS ENGENHARIA -> Julio
+UPDATE crm_deals SET 
+  original_sdr_email = COALESCE(original_sdr_email, owner_id),
+  r1_closer_email = 'julio.caetano@minhacasafinanciada.com',
+  owner_id = 'julio.caetano@minhacasafinanciada.com',
+  updated_at = NOW()
+WHERE id = '6354770e-29f3-4a28-8c60-5ea044d98fcf';
+
+-- 3. Ana luzia maranini -> Julio
+UPDATE crm_deals SET 
+  r1_closer_email = 'julio.caetano@minhacasafinanciada.com',
+  owner_id = 'julio.caetano@minhacasafinanciada.com',
+  updated_at = NOW()
+WHERE id = 'cfd65eeb-2c24-4dd3-a8bb-21ce29a3ff6b';
+
+-- 4. Robson Moreira -> Thayna
+UPDATE crm_deals SET 
+  original_sdr_email = COALESCE(original_sdr_email, owner_id),
+  r1_closer_email = 'thaynar.tavares@minhacasafinanciada.com',
+  owner_id = 'thaynar.tavares@minhacasafinanciada.com',
+  updated_at = NOW()
+WHERE id = '4202201f-400e-4109-a16a-34fc61df746f';
+
+-- 5. Mauricio Albuquerque -> Cristiane
+UPDATE crm_deals SET 
+  original_sdr_email = COALESCE(original_sdr_email, owner_id),
+  r1_closer_email = 'cristiane.gomes@minhacasafinanciada.com',
+  owner_id = 'cristiane.gomes@minhacasafinanciada.com',
+  updated_at = NOW()
+WHERE id = 'aea3b827-bbb8-4baa-8305-ecedd23bd5d1';
 ```
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/hubla-webhook-handler/index.ts` | Adicionar chamada `autoMarkContractPaid` no bloco sem items (após linha 888) |
 
 ## Resultado Esperado
 
-Após a correção:
+Apos a migracao:
 
-| Antes | Depois |
-|-------|--------|
-| Automação falha quando `items.length === 0` | Automação funciona em ambos os cenários |
-| Julio mostra 1 contrato pago | Julio mostra 4 contratos pagos |
-| Relatório Contratos: 4 | Relatório Contratos: 7+ |
-| Números inconsistentes entre telas | Números sincronizados |
+| Metrica | Antes | Depois |
+|---------|-------|--------|
+| Lorena no Kanban do Julio | Nao aparece | Aparece em "Contrato Pago" |
+| CAIS ENGENHARIA no Kanban do Julio | Nao aparece | Aparece em "Contrato Pago" |
+| Ana luzia no Kanban do Julio | Nao aparece | Aparece em "Contrato Pago" |
+| Contratos do Julio no "Meu Desempenho" | 1 | 4 |
 
-## Testes Necessários
+## Observacoes
 
-1. Aguardar próximo pagamento de contrato A000
-2. Verificar nos logs se aparece "[CONTRATO HUBLA] Pagamento detectado (sem items)"
-3. Verificar se attendee é atualizado para `contract_paid`
-4. Verificar se notificação é enviada ao closer
+- A Lorena **nao eh "Outside"** - ela comprou o contrato **APOS** a reuniao R1 (reuniao 16:30, compra 17:19)
+- O sistema esta correto, apenas a migracao manual nao executou toda a logica
+- Futuras marcacoes de contrato pago via interface funcionarao automaticamente
+
+## Arquivo a Modificar
+
+Nenhum arquivo de codigo sera modificado - apenas uma migracao SQL sera executada.
