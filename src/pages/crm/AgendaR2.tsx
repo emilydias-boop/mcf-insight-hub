@@ -28,6 +28,7 @@ import {
   Clock,
   Sliders,
   AlertCircle,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +49,7 @@ import { R2PendingLeadsPanel } from "@/components/crm/R2PendingLeadsPanel";
 import { R2NoShowsPanel } from "@/components/crm/R2NoShowsPanel";
 import { R2ListViewTable } from "@/components/crm/R2ListViewTable";
 import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
+import { R2QualificationReportPanel } from "@/components/crm/R2QualificationReportPanel";
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
 import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
@@ -476,6 +478,10 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="report" className="gap-2">
+                  <FileText className="h-4 w-4" />
+                  Relatório
+                </TabsTrigger>
               </TabsList>
               <div className="text-sm text-muted-foreground">{meetings.length} reunião(ões)</div>
             </div>
@@ -501,7 +507,10 @@ export default function AgendaR2() {
               <R2NoShowsPanel closers={closersAsR2CloserWithAvailability} />
             </TabsContent>
 
-            {/* Calendar View */}
+            {/* Report Tab */}
+            <TabsContent value="report" className="mt-0">
+              <R2QualificationReportPanel />
+            </TabsContent>
             <TabsContent value="calendar" className="mt-0">
               {isLoadingMeetings || isLoadingClosers ? (
                 <div className="space-y-2">
