@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
+import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 
@@ -38,6 +39,8 @@ interface DealFiltersProps {
   onClear: () => void;
   selectionMode?: boolean;
   onToggleSelectionMode?: () => void;
+  /** Lista de owners derivada dos deals (quando fornecida, substitui a query interna) */
+  ownerOptions?: OwnerOption[];
 }
 
 export const DealFilters = ({ 
@@ -45,7 +48,8 @@ export const DealFilters = ({
   onChange, 
   onClear, 
   selectionMode = false,
-  onToggleSelectionMode 
+  onToggleSelectionMode,
+  ownerOptions,
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   
@@ -143,7 +147,7 @@ export const DealFilters = ({
         </SelectContent>
       </Select>
       
-      {/* Filtro de Responsável (SDRs, Closers e Ex-funcionários) */}
+      {/* Filtro de Responsável - usa ownerOptions se fornecido, senão fallback */}
       <Select
         value={filters.owner || 'all'}
         onValueChange={(value) => onChange({ ...filters, owner: value === 'all' ? null : value })}
@@ -153,29 +157,58 @@ export const DealFilters = ({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Todos os responsáveis</SelectItem>
-          {/* Ativos */}
-          {dealOwners?.active && dealOwners.active.length > 0 && (
+          
+          {/* Se ownerOptions foi fornecido, usar ele */}
+          {ownerOptions ? (
             <>
-              {dealOwners.active.map((user: any) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.full_name || user.email?.split('@')[0]} ({user.user_roles?.[0]?.role?.toUpperCase() || 'SDR'})
+              {/* Ativos */}
+              {ownerOptions.filter(o => !o.isInactive).map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
                 </SelectItem>
               ))}
+              {/* Ex-funcionários / Legados */}
+              {ownerOptions.some(o => o.isInactive) && (
+                <>
+                  <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
+                    ── Ex-funcionários ──
+                  </SelectItem>
+                  {ownerOptions.filter(o => o.isInactive).map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className="text-muted-foreground">
+                        {opt.label} {opt.roleLabel && `(${opt.roleLabel})`}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </>
-          )}
-          {/* Ex-funcionários (desativados) */}
-          {dealOwners?.inactive && dealOwners.inactive.length > 0 && (
+          ) : (
+            /* Fallback: query antiga (para reuso em outros lugares) */
             <>
-              <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
-                ── Ex-funcionários ──
-              </SelectItem>
-              {dealOwners.inactive.map((user: any) => (
-                <SelectItem key={user.id} value={user.id}>
-                  <span className="text-muted-foreground">
-                    {user.full_name || user.email?.split('@')[0]}
-                  </span>
-                </SelectItem>
-              ))}
+              {dealOwners?.active && dealOwners.active.length > 0 && (
+                <>
+                  {dealOwners.active.map((user: any) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.full_name || user.email?.split('@')[0]} ({user.user_roles?.[0]?.role?.toUpperCase() || 'SDR'})
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+              {dealOwners?.inactive && dealOwners.inactive.length > 0 && (
+                <>
+                  <SelectItem value="__separator__" disabled className="text-xs text-muted-foreground">
+                    ── Ex-funcionários ──
+                  </SelectItem>
+                  {dealOwners.inactive.map((user: any) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      <span className="text-muted-foreground">
+                        {user.full_name || user.email?.split('@')[0]}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </>
           )}
         </SelectContent>

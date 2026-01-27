@@ -32,6 +32,7 @@ import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useMyBU } from '@/hooks/useMyBU';
 import { differenceInDays } from 'date-fns';
+import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -161,6 +162,9 @@ const Negocios = () => {
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
   const visibleStages = getVisibleStages();
+  
+  // Derivar opções de owners a partir dos deals carregados
+  const { ownerOptions } = useDealOwnerOptions(dealsData);
   
   // Extrair deal IDs e stage IDs para buscar atividades em batch
   const dealIds = useMemo(() => (dealsData || []).map((d: any) => d.id), [dealsData]);
@@ -303,7 +307,15 @@ const Negocios = () => {
         }
       }
       
-      if (filters.owner && deal.owner_profile_id !== filters.owner) return false;
+      // Filtro de responsável: suporta UUID e email legado (prefixo "email:")
+      if (filters.owner) {
+        if (filters.owner.startsWith('email:')) {
+          const emailFilter = filters.owner.replace('email:', '');
+          if (deal.owner_id !== emailFilter) return false;
+        } else {
+          if (deal.owner_profile_id !== filters.owner) return false;
+        }
+      }
       
       // Filtro por status do negócio (baseado no estágio)
       if (filters.dealStatus !== 'all') {
@@ -430,6 +442,7 @@ const Negocios = () => {
           onClear={clearFilters}
           selectionMode={selectionMode}
           onToggleSelectionMode={handleToggleSelectionMode}
+          ownerOptions={ownerOptions}
         />
         
         <div className="flex-1 overflow-hidden p-2 sm:p-4">
