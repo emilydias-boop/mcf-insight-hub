@@ -1,69 +1,146 @@
 
-## O que está acontecendo (causa raiz)
 
-O erro:
+# Plano: Corrigir Colunas Inexistentes nas Funções RPC
 
-`Could not choose the best candidate function between: public.get_all_hubla_transactions(... p_start_date => text ...), public.get_all_hubla_transactions(... p_start_date => timestamptz ...)`
+## Problema Identificado
 
-significa que hoje existem **duas funções diferentes com o mesmo nome** no Postgres:
+A última migration criou funções RPC que referenciam colunas inexistentes:
 
-- `get_all_hubla_transactions(p_search text, p_start_date text, p_end_date text, p_limit int)`
-- `get_all_hubla_transactions(p_search text, p_start_date timestamptz, p_end_date timestamptz, p_limit int)`
+| Coluna na Função | Status | Coluna Correta |
+|------------------|--------|----------------|
+| `ht.gross_value` | ❌ Não existe | Usar `ht.product_price` |
+| `ht.fee_value` | ❌ Não existe | Remover (calcular no frontend) |
 
-Como o frontend está chamando `supabase.rpc('get_all_hubla_transactions', { p_start_date: "2026-01-01T00:00:00-03:00", ... })`, o Postgres não consegue decidir automaticamente qual assinatura usar (ambiguidade).
+## Colunas que EXISTEM na tabela `hubla_transactions`
 
-Isso aconteceu porque uma migration anterior criou a versão com `timestamptz`, e depois outra migration recriou a versão com `text`, mas **não removeu** a versão antiga com `timestamptz`.
+```text
+id, hubla_id, product_name, product_category, product_price, 
+net_value, customer_name, customer_email, customer_phone, 
+sale_date, sale_status, installment_number, total_installments, 
+source, gross_override, is_offer, payment_method, created_at, updated_at
+```
 
-## Objetivo da correção
+## Campos que o Frontend Espera (interface HublaTransaction)
 
-1) Manter somente **uma** assinatura (para acabar com a ambiguidade).
-2) Manter o comportamento correto:
-   - **Somente sources**: `hubla` e `manual`
-   - **Somente status**: `completed` e `refunded`
-   - Filtrar por BU via `product_configurations.target_bu`
-3) Preservar o retorno com `hubla_id` (para o agrupamento no frontend).
+```text
+id, hubla_id, product_name, product_category, product_price, 
+net_value, customer_name, customer_email, customer_phone, 
+sale_date, sale_status, installment_number, total_installments, 
+source, gross_override
+```
 
-## Decisão técnica (mais segura com seu frontend atual)
+## Solução
 
-Padronizar para **assinatura com `text` nas datas** (porque o frontend já manda string com timezone `-03:00`) e **dropar a assinatura `timestamptz`**.
+Recriar as funções RPC com os campos corretos que existem na tabela e são esperados pelo frontend.
 
-Isso evita ter que mudar vários hooks/formatadores de data.
+## Alteração Técnica
 
-## Passos de implementação (DB)
+### Migration SQL Corretiva
 
-### 1) Criar uma migration corretiva que:
-- Remova as funções antigas com assinatura `timestamptz`:
-  - `DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamptz, timestamptz, integer);`
-  - `DROP FUNCTION IF EXISTS public.get_hubla_transactions_by_bu(text, text, timestamptz, timestamptz, integer);`
+```sql
+-- Dropar funções atuais com schema incorreto
+DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
+DROP FUNCTION IF EXISTS public.get_hubla_transactions_by_bu(text, text, text, text, integer);
 
-- Garanta que a versão “final” desejada exista (assinatura `text`) e continue com os filtros:
-  - `ht.source IN ('hubla', 'manual')`
-  - `ht.sale_status IN ('completed', 'refunded')`
-  - `INNER JOIN product_configurations pc ON ht.product_name = pc.product_name`
-  - `pc.target_bu = 'incorporador'` (na função geral) e `pc.target_bu = p_bu` (na função por BU)
-  - Datas como `p_start_date::timestamptz` / `p_end_date::timestamptz`
+-- Recriar get_all_hubla_transactions com campos corretos
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
+  p_search text DEFAULT NULL,
+  p_start_date text DEFAULT NULL,
+  p_end_date text DEFAULT NULL,
+  p_limit integer DEFAULT 5000
+)
+RETURNS TABLE(
+  id uuid,
+  hubla_id text,
+  product_name text,
+  product_category text,
+  product_price numeric,
+  net_value numeric,
+  customer_name text,
+  customer_email text,
+  customer_phone text,
+  sale_date timestamptz,
+  sale_status text,
+  installment_number integer,
+  total_installments integer,
+  source text,
+  gross_override numeric
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.hubla_id::text,
+    ht.product_name::text,
+    ht.product_category::text,
+    ht.product_price,
+    ht.net_value,
+    ht.customer_name::text,
+    ht.customer_email::text,
+    ht.customer_phone::text,
+    ht.sale_date,
+    ht.sale_status::text,
+    ht.installment_number,
+    ht.total_installments,
+    ht.source::text,
+    ht.gross_override
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = 'incorporador'
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND ht.source IN ('hubla', 'manual')
+    AND (p_search IS NULL OR (...))
+    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
+```
 
-- Reaplicar permissões (GRANT EXECUTE) para `anon` e `authenticated` na assinatura `text`.
+## Mapeamento de Campos
 
-### 2) Validar o resultado
-- Recarregar a página `/bu-incorporador/transacoes`.
-- Confirmar que:
-  - o erro de “best candidate function” sumiu
-  - voltaram as transações
-  - não aparecem sources como `hubla_make_sync` (somente `hubla` e `manual`)
+| RETURNS TABLE | SELECT | Origem |
+|---------------|--------|--------|
+| `id uuid` | `ht.id` | Tabela |
+| `hubla_id text` | `ht.hubla_id::text` | Tabela |
+| `product_name text` | `ht.product_name::text` | Tabela |
+| `product_category text` | `ht.product_category::text` | Tabela |
+| `product_price numeric` | `ht.product_price` | Tabela |
+| `net_value numeric` | `ht.net_value` | Tabela |
+| `customer_name text` | `ht.customer_name::text` | Tabela |
+| `customer_email text` | `ht.customer_email::text` | Tabela |
+| `customer_phone text` | `ht.customer_phone::text` | Tabela |
+| `sale_date timestamptz` | `ht.sale_date` | Tabela |
+| `sale_status text` | `ht.sale_status::text` | Tabela |
+| `installment_number integer` | `ht.installment_number` | Tabela |
+| `total_installments integer` | `ht.total_installments` | Tabela |
+| `source text` | `ht.source::text` | Tabela |
+| `gross_override numeric` | `ht.gross_override` | Tabela |
 
-## Passos de implementação (frontend)
+## Filtros Mantidos
 
-Nenhuma mudança deve ser necessária no frontend para resolver esta ambiguidade, pois o problema é a duplicidade de assinaturas no banco.
+| Filtro | SQL |
+|--------|-----|
+| Source | `ht.source IN ('hubla', 'manual')` |
+| Status | `ht.sale_status IN ('completed', 'refunded')` |
+| BU | `INNER JOIN product_configurations` + `pc.target_bu = 'incorporador'` |
 
-(Se ainda houver algum erro depois, aí sim o próximo passo seria ajustar o frontend para chamar explicitamente uma função com nome diferente, mas isso só se a padronização no banco não for suficiente.)
+## Resultado Esperado
 
-## Risco / Observações importantes
+Após a correção:
+- A página `/bu-incorporador/transacoes` exibirá as transações normalmente
+- Os campos retornados são compatíveis com a interface `HublaTransaction` do frontend
+- Os filtros de source e status continuam aplicados
+- O agrupamento por `hubla_id` para parent/order bumps continua funcionando
 
-- Essa correção é “cirúrgica”: não mexe em dados, só em definição de funções.
-- O risco principal é algum outro lugar do app estar chamando explicitamente a assinatura `timestamptz`. Pelos arquivos atuais, os calls usam strings, então a remoção da assinatura `timestamptz` é o caminho mais estável.
+## Arquivos a Modificar
 
-## Checklist de aceite (o que você verá na tela)
-- A lista de transações deixa de mostrar erro e volta a preencher.
-- “Fonte” mostra apenas `hubla` e `manual`.
-- Filtros de data e busca continuam funcionando.
+| Tipo | Arquivo | Alteração |
+|------|---------|-----------|
+| Migration | `supabase/migrations/[timestamp]_fix_column_names.sql` | Recriar funções com campos corretos |
+
