@@ -7,6 +7,7 @@ interface BulkTransferParams {
   dealIds: string[];
   newOwnerEmail: string;
   newOwnerName: string;
+  newOwnerProfileId: string;
 }
 
 interface TransferResult {
@@ -20,7 +21,7 @@ export const useBulkTransfer = () => {
   const { user } = useAuth();
   
   return useMutation({
-    mutationFn: async ({ dealIds, newOwnerEmail, newOwnerName }: BulkTransferParams): Promise<TransferResult> => {
+    mutationFn: async ({ dealIds, newOwnerEmail, newOwnerName, newOwnerProfileId }: BulkTransferParams): Promise<TransferResult> => {
       const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Sistema';
       
       const results = await Promise.allSettled(
@@ -34,10 +35,13 @@ export const useBulkTransfer = () => {
           
           const previousOwner = deal?.owner_id || 'Sem responsável';
           
-          // 2. Atualizar owner
+          // 2. Atualizar owner (email e UUID)
           const { error: updateError } = await supabase
             .from('crm_deals')
-            .update({ owner_id: newOwnerEmail })
+            .update({ 
+              owner_id: newOwnerEmail,
+              owner_profile_id: newOwnerProfileId
+            })
             .eq('id', dealId);
           
           if (updateError) throw updateError;

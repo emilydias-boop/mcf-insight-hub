@@ -65,6 +65,7 @@ export const BulkTransferDialog = ({
       dealIds: selectedDealIds,
       newOwnerEmail: user.email,
       newOwnerName: user.full_name || user.email,
+      newOwnerProfileId: user.id,
     });
 
     setSelectedUser(null);
