@@ -774,28 +774,15 @@ export function AgendaCalendar({
   }
 
   // Get active closers for day view to create dedicated columns
+  // Uses ALL closers with configured slots (not just those with meetings)
   const activeClosersForDayView = useMemo(() => {
     if (viewMode !== 'day') return [];
     const day = viewDays[0];
     if (!day) return [];
     
-    // Get all closers that have meetings OR are available on this day
-    const closerIds = new Set<string>();
-    
-    // Add closers with meetings
-    filteredMeetings.forEach(m => {
-      if (isSameDay(parseISO(m.scheduled_at), day) && m.closer_id) {
-        closerIds.add(m.closer_id);
-      }
-    });
-    
-    // If no meetings, show all active closers
-    if (closerIds.size === 0) {
-      closers.filter(c => c.is_active).forEach(c => closerIds.add(c.id));
-    }
-    
-    return [...closerIds].sort();
-  }, [viewMode, viewDays, filteredMeetings, closers]);
+    // Use all closers configured for this day to ensure proper column separation
+    return getAllConfiguredClosersForDay(day);
+  }, [viewMode, viewDays, getAllConfiguredClosersForDay]);
 
   // Day or Week view rendering with drag-and-drop
   const numCloserColumns = activeClosersForDayView.length || 1;
