@@ -679,6 +679,92 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       }
     }
 
+    // 6. TRANSFERIR OWNERSHIP E MOVER ESTÁGIO DO DEAL
+    if (matchingAttendee.deal_id && meeting.closer_id) {
+      try {
+        // Buscar email do closer
+        const { data: closerData } = await supabase
+          .from('closers')
+          .select('email')
+          .eq('id', meeting.closer_id)
+          .maybeSingle();
+        
+        const closerEmail = closerData?.email;
+        
+        if (closerEmail) {
+          // Buscar deal atual
+          const { data: deal } = await supabase
+            .from('crm_deals')
+            .select('owner_id, original_sdr_email, r1_closer_email, origin_id')
+            .eq('id', matchingAttendee.deal_id)
+            .maybeSingle();
+          
+          if (deal) {
+            // Buscar lista de closers para verificar se owner atual é closer
+            const { data: closersList } = await supabase
+              .from('closers')
+              .select('email')
+              .eq('is_active', true);
+            
+            const closerEmails = closersList?.map((c: { email: string }) => c.email.toLowerCase()) || [];
+            const isOwnerCloser = closerEmails.includes(deal.owner_id?.toLowerCase() || '');
+            
+            // Buscar profile_id do closer para owner_profile_id
+            const { data: closerProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', closerEmail)
+              .maybeSingle();
+            
+            // Buscar stage "Contrato Pago" no pipeline
+            const { data: contractPaidStage } = await supabase
+              .from('crm_stages')
+              .select('id')
+              .eq('origin_id', deal.origin_id)
+              .ilike('stage_name', '%Contrato Pago%')
+              .maybeSingle();
+            
+            // Atualizar deal com transferência de ownership
+            const updatePayload: Record<string, unknown> = {
+              owner_id: closerEmail,
+              r1_closer_email: closerEmail,
+            };
+            
+            // Preservar SDR original se owner atual não é closer
+            if (!deal.original_sdr_email && deal.owner_id && !isOwnerCloser) {
+              updatePayload.original_sdr_email = deal.owner_id;
+            }
+            
+            // Atualizar owner_profile_id se encontrou o profile
+            if (closerProfile?.id) {
+              updatePayload.owner_profile_id = closerProfile.id;
+            }
+            
+            // Mover para estágio Contrato Pago se encontrou
+            if (contractPaidStage?.id) {
+              updatePayload.stage_id = contractPaidStage.id;
+            }
+            
+            const { error: updateError } = await supabase
+              .from('crm_deals')
+              .update(updatePayload)
+              .eq('id', matchingAttendee.deal_id);
+            
+            if (updateError) {
+              console.error(`❌ [AUTO-PAGO] Erro ao transferir deal:`, updateError.message);
+            } else {
+              console.log(`✅ [AUTO-PAGO] Deal ${matchingAttendee.deal_id} transferido para ${closerEmail}`);
+              console.log(`📋 [AUTO-PAGO] Campos atualizados:`, JSON.stringify(updatePayload));
+            }
+          }
+        } else {
+          console.log(`⚠️ [AUTO-PAGO] Closer ${meeting.closer_id} não encontrado na tabela closers`);
+        }
+      } catch (ownershipErr: any) {
+        console.error(`❌ [AUTO-PAGO] Erro na transferência de ownership:`, ownershipErr.message);
+      }
+    }
+
     console.log(`🎉 [AUTO-PAGO] Contrato marcado como pago automaticamente!`);
   } catch (err: any) {
     console.error('🎯 [AUTO-PAGO] Erro:', err.message);
