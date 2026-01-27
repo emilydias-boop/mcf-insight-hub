@@ -75,14 +75,15 @@ export const useCreatePipeline = () => {
 
       // 2. Create Stages
       if (data.stages.length > 0) {
-        const stagesToInsert = data.stages.map((stage, index) => ({
-          name: stage.name,
-          color: stage.color,
-          stage_order: index,
-          stage_type: stage.stage_type,
-          origin_id: originId,
-          group_id: groupId || data.parent_group_id,
-        }));
+      const stagesToInsert = data.stages.map((stage, index) => ({
+        name: stage.name,
+        color: stage.color,
+        stage_order: index,
+        stage_type: stage.stage_type,
+        // Constraint exige apenas UM parent: origin OU group (XOR)
+        origin_id: originId || null,
+        group_id: originId ? null : (groupId || data.parent_group_id),
+      }));
 
         const { error: stagesError } = await supabase
           .from('local_pipeline_stages')
