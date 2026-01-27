@@ -1,71 +1,64 @@
 
-# Plano: Corrigir Erro da Função RPC (column pc.original_name does not exist)
+# Plano: Corrigir Filtro de Source na Função RPC
 
 ## Problema Identificado
 
-A migration anterior criou as funções RPC com referência à coluna `pc.original_name`, mas essa coluna **não existe** na tabela `product_configurations`. A coluna correta é `pc.product_name`.
+A última migration removeu filtros críticos das funções RPC:
 
-### Erro Atual
-```
-column pc.original_name does not exist
-```
+| Filtro | Antes (correto) | Agora (incorreto) |
+|--------|-----------------|-------------------|
+| Source | `ht.source IN ('hubla', 'manual')` | ❌ Sem filtro |
+| Status | `ht.sale_status IN ('completed', 'refunded')` | ❌ Sem filtro |
+| JOIN | `INNER JOIN product_configurations` | `LEFT JOIN` (retorna tudo) |
 
-### Estrutura Real da Tabela `product_configurations`
-| Coluna | Tipo |
-|--------|------|
-| product_name | text |
-| product_code | text |
-| display_name | text |
-| target_bu | text |
-| reference_price | numeric |
-| ... | ... |
+**Resultado**: Transações com source `hubla_make_sync` e `make` estão aparecendo indevidamente.
 
 ## Solução
 
-Recriar as funções RPC corrigindo a referência `pc.original_name` para `pc.product_name`, e simplificando a lógica para manter compatibilidade com a versão anterior que funcionava.
+Recriar as funções RPC com:
+1. ✅ Filtro de source: `ht.source IN ('hubla', 'manual')`
+2. ✅ Filtro de status: `ht.sale_status IN ('completed', 'refunded')`
+3. ✅ INNER JOIN com product_configurations
+4. ✅ Campo `hubla_id` no retorno (para agrupamento)
 
 ## Alteração Técnica
 
 ### Migration SQL Corretiva
 
-A nova migration vai:
-1. Dropar as funções com erro
-2. Recriar usando a estrutura que funcionava antes (migration `20260127152906`)
-3. Adicionar apenas o campo `hubla_id` ao retorno
-
-### Principais Mudanças
-
-| Antes (com erro) | Depois (corrigido) |
-|------------------|-------------------|
-| `LOWER(ht.product_name) = LOWER(pc.original_name)` | `ht.product_name = pc.product_name` |
-| Lógica complexa com child_offer_ids | Lógica simples do JOIN original |
-| `pc.product_code` como product_category | `ht.product_category` direto |
-
-### Campos Retornados
-
 ```sql
+-- Recriar get_all_hubla_transactions
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(...)
 RETURNS TABLE(
   id uuid,
-  hubla_id text,  -- Campo adicionado para agrupamento
-  product_name text,
-  product_category text,
-  product_price numeric,
-  net_value numeric,
-  customer_name text,
-  customer_email text,
-  customer_phone text,
-  sale_date timestamptz,
-  sale_status text,
-  installment_number integer,
-  total_installments integer,
-  source text,
-  gross_override numeric
+  hubla_id text,  -- Manter para agrupamento
+  ...
 )
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.hubla_id::text,
+    ...
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = 'incorporador'
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND ht.source IN ('hubla', 'manual')  -- CRÍTICO: Filtrar sources
+    AND ...
+END;
+$$;
 ```
 
 ## Resultado Esperado
 
-Após a correção:
-- As transações voltarão a aparecer normalmente
-- O campo `hubla_id` estará disponível para o agrupamento
-- A lógica de consolidação (parent + order bumps) funcionará corretamente
+| Antes | Depois |
+|-------|--------|
+| 4.316 transações (inclui hubla_make_sync) | Apenas hubla + manual |
+| Fonte: hubla, hubla_make_sync, make | Fonte: hubla, manual |
+
+## Arquivo a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `supabase/migrations/[timestamp]_fix_source_filter.sql` | Restaura filtros críticos de source e status |
