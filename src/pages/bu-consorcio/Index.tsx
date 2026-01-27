@@ -94,6 +94,15 @@ function getFirstLastName(fullName?: string): string {
   return `${parts[0]} ${parts[parts.length - 1]}`;
 }
 
+// Extract first two names from full name (for Responsável column)
+function getFirstTwoNames(fullName?: string): string {
+  if (!fullName) return '-';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length <= 2) return fullName.trim();
+  return `${parts[0]} ${parts[1]}`;
+}
+
+
 // Calculate next due date based on dia_vencimento
 function calcularProximoVencimento(diaVencimento: number): Date {
   const now = new Date();
@@ -256,7 +265,7 @@ export default function ConsorcioPage() {
         card.categoria === 'inside' ? 'Inside' : 'Life',
         origemConfig?.label || card.origem,
         card.status,
-        card.vendedor_name || '',
+        getFirstTwoNames(card.vendedor_name),
         card.valor_comissao || 0,
       ];
     });
@@ -598,7 +607,7 @@ export default function ConsorcioPage() {
                           <Badge className={statusConfig.color}>{statusConfig.label}</Badge>
                         )}
                       </TableCell>
-                      <TableCell>{card.vendedor_name || '-'}</TableCell>
+                      <TableCell>{getFirstTwoNames(card.vendedor_name)}</TableCell>
                       <TableCell className="text-right">
                         {card.valor_comissao_total ? formatCurrencyFull(card.valor_comissao_total) : '-'}
                       </TableCell>
