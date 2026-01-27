@@ -77,7 +77,7 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
   const { data: closerCarrinhoMetrics, isLoading: closerLoading } = useCloserCarrinhoMetrics(weekDate);
 
   const handleRescheduleNoShows = () => {
-    window.location.href = '/crm/agenda-r2?filter=no_show';
+    window.location.href = '/crm/agenda-r2?tab=noshows';
   };
 
   if (isLoading) {

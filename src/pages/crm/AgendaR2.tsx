@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   format,
   startOfWeek,
@@ -26,6 +27,7 @@ import {
   LayoutGrid,
   Clock,
   Sliders,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,9 +45,11 @@ import { R2MeetingDetailDrawer } from "@/components/crm/R2MeetingDetailDrawer";
 import { R2QuickScheduleModal } from "@/components/crm/R2QuickScheduleModal";
 import { R2CloserAvailabilityConfig } from "@/components/crm/R2CloserAvailabilityConfig";
 import { R2PendingLeadsPanel } from "@/components/crm/R2PendingLeadsPanel";
+import { R2NoShowsPanel } from "@/components/crm/R2NoShowsPanel";
 import { R2ListViewTable } from "@/components/crm/R2ListViewTable";
 import { R2StatusConfigModal } from "@/components/crm/R2StatusConfigModal";
 import { useR2PendingLeadsCount } from "@/hooks/useR2PendingLeads";
+import { useR2NoShowsCount } from "@/hooks/useR2NoShowLeads";
 import { R2RescheduleModal } from "@/components/crm/R2RescheduleModal";
 import { R2MeetingRow } from "@/types/r2Agenda";
 import { R2Meeting } from "@/hooks/useR2AgendaMeetings";
@@ -53,14 +57,20 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useR2DailySlotsForView } from "@/hooks/useR2DailySlotsForView";
+import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
 
 type ViewMode = "day" | "week" | "month";
 
 export default function AgendaR2() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [closerFilter, setCloserFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Determine initial tab from URL
+  const urlTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(urlTab === 'noshows' ? 'noshows' : 'calendar');
 
   // Modal/Drawer states
   const [selectedMeeting, setSelectedMeeting] = useState<R2MeetingRow | null>(null);
@@ -72,6 +82,13 @@ export default function AgendaR2() {
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
   const [statusConfigOpen, setStatusConfigOpen] = useState(false);
+
+  // Handle URL param changes
+  useEffect(() => {
+    if (urlTab === 'noshows') {
+      setActiveTab('noshows');
+    }
+  }, [urlTab]);
 
   // Calculate date range based on view mode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -102,6 +119,7 @@ export default function AgendaR2() {
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const pendingCount = useR2PendingLeadsCount();
+  const { data: noShowCount = 0 } = useR2NoShowsCount();
 
   // Fetch R2 configured slots for the "Por Closer" view
   const closerIds = useMemo(() => closers.map((c) => c.id), [closers]);
@@ -207,6 +225,17 @@ export default function AgendaR2() {
       availability: [],
     }));
   }, [displayClosers]);
+
+  // Convert closers for R2NoShowsPanel (uses R2CloserWithAvailability type)
+  const closersAsR2CloserWithAvailability: R2CloserWithAvailability[] = useMemo(() => {
+    return closers.map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      color: c.color || "#8B5CF6",
+      is_active: c.is_active ?? true,
+    }));
+  }, [closers]);
 
   // Navigation handlers
   const handlePrev = () => {
@@ -414,7 +443,7 @@ export default function AgendaR2() {
       {/* Main Content with Tabs */}
       <Card>
         <CardContent className="pt-4">
-          <Tabs defaultValue="calendar">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <div className="flex items-center justify-between mb-4">
               <TabsList>
                 <TabsTrigger value="list" className="gap-2">
@@ -438,6 +467,15 @@ export default function AgendaR2() {
                     </Badge>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="noshows" className="gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  No-Shows
+                  {noShowCount > 0 && (
+                    <Badge variant="outline" className="h-5 min-w-[20px] px-1.5 text-xs bg-destructive/10 text-destructive border-destructive/20">
+                      {noShowCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
               </TabsList>
               <div className="text-sm text-muted-foreground">{meetings.length} reunião(ões)</div>
             </div>
@@ -456,6 +494,11 @@ export default function AgendaR2() {
             {/* Pending Leads Tab */}
             <TabsContent value="pending" className="mt-0">
               <R2PendingLeadsPanel closers={closersWithAvailability} />
+            </TabsContent>
+
+            {/* No-Shows Tab */}
+            <TabsContent value="noshows" className="mt-0">
+              <R2NoShowsPanel closers={closersAsR2CloserWithAvailability} />
             </TabsContent>
 
             {/* Calendar View */}
