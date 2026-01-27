@@ -18,6 +18,7 @@ export const useCreatePipeline = () => {
       const timestamp = Date.now();
       let groupId: string | undefined;
       let originId: string | undefined;
+      let stageIdMap: Map<string, string> = new Map();
 
       // 1. Create Group or Origin
       if (data.type === 'group') {
@@ -75,21 +76,32 @@ export const useCreatePipeline = () => {
 
       // 2. Create Stages
       if (data.stages.length > 0) {
-      const stagesToInsert = data.stages.map((stage, index) => ({
-        name: stage.name,
-        color: stage.color,
-        stage_order: index,
-        stage_type: stage.stage_type,
-        // Constraint exige apenas UM parent: origin OU group (XOR)
-        origin_id: originId || null,
-        group_id: originId ? null : (groupId || data.parent_group_id),
-      }));
+        const stagesToInsert = data.stages.map((stage, index) => ({
+          name: stage.name,
+          color: stage.color,
+          stage_order: index,
+          stage_type: stage.stage_type,
+          // Constraint exige apenas UM parent: origin OU group (XOR)
+          origin_id: originId || null,
+          group_id: originId ? null : (groupId || data.parent_group_id),
+        }));
 
-        const { error: stagesError } = await supabase
+        const { data: createdStages, error: stagesError } = await supabase
           .from('local_pipeline_stages')
-          .insert(stagesToInsert);
+          .insert(stagesToInsert)
+          .select('id, stage_order');
 
         if (stagesError) throw new Error(`Erro ao criar etapas: ${stagesError.message}`);
+
+        // Criar mapeamento: wizard stage ID → DB stage ID
+        if (createdStages) {
+          createdStages.forEach((dbStage) => {
+            const wizardStage = data.stages.find(s => s.stage_order === dbStage.stage_order);
+            if (wizardStage) {
+              stageIdMap.set(wizardStage.id, dbStage.id);
+            }
+          });
+        }
       }
 
       // 3. Create Distribution Config (if configured)
@@ -115,13 +127,19 @@ export const useCreatePipeline = () => {
 
       // 4. Create Webhook Endpoint (if enabled)
       if (data.integration.enabled && data.integration.slug) {
+        // Mapear ID temporário para ID real do banco
+        let realStageId: string | null = null;
+        if (data.integration.initial_stage_id) {
+          realStageId = stageIdMap.get(data.integration.initial_stage_id) || null;
+        }
+
         const { error: webhookError } = await supabase
           .from('webhook_endpoints')
           .insert({
             name: data.name,
             slug: data.integration.slug,
             origin_id: originId!,
-            stage_id: data.integration.initial_stage_id || null,
+            stage_id: realStageId,
             auto_tags: data.integration.auto_tags.length > 0 ? data.integration.auto_tags : null,
             is_active: true,
           });
