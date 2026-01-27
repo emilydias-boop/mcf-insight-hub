@@ -1,190 +1,124 @@
 
-# Plano: Adicionar Exclusão de Participante Único e Cancelamento de Reunião
+# Plano: Corrigir Contagem de R2 Agendadas por Closer R1
 
 ## Problema Identificado
 
-Quando uma reunião R2 tem apenas **1 participante**, não existe forma de:
-1. Excluir esse participante
-2. Cancelar a reunião inteira
+A coluna **"R2 Agendada"** na tabela de Closers está mostrando **0** para todos, quando deveria mostrar:
 
-O botão de lixeira só aparece quando há mais de 1 participante (linha 179: `meeting.attendees.length > 1`).
+| Closer | R2 Agendadas (real) | Exibido |
+|--------|---------------------|---------|
+| Julio | 61 | 0 |
+| Cristiane | 51 | 0 |
+| Thayna | 48 | 0 |
 
-## Solução Proposta
+## Causa Raiz
 
-### Comportamento Desejado
+No hook `useR1CloserMetrics.ts`, a busca de **reuniões R1** está filtrada pelo mesmo período de datas selecionado na página:
 
-| Situação | Ação "Excluir Participante" | Resultado |
-|----------|----------------------------|-----------|
-| Múltiplos participantes | Remove só o selecionado | Reunião continua com os demais |
-| **Participante único** | Remove o participante | Reunião é **cancelada** automaticamente |
-
-Adicionar também um botão "Cancelar Reunião" que cancela tudo de uma vez (slot + todos participantes).
-
-## Mudanças Necessárias
-
-### 1. Criar Hook para Cancelar Reunião R2
-
-**Arquivo:** `src/hooks/useR2AttendeeUpdate.ts`
-
-Adicionar novo hook `useCancelR2Meeting` que:
-- Atualiza status do `meeting_slot` para "canceled"
-- Invalida os caches corretos do R2
-
-### 2. Criar Hook para Remover Último Participante
-
-**Arquivo:** `src/hooks/useR2AttendeeUpdate.ts`
-
-Modificar ou criar `useRemoveR2AttendeeAndCancelIfEmpty` que:
-- Remove o participante
-- Se era o último, cancela o meeting_slot automaticamente
-
-### 3. Atualizar R2MeetingDetailDrawer
-
-**Arquivo:** `src/components/crm/R2MeetingDetailDrawer.tsx`
-
-**Mudanças:**
-
-1. **Remover condição** `meeting.attendees.length > 1` (linha 179)
-   - Mostrar botão de lixeira sempre
-
-2. **Alterar lógica do handleRemoveAttendee**:
-   - Se há mais de 1 participante: apenas remove
-   - Se é o último: confirma e cancela a reunião também
-
-3. **Adicionar botão "Cancelar Reunião"** no footer:
-   - Permite cancelar toda a reunião de uma vez
-   - Útil quando quer desmarcar sem excluir o lead do histórico
-
-## Arquitetura da Solução
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    R2MeetingDetailDrawer                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Participantes (1)                                          │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ 🔴 Odesmar Martins da Silva    [Selecionado] [🗑️]    │  │
-│  └───────────────────────────────────────────────────────┘  │
-│       ↓                                                     │
-│  Clicou no 🗑️ do único participante?                       │
-│       ↓                                                     │
-│  Confirmar: "Ao remover o único participante, a reunião     │
-│             será cancelada. Deseja continuar?"              │
-│       ↓                                                     │
-│  1. DELETE meeting_slot_attendees                           │
-│  2. UPDATE meeting_slots SET status = 'canceled'            │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  FOOTER (atual + novo botão):                               │
-│  ┌──────────────┐  ┌──────────────┐                         │
-│  │ ✓ Realizada  │  │ ✗ No-show    │                         │
-│  └──────────────┘  └──────────────┘                         │
-│  ┌──────────────┐  ┌──────────────┐                         │
-│  │ 🕐 Reagendar │  │ ↩ Reembolso  │                         │
-│  └──────────────┘  └──────────────┘                         │
-│  ┌─────────────────────────────────┐  ← NOVO                │
-│  │ 🗑️ Cancelar Reunião            │                         │
-│  └─────────────────────────────────┘                        │
-└─────────────────────────────────────────────────────────────┘
+```typescript
+// Linhas 58-59 - PROBLEMA
+.gte('scheduled_at', start)  // Filtra R1 para o período
+.lte('scheduled_at', end)    // Ex: apenas janeiro/2026
 ```
 
-## Arquivos a Modificar
+Mas uma **R2 de janeiro** pode estar vinculada a uma **R1 de dezembro**!
+
+**Resultado:** O mapeamento `deal_id → closer_id` fica incompleto, não encontrando correspondência para R2s cujas R1 foram realizadas antes do período filtrado.
+
+## Solução
+
+Separar as queries em duas lógicas:
+
+1. **Para métricas R1** (agendadas, realizadas, no-show, contrato): manter o filtro de data (período selecionado)
+
+2. **Para mapeamento R2 → Closer R1**: buscar **todas as R1** independente de data, já que o vínculo é pelo `deal_id`
+
+## Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useR2AttendeeUpdate.ts` | Adicionar `useCancelR2Meeting` |
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Remover condição, adicionar botão cancelar |
+| `src/hooks/useR1CloserMetrics.ts` | Separar query de R1 para métricas vs query para mapeamento R2 |
 
-## Detalhes Técnicos
+## Mudanças no Código
 
-### Novo Hook: useCancelR2Meeting
+### useR1CloserMetrics.ts
 
-```typescript
-export function useCancelR2Meeting() {
-  const queryClient = useQueryClient();
+**Adicionar uma segunda query de R1 SEM filtro de data** para mapear deals a closers:
 
-  return useMutation({
-    mutationFn: async (meetingId: string) => {
-      const { error } = await supabase
-        .from('meeting_slots')
-        .update({ status: 'canceled' })
-        .eq('id', meetingId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
-      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
-      toast.success('Reunião cancelada');
-    },
-  });
-}
+```text
+1. Query R1 PARA O PERÍODO (já existe)
+   → Usada para: r1_agendada, r1_realizada, noshow, contrato_pago
+   
+2. NOVA: Query R1 SEM FILTRO DE DATA
+   → Usada apenas para: dealToR1Closer map (atribuição R2)
+   
+3. Query R2 PARA O PERÍODO (já existe)
+   → Usa o map da query 2 para atribuir R2 ao closer R1
 ```
 
-### Lógica Atualizada do handleRemoveAttendee
+### Implementação
+
+Na query que popula o `dealToR1Closer`, remover os filtros de data:
 
 ```typescript
-const handleRemoveAttendee = (attendeeId: string) => {
-  const isLastAttendee = meeting.attendees?.length === 1;
-  
-  const confirmMessage = isLastAttendee
-    ? 'Ao remover o único participante, a reunião será cancelada. Deseja continuar?'
-    : 'Deseja remover este participante da reunião?';
-  
-  if (confirm(confirmMessage)) {
-    removeAttendee.mutate(attendeeId, {
-      onSuccess: () => {
-        if (isLastAttendee) {
-          cancelMeeting.mutate(meeting.id);
-          onOpenChange(false); // Fecha o drawer
-        } else {
-          const remaining = meeting.attendees?.filter(a => a.id !== attendeeId);
-          if (remaining?.length) {
-            setSelectedAttendeeId(remaining[0].id);
-          }
+// NOVA query: Buscar TODOS os R1 meetings para mapear deal → closer R1
+const { data: allR1Meetings } = await supabase
+  .from('meeting_slots')
+  .select(`
+    closer_id,
+    meeting_slot_attendees (
+      deal_id,
+      booked_by,
+      status
+    )
+  `)
+  .eq('meeting_type', 'r1')
+  .neq('status', 'cancelled')
+  .neq('status', 'canceled');
+  // SEM filtro de data!
+
+// Usar allR1Meetings para construir dealToR1Closer
+const dealToR1Closer = new Map<string, string>();
+allR1Meetings?.forEach(meeting => {
+  meeting.meeting_slot_attendees?.forEach(att => {
+    if (att.deal_id && meeting.closer_id) {
+      const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
+      if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
+        // Mapear deal → R1 closer (primeira correspondência ganha)
+        if (!dealToR1Closer.has(att.deal_id)) {
+          dealToR1Closer.set(att.deal_id, meeting.closer_id);
         }
       }
-    });
-  }
-};
-```
-
-### Botão Cancelar Reunião
-
-```typescript
-<Button 
-  variant="outline"
-  className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-  onClick={() => {
-    if (confirm('Deseja cancelar esta reunião? Todos os participantes serão afetados.')) {
-      cancelMeeting.mutate(meeting.id);
-      onOpenChange(false);
     }
-  }}
->
-  <Trash2 className="h-4 w-4 mr-2" />
-  Cancelar Reunião
-</Button>
+  });
+});
 ```
 
 ## Fluxo de Implementação
 
 ```text
-1. Adicionar useCancelR2Meeting no hook
+1. Adicionar query de R1 sem filtro de data
           ↓
-2. Remover condição length > 1 do botão lixeira
+2. Buscar profiles para essa nova query (ou reutilizar)
           ↓
-3. Atualizar lógica handleRemoveAttendee
+3. Construir dealToR1Closer usando a query sem filtro
           ↓
-4. Adicionar botão "Cancelar Reunião" no footer
+4. Manter lógica de contagem R2 inalterada
           ↓
-5. Testar cenários: único participante e múltiplos
+5. Testar com período de janeiro/2026
 ```
 
-## Benefícios
+## Resultado Esperado
 
-1. **Flexibilidade**: Pode remover participante único sem travar
-2. **Consistência**: Reunião sem participantes é automaticamente cancelada
-3. **Clareza**: Mensagem de confirmação diferente para cada cenário
-4. **Ação Rápida**: Botão para cancelar reunião inteira de uma vez
+| Closer | Antes | Depois |
+|--------|-------|--------|
+| Julio | 0 | 61 |
+| Cristiane | 0 | 51 |
+| Thayna | 0 | 48 |
+| **Total** | 0 | **160** |
+
+## Impacto
+
+- Corrige a exibição de R2 Agendadas na tabela de Closers
+- Não afeta outras métricas (R1 Agendada, Realizada, etc.)
+- Não impacta performance significativamente (query adicional simples)
