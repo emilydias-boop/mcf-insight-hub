@@ -1,181 +1,177 @@
 
-# Plano: Corrigir Bug de Matching na Funcao autoMarkContractPaid
+
+# Plano: Adicionar Transferência de Propriedade ao autoMarkContractPaid
 
 ## Problema Identificado
 
-Dois contratos pagos ontem (26/01) nao foram marcados automaticamente como `contract_paid`:
+Quando um contrato é pago (webhook Hubla), a função `autoMarkContractPaid` marca corretamente o attendee como `contract_paid`, mas **não transfere a propriedade do deal para o closer**.
 
-| Cliente | Telefone | Pagamento | Problema |
-|---------|----------|-----------|----------|
-| Claudia Ciarlini Martins | 5999279991 | 27/01 00:33 | Email diferente: pagou com `gmail`, CRM tem `hotmail` |
-| Juliano Locatelli | 49999362228 | 26/01 23:04 | Email correto, mas NAO foi encontrado |
+| Lead | SDR (owner_id) | Closer R1 | Status Esperado |
+|------|----------------|-----------|-----------------|
+| Juliano Locatelli | juliana.rodrigues@ | julio.caetano@ | owner deveria ser Julio |
+| Claudia Ciarlini | caroline.souza@ | julio.caetano@ | owner deveria ser Julio |
 
-### Analise Tecnica
-
-**Dados do Juliano (deveria ter funcionado):**
-- Email no pagamento: `juliano.locatelli@yahoo.com.br`
-- Email no CRM: `juliano.locatelli@yahoo.com.br` (IGUAL)
-- Reuniao R1: 26/01 22:15 com Julio (status: invited, meeting: completed)
-- Transacao registrada: Sim, categoria `incorporador`, valor R$ 497
-
-**Dados da Claudia:**
-- Email no pagamento: `claudiaciarlini@gmail.com`
-- Email no CRM: `claudiaciarlini@hotmail.com` (DIFERENTE)
-- Telefone: `+5585999279991` (IGUAL nos dois)
-- Reuniao R1: 26/01 23:30 com Julio (status: invited)
-
-### Causas Raiz
-
-1. **Query retorna 470 attendees** - A funcao busca TODOS os attendees R1 pendentes da base, iterando um a um para fazer o matching
-2. **Ordenacao nested pode nao funcionar** - A sintaxe `.order('meeting_slots(scheduled_at)')` pode nao ordenar corretamente no Supabase
-3. **Match por email antes de telefone** - Se o email nao bate (Claudia), o codigo continua para telefone, mas pode nao encontrar
-4. **Sem limite temporal** - Busca attendees de semanas/meses atras, aumentando chance de match incorreto
+O código de transferência de propriedade existe apenas no frontend (`syncDealStageFromAgenda` em `useAgendaData.ts`), mas o webhook backend não o executa.
 
 ---
 
-## Solucao Proposta
+## Solução Proposta
 
-### Modificacao 1: Limitar Busca a Reunioes Recentes (14 dias)
-
-Adicionar filtro de data para buscar apenas reunioes dos ultimos 14 dias, reduzindo de 470 para ~50-100 attendees:
+Adicionar na função `autoMarkContractPaid` a lógica completa de transferência de propriedade após marcar o attendee como `contract_paid`:
 
 ```typescript
-const twoWeeksAgo = new Date();
-twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-
-const { data: attendees } = await supabase
-  .from('meeting_slot_attendees')
-  .select(`...`)
-  .eq('meeting_slots.meeting_type', 'r1')
-  .gte('meeting_slots.scheduled_at', twoWeeksAgo.toISOString()) // NOVO
-  .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
-  .in('status', ['scheduled', 'invited', 'completed']);
-```
-
-### Modificacao 2: Ordenar no JavaScript (mais confiavel)
-
-Remover a ordenacao do Supabase e ordenar em JavaScript para garantir que reunioes mais recentes sejam processadas primeiro:
-
-```typescript
-// Ordenar por data mais recente primeiro
-attendees.sort((a, b) => {
-  const dateA = new Date(a.meeting_slots?.scheduled_at || 0);
-  const dateB = new Date(b.meeting_slots?.scheduled_at || 0);
-  return dateB.getTime() - dateA.getTime();
-});
-```
-
-### Modificacao 3: Melhorar Match por Telefone
-
-Se o email nao bater, fazer match por telefone imediatamente (em vez de esperar o proximo attendee):
-
-```typescript
-for (const attendee of attendees) {
-  const { data: deal } = await supabase
-    .from('crm_deals')
-    .select('contact:crm_contacts(email, phone)')
-    .eq('id', attendee.deal_id)
-    .maybeSingle();
-
-  const contactEmail = deal?.contact?.email?.toLowerCase() || '';
-  const contactPhone = deal?.contact?.phone?.replace(/\D/g, '') || '';
-
-  // Match por EMAIL (prioridade 1)
-  if (emailLower && contactEmail === emailLower) {
-    matchingAttendee = attendee;
-    matchType = 'email';
-    break;
-  }
-
-  // Match por TELEFONE (prioridade 2) - verificar MESMO se email nao bateu
-  if (phoneSuffix.length >= 8) {
-    const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
-    if (contactPhone.endsWith(phoneSuffix) || attendeePhoneClean.endsWith(phoneSuffix)) {
-      // Guardar como candidato, mas continuar buscando match por email
-      if (!phoneMatchCandidate) {
-        phoneMatchCandidate = { attendee, meeting: attendee.meeting_slots };
+// 6. TRANSFERIR OWNERSHIP E MOVER ESTÁGIO DO DEAL
+if (matchingAttendee.deal_id) {
+  // Buscar email do closer
+  const { data: closerData } = await supabase
+    .from('closers')
+    .select('email')
+    .eq('id', meeting.closer_id)
+    .single();
+  
+  const closerEmail = closerData?.email;
+  
+  if (closerEmail) {
+    // Buscar deal atual
+    const { data: deal } = await supabase
+      .from('crm_deals')
+      .select('owner_id, original_sdr_email, r1_closer_email, origin_id')
+      .eq('id', matchingAttendee.deal_id)
+      .single();
+    
+    if (deal) {
+      // Buscar lista de closers para verificar se owner atual é closer
+      const { data: closersList } = await supabase
+        .from('closers')
+        .select('email')
+        .eq('is_active', true);
+      
+      const closerEmails = closersList?.map(c => c.email.toLowerCase()) || [];
+      const isOwnerCloser = closerEmails.includes(deal.owner_id?.toLowerCase() || '');
+      
+      // Buscar profile_id do closer para owner_profile_id
+      const { data: closerProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', closerEmail)
+        .single();
+      
+      // Buscar stage "Contrato Pago" no pipeline
+      const { data: contractPaidStage } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .eq('origin_id', deal.origin_id)
+        .ilike('stage_name', 'Contrato Pago')
+        .single();
+      
+      // Atualizar deal com transferência de ownership
+      const updatePayload: Record<string, unknown> = {
+        owner_id: closerEmail,
+        r1_closer_email: closerEmail,
+      };
+      
+      // Preservar SDR original se owner atual não é closer
+      if (!deal.original_sdr_email && deal.owner_id && !isOwnerCloser) {
+        updatePayload.original_sdr_email = deal.owner_id;
       }
+      
+      // Atualizar owner_profile_id se encontrou o profile
+      if (closerProfile?.id) {
+        updatePayload.owner_profile_id = closerProfile.id;
+      }
+      
+      // Mover para estágio Contrato Pago se encontrou
+      if (contractPaidStage?.id) {
+        updatePayload.stage_id = contractPaidStage.id;
+      }
+      
+      await supabase
+        .from('crm_deals')
+        .update(updatePayload)
+        .eq('id', matchingAttendee.deal_id);
+      
+      console.log(`✅ [AUTO-PAGO] Deal ${matchingAttendee.deal_id} transferido para ${closerEmail}`);
     }
   }
 }
-
-// Se nao encontrou por email, usar match por telefone
-if (!matchingAttendee && phoneMatchCandidate) {
-  matchingAttendee = phoneMatchCandidate.attendee;
-  meeting = phoneMatchCandidate.meeting;
-  matchType = 'telefone';
-}
-```
-
-### Modificacao 4: Adicionar Logs Detalhados de Matching
-
-```typescript
-console.log(`🎯 [AUTO-PAGO] Buscando match para: email=${emailLower}, phone_suffix=${phoneSuffix}`);
-console.log(`🎯 [AUTO-PAGO] ${attendees.length} attendees encontrados (ultimos 14 dias)`);
-
-// No loop
-console.log(`🔍 Verificando: ${attendee.attendee_name} (email: ${contactEmail}, phone: ${contactPhone})`);
-
-// Match final
-console.log(`✅ Match por ${matchType}: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
 ```
 
 ---
 
-## Arquivos a Modificar
+## Detalhes Técnicos
 
-| Arquivo | Tipo de Mudanca |
-|---------|-----------------|
-| `supabase/functions/hubla-webhook-handler/index.ts` | Refatorar funcao `autoMarkContractPaid` (linhas 512-700) |
+### Arquivo a Modificar
 
----
+| Arquivo | Modificação |
+|---------|-------------|
+| `supabase/functions/hubla-webhook-handler/index.ts` | Adicionar lógica de transferência após linha ~682 |
 
-## Detalhes Tecnicos
+### Campos a Atualizar no Deal
 
-### Funcao Completa Refatorada
-
-A funcao `autoMarkContractPaid` sera atualizada para:
-
-1. **Filtrar por data** - Apenas reunioes dos ultimos 14 dias
-2. **Ordenar em JS** - Garantir que reunioes mais recentes venham primeiro
-3. **Match em duas fases** - Primeiro por email, depois por telefone como fallback
-4. **Logs detalhados** - Facilitar debugging de casos futuros
+| Campo | Valor | Descrição |
+|-------|-------|-----------|
+| `owner_id` | email do closer | Novo proprietário do lead |
+| `owner_profile_id` | UUID do profile | Para joins com tabela profiles |
+| `original_sdr_email` | email do SDR | Preservado para métricas |
+| `r1_closer_email` | email do closer | Registro da cadeia de ownership |
+| `stage_id` | ID do estágio "Contrato Pago" | Move o deal no Kanban |
 
 ### Fluxo Corrigido
 
 ```text
-Webhook recebe pagamento de contrato (R$ 497)
-           |
-           v
-Buscar attendees R1 dos ULTIMOS 14 DIAS
-           |
-           v
-Ordenar por data (mais recente primeiro)
-           |
-           v
-Para cada attendee:
-  - Buscar email/phone do contato via deal_id
-  - Se email = email do pagamento -> MATCH IMEDIATO
-  - Se telefone termina igual -> GUARDAR como candidato
-           |
-           v
-Se nao achou por email, usar candidato de telefone
-           |
-           v
-Marcar attendee como contract_paid
+Webhook recebe pagamento de contrato
+           ↓
+autoMarkContractPaid encontra attendee
+           ↓
+Marca attendee como contract_paid
+           ↓
+Marca meeting slot como completed
+           ↓
+[NOVO] Busca closer email do meeting
+           ↓
+[NOVO] Atualiza deal:
+  - owner_id → closer email
+  - owner_profile_id → closer profile UUID
+  - original_sdr_email → SDR original (preservado)
+  - r1_closer_email → closer email
+  - stage_id → "Contrato Pago"
+           ↓
+Cria notificação para closer
+```
+
+---
+
+## Correção Manual Imediata
+
+Para os leads Juliano e Claudia que já foram processados, será necessário atualizar manualmente:
+
+```sql
+-- Corrigir Juliano Locatelli
+UPDATE crm_deals 
+SET 
+  owner_id = 'julio.caetano@minhacasafinanciada.com',
+  original_sdr_email = 'juliana.rodrigues@minhacasafinanciada.com',
+  r1_closer_email = 'julio.caetano@minhacasafinanciada.com'
+WHERE id = '79e1b425-6832-4eb6-b086-022de05e7e89';
+
+-- Corrigir Claudia Ciarlini
+UPDATE crm_deals 
+SET 
+  owner_id = 'julio.caetano@minhacasafinanciada.com',
+  original_sdr_email = 'caroline.souza@minhacasafinanciada.com',
+  r1_closer_email = 'julio.caetano@minhacasafinanciada.com'
+WHERE id = '93c1ccfd-ab11-421e-819a-f37d9e235628';
 ```
 
 ---
 
 ## Resultado Esperado
 
-| Cenario | Antes | Depois |
-|---------|-------|--------|
-| Email igual | Funciona (as vezes) | Funciona (sempre) |
-| Email diferente, telefone igual | NAO funciona | Funciona via telefone |
-| Muitos attendees (470) | Lento/timeout | Rapido (~50-100) |
-| Logs | Insuficientes | Detalhados |
+| Antes | Depois |
+|-------|--------|
+| Attendee marcado contract_paid | Attendee marcado contract_paid |
+| Deal continua com SDR | Deal transferido para Closer |
+| original_sdr_email = null | original_sdr_email = SDR email |
+| r1_closer_email = null | r1_closer_email = Closer email |
+| stage = qualquer | stage = "Contrato Pago" |
 
-### Casos que serao resolvidos:
-- Claudia Ciarlini: Match por telefone (emails diferentes)
-- Juliano Locatelli: Match por email (com ordenacao correta)
