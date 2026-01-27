@@ -515,127 +515,110 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     return;
   }
 
+  // Log detalhado dos dados recebidos
+  console.log(`🎯 [AUTO-PAGO] Dados recebidos:`, {
+    email: data.customerEmail,
+    phone: data.customerPhone,
+    name: data.customerName,
+    saleDate: data.saleDate
+  });
+
   console.log(`🎯 [AUTO-PAGO] Buscando reunião R1 para: ${data.customerEmail || data.customerPhone}`);
 
   try {
     // Normalizar telefone para busca
     const phoneDigits = data.customerPhone?.replace(/\D/g, '') || '';
     const phoneSuffix = phoneDigits.slice(-9);
+    const emailLower = data.customerEmail?.toLowerCase() || '';
 
-    // NOVA ABORDAGEM: Buscar attendees diretamente por deal->contact email/phone
-    // Em vez de buscar contact primeiro e depois attendee
-    // Isso evita pegar o attendee errado quando há múltiplos no mesmo slot
-    
+    // NOVA ABORDAGEM: Buscar TODOS os attendees R1 pendentes SEM JOIN com crm_contacts
+    // Isso evita problemas quando há múltiplos contatos duplicados com o mesmo email
+    const { data: attendees, error: queryError } = await supabase
+      .from('meeting_slot_attendees')
+      .select(`
+        id,
+        status,
+        meeting_slot_id,
+        attendee_name,
+        attendee_phone,
+        deal_id,
+        meeting_slots!inner(
+          id,
+          scheduled_at,
+          status,
+          meeting_type,
+          closer_id
+        )
+      `)
+      .eq('meeting_slots.meeting_type', 'r1')
+      .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+      .in('status', ['scheduled', 'invited', 'completed']) // NÃO buscar já contract_paid
+      .order('meeting_slots(scheduled_at)', { ascending: false });
+
+    if (queryError) {
+      console.error('🎯 [AUTO-PAGO] Erro na query:', queryError.message);
+      return;
+    }
+
+    if (!attendees?.length) {
+      console.log('🎯 [AUTO-PAGO] Nenhum attendee R1 pendente encontrado');
+      return;
+    }
+
+    // Log de todos os attendees encontrados
+    console.log(`🎯 [AUTO-PAGO] ${attendees.length} attendees encontrados:`, attendees.map((a: any) => ({
+      id: a.id,
+      name: a.attendee_name,
+      status: a.status,
+      deal_id: a.deal_id
+    })));
+
+    // Para cada attendee, buscar o email/phone do contato vinculado via deal_id
     let matchingAttendee: any = null;
     let meeting: any = null;
 
-    // 1. Tentar buscar por email do contato vinculado ao deal (match preciso)
-    if (data.customerEmail) {
-      console.log(`🎯 [AUTO-PAGO] Tentando match por email: ${data.customerEmail}`);
-      
-      // Buscar attendees que tenham deal com contato com este email
-      const { data: attendees, error: queryError } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          status,
-          meeting_slot_id,
-          attendee_name,
-          deal_id,
-          deal:crm_deals!inner(
-            id,
-            contact:crm_contacts!inner(
-              id,
-              email
-            )
-          ),
-          meeting_slots!inner(
-            id,
-            scheduled_at,
-            status,
-            meeting_type,
-            closer_id
-          )
-        `)
-        .eq('meeting_slots.meeting_type', 'r1')
-        .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
-        .in('status', ['scheduled', 'invited', 'completed']) // NÃO buscar já contract_paid
-        .order('meeting_slots(scheduled_at)', { ascending: false });
-
-      if (queryError) {
-        console.error('🎯 [AUTO-PAGO] Erro na query por email:', queryError.message);
-      } else if (attendees?.length) {
-        // Filtrar localmente pelo email (case-insensitive)
-        const emailLower = data.customerEmail.toLowerCase();
-        const matched = attendees.find((a: any) => 
-          a.deal?.contact?.email?.toLowerCase() === emailLower
-        );
-        
-        if (matched) {
-          matchingAttendee = matched;
-          meeting = matched.meeting_slots;
-          console.log(`✅ [AUTO-PAGO] Match por EMAIL: ${matched.attendee_name} (${matched.id})`);
-        }
+    for (const attendee of attendees) {
+      if (!attendee.deal_id) {
+        console.log(`🎯 [AUTO-PAGO] Attendee ${attendee.id} sem deal_id, pulando...`);
+        continue;
       }
-    }
 
-    // 2. Se não encontrou por email, tentar por telefone
-    if (!matchingAttendee && phoneSuffix.length >= 8) {
-      console.log(`🎯 [AUTO-PAGO] Tentando match por telefone: ...${phoneSuffix}`);
-      
-      const { data: attendees, error: queryError } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          status,
-          meeting_slot_id,
-          attendee_name,
-          attendee_phone,
-          deal_id,
-          deal:crm_deals!inner(
-            id,
-            contact:crm_contacts!inner(
-              id,
-              phone
-            )
-          ),
-          meeting_slots!inner(
-            id,
-            scheduled_at,
-            status,
-            meeting_type,
-            closer_id
-          )
-        `)
-        .eq('meeting_slots.meeting_type', 'r1')
-        .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
-        .in('status', ['scheduled', 'invited', 'completed'])
-        .order('meeting_slots(scheduled_at)', { ascending: false });
+      // Buscar o contato vinculado ao deal (lookup individual evita problemas com duplicados)
+      const { data: deal } = await supabase
+        .from('crm_deals')
+        .select('contact:crm_contacts(email, phone)')
+        .eq('id', attendee.deal_id)
+        .maybeSingle();
 
-      if (queryError) {
-        console.error('🎯 [AUTO-PAGO] Erro na query por telefone:', queryError.message);
-      } else if (attendees?.length) {
-        // Filtrar localmente pelo sufixo do telefone
-        const matched = attendees.find((a: any) => {
-          const contactPhone = a.deal?.contact?.phone?.replace(/\D/g, '') || '';
-          const attendeePhone = a.attendee_phone?.replace(/\D/g, '') || '';
-          return contactPhone.endsWith(phoneSuffix) || attendeePhone.endsWith(phoneSuffix);
-        });
-        
-        if (matched) {
-          matchingAttendee = matched;
-          meeting = matched.meeting_slots;
-          console.log(`✅ [AUTO-PAGO] Match por TELEFONE: ${matched.attendee_name} (${matched.id})`);
+      const contactEmail = deal?.contact?.email?.toLowerCase() || '';
+      const contactPhone = deal?.contact?.phone?.replace(/\D/g, '') || '';
+
+      // Match por email (prioridade)
+      if (emailLower && contactEmail === emailLower) {
+        matchingAttendee = attendee;
+        meeting = attendee.meeting_slots;
+        console.log(`✅ [AUTO-PAGO] Match por EMAIL: ${attendee.attendee_name} (${attendee.id}) - deal: ${attendee.deal_id}`);
+        break;
+      }
+
+      // Match por telefone (fallback) - apenas se ainda não encontrou match
+      if (!matchingAttendee && phoneSuffix.length >= 8) {
+        const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
+        if (contactPhone.endsWith(phoneSuffix) || attendeePhoneClean.endsWith(phoneSuffix)) {
+          matchingAttendee = attendee;
+          meeting = attendee.meeting_slots;
+          console.log(`✅ [AUTO-PAGO] Match por TELEFONE: ${attendee.attendee_name} (${attendee.id}) - deal: ${attendee.deal_id}`);
+          break;
         }
       }
     }
 
     if (!matchingAttendee) {
-      console.log('🎯 [AUTO-PAGO] Nenhuma reunião R1 ativa encontrada para este cliente');
+      console.log('🎯 [AUTO-PAGO] Nenhum match encontrado para este cliente');
       return;
     }
 
-    console.log(`✅ [AUTO-PAGO] Match: Attendee ${matchingAttendee.id} (${matchingAttendee.attendee_name}) - Reunião: ${meeting.id}`);
+    console.log(`✅ [AUTO-PAGO] Match final: Attendee ${matchingAttendee.id} (${matchingAttendee.attendee_name}) - Reunião: ${meeting.id}`);
 
     // 3. Atualizar attendee para contract_paid com a data da reunião (não de hoje)
     const { error: updateError } = await supabase
