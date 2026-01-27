@@ -98,16 +98,55 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
 
       if (r2Error) throw r2Error;
 
-      // Build a map of deal_id -> R1 closer_id (only for valid SDR bookings with allowed statuses)
+      // NOVA QUERY: Buscar TODOS os R1 meetings (SEM filtro de data) para mapear deal → closer R1
+      // Isso é necessário porque uma R2 de janeiro pode estar vinculada a uma R1 de dezembro
+      const { data: allR1Meetings, error: allR1Error } = await supabase
+        .from('meeting_slots')
+        .select(`
+          closer_id,
+          meeting_slot_attendees (
+            deal_id,
+            booked_by,
+            status
+          )
+        `)
+        .eq('meeting_type', 'r1')
+        .neq('status', 'cancelled')
+        .neq('status', 'canceled');
+
+      if (allR1Error) throw allR1Error;
+
+      // Fetch profiles for the new query's booked_by IDs
+      const allBookedByIds = new Set<string>();
+      allR1Meetings?.forEach(meeting => {
+        meeting.meeting_slot_attendees?.forEach(att => {
+          if (att.booked_by) allBookedByIds.add(att.booked_by);
+        });
+      });
+
+      const { data: allProfiles } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', Array.from(allBookedByIds));
+
+      const allProfileEmailMap = new Map<string, string>();
+      allProfiles?.forEach(p => {
+        if (p.email) allProfileEmailMap.set(p.id, p.email.toLowerCase());
+      });
+
+      // Build a map of deal_id -> R1 closer_id using ALL R1 meetings (not date-filtered)
       const dealToR1Closer = new Map<string, string>();
-      meetings?.forEach(meeting => {
+      allR1Meetings?.forEach(meeting => {
         meeting.meeting_slot_attendees?.forEach(att => {
           if (att.deal_id && meeting.closer_id) {
             // Only include if booked by valid SDR AND has an allowed status
-            const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
+            const bookedByEmail = att.booked_by ? allProfileEmailMap.get(att.booked_by) : null;
             const status = att.status;
             if (bookedByEmail && validSdrEmails.has(bookedByEmail) && allowedAgendadaStatuses.includes(status)) {
-              dealToR1Closer.set(att.deal_id, meeting.closer_id);
+              // First match wins - don't overwrite existing mappings
+              if (!dealToR1Closer.has(att.deal_id)) {
+                dealToR1Closer.set(att.deal_id, meeting.closer_id);
+              }
             }
           }
         });
