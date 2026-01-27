@@ -7434,57 +7434,31 @@ export type Database = {
     }
     Functions: {
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
-      get_all_hubla_transactions:
-        | {
-            Args: {
-              p_end_date?: string
-              p_limit?: number
-              p_search?: string
-              p_start_date?: string
-            }
-            Returns: {
-              customer_email: string
-              customer_name: string
-              customer_phone: string
-              gross_override: number
-              hubla_id: string
-              id: string
-              installment_number: number
-              net_value: number
-              product_category: string
-              product_name: string
-              product_price: number
-              sale_date: string
-              sale_status: string
-              source: string
-              total_installments: number
-            }[]
-          }
-        | {
-            Args: {
-              p_end_date?: string
-              p_limit?: number
-              p_search?: string
-              p_start_date?: string
-            }
-            Returns: {
-              customer_email: string
-              customer_name: string
-              customer_phone: string
-              gross_override: number
-              hubla_id: string
-              id: string
-              installment_number: number
-              net_value: number
-              product_category: string
-              product_name: string
-              product_price: number
-              sale_date: string
-              sale_status: string
-              source: string
-              total_installments: number
-            }[]
-          }
+      get_all_hubla_transactions: {
+        Args: {
+          p_end_date?: string
+          p_limit?: number
+          p_search?: string
+          p_start_date?: string
+        }
+        Returns: {
+          created_at: string
+          customer_email: string
+          customer_name: string
+          fee_value: number
+          gross_value: number
+          hubla_id: string
+          id: string
+          installment_number: number
+          net_value: number
+          payment_method: string
+          product_name: string
+          sale_date: string
+          sale_status: string
+          source: string
+          total_installments: number
+        }[]
+      }
       get_contact_with_meetings: {
         Args: { p_email?: string; p_phone_suffix?: string }
         Returns: {
@@ -7530,59 +7504,32 @@ export type Database = {
           id: string
         }[]
       }
-      get_hubla_transactions_by_bu:
-        | {
-            Args: {
-              p_bu: string
-              p_end_date?: string
-              p_limit?: number
-              p_search?: string
-              p_start_date?: string
-            }
-            Returns: {
-              customer_email: string
-              customer_name: string
-              customer_phone: string
-              gross_override: number
-              hubla_id: string
-              id: string
-              installment_number: number
-              net_value: number
-              product_category: string
-              product_name: string
-              product_price: number
-              sale_date: string
-              sale_status: string
-              source: string
-              total_installments: number
-            }[]
-          }
-        | {
-            Args: {
-              p_bu: string
-              p_end_date?: string
-              p_limit?: number
-              p_search?: string
-              p_start_date?: string
-            }
-            Returns: {
-              customer_email: string
-              customer_name: string
-              customer_phone: string
-              gross_override: number
-              hubla_id: string
-              id: string
-              installment_number: number
-              net_value: number
-              product_category: string
-              product_name: string
-              product_price: number
-              sale_date: string
-              sale_status: string
-              source: string
-              total_installments: number
-            }[]
-          }
+      get_hubla_transactions_by_bu: {
+        Args: {
+          p_bu: string
+          p_end_date?: string
+          p_limit?: number
+          p_search?: string
+          p_start_date?: string
+        }
+        Returns: {
+          created_at: string
+          customer_email: string
+          customer_name: string
+          fee_value: number
+          gross_value: number
+          hubla_id: string
+          id: string
+          installment_number: number
+          net_value: number
+          payment_method: string
+          product_name: string
+          sale_date: string
+          sale_status: string
+          source: string
+          total_installments: number
+        }[]
+      }
       get_incorporador_transactions:
         | {
             Args: { p_limit?: number; p_search?: string }
