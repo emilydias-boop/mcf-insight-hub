@@ -246,7 +246,7 @@ export default function ConsorcioPage() {
       
       return [
         index + 1,
-        getFirstLastName(displayName),
+        displayName || '-',
         card.grupo,
         card.cota,
         card.valor_credito,
@@ -552,7 +552,7 @@ export default function ConsorcioPage() {
                       <TableCell className="text-center font-medium text-muted-foreground">
                         {orderNumber}
                       </TableCell>
-                      <TableCell className="font-medium">{getFirstLastName(displayName)}</TableCell>
+                      <TableCell className="font-medium">{displayName || '-'}</TableCell>
                       <TableCell className="text-center">{card.grupo}</TableCell>
                       <TableCell className="text-center font-medium">{card.cota}</TableCell>
                       <TableCell className="text-right font-medium">
