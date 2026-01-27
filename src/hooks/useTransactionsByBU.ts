@@ -7,7 +7,7 @@ export const useTransactionsByBU = (targetBU: string, filters: TransactionFilter
     queryKey: ['transactions-by-bu', targetBU, filters],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_hubla_transactions_by_bu', {
-        p_target_bu: targetBU,
+        p_bu: targetBU,
         p_search: filters.search || null,
         p_start_date: filters.startDate?.toISOString() || null,
         p_end_date: filters.endDate?.toISOString() || null,
