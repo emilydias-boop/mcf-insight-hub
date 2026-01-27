@@ -246,6 +246,8 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
       sales_channel: 'LIVE',
       is_decision_maker: null,
       decision_maker_type: null,
+      is_reschedule: null,
+      parent_attendee_id: null,
       deal: lead.deal ? {
         id: lead.deal_id || '',
         name: lead.deal.name,

@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Calendar, CheckCircle, XCircle, 
-  ExternalLink, Clock, User, Users, History, RotateCcw, Trash2
+  ExternalLink, Clock, User, Users, History, RotateCcw, Trash2, ArrowRightLeft
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -182,6 +182,12 @@ export function R2MeetingDetailDrawer({
                               <span className="font-medium text-sm truncate">
                                 {att.name || att.deal?.contact?.name || 'Lead'}
                               </span>
+                              {att.is_reschedule && (
+                                <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 border-orange-300 gap-1 shrink-0">
+                                  <ArrowRightLeft className="h-3 w-3" />
+                                  Reagendado
+                                </Badge>
+                              )}
                               {isSelected && (
                                 <Badge className="text-xs bg-primary text-primary-foreground shrink-0">
                                   Selecionado

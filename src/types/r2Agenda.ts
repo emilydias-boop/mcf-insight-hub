@@ -47,6 +47,9 @@ export interface R2AttendeeExtended {
   // Decision maker fields
   is_decision_maker: boolean | null;
   decision_maker_type: string | null;
+  // Rescheduling tracking
+  is_reschedule: boolean | null;
+  parent_attendee_id: string | null;
   deal?: {
     id: string;
     name: string;
