@@ -1,50 +1,167 @@
 
-Objetivo: fazer as listas voltarem a carregar transações (e não ficar “zerado”), mantendo a inclusão de reembolsos.
+# Plano: Corrigir Referencia de Tabela nas Funcoes RPC
 
-Diagnóstico (confirmado pelos logs de rede)
-- A chamada do frontend para `rpc/get_all_hubla_transactions` está falhando com HTTP 300 e erro **PGRST203**:
-  - “Could not choose the best candidate function…”
-- Motivo: existem **duas funções com o mesmo nome** (`get_all_hubla_transactions`) com assinaturas diferentes:
-  1) `p_start_date`/`p_end_date` como **text**
-  2) `p_start_date`/`p_end_date` como **timestamp with time zone**
-- O frontend envia `p_start_date`/`p_end_date` como string tipo `"2026-01-01T00:00:00-03:00"`, que pode ser interpretada tanto como `text` quanto como `timestamptz`. O PostgREST não consegue decidir qual overload usar e retorna PGRST203.  
-- Como a query falha, o React Query acaba ficando sem dados e a tela aparece zerada.
+## Problema Identificado
 
-Solução proposta (mais segura e rápida)
-- Eliminar a ambiguidade removendo o “overload” extra e mantendo apenas 1 assinatura por função.
-- Para minimizar risco de regressão, vamos manter a versão que o frontend já usava (parâmetros de data como `text`), que também já estava com a correção do `sale_status IN ('completed','refunded')`.
+As funcoes `get_all_hubla_transactions` e `get_hubla_transactions_by_bu` estao tentando fazer JOIN com a tabela `hubla_products`, que **nao existe**. A tabela correta e `product_configurations`.
 
-Plano de implementação (DB + frontend)
-1) Banco (migration)
-   - Criar uma nova migration SQL para:
-     - Dropar as versões `timestamp with time zone`:
-       - `DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamp with time zone, timestamp with time zone, integer);`
-       - `DROP FUNCTION IF EXISTS public.get_hubla_transactions_by_bu(text, text, timestamp with time zone, timestamp with time zone, integer);`
-     - Manter as versões `text` (já existentes) como a “fonte única”.
-   - Resultado esperado: PostgREST não terá mais 2 candidatos e a RPC voltará a responder 200 com dados.
+| Funcao | Erro Atual | Correcao |
+|--------|-----------|----------|
+| `get_all_hubla_transactions` | `INNER JOIN hubla_products hp` | `INNER JOIN product_configurations pc` |
+| `get_hubla_transactions_by_bu` | `INNER JOIN hubla_products hp` | `INNER JOIN product_configurations pc` |
 
-2) Tipos do Supabase (TypeScript)
-   - Regerar/atualizar `src/integrations/supabase/types.ts` para remover as assinaturas duplicadas (overloads) e refletir apenas a função restante.
-   - Isso evita inconsistências de tipagem e reduz risco de chamadas incorretas.
+## Estrutura da Tabela Correta
 
-3) UX de erro (recomendado, pequena melhoria)
-   - Ajustar `useAllHublaTransactions` e/ou a tela `TransacoesIncorp` para:
-     - Exibir um toast/estado de erro quando a RPC retornar erro (hoje a tela só mostra “Nenhuma transação encontrada”, o que mascara falhas).
-   - Resultado: se acontecer qualquer erro de RPC no futuro, fica explícito para o usuário e facilita suporte.
+A tabela `product_configurations` possui:
+- `product_name` (text) - para fazer o JOIN
+- `target_bu` (text) - para filtrar por BU ('incorporador', 'consorcio', etc)
 
-4) Verificação pós-correção
-   - Recarregar `/bu-incorporador/transacoes`.
-   - Conferir no Network:
-     - `rpc/get_all_hubla_transactions` deve retornar 200.
-   - Conferir na UI:
-     - Total de transações > 0 (para o período selecionado).
-     - Itens `sale_status === 'refunded'` continuam aparecendo com badge “Reembolso” e linha destacada.
+## Solucao
 
-Riscos e observações
-- Essa correção resolve o “zerado” causado por erro de overload.
-- Se após isso ainda vier vazio, aí o problema passa a ser “filtro/join não encontrando dados” (ex.: mapeamento de produtos), mas hoje o erro principal é inequívoco (PGRST203).
+Criar uma migration SQL que recria ambas as funcoes usando a tabela `product_configurations` ao inves de `hubla_products`.
 
-Arquivos que serão afetados quando você me colocar em modo de implementação
-- Novo migration em `supabase/migrations/...sql`
-- `src/integrations/supabase/types.ts`
-- (Opcional) `src/hooks/useAllHublaTransactions.ts` para melhorar visibilidade de erro
+## Arquivo a Criar
+
+| Arquivo | Tipo |
+|---------|------|
+| `supabase/migrations/XXXXXXXX_fix_rpc_table_reference.sql` | Criar |
+
+## SQL da Migration
+
+```sql
+-- Recriar get_all_hubla_transactions com tabela correta
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
+  p_search text DEFAULT NULL,
+  p_start_date text DEFAULT NULL,
+  p_end_date text DEFAULT NULL,
+  p_limit integer DEFAULT 5000
+)
+RETURNS TABLE(
+  id uuid,
+  product_name text,
+  product_category text,
+  product_price numeric,
+  net_value numeric,
+  customer_name text,
+  customer_email text,
+  customer_phone text,
+  sale_date timestamp with time zone,
+  sale_status text,
+  installment_number integer,
+  total_installments integer,
+  source text,
+  gross_override numeric
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.product_name,
+    ht.product_category,
+    ht.product_price,
+    ht.net_value,
+    ht.customer_name,
+    ht.customer_email,
+    ht.customer_phone,
+    ht.sale_date,
+    ht.sale_status,
+    ht.installment_number,
+    ht.total_installments,
+    ht.source,
+    ht.gross_override
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = 'incorporador'
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND (p_search IS NULL OR (
+      ht.customer_name ILIKE '%' || p_search || '%' OR
+      ht.customer_email ILIKE '%' || p_search || '%' OR
+      ht.product_name ILIKE '%' || p_search || '%'
+    ))
+    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
+
+-- Recriar get_hubla_transactions_by_bu com tabela correta
+CREATE OR REPLACE FUNCTION public.get_hubla_transactions_by_bu(
+  p_target_bu text,
+  p_search text DEFAULT NULL,
+  p_start_date text DEFAULT NULL,
+  p_end_date text DEFAULT NULL,
+  p_limit integer DEFAULT 5000
+)
+RETURNS TABLE(
+  id uuid,
+  product_name text,
+  product_category text,
+  product_price numeric,
+  net_value numeric,
+  customer_name text,
+  customer_email text,
+  customer_phone text,
+  sale_date timestamp with time zone,
+  sale_status text,
+  installment_number integer,
+  total_installments integer,
+  source text,
+  gross_override numeric
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.product_name,
+    ht.product_category,
+    ht.product_price,
+    ht.net_value,
+    ht.customer_name,
+    ht.customer_email,
+    ht.customer_phone,
+    ht.sale_date,
+    ht.sale_status,
+    ht.installment_number,
+    ht.total_installments,
+    ht.source,
+    ht.gross_override
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = p_target_bu
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND (p_search IS NULL OR (
+      ht.customer_name ILIKE '%' || p_search || '%' OR
+      ht.customer_email ILIKE '%' || p_search || '%' OR
+      ht.product_name ILIKE '%' || p_search || '%'
+    ))
+    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
+```
+
+## Resultado Esperado
+
+Apos a execucao:
+1. As funcoes RPC farao JOIN com `product_configurations` (que existe)
+2. Transacoes aparecerao na lista de vendas
+3. Filtro por BU funcionara corretamente
+4. Status `completed` e `refunded` serao incluidos
+
+## Arquivos Afetados
+
+| Arquivo | Acao |
+|---------|------|
+| Nova migration SQL | Criar |
+| `src/integrations/supabase/types.ts` | Atualizado automaticamente |
