@@ -163,15 +163,17 @@ export const WizardStepIntegrations = ({ data, onChange, errors }: WizardStepInt
           {/* Initial Stage */}
           <div className="space-y-2">
             <Label>Etapa Inicial para Novos Leads</Label>
-            <Select
-              value={data.integration.initial_stage_id}
-              onValueChange={(value) => updateIntegration({ initial_stage_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a etapa inicial (padrão: primeira etapa)" />
-              </SelectTrigger>
-              <SelectContent className="bg-background border shadow-lg z-50">
-                <SelectItem value="">Primeira etapa (padrão)</SelectItem>
+          <Select
+            value={data.integration.initial_stage_id || '__default__'}
+            onValueChange={(value) => updateIntegration({ 
+              initial_stage_id: value === '__default__' ? '' : value 
+            })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione a etapa inicial (padrão: primeira etapa)" />
+            </SelectTrigger>
+            <SelectContent className="bg-background border shadow-lg z-50">
+              <SelectItem value="__default__">Primeira etapa (padrão)</SelectItem>
                 {data.stages.map((stage) => (
                   <SelectItem key={stage.id} value={stage.id}>
                     <div className="flex items-center gap-2">
