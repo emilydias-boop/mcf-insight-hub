@@ -66,7 +66,7 @@ export function R2QualificationReportPanel() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const { data: closers = [] } = useR2Closers();
-  const { data = [], isLoading } = useR2QualificationReport({
+  const { data = [], isLoading, isFetching, dataUpdatedAt } = useR2QualificationReport({
     startDate: dateRange?.from || startOfMonth(new Date()),
     endDate: dateRange?.to || endOfMonth(new Date()),
     closerId: closerFilter !== 'all' ? closerFilter : undefined,
@@ -165,10 +165,20 @@ export function R2QualificationReportPanel() {
               </Select>
             </div>
 
-            <Button onClick={handleExport} disabled={data.length === 0}>
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
-              Exportar Excel
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {isFetching && !isLoading && (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                )}
+                <span>
+                  Atualizado: {format(new Date(dataUpdatedAt), 'HH:mm:ss', { locale: ptBR })}
+                </span>
+              </div>
+              <Button onClick={handleExport} disabled={data.length === 0}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Exportar Excel
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
