@@ -4,6 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -242,7 +243,7 @@ export default function ConsorcioVendas() {
                   </TableRow>
                 ) : (
                   paginatedTransactions.map((t) => (
-                    <TableRow key={t.id}>
+                    <TableRow key={t.id} className={t.sale_status === 'refunded' ? 'bg-destructive/10' : ''}>
                       <TableCell className="font-medium">
                         {t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yy HH:mm', { locale: ptBR }) : '-'}
                       </TableCell>
@@ -251,8 +252,15 @@ export default function ConsorcioVendas() {
                       </TableCell>
                       <TableCell>
                         <div className="max-w-[180px]">
-                          <div className="truncate font-medium" title={t.customer_name || ''}>
-                            {t.customer_name || '-'}
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-medium" title={t.customer_name || ''}>
+                              {t.customer_name || '-'}
+                            </span>
+                            {t.sale_status === 'refunded' && (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0">
+                                Reembolso
+                              </Badge>
+                            )}
                           </div>
                           <div className="truncate text-xs text-muted-foreground" title={t.customer_email || ''}>
                             {t.customer_email || '-'}
