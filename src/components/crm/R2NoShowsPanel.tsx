@@ -32,10 +32,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DateRange } from 'react-day-picker';
 import { useR2NoShowLeads, R2NoShowLead, DateFilterType } from '@/hooks/useR2NoShowLeads';
 import { R2RescheduleModal } from './R2RescheduleModal';
+import { R2MeetingDetailDrawer } from './R2MeetingDetailDrawer';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { R2MeetingSlot, R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { cn } from '@/lib/utils';
-import { LEAD_PROFILE_OPTIONS } from '@/types/r2Agenda';
+import { LEAD_PROFILE_OPTIONS, R2MeetingRow } from '@/types/r2Agenda';
 
 interface R2NoShowsPanelProps {
   closers: R2CloserWithAvailability[];
@@ -43,15 +44,17 @@ interface R2NoShowsPanelProps {
 
 function NoShowCard({ 
   lead, 
-  onReschedule 
+  onReschedule,
+  onClick,
 }: { 
   lead: R2NoShowLead; 
   onReschedule: () => void;
+  onClick: () => void;
 }) {
   const profileLabel = LEAD_PROFILE_OPTIONS.find(p => p.value === lead.lead_profile)?.label || lead.lead_profile;
   
   return (
-    <Card className="border-l-4 border-l-destructive hover:shadow-md transition-shadow">
+    <Card className="border-l-4 border-l-destructive hover:shadow-md transition-shadow cursor-pointer" onClick={onClick}>
       <CardContent className="p-4">
         {/* Header: Name + Reschedule Button */}
         <div className="flex items-start justify-between mb-3">
@@ -62,7 +65,10 @@ function NoShowCard({
           <Button 
             size="sm" 
             className="bg-primary hover:bg-primary/90 gap-1"
-            onClick={onReschedule}
+            onClick={(e) => {
+              e.stopPropagation();
+              onReschedule();
+            }}
           >
             <CalendarClock className="h-4 w-4" />
             Reagendar R2
@@ -188,6 +194,10 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
   // Reschedule modal state
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<R2NoShowLead | null>(null);
+  
+  // Detail drawer state
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [selectedMeetingForDrawer, setSelectedMeetingForDrawer] = useState<R2MeetingRow | null>(null);
 
   const { data: leads = [], isLoading } = useR2NoShowLeads({
     dateFilter,
@@ -199,9 +209,83 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
   const { data: statusOptions = [] } = useR2StatusOptions();
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
 
+  // Convert R2NoShowLead to R2MeetingRow for the detail drawer
+  const convertToMeetingRow = (lead: R2NoShowLead): R2MeetingRow => ({
+    id: lead.meeting_id,
+    scheduled_at: lead.scheduled_at,
+    status: 'no_show',
+    notes: null,
+    created_at: lead.scheduled_at,
+    meeting_type: 'r2',
+    closer: {
+      id: lead.closer_id,
+      name: lead.closer_name,
+      color: lead.closer_color,
+    },
+    attendees: [{
+      id: lead.id,
+      deal_id: lead.deal_id,
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      attendee_name: lead.name,
+      attendee_phone: lead.phone,
+      status: 'no_show',
+      already_builds: lead.already_builds,
+      lead_profile: lead.lead_profile,
+      partner_name: null,
+      video_status: null,
+      r2_status_id: null,
+      thermometer_ids: [],
+      r2_confirmation: null,
+      r2_observations: null,
+      meeting_link: null,
+      updated_by: null,
+      updated_at: null,
+      r1_qualification_note: lead.r1_qualification_note,
+      sales_channel: 'LIVE',
+      is_decision_maker: null,
+      decision_maker_type: null,
+      deal: lead.deal ? {
+        id: lead.deal_id || '',
+        name: lead.deal.name,
+        origin_id: null,
+        custom_fields: lead.deal.custom_fields,
+        contact: {
+          name: lead.name,
+          phone: lead.phone || '',
+          email: lead.email || '',
+          tags: [],
+        },
+      } : undefined,
+    }],
+    sdr: lead.sdr_name ? { email: '', name: lead.sdr_name } : undefined,
+    r1_closer: lead.r1_closer_name ? {
+      id: '',
+      name: lead.r1_closer_name,
+      scheduled_at: lead.r1_date,
+    } : undefined,
+    booked_by: undefined,
+  });
+
+  const handleOpenDrawer = (lead: R2NoShowLead) => {
+    setSelectedMeetingForDrawer(convertToMeetingRow(lead));
+    setDetailDrawerOpen(true);
+  };
+
   const handleReschedule = (lead: R2NoShowLead) => {
     setSelectedLead(lead);
     setRescheduleModalOpen(true);
+  };
+  
+  const handleRescheduleFromDrawer = (meeting: R2MeetingRow) => {
+    // Find the original lead to pass to reschedule modal
+    const originalLead = leads.find(l => l.meeting_id === meeting.id);
+    if (originalLead) {
+      setSelectedLead(originalLead);
+      setRescheduleModalOpen(true);
+      setDetailDrawerOpen(false);
+    }
   };
 
   // Convert R2NoShowLead to R2MeetingSlot for the modal
@@ -364,10 +448,21 @@ export function R2NoShowsPanel({ closers }: R2NoShowsPanelProps) {
               key={lead.id}
               lead={lead}
               onReschedule={() => handleReschedule(lead)}
+              onClick={() => handleOpenDrawer(lead)}
             />
           ))}
         </div>
       )}
+
+      {/* Detail Drawer */}
+      <R2MeetingDetailDrawer
+        meeting={selectedMeetingForDrawer}
+        statusOptions={statusOptions}
+        thermometerOptions={thermometerOptions}
+        open={detailDrawerOpen}
+        onOpenChange={setDetailDrawerOpen}
+        onReschedule={handleRescheduleFromDrawer}
+      />
 
       {/* Reschedule Modal */}
       <R2RescheduleModal
