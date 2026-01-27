@@ -1,182 +1,107 @@
 
+# Plano: Corrigir Duplicacao de Transacoes na Listagem
 
-# Plano: Prazo Editavel com Taxa do Prazo Mais Proximo
+## Problema Identificado
 
-## Resumo
+A funcao RPC `get_all_hubla_transactions` esta retornando registros de notificacao (`newsale-*`) que sao duplicatas das transacoes reais.
 
-Transformar o campo "Prazo (meses)" de um Select fixo (200/220/240) para um Input numerico livre. A taxa de administracao sera obtida do produto conforme o prazo mais proximo (200, 220 ou 240).
+### Causa Raiz
 
-## Logica de Selecao de Taxa
-
-Para prazos personalizados, a taxa sera selecionada pelo prazo referencia mais proximo:
-
-| Prazo Digitado | Prazo Referencia | Taxa Usada |
-|----------------|------------------|------------|
-| 100-209 | 200 | taxa_adm_200 (20%) |
-| 210-229 | 220 | taxa_adm_220 (22%) |
-| 230+ | 240 | taxa_adm_240 (25%) |
-
-Exemplo pratico para um produto Select:
-- 239 meses → usa taxa de 240 (25%)
-- 215 meses → usa taxa de 220 (22%)
-- 205 meses → usa taxa de 200 (20%)
-
-## Alteracoes Tecnicas
-
-### 1. Arquivo: `src/types/consorcioProdutos.ts`
-
-**Linha 57 - Alterar tipo PrazoParcelas:**
-
-```typescript
-// ANTES
-export type PrazoParcelas = 200 | 220 | 240;
-
-// DEPOIS
-export type PrazoParcelas = number;
+A migracao `20260127151638_b338b00b-7355-4356-8f31-91040b14a6b2.sql` removeu o filtro:
+```sql
+AND ht.hubla_id NOT LIKE 'newsale-%'
 ```
 
-### 2. Arquivo: `src/lib/consorcioCalculos.ts`
+### Impacto
 
-**Linhas 6-17 - Atualizar getTaxaAdm para prazo mais proximo:**
+- 637 registros duplicados exibidos no periodo de janeiro/2026
+- Cada venda aparece duas vezes: uma com valores reais e outra com Bruto/Liquido zerados marcada como "Recorrente"
 
-```typescript
-// ANTES
-export function getTaxaAdm(produto: ConsorcioProduto, prazo: PrazoParcelas): number {
-  switch (prazo) {
-    case 200:
-      return produto.taxa_adm_200 || 20;
-    case 220:
-      return produto.taxa_adm_220 || 22;
-    case 240:
-      return produto.taxa_adm_240 || 25;
-    default:
-      return 25;
-  }
-}
+## Solucao
 
-// DEPOIS
-export function getTaxaAdm(produto: ConsorcioProduto, prazo: number): number {
-  // Seleciona taxa do prazo referencia mais proximo
-  if (prazo < 210) {
-    return produto.taxa_adm_200 || 20;
-  } else if (prazo < 230) {
-    return produto.taxa_adm_220 || 22;
-  } else {
-    return produto.taxa_adm_240 || 25;
-  }
-}
+Adicionar o filtro de exclusao dos registros `newsale-*` de volta na funcao RPC.
+
+### Arquivo a Criar: Nova Migracao SQL
+
+```sql
+-- Corrigir get_all_hubla_transactions para excluir registros newsale duplicados
+-- Esses registros sao notificacoes de "nova venda" com net_value=0, nao vendas reais
+
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
+  p_search text DEFAULT NULL,
+  p_start_date text DEFAULT NULL,
+  p_end_date text DEFAULT NULL,
+  p_limit integer DEFAULT 5000
+)
+RETURNS TABLE(
+  id uuid,
+  product_name text,
+  product_category text,
+  product_price numeric,
+  net_value numeric,
+  customer_name text,
+  customer_email text,
+  customer_phone text,
+  sale_date timestamp with time zone,
+  sale_status text,
+  installment_number integer,
+  total_installments integer,
+  source text,
+  gross_override numeric
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.product_name,
+    ht.product_category,
+    ht.product_price,
+    ht.net_value,
+    ht.customer_name,
+    ht.customer_email,
+    ht.customer_phone,
+    ht.sale_date,
+    ht.sale_status,
+    ht.installment_number,
+    ht.total_installments,
+    ht.source,
+    ht.gross_override
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = 'incorporador'
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND ht.source IN ('hubla', 'manual')
+    -- FILTRO ADICIONADO: Excluir registros de notificacao newsale
+    AND ht.hubla_id NOT LIKE 'newsale-%'
+    AND (p_search IS NULL OR (
+      ht.customer_name ILIKE '%' || p_search || '%' OR
+      ht.customer_email ILIKE '%' || p_search || '%' OR
+      ht.product_name ILIKE '%' || p_search || '%'
+    ))
+    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
 ```
 
-**Linha 24 - Atualizar assinatura:**
+## Resultado Esperado
 
-```typescript
-// ANTES
-prazo: PrazoParcelas,
+| Antes | Depois |
+|-------|--------|
+| 2.407 transacoes | ~1.770 transacoes |
+| Linhas duplicadas com Bruto/Liquido zerados | Apenas transacoes reais |
+| Badge "Recorrente" incorreto em duplicatas | Badges corretos |
 
-// DEPOIS
-prazo: number,
-```
+## Observacao Tecnica
 
-**Linha 102 - Atualizar assinatura:**
+Os registros `newsale-*` sao criados pelo webhook Hubla como notificacao previa antes da transacao ser confirmada. Eles nao devem ser exibidos na listagem porque:
 
-```typescript
-// ANTES
-prazo: PrazoParcelas,
-
-// DEPOIS
-prazo: number,
-```
-
-### 3. Arquivo: `src/components/consorcio/ConsorcioCardForm.tsx`
-
-**Linha 371 - Remover validacao de prazo fixo:**
-
-```typescript
-// ANTES
-const prazoValido = [200, 220, 240].includes(prazoMeses) 
-  ? prazoMeses as PrazoParcelas : 240;
-
-// DEPOIS
-const prazoValido = prazoMeses > 0 ? prazoMeses : 240;
-```
-
-**Linhas 937-963 - Trocar Select por Input numerico:**
-
-```tsx
-// ANTES
-<FormField
-  control={form.control}
-  name="prazo_meses"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Prazo (meses) *</FormLabel>
-      <Select 
-        onValueChange={(v) => field.onChange(Number(v))} 
-        value={field.value?.toString() || '240'}
-      >
-        <FormControl>
-          <SelectTrigger>
-            <SelectValue placeholder="Selecione o prazo" />
-          </SelectTrigger>
-        </FormControl>
-        <SelectContent>
-          {PRAZO_OPTIONS.map(opt => (
-            <SelectItem key={opt.value} value={opt.value.toString()}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <FormMessage />
-    </FormItem>
-  )}
-/>
-
-// DEPOIS
-<FormField
-  control={form.control}
-  name="prazo_meses"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Prazo (meses) *</FormLabel>
-      <FormControl>
-        <Input 
-          type="number" 
-          min={1}
-          max={300}
-          placeholder="Ex: 239"
-          value={field.value || ''}
-          onChange={(e) => field.onChange(Number(e.target.value) || 240)}
-        />
-      </FormControl>
-      <FormMessage />
-    </FormItem>
-  )}
-/>
-```
-
-## Comportamento Esperado
-
-Para um produto Parcelinha (taxa_adm: 200→20%, 220→22%, 240→25%):
-
-| Prazo | Taxa Adm | Fundo Comum (R$200.000) | Parcela Base |
-|-------|----------|-------------------------|--------------|
-| 200 | 20% | R$ 1.000,00 | Calculo normal |
-| 220 | 22% | R$ 909,09 | Calculo normal |
-| 239 | 25% | R$ 836,82 | Calculo com taxa 240 |
-| 240 | 25% | R$ 833,33 | Calculo normal |
-
-## Limitacoes
-
-- Valores tabelados oficiais (tabela consorcio_creditos) so existem para 200, 220 e 240 meses
-- Para prazos personalizados (ex: 239), sera exibida a mensagem "Calculado" em vez de "Tabela Oficial"
-- A formula de calculo permanece a mesma, apenas aceita prazo livre
-
-## Arquivos a Modificar
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/types/consorcioProdutos.ts` | Alterar tipo PrazoParcelas para number |
-| `src/lib/consorcioCalculos.ts` | Usar taxa do prazo mais proximo |
-| `src/components/consorcio/ConsorcioCardForm.tsx` | Trocar Select por Input |
-
+1. Possuem `net_value = 0` (nao representam receita real)
+2. Sao duplicatas dos registros finais com UUID real
+3. Confundem a contagem de transacoes e metricas
