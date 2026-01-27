@@ -1,91 +1,122 @@
 
-# Plano: Atualização Real-Time do Relatório R2
+# Plano: Incluir Reembolsos nas Listas de Vendas com Badge de Alerta
 
-## Objetivo
+## Problema Atual
 
-Fazer com que o relatório de qualificação R2 atualize automaticamente quando:
-1. Status de reunião é alterado (completed, no_show, etc.)
-2. Campos de qualificação são preenchidos (estado, renda, profissão, etc.)
-3. Novas reuniões são agendadas
+As funções RPC de transações filtram **somente** `sale_status = 'completed'`, o que **remove completamente** as vendas reembolsadas das listas:
 
-## Abordagem
-
-O projeto já utiliza `refetchInterval` do React Query para atualizações periódicas em diversos hooks (30-60 segundos). Esta é a abordagem mais simples e consistente com o padrão existente.
-
-**Por que refetchInterval?**
-| Aspecto | refetchInterval | Supabase Realtime |
-|---------|-----------------|-------------------|
-| Complexidade | Baixa (1 linha) | Alta (setup channel) |
-| Padrão no projeto | Usado em 29+ hooks | Não utilizado |
-| Confiabilidade | Alta | Requer conexão ativa |
-| Custo | Polling leve | Conexão persistente |
-
-## Mudanças
-
-### 1. Hook `useR2QualificationReport.ts`
-
-Adicionar `refetchInterval` e `staleTime` para atualização automática a cada 30 segundos:
-
-**Arquivo:** `src/hooks/useR2QualificationReport.ts`
-
-```typescript
-export function useR2QualificationReport(filters: QualificationFilters) {
-  return useQuery({
-    queryKey: ['r2-qualification-report', ...],
-    queryFn: async () => { ... },
-    // ADICIONAR ESTAS LINHAS:
-    staleTime: 30000,        // Dados considerados "frescos" por 30 segundos
-    refetchInterval: 30000,  // Atualizar automaticamente a cada 30 segundos
-  });
-}
+```sql
+-- Filtro atual nas RPCs (excluindo reembolsos)
+WHERE ht.sale_status = 'completed'
 ```
 
-### 2. Indicador Visual de Atualização (Opcional)
+Isso faz com que uma venda que entrou no dia, mas depois foi reembolsada, simplesmente **desapareça** da lista.
 
-Adicionar um indicador discreto mostrando quando os dados foram atualizados pela última vez:
+## Comportamento Desejado
 
-**Arquivo:** `src/components/crm/R2QualificationReportPanel.tsx`
+- **Manter** transações reembolsadas na lista (não remover)
+- **Alertar visualmente** com um badge vermelho ou destacar a linha
+- Seguir o padrão já existente na página `A010.tsx` (Receita):
+  - Badge vermelho "Reembolso" ao lado do nome
+  - Linha com fundo levemente vermelho
+
+## Solução
+
+### 1. Atualizar Funções RPC (SQL)
+
+Modificar ambas as funções para incluir `refunded`:
+
+**Arquivo:** `supabase/migrations/XXXXXXXX_include_refunded_in_transactions.sql`
+
+```sql
+-- get_all_hubla_transactions
+WHERE ht.sale_status IN ('completed', 'refunded')
+
+-- get_hubla_transactions_by_bu
+WHERE ht.sale_status IN ('completed', 'refunded')
+```
+
+### 2. Atualizar Página BU Incorporador
+
+**Arquivo:** `src/pages/bu-incorporador/TransacoesIncorp.tsx`
+
+Adicionar na coluna "Cliente":
+- Badge vermelho "Reembolso" quando `sale_status === 'refunded'`
+- Estilo visual na linha (fundo avermelhado)
 
 ```tsx
-const { data, isLoading, isFetching, dataUpdatedAt } = useR2QualificationReport({...});
+<TableRow 
+  key={t.id}
+  className={t.sale_status === 'refunded' ? 'bg-destructive/10' : ''}
+>
+  <TableCell>
+    <div className="max-w-[180px]">
+      <div className="flex items-center gap-2">
+        <span className="truncate font-medium">{t.customer_name || '-'}</span>
+        {t.sale_status === 'refunded' && (
+          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+            Reembolso
+          </Badge>
+        )}
+      </div>
+      <div className="truncate text-xs text-muted-foreground">
+        {t.customer_email || '-'}
+      </div>
+    </div>
+  </TableCell>
+</TableRow>
+```
 
-// No header do painel:
-<div className="flex items-center gap-2 text-xs text-muted-foreground">
-  {isFetching && !isLoading && (
-    <Loader2 className="h-3 w-3 animate-spin" />
-  )}
-  <span>
-    Atualizado: {format(new Date(dataUpdatedAt), 'HH:mm:ss')}
-  </span>
-</div>
+### 3. Atualizar Páginas das Outras BUs
+
+Aplicar a mesma lógica em:
+
+| BU | Arquivo |
+|----|---------|
+| Consórcio | `src/pages/bu-consorcio/Vendas.tsx` |
+| Crédito | `src/pages/bu-credito/Vendas.tsx` |
+| Projetos | `src/pages/bu-projetos/Vendas.tsx` (se existir) |
+| Outros | `src/pages/bu-outros/Vendas.tsx` (se existir) |
+
+### 4. Atualizar Interface do HublaTransaction
+
+**Arquivo:** `src/hooks/useAllHublaTransactions.ts`
+
+O campo `sale_status` já existe na interface, apenas garantir que está sendo utilizado.
+
+## Resultado Visual Esperado
+
+```text
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Data          │ Produto        │ Cliente                    │ Bruto     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ 27/01/26 10:22│ A010 - Consul..│ Andrei Vinnicius da Silva  │ R$ 47,00  │
+│ 27/01/26 09:27│ A010 - Consul..│ Marilene Maura vieira      │ R$ 47,00  │
+│ 27/01/26 08:56│ A010 - Consul..│ Thayná Ferreira [Reembolso]│ R$ 47,00  │ ← Linha vermelha claro
+│ 27/01/26 08:39│ A010 - Consul..│ Suzi Kenne                 │ R$ 47,00  │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useR2QualificationReport.ts` | Adicionar `staleTime: 30000` e `refetchInterval: 30000` |
-| `src/components/crm/R2QualificationReportPanel.tsx` | (Opcional) Adicionar indicador visual de última atualização |
+| Arquivo | Tipo | Descrição |
+|---------|------|-----------|
+| Nova migration SQL | Criar | Atualizar RPCs para incluir `refunded` |
+| `src/pages/bu-incorporador/TransacoesIncorp.tsx` | Modificar | Adicionar badge e estilo de linha |
+| `src/pages/bu-consorcio/Vendas.tsx` | Modificar | Adicionar badge e estilo de linha |
+| `src/pages/bu-credito/Vendas.tsx` | Modificar | Adicionar badge e estilo de linha |
 
-## Comportamento Final
+## Impacto nos KPIs
 
-1. **Auto-refresh a cada 30 segundos**: O relatório busca novos dados automaticamente
-2. **Indicador visual**: Usuário vê quando os dados foram atualizados
-3. **Sem piscar**: O `staleTime` evita recarregamentos visuais desnecessários
-4. **Consistente**: Mesmo padrão usado em outros dashboards do sistema
+- Os **totais bruto/líquido** continuarão somando os valores (inclusive reembolsos)
+- Se desejar, podemos ajustar para:
+  - Subtrair reembolsos do bruto
+  - Manter linha separada "Reembolsados: X transações (R$ Y)"
+- Por enquanto, mantemos a exibição simples com badge
 
-## Fluxo de Atualização
+## Considerações
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ Usuário preenche qualificação no Drawer R2                  │
-│         ↓                                                   │
-│ Dados salvos em crm_deals.custom_fields                     │
-│         ↓                                                   │
-│ [30 segundos]                                               │
-│         ↓                                                   │
-│ React Query dispara refetch automático                      │
-│         ↓                                                   │
-│ Relatório atualizado com novos gráficos e métricas         │
-└─────────────────────────────────────────────────────────────┘
-```
+1. **Não remove** da lista - apenas alerta visualmente
+2. **Padrão consistente** com a página A010.tsx que já funciona assim
+3. **Badge discreto** ao lado do nome, não ocupa coluna extra
+4. **Exportação** continuará incluindo essas transações (com status visível)
