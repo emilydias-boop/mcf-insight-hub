@@ -112,11 +112,15 @@ export function R2RescheduleModal({
     const newDate = new Date(selectedDate);
     newDate.setHours(hours, minutes, 0, 0);
 
-    // First reschedule the meeting
+    // First reschedule the meeting with full context for proper history tracking
     rescheduleMeeting.mutate({
       meetingId: meeting.id,
       newDate,
       closerId: selectedCloser !== meeting.closer?.id ? selectedCloser : undefined,
+      attendeeId: attendee?.id,
+      originalDate: meeting.scheduled_at,
+      originalCloserId: meeting.closer?.id,
+      originalAttendeeStatus: attendee?.status,
       rescheduleNote: rescheduleNote.trim() || undefined,
     }, {
       onSuccess: async () => {
