@@ -1,131 +1,221 @@
 
-# Plano: Corrigir Sobreposicao de Closers na Visualizacao Diaria do Calendario R2
+# Plano: Corrigir Bug no autoMarkContractPaid para Multiplos Leads no Mesmo Slot
 
 ## Problema Identificado
 
-Na visualizacao de **Dia** do Calendario R2, quando multiplos closers (Jessica, Thobson, Claudia) tem slots disponiveis no mesmo horario, seus marcadores estao se sobrepondo em vez de aparecerem lado a lado em colunas separadas.
+Quando multiplos leads estao no mesmo slot R1 e pagam o contrato em sequencia, apenas o primeiro e marcado automaticamente como `contract_paid`. Os demais nao sao processados corretamente.
+
+### Caso Real Analisado
+
+| Lead | Horario Pagamento | Status Atual | Atualizado Por |
+|------|-------------------|--------------|----------------|
+| Mauricio Albuquerque | 19:31 | contract_paid | Webhook (automatico) |
+| William Santos gondim | 19:36 | contract_paid | Manual (20:04) |
+
+Ambos estavam no mesmo slot (`70df5974...`) com status `invited` no momento do pagamento.
 
 ### Causa Raiz
 
-O calculo de `activeClosersForDayView` (linhas 776-798 do `AgendaCalendar.tsx`) so inclui closers que:
-1. **Tem reunioes** agendadas no dia, OU
-2. Sao closers ativos **SE nao houver nenhuma reuniao**
+O codigo atual na funcao `autoMarkContractPaid` tem dois problemas:
 
-O problema ocorre quando **alguns closers tem reunioes** mas **outros closers tem apenas slots disponiveis** (sem reunioes). Nesse cenario, os closers "disponiveis" nao sao incluidos nas colunas do grid, resultando em sobreposicao visual.
+**Problema 1 - Query Retorna Dados Inconsistentes**
 
-### Exemplo do Bug
+A query usa `!inner` join com `crm_contacts` para filtrar por email:
 
-| Closer | Tem Reuniao | Tem Slot Configurado | Incluido no Grid |
-|--------|-------------|----------------------|------------------|
-| Julio | Sim | Sim | Sim |
-| Jessica | Nao | Sim | **NAO** (Bug!) |
-| Thobson | Nao | Sim | **NAO** (Bug!) |
-| Claudia | Nao | Sim | **NAO** (Bug!) |
+```typescript
+const { data: attendees } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id, status, ...
+    deal:crm_deals!inner(
+      contact:crm_contacts!inner(email)
+    ),
+    meeting_slots!inner(...)
+  `)
+  .in('status', ['scheduled', 'invited', 'completed'])
+```
 
-Resultado: Jessica, Thobson e Claudia sao renderizados sobrepostos dentro de uma unica coluna.
+Quando existem **multiplos contatos duplicados** com o mesmo email (4 contatos para William), o Supabase pode retornar resultados inconsistentes ou nao encontrar o attendee correto.
+
+**Problema 2 - find() Retorna Apenas o Primeiro Match**
+
+```typescript
+const matched = attendees.find((a: any) => 
+  a.deal?.contact?.email?.toLowerCase() === emailLower
+);
+```
+
+Mesmo que a query retorne o attendee correto, se houver multiplos resultados, apenas o primeiro e processado.
 
 ## Solucao Proposta
 
-Modificar o calculo de `activeClosersForDayView` para usar `getAllConfiguredClosersForDay` que ja existe no codigo e retorna **todos os closers que tem QUALQUER slot configurado** para o dia:
+### Modificacao 1: Simplificar a Query e Melhorar o Matching
 
-### Codigo Atual (Linha 776-798)
+Em vez de fazer JOIN complexo com multiplas tabelas que pode retornar resultados duplicados, buscar attendees diretamente e fazer o matching de forma mais robusta:
 
 ```typescript
-const activeClosersForDayView = useMemo(() => {
-  if (viewMode !== 'day') return [];
-  const day = viewDays[0];
-  if (!day) return [];
-  
-  const closerIds = new Set<string>();
-  
-  // PROBLEMA: So adiciona closers com reunioes
-  filteredMeetings.forEach(m => {
-    if (isSameDay(parseISO(m.scheduled_at), day) && m.closer_id) {
-      closerIds.add(m.closer_id);
-    }
-  });
-  
-  // So usa todos os closers se NAO houver nenhuma reuniao
-  if (closerIds.size === 0) {
-    closers.filter(c => c.is_active).forEach(c => closerIds.add(c.id));
+async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<void> {
+  if (!data.customerEmail && !data.customerPhone) {
+    console.log('🎯 [AUTO-PAGO] Sem email ou telefone para buscar reunião');
+    return;
   }
-  
-  return [...closerIds].sort();
-}, [viewMode, viewDays, filteredMeetings, closers]);
+
+  console.log(`🎯 [AUTO-PAGO] Buscando reunião R1 para: ${data.customerEmail || data.customerPhone}`);
+
+  try {
+    const phoneDigits = data.customerPhone?.replace(/\D/g, '') || '';
+    const phoneSuffix = phoneDigits.slice(-9);
+    const emailLower = data.customerEmail?.toLowerCase() || '';
+
+    // NOVA ABORDAGEM: Buscar TODOS os attendees R1 pendentes (sem contract_paid)
+    // e fazer matching local mais robusto
+    const { data: attendees, error: queryError } = await supabase
+      .from('meeting_slot_attendees')
+      .select(`
+        id,
+        status,
+        meeting_slot_id,
+        attendee_name,
+        attendee_phone,
+        deal_id,
+        meeting_slots!inner(
+          id,
+          scheduled_at,
+          status,
+          meeting_type,
+          closer_id
+        )
+      `)
+      .eq('meeting_slots.meeting_type', 'r1')
+      .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+      .in('status', ['scheduled', 'invited', 'completed'])
+      .order('meeting_slots(scheduled_at)', { ascending: false });
+
+    if (queryError) {
+      console.error('🎯 [AUTO-PAGO] Erro na query:', queryError.message);
+      return;
+    }
+
+    if (!attendees?.length) {
+      console.log('🎯 [AUTO-PAGO] Nenhum attendee R1 pendente encontrado');
+      return;
+    }
+
+    console.log(`🎯 [AUTO-PAGO] ${attendees.length} attendees encontrados, buscando match...`);
+
+    // Para cada attendee, buscar o email do contato vinculado
+    let matchingAttendee: any = null;
+    let meeting: any = null;
+
+    for (const attendee of attendees) {
+      if (!attendee.deal_id) continue;
+
+      // Buscar o contato vinculado ao deal
+      const { data: deal } = await supabase
+        .from('crm_deals')
+        .select('contact:crm_contacts(email, phone)')
+        .eq('id', attendee.deal_id)
+        .maybeSingle();
+
+      const contactEmail = deal?.contact?.email?.toLowerCase() || '';
+      const contactPhone = deal?.contact?.phone?.replace(/\D/g, '') || '';
+
+      // Match por email (prioridade)
+      if (emailLower && contactEmail === emailLower) {
+        matchingAttendee = attendee;
+        meeting = attendee.meeting_slots;
+        console.log(`✅ [AUTO-PAGO] Match por EMAIL: ${attendee.attendee_name} (${attendee.id})`);
+        break;
+      }
+
+      // Match por telefone (fallback)
+      if (!matchingAttendee && phoneSuffix.length >= 8) {
+        if (contactPhone.endsWith(phoneSuffix) || 
+            attendee.attendee_phone?.replace(/\D/g, '').endsWith(phoneSuffix)) {
+          matchingAttendee = attendee;
+          meeting = attendee.meeting_slots;
+          console.log(`✅ [AUTO-PAGO] Match por TELEFONE: ${attendee.attendee_name} (${attendee.id})`);
+          break;
+        }
+      }
+    }
+
+    if (!matchingAttendee) {
+      console.log('🎯 [AUTO-PAGO] Nenhum match encontrado para este cliente');
+      return;
+    }
+
+    // ... resto do codigo (atualizar status, criar notificacao) permanece igual
+  } catch (err: any) {
+    console.error('🎯 [AUTO-PAGO] Erro:', err.message);
+  }
+}
 ```
 
-### Codigo Corrigido
+### Modificacao 2: Adicionar Logs Detalhados
+
+Para facilitar debugging de casos futuros, adicionar logs mais detalhados:
 
 ```typescript
-const activeClosersForDayView = useMemo(() => {
-  if (viewMode !== 'day') return [];
-  const day = viewDays[0];
-  if (!day) return [];
-  
-  // CORRECAO: Usar TODOS os closers configurados para o dia
-  // (nao apenas os que tem reunioes)
-  return getAllConfiguredClosersForDay(day);
-}, [viewMode, viewDays, getAllConfiguredClosersForDay]);
+console.log(`🎯 [AUTO-PAGO] Dados recebidos:`, {
+  email: data.customerEmail,
+  phone: data.customerPhone,
+  name: data.customerName,
+  saleDate: data.saleDate
+});
+
+// Apos buscar attendees
+console.log(`🎯 [AUTO-PAGO] Attendees encontrados:`, attendees?.map((a: any) => ({
+  id: a.id,
+  name: a.attendee_name,
+  status: a.status,
+  deal_id: a.deal_id
+})));
 ```
 
-## Mudancas Necessarias
+## Arquivos a Modificar
 
 | Arquivo | Tipo de Mudanca |
 |---------|-----------------|
-| `src/components/crm/AgendaCalendar.tsx` | Modificar 1 funcao |
+| `supabase/functions/hubla-webhook-handler/index.ts` | Refatorar funcao `autoMarkContractPaid` |
 
-### Detalhes da Modificacao
+## Detalhes Tecnicos
 
-**Linhas 776-798**: Substituir o calculo de `activeClosersForDayView` para usar a funcao existente `getAllConfiguredClosersForDay` que ja considera todos os closers com slots configurados (baseado em `r2DailySlotsMap` para R2 ou `meetingLinkSlots` para R1).
+### Linha de Modificacao
+
+Substituir a funcao `autoMarkContractPaid` (linhas 512-696) pela nova versao que:
+
+1. **Busca attendees sem JOIN complexo com crm_contacts** - Evita problemas com contatos duplicados
+2. **Faz lookup individual do contato** - Para cada attendee, busca o contato correto via deal_id
+3. **Matching sequencial com break** - Para no primeiro match valido
+4. **Logs detalhados** - Facilita debugging futuro
+
+### Fluxo Corrigido
+
+```text
+Webhook chega com email/telefone do cliente
+           ↓
+Buscar TODOS os attendees R1 pendentes (sem JOIN com contacts)
+           ↓
+Para cada attendee:
+  - Buscar contato via deal_id
+  - Comparar email/telefone
+  - Se match → marcar como contract_paid e PARAR
+           ↓
+Se nenhum match → log e retornar
+```
+
+### Beneficios da Solucao
+
+1. **Evita problemas com contatos duplicados** - Busca o contato correto via deal_id
+2. **Funcionamento consistente** - Cada pagamento marca o attendee correto
+3. **Melhor logging** - Facilita identificar problemas futuros
+4. **Compatibilidade** - Nao quebra logica existente de notificacoes e atualizacao de status
 
 ## Resultado Esperado
 
 | Antes | Depois |
 |-------|--------|
-| Jessica, Thobson, Claudia sobrepostos | Cada closer em coluna separada |
-| Grid com 1 coluna (apenas closers com reunioes) | Grid com 3+ colunas (todos os closers configurados) |
-| Dificil visualizar disponibilidade | Visualizacao clara por closer |
-
-### Visualizacao Esperada
-
-```text
-| Hora  | Jessica | Thobson | Claudia |
-|-------|---------|---------|---------|
-| 10:30 | + Livre | + Livre | + Livre |
-| 10:45 | Reuniao | + Livre | + Livre |
-| 11:00 | + Livre | + Livre | + Livre |
-```
-
-## Secao Tecnica
-
-### Funcao Existente que Sera Reutilizada
-
-A funcao `getAllConfiguredClosersForDay` (linhas 461-483) ja faz exatamente o que precisamos:
-
-```typescript
-const getAllConfiguredClosersForDay = useCallback((day: Date) => {
-  const allCloserIdsSet = new Set<string>();
-  
-  if (meetingType === 'r2' && r2DailySlotsMap) {
-    const dateStr = format(day, 'yyyy-MM-dd');
-    const dateSlots = r2DailySlotsMap[dateStr];
-    if (dateSlots) {
-      Object.values(dateSlots).forEach(slotInfo => {
-        slotInfo.closerIds.forEach(id => allCloserIdsSet.add(id));
-      });
-    }
-  } else {
-    const dayOfWeek = day.getDay() === 0 ? 7 : day.getDay();
-    const slots = meetingLinkSlots?.[dayOfWeek] || [];
-    slots.forEach(slot => {
-      slot.closerIds.forEach(id => allCloserIdsSet.add(id));
-    });
-  }
-  
-  return Array.from(allCloserIdsSet).sort();
-}, [meetingType, r2DailySlotsMap, meetingLinkSlots]);
-```
-
-### Consistencia com Outras Views
-
-Essa correcao alinha o Day View com o Week View, que ja usa `getSlotGridInfo` → `getAllConfiguredClosersForDay` para calcular o grid de closers.
+| Apenas 1o lead marcado automaticamente | Todos os leads marcados corretamente |
+| Contatos duplicados causam conflito | Matching via deal_id evita conflito |
+| Logs insuficientes para debug | Logs detalhados por attendee |
