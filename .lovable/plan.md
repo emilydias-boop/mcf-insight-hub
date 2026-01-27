@@ -1,124 +1,203 @@
 
-# Plano: Corrigir Contagem de R2 Agendadas por Closer R1
+# Plano: Criar Seção de No-Shows para Reagendamento R2
 
-## Problema Identificado
+## Visão Geral
 
-A coluna **"R2 Agendada"** na tabela de Closers está mostrando **0** para todos, quando deveria mostrar:
+Criar uma nova aba **"No-Shows"** dentro da Agenda R2, ao lado de "Pendentes", com todas as informações necessárias para a Yanca reagendar rapidamente os leads que faltaram às reuniões.
 
-| Closer | R2 Agendadas (real) | Exibido |
-|--------|---------------------|---------|
-| Julio | 61 | 0 |
-| Cristiane | 51 | 0 |
-| Thayna | 48 | 0 |
-
-## Causa Raiz
-
-No hook `useR1CloserMetrics.ts`, a busca de **reuniões R1** está filtrada pelo mesmo período de datas selecionado na página:
-
-```typescript
-// Linhas 58-59 - PROBLEMA
-.gte('scheduled_at', start)  // Filtra R1 para o período
-.lte('scheduled_at', end)    // Ex: apenas janeiro/2026
-```
-
-Mas uma **R2 de janeiro** pode estar vinculada a uma **R1 de dezembro**!
-
-**Resultado:** O mapeamento `deal_id → closer_id` fica incompleto, não encontrando correspondência para R2s cujas R1 foram realizadas antes do período filtrado.
-
-## Solução
-
-Separar as queries em duas lógicas:
-
-1. **Para métricas R1** (agendadas, realizadas, no-show, contrato): manter o filtro de data (período selecionado)
-
-2. **Para mapeamento R2 → Closer R1**: buscar **todas as R1** independente de data, já que o vínculo é pelo `deal_id`
-
-## Arquivo a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useR1CloserMetrics.ts` | Separar query de R1 para métricas vs query para mapeamento R2 |
-
-## Mudanças no Código
-
-### useR1CloserMetrics.ts
-
-**Adicionar uma segunda query de R1 SEM filtro de data** para mapear deals a closers:
+## Estrutura da Solução
 
 ```text
-1. Query R1 PARA O PERÍODO (já existe)
-   → Usada para: r1_agendada, r1_realizada, noshow, contrato_pago
-   
-2. NOVA: Query R1 SEM FILTRO DE DATA
-   → Usada apenas para: dealToR1Closer map (atribuição R2)
-   
-3. Query R2 PARA O PERÍODO (já existe)
-   → Usa o map da query 2 para atribuir R2 ao closer R1
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Agenda R2                                                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  [Lista] [Calendário] [Por Sócio] [Pendentes (30)] [No-Shows (5)]          │
+│                                                        ↑ NOVA ABA           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Filtros:  [Dia ▾] [Semana ▾] [Mês ▾] [Personalizado]  [Sócio R2 ▾]        │
+│                                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │ 🔴 Odesmar Martins da Silva                                            │ │
+│  │    📞 (11) 99999-9999  |  📧 email@teste.com                           │ │
+│  │    📅 R2 era: 27/01 às 13:00 com Claudia                               │ │
+│  │    👤 SDR: Jessica  |  🎯 Closer R1: Julio                             │ │
+│  │    💰 Perfil: Lead A  |  🏗️ Já constrói: Sim                           │ │
+│  │    📋 Nota SDR: "Cliente interessado em construir..."                  │ │
+│  │                                                   [📅 Reagendar R2]    │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Implementação
+## Funcionalidades
 
-Na query que popula o `dealToR1Closer`, remover os filtros de data:
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| **Aba No-Shows** | Nova aba com badge contador |
+| **Filtro de Data** | Dia, Semana, Mês, Personalizado |
+| **Filtro por Sócio R2** | Filtrar pelo closer R2 responsável |
+| **Informações Completas** | Nome, telefone, email, data original, closer, SDR, perfil, notas |
+| **Ação Rápida** | Botão "Reagendar R2" abre modal de reagendamento |
+| **Redirecionamento do Carrinho** | Link do carrinho direciona para esta aba |
+
+## Arquivos a Criar
+
+### 1. Componente: R2NoShowsPanel
+
+**Arquivo:** `src/components/crm/R2NoShowsPanel.tsx`
+
+Painel com:
+- Filtros de data (próprios, não usa os globais da página)
+- Filtro por sócio R2
+- Lista de cards com leads no-show
+- Cada card com todas as informações relevantes
+- Botão de reagendar que abre o modal R2RescheduleModal
+
+### 2. Hook: useR2NoShowLeads
+
+**Arquivo:** `src/hooks/useR2NoShowLeads.ts`
+
+Hook dedicado para buscar no-shows com todas as informações necessárias:
+- Dados do attendee (nome, telefone, deal)
+- Data/hora original da R2
+- Closer R2 responsável
+- SDR que agendou
+- Closer R1 que fez a primeira reunião
+- Notas de qualificação
+- Perfil do lead
+- Custom fields do deal
+
+## Arquivos a Modificar
+
+### 1. AgendaR2.tsx
+
+Adicionar:
+- Nova aba "No-Shows" no TabsList
+- Hook para contar no-shows no período
+- Tratamento do parâmetro URL `?filter=no_show` para abrir nesta aba
+- Nova TabsContent com o R2NoShowsPanel
+
+### 2. R2MetricsPanel.tsx
+
+Alterar redirecionamento do botão "Reagendar" para:
+- De: `window.location.href = '/crm/agenda-r2?filter=no_show'`
+- Para: `window.location.href = '/crm/agenda-r2?tab=noshows'`
+
+## Detalhes Técnicos
+
+### Hook useR2NoShowLeads
 
 ```typescript
-// NOVA query: Buscar TODOS os R1 meetings para mapear deal → closer R1
-const { data: allR1Meetings } = await supabase
-  .from('meeting_slots')
-  .select(`
-    closer_id,
-    meeting_slot_attendees (
-      deal_id,
-      booked_by,
-      status
-    )
-  `)
-  .eq('meeting_type', 'r1')
-  .neq('status', 'cancelled')
-  .neq('status', 'canceled');
-  // SEM filtro de data!
-
-// Usar allR1Meetings para construir dealToR1Closer
-const dealToR1Closer = new Map<string, string>();
-allR1Meetings?.forEach(meeting => {
-  meeting.meeting_slot_attendees?.forEach(att => {
-    if (att.deal_id && meeting.closer_id) {
-      const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
-      if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
-        // Mapear deal → R1 closer (primeira correspondência ganha)
-        if (!dealToR1Closer.has(att.deal_id)) {
-          dealToR1Closer.set(att.deal_id, meeting.closer_id);
-        }
-      }
-    }
-  });
-});
+// Buscar attendees com status 'no_show' de reuniões R2
+// Filtrar por período e opcionalmente por closer_id
+// Enriquecer com dados de SDR, R1 closer, notas e custom_fields
+interface R2NoShowLead {
+  id: string;                    // attendee id
+  name: string;
+  phone: string | null;
+  email: string | null;
+  
+  // R2 original
+  meeting_id: string;
+  scheduled_at: string;          // data/hora original do no-show
+  closer_id: string;
+  closer_name: string;
+  closer_color: string | null;
+  
+  // Histórico do funil
+  sdr_name: string | null;
+  r1_closer_name: string | null;
+  r1_date: string | null;
+  
+  // Qualificação
+  lead_profile: string | null;
+  already_builds: boolean | null;
+  r1_qualification_note: string | null;
+  
+  // Deal info
+  deal_id: string | null;
+  deal?: {
+    custom_fields: Record<string, unknown>;
+    origin_name: string | null;
+  };
+}
 ```
+
+### Componente R2NoShowsPanel
+
+Props:
+- `closers`: Lista de closers R2 ativos para o filtro
+
+Estado interno:
+- `dateFilter`: 'day' | 'week' | 'month' | 'custom'
+- `selectedDate`: Date
+- `customRange`: { start: Date, end: Date }
+- `closerFilter`: string | 'all'
+- `rescheduleModalOpen`: boolean
+- `selectedLead`: R2NoShowLead | null
+
+### Parâmetro URL
+
+Usar `useSearchParams` do react-router-dom para:
+1. Ler `?tab=noshows` e definir aba ativa
+2. Permitir navegar via URL
 
 ## Fluxo de Implementação
 
 ```text
-1. Adicionar query de R1 sem filtro de data
+1. Criar hook useR2NoShowLeads
           ↓
-2. Buscar profiles para essa nova query (ou reutilizar)
+2. Criar componente R2NoShowsPanel
           ↓
-3. Construir dealToR1Closer usando a query sem filtro
+3. Adicionar hook useR2NoShowsCount para badge
           ↓
-4. Manter lógica de contagem R2 inalterada
+4. Modificar AgendaR2.tsx:
+   - Adicionar aba no-shows
+   - Ler parâmetro URL
+   - Integrar modal de reagendamento
           ↓
-5. Testar com período de janeiro/2026
+5. Atualizar R2MetricsPanel para usar nova URL
+          ↓
+6. Testar fluxo completo: Carrinho → Aba → Reagendar
 ```
 
-## Resultado Esperado
+## Detalhes de UI
 
-| Closer | Antes | Depois |
-|--------|-------|--------|
-| Julio | 0 | 61 |
-| Cristiane | 0 | 51 |
-| Thayna | 0 | 48 |
-| **Total** | 0 | **160** |
+### Card de No-Show
 
-## Impacto
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│ 🔴 Nome do Lead                                    [Reagendar] │
+│    📞 (11) 99999-9999  |  📧 email@exemplo.com                  │
+├─────────────────────────────────────────────────────────────────┤
+│ 📅 R2: 27/01 às 13:00                                          │
+│ 👤 Sócio R2: Claudia Carielo                                    │
+├─────────────────────────────────────────────────────────────────┤
+│ 📌 SDR: Jessica Bellini                                         │
+│ 🎯 Closer R1: Julio Cesar (18/01 às 10:00)                     │
+├─────────────────────────────────────────────────────────────────┤
+│ 💡 Perfil: Lead A  |  🏗️ Já constrói: Sim  |  📍 São Paulo     │
+│ 📋 "Cliente com terreno próprio, interessado em construir..."  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-- Corrige a exibição de R2 Agendadas na tabela de Closers
-- Não afeta outras métricas (R1 Agendada, Realizada, etc.)
-- Não impacta performance significativamente (query adicional simples)
+### Filtros
+
+```text
+┌────────────────────────────────────────────────────────────────┐
+│  Período: [Dia] [Semana] [Mês] [📅 Personalizado]              │
+│                                                                 │
+│  Sócio R2: [Todos os sócios ▾]                                 │
+│                                                                 │
+│  Mostrando 5 leads com no-show de 20/01 a 27/01                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+## Benefícios
+
+1. **Agilidade**: Yanca vê tudo que precisa em uma tela
+2. **Contexto Completo**: Histórico do funil (SDR → R1 → R2)
+3. **Ação Rápida**: Um clique para reagendar
+4. **Filtros Flexíveis**: Encontra no-shows por data ou sócio
+5. **Integração**: Carrinho direciona automaticamente para esta aba
