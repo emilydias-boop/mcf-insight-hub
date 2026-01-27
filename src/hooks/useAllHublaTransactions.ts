@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 export interface HublaTransaction {
   id: string;
+  hubla_id: string | null;
   product_name: string | null;
   product_category: string | null;
   product_price: number | null;

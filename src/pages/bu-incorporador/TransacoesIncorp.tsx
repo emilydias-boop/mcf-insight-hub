@@ -1,12 +1,11 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Pencil, Trash2, Eye, UserPlus, UserCheck } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,7 +35,8 @@ import {
 import { useAllHublaTransactions, TransactionFilters, HublaTransaction } from '@/hooks/useAllHublaTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
 import { formatCurrency } from '@/lib/formatters';
-import { getDeduplicatedGross, getFixedGrossPrice } from '@/lib/incorporadorPricing';
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
+import { TransactionGroupRow, groupTransactionsByPurchase } from '@/components/incorporador/TransactionGroupRow';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 40];
 
@@ -78,12 +78,17 @@ export default function TransacoesIncorp() {
   // Produtos já são filtrados no RPC - usar diretamente
   const transactions = allTransactions;
 
-  // Paginação
-  const totalPages = Math.ceil(transactions.length / itemsPerPage);
-  const paginatedTransactions = useMemo(() => {
+  // Agrupa transações por compra (parent + order bumps)
+  const transactionGroups = useMemo(() => {
+    return groupTransactionsByPurchase(transactions, globalFirstIds);
+  }, [transactions, globalFirstIds]);
+
+  // Paginação por grupos
+  const totalPages = Math.ceil(transactionGroups.length / itemsPerPage);
+  const paginatedGroups = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return transactions.slice(start, start + itemsPerPage);
-  }, [transactions, currentPage, itemsPerPage]);
+    return transactionGroups.slice(start, start + itemsPerPage);
+  }, [transactionGroups, currentPage, itemsPerPage]);
 
   // Totais - Bruto usa deduplicação GLOBAL (consistente com Dashboard)
   const totals = useMemo(() => {
@@ -278,7 +283,7 @@ export default function TransacoesIncorp() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-sm font-medium text-muted-foreground">Líquido Total</div>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(totals.liquido)}</div>
+              <div className="text-2xl font-bold text-primary">{formatCurrency(totals.liquido)}</div>
             </CardContent>
           </Card>
         </div>
@@ -316,123 +321,22 @@ export default function TransacoesIncorp() {
                         <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                       </TableRow>
                     ))
-                  ) : paginatedTransactions.length === 0 ? (
+                  ) : paginatedGroups.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                         Nenhuma transação encontrada
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedTransactions.map((t) => (
-                      <TableRow key={t.id} className={t.sale_status === 'refunded' ? 'bg-destructive/10' : ''}>
-                        <TableCell className="font-medium">
-                          {t.sale_date ? format(new Date(t.sale_date), 'dd/MM/yy HH:mm', { locale: ptBR }) : '-'}
-                        </TableCell>
-                        <TableCell className="max-w-[200px] truncate" title={t.product_name || ''}>
-                          {t.product_name || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-[180px]">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate font-medium" title={t.customer_name || ''}>
-                                {t.customer_name || '-'}
-                              </span>
-                              {t.sale_status === 'refunded' && (
-                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0">
-                                  Reembolso
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="truncate text-xs text-muted-foreground" title={t.customer_email || ''}>
-                              {t.customer_email || '-'}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {t.installment_number && t.total_installments 
-                            ? `${t.installment_number}/${t.total_installments}` 
-                            : '1/1'}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {(() => {
-                            const isFirst = globalFirstIds.has(t.id);
-                            const brutoValue = getDeduplicatedGross(t, isFirst);
-                            return (
-                              <span className={!isFirst ? "text-muted-foreground" : ""}>
-                                {formatCurrency(brutoValue)}
-                                {!isFirst && (
-                                  <span 
-                                    className="ml-1 text-xs" 
-                                    title="Bruto zerado - cliente já contabilizado neste produto"
-                                  >
-                                    (dup)
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-right text-green-600 font-medium">
-                          {formatCurrency(t.net_value || 0)}
-                        </TableCell>
-                        <TableCell>
-                          <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-muted">
-                            {t.source || 'hubla'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {globalFirstIds.has(t.id) ? (
-                            <span 
-                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                              title="Primeira compra deste cliente neste produto"
-                            >
-                              <UserPlus className="h-3 w-3" />
-                              Novo
-                            </span>
-                          ) : (
-                            <span 
-                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                              title="Cliente já comprou este produto anteriormente"
-                            >
-                              <UserCheck className="h-3 w-3" />
-                              Recorrente
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8" 
-                              onClick={() => handleViewDetails(t)}
-                              title="Ver detalhes"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8" 
-                              onClick={() => handleEdit(t)}
-                              title="Editar"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            {t.source === 'manual' && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8" 
-                                onClick={() => handleDelete(t)}
-                                title="Excluir"
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                    paginatedGroups.map((group) => (
+                      <TransactionGroupRow
+                        key={group.id}
+                        group={group}
+                        globalFirstIds={globalFirstIds}
+                        onViewDetails={handleViewDetails}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                      />
                     ))
                   )}
                 </TableBody>
@@ -440,7 +344,7 @@ export default function TransacoesIncorp() {
             </div>
 
             {/* Paginação */}
-            {transactions.length > 0 && (
+            {transactionGroups.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-between border-t px-4 py-3 gap-3">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
@@ -457,10 +361,10 @@ export default function TransacoesIncorp() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <span className="text-sm text-muted-foreground">por página</span>
+                    <span className="text-sm text-muted-foreground">grupos por página</span>
                   </div>
                   <div className="text-sm text-muted-foreground hidden md:block">
-                    Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, transactions.length)} de {transactions.length.toLocaleString('pt-BR')}
+                    {transactionGroups.length.toLocaleString('pt-BR')} grupos ({transactions.length.toLocaleString('pt-BR')} transações)
                   </div>
                 </div>
                 {totalPages > 1 && (
