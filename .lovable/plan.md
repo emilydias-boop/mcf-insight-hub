@@ -1,63 +1,91 @@
 
-# Plano: Corrigir Query do Relatório de Qualificação R2
+# Plano: Atualização Real-Time do Relatório R2
 
-## Problema Identificado
+## Objetivo
 
-A query no hook `useR2QualificationReport.ts` está retornando **erro 400** porque está usando uma foreign key que não existe:
+Fazer com que o relatório de qualificação R2 atualize automaticamente quando:
+1. Status de reunião é alterado (completed, no_show, etc.)
+2. Campos de qualificação são preenchidos (estado, renda, profissão, etc.)
+3. Novas reuniões são agendadas
 
-```
-owner:profiles!crm_deals_owner_id_fkey(id, full_name)
-```
+## Abordagem
 
-**Erro retornado pelo Supabase:**
-> "Could not find a relationship between 'crm_deals' and 'profiles' using the hint 'crm_deals_owner_id_fkey'"
+O projeto já utiliza `refetchInterval` do React Query para atualizações periódicas em diversos hooks (30-60 segundos). Esta é a abordagem mais simples e consistente com o padrão existente.
 
-## Causa Raiz
+**Por que refetchInterval?**
+| Aspecto | refetchInterval | Supabase Realtime |
+|---------|-----------------|-------------------|
+| Complexidade | Baixa (1 linha) | Alta (setup channel) |
+| Padrão no projeto | Usado em 29+ hooks | Não utilizado |
+| Confiabilidade | Alta | Requer conexão ativa |
+| Custo | Polling leve | Conexão persistente |
 
-A tabela `crm_deals` não possui `owner_id` como FK para `profiles`. A coluna correta é:
+## Mudanças
 
-| Errado (atual) | Correto |
-|----------------|---------|
-| `owner_id` | `owner_profile_id` |
-| `crm_deals_owner_id_fkey` | `crm_deals_owner_profile_id_fkey` |
+### 1. Hook `useR2QualificationReport.ts`
 
-## Solução
+Adicionar `refetchInterval` e `staleTime` para atualização automática a cada 30 segundos:
 
-Corrigir a query na linha 72 do arquivo `src/hooks/useR2QualificationReport.ts`:
+**Arquivo:** `src/hooks/useR2QualificationReport.ts`
 
-**Antes (com erro):**
 ```typescript
-deal:crm_deals(
-  id,
-  name,
-  owner_id,
-  custom_fields,
-  contact:crm_contacts(name, email, phone),
-  owner:profiles!crm_deals_owner_id_fkey(id, full_name)  // ← FK errada
-)
+export function useR2QualificationReport(filters: QualificationFilters) {
+  return useQuery({
+    queryKey: ['r2-qualification-report', ...],
+    queryFn: async () => { ... },
+    // ADICIONAR ESTAS LINHAS:
+    staleTime: 30000,        // Dados considerados "frescos" por 30 segundos
+    refetchInterval: 30000,  // Atualizar automaticamente a cada 30 segundos
+  });
+}
 ```
 
-**Depois (corrigido):**
-```typescript
-deal:crm_deals(
-  id,
-  name,
-  owner_profile_id,
-  custom_fields,
-  contact:crm_contacts(name, email, phone),
-  owner:profiles!crm_deals_owner_profile_id_fkey(id, full_name)  // ← FK correta
-)
+### 2. Indicador Visual de Atualização (Opcional)
+
+Adicionar um indicador discreto mostrando quando os dados foram atualizados pela última vez:
+
+**Arquivo:** `src/components/crm/R2QualificationReportPanel.tsx`
+
+```tsx
+const { data, isLoading, isFetching, dataUpdatedAt } = useR2QualificationReport({...});
+
+// No header do painel:
+<div className="flex items-center gap-2 text-xs text-muted-foreground">
+  {isFetching && !isLoading && (
+    <Loader2 className="h-3 w-3 animate-spin" />
+  )}
+  <span>
+    Atualizado: {format(new Date(dataUpdatedAt), 'HH:mm:ss')}
+  </span>
+</div>
 ```
 
-## Arquivo a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useR2QualificationReport.ts` | Corrigir linha 69 (`owner_id` → `owner_profile_id`) e linha 72 (FK correta) |
+| `src/hooks/useR2QualificationReport.ts` | Adicionar `staleTime: 30000` e `refetchInterval: 30000` |
+| `src/components/crm/R2QualificationReportPanel.tsx` | (Opcional) Adicionar indicador visual de última atualização |
 
-## Resultado Esperado
+## Comportamento Final
 
-1. Query executará com sucesso (status 200)
-2. Dados de qualificação R2 aparecerão nos gráficos e tabela
-3. Total de leads, realizadas, no-shows e taxa de conversão exibirão valores corretos
-4. Exportação Excel funcionará com dados populados
+1. **Auto-refresh a cada 30 segundos**: O relatório busca novos dados automaticamente
+2. **Indicador visual**: Usuário vê quando os dados foram atualizados
+3. **Sem piscar**: O `staleTime` evita recarregamentos visuais desnecessários
+4. **Consistente**: Mesmo padrão usado em outros dashboards do sistema
+
+## Fluxo de Atualização
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Usuário preenche qualificação no Drawer R2                  │
+│         ↓                                                   │
+│ Dados salvos em crm_deals.custom_fields                     │
+│         ↓                                                   │
+│ [30 segundos]                                               │
+│         ↓                                                   │
+│ React Query dispara refetch automático                      │
+│         ↓                                                   │
+│ Relatório atualizado com novos gráficos e métricas         │
+└─────────────────────────────────────────────────────────────┘
+```
