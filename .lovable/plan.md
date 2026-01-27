@@ -1,48 +1,60 @@
 
-# Plano: Excluir Transações Temporárias (newsale-) da Listagem
+
+# Plano: Corrigir Conflito de Assinatura de Função RPC
 
 ## Problema Identificado
 
-O cliente Robson Moreira aparece com **2 transações de contrato** porque:
+O erro ocorre porque existem **duas versões** da função `get_all_hubla_transactions` no banco:
 
-1. `newsale-1769525395779` → Transação temporária (webhook inicial) - net_value: R$ 0,00
-2. `0968afcd-5ac9-...` → Transação real (confirmação) - net_value: R$ 460,76
+| Versão | Tipo dos Parâmetros de Data |
+|--------|----------------------------|
+| Antiga | `text` |
+| Nova | `timestamp with time zone` |
 
-As transações com prefixo `newsale-` são registros temporários criados pelo webhook da Hubla **antes** da confirmação do pagamento. Quando o pagamento é confirmado, a Hubla envia outro webhook com o `hubla_id` definitivo (UUID).
+Quando o frontend envia uma string como `"2026-01-01T00:00:00-03:00"`, o PostgreSQL não consegue decidir automaticamente qual função chamar, pois a string é compatível com ambos os tipos.
 
-A função `get_first_transaction_ids` já ignora essas transações (`hubla_id NOT LIKE 'newsale-%'`), mas a função `get_all_hubla_transactions` **não está filtrando**, causando a duplicidade na listagem.
+## Causa Raiz
+
+A migration `20260127152906` usou `CREATE OR REPLACE FUNCTION`, que substitui funções **apenas se a assinatura (tipos dos parâmetros) for idêntica**. Como os tipos mudaram de `text` para `timestamptz`, o PostgreSQL criou uma **nova função** em vez de substituir a antiga.
 
 ## Solução
 
-Adicionar o filtro `AND ht.hubla_id NOT LIKE 'newsale-%'` na função RPC `get_all_hubla_transactions`.
+Criar uma migration que:
+1. **DROP** da função antiga (com assinatura `text`)
+2. Manter apenas a versão com `timestamptz`
 
 ## Alteração Técnica
 
 ### Migration SQL
 
 ```sql
--- Na função get_all_hubla_transactions, adicionar filtro:
-WHERE pc.target_bu = 'incorporador'
-  AND ht.sale_status IN ('completed', 'refunded')
-  AND ht.source IN ('hubla', 'manual')
-  AND ht.hubla_id NOT LIKE 'newsale-%'  -- NOVO: Excluir temporárias
-  AND (p_search IS NULL OR ...)
+-- Remover versão antiga da função com parâmetros text
+DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(
+  text, text, text, integer
+);
+
+-- Remover versão antiga da função by_bu com parâmetros text
+DROP FUNCTION IF EXISTS public.get_hubla_transactions_by_bu(
+  text, text, text, text, integer
+);
 ```
 
-## Impacto Esperado
+## Por que isso funciona?
 
-| Antes | Depois |
-|-------|--------|
-| Robson com 2 linhas | Robson com 1 linha |
-| Segunda linha "Recorrente" R$ 0,00 | Removida |
-| Total de transações maior | Total correto (sem duplicatas) |
+- Após remover a versão antiga, só existirá uma função com esse nome
+- O PostgreSQL conseguirá fazer a conversão automática de `text` → `timestamptz` quando receber a string do frontend
+- Não precisa alterar o código do frontend
 
 ## Arquivo a Criar
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `supabase/migrations/[timestamp]_exclude_newsale_transactions.sql` | Adiciona filtro para excluir transações temporárias |
+| `supabase/migrations/[timestamp]_drop_old_function_signatures.sql` | Remove versões antigas das funções |
 
-## Observação
+## Resultado Esperado
 
-A mesma correção será aplicada na função `get_hubla_transactions_by_bu` para garantir consistência em todas as BUs.
+Após a correção:
+- O erro de "could not choose the best candidate function" será eliminado
+- A listagem de transações voltará a funcionar normalmente
+- O Robson Moreira aparecerá apenas uma vez (como esperado após a correção anterior)
+
