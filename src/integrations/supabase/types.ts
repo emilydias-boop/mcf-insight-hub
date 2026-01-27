@@ -7446,6 +7446,7 @@ export type Database = {
           customer_name: string
           customer_phone: string
           gross_override: number
+          hubla_id: string
           id: string
           installment_number: number
           net_value: number
@@ -7516,6 +7517,7 @@ export type Database = {
           customer_name: string
           customer_phone: string
           gross_override: number
+          hubla_id: string
           id: string
           installment_number: number
           net_value: number
