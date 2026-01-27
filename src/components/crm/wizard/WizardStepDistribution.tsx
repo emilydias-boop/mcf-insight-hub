@@ -25,18 +25,18 @@ export const WizardStepDistribution = ({ data, onChange, errors }: WizardStepDis
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch SDRs and Closers
+  // Fetch all active users
   useEffect(() => {
     const fetchUsers = async () => {
       setIsLoading(true);
       try {
-        // Use RPC or direct fetch to avoid type instantiation issues
         const client = supabase as any;
         
+        // Buscar TODOS os usuários ativos
         const { data: profilesData } = await client
           .from('profiles')
           .select('id, email, full_name')
-          .eq('is_active', true)
+          .eq('access_status', 'ativo')
           .order('full_name');
         
         if (!profilesData) {
@@ -44,27 +44,14 @@ export const WizardStepDistribution = ({ data, onChange, errors }: WizardStepDis
           return;
         }
         
-        const { data: rolesData } = await client
-          .from('user_roles')
-          .select('user_id, role')
-          .in('role', ['sdr', 'closer']);
+        // Mapear diretamente sem filtro de role
+        const allUsers = profilesData.map((p: any) => ({
+          id: p.id,
+          email: p.email || '',
+          full_name: p.full_name || p.email || '',
+        }));
         
-        if (!rolesData) {
-          setUsers([]);
-          return;
-        }
-        
-        const sdrCloserUserIds = new Set(rolesData.map((r: any) => r.user_id));
-        
-        const filteredUsers = profilesData
-          .filter((p: any) => sdrCloserUserIds.has(p.id))
-          .map((p: any) => ({
-            id: p.id,
-            email: p.email || '',
-            full_name: p.full_name || p.email || '',
-          }));
-        
-        setUsers(filteredUsers);
+        setUsers(allUsers);
       } finally {
         setIsLoading(false);
       }
