@@ -15,7 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { R2MeetingRow, R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
-import { useRemoveR2Attendee, useCancelR2Meeting } from '@/hooks/useR2AttendeeUpdate';
+import { useRemoveR2Attendee, useCancelR2Meeting, useRestoreR2Meeting } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { RefundModal } from './RefundModal';
 import { R2QualificationTab } from './r2-drawer/R2QualificationTab';
@@ -55,6 +55,7 @@ export function R2MeetingDetailDrawer({
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
   const cancelMeeting = useCancelR2Meeting();
+  const restoreMeeting = useRestoreR2Meeting();
   
   const attendee = meeting?.attendees?.find(a => a.id === selectedAttendeeId) || meeting?.attendees?.[0];
 
@@ -367,14 +368,28 @@ export function R2MeetingDetailDrawer({
             </Button>
           </div>
 
-          <Button 
-            variant="outline"
-            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
-            onClick={handleCancelMeeting}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Cancelar Reunião
-          </Button>
+          {meeting.status === 'canceled' ? (
+            <Button 
+              variant="outline"
+              className="w-full text-primary border-primary/30 hover:bg-primary/10"
+              onClick={() => {
+                restoreMeeting.mutate(meeting.id);
+                onOpenChange(false);
+              }}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Desfazer Cancelamento
+            </Button>
+          ) : (
+            <Button 
+              variant="outline"
+              className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={handleCancelMeeting}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Cancelar Reunião
+            </Button>
+          )}
         </div>
       </SheetContent>
 

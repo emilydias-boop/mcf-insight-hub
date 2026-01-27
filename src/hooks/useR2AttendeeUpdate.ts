@@ -147,3 +147,27 @@ export function useCancelR2Meeting() {
     }
   });
 }
+
+// Restore R2 meeting (undo cancellation)
+export function useRestoreR2Meeting() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (meetingId: string) => {
+      const { error } = await supabase
+        .from('meeting_slots')
+        .update({ status: 'scheduled' })
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      toast.success('Reunião restaurada');
+    },
+    onError: () => {
+      toast.error('Erro ao restaurar reunião');
+    }
+  });
+}

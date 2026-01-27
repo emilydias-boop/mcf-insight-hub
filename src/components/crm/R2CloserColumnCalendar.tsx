@@ -70,10 +70,24 @@ export function R2CloserColumnCalendar({
     if (slotMeetings.length === 0) return undefined;
     if (slotMeetings.length === 1) return slotMeetings[0];
     
-    // Consolidate all attendees from multiple meetings into one
+    // Filter out canceled slots with no attendees
+    const validMeetings = slotMeetings.filter(m => 
+      m.status !== 'canceled' || (m.attendees && m.attendees.length > 0)
+    );
+    
+    if (validMeetings.length === 0) {
+      // All are empty canceled slots - show the canceled state
+      return slotMeetings[0];
+    }
+    
+    // Prioritize non-canceled meeting for status
+    const primaryMeeting = validMeetings.find(m => m.status !== 'canceled') 
+      || validMeetings[0];
+    
+    // Consolidate all attendees from valid meetings
     return {
-      ...slotMeetings[0],
-      attendees: slotMeetings.flatMap(m => m.attendees || [])
+      ...primaryMeeting,
+      attendees: validMeetings.flatMap(m => m.attendees || [])
     };
   };
 
