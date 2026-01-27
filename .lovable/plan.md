@@ -1,153 +1,75 @@
 
-# Plano: Consolidar Transações em Linhas Expansíveis
+# Plano: Adicionar hubla_id ao Retorno da Função RPC
 
-## Objetivo
+## Problema Identificado
 
-Agrupar visualmente as transações de uma mesma compra (produto principal + order bumps) em uma única linha expansível na tela de "Vendas MCF Incorporador", mostrando totais consolidados e permitindo expandir para ver os detalhes de cada item.
+A função RPC `get_all_hubla_transactions` **não retorna o campo `hubla_id`**, que é essencial para o agrupamento de transações por compra funcionar.
 
-## Lógica de Agrupamento
+### Diagnóstico
 
-O agrupamento será feito pelo `hubla_id`:
-- **Produto Principal**: hubla_id sem sufixo `-offer-`
-- **Order Bumps**: hubla_id com sufixo `-offer-1`, `-offer-2`, etc.
-- **Base ID**: Remove o sufixo `-offer-X` para agrupar transações relacionadas
+| Componente | Status |
+|------------|--------|
+| Interface TypeScript (`HublaTransaction`) | Declara `hubla_id` |
+| Componente de agrupamento (`TransactionGroupRow`) | Usa `tx.hubla_id` para agrupar |
+| Função RPC no banco | **NÃO retorna** `hubla_id` |
 
-### Exemplo Visual
+**Resultado**: O `hubla_id` chega como `undefined` no frontend. A função `groupTransactionsByPurchase` usa `tx.id` como fallback, criando um grupo por transação ao invés de consolidar.
 
-| Antes (Atual) | Depois (Proposto) |
-|---------------|-------------------|
-| ACESSO VITALÍCIO - R$ 104 (Novo) | ▶ ACESSO VITALÍCIO + 2 bumps |
-| ACESSO VITALÍCIO - R$ 57 (dup) | Bruto: R$ 208 / Líquido: R$ 163 |
-| Comunidade Incorporador - R$ 47 | |
+## Solução
 
-Ao expandir:
+Atualizar a função RPC para incluir `hubla_id` no retorno.
 
-```text
-▼ ACESSO VITALÍCIO + 2 bumps (R$ 208 bruto | R$ 163 líquido)
-   ├─ ACESSO VITALÍCIO (Principal) - R$ 104 → R$ 81,70
-   ├─ ACESSO VITALÍCIO (Bump 1) - R$ 57 → R$ 44,78
-   └─ Comunidade Incorporador (Bump 2) - R$ 47 → R$ 36,92
+## Alteração Técnica
+
+### Migration SQL
+
+A função precisa ser recriada com:
+1. `hubla_id text` adicionado ao `RETURNS TABLE`
+2. `ht.hubla_id` adicionado ao `SELECT`
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(...)
+RETURNS TABLE(
+  id uuid,
+  hubla_id text,  -- ADICIONAR
+  product_name text,
+  ...
+)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.hubla_id,  -- ADICIONAR
+    ht.product_name,
+    ...
+END;
+$$;
 ```
 
-## Arquitetura da Solução
-
-### 1. Componente de Linha Expansível
-
-Criar um novo componente `TransactionGroupRow` que:
-- Exibe a linha principal com totais consolidados
-- Mostra badge "+X order bump(s)" quando houver bumps
-- Expande ao clicar para mostrar detalhes de cada transação
-- Mantém as ações (Ver, Editar) na linha principal
-
-### 2. Lógica de Agrupamento (Frontend)
-
-Função `groupTransactionsByPurchase`:
-- Agrupa por `baseId` (hubla_id sem `-offer-X`)
-- Calcula totais de bruto e líquido
-- Identifica qual é o produto principal vs order bumps
-
-### 3. Ajuste nos Totais
-
-O cálculo de totais já está correto (soma tudo). A mudança é apenas visual para consolidar a exibição.
-
-## Alterações Técnicas
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/bu-incorporador/TransacoesIncorp.tsx` | Adicionar lógica de agrupamento e componente de linha expansível |
-
-### Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/incorporador/TransactionGroupRow.tsx` | Componente de linha expansível com produtos agrupados |
-
-## Detalhes de Implementação
-
-### Interface de Dados Agrupados
-
-```typescript
-interface TransactionGroup {
-  id: string;           // baseId (hubla_id sem -offer-X)
-  main: HublaTransaction;
-  orderBumps: HublaTransaction[];
-  totalGross: number;   // Soma dos brutos
-  totalNet: number;     // Soma dos líquidos
-  isFirst: boolean;     // Se é primeira compra (para badge Novo/Recorrente)
-}
-```
-
-### Função de Agrupamento
-
-```typescript
-const groupTransactionsByPurchase = (
-  transactions: HublaTransaction[],
-  firstIds: Set<string>
-): TransactionGroup[] => {
-  const groups = new Map<string, TransactionGroup>();
-
-  transactions.forEach(tx => {
-    const baseId = tx.hubla_id?.replace(/-offer-\d+$/, '') || tx.id;
-    const isOrderBump = tx.hubla_id?.includes('-offer-');
-
-    if (!groups.has(baseId)) {
-      groups.set(baseId, {
-        id: baseId,
-        main: tx,
-        orderBumps: [],
-        totalGross: 0,
-        totalNet: 0,
-        isFirst: false
-      });
-    }
-
-    const group = groups.get(baseId)!;
-
-    if (isOrderBump) {
-      group.orderBumps.push(tx);
-    } else {
-      group.main = tx;
-      group.isFirst = firstIds.has(tx.id);
-    }
-
-    // Soma bruto e líquido
-    const isFirst = firstIds.has(tx.id);
-    group.totalGross += getDeduplicatedGross(tx, isFirst);
-    group.totalNet += tx.net_value || 0;
-  });
-
-  return Array.from(groups.values());
-};
-```
-
-### Componente TransactionGroupRow
-
-O componente renderiza:
-1. **Linha Principal** (sempre visível):
-   - Data, Produto Principal, Cliente, Parcela
-   - Bruto Total, Líquido Total
-   - Badge "+X order bump(s)" se houver
-   - Badge Novo/Recorrente
-   - Ações (Ver, Editar, Excluir)
-
-2. **Linhas Expandidas** (visíveis ao clicar):
-   - Cada transação individual com seus valores
-   - Indicador visual (├─ ou └─) para hierarquia
+A mesma alteração será feita em `get_hubla_transactions_by_bu`.
 
 ## Resultado Esperado
 
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| Linhas por compra | 3 linhas separadas | 1 linha consolidada + expandível |
-| Visibilidade | Confuso, parece duplicado | Claro, mostra que são itens da mesma compra |
-| Totais | Corretos, mas visualmente confusos | Corretos e consolidados visualmente |
-| UX | Difícil entender relação entre linhas | Relação clara entre principal e bumps |
+Após a correção:
 
-## Compatibilidade
+| Antes | Depois |
+|-------|--------|
+| 3 linhas separadas (3 grupos) | 1 linha consolidada + 2 order bumps |
+| hubla_id = undefined | hubla_id = "8f7973cb-..." ou "...-offer-1" |
+| Agrupamento não funciona | Agrupamento funciona corretamente |
 
-- A paginação será por **grupos** (não por transações individuais)
-- A exportação CSV mantém o formato atual (uma linha por transação)
-- Os filtros continuam funcionando normalmente
-- O Drawer de detalhes abre para o produto principal do grupo
+### Visualização Esperada para ADAN Lucas
+
+```text
+▼ ACESSO VITALÍCIO + 2 bumps (R$ 163,40 bruto | R$ 163,40 líquido)
+   ├─ ACESSO VITALÍCIO (Principal) - R$ 81,70
+   ├─ ACESSO VITALÍCIO (Bump) - R$ 44,78  
+   └─ A010 - Consultoria... (Bump) - R$ 36,92
+```
+
+## Arquivo a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `supabase/migrations/[timestamp]_add_hubla_id_to_rpc.sql` | Adiciona hubla_id ao retorno das funções RPC |
