@@ -20,24 +20,27 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
   return useQuery({
     queryKey: ['r2-carrinho-kpis', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')],
     queryFn: async (): Promise<R2CarrinhoKPIs> => {
-      // Count R1 contracts paid in the week
-      const { data: r1Contracts } = await supabase
-        .from('meeting_slot_attendees')
-        .select(`
-          id,
-          status,
-          meeting_slots!inner(
-            id,
-            meeting_type,
-            scheduled_at
-          )
-        `)
-        .eq('status', 'contract_paid')
-        .eq('meeting_slots.meeting_type', 'r1')
-        .gte('meeting_slots.scheduled_at', startOfDay(weekStart).toISOString())
-        .lte('meeting_slots.scheduled_at', endOfDay(weekEnd).toISOString());
+      // ===== CONTRATOS PAGOS =====
+      // Count unique contracts (A000) paid in the week from hubla_transactions
+      // This aligns with the "Vendas MCF Incorporador" tab
+      const { data: contratosTx } = await supabase
+        .from('hubla_transactions')
+        .select('customer_email')
+        .ilike('product_name', '%A000%')
+        .eq('product_category', 'incorporador')
+        .gte('sale_date', startOfDay(weekStart).toISOString())
+        .lte('sale_date', endOfDay(weekEnd).toISOString());
 
-      // Get all R2 meetings in the week
+      // Deduplicate by email (one contract per customer)
+      const uniqueContracts = new Set(
+        (contratosTx || [])
+          .map(tx => tx.customer_email?.toLowerCase())
+          .filter(Boolean)
+      );
+      const contratosPagos = uniqueContracts.size;
+
+      // ===== R2 MEETINGS =====
+      // Get all R2 meetings in the week with attendees
       const { data: r2Meetings } = await supabase
         .from('meeting_slots')
         .select(`
@@ -54,7 +57,21 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
         .gte('scheduled_at', startOfDay(weekStart).toISOString())
         .lte('scheduled_at', endOfDay(weekEnd).toISOString());
 
-      // Get R2 status options to find "Aprovado" status
+      // ===== R2 AGENDADAS =====
+      // Count ATTENDEES (not slots) in scheduled/invited/pending meetings
+      // This aligns with the "R2 Agendadas" tab
+      const scheduledStatuses = ['scheduled', 'invited', 'pending'];
+      const r2Agendadas = (r2Meetings || [])
+        .filter(m => scheduledStatuses.includes(m.status))
+        .reduce((acc, m) => acc + (m.attendees?.length || 0), 0);
+
+      // ===== R2 REALIZADAS =====
+      // Count completed meetings (slots, not attendees - represents meetings held)
+      const r2Realizadas = (r2Meetings || [])
+        .filter(m => m.status === 'completed')
+        .length;
+
+      // ===== R2 STATUS OPTIONS =====
       const { data: statusOptions } = await supabase
         .from('r2_status_options')
         .select('id, name')
@@ -82,17 +99,8 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
         ?.filter(s => foraDoCarrinhoNames.some(name => s.name.toLowerCase().includes(name)))
         .map(s => s.id) || [];
 
-      // Calculate KPIs
-      const r2Agendadas = r2Meetings?.filter(m => 
-        !['cancelled', 'rescheduled'].includes(m.status)
-      ).length || 0;
-
-      const r2Realizadas = r2Meetings?.filter(m => 
-        m.status === 'completed'
-      ).length || 0;
-
-      // Count attendees by R2 status
-      const allAttendees = r2Meetings?.flatMap(m => m.attendees || []) || [];
+      // ===== ATTENDEE STATUS COUNTS =====
+      const allAttendees = (r2Meetings || []).flatMap(m => m.attendees || []);
       
       const aprovados = allAttendees.filter(a => 
         a.r2_status_id === aprovadoStatusId
@@ -111,7 +119,7 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
       ).length;
 
       return {
-        contratosPagos: r1Contracts?.length || 0,
+        contratosPagos,
         r2Agendadas,
         r2Realizadas,
         foraDoCarrinho,
