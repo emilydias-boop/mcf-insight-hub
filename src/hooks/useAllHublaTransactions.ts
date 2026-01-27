@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 export interface HublaTransaction {
   id: string;
@@ -32,7 +34,7 @@ const formatDateWithBrazilTimezone = (date: Date, endOfDay = false): string => {
 };
 
 export const useAllHublaTransactions = (filters: TransactionFilters) => {
-  return useQuery({
+  const query = useQuery({
     queryKey: ['all-hubla-transactions', filters.search, filters.startDate?.toISOString(), filters.endDate?.toISOString()],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_all_hubla_transactions', {
@@ -46,11 +48,22 @@ export const useAllHublaTransactions = (filters: TransactionFilters) => {
       return (data || []) as HublaTransaction[];
     },
     retry: 1,
-    refetchInterval: (query) => {
+    refetchInterval: (q) => {
       // Don't refetch if there was an error
-      if (query.state.error) return false;
+      if (q.state.error) return false;
       return 30000;
     },
     staleTime: 10000,
   });
+
+  // Show toast on error
+  useEffect(() => {
+    if (query.error) {
+      toast.error('Erro ao carregar transações', {
+        description: (query.error as Error).message || 'Tente novamente mais tarde.',
+      });
+    }
+  }, [query.error]);
+
+  return query;
 };
