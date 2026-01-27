@@ -303,7 +303,7 @@ const Negocios = () => {
         }
       }
       
-      if (filters.owner && deal.owner_id !== filters.owner) return false;
+      if (filters.owner && deal.owner_profile_id !== filters.owner) return false;
       
       // Filtro por status do negócio (baseado no estágio)
       if (filters.dealStatus !== 'all') {
