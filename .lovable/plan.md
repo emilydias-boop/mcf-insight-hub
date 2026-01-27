@@ -1,51 +1,138 @@
 
-# Plano: Corrigir Transferência em Massa para Atualizar owner_profile_id
+# Plano: Corrigir Exibição de Reuniões Canceladas e Adicionar Botão de Desfazer
 
-## Problema Identificado
+## Diagnóstico Completo
 
-A transferência em massa de leads do Vinicius para o Alex atualizou apenas o campo `owner_id` (email), mas **não atualizou o campo `owner_profile_id`** (UUID).
+### Problema 1: Por que a reunião das 19:00h aparece riscada
 
-**Evidência no banco de dados:**
+A reunião às 22:00 UTC (19:00 BRT) da Claudia Carielo possui **3 slots de reunião diferentes**:
 
-| Campo | Valor Atual | Valor Correto |
-|-------|-------------|---------------|
-| `owner_id` | `alex.dias@minhacasafinanciada.com` | ✅ Correto |
-| `owner_profile_id` | `992a3790-...` (UUID do Vinicius) | `16c5d025-...` (UUID do Alex) |
+| Slot | Status | Participantes |
+|------|--------|---------------|
+| `106eb01a-...` | ❌ **canceled** | 0 (vazio) |
+| `47ac9546-...` | ✅ scheduled | Ana Luzia |
+| `4e58f7fc-...` | ✅ scheduled | Victor Hugo |
 
-Como o filtro de responsáveis foi corrigido para usar `owner_profile_id`, os leads transferidos não aparecem na pipeline do Alex.
-
-## Causa Raiz
-
-No arquivo `src/hooks/useBulkTransfer.ts`, linha 40:
+O código de consolidação em `R2CloserColumnCalendar.tsx` (linha 68-78) usa o status do **primeiro** slot encontrado:
 
 ```typescript
-const { error: updateError } = await supabase
-  .from('crm_deals')
-  .update({ owner_id: newOwnerEmail })  // ❌ Falta owner_profile_id
-  .eq('id', dealId);
+return {
+  ...slotMeetings[0],  // ← Herda status do primeiro slot (canceled)
+  attendees: slotMeetings.flatMap(m => m.attendees || [])
+};
 ```
 
-O update só atualiza `owner_id` mas ignora `owner_profile_id`.
+Como o slot cancelado é o primeiro no array, a visualização inteira fica com `line-through`, mesmo tendo participantes ativos.
+
+### Problema 2: Logs de auditoria
+
+- O slot foi cancelado em **26/01/2026 às 22:13 UTC**
+- **Não há trigger de auditoria** para a tabela `meeting_slots` — apenas `meeting_slot_attendees` é monitorada
+- Por isso, não é possível identificar quem cancelou
 
 ---
 
-## Solução
+## Solução em 3 Partes
 
-### Mudança 1: Passar o UUID do novo owner na transferência
+### Parte 1: Corrigir a consolidação de slots (prioridade imediata)
 
-No `BulkTransferDialog.tsx`:
-- Já temos acesso ao `user.id` (UUID) quando selecionamos o usuário
-- Passar esse ID para o `useBulkTransfer`
+**Arquivo:** `src/components/crm/R2CloserColumnCalendar.tsx`
 
-### Mudança 2: Atualizar ambos os campos no banco
+**Mudança:** Modificar `getConsolidatedMeetingForSlot()` para:
+1. Filtrar slots cancelados que estão vazios (sem attendees)
+2. Priorizar o status de slots não-cancelados
+3. Unificar attendees de todos os slots válidos
 
-No `useBulkTransfer.ts`:
-- Receber o `newOwnerProfileId` como parâmetro
-- Atualizar tanto `owner_id` quanto `owner_profile_id`
+```typescript
+const getConsolidatedMeetingForSlot = (...): R2Meeting | undefined => {
+  const slotMeetings = getMeetingsForSlot(closerId, hour, minute);
+  if (slotMeetings.length === 0) return undefined;
+  
+  // Filter out canceled slots with no attendees
+  const validMeetings = slotMeetings.filter(m => 
+    m.status !== 'canceled' || (m.attendees && m.attendees.length > 0)
+  );
+  
+  if (validMeetings.length === 0) {
+    // All are empty canceled slots - show the canceled state
+    return slotMeetings[0];
+  }
+  
+  // Prioritize non-canceled meeting for status
+  const primaryMeeting = validMeetings.find(m => m.status !== 'canceled') 
+    || validMeetings[0];
+  
+  // Consolidate all attendees
+  return {
+    ...primaryMeeting,
+    attendees: validMeetings.flatMap(m => m.attendees || [])
+  };
+};
+```
 
-### Mudança 3: Corrigir dados históricos
+### Parte 2: Adicionar botão "Desfazer Cancelamento"
 
-Executar um update para os leads que já foram transferidos mas ficaram com `owner_profile_id` inconsistente.
+**Arquivos:**
+- `src/hooks/useR2AttendeeUpdate.ts` — adicionar hook `useRestoreR2Meeting`
+- `src/components/crm/R2MeetingDetailDrawer.tsx` — adicionar botão condicional no footer
+
+**Lógica:**
+- Exibir botão **apenas** quando `meeting.status === 'canceled'`
+- Ao clicar, atualizar o slot para `status: 'scheduled'`
+- Invalidar caches relevantes
+
+```typescript
+// useR2AttendeeUpdate.ts - novo hook
+export function useRestoreR2Meeting() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (meetingId: string) => {
+      const { error } = await supabase
+        .from('meeting_slots')
+        .update({ status: 'scheduled' })
+        .eq('id', meetingId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      toast.success('Reunião restaurada');
+    },
+    onError: () => {
+      toast.error('Erro ao restaurar reunião');
+    }
+  });
+}
+```
+
+**UI no drawer:**
+```tsx
+{meeting.status === 'canceled' && (
+  <Button 
+    variant="outline"
+    className="w-full text-primary border-primary/30 hover:bg-primary/10"
+    onClick={() => restoreMeeting.mutate(meeting.id)}
+  >
+    <RotateCcw className="h-4 w-4 mr-2" />
+    Desfazer Cancelamento
+  </Button>
+)}
+```
+
+### Parte 3: Adicionar auditoria para `meeting_slots` (recomendado)
+
+**Arquivo:** Nova migração SQL
+
+Para rastrear futuras alterações de status em reuniões:
+
+```sql
+-- Criar trigger de auditoria para meeting_slots
+CREATE TRIGGER audit_meeting_slots_trigger
+  AFTER INSERT OR UPDATE OR DELETE ON meeting_slots
+  FOR EACH ROW EXECUTE FUNCTION log_audit_changes();
+```
 
 ---
 
@@ -53,65 +140,30 @@ Executar um update para os leads que já foram transferidos mas ficaram com `own
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useBulkTransfer.ts` | Adicionar `newOwnerProfileId` ao update |
-| `src/components/crm/BulkTransferDialog.tsx` | Passar `user.id` como parâmetro |
+| `src/components/crm/R2CloserColumnCalendar.tsx` | Corrigir `getConsolidatedMeetingForSlot()` para ignorar slots cancelados vazios |
+| `src/hooks/useR2AttendeeUpdate.ts` | Adicionar hook `useRestoreR2Meeting` |
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Adicionar botão "Desfazer Cancelamento" condicional |
 
 ---
 
-## Detalhes Técnicos
+## Correção Imediata de Dados
 
-### useBulkTransfer.ts
-
-```typescript
-interface BulkTransferParams {
-  dealIds: string[];
-  newOwnerEmail: string;
-  newOwnerName: string;
-  newOwnerProfileId: string;  // ← ADICIONAR
-}
-
-// No update:
-const { error: updateError } = await supabase
-  .from('crm_deals')
-  .update({ 
-    owner_id: newOwnerEmail,
-    owner_profile_id: newOwnerProfileId  // ← ADICIONAR
-  })
-  .eq('id', dealId);
-```
-
-### BulkTransferDialog.tsx
-
-```typescript
-await bulkTransfer.mutateAsync({
-  dealIds: selectedDealIds,
-  newOwnerEmail: user.email,
-  newOwnerName: user.full_name || user.email,
-  newOwnerProfileId: user.id,  // ← ADICIONAR (já temos esse dado!)
-});
-```
-
----
-
-## Correção de Dados Históricos
-
-Após aplicar a correção, precisaremos executar um SQL para corrigir os leads já transferidos:
+Para resolver o problema atual das 19:00h, posso também oferecer um SQL para limpar slots cancelados vazios:
 
 ```sql
--- Atualizar owner_profile_id baseado no owner_id (email)
-UPDATE crm_deals d
-SET owner_profile_id = p.id
-FROM profiles p
-WHERE d.owner_id = p.email
-  AND d.owner_profile_id IS DISTINCT FROM p.id;
+-- Deletar slots cancelados que não têm participantes
+DELETE FROM meeting_slots ms
+WHERE ms.status = 'canceled'
+  AND NOT EXISTS (
+    SELECT 1 FROM meeting_slot_attendees msa 
+    WHERE msa.meeting_slot_id = ms.id
+  );
 ```
-
-Este SQL será fornecido para execução manual no Cloud View.
 
 ---
 
 ## Resultado Esperado
 
-1. Transferências futuras atualizarão ambos os campos corretamente
-2. O filtro por responsável funcionará imediatamente após a transferência
-3. Os leads do Alex aparecerão na pipeline dele
+1. **Imediato:** Reunião das 19:00h de Victor Hugo e Ana Luzia aparecerá corretamente (sem `line-through`)
+2. **UX:** Usuários poderão restaurar reuniões canceladas por engano
+3. **Auditoria:** Futuras mudanças de status em `meeting_slots` serão rastreáveis
