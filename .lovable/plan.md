@@ -1,178 +1,353 @@
 
-# Plano: Ajustes no Drawer de Detalhes R2
+# Plano: Relatório de Qualificação R2 (Consolidated)
 
-## Resumo das Mudanças
+## Objetivo
 
-| Item | Estado Atual | Mudança |
-|------|--------------|---------|
-| Botão "Reagendar" | Presente no drawer | Remover - usar aba de No-Shows para reagendar |
-| "Cancelar Reunião" | Marca slot como `canceled` (fica riscado) | Remover todos os attendees e deletar/marcar slot vazio |
-| "Realizada" | Apenas muda status | Exibir alerta para lembrar de dar Status Final |
-| Reembolso | ✅ Já funciona corretamente | Nenhuma mudança necessária |
+Criar um relatório consolidado das respostas de qualificação dos leads R2 para análise gerencial. O relatório permitirá:
+
+1. **Para a equipe R2** (aba ao lado de No-Shows): Visualização rápida das qualificações
+2. **Para Diretoria/CEOs** (em Relatórios): Análise consolidada com filtros e exportação Excel
 
 ---
 
-## 1. Remover Botão "Reagendar"
+## Visão Geral da Solução
 
-**Arquivo:** `src/components/crm/R2MeetingDetailDrawer.tsx`
-
-**Justificativa:** O fluxo correto é:
-1. Sócio marca como "No-show"
-2. Lead aparece automaticamente na aba "No-Shows"
-3. Yanca (coordenadora) reagenda a partir dessa aba
-
-**Mudança:** Remover o botão "Reagendar" do grid de ações no footer (linhas 360-366).
-
-**Antes:**
-```tsx
-<div className="grid grid-cols-2 gap-2">
-  <Button variant="outline" onClick={() => onReschedule(meeting)}>
-    <Clock className="h-4 w-4 mr-2" />
-    Reagendar
-  </Button>
-  <Button variant="outline" className="text-orange-600..." onClick={() => setRefundModalOpen(true)}>
-    <RotateCcw className="h-4 w-4 mr-2" />
-    Reembolso
-  </Button>
-</div>
-```
-
-**Depois:**
-```tsx
-<Button 
-  variant="outline"
-  className="w-full text-orange-600 border-orange-200 hover:bg-orange-50"
-  onClick={() => setRefundModalOpen(true)}
->
-  <RotateCcw className="h-4 w-4 mr-2" />
-  Reembolso
-</Button>
+```text
+┌────────────────────────────────────────────────────────────────┐
+│                    AGENDA R2 - Nova Aba                        │
+├────────────────────────────────────────────────────────────────┤
+│ Tabs: Lista | Calendário | Por Sócio | Pendentes | No-Shows | RELATÓRIO |
+│                                                                │
+│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐   │
+│ │   Por Estado    │ │   Por Renda     │ │  Por Profissão  │   │
+│ │  ┌───────────┐  │ │  ┌───────────┐  │ │  ┌───────────┐  │   │
+│ │  │ SP: 45    │  │ │  │10k-20k:32 │  │ │  │Empresário │  │   │
+│ │  │ RJ: 28    │  │ │  │20k-30k:18 │  │ │  │   :28     │  │   │
+│ │  │ MG: 15    │  │ │  │ +30k: 12  │  │ │  │Engenheiro │  │   │
+│ │  └───────────┘  │ │  └───────────┘  │ │  │   :22     │  │   │
+│ └─────────────────┘ └─────────────────┘ └───────────────────┘   │
+│                                                                │
+│ ┌────────────────────────────────────────────────────────────┐ │
+│ │                  Tabela Detalhada                          │ │
+│ │ Lead | Estado | Renda | Profissão | Status | Closer | ... │ │
+│ └────────────────────────────────────────────────────────────┘ │
+│                                                                │
+│                 [📊 Exportar Excel]                            │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Corrigir "Cancelar Reunião"
+## Componentes a Criar
 
-**Problema atual:** O hook `useCancelR2Meeting` apenas marca `meeting_slots.status = 'canceled'`, deixando o horário riscado na agenda. Isso polui a visualização quando novos leads são agendados no mesmo horário.
+### 1. Hook: `useR2QualificationReport`
 
-**Solução:** Ao cancelar a reunião R2:
-1. Remover todos os attendees do slot
-2. Deletar o slot (se vazio) OU marcar como cancelado apenas se precisar manter histórico
+Buscar dados de qualificação consolidados das reuniões R2.
 
-**Arquivo:** `src/hooks/useR2AttendeeUpdate.ts`
+**Arquivo:** `src/hooks/useR2QualificationReport.ts`
 
-**Mudança:** Modificar `useCancelR2Meeting` para:
+**Dados retornados:**
+```typescript
+interface R2QualificationReportRow {
+  id: string;
+  leadName: string;
+  phone: string | null;
+  email: string | null;
+  scheduledAt: string;
+  status: string;
+  closerName: string;
+  sdrName: string | null;
+  salesChannel: 'A010' | 'LIVE';
+  // Campos de qualificação
+  estado: string | null;
+  profissao: string | null;
+  renda: string | null;
+  idade: string | null;
+  jaConstroi: string | null;
+  terreno: string | null;
+  imovel: string | null;
+  tempoMcf: string | null;
+  temSocio: boolean | null;
+  nomeSocio: string | null;
+}
+```
+
+**Query:** Buscar `meeting_slot_attendees` com JOIN em `crm_deals.custom_fields` para extrair os campos de qualificação.
+
+### 2. Componente: `R2QualificationReportPanel`
+
+Painel com filtros, gráficos de distribuição e tabela de dados.
+
+**Arquivo:** `src/components/crm/R2QualificationReportPanel.tsx`
+
+**Funcionalidades:**
+- Filtros por período, closer, status
+- Gráficos de distribuição (por Estado, Renda, Profissão, Terreno, Já Constrói)
+- Tabela detalhada com todas as colunas
+- Botão "Exportar Excel" com formato igual à planilha manual
+
+### 3. Integração na Agenda R2
+
+**Arquivo:** `src/pages/crm/AgendaR2.tsx`
+
+Adicionar nova aba "Relatório" ao lado de "No-Shows".
+
+### 4. Página para Relatórios Gerais (Opcional)
+
+**Arquivo:** `src/pages/relatorios/QualificacaoR2.tsx`
+
+Página acessível via menu Relatórios para Chairman/CEOs com visão consolidada completa.
+
+---
+
+## Detalhes Técnicos
+
+### Hook `useR2QualificationReport.ts`
 
 ```typescript
-export function useCancelR2Meeting() {
-  const queryClient = useQueryClient();
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { startOfDay, endOfDay, format } from 'date-fns';
 
-  return useMutation({
-    mutationFn: async (meetingId: string) => {
-      // 1. Deletar todos os attendees deste slot
-      const { error: deleteAttendeesError } = await supabase
-        .from('meeting_slot_attendees')
-        .delete()
-        .eq('meeting_slot_id', meetingId);
+interface QualificationFilters {
+  startDate: Date;
+  endDate: Date;
+  closerId?: string;
+  status?: string;
+}
 
-      if (deleteAttendeesError) throw deleteAttendeesError;
-
-      // 2. Deletar o slot de reunião (em vez de apenas marcar como canceled)
-      const { error: deleteSlotError } = await supabase
+export function useR2QualificationReport(filters: QualificationFilters) {
+  return useQuery({
+    queryKey: ['r2-qualification-report', filters],
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from('meeting_slots')
-        .delete()
-        .eq('id', meetingId);
-
-      if (deleteSlotError) throw deleteSlotError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
-      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
-      toast.success('Reunião cancelada e removida');
-    },
-    onError: () => {
-      toast.error('Erro ao cancelar reunião');
+        .select(`
+          id,
+          scheduled_at,
+          status,
+          closer:closers!meeting_slots_closer_id_fkey(id, name),
+          attendees:meeting_slot_attendees(
+            id,
+            attendee_name,
+            attendee_phone,
+            status,
+            deal:crm_deals(
+              id,
+              name,
+              owner_id,
+              custom_fields,
+              contact:crm_contacts(name, email, phone)
+            )
+          )
+        `)
+        .eq('meeting_type', 'r2')
+        .gte('scheduled_at', startOfDay(filters.startDate).toISOString())
+        .lte('scheduled_at', endOfDay(filters.endDate).toISOString());
+      
+      if (error) throw error;
+      
+      // Transform and flatten data
+      return data.flatMap(meeting => 
+        meeting.attendees.map(att => ({
+          id: att.id,
+          leadName: att.attendee_name || att.deal?.contact?.name,
+          phone: att.attendee_phone || att.deal?.contact?.phone,
+          email: att.deal?.contact?.email,
+          scheduledAt: meeting.scheduled_at,
+          status: att.status,
+          closerName: meeting.closer?.name,
+          // Qualification fields from custom_fields
+          estado: att.deal?.custom_fields?.estado,
+          profissao: att.deal?.custom_fields?.profissao,
+          renda: att.deal?.custom_fields?.renda,
+          idade: att.deal?.custom_fields?.idade,
+          jaConstroi: att.deal?.custom_fields?.ja_constroi,
+          terreno: att.deal?.custom_fields?.terreno,
+          imovel: att.deal?.custom_fields?.possui_imovel,
+          tempoMcf: att.deal?.custom_fields?.tempo_conhece_mcf,
+          temSocio: att.deal?.custom_fields?.tem_socio,
+          nomeSocio: att.deal?.custom_fields?.nome_socio,
+        }))
+      );
     }
   });
 }
 ```
 
-**Nota:** Ao deletar completamente, o slot não aparecerá mais como "riscado", permitindo que novos leads ocupem esse horário normalmente.
+### Componente `R2QualificationReportPanel.tsx`
 
----
+**Estrutura:**
 
-## 3. Lembrar de Dar Status ao Marcar "Realizada"
-
-**Problema:** Quando o sócio marca a reunião como "Realizada", ele pode esquecer de preencher o "Status Final" na aba de Avaliação R2.
-
-**Solução:** Exibir um `toast.info` ou dialog após marcar como realizada, lembrando de preencher o status.
-
-**Arquivo:** `src/components/crm/R2MeetingDetailDrawer.tsx`
-
-**Mudança:** Modificar `handleParticipantStatusChange` para exibir lembrete quando status = 'completed':
-
-```typescript
-const handleParticipantStatusChange = (newStatus: string) => {
-  if (!attendee) return;
+```tsx
+export function R2QualificationReportPanel() {
+  // Filtros de período e closer
+  const [dateRange, setDateRange] = useState<DateRange>();
+  const [closerFilter, setCloserFilter] = useState('all');
   
-  const statusesToSyncSlot = ['completed', 'contract_paid'];
-  const isPrincipal = !attendee.partner_name;
-  const shouldSyncSlot = statusesToSyncSlot.includes(newStatus) && isPrincipal;
-
-  updateAttendeeAndSlotStatus.mutate({
-    attendeeId: attendee.id,
-    status: newStatus,
-    meetingId: meeting.id,
-    syncSlot: shouldSyncSlot,
-    meetingType: 'r2',
-  }, {
-    onSuccess: () => {
-      // Lembrar de dar status quando marcar como realizada
-      if (newStatus === 'completed') {
-        toast.info(
-          'Lembre-se de preencher o Status Final na aba "Avaliação R2"',
-          { duration: 5000 }
-        );
-      }
-    }
+  const { data = [], isLoading } = useR2QualificationReport({
+    startDate: dateRange?.from || startOfMonth(new Date()),
+    endDate: dateRange?.to || endOfMonth(new Date()),
+    closerId: closerFilter !== 'all' ? closerFilter : undefined,
   });
-};
+  
+  // Agregações para gráficos
+  const estadoStats = useMemo(() => 
+    groupBy(data, 'estado'), [data]
+  );
+  const rendaStats = useMemo(() => 
+    groupBy(data, 'renda'), [data]
+  );
+  
+  // Exportar Excel
+  const handleExport = () => {
+    const ws = XLSX.utils.json_to_sheet(data.map(row => ({
+      'Nome': row.leadName,
+      'Telefone': row.phone,
+      'Email': row.email,
+      'Data Reunião': format(new Date(row.scheduledAt), 'dd/MM/yyyy'),
+      'Horário': format(new Date(row.scheduledAt), 'HH:mm'),
+      'Status': row.status,
+      'Sócio R2': row.closerName,
+      'Estado': row.estado,
+      'Profissão': row.profissao,
+      'Renda': row.renda,
+      'Idade': row.idade,
+      'Já Constrói': row.jaConstroi,
+      'Tem Terreno': row.terreno,
+      'Tem Imóvel': row.imovel,
+      'Conhece MCF': row.tempoMcf,
+      'Tem Sócio': row.temSocio ? 'Sim' : 'Não',
+      'Nome Sócio': row.nomeSocio,
+    })));
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Qualificação R2');
+    XLSX.writeFile(wb, `qualificacao_r2_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  };
+  
+  return (
+    <div className="space-y-6">
+      {/* Filtros */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex gap-4">
+            <DatePickerCustom mode="range" ... />
+            <Select value={closerFilter} ... />
+            <Button onClick={handleExport}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Exportar Excel
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Gráficos de Distribuição */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader><CardTitle>Por Estado</CardTitle></CardHeader>
+          <CardContent>
+            <PieChart ... />
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader><CardTitle>Por Renda</CardTitle></CardHeader>
+          <CardContent>
+            <BarChart ... />
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader><CardTitle>Por Profissão</CardTitle></CardHeader>
+          <CardContent>
+            <BarChart ... />
+          </CardContent>
+        </Card>
+      </div>
+      
+      {/* Tabela Detalhada */}
+      <Card>
+        <Table>
+          <TableHeader>...</TableHeader>
+          <TableBody>
+            {data.map(row => <TableRow key={row.id}>...</TableRow>)}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
+  );
+}
+```
+
+### Integração na AgendaR2.tsx
+
+Adicionar nova TabTrigger e TabsContent:
+
+```tsx
+// No TabsList (após No-Shows)
+<TabsTrigger value="report" className="gap-2">
+  <FileText className="h-4 w-4" />
+  Relatório
+</TabsTrigger>
+
+// Novo TabsContent
+<TabsContent value="report" className="mt-0">
+  <R2QualificationReportPanel />
+</TabsContent>
 ```
 
 ---
 
-## 4. Reembolso - Verificação
+## Colunas do Relatório (baseado na planilha)
 
-**Resultado:** O Reembolso já está funcionando corretamente!
-
-O `RefundModal` já faz:
-1. ✅ Atualiza `meeting_slots.status` para `'refunded'`
-2. ✅ Atualiza `crm_deals.custom_fields` com:
-   - `reembolso_solicitado: true`
-   - `reembolso_em: timestamp`
-   - `motivo_reembolso: "..."` 
-   - `justificativa_reembolso: "..."`
-   - `motivo_sem_interesse: "Reembolso"`
-3. ✅ Move o deal para uma stage de "Perdido"
-4. ✅ Registra atividade `loss_marked` com os detalhes
-
-**Não é necessária nenhuma mudança.**
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Remover botão "Reagendar", adicionar toast de lembrete ao marcar "Realizada" |
-| `src/hooks/useR2AttendeeUpdate.ts` | Modificar `useCancelR2Meeting` para deletar attendees e slot |
+| Coluna | Campo | Origem |
+|--------|-------|--------|
+| Nome | `attendee_name` | meeting_slot_attendees |
+| Email | `email` | crm_contacts |
+| Telefone | `attendee_phone` | meeting_slot_attendees |
+| Responsável (SDR) | `owner_id` | crm_deals |
+| Sócio R2 | `closer.name` | closers |
+| Status Agendamento | `status` | meeting_slot_attendees |
+| Status Yanca | customizado | custom_fields |
+| Vendas | vinculado | hubla_transactions |
+| Idade | `custom_fields.idade` | crm_deals |
+| Renda | `custom_fields.renda` | crm_deals |
+| Estado | `custom_fields.estado` | crm_deals |
+| Profissão | `custom_fields.profissao` | crm_deals |
+| Constrói | `custom_fields.ja_constroi` | crm_deals |
+| Tem Sócio | `custom_fields.tem_socio` | crm_deals |
+| Imóvel Próprio | `custom_fields.possui_imovel` | crm_deals |
+| Tem Terreno | `custom_fields.terreno` | crm_deals |
+| Conhece MCF | `custom_fields.tempo_conhece_mcf` | crm_deals |
 
 ---
 
-## Impacto
+## Arquivos a Criar/Modificar
 
-1. **Reagendar:** Fluxo fica mais organizado - apenas Yanca reagenda via aba No-Shows
-2. **Cancelar:** Horários cancelados não ficam mais "riscados" poluindo a agenda
-3. **Realizada:** Sócios serão lembrados de preencher Status Final
-4. **Reembolso:** Já funciona - lead fica sinalizado no CRM
+| Arquivo | Ação |
+|---------|------|
+| `src/hooks/useR2QualificationReport.ts` | **Criar** - Hook para buscar dados consolidados |
+| `src/components/crm/R2QualificationReportPanel.tsx` | **Criar** - Painel com gráficos e tabela |
+| `src/pages/crm/AgendaR2.tsx` | **Modificar** - Adicionar aba "Relatório" |
+| `src/pages/relatorios/QualificacaoR2.tsx` | **Criar** (opcional) - Página para menu Relatórios |
+
+---
+
+## Acesso por Roles
+
+| Localização | Roles com Acesso |
+|-------------|------------------|
+| Agenda R2 > Aba Relatório | `admin`, `manager`, `coordenador`, `closer` (sócio R2) |
+| Relatórios > Qualificação R2 | `admin`, `manager` (Chairman, CEOs) |
+
+---
+
+## Resultado Esperado
+
+1. **Nova aba "Relatório"** na Agenda R2 ao lado de "No-Shows"
+2. **Gráficos de distribuição** mostrando estados mais frequentes, faixas de renda, profissões
+3. **Tabela completa** com todos os dados de qualificação
+4. **Exportação Excel** no mesmo formato da planilha manual
+5. **Filtros** por período, closer, status para análise segmentada
 
