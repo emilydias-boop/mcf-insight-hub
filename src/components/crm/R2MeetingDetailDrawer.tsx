@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Calendar, CheckCircle, XCircle, 
-  ExternalLink, Clock, User, Users, History, RotateCcw, Trash2, ArrowRightLeft
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { R2MeetingRow, R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
 import { useRemoveR2Attendee, useCancelR2Meeting, useRestoreR2Meeting } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
@@ -85,6 +86,15 @@ export function R2MeetingDetailDrawer({
       meetingId: meeting.id,
       syncSlot: shouldSyncSlot,
       meetingType: 'r2',
+    }, {
+      onSuccess: () => {
+        if (newStatus === 'completed') {
+          toast.info(
+            'Lembre-se de preencher o Status Final na aba "Avaliação R2"',
+            { duration: 5000 }
+          );
+        }
+      }
     });
   };
 
@@ -356,23 +366,14 @@ export function R2MeetingDetailDrawer({
             </Button>
           </div>
           
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              variant="outline"
-              onClick={() => onReschedule(meeting)}
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Reagendar
-            </Button>
-            <Button 
-              variant="outline"
-              className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
-              onClick={() => setRefundModalOpen(true)}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reembolso
-            </Button>
-          </div>
+          <Button 
+            variant="outline"
+            className="w-full text-orange-600 border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950"
+            onClick={() => setRefundModalOpen(true)}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reembolso
+          </Button>
 
           {meeting.status === 'canceled' ? (
             <Button 
