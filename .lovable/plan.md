@@ -1,96 +1,63 @@
 
-# Plano: Corrigir Validação do Campo "Origem" no Formulário de Consórcio
+# Plano: Remover CHECK Constraint Restritiva do Campo "Origem"
 
 ## Problema Identificado
 
-Você não consegue salvar uma carta de consórcio com origem "Reverter" porque o **schema Zod do formulário está hardcoded** com apenas 4 valores:
+O erro ocorre porque existe uma **CHECK constraint no banco de dados** que restringe os valores do campo `origem`:
 
-```typescript
-// src/components/consorcio/ConsorcioCardForm.tsx (linha 121)
-origem: z.enum(['socio', 'gr', 'indicacao', 'outros'])
+```sql
+CHECK ((origem = ANY (ARRAY['socio', 'gr', 'indicacao', 'outros'])))
 ```
 
-Porém, a tabela `consorcio_origem_options` agora contém:
+Essa constraint **não inclui** os valores:
+- `reverter` (que você está tentando usar)
+- `clube_arremate` (também cadastrado)
 
-| name | label |
-|------|-------|
-| socio | Sócio |
-| gr | GR |
-| indicacao | Indicação |
-| clube_arremate | Clube do Arremate |
-| outros | Outros |
-| **reverter** | **Reverter** |
+## Diagnóstico
 
-**O formulário mostra a opção "Reverter" no dropdown** (vindo do banco), mas quando você tenta salvar, a **validação Zod rejeita** porque `reverter` não está na lista permitida.
+| Origem | Na tabela `consorcio_origem_options` | Permitida pela constraint |
+|--------|-------------------------------------|---------------------------|
+| socio | Sim | Sim |
+| gr | Sim | Sim |
+| indicacao | Sim | Sim |
+| outros | Sim | Sim |
+| **clube_arremate** | **Sim** | **Nao** |
+| **reverter** | **Sim** | **Nao** |
 
-## Solução Proposta
+## Solucao Proposta
 
-Tornar o schema Zod **dinâmico**, aceitando qualquer string no campo origem (já que as opções são validadas pelo banco/dropdown).
+**Remover a CHECK constraint** da coluna `origem`, permitindo que qualquer valor seja inserido. A validacao passa a ser feita apenas pelo dropdown (que mostra opcoes do banco) e pelo Zod no frontend.
 
-## Alterações Técnicas
+Essa abordagem eh consistente com o design atual: as opcoes sao dinamicas e vem da tabela `consorcio_origem_options`.
 
-### Arquivo: `src/components/consorcio/ConsorcioCardForm.tsx`
+## Alteracao Tecnica
 
-**Alteração 1: Schema Zod (linha 121)**
+### Migration SQL
 
-| Antes | Depois |
-|-------|--------|
-| `origem: z.enum(['socio', 'gr', 'indicacao', 'outros'])` | `origem: z.string().min(1, 'Origem é obrigatória')` |
-
-**Alteração 2: Default values (linha 293, 547, 486)**
-
-Atualizar os casts de `origem` para aceitar string genérica em vez de enum restrito.
-
-### Arquivo: `src/types/consorcio.ts`
-
-**Alteração 3: Tipo OrigemConsorcio (linha 5)**
-
-| Antes | Depois |
-|-------|--------|
-| `type OrigemConsorcio = 'socio' \| 'gr' \| 'indicacao' \| 'outros'` | `type OrigemConsorcio = string` |
-
-## Código Detalhado
-
-```typescript
-// src/components/consorcio/ConsorcioCardForm.tsx
-
-// Linha 121 - Schema Zod
-origem: z.string().min(1, 'Origem é obrigatória'),
-
-// Linha 232 - Default value para edição
-origem: card.origem || 'socio',
-
-// Linha 486 - Reset para edição
-origem: card.origem || 'socio',
-
-// Linha 547 - Reset para criação
-origem: 'socio',
+```sql
+-- Remove a CHECK constraint restritiva do campo origem
+ALTER TABLE consortium_cards 
+DROP CONSTRAINT consortium_cards_origem_check;
 ```
 
-```typescript
-// src/types/consorcio.ts
+## Por que Remover em vez de Atualizar?
 
-// Linha 5
-export type OrigemConsorcio = string;
-```
+| Opcao | Problema |
+|-------|----------|
+| Atualizar constraint com novos valores | Precisaria alterar toda vez que criar nova origem |
+| Remover constraint | Flexivel - novas origens funcionam automaticamente |
+
+Como as origens sao gerenciadas dinamicamente pela tabela `consorcio_origem_options`, faz sentido **remover a constraint** e confiar na validacao da aplicacao.
 
 ## Resultado Esperado
 
-Após a correção:
-
-- O campo "Origem" aceitará qualquer valor cadastrado em `consorcio_origem_options`
-- Você poderá salvar cartas com origem "Reverter", "Clube do Arremate" ou qualquer nova origem que adicionar no futuro
-- A validação continuará garantindo que o campo não fique vazio
+Apos a migracao:
+- Salvar cartas com origem "Reverter" funcionara normalmente
+- Salvar cartas com origem "Clube do Arremate" tambem funcionara
+- Novas origens adicionadas no futuro funcionarao sem alteracoes no banco
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/consorcio/ConsorcioCardForm.tsx` | Alterar schema Zod de enum para string |
-| `src/types/consorcio.ts` | Alterar tipo OrigemConsorcio para string |
-
-## Impacto
-
-- **Zero impacto visual** - o dropdown continua igual
-- **Comportamento corrigido** - salvar funciona com qualquer origem do banco
-- **Flexibilidade futura** - novas origens funcionam sem alterar código
+| Tipo | Arquivo | Alteracao |
+|------|---------|-----------|
+| Migration | `supabase/migrations/[timestamp]_remove_origem_check.sql` | DROP CONSTRAINT |
