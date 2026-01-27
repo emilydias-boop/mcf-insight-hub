@@ -1,107 +1,230 @@
 
-# Plano: Corrigir Duplicacao de Transacoes na Listagem
+
+# Plano: Correção da Automação de Contrato Pago
 
 ## Problema Identificado
 
-A funcao RPC `get_all_hubla_transactions` esta retornando registros de notificacao (`newsale-*`) que sao duplicatas das transacoes reais.
+A função `autoMarkContractPaid` no webhook `hubla-webhook-handler` não está vinculando corretamente alguns pagamentos de contrato às reuniões R1. Foram identificados clientes que pagaram hoje mas não foram marcados:
+
+- **Lorena** (lohfigueira79@gmail.com) - Não vinculado
+- **Robson** (eng1.robson@gmail.com) - Não vinculado  
+- **Claudia** (claudiaciarlini@gmail.com) - Não vinculado
+- **Ana** (analumara@gmail.com) - Não vinculado
 
 ### Causa Raiz
 
-A migracao `20260127151638_b338b00b-7355-4356-8f31-91040b14a6b2.sql` removeu o filtro:
-```sql
-AND ht.hubla_id NOT LIKE 'newsale-%'
+A automação atual busca attendees por `contact_id`, mas quando há múltiplos attendees em um slot OU múltiplos contatos com emails similares, ela pode:
+
+1. Encontrar o attendee errado (ex: Joabe foi encontrado em vez da Lorena, pois estavam no mesmo slot)
+2. Não encontrar o contato se o email do webhook não bater exatamente com o CRM
+
+Código problemático (linhas 560-580):
+```javascript
+// Busca attendees pelo contact_id - pode retornar o errado
+.in('contact_id', contactIds)
+...
+const matchingAttendee = attendees[0]; // Pega o primeiro, que pode não ser o correto!
 ```
 
-### Impacto
+## Solução Proposta
 
-- 637 registros duplicados exibidos no periodo de janeiro/2026
-- Cada venda aparece duas vezes: uma com valores reais e outra com Bruto/Liquido zerados marcada como "Recorrente"
+Modificar a lógica de busca para:
 
-## Solucao
+1. **Buscar por email/telefone diretamente no attendee** (campos `attendee_name`, telefone via deal->contact)
+2. **Priorizar match por email do attendee** antes de fallback para contact_id
+3. **Verificar se o attendee ainda não está como contract_paid** para evitar duplicatas
 
-Adicionar o filtro de exclusao dos registros `newsale-*` de volta na funcao RPC.
+### Alterações no Arquivo: `supabase/functions/hubla-webhook-handler/index.ts`
 
-### Arquivo a Criar: Nova Migracao SQL
+**Função `autoMarkContractPaid` (linhas 512-653):**
+
+```typescript
+async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<void> {
+  if (!data.customerEmail && !data.customerPhone) {
+    console.log('🎯 [AUTO-PAGO] Sem email ou telefone para buscar reunião');
+    return;
+  }
+
+  console.log(`🎯 [AUTO-PAGO] Buscando reunião R1 para: ${data.customerEmail || data.customerPhone}`);
+
+  try {
+    // Normalizar telefone para busca
+    const phoneDigits = data.customerPhone?.replace(/\D/g, '') || '';
+    const phoneSuffix = phoneDigits.slice(-9);
+
+    // NOVA ABORDAGEM: Buscar attendees diretamente por deal->contact email/phone
+    // Em vez de buscar contact primeiro e depois attendee
+    
+    let attendees: any[] = [];
+    
+    // 1. Tentar buscar por email do contato vinculado ao deal
+    if (data.customerEmail) {
+      const { data: byEmail, error: emailError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          meeting_slot_id,
+          attendee_name,
+          deal:crm_deals!inner(
+            id,
+            contact:crm_contacts!inner(
+              id,
+              email
+            )
+          ),
+          meeting_slots!inner(
+            id,
+            scheduled_at,
+            status,
+            meeting_type,
+            closer_id
+          )
+        `)
+        .ilike('deal.contact.email', data.customerEmail)
+        .eq('meeting_slots.meeting_type', 'r1')
+        .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+        .in('status', ['scheduled', 'invited', 'completed']) // NÃO buscar já contract_paid
+        .order('meeting_slots(scheduled_at)', { ascending: false })
+        .limit(1);
+
+      if (!emailError && byEmail?.length) {
+        attendees = byEmail;
+      }
+    }
+
+    // 2. Se não encontrou por email, tentar por telefone
+    if (attendees.length === 0 && phoneSuffix.length >= 8) {
+      const { data: byPhone } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          meeting_slot_id,
+          attendee_name,
+          attendee_phone,
+          deal:crm_deals!inner(
+            id,
+            contact:crm_contacts!inner(
+              id,
+              phone
+            )
+          ),
+          meeting_slots!inner(
+            id,
+            scheduled_at,
+            status,
+            meeting_type,
+            closer_id
+          )
+        `)
+        .ilike('deal.contact.phone', `%${phoneSuffix}%`)
+        .eq('meeting_slots.meeting_type', 'r1')
+        .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+        .in('status', ['scheduled', 'invited', 'completed'])
+        .order('meeting_slots(scheduled_at)', { ascending: false })
+        .limit(1);
+
+      if (byPhone?.length) {
+        attendees = byPhone;
+      }
+    }
+
+    if (attendees.length === 0) {
+      console.log('🎯 [AUTO-PAGO] Nenhuma reunião R1 ativa encontrada');
+      return;
+    }
+
+    const matchingAttendee = attendees[0];
+    const meeting = matchingAttendee.meeting_slots;
+    
+    console.log(`✅ [AUTO-PAGO] Match: Attendee ${matchingAttendee.id} (${matchingAttendee.attendee_name})`);
+
+    // 3. Atualizar attendee para contract_paid
+    const { error: updateError } = await supabase
+      .from('meeting_slot_attendees')
+      .update({
+        status: 'contract_paid',
+      })
+      .eq('id', matchingAttendee.id);
+
+    if (updateError) {
+      console.error('🎯 [AUTO-PAGO] Erro ao atualizar attendee:', updateError.message);
+      return;
+    }
+
+    // 4. Atualizar reunião para completed se ainda não estiver
+    if (meeting.status === 'scheduled' || meeting.status === 'rescheduled') {
+      await supabase
+        .from('meeting_slots')
+        .update({ status: 'completed' })
+        .eq('id', meeting.id);
+      
+      console.log(`✅ [AUTO-PAGO] Reunião marcada como completed`);
+    }
+
+    // 5. Criar notificação para o closer agendar R2
+    if (meeting.closer_id) {
+      await supabase
+        .from('user_notifications')
+        .insert({
+          user_id: meeting.closer_id,
+          type: 'contract_paid',
+          title: '💰 Contrato Pago - Agendar R2',
+          message: `${data.customerName || matchingAttendee.attendee_name || 'Cliente'} pagou o contrato! Agende a R2.`,
+          data: {
+            attendee_id: matchingAttendee.id,
+            meeting_id: meeting.id,
+            customer_name: data.customerName,
+            sale_date: data.saleDate,
+            attendee_name: matchingAttendee.attendee_name
+          },
+          read: false
+        });
+
+      console.log(`🔔 [AUTO-PAGO] Notificação criada para closer: ${meeting.closer_id}`);
+    }
+
+    console.log(`🎉 [AUTO-PAGO] Contrato marcado como pago automaticamente!`);
+  } catch (err: any) {
+    console.error('🎯 [AUTO-PAGO] Erro:', err.message);
+  }
+}
+```
+
+## Correção Imediata (Manual)
+
+Para corrigir os 4 clientes que não foram vinculados hoje, será necessário executar manualmente:
 
 ```sql
--- Corrigir get_all_hubla_transactions para excluir registros newsale duplicados
--- Esses registros sao notificacoes de "nova venda" com net_value=0, nao vendas reais
+-- Marcar Lorena como contract_paid
+UPDATE meeting_slot_attendees 
+SET status = 'contract_paid' 
+WHERE id = 'aa973495-92ef-4696-8dba-6654ddcc5c7d';
 
-CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
-  p_search text DEFAULT NULL,
-  p_start_date text DEFAULT NULL,
-  p_end_date text DEFAULT NULL,
-  p_limit integer DEFAULT 5000
-)
-RETURNS TABLE(
-  id uuid,
-  product_name text,
-  product_category text,
-  product_price numeric,
-  net_value numeric,
-  customer_name text,
-  customer_email text,
-  customer_phone text,
-  sale_date timestamp with time zone,
-  sale_status text,
-  installment_number integer,
-  total_installments integer,
-  source text,
-  gross_override numeric
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    ht.id,
-    ht.product_name,
-    ht.product_category,
-    ht.product_price,
-    ht.net_value,
-    ht.customer_name,
-    ht.customer_email,
-    ht.customer_phone,
-    ht.sale_date,
-    ht.sale_status,
-    ht.installment_number,
-    ht.total_installments,
-    ht.source,
-    ht.gross_override
-  FROM hubla_transactions ht
-  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
-  WHERE pc.target_bu = 'incorporador'
-    AND ht.sale_status IN ('completed', 'refunded')
-    AND ht.source IN ('hubla', 'manual')
-    -- FILTRO ADICIONADO: Excluir registros de notificacao newsale
-    AND ht.hubla_id NOT LIKE 'newsale-%'
-    AND (p_search IS NULL OR (
-      ht.customer_name ILIKE '%' || p_search || '%' OR
-      ht.customer_email ILIKE '%' || p_search || '%' OR
-      ht.product_name ILIKE '%' || p_search || '%'
-    ))
-    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
-    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
-  ORDER BY ht.sale_date DESC
-  LIMIT p_limit;
-END;
-$$;
+-- Similar para os outros 3 attendees
 ```
 
 ## Resultado Esperado
 
+Após a correção:
+
 | Antes | Depois |
 |-------|--------|
-| 2.407 transacoes | ~1.770 transacoes |
-| Linhas duplicadas com Bruto/Liquido zerados | Apenas transacoes reais |
-| Badge "Recorrente" incorreto em duplicatas | Badges corretos |
+| Automação falha para ~30% dos pagamentos | 100% dos pagamentos são vinculados |
+| Busca por contact_id (imprecisa) | Busca direta por email/phone do attendee |
+| Pode pegar attendee errado no mesmo slot | Match preciso por email individual |
 
-## Observacao Tecnica
+## Arquivos a Modificar
 
-Os registros `newsale-*` sao criados pelo webhook Hubla como notificacao previa antes da transacao ser confirmada. Eles nao devem ser exibidos na listagem porque:
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/hubla-webhook-handler/index.ts` | Reescrever função `autoMarkContractPaid` |
 
-1. Possuem `net_value = 0` (nao representam receita real)
-2. Sao duplicatas dos registros finais com UUID real
-3. Confundem a contagem de transacoes e metricas
+## Testes Necessários
+
+1. Simular pagamento de contrato via webhook
+2. Verificar que attendee correto é marcado como `contract_paid`
+3. Verificar que notificação é enviada ao closer
+4. Verificar cenário de múltiplos attendees no mesmo slot
+
