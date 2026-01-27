@@ -368,7 +368,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
   const calculoParcela = useMemo(() => {
     if (!produtoSelecionado || valorCredito <= 0 || prazoMeses <= 0) return null;
     
-    const prazoValido = [200, 220, 240].includes(prazoMeses) ? prazoMeses as PrazoParcelas : 240;
+    const prazoValido = prazoMeses > 0 ? prazoMeses : 240;
     
     // First calculate using formulas
     const calculoBase = calcularParcela(
@@ -940,23 +940,16 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Prazo (meses) *</FormLabel>
-                        <Select 
-                          onValueChange={(v) => field.onChange(Number(v))} 
-                          value={field.value?.toString() || '240'}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o prazo" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {PRAZO_OPTIONS.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value.toString()}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min={1}
+                            max={300}
+                            placeholder="Ex: 239"
+                            value={field.value || ''}
+                            onChange={(e) => field.onChange(Number(e.target.value) || 240)}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

@@ -54,7 +54,7 @@ export interface ConsorcioCredito {
 }
 
 export type CondicaoPagamento = 'convencional' | '50' | '25';
-export type PrazoParcelas = 200 | 220 | 240;
+export type PrazoParcelas = number;
 
 export interface CalculoParcela {
   fundoComum: number;

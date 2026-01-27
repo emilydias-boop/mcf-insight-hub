@@ -3,16 +3,14 @@ import { ConsorcioProduto, ConsorcioCredito, CondicaoPagamento, PrazoParcelas, C
 /**
  * Obtém a taxa de administração baseada no prazo
  */
-export function getTaxaAdm(produto: ConsorcioProduto, prazo: PrazoParcelas): number {
-  switch (prazo) {
-    case 200:
-      return produto.taxa_adm_200 || 20;
-    case 220:
-      return produto.taxa_adm_220 || 22;
-    case 240:
-      return produto.taxa_adm_240 || 25;
-    default:
-      return 25;
+export function getTaxaAdm(produto: ConsorcioProduto, prazo: number): number {
+  // Seleciona taxa do prazo referência mais próximo
+  if (prazo < 210) {
+    return produto.taxa_adm_200 || 20;
+  } else if (prazo < 230) {
+    return produto.taxa_adm_220 || 22;
+  } else {
+    return produto.taxa_adm_240 || 25;
   }
 }
 
