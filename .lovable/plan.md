@@ -1,63 +1,65 @@
 
-# Plano: Remover CHECK Constraint Restritiva do Campo "Origem"
+# Plano: Mostrar Nome Completo do Consorciado na Tabela
 
 ## Problema Identificado
 
-O erro ocorre porque existe uma **CHECK constraint no banco de dados** que restringe os valores do campo `origem`:
+A coluna "Nome" na tabela de consórcio está usando a função `getFirstLastName()` que **trunca o nome** para mostrar apenas o primeiro e o último nome:
 
-```sql
-CHECK ((origem = ANY (ARRAY['socio', 'gr', 'indicacao', 'outros'])))
+```typescript
+// Linha 90-95 - Função atual
+function getFirstLastName(fullName?: string): string {
+  if (!fullName) return '-';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
 ```
 
-Essa constraint **não inclui** os valores:
-- `reverter` (que você está tentando usar)
-- `clube_arremate` (também cadastrado)
+**Resultado atual:** "FELIPE BELLARD GUIMARAES" → "FELIPE GUIMARAES"
 
-## Diagnóstico
+## Solução Proposta
 
-| Origem | Na tabela `consorcio_origem_options` | Permitida pela constraint |
-|--------|-------------------------------------|---------------------------|
-| socio | Sim | Sim |
-| gr | Sim | Sim |
-| indicacao | Sim | Sim |
-| outros | Sim | Sim |
-| **clube_arremate** | **Sim** | **Nao** |
-| **reverter** | **Sim** | **Nao** |
+Alterar a exibição na tabela para mostrar o **nome completo** do consorciado, mantendo a coluna "Responsável" com o nome do vendedor já existente.
 
-## Solucao Proposta
+## Alterações Técnicas
 
-**Remover a CHECK constraint** da coluna `origem`, permitindo que qualquer valor seja inserido. A validacao passa a ser feita apenas pelo dropdown (que mostra opcoes do banco) e pelo Zod no frontend.
+### Arquivo: `src/pages/bu-consorcio/Index.tsx`
 
-Essa abordagem eh consistente com o design atual: as opcoes sao dinamicas e vem da tabela `consorcio_origem_options`.
+**Linha 555 - Exibição do nome na tabela:**
 
-## Alteracao Tecnica
+| Antes | Depois |
+|-------|--------|
+| `getFirstLastName(displayName)` | `displayName \|\| '-'` |
 
-### Migration SQL
-
-```sql
--- Remove a CHECK constraint restritiva do campo origem
-ALTER TABLE consortium_cards 
-DROP CONSTRAINT consortium_cards_origem_check;
+**Código alterado:**
+```tsx
+// Linha 555
+<TableCell className="font-medium">{displayName || '-'}</TableCell>
 ```
 
-## Por que Remover em vez de Atualizar?
+**Linha 248 no CSV export (opcional):**
+Para manter consistência, também alterar o export:
 
-| Opcao | Problema |
-|-------|----------|
-| Atualizar constraint com novos valores | Precisaria alterar toda vez que criar nova origem |
-| Remover constraint | Flexivel - novas origens funcionam automaticamente |
-
-Como as origens sao gerenciadas dinamicamente pela tabela `consorcio_origem_options`, faz sentido **remover a constraint** e confiar na validacao da aplicacao.
+| Antes | Depois |
+|-------|--------|
+| `getFirstLastName(displayName)` | `displayName \|\| '-'` |
 
 ## Resultado Esperado
 
-Apos a migracao:
-- Salvar cartas com origem "Reverter" funcionara normalmente
-- Salvar cartas com origem "Clube do Arremate" tambem funcionara
-- Novas origens adicionadas no futuro funcionarao sem alteracoes no banco
+| Campo | Antes | Depois |
+|-------|-------|--------|
+| Nome | FELIPE GUIMARAES | FELIPE BELLARD GUIMARAES |
+| Responsável | João Pedro Martins Vieira | João Pedro Martins Vieira (sem alteração) |
 
 ## Arquivos a Modificar
 
-| Tipo | Arquivo | Alteracao |
-|------|---------|-----------|
-| Migration | `supabase/migrations/[timestamp]_remove_origem_check.sql` | DROP CONSTRAINT |
+| Arquivo | Linha | Alteração |
+|---------|-------|-----------|
+| `src/pages/bu-consorcio/Index.tsx` | 555 | Usar `displayName` direto |
+| `src/pages/bu-consorcio/Index.tsx` | 248 | Atualizar export CSV |
+
+## Impacto
+
+- A coluna "Nome" mostrará o nome completo do consorciado (PF ou razão social)
+- A coluna pode ficar mais larga para acomodar nomes longos
+- A função `getFirstLastName` pode ser removida se não for usada em outro lugar
