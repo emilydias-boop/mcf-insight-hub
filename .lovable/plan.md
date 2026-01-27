@@ -1,177 +1,139 @@
 
 
-# Plano: Adicionar Transferência de Propriedade ao autoMarkContractPaid
+# Plano: Reprocessar Contratos e Garantir Deploy
 
 ## Problema Identificado
 
-Quando um contrato é pago (webhook Hubla), a função `autoMarkContractPaid` marca corretamente o attendee como `contract_paid`, mas **não transfere a propriedade do deal para o closer**.
+O código corrigido com a lógica de transferência de ownership ainda **não foi deployado** para a Edge Function em produção. Os pagamentos de Juliano (26/01 23:04) e Claudia (27/01 00:33) foram processados pela versão **antiga** do código, que:
+1. Não detectava corretamente A000-Contrato como contrato pago
+2. Não transferia ownership do deal para o closer
 
-| Lead | SDR (owner_id) | Closer R1 | Status Esperado |
-|------|----------------|-----------|-----------------|
-| Juliano Locatelli | juliana.rodrigues@ | julio.caetano@ | owner deveria ser Julio |
-| Claudia Ciarlini | caroline.souza@ | julio.caetano@ | owner deveria ser Julio |
+## Solução em 3 Etapas
 
-O código de transferência de propriedade existe apenas no frontend (`syncDealStageFromAgenda` em `useAgendaData.ts`), mas o webhook backend não o executa.
+### Etapa 1: Criar Edge Function de Reprocessamento
 
----
+Criar uma nova Edge Function `reprocess-contract-payments` que:
+- Busca transações de contrato recentes (últimos 7 dias) na `hubla_transactions`
+- Para cada transação, encontra o attendee R1 correspondente
+- Marca como `contract_paid` se ainda não estiver
+- Transfere ownership do deal para o closer
+- Atualiza `original_sdr_email` e `r1_closer_email`
+- Move para estágio "Contrato Pago"
 
-## Solução Proposta
+### Etapa 2: Corrigir Detecção de Contrato no Webhook
 
-Adicionar na função `autoMarkContractPaid` a lógica completa de transferência de propriedade após marcar o attendee como `contract_paid`:
+Atualmente o mapeamento de `A000 - Contrato` retorna `incorporador`. Precisamos garantir que a lógica de detecção de contrato funcione corretamente:
 
+O código já tem a verificação:
 ```typescript
-// 6. TRANSFERIR OWNERSHIP E MOVER ESTÁGIO DO DEAL
-if (matchingAttendee.deal_id) {
-  // Buscar email do closer
-  const { data: closerData } = await supabase
-    .from('closers')
-    .select('email')
-    .eq('id', meeting.closer_id)
-    .single();
-  
-  const closerEmail = closerData?.email;
-  
-  if (closerEmail) {
-    // Buscar deal atual
-    const { data: deal } = await supabase
-      .from('crm_deals')
-      .select('owner_id, original_sdr_email, r1_closer_email, origin_id')
-      .eq('id', matchingAttendee.deal_id)
-      .single();
-    
-    if (deal) {
-      // Buscar lista de closers para verificar se owner atual é closer
-      const { data: closersList } = await supabase
-        .from('closers')
-        .select('email')
-        .eq('is_active', true);
-      
-      const closerEmails = closersList?.map(c => c.email.toLowerCase()) || [];
-      const isOwnerCloser = closerEmails.includes(deal.owner_id?.toLowerCase() || '');
-      
-      // Buscar profile_id do closer para owner_profile_id
-      const { data: closerProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', closerEmail)
-        .single();
-      
-      // Buscar stage "Contrato Pago" no pipeline
-      const { data: contractPaidStage } = await supabase
-        .from('crm_stages')
-        .select('id')
-        .eq('origin_id', deal.origin_id)
-        .ilike('stage_name', 'Contrato Pago')
-        .single();
-      
-      // Atualizar deal com transferência de ownership
-      const updatePayload: Record<string, unknown> = {
-        owner_id: closerEmail,
-        r1_closer_email: closerEmail,
-      };
-      
-      // Preservar SDR original se owner atual não é closer
-      if (!deal.original_sdr_email && deal.owner_id && !isOwnerCloser) {
-        updatePayload.original_sdr_email = deal.owner_id;
-      }
-      
-      // Atualizar owner_profile_id se encontrou o profile
-      if (closerProfile?.id) {
-        updatePayload.owner_profile_id = closerProfile.id;
-      }
-      
-      // Mover para estágio Contrato Pago se encontrou
-      if (contractPaidStage?.id) {
-        updatePayload.stage_id = contractPaidStage.id;
-      }
-      
-      await supabase
-        .from('crm_deals')
-        .update(updatePayload)
-        .eq('id', matchingAttendee.deal_id);
-      
-      console.log(`✅ [AUTO-PAGO] Deal ${matchingAttendee.deal_id} transferido para ${closerEmail}`);
-    }
-  }
-}
+const isContratoPago = (
+  productCategory === 'contrato' || 
+  (productCategory === 'incorporador' && grossValue >= 490 && grossValue <= 510) ||
+  (productName.toUpperCase().includes('A000') && productName.toUpperCase().includes('CONTRATO'))
+);
 ```
+
+Mas o Juliano pagou R$ 593.88 (parcelado com juros), que está fora do range 490-510. Precisamos:
+- Ampliar o range para detectar contratos com juros (490-650)
+- OU usar apenas o nome do produto para detecção
+
+### Etapa 3: Deploy da Edge Function
+
+Garantir que a Edge Function `hubla-webhook-handler` seja redeployada com todas as correções.
 
 ---
 
 ## Detalhes Técnicos
 
-### Arquivo a Modificar
+### Nova Edge Function: `reprocess-contract-payments`
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `supabase/functions/hubla-webhook-handler/index.ts` | Adicionar lógica de transferência após linha ~682 |
+**Arquivo:** `supabase/functions/reprocess-contract-payments/index.ts`
 
-### Campos a Atualizar no Deal
+```typescript
+// Buscar transações de contrato dos últimos 7 dias
+const { data: transactions } = await supabase
+  .from('hubla_transactions')
+  .select('*')
+  .gte('sale_date', sevenDaysAgo.toISOString())
+  .or('product_category.eq.contrato,product_name.ilike.%contrato%,and(product_category.eq.incorporador,product_price.gte.490,product_price.lte.650)')
+  .eq('installment_number', 1)
+  .order('sale_date', { ascending: false });
 
-| Campo | Valor | Descrição |
-|-------|-------|-----------|
-| `owner_id` | email do closer | Novo proprietário do lead |
-| `owner_profile_id` | UUID do profile | Para joins com tabela profiles |
-| `original_sdr_email` | email do SDR | Preservado para métricas |
-| `r1_closer_email` | email do closer | Registro da cadeia de ownership |
-| `stage_id` | ID do estágio "Contrato Pago" | Move o deal no Kanban |
+// Para cada transação, reprocessar
+for (const tx of transactions) {
+  // 1. Buscar attendee R1 por email ou telefone
+  // 2. Verificar se já está marcado como contract_paid
+  // 3. Se não, marcar e transferir ownership
+  // 4. Registrar log de reprocessamento
+}
+```
 
-### Fluxo Corrigido
+### Correção no Webhook Principal
+
+**Arquivo:** `supabase/functions/hubla-webhook-handler/index.ts`
+
+Linha ~1079-1083 - Ampliar range de detecção:
+
+```typescript
+const isContratoPago = (
+  productCategory === 'contrato' || 
+  // CORREÇÃO: Ampliar range para incluir contratos com juros de parcelamento
+  (productCategory === 'incorporador' && itemPriceForContractCheck >= 490 && itemPriceForContractCheck <= 650) ||
+  (productName.toUpperCase().includes('A000') && productName.toUpperCase().includes('CONTRATO'))
+);
+```
+
+---
+
+## Fluxo de Reprocessamento
 
 ```text
-Webhook recebe pagamento de contrato
-           ↓
-autoMarkContractPaid encontra attendee
-           ↓
-Marca attendee como contract_paid
-           ↓
-Marca meeting slot como completed
-           ↓
-[NOVO] Busca closer email do meeting
-           ↓
-[NOVO] Atualiza deal:
-  - owner_id → closer email
-  - owner_profile_id → closer profile UUID
-  - original_sdr_email → SDR original (preservado)
-  - r1_closer_email → closer email
-  - stage_id → "Contrato Pago"
-           ↓
-Cria notificação para closer
+Edge Function reprocess-contract-payments
+                    |
+                    v
+Buscar transações de contrato (últimos 7 dias)
+                    |
+                    v
+Para cada transação:
+  - Buscar attendee R1 (email/telefone)
+  - Se attendee.status != 'contract_paid':
+      - Marcar attendee como contract_paid
+      - Marcar meeting_slot como completed
+      - Buscar closer_id do meeting
+      - Transferir deal.owner_id para closer
+      - Preservar original_sdr_email
+      - Mover para estágio "Contrato Pago"
+                    |
+                    v
+Retornar resumo: N processados, M transferidos, X erros
 ```
 
 ---
 
-## Correção Manual Imediata
+## Casos que Serão Corrigidos
 
-Para os leads Juliano e Claudia que já foram processados, será necessário atualizar manualmente:
-
-```sql
--- Corrigir Juliano Locatelli
-UPDATE crm_deals 
-SET 
-  owner_id = 'julio.caetano@minhacasafinanciada.com',
-  original_sdr_email = 'juliana.rodrigues@minhacasafinanciada.com',
-  r1_closer_email = 'julio.caetano@minhacasafinanciada.com'
-WHERE id = '79e1b425-6832-4eb6-b086-022de05e7e89';
-
--- Corrigir Claudia Ciarlini
-UPDATE crm_deals 
-SET 
-  owner_id = 'julio.caetano@minhacasafinanciada.com',
-  original_sdr_email = 'caroline.souza@minhacasafinanciada.com',
-  r1_closer_email = 'julio.caetano@minhacasafinanciada.com'
-WHERE id = '93c1ccfd-ab11-421e-819a-f37d9e235628';
-```
+| Cliente | Situação Atual | Após Reprocessamento |
+|---------|----------------|----------------------|
+| Juliano Locatelli | owner: juliana.rodrigues@ | owner: julio.caetano@ |
+| Claudia Ciarlini | owner: caroline.souza@ | owner: julio.caetano@ |
 
 ---
 
-## Resultado Esperado
+## Arquivos a Criar/Modificar
 
-| Antes | Depois |
-|-------|--------|
-| Attendee marcado contract_paid | Attendee marcado contract_paid |
-| Deal continua com SDR | Deal transferido para Closer |
-| original_sdr_email = null | original_sdr_email = SDR email |
-| r1_closer_email = null | r1_closer_email = Closer email |
-| stage = qualquer | stage = "Contrato Pago" |
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/reprocess-contract-payments/index.ts` | CRIAR - Nova função de reprocessamento |
+| `supabase/functions/hubla-webhook-handler/index.ts` | MODIFICAR - Ampliar range de detecção (490-650) |
+| `supabase/config.toml` | MODIFICAR - Registrar nova função |
+
+---
+
+## Execução
+
+Após aprovar este plano:
+1. Criarei a Edge Function `reprocess-contract-payments`
+2. Ajustarei o range de detecção no webhook principal
+3. O deploy será automático
+4. Você poderá chamar a função de reprocessamento para corrigir Juliano e Claudia
 
