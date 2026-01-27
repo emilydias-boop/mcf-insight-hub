@@ -1,75 +1,71 @@
 
-# Plano: Adicionar hubla_id ao Retorno da Função RPC
+# Plano: Corrigir Erro da Função RPC (column pc.original_name does not exist)
 
 ## Problema Identificado
 
-A função RPC `get_all_hubla_transactions` **não retorna o campo `hubla_id`**, que é essencial para o agrupamento de transações por compra funcionar.
+A migration anterior criou as funções RPC com referência à coluna `pc.original_name`, mas essa coluna **não existe** na tabela `product_configurations`. A coluna correta é `pc.product_name`.
 
-### Diagnóstico
+### Erro Atual
+```
+column pc.original_name does not exist
+```
 
-| Componente | Status |
-|------------|--------|
-| Interface TypeScript (`HublaTransaction`) | Declara `hubla_id` |
-| Componente de agrupamento (`TransactionGroupRow`) | Usa `tx.hubla_id` para agrupar |
-| Função RPC no banco | **NÃO retorna** `hubla_id` |
-
-**Resultado**: O `hubla_id` chega como `undefined` no frontend. A função `groupTransactionsByPurchase` usa `tx.id` como fallback, criando um grupo por transação ao invés de consolidar.
+### Estrutura Real da Tabela `product_configurations`
+| Coluna | Tipo |
+|--------|------|
+| product_name | text |
+| product_code | text |
+| display_name | text |
+| target_bu | text |
+| reference_price | numeric |
+| ... | ... |
 
 ## Solução
 
-Atualizar a função RPC para incluir `hubla_id` no retorno.
+Recriar as funções RPC corrigindo a referência `pc.original_name` para `pc.product_name`, e simplificando a lógica para manter compatibilidade com a versão anterior que funcionava.
 
 ## Alteração Técnica
 
-### Migration SQL
+### Migration SQL Corretiva
 
-A função precisa ser recriada com:
-1. `hubla_id text` adicionado ao `RETURNS TABLE`
-2. `ht.hubla_id` adicionado ao `SELECT`
+A nova migration vai:
+1. Dropar as funções com erro
+2. Recriar usando a estrutura que funcionava antes (migration `20260127152906`)
+3. Adicionar apenas o campo `hubla_id` ao retorno
+
+### Principais Mudanças
+
+| Antes (com erro) | Depois (corrigido) |
+|------------------|-------------------|
+| `LOWER(ht.product_name) = LOWER(pc.original_name)` | `ht.product_name = pc.product_name` |
+| Lógica complexa com child_offer_ids | Lógica simples do JOIN original |
+| `pc.product_code` como product_category | `ht.product_category` direto |
+
+### Campos Retornados
 
 ```sql
-CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(...)
 RETURNS TABLE(
   id uuid,
-  hubla_id text,  -- ADICIONAR
+  hubla_id text,  -- Campo adicionado para agrupamento
   product_name text,
-  ...
+  product_category text,
+  product_price numeric,
+  net_value numeric,
+  customer_name text,
+  customer_email text,
+  customer_phone text,
+  sale_date timestamptz,
+  sale_status text,
+  installment_number integer,
+  total_installments integer,
+  source text,
+  gross_override numeric
 )
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    ht.id,
-    ht.hubla_id,  -- ADICIONAR
-    ht.product_name,
-    ...
-END;
-$$;
 ```
-
-A mesma alteração será feita em `get_hubla_transactions_by_bu`.
 
 ## Resultado Esperado
 
 Após a correção:
-
-| Antes | Depois |
-|-------|--------|
-| 3 linhas separadas (3 grupos) | 1 linha consolidada + 2 order bumps |
-| hubla_id = undefined | hubla_id = "8f7973cb-..." ou "...-offer-1" |
-| Agrupamento não funciona | Agrupamento funciona corretamente |
-
-### Visualização Esperada para ADAN Lucas
-
-```text
-▼ ACESSO VITALÍCIO + 2 bumps (R$ 163,40 bruto | R$ 163,40 líquido)
-   ├─ ACESSO VITALÍCIO (Principal) - R$ 81,70
-   ├─ ACESSO VITALÍCIO (Bump) - R$ 44,78  
-   └─ A010 - Consultoria... (Bump) - R$ 36,92
-```
-
-## Arquivo a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `supabase/migrations/[timestamp]_add_hubla_id_to_rpc.sql` | Adiciona hubla_id ao retorno das funções RPC |
+- As transações voltarão a aparecer normalmente
+- O campo `hubla_id` estará disponível para o agrupamento
+- A lógica de consolidação (parent + order bumps) funcionará corretamente
