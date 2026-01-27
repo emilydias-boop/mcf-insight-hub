@@ -66,10 +66,10 @@ export function useR2QualificationReport(filters: QualificationFilters) {
             deal:crm_deals(
               id,
               name,
-              owner_id,
+              owner_profile_id,
               custom_fields,
               contact:crm_contacts(name, email, phone),
-              owner:profiles!crm_deals_owner_id_fkey(id, full_name)
+              owner:profiles!crm_deals_owner_profile_id_fkey(id, full_name)
             )
           )
         `)
@@ -98,14 +98,14 @@ export function useR2QualificationReport(filters: QualificationFilters) {
           const deal = att.deal as {
             id: string;
             name: string | null;
-            owner_id: string | null;
+            owner_profile_id: string | null;
             custom_fields: Json;
             contact: { name: string | null; email: string | null; phone: string | null } | null;
-            owner: { id: string; full_name: string | null }[] | null;
+            owner: { id: string; full_name: string | null } | null;
           } | null;
           
           const customFields = (deal?.custom_fields as CustomFields) || {};
-          const ownerData = Array.isArray(deal?.owner) ? deal?.owner[0] : null;
+          const ownerData = deal?.owner || null;
           
           return {
             id: att.id,
