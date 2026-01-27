@@ -7506,11 +7506,11 @@ export type Database = {
       }
       get_hubla_transactions_by_bu: {
         Args: {
+          p_bu: string
           p_end_date?: string
           p_limit?: number
           p_search?: string
           p_start_date?: string
-          p_target_bu: string
         }
         Returns: {
           customer_email: string
