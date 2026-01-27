@@ -1,137 +1,172 @@
 
-# Plano: Corrigir Exibição de Reuniões Canceladas e Adicionar Botão de Desfazer
 
-## Diagnóstico Completo
+# Plano: Adicionar Tag de Reagendado e Histórico no R2 (Similar ao R1)
 
-### Problema 1: Por que a reunião das 19:00h aparece riscada
+## Objetivo
 
-A reunião às 22:00 UTC (19:00 BRT) da Claudia Carielo possui **3 slots de reunião diferentes**:
+Replicar a lógica de reagendamento do R1 para o R2, incluindo:
+1. Badge visual "Reagendado" nos participantes
+2. Registro de histórico via `parent_attendee_id` e `is_reschedule`
+3. Atualização de `custom_fields` no deal para rastrear reagendamentos
 
-| Slot | Status | Participantes |
-|------|--------|---------------|
-| `106eb01a-...` | ❌ **canceled** | 0 (vazio) |
-| `47ac9546-...` | ✅ scheduled | Ana Luzia |
-| `4e58f7fc-...` | ✅ scheduled | Victor Hugo |
+## Contexto Atual
 
-O código de consolidação em `R2CloserColumnCalendar.tsx` (linha 68-78) usa o status do **primeiro** slot encontrado:
+### Como funciona no R1 (modelo a seguir)
+- Quando um lead com no-show é reagendado para um **dia diferente**, o sistema:
+  1. Cria um **novo attendee** vinculado ao original via `parent_attendee_id`
+  2. Define `is_reschedule = true` e `status = 'rescheduled'`
+  3. Atualiza o deal com `custom_fields.is_rescheduled = true` e `reschedule_count`
+  4. Exibe badge "Remanejado" com ícone na UI
 
-```typescript
-return {
-  ...slotMeetings[0],  // ← Herda status do primeiro slot (canceled)
-  attendees: slotMeetings.flatMap(m => m.attendees || [])
-};
-```
+### Situação atual no R2
+- O hook `useRescheduleR2Meeting` apenas atualiza o **slot** existente (data/hora/status)
+- Não cria rastreabilidade via `parent_attendee_id`
+- Não marca `is_reschedule = true` no attendee
+- A interface não exibe badge de reagendado
 
-Como o slot cancelado é o primeiro no array, a visualização inteira fica com `line-through`, mesmo tendo participantes ativos.
+## Mudanças Necessárias
 
-### Problema 2: Logs de auditoria
+### 1. Atualizar Queries para Incluir Campos de Rastreamento
 
-- O slot foi cancelado em **26/01/2026 às 22:13 UTC**
-- **Não há trigger de auditoria** para a tabela `meeting_slots` — apenas `meeting_slot_attendees` é monitorada
-- Por isso, não é possível identificar quem cancelou
+**Arquivos:** `src/hooks/useR2AgendaMeetings.ts`, `src/hooks/useR2MeetingsExtended.ts`
+
+Adicionar `is_reschedule` e `parent_attendee_id` nas queries de attendees para que a UI possa exibir a badge.
+
+### 2. Atualizar o Hook de Reagendamento
+
+**Arquivo:** `src/hooks/useR2AgendaData.ts`
+
+Modificar `useRescheduleR2Meeting` para:
+- Se o attendee já teve no-show → criar **novo attendee** vinculado via `parent_attendee_id`
+- Marcar `is_reschedule = true` no attendee
+- Atualizar `custom_fields` do deal com `is_rescheduled`, `reschedule_count`, `last_reschedule_at`
+- Manter histórico do agendamento original
+
+### 3. Adicionar Badge "Reagendado" na UI
+
+**Arquivos:** 
+- `src/components/crm/R2CloserColumnCalendar.tsx` 
+- `src/components/crm/R2MeetingDetailDrawer.tsx`
+
+Exibir badge visual para attendees com `is_reschedule = true` ou `parent_attendee_id` preenchido (igual ao R1).
+
+### 4. Atualizar Tipos
+
+**Arquivo:** `src/types/r2Agenda.ts`
+
+Adicionar campos `is_reschedule` e `parent_attendee_id` no tipo `R2AttendeeExtended`.
 
 ---
 
-## Solução em 3 Partes
+## Detalhes Técnicos
 
-### Parte 1: Corrigir a consolidação de slots (prioridade imediata)
-
-**Arquivo:** `src/components/crm/R2CloserColumnCalendar.tsx`
-
-**Mudança:** Modificar `getConsolidatedMeetingForSlot()` para:
-1. Filtrar slots cancelados que estão vazios (sem attendees)
-2. Priorizar o status de slots não-cancelados
-3. Unificar attendees de todos os slots válidos
+### Mudança 1: Queries (useR2AgendaMeetings.ts e useR2MeetingsExtended.ts)
 
 ```typescript
-const getConsolidatedMeetingForSlot = (...): R2Meeting | undefined => {
-  const slotMeetings = getMeetingsForSlot(closerId, hour, minute);
-  if (slotMeetings.length === 0) return undefined;
-  
-  // Filter out canceled slots with no attendees
-  const validMeetings = slotMeetings.filter(m => 
-    m.status !== 'canceled' || (m.attendees && m.attendees.length > 0)
-  );
-  
-  if (validMeetings.length === 0) {
-    // All are empty canceled slots - show the canceled state
-    return slotMeetings[0];
-  }
-  
-  // Prioritize non-canceled meeting for status
-  const primaryMeeting = validMeetings.find(m => m.status !== 'canceled') 
-    || validMeetings[0];
-  
-  // Consolidate all attendees
-  return {
-    ...primaryMeeting,
-    attendees: validMeetings.flatMap(m => m.attendees || [])
-  };
-};
+// Adicionar na query de attendees:
+attendees:meeting_slot_attendees(
+  id,
+  attendee_name,
+  attendee_phone,
+  status,
+  deal_id,
+  is_reschedule,        // ← ADICIONAR
+  parent_attendee_id,   // ← ADICIONAR
+  ...
+)
 ```
 
-### Parte 2: Adicionar botão "Desfazer Cancelamento"
-
-**Arquivos:**
-- `src/hooks/useR2AttendeeUpdate.ts` — adicionar hook `useRestoreR2Meeting`
-- `src/components/crm/R2MeetingDetailDrawer.tsx` — adicionar botão condicional no footer
-
-**Lógica:**
-- Exibir botão **apenas** quando `meeting.status === 'canceled'`
-- Ao clicar, atualizar o slot para `status: 'scheduled'`
-- Invalidar caches relevantes
+### Mudança 2: Hook de Reagendamento (useR2AgendaData.ts)
 
 ```typescript
-// useR2AttendeeUpdate.ts - novo hook
-export function useRestoreR2Meeting() {
-  const queryClient = useQueryClient();
-
+export function useRescheduleR2Meeting() {
   return useMutation({
-    mutationFn: async (meetingId: string) => {
-      const { error } = await supabase
-        .from('meeting_slots')
-        .update({ status: 'scheduled' })
-        .eq('id', meetingId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
-      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
-      toast.success('Reunião restaurada');
-    },
-    onError: () => {
-      toast.error('Erro ao restaurar reunião');
+    mutationFn: async ({ meetingId, newDate, closerId, attendeeId, isNoShowReschedule }) => {
+      
+      if (isNoShowReschedule && attendeeId) {
+        // 1. Buscar dados do attendee original
+        const { data: originalAttendee } = await supabase
+          .from('meeting_slot_attendees')
+          .select('contact_id, deal_id, booked_by, lead_profile, ...')
+          .eq('id', attendeeId)
+          .single();
+        
+        // 2. Criar ou encontrar slot de destino
+        // (mesma lógica do R1)
+        
+        // 3. Criar NOVO attendee vinculado ao original
+        const { data: newAttendee } = await supabase
+          .from('meeting_slot_attendees')
+          .insert({
+            meeting_slot_id: targetSlotId,
+            ...originalAttendee,
+            status: 'rescheduled',
+            is_reschedule: true,
+            parent_attendee_id: attendeeId,  // ← Vincula ao original
+          });
+        
+        // 4. Atualizar deal com marcação de reagendamento
+        if (originalAttendee.deal_id) {
+          await supabase.from('crm_deals').update({
+            custom_fields: {
+              ...currentFields,
+              is_rescheduled: true,
+              reschedule_count: count + 1,
+              last_reschedule_at: new Date().toISOString()
+            }
+          }).eq('id', originalAttendee.deal_id);
+        }
+      } else {
+        // Movimentação simples (mesmo dia ou não é no-show)
+        // Manter lógica atual + adicionar is_reschedule: true
+      }
     }
   });
 }
 ```
 
-**UI no drawer:**
+### Mudança 3: UI - Badge Reagendado (R2CloserColumnCalendar.tsx)
+
 ```tsx
-{meeting.status === 'canceled' && (
-  <Button 
-    variant="outline"
-    className="w-full text-primary border-primary/30 hover:bg-primary/10"
-    onClick={() => restoreMeeting.mutate(meeting.id)}
-  >
-    <RotateCcw className="h-4 w-4 mr-2" />
-    Desfazer Cancelamento
-  </Button>
+import { ArrowRightLeft } from 'lucide-react';
+
+// No render de cada attendee:
+<div className="flex items-center justify-between gap-1">
+  <div className="flex items-center gap-1">
+    <span className="truncate font-medium">
+      {att.name || att.deal?.contact?.name || "Lead"}
+    </span>
+    {/* Badge de Reagendado */}
+    {att.is_reschedule && (
+      <span className="flex items-center bg-orange-500/40 rounded px-0.5">
+        <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
+      </span>
+    )}
+  </div>
+  <Badge ...>
+    {ATTENDEE_STATUS_CONFIG[att.status]?.shortLabel}
+  </Badge>
+</div>
+```
+
+E no Tooltip expandido:
+```tsx
+{att.is_reschedule && (
+  <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
+    <ArrowRightLeft className="h-2.5 w-2.5" />
+    Reagendado
+  </Badge>
 )}
 ```
 
-### Parte 3: Adicionar auditoria para `meeting_slots` (recomendado)
+### Mudança 4: Tipos (r2Agenda.ts)
 
-**Arquivo:** Nova migração SQL
-
-Para rastrear futuras alterações de status em reuniões:
-
-```sql
--- Criar trigger de auditoria para meeting_slots
-CREATE TRIGGER audit_meeting_slots_trigger
-  AFTER INSERT OR UPDATE OR DELETE ON meeting_slots
-  FOR EACH ROW EXECUTE FUNCTION log_audit_changes();
+```typescript
+export interface R2AttendeeExtended {
+  // ... campos existentes ...
+  is_reschedule: boolean | null;        // ← ADICIONAR
+  parent_attendee_id: string | null;    // ← ADICIONAR
+}
 ```
 
 ---
@@ -140,30 +175,19 @@ CREATE TRIGGER audit_meeting_slots_trigger
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/R2CloserColumnCalendar.tsx` | Corrigir `getConsolidatedMeetingForSlot()` para ignorar slots cancelados vazios |
-| `src/hooks/useR2AttendeeUpdate.ts` | Adicionar hook `useRestoreR2Meeting` |
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Adicionar botão "Desfazer Cancelamento" condicional |
-
----
-
-## Correção Imediata de Dados
-
-Para resolver o problema atual das 19:00h, posso também oferecer um SQL para limpar slots cancelados vazios:
-
-```sql
--- Deletar slots cancelados que não têm participantes
-DELETE FROM meeting_slots ms
-WHERE ms.status = 'canceled'
-  AND NOT EXISTS (
-    SELECT 1 FROM meeting_slot_attendees msa 
-    WHERE msa.meeting_slot_id = ms.id
-  );
-```
+| `src/types/r2Agenda.ts` | Adicionar `is_reschedule` e `parent_attendee_id` ao tipo |
+| `src/hooks/useR2AgendaMeetings.ts` | Incluir campos na query |
+| `src/hooks/useR2MeetingsExtended.ts` | Incluir campos na query |
+| `src/hooks/useR2AgendaData.ts` | Refatorar `useRescheduleR2Meeting` para criar histórico |
+| `src/components/crm/R2CloserColumnCalendar.tsx` | Adicionar badge "Reagendado" |
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Exibir badge no drawer de detalhes |
 
 ---
 
 ## Resultado Esperado
 
-1. **Imediato:** Reunião das 19:00h de Victor Hugo e Ana Luzia aparecerá corretamente (sem `line-through`)
-2. **UX:** Usuários poderão restaurar reuniões canceladas por engano
-3. **Auditoria:** Futuras mudanças de status em `meeting_slots` serão rastreáveis
+1. **Visual:** Leads reagendados após no-show exibirão badge laranja com ícone de setas
+2. **Histórico:** O registro original do no-show é preservado e linkado via `parent_attendee_id`
+3. **Rastreabilidade:** O deal terá `is_rescheduled = true` e contador de reagendamentos
+4. **Consistência:** R2 funcionará igual ao R1 para reagendamentos
+
