@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Employee, EMPLOYEE_STATUS_LABELS } from '@/types/hr';
 import { useEmployees } from '@/hooks/useEmployees';
-import { User, DollarSign, FileText, History, StickyNote, Calendar, Users, Shield } from 'lucide-react';
+import { User, DollarSign, FileText, History, StickyNote, Calendar, Users, Shield, ClipboardList } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import EmployeeGeneralTab from './tabs/EmployeeGeneralTab';
@@ -13,6 +13,7 @@ import EmployeeDocumentsTab from './tabs/EmployeeDocumentsTab';
 import EmployeeHistoryTab from './tabs/EmployeeHistoryTab';
 import EmployeeNotesTab from './tabs/EmployeeNotesTab';
 import EmployeePermissionsTab from './tabs/EmployeePermissionsTab';
+import EmployeeExamsTab from './tabs/EmployeeExamsTab';
 
 interface EmployeeDrawerProps {
   employee: Employee | null;
@@ -32,8 +33,8 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
 
   const isPJ = employee.tipo_contrato === 'PJ';
 
-  // Calculate number of tabs for grid
-  const tabCount = isPJ ? 7 : 6;
+  // Calculate number of tabs for grid (added Avaliações tab)
+  const tabCount = isPJ ? 8 : 7;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -120,6 +121,10 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
               <Shield className="h-3 w-3" />
               <span className="hidden sm:inline">Perm.</span>
             </TabsTrigger>
+            <TabsTrigger value="avaliacoes" className="flex items-center gap-1">
+              <ClipboardList className="h-3 w-3" />
+              <span className="hidden sm:inline">Aval.</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="geral" className="mt-4">
@@ -150,6 +155,10 @@ export default function EmployeeDrawer({ employee, open, onOpenChange }: Employe
 
           <TabsContent value="permissoes" className="mt-4">
             <EmployeePermissionsTab employee={employee} />
+          </TabsContent>
+
+          <TabsContent value="avaliacoes" className="mt-4">
+            <EmployeeExamsTab employee={employee} />
           </TabsContent>
         </Tabs>
       </SheetContent>
