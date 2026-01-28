@@ -2,6 +2,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ShieldAlert } from 'lucide-react';
 import { AppRole } from '@/types/user-management';
+import { useMyR2Closer } from '@/hooks/useMyR2Closer';
 
 // Roles que têm acesso padrão à Agenda R2
 const R2_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador'];
@@ -20,12 +21,21 @@ interface R2AccessGuardProps {
 }
 
 export const R2AccessGuard = ({ children, fallback }: R2AccessGuardProps) => {
-  const { role, user } = useAuth();
+  const { role, user, allRoles } = useAuth();
+  const { data: myR2Closer, isLoading: loadingR2Closer } = useMyR2Closer();
 
   const hasRoleAccess = role && R2_ALLOWED_ROLES.includes(role);
   const hasUserAccess = user?.id && R2_AUTHORIZED_USERS.includes(user.id);
+  // Closers R2 também têm acesso
+  const isR2Closer = !!myR2Closer?.id;
+  const hasCloserAccess = (role === 'closer' || allRoles?.includes('closer')) && isR2Closer;
 
-  if (!hasRoleAccess && !hasUserAccess) {
+  // Show loading while checking R2 closer status
+  if (loadingR2Closer && (role === 'closer' || allRoles?.includes('closer'))) {
+    return null;
+  }
+
+  if (!hasRoleAccess && !hasUserAccess && !hasCloserAccess) {
     if (fallback) {
       return <>{fallback}</>;
     }
@@ -46,8 +56,11 @@ export const R2AccessGuard = ({ children, fallback }: R2AccessGuardProps) => {
 };
 
 // Helper para verificar se usuário pode ver R2 (usado no CRM.tsx)
-export const canUserAccessR2 = (role: AppRole | null, userId: string | undefined): boolean => {
+// Nota: para closers R2, a verificação completa é feita no componente R2AccessGuard
+export const canUserAccessR2 = (role: AppRole | null, userId: string | undefined, allRoles?: AppRole[]): boolean => {
   const hasRoleAccess = role && R2_ALLOWED_ROLES.includes(role);
   const hasUserAccess = userId && R2_AUTHORIZED_USERS.includes(userId);
-  return hasRoleAccess || hasUserAccess;
+  // Closers podem acessar - verificação final de R2 é feita no guard
+  const isCloser = role === 'closer' || (allRoles?.includes('closer') ?? false);
+  return hasRoleAccess || hasUserAccess || isCloser;
 };
