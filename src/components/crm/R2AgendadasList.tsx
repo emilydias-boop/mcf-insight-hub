@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, Phone, User, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +44,9 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
     return acc;
   }, {} as Record<string, R2CarrinhoAttendee[]>);
 
+  // Sort days chronologically
+  const sortedDays = Object.keys(byDay).sort();
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -52,86 +55,82 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
         </Badge>
       </div>
 
-      <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Data/Hora</TableHead>
-              <TableHead>Nome</TableHead>
-              <TableHead>Telefone</TableHead>
-              <TableHead>Closer</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Object.entries(byDay).map(([day, dayAttendees]) => (
-              <>
-                <TableRow key={`header-${day}`} className="bg-muted/50">
-                  <TableCell colSpan={5} className="font-semibold">
+      <div className="space-y-4">
+        {sortedDays.map((day) => {
+          const dayAttendees = byDay[day];
+          // Sort by time within the day
+          const sortedAttendees = [...dayAttendees].sort((a, b) => 
+            new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+          );
+
+          return (
+            <Card key={day}>
+              <CardHeader className="py-3 px-4 bg-muted/50">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold capitalize">
                     {format(new Date(day), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                    <Badge variant="outline" className="ml-2">{dayAttendees.length}</Badge>
-                  </TableCell>
-                </TableRow>
-                {dayAttendees.map((att) => {
-                  const statusInfo = STATUS_LABELS[att.status] || STATUS_LABELS.scheduled;
-                  
-                  return (
-                    <TableRow 
-                      key={att.id}
-                      className="cursor-pointer hover:bg-muted/30"
-                      onClick={() => onSelectAttendee?.(att)}
-                    >
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">
-                            {format(new Date(att.scheduled_at), 'HH:mm', { locale: ptBR })}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          <div className="flex flex-col">
-                            <span className="font-medium">{att.attendee_name || att.deal_name || 'Sem nome'}</span>
+                  </span>
+                  <Badge variant="outline">{dayAttendees.length}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {sortedAttendees.map((att) => {
+                    const statusInfo = STATUS_LABELS[att.status] || STATUS_LABELS.scheduled;
+                    
+                    return (
+                      <div
+                        key={att.id}
+                        className="p-3 hover:bg-muted/30 cursor-pointer transition-colors"
+                        onClick={() => onSelectAttendee?.(att)}
+                      >
+                        {/* Linha 1: Horário + Nome + Telefone */}
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5 text-primary font-semibold min-w-[60px]">
+                            <Clock className="h-4 w-4" />
+                            <span>{format(new Date(att.scheduled_at), 'HH:mm')}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="font-medium truncate">
+                              {att.attendee_name || att.deal_name || 'Sem nome'}
+                            </span>
                             {att.partner_name && (
                               <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>
                             )}
                           </div>
+                          <div className="flex items-center gap-1.5 font-mono text-sm text-muted-foreground">
+                            <Phone className="h-3.5 w-3.5" />
+                            <span>{att.attendee_phone || att.contact_phone || '-'}</span>
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 font-mono text-sm">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          {att.attendee_phone || att.contact_phone || '-'}
+                        
+                        {/* Linha 2: Closer + Status */}
+                        <div className="flex items-center justify-between mt-1.5 pl-[72px]">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            {att.closer_color && (
+                              <div 
+                                className="w-2.5 h-2.5 rounded-full" 
+                                style={{ backgroundColor: att.closer_color }}
+                              />
+                            )}
+                            <span>Closer: {att.closer_name || '-'}</span>
+                          </div>
+                          <Badge 
+                            variant="outline" 
+                            className={cn('text-xs', statusInfo.className)}
+                          >
+                            {statusInfo.label}
+                          </Badge>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {att.closer_color && (
-                            <div 
-                              className="w-3 h-3 rounded-full" 
-                              style={{ backgroundColor: att.closer_color }}
-                            />
-                          )}
-                          {att.closer_name || '-'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="outline" 
-                          className={cn(statusInfo.className)}
-                        >
-                          {statusInfo.label}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </>
-            ))}
-          </TableBody>
-        </Table>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
