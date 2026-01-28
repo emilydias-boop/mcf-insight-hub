@@ -90,7 +90,7 @@ serve(async (req) => {
         console.log(`\n📝 Processando: ${tx.customer_name} (${customerEmail || phoneSuffix})`);
         console.log(`   Produto: ${tx.product_name} - R$ ${tx.product_price}`);
 
-        // Buscar attendees R1 recentes - CORRIGIDO: usando schema real da tabela
+        // Buscar attendees R1 recentes - FILTRADO por meeting_type = 'r1'
         const fourteenDaysAgo = new Date();
         fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
@@ -99,9 +99,12 @@ serve(async (req) => {
           .select(`
             id, status, attendee_name, attendee_phone, deal_id, meeting_slot_id, contact_id,
             contact:crm_contacts(id, email, phone),
-            slot:meeting_slots(id, closer_id, status, meeting_type)
+            slot:meeting_slots!inner(id, closer_id, status, meeting_type)
           `)
-          .gte('created_at', fourteenDaysAgo.toISOString())
+          .eq('slot.meeting_type', 'r1')
+          .gte('slot.scheduled_at', fourteenDaysAgo.toISOString())
+          .in('slot.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+          .in('status', ['scheduled', 'invited', 'completed'])
           .order('created_at', { ascending: false });
 
         // Encontrar attendee por email do contato ou telefone
