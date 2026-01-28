@@ -1,23 +1,26 @@
 
-# Correção: Race Condition no ResourceGuard
 
-## Problema Identificado
+# Correção de Nomenclatura: KPI vs Tab R2
 
-O componente `ResourceGuard` não espera o `loading` do `AuthContext` terminar antes de verificar permissões. Isso causa:
+## Problema Atual
 
-1. Usuário navega para `/crm/negocios`
-2. `ResourceGuard` (do pai `/crm`) verifica permissões **imediatamente**
-3. `role` ainda é `null` (loading em andamento)
-4. `canView` retorna `false` → mostra "Acesso Negado"
-5. Após refresh, `loading` já terminou → funciona
+| Local | Valor | O que conta |
+|-------|-------|-------------|
+| KPI "R2 Agendadas" | 16 | Apenas attendees em reuniões **ainda não realizadas** (scheduled, invited, pending) |
+| Tab "R2 Agendadas" | 60 | **Todas** as R2 da semana (realizadas + pendentes) |
 
-O `RoleGuard` não tem esse problema porque **espera o `loading`**:
-```typescript
-// RoleGuard (correto)
-if (loading) {
-  return <Spinner />; // Espera!
-}
-```
+A nomenclatura igual ("R2 Agendadas") confunde, pois medem coisas diferentes.
+
+---
+
+## Solução Proposta
+
+### Opção recomendada: Renomear para clareza
+
+| Atual | Novo Nome | Significado |
+|-------|-----------|-------------|
+| KPI "R2 Agendadas" | **"R2 Pendentes"** | Reuniões que ainda vão acontecer |
+| Tab "R2 Agendadas" | **"Todas R2s"** | Todas as R2 da semana (para gestão) |
 
 ---
 
@@ -25,106 +28,59 @@ if (loading) {
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/components/auth/ResourceGuard.tsx` | Adicionar verificação de `loading` igual ao `RoleGuard` |
+| `src/pages/crm/R2Carrinho.tsx` | Renomear KPI para "R2 Pendentes" e tab para "Todas R2s" |
 
 ---
 
-## Solução
+## Alterações
 
-Adicionar verificação de `loading` no `ResourceGuard`:
+### 1. Renomear KPI (linha 82)
 
 ```typescript
-export const ResourceGuard = ({ 
-  resource, 
-  requiredLevel = 'view',
-  children, 
-  fallback 
-}: ResourceGuardProps) => {
-  const { role, loading } = useAuth(); // Adicionar 'loading'
-  const { canView, canEdit, canFull } = useResourcePermission(resource);
-  
-  // NOVO: Esperar o loading terminar antes de verificar permissões
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
-  // Admins sempre têm acesso (só verifica após loading terminar)
-  if (role === 'admin') {
-    return <>{children}</>;
-  }
-  
-  const hasAccess = /* ... resto do código ... */
+// Antes
+{ label: 'R2 Agendadas', value: kpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
+
+// Depois
+{ label: 'R2 Pendentes', value: kpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
 ```
 
----
+### 2. Renomear Tab (linhas 147-152)
 
-## Alteração Completa
-
-**Arquivo: `src/components/auth/ResourceGuard.tsx`**
-
-**Antes (linha 14-26):**
 ```typescript
-export const ResourceGuard = ({ 
-  resource, 
-  requiredLevel = 'view',
-  children, 
-  fallback 
-}: ResourceGuardProps) => {
-  const { role } = useAuth();
-  const { canView, canEdit, canFull } = useResourcePermission(resource);
-  
-  // Admins sempre têm acesso
-  if (role === 'admin') {
-    return <>{children}</>;
-  }
-```
+// Antes
+<TabsTrigger value="agendadas" className="flex items-center gap-2">
+  R2 Agendadas
+  <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+    {agendadasData.length}
+  </span>
+</TabsTrigger>
 
-**Depois:**
-```typescript
-export const ResourceGuard = ({ 
-  resource, 
-  requiredLevel = 'view',
-  children, 
-  fallback 
-}: ResourceGuardProps) => {
-  const { role, loading } = useAuth();
-  const { canView, canEdit, canFull } = useResourcePermission(resource);
-  
-  // Esperar o loading terminar antes de verificar permissões
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
-  // Admins sempre têm acesso (só verifica após loading terminar)
-  if (role === 'admin') {
-    return <>{children}</>;
-  }
+// Depois  
+<TabsTrigger value="agendadas" className="flex items-center gap-2">
+  📋 Todas R2s
+  <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
+    {agendadasData.length}
+  </span>
+</TabsTrigger>
 ```
 
 ---
 
 ## Resultado Esperado
 
-1. **Navegação**: Ao navegar para `/crm/negocios`, aparece um spinner por ~100-500ms enquanto `loading` é `true`
-2. **Após loading**: Quando `role` carrega, verifica permissões corretamente
-3. **Sem "Acesso Negado" falso**: O erro não aparece mais durante a navegação
+```text
+KPIs:
++----------------+---------------+---------------+------------------+-----------+
+| Contratos (R1) | R2 Pendentes  | R2 Realizadas | Fora do Carrinho | Aprovados |
+|      0         |     16        |      44       |        8         |    22     |
++----------------+---------------+---------------+------------------+-----------+
 
----
+Tabs:
+[ 📋 Todas R2s (60) ] [ Fora do Carrinho (8) ] [ ✓ Aprovados (22) ] [ 💰 Vendas ] [ 📊 Métricas ]
+```
 
-## Por Que Funciona Após Refresh?
+Agora fica claro:
+- **KPI "R2 Pendentes"**: 16 reuniões ainda vão acontecer
+- **Tab "Todas R2s"**: 60 attendees na semana (para acompanhamento geral)
+- **KPI "Aprovados"**: 22 leads aprovados
 
-No refresh, a sequência é diferente:
-1. Página recarrega completamente
-2. React monta a árvore de componentes
-3. `AuthContext` inicia verificação
-4. `loading` termina antes do `ResourceGuard` verificar (devido a cache/timing)
-
-Na navegação (SPA), o `ResourceGuard` já está montado e verifica imediatamente quando `role` ainda é `null`.
