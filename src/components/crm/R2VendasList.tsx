@@ -84,15 +84,20 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
   const [transactionToLink, setTransactionToLink] = useState<{ id: string; name: string; email?: string; phone?: string } | null>(null);
   const [unlinkedOpen, setUnlinkedOpen] = useState(false);
 
-  // Calcular totais - Bruto exclui itens com excluded_from_cart=true
+  // Calcular totais - separando normais e extras
   const totals = useMemo(() => {
-    const brutoTotal = vendas
-      .filter(v => !v.excluded_from_cart)
-      .reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
+    const vendasNormais = vendas.filter(v => !v.is_extra && !v.excluded_from_cart);
+    const vendasExtras = vendas.filter(v => v.is_extra && !v.excluded_from_cart);
+    
+    const brutoTotal = vendasNormais.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
+    const brutoExtras = vendasExtras.reduce((sum, v) => sum + getDeduplicatedGross(v), 0);
     const liquidoTotal = vendas.reduce((sum, v) => sum + (v.net_value || 0), 0);
+    
     return {
-      count: vendas.length,
+      count: vendasNormais.length,
+      countExtras: vendasExtras.length,
       bruto: brutoTotal,
+      brutoExtras: brutoExtras,
       liquido: liquidoTotal,
     };
   }, [vendas]);
@@ -244,16 +249,36 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-2 h-10 rounded-full bg-blue-500" />
               <div>
-                <p className="text-sm text-muted-foreground">Total Transações</p>
+                <p className="text-sm text-muted-foreground">Vendas da Semana</p>
                 <p className="text-2xl font-bold">
                   {isLoading ? '...' : totals.count}
                 </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={totals.countExtras > 0 ? 'border-orange-500/30' : ''}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-10 rounded-full bg-orange-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Vendas Extras</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-bold">
+                    {isLoading ? '...' : totals.countExtras}
+                  </p>
+                  {totals.countExtras > 0 && (
+                    <Badge variant="outline" className="text-orange-500 border-orange-500/50 bg-orange-500/10 text-xs">
+                      Sem. anterior
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -263,7 +288,7 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
             <div className="flex items-center gap-3">
               <div className="w-2 h-10 rounded-full bg-green-500" />
               <div>
-                <p className="text-sm text-muted-foreground">Bruto Total</p>
+                <p className="text-sm text-muted-foreground">Bruto (Semana)</p>
                 <p className="text-2xl font-bold">
                   {isLoading ? '...' : formatCurrency(totals.bruto)}
                 </p>
@@ -396,6 +421,11 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
                           <Badge variant="outline" className="text-blue-500 border-blue-500/50">
                             <Link2 className="h-3 w-3 mr-1" />
                             Manual
+                          </Badge>
+                        )}
+                        {venda.is_extra && venda.original_scheduled_at && (
+                          <Badge variant="outline" className="text-orange-500 border-orange-500/50 bg-orange-500/10">
+                            ⚡ Extra ({format(new Date(venda.original_scheduled_at), 'dd/MM')})
                           </Badge>
                         )}
                         {venda.excluded_from_cart && (

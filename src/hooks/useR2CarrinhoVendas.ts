@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCustomWeekStart, getCustomWeekEnd } from '@/lib/dateHelpers';
-import { endOfDay } from 'date-fns';
+import { endOfDay, format } from 'date-fns';
 
 // Helper para normalização consistente (apenas dígitos, últimos 11)
 const normalizeForMatch = (phone: string | null): string | null => {
@@ -52,6 +52,10 @@ export interface R2CarrinhoVenda {
   related_transactions?: R2CarrinhoVenda[];
   // Preço de referência enriquecido do Hubla
   enriched_reference_price?: number;
+  // Flag para vendas de semanas anteriores (extras)
+  is_extra?: boolean;
+  original_week_start?: string;
+  original_scheduled_at?: string;
 }
 
 export function useR2CarrinhoVendas(weekDate: Date) {
@@ -161,7 +165,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
         .filter((tx: any) => tx.linked_attendee_id)
         .map((tx: any) => tx.linked_attendee_id);
 
-      let linkedAttendeesMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null }>();
+      let linkedAttendeesMap = new Map<string, { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt: string | null }>();
 
       if (linkedAttendeeIds.length > 0) {
         const { data: linkedAttendees } = await supabase
@@ -170,6 +174,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
             id,
             attendee_name,
             meeting_slot:meeting_slots!inner (
+              scheduled_at,
               closer:closers (
                 name,
                 color
@@ -183,6 +188,7 @@ export function useR2CarrinhoVendas(weekDate: Date) {
             name: att.attendee_name,
             closerName: att.meeting_slot?.closer?.name || null,
             closerColor: att.meeting_slot?.closer?.color || null,
+            scheduledAt: att.meeting_slot?.scheduled_at || null,
           });
         });
       }
@@ -196,7 +202,8 @@ export function useR2CarrinhoVendas(weekDate: Date) {
 
         let matched = false;
         let isManualLink = false;
-        let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null } | undefined;
+        let attendeeData: { name: string | null; closerName: string | null; closerColor: string | null; scheduledAt?: string | null } | undefined;
+        let linkedScheduledAt: string | null = null;
 
         // Match por email
         if (txEmail && emailsSet.has(txEmail)) {
@@ -212,17 +219,32 @@ export function useR2CarrinhoVendas(weekDate: Date) {
           }
         }
 
-        // Match manual (linked_attendee_id)
+        // Match manual (linked_attendee_id) - pode ser de outra semana
         if (!matched && tx.linked_attendee_id) {
           const linkedData = linkedAttendeesMap.get(tx.linked_attendee_id);
           if (linkedData) {
             matched = true;
             isManualLink = true;
             attendeeData = linkedData;
+            linkedScheduledAt = linkedData.scheduledAt;
           }
         }
 
         if (matched) {
+          // Calcular se é uma venda "extra" (R2 foi em outra semana)
+          let isExtra = false;
+          let originalWeekStart: string | undefined;
+          let originalScheduledAt: string | undefined;
+
+          if (linkedScheduledAt) {
+            const linkedWeekStart = getCustomWeekStart(new Date(linkedScheduledAt));
+            if (linkedWeekStart.getTime() !== weekStart.getTime()) {
+              isExtra = true;
+              originalWeekStart = format(linkedWeekStart, 'yyyy-MM-dd');
+              originalScheduledAt = linkedScheduledAt;
+            }
+          }
+
           matchedTransactions.push({
             id: tx.id,
             hubla_id: tx.hubla_id,
@@ -244,6 +266,9 @@ export function useR2CarrinhoVendas(weekDate: Date) {
             r2_closer_name: attendeeData?.closerName || null,
             r2_closer_color: attendeeData?.closerColor || null,
             is_manual_link: isManualLink,
+            is_extra: isExtra,
+            original_week_start: originalWeekStart,
+            original_scheduled_at: originalScheduledAt,
           });
         }
       });

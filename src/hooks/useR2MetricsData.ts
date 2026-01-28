@@ -257,9 +257,30 @@ export function useR2MetricsData(weekDate: Date) {
         .eq('product_category', 'parceria')
         .gte('sale_date', weekStart.toISOString())
         .lte('sale_date', endOfDay(weekEnd).toISOString());
-      // Removed sale_status filter to match Vendas tab behavior
 
       if (hublaError) throw hublaError;
+
+      // 5.1 For linked_attendee_id matching, also fetch the scheduled_at to detect extras
+      const linkedAttendeeIds = hublaVendas?.filter(v => v.linked_attendee_id).map(v => v.linked_attendee_id!) || [];
+      const linkedAttendeeScheduledMap = new Map<string, string>();
+
+      if (linkedAttendeeIds.length > 0) {
+        const { data: linkedAttendeesData } = await supabase
+          .from('meeting_slot_attendees')
+          .select(`
+            id,
+            meeting_slot:meeting_slots!inner (
+              scheduled_at
+            )
+          `)
+          .in('id', linkedAttendeeIds);
+
+        linkedAttendeesData?.forEach((att: any) => {
+          if (att.meeting_slot?.scheduled_at) {
+            linkedAttendeeScheduledMap.set(att.id, att.meeting_slot.scheduled_at);
+          }
+        });
+      }
 
       // Build map of approved attendee IDs to their closers (for linked_attendee_id matching)
       const approvedAttendeeIds = new Set<string>();
@@ -286,6 +307,7 @@ export function useR2MetricsData(weekDate: Date) {
       // Match sales by email, phone, OR linked_attendee_id - CONSOLIDATE by customer
       const matchedClosers = new Map<string, number>();
       const countedSaleKeys = new Set<string>(); // Track unique sales by customer
+      const extraSaleKeys = new Set<string>(); // Track sales from previous weeks
 
       hublaVendas?.forEach(venda => {
         const vendaEmail = venda.customer_email?.toLowerCase();
@@ -302,6 +324,17 @@ export function useR2MetricsData(weekDate: Date) {
           // Skip if this customer was already counted (consolidate P1+P2 into one sale)
           if (countedSaleKeys.has(saleKey)) return;
           countedSaleKeys.add(saleKey);
+
+          // Check if this is an "extra" sale (attendee from a different week)
+          if (linkedMatch && venda.linked_attendee_id) {
+            const linkedScheduledAt = linkedAttendeeScheduledMap.get(venda.linked_attendee_id);
+            if (linkedScheduledAt) {
+              const linkedWeekStart = getCustomWeekStart(new Date(linkedScheduledAt));
+              if (linkedWeekStart.getTime() !== weekStart.getTime()) {
+                extraSaleKeys.add(saleKey);
+              }
+            }
+          }
           
           // Find which closer this sale belongs to
           let matchedCloserId: string | null = null;
@@ -347,6 +380,7 @@ export function useR2MetricsData(weekDate: Date) {
 
       // vendas = unique consolidated sales count
       const vendas = countedSaleKeys.size;
+      const vendasExtrasDeSemanaAnterior = extraSaleKeys.size;
 
       // Update closer vendas counts
       matchedClosers.forEach((count, closerId) => {
@@ -366,6 +400,8 @@ export function useR2MetricsData(weekDate: Date) {
       const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidosCount / totalLeads) * 100 : 0;
       
       const selecionados = aprovados;
+      // Vendas extras = vendas de semanas anteriores + vendas extras manuais
+      const totalVendasExtras = vendasExtrasDeSemanaAnterior + (vendasExtras?.length || 0);
       const totalVendas = vendas + (vendasExtras?.length || 0);
       const conversaoGeral = selecionados > 0 ? (totalVendas / selecionados) * 100 : 0;
 
@@ -393,7 +429,7 @@ export function useR2MetricsData(weekDate: Date) {
         noShowAttendees,
         selecionados,
         vendas: totalVendas,
-        vendasExtras: vendasExtras?.length || 0,
+        vendasExtras: totalVendasExtras,
         conversaoGeral,
         closerConversions,
       };
