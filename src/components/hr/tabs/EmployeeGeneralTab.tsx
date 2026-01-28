@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Employee, EMPLOYEE_STATUS_LABELS, SQUAD_OPTIONS, TIPO_VINCULO_OPTIONS, DEPARTAMENTO_OPTIONS } from '@/types/hr';
 import { useEmployeeMutations, useEmployees } from '@/hooks/useEmployees';
+import { useDepartamentos, useSquads } from '@/hooks/useHRConfig';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +14,6 @@ import { ptBR } from 'date-fns/locale';
 import { Pencil, Save, X, ChevronDown, Briefcase, User, MapPin } from 'lucide-react';
 import ProfileLinkSection from '../ProfileLinkSection';
 import CargoSelect from '../CargoSelect';
-import { useCargos } from '@/hooks/useOrganograma';
 
 interface EmployeeGeneralTabProps {
   employee: Employee;
@@ -25,6 +25,12 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
   const [addressOpen, setAddressOpen] = useState(false);
   const { updateEmployee } = useEmployeeMutations();
   const { data: employees } = useEmployees();
+  const { data: departamentosDB } = useDepartamentos();
+  const { data: squadsDB } = useSquads();
+
+  // Use database data with fallback to static options
+  const departamentoOptions = departamentosDB?.filter(d => d.ativo).map(d => d.nome) || DEPARTAMENTO_OPTIONS;
+  const squadOptions = squadsDB?.filter(s => s.ativo).map(s => s.nome) || SQUAD_OPTIONS;
 
   // Sync formData when employee changes
   useEffect(() => {
@@ -99,7 +105,7 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">Selecione...</SelectItem>
-                  {DEPARTAMENTO_OPTIONS.map((dept) => (
+                  {departamentoOptions.map((dept) => (
                     <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                   ))}
                 </SelectContent>
@@ -114,7 +120,7 @@ export default function EmployeeGeneralTab({ employee }: EmployeeGeneralTabProps
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">Selecione...</SelectItem>
-                  {SQUAD_OPTIONS.map((squad) => (
+                  {squadOptions.map((squad) => (
                     <SelectItem key={squad} value={squad}>{squad}</SelectItem>
                   ))}
                 </SelectContent>
