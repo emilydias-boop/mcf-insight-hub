@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, MessageCircle, ArrowRight, Loader2, XCircle } from 'lucide-react';
+import { Phone, MessageCircle, ArrowRight, Loader2, XCircle, Calendar } from 'lucide-react';
 import { useTwilio } from '@/contexts/TwilioContext';
 import { useUpdateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { MarkAsLostModal } from './MarkAsLostModal';
 import { InlineCallControls } from './InlineCallControls';
+import { SdrScheduleDialog } from './SdrScheduleDialog';
 
 interface QuickActionsBlockProps {
   deal: any;
@@ -31,6 +32,7 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
   const [selectedStageId, setSelectedStageId] = useState<string>('');
   const [showLostModal, setShowLostModal] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   
   const isTestDeal = deal ? isTestPipeline(deal.origin_id) : false;
   const currentStageOrder = deal?.crm_stages?.stage_order || 0;
@@ -179,6 +181,17 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
               <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
               WhatsApp
             </Button>
+            
+            {/* Botão Agendar */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-50"
+              onClick={() => setShowScheduleDialog(true)}
+            >
+              <Calendar className="h-3.5 w-3.5 mr-1.5" />
+              Agendar
+            </Button>
           </>
         )}
         
@@ -237,6 +250,15 @@ export const QuickActionsBlock = ({ deal, contact, onStageChange }: QuickActions
         originId={deal?.origin_id}
         currentCustomFields={deal?.custom_fields || {}}
         onSuccess={onStageChange}
+      />
+      
+      {/* Modal de Agendamento */}
+      <SdrScheduleDialog
+        open={showScheduleDialog}
+        onOpenChange={setShowScheduleDialog}
+        dealId={deal?.id}
+        contactName={contact?.name || deal?.name}
+        onScheduled={onStageChange}
       />
     </>
   );
