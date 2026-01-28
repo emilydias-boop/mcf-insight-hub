@@ -49,6 +49,7 @@ export function useR2PendingLeads() {
           deal_id,
           status,
           created_at,
+          contract_paid_at,
           meeting_slot:meeting_slots!inner(
             id,
             scheduled_at,
@@ -65,7 +66,7 @@ export function useR2PendingLeads() {
         `)
         .eq('status', 'contract_paid')
         .eq('meeting_slots.meeting_type', 'r1')
-        .order('created_at', { ascending: false });
+        .order('contract_paid_at', { ascending: false, nullsFirst: false });
 
       if (paidError) throw paidError;
       if (!paidAttendees || paidAttendees.length === 0) return [];
@@ -88,7 +89,7 @@ export function useR2PendingLeads() {
         // No contacts found, return all as pending (edge case)
         return attendeesWithContact.map(a => ({
           ...a,
-          contract_paid_at: a.created_at,
+          contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
         })) as R2PendingLead[];
       }
 
@@ -120,7 +121,7 @@ export function useR2PendingLeads() {
       if (allDealIds.size === 0) {
         return attendeesWithContact.map(a => ({
           ...a,
-          contract_paid_at: a.created_at,
+          contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
         })) as R2PendingLead[];
       }
 
@@ -164,7 +165,7 @@ export function useR2PendingLeads() {
         })
         .map(a => ({
           ...a,
-          contract_paid_at: a.created_at,
+          contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
         })) as R2PendingLead[];
 
       return pendingLeads;
