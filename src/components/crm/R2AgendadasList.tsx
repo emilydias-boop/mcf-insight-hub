@@ -437,14 +437,14 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <Table>
+                  <Table className="table-fixed w-full">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[80px]">Horário</TableHead>
-                        <TableHead>Nome Lead</TableHead>
-                        <TableHead className="w-[140px]">Closer R2</TableHead>
+                        <TableHead className="w-auto">Nome Lead</TableHead>
+                        <TableHead className="w-[160px] min-w-[160px]">Closer R2</TableHead>
                         <TableHead className="w-[90px]">Dia R1</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
+                        <TableHead className="w-[180px] min-w-[180px] text-right">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -467,15 +467,16 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="w-[140px]">
-                            <div className="flex items-center gap-2 max-w-[140px]">
-                              {att.closer_color && (
-                                <div 
-                                  className="w-2.5 h-2.5 rounded-full shrink-0" 
-                                  style={{ backgroundColor: att.closer_color }}
-                                />
-                              )}
-                              <span className="truncate">{att.closer_name || '-'}</span>
+                          <TableCell className="w-[160px] min-w-[160px]">
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className={cn(
+                                  "w-2.5 h-2.5 rounded-full shrink-0",
+                                  !att.closer_color && "opacity-0"
+                                )}
+                                style={att.closer_color ? { backgroundColor: att.closer_color } : undefined}
+                              />
+                              <span className="truncate whitespace-nowrap">{att.closer_name || '-'}</span>
                             </div>
                           </TableCell>
                           <TableCell className="font-mono text-sm text-muted-foreground">

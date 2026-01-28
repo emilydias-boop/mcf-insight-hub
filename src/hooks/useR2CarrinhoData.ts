@@ -35,11 +35,10 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
   return useQuery({
     queryKey: ['r2-carrinho-data', format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd'), filter],
     queryFn: async (): Promise<R2CarrinhoAttendee[]> => {
-      // Get R2 status options
+      // Get R2 status options (all, including inactive, for proper name mapping)
       const { data: statusOptions } = await supabase
         .from('r2_status_options')
-        .select('id, name')
-        .eq('is_active', true);
+        .select('id, name');
 
       const statusMap = (statusOptions || []).reduce((acc, s) => {
         acc[s.id] = s.name;
