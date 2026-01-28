@@ -19,12 +19,41 @@ export interface AttendeeNote {
 
 /**
  * Fetch all notes for a specific attendee
+ * If dealId is provided, also fetches notes from all historical attendees for the same deal
  */
-export function useAttendeeNotes(attendeeId: string | null | undefined) {
+export function useAttendeeNotes(
+  attendeeId: string | null | undefined,
+  dealId?: string | null
+) {
   return useQuery({
-    queryKey: ['attendee-notes', attendeeId],
+    queryKey: ['attendee-notes', attendeeId, dealId],
     queryFn: async () => {
-      if (!attendeeId) return [];
+      if (!attendeeId && !dealId) return [];
+      
+      // Build list of attendee IDs to fetch notes for
+      let allAttendeeIds: string[] = [];
+      
+      // If dealId is provided, fetch all attendee IDs for this deal (historical + current)
+      if (dealId) {
+        const { data: allAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id')
+          .eq('deal_id', dealId);
+        
+        allAttendeeIds = (allAttendees || []).map(a => a.id);
+      }
+      
+      // Add current attendeeId if not already in the list
+      if (attendeeId && !allAttendeeIds.includes(attendeeId)) {
+        allAttendeeIds.push(attendeeId);
+      }
+      
+      // Fallback: if no IDs found, use just the attendeeId
+      if (allAttendeeIds.length === 0 && attendeeId) {
+        allAttendeeIds = [attendeeId];
+      }
+      
+      if (allAttendeeIds.length === 0) return [];
       
       const { data, error } = await supabase
         .from('attendee_notes')
@@ -36,7 +65,7 @@ export function useAttendeeNotes(attendeeId: string | null | undefined) {
           created_by,
           created_at
         `)
-        .eq('attendee_id', attendeeId)
+        .in('attendee_id', allAttendeeIds)
         .order('created_at', { ascending: true });
       
       if (error) throw error;
@@ -63,7 +92,7 @@ export function useAttendeeNotes(attendeeId: string | null | undefined) {
         created_by_profile: note.created_by ? profilesMap.get(note.created_by) || null : null,
       })) as AttendeeNote[];
     },
-    enabled: !!attendeeId,
+    enabled: !!(attendeeId || dealId),
   });
 }
 
@@ -102,6 +131,8 @@ export function useAddAttendeeNote() {
     },
     onSuccess: (_, variables) => {
       queryClient.refetchQueries({ queryKey: ['attendee-notes', variables.attendeeId] });
+      // Also invalidate queries that might include dealId
+      queryClient.invalidateQueries({ queryKey: ['attendee-notes'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['lead-notes'] });
     },
@@ -125,6 +156,8 @@ export function useDeleteAttendeeNote() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['attendee-notes', variables.attendeeId] });
+      // Also invalidate all attendee-notes queries
+      queryClient.invalidateQueries({ queryKey: ['attendee-notes'] });
       queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
     },
   });
