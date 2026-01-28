@@ -4301,6 +4301,7 @@ export type Database = {
           carrinho_updated_at: string | null
           closer_notes: string | null
           contact_id: string | null
+          contract_paid_at: string | null
           created_at: string | null
           deal_id: string | null
           decision_maker_type: string | null
@@ -4335,6 +4336,7 @@ export type Database = {
           carrinho_updated_at?: string | null
           closer_notes?: string | null
           contact_id?: string | null
+          contract_paid_at?: string | null
           created_at?: string | null
           deal_id?: string | null
           decision_maker_type?: string | null
@@ -4369,6 +4371,7 @@ export type Database = {
           carrinho_updated_at?: string | null
           closer_notes?: string | null
           contact_id?: string | null
+          contract_paid_at?: string | null
           created_at?: string | null
           deal_id?: string | null
           decision_maker_type?: string | null
