@@ -461,6 +461,35 @@ export function useEmployeeMutations() {
   };
 }
 
+// Hook para buscar colaboradores com dados do cargo do catálogo
+export function useEmployeesWithCargo() {
+  return useQuery({
+    queryKey: ['employees-with-cargo'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select(`
+          *,
+          cargo_catalogo:cargo_catalogo_id (
+            id,
+            nome_exibicao,
+            cargo_base,
+            area,
+            nivel,
+            fixo_valor,
+            variavel_valor,
+            ote_total
+          )
+        `)
+        .eq('status', 'ativo')
+        .order('nome_completo');
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
 // Hook para buscar dados de fechamento SDR vinculado ao colaborador
 export function useEmployeeSdrPayouts(sdrId: string | null, limit = 6) {
   return useQuery({
