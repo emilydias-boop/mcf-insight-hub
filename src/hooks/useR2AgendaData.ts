@@ -62,6 +62,9 @@ export function useUpdateR2MeetingStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-noshow-count'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-noshow-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       toast.success('Status atualizado');
     },
     onError: () => {
@@ -164,11 +167,17 @@ export function useRescheduleR2Meeting() {
 
         if (attendeeError) throw attendeeError;
 
-        // 4. Mark original slot as rescheduled (keep original attendee as no_show for history)
+        // 4. Mark original slot as rescheduled
         await supabase
           .from('meeting_slots')
           .update({ status: 'rescheduled' })
           .eq('id', meetingId);
+
+        // 4.5 Update original attendee status to 'rescheduled' to remove from no-show count
+        await supabase
+          .from('meeting_slot_attendees')
+          .update({ status: 'rescheduled' })
+          .eq('id', attendeeId);
 
         // 5. Update deal custom_fields for tracking
         if (originalAttendee.deal_id) {
@@ -241,7 +250,8 @@ export function useRescheduleR2Meeting() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
-      queryClient.invalidateQueries({ queryKey: ['r2-noshows'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-noshow-count'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-noshow-leads'] });
       queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       toast.success('Reunião R2 reagendada');
     },
@@ -338,6 +348,8 @@ export function useCreateR2Meeting() {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-noshow-count'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-noshow-leads'] });
       toast.success('Reunião R2 agendada com sucesso');
     },
     onError: () => {
