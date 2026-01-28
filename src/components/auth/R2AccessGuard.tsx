@@ -21,8 +21,13 @@ interface R2AccessGuardProps {
 }
 
 export const R2AccessGuard = ({ children, fallback }: R2AccessGuardProps) => {
-  const { role, user, allRoles } = useAuth();
+  const { role, user, allRoles, loading: authLoading } = useAuth();
   const { data: myR2Closer, isLoading: loadingR2Closer } = useMyR2Closer();
+
+  // Aguarda auth resolver antes de negar acesso
+  if (authLoading) {
+    return null;
+  }
 
   const hasRoleAccess = role && R2_ALLOWED_ROLES.includes(role);
   const hasUserAccess = user?.id && R2_AUTHORIZED_USERS.includes(user.id);

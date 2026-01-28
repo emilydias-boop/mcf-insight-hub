@@ -314,7 +314,7 @@ const personalMenuItems: PersonalMenuItem[] = [
 ];
 
 export function AppSidebar() {
-  const { user, role, signOut } = useAuth();
+  const { user, role, signOut, loading: authLoading } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { data: myProducts = [] } = useMyProducts();
   const { data: myBU } = useMyBU();
@@ -325,13 +325,15 @@ export function AppSidebar() {
   const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
 
-  const getRoleBadgeVariant = (userRole: AppRole | null) => {
+  const getRoleBadgeVariant = (userRole: AppRole | null, isLoading: boolean) => {
+    if (isLoading) return "outline";
     if (userRole === "admin") return "default";
     if (userRole === "manager") return "secondary";
     return "outline";
   };
 
-  const getRoleLabel = (userRole: AppRole | null) => {
+  const getRoleLabel = (userRole: AppRole | null, isLoading: boolean) => {
+    if (isLoading) return "Carregando...";
     if (userRole === "admin") return "Admin";
     if (userRole === "manager") return "Manager";
     if (userRole === "coordenador") return "Coordenador";
@@ -602,8 +604,8 @@ export function AppSidebar() {
                 <>
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-xs font-medium text-sidebar-foreground truncate">{user?.email || "Usuário"}</p>
-                    <Badge variant={getRoleBadgeVariant(role)} className="text-[10px] px-1.5 py-0 h-4 mt-0.5">
-                      {getRoleLabel(role)}
+                    <Badge variant={getRoleBadgeVariant(role, authLoading)} className="text-[10px] px-1.5 py-0 h-4 mt-0.5">
+                      {getRoleLabel(role, authLoading)}
                     </Badge>
                   </div>
                   <ChevronUp className="h-4 w-4 text-muted-foreground" />
