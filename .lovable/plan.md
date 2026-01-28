@@ -1,98 +1,124 @@
 
-# Corrigir Exibição de Horários Além das 21:00 no Agenda R2
+# Integrar Notas do Closer R1 nas Notas do Lead
 
-## Diagnóstico do Problema
+## Problema Identificado
 
-### Evidência no Banco de Dados
-Thobson Motta tem os seguintes slots configurados para 28/01/2026:
-| Horário | Status |
-|---------|--------|
-| 09:00 | ✅ Configurado |
-| 13:00 | ✅ Configurado |
-| **22:00** | ✅ Configurado no banco, **mas invisível na interface** |
+Quando o closer de R1 salva uma nota no drawer de reunião (campo "Notas da Closer para: [Nome]"), essa nota é armazenada em `meeting_slot_attendees.closer_notes`, mas **não é exibida** nas notas consolidadas do lead que os sócios de R2 visualizam.
 
-### Causa Raiz
-No arquivo `R2CloserColumnCalendar.tsx`, a constante `ALL_TIME_SLOTS` está **hardcoded** para exibir apenas horários de **07:00 a 21:00**:
-
-```typescript
-// Linha 38-43
-const ALL_TIME_SLOTS = Array.from({ length: 29 }, (_, i) => {
-  const hour = Math.floor(i / 2) + 7;  // 7 + 14 = 21 (máximo)
-  const minute = (i % 2) * 30;
-  return { hour, minute, label: `...` };
-});
-```
-
-**Cálculo atual:**
-- `length: 29` → 29 slots de 30 min = 14.5 horas
-- Hora inicial: 7
-- Hora final: 7 + 14 = **21:00** (21:30 não existe)
-
-Resultado: Horários como **21:30, 22:00, 22:30, 23:00** nunca são exibidos, mesmo que configurados no banco.
+### Fluxo Atual
+| Fonte | Armazenamento | Buscado por useLeadNotes? |
+|-------|---------------|---------------------------|
+| Nota de agendamento (SDR) | `meeting_slot_attendees.notes` | ✅ Sim |
+| **Nota do Closer R1** | `meeting_slot_attendees.closer_notes` | ❌ **NÃO** |
+| Notas de attendee | `attendee_notes` | ✅ Sim |
+| Notas de ligação | `calls.notes` | ✅ Sim |
+| Notas manuais | `deal_activities` | ✅ Sim |
 
 ---
 
-## Solução Proposta
+## Solução
 
-### Abordagem
-Expandir o range de `ALL_TIME_SLOTS` para cobrir **07:00 até 23:30** (todo o dia útil estendido).
+Modificar o hook `useLeadNotes.ts` para **incluir `closer_notes`** na busca de notas de agendamento.
 
-### Cálculo Corrigido
+### Arquivo: `src/hooks/useLeadNotes.ts`
 
-| Range Desejado | Início | Fim | Slots |
-|----------------|--------|-----|-------|
-| 07:00 - 23:30 | 07:00 | 23:30 | 34 slots |
+#### Mudança (linhas 122-142):
 
-**Fórmula:**
-- 07:00 até 23:30 = 16.5 horas = 33 intervalos de 30 min + 1 = **34 slots**
-
----
-
-## Implementação
-
-### Arquivo: `src/components/crm/R2CloserColumnCalendar.tsx`
-
-**Mudança (linhas 38-43):**
-
-De:
+**De:**
 ```typescript
-// Fixed time slots for R2 (07:00 to 21:00, 30-min intervals)
-const ALL_TIME_SLOTS = Array.from({ length: 29 }, (_, i) => {
-  const hour = Math.floor(i / 2) + 7;
-  const minute = (i % 2) * 30;
-  return { hour, minute, label: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}` };
-});
+// 3. Fetch scheduling notes from meeting_slot_attendees.notes
+if (allAttendeeIds.length > 0) {
+  const { data: schedulingNotes } = await supabase
+    .from('meeting_slot_attendees')
+    .select('id, notes, created_at')  // ← SÓ 'notes'
+    .in('id', allAttendeeIds)
+    .not('notes', 'is', null);
+  
+  if (schedulingNotes) {
+    schedulingNotes.forEach(sn => {
+      if (sn.notes) {
+        notes.push({
+          id: `scheduling-${sn.id}`,
+          type: 'scheduling',
+          content: sn.notes,
+          author: null,
+          created_at: sn.created_at || new Date().toISOString(),
+        });
+      }
+    });
+  }
+}
 ```
 
-Para:
+**Para:**
 ```typescript
-// Fixed time slots for R2 (07:00 to 23:30, 30-min intervals)
-const ALL_TIME_SLOTS = Array.from({ length: 34 }, (_, i) => {
-  const hour = Math.floor(i / 2) + 7;
-  const minute = (i % 2) * 30;
-  return { hour, minute, label: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}` };
-});
+// 3. Fetch scheduling notes AND closer notes from meeting_slot_attendees
+if (allAttendeeIds.length > 0) {
+  const { data: attendeeData } = await supabase
+    .from('meeting_slot_attendees')
+    .select('id, notes, closer_notes, created_at, updated_at')
+    .in('id', allAttendeeIds);
+  
+  if (attendeeData) {
+    attendeeData.forEach(item => {
+      // Notas de agendamento (SDR)
+      if (item.notes) {
+        notes.push({
+          id: `scheduling-${item.id}`,
+          type: 'scheduling',
+          content: item.notes,
+          author: null,
+          created_at: item.created_at || new Date().toISOString(),
+        });
+      }
+      
+      // Notas do Closer R1
+      if (item.closer_notes) {
+        notes.push({
+          id: `closer-${item.id}`,
+          type: 'closer',
+          content: item.closer_notes,
+          author: null, // Poderia buscar o closer name no futuro
+          created_at: item.updated_at || item.created_at || new Date().toISOString(),
+        });
+      }
+    });
+  }
+}
 ```
 
 ---
 
 ## Resultado Esperado
 
-### Novos Horários Visíveis
+### Na aba "Notas" do drawer R2:
+| Tipo | Badge | Fonte |
+|------|-------|-------|
+| Nota SDR | "Nota SDR" (azul) | deal_activities |
+| Agendamento | "Agendamento" (roxo) | meeting_slot_attendees.notes |
+| **Closer** | **"Closer" (verde)** | **meeting_slot_attendees.closer_notes** ← NOVA |
+| Ligação | "Ligação" (âmbar) | calls.notes |
+| R2 | "R2" (índigo) | attendee_notes |
+| Qualificação | "Qualificação" (teal) | deal_activities (qualification_note) |
 
-| Slot | Horário |
-|------|---------|
-| 30 | 21:30 |
-| 31 | 22:00 ← **Thobson aparece aqui** |
-| 32 | 22:30 |
-| 33 | 23:00 |
-| 34 | 23:30 |
+---
 
-### Comportamento
+## Melhoria Futura (Opcional)
 
-- O filtro `timeSlots` já existe (linha 112-126) e só exibe horários **configurados** no banco
-- Portanto, só aparecerão os horários 22:00+ se algum closer tiver slots configurados nesse período
-- Para Thobson: aparecerá o slot das 22:00 como disponível ou com a reunião agendada
+Para mostrar o **nome do closer** que escreveu a nota, podemos fazer um JOIN com `meeting_slots` → `closers`:
+
+```typescript
+const { data: attendeeData } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id, notes, closer_notes, created_at, updated_at,
+    meeting_slots(closers(name))
+  `)
+  .in('id', allAttendeeIds);
+
+// E usar:
+author: item.meeting_slots?.closers?.name || 'Closer'
+```
 
 ---
 
@@ -100,8 +126,8 @@ const ALL_TIME_SLOTS = Array.from({ length: 34 }, (_, i) => {
 
 | Item | Valor |
 |------|-------|
-| **Arquivo** | `src/components/crm/R2CloserColumnCalendar.tsx` |
-| **Linha** | 39 |
-| **Mudança** | `length: 29` → `length: 34` |
-| **Impacto** | Exibe horários de 07:00 a 23:30 |
-| **Risco** | Baixo (apenas expande range visual) |
+| **Arquivo** | `src/hooks/useLeadNotes.ts` |
+| **Linhas** | 122-142 |
+| **Mudança** | Adicionar `closer_notes` na query e criar entrada com `type: 'closer'` |
+| **Impacto** | Notas do Closer R1 aparecem no R2 NotesTab |
+| **Risco** | Baixo (apenas adiciona dados, não remove nada) |
