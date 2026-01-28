@@ -43,16 +43,33 @@ export function useAvailableProfiles() {
 
       const linkedProfileIds = new Set(linkedEmployees?.map(e => e.profile_id) || []);
 
-      // Buscar roles para cada profile
+      // Buscar roles para cada profile (pode ter múltiplas por usuário)
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role');
 
       if (rolesError) throw rolesError;
 
-      const roleMap = new Map<string, string>();
+      // Prioridade de roles: menor = maior prioridade
+      const ROLE_PRIORITY: Record<string, number> = {
+        admin: 1, manager: 2, coordenador: 3, closer: 4,
+        closer_sombra: 5, financeiro: 6, rh: 7, sdr: 8, viewer: 9,
+      };
+
+      // Agrupar roles por user_id e escolher a de maior prioridade
+      const rolesByUser = new Map<string, string[]>();
       userRoles?.forEach(ur => {
-        roleMap.set(ur.user_id, ur.role);
+        const existing = rolesByUser.get(ur.user_id) || [];
+        existing.push(ur.role);
+        rolesByUser.set(ur.user_id, existing);
+      });
+
+      const roleMap = new Map<string, string>();
+      rolesByUser.forEach((roles, userId) => {
+        const sortedRoles = roles.sort((a, b) => 
+          (ROLE_PRIORITY[a] || 99) - (ROLE_PRIORITY[b] || 99)
+        );
+        roleMap.set(userId, sortedRoles[0]);
       });
 
       // Filtrar profiles não vinculados e adicionar role
@@ -92,18 +109,29 @@ export function useLinkedProfile(profileId: string | null) {
       if (profileError) throw profileError;
       if (!profile) return null;
 
-      // Buscar role
-      const { data: userRole, error: roleError } = await supabase
+      // Buscar roles (pode ter múltiplas)
+      const { data: userRoles, error: roleError } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', profileId)
-        .maybeSingle();
+        .eq('user_id', profileId);
 
       if (roleError) throw roleError;
 
+      // Determinar role principal por prioridade
+      const ROLE_PRIORITY: Record<string, number> = {
+        admin: 1, manager: 2, coordenador: 3, closer: 4,
+        closer_sombra: 5, financeiro: 6, rh: 7, sdr: 8, viewer: 9,
+      };
+
+      const primaryRole = userRoles?.length 
+        ? userRoles.sort((a, b) => 
+            (ROLE_PRIORITY[a.role] || 99) - (ROLE_PRIORITY[b.role] || 99)
+          )[0].role 
+        : null;
+
       return {
         ...profile,
-        role: userRole?.role || null,
+        role: primaryRole,
       } as AvailableProfile;
     },
     enabled: !!profileId,

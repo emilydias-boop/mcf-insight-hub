@@ -4,12 +4,26 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador';
+type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh';
+
+// Prioridade de roles: menor número = maior prioridade
+const ROLE_PRIORITY: Record<string, number> = {
+  admin: 1,
+  manager: 2,
+  coordenador: 3,
+  closer: 4,
+  closer_sombra: 5,
+  financeiro: 6,
+  rh: 7,
+  sdr: 8,
+  viewer: 9,
+};
 
 interface AuthState {
   user: User | null;
   session: Session | null;
   role: AppRole | null;
+  allRoles: AppRole[];
   loading: boolean;
 }
 
@@ -18,6 +32,7 @@ interface AuthContextType extends AuthState {
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
+  hasAnyRole: (...roles: AppRole[]) => boolean;
   resetPassword: (email: string) => Promise<void>;
 }
 
@@ -27,22 +42,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [allRoles, setAllRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const fetchUserRole = async (userId: string) => {
+  const fetchUserRoles = async (userId: string): Promise<{ primaryRole: AppRole | null; roles: AppRole[] }> => {
+    // Buscar TODAS as roles do usuário (sem .single())
     const { data, error } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
-      .single();
+      .eq('user_id', userId);
 
     if (error) {
-      console.error('Error fetching user role:', error);
-      return null;
+      console.error('Error fetching user roles:', error);
+      return { primaryRole: null, roles: [] };
     }
 
-    return data?.role as AppRole || null;
+    if (!data || data.length === 0) {
+      return { primaryRole: null, roles: [] };
+    }
+
+    // Mapear todas as roles
+    const roles = data.map(r => r.role as AppRole);
+    
+    // Ordenar por prioridade (menor = maior prioridade)
+    const sortedRoles = [...roles].sort((a, b) => 
+      (ROLE_PRIORITY[a] || 99) - (ROLE_PRIORITY[b] || 99)
+    );
+    
+    // Role principal = maior prioridade
+    return { primaryRole: sortedRoles[0], roles };
   };
 
   useEffect(() => {
@@ -72,19 +101,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setUser(null);
                 setSession(null);
                 setRole(null);
+                setAllRoles([]);
                 setLoading(false);
                 toast.error('Sua conta foi bloqueada ou desativada.');
                 return;
               }
             }
 
-            fetchUserRole(session.user.id).then(role => {
-              setRole(role);
+            fetchUserRoles(session.user.id).then(({ primaryRole, roles }) => {
+              setRole(primaryRole);
+              setAllRoles(roles);
               setLoading(false);
             });
           }, 0);
         } else {
           setRole(null);
+          setAllRoles([]);
           setLoading(false);
         }
       }
@@ -96,8 +128,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        fetchUserRole(session.user.id).then(role => {
-          setRole(role);
+        fetchUserRoles(session.user.id).then(({ primaryRole, roles }) => {
+          setRole(primaryRole);
+          setAllRoles(roles);
           setLoading(false);
         });
       } else {
@@ -153,7 +186,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', authData.user.id);
       
       // Buscar role do usuário para redirect condicional
-      const userRole = await fetchUserRole(authData.user.id);
+      const { primaryRole: userRole, roles } = await fetchUserRoles(authData.user.id);
+      setAllRoles(roles);
       
       toast.success('Login realizado com sucesso!');
       
@@ -214,21 +248,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setSession(null);
       setRole(null);
+      setAllRoles([]);
       toast.success('Logout realizado com sucesso!');
       navigate('/auth');
     }
   };
 
   const hasRole = (requiredRole: AppRole): boolean => {
-    if (!role) return false;
+    // Verificar em TODAS as roles do usuário
+    if (allRoles.length === 0) return false;
     
     // Admin has access to everything
-    if (role === 'admin') return true;
+    if (allRoles.includes('admin')) return true;
     
     // Manager can access viewer permissions too
-    if (role === 'manager' && requiredRole === 'viewer') return true;
+    if (allRoles.includes('manager') && requiredRole === 'viewer') return true;
     
-    return role === requiredRole;
+    // Verificar se o usuário tem a role requerida em qualquer uma das suas roles
+    return allRoles.includes(requiredRole);
+  };
+
+  const hasAnyRole = (...roles: AppRole[]): boolean => {
+    if (allRoles.length === 0) return false;
+    if (allRoles.includes('admin')) return true;
+    return roles.some(r => allRoles.includes(r));
   };
 
   const resetPassword = async (email: string) => {
@@ -252,11 +295,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         session,
         role,
+        allRoles,
         loading,
         signIn,
         signUp,
         signOut,
         hasRole,
+        hasAnyRole,
         resetPassword,
       }}
     >
