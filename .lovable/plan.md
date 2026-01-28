@@ -1,138 +1,104 @@
 
-# Sistema de Gestão de Entidades do RH
+# Tornar Áreas Editáveis Dinamicamente
 
-## Visão Geral
+## Problema Identificado
 
-Criar uma página de **Configurações do RH** (`/rh/configuracoes`) que permite gerenciar todas as entidades organizacionais:
+1. **Erro ao criar cargo**: A tabela `cargos_catalogo` tem uma CHECK constraint (`cargos_catalogo_area_check`) que restringe o campo `area` a valores fixos
+2. **Inconsistência**: O formulário oferece opções como "TI", "RH", "Diretoria" que não estão na constraint
+3. **Falta de flexibilidade**: O usuário não consegue adicionar novas áreas sem alterar o banco de dados
 
-1. **Cargos / Funções** - Com níveis e valores de remuneração
-2. **Departamentos / BUs** - Business Units dinâmicas
-3. **Squads / Equipes** - Equipes dentro das BUs
+### Áreas permitidas atualmente (constraint):
+- Inside Sales, Consórcio, Crédito, Marketing, Tecnologia, Financeiro, Projetos, Avulsos
 
-Essas entidades passarão de listas estáticas no código para tabelas dinâmicas no banco de dados, permitindo criar, editar e excluir sem precisar de alterações no código.
-
----
-
-## Estrutura de Dados (Banco de Dados)
-
-### Tabelas a Criar
-
-| Tabela | Campos Principais |
-|--------|-------------------|
-| `departamentos` | id, nome, codigo, bu_relacionada, ativo, ordem |
-| `squads` | id, nome, departamento_id, ativo, ordem |
-
-A tabela `cargos_catalogo` já existe e será reutilizada.
-
-### Relacionamentos
-
-```text
-departamentos (BUs)
-    └── squads (Equipes)
-    
-cargos_catalogo (separado, por área)
-    └── employees.cargo_catalogo_id
-```
+### Áreas no formulário (incorretas):
+- Inside Sales, Consórcio, Crédito, Projetos, Outros, Marketing, Financeiro, RH, TI, Diretoria
 
 ---
 
-## Interface do Usuário
+## Solução Proposta
 
-### Nova Página: Configurações do RH
+### Fase 1: Criar tabela de áreas dinâmicas
 
-**Rota:** `/rh/configuracoes`
-
-**Abas:**
-1. **Cargos** - CRUD completo do catálogo de cargos
-2. **Departamentos** - CRUD de BUs/departamentos
-3. **Squads** - CRUD de equipes por departamento
-
----
-
-### Aba 1: Cargos
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  [+ Novo Cargo]                    [🔍 Buscar...]               │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ▼ Inside Sales (12 cargos)                                     │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ SDR Inside N1  │ N1 │ R$ 2.800│ R$ 1.200│ R$ 4.000│ [✏️][🗑]│  │
-│  │ SDR Inside N2  │ N2 │ R$ 3.150│ R$ 1.350│ R$ 4.500│ [✏️][🗑]│  │
-│  │ Closer Inside  │ N3 │ R$ 3.500│ R$ 2.000│ R$ 5.500│ [✏️][🗑]│  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ▼ Consórcio (4 cargos)                                         │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ SDR Consórcio   │ N1 │ R$ 1.800│ R$ 1.500│ R$ 3.300│ [✏️][🗑]│  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Dialog de Criar/Editar Cargo:**
+Criar uma tabela `areas_catalogo` para armazenar as áreas e remover a CHECK constraint da tabela `cargos_catalogo`.
 
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
-| Nome de Exibição | texto | Ex: "SDR Inside N1" |
-| Cargo Base | texto | Ex: "SDR" |
-| Área | select | Inside Sales, Consórcio, Crédito, etc |
-| Nível | número | 1-7 (opcional) |
-| Fixo (R$) | moeda | Valor fixo mensal |
-| Variável (R$) | moeda | Valor variável potencial |
-| OTE Total (R$) | moeda | Auto-calculado: Fixo + Variável |
-| Modelo Variável | select | score_metricas, componentes_regua_global |
+| id | UUID | Identificador único |
+| nome | TEXT | Nome da área (ex: "Inside Sales") |
+| codigo | TEXT | Código interno (ex: "inside_sales") |
+| ordem | INTEGER | Ordem de exibição |
+| ativo | BOOLEAN | Se a área está ativa |
 
----
+### Fase 2: Adicionar nova aba "Áreas" na página de Configurações
 
-### Aba 2: Departamentos (BUs)
+Nova aba no `/rh/configuracoes` para gerenciar áreas:
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  [+ Novo Departamento]                                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 🏢 BU - Incorporador 50K   │  4 colaboradores  │ [✏️][🗑]   │  │
-│  │ 🏢 BU - Consórcio          │  2 colaboradores  │ [✏️][🗑]   │  │
-│  │ 🏢 BU - Crédito            │  3 colaboradores  │ [✏️][🗑]   │  │
-│  │ 🏢 Diretoria               │  1 colaborador    │ [✏️][🗑]   │  │
-│  │ 🏢 TI                      │  2 colaboradores  │ [✏️][🗑]   │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+[Cargos] [Departamentos/BUs] [Squads] [Áreas]
 ```
 
-**Dialog de Criar/Editar Departamento:**
+Interface da aba Áreas:
+```text
++--------------------------------------------------+
+|  [+ Nova Área]                                   |
++--------------------------------------------------+
+| Nome              | Código       | Cargos | Ações|
++--------------------------------------------------+
+| Inside Sales      | inside_sales |   12   | [✏️][🗑]|
+| Consórcio         | consorcio    |    4   | [✏️][🗑]|
+| Crédito           | credito      |    3   | [✏️][🗑]|
+| Projetos          | projetos     |    2   | [✏️][🗑]|
+| Marketing         | marketing    |    1   | [✏️][🗑]|
+| Financeiro        | financeiro   |    1   | [✏️][🗑]|
+| Tecnologia        | tecnologia   |    0   | [✏️][🗑]|
+| RH                | rh           |    0   | [✏️][🗑]|
++--------------------------------------------------+
+```
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| Nome | texto | Ex: "BU - Incorporador 50K" |
-| Código | texto | Ex: "incorporador" (para mapeamentos) |
-| É BU? | checkbox | Indica se é uma Business Unit válida |
+### Fase 3: Atualizar formulário de cargos
+
+O `CargoFormDialog.tsx` passará a buscar as áreas dinamicamente da tabela `areas_catalogo` em vez de usar a lista estática.
 
 ---
 
-### Aba 3: Squads
+## Alterações de Banco de Dados
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  [+ Nova Squad]              Departamento: [Todos ▼]            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ▼ BU - Incorporador 50K                                        │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 👥 Inside Sales Produto    │  8 colaboradores  │ [✏️][🗑]   │  │
-│  │ 👥 Comercial               │  4 colaboradores  │ [✏️][🗑]   │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│  ▼ BU - Consórcio                                               │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │ 👥 Vendas Consórcio        │  2 colaboradores  │ [✏️][🗑]   │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+### Migração SQL:
+
+```sql
+-- 1. Criar tabela de áreas
+CREATE TABLE areas_catalogo (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL UNIQUE,
+  codigo TEXT UNIQUE,
+  ordem INTEGER DEFAULT 0,
+  ativo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2. Popular com áreas existentes
+INSERT INTO areas_catalogo (nome, codigo, ordem) VALUES
+  ('Inside Sales', 'inside_sales', 1),
+  ('Consórcio', 'consorcio', 2),
+  ('Crédito', 'credito', 3),
+  ('Projetos', 'projetos', 4),
+  ('Marketing', 'marketing', 5),
+  ('Financeiro', 'financeiro', 6),
+  ('Tecnologia', 'tecnologia', 7),
+  ('RH', 'rh', 8),
+  ('Diretoria', 'diretoria', 9),
+  ('Avulsos', 'avulsos', 10);
+
+-- 3. Remover CHECK constraint da área
+ALTER TABLE cargos_catalogo 
+  DROP CONSTRAINT cargos_catalogo_area_check;
+
+-- 4. Adicionar RLS
+ALTER TABLE areas_catalogo ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read" ON areas_catalogo FOR SELECT USING (true);
+CREATE POLICY "Auth write" ON areas_catalogo 
+  FOR ALL USING (auth.role() = 'authenticated');
 ```
 
 ---
@@ -141,110 +107,33 @@ cargos_catalogo (separado, por área)
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `src/pages/rh/Configuracoes.tsx` | Página principal com abas |
-| `src/components/hr/config/CargosTab.tsx` | Gestão de cargos |
-| `src/components/hr/config/CargoFormDialog.tsx` | Dialog criar/editar cargo |
-| `src/components/hr/config/DepartamentosTab.tsx` | Gestão de departamentos |
-| `src/components/hr/config/DepartamentoFormDialog.tsx` | Dialog criar/editar depto |
-| `src/components/hr/config/SquadsTab.tsx` | Gestão de squads |
-| `src/components/hr/config/SquadFormDialog.tsx` | Dialog criar/editar squad |
-| `src/hooks/useHRConfig.ts` | Hooks para CRUD das entidades |
-
----
+| `src/components/hr/config/AreasTab.tsx` | Aba de gestão de áreas |
+| `src/components/hr/config/AreaFormDialog.tsx` | Dialog para criar/editar área |
 
 ## Arquivos a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/App.tsx` | Adicionar rota `/rh/configuracoes` |
-| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Usar dados dinâmicos das tabelas |
-| `src/components/hr/CargoSelect.tsx` | Já usa `cargos_catalogo`, sem mudança |
-| `src/types/hr.ts` | Manter opções estáticas como fallback |
-| `src/hooks/useOrganograma.ts` | Adicionar mutations para cargos |
+| `src/pages/rh/Configuracoes.tsx` | Adicionar aba "Áreas" |
+| `src/hooks/useHRConfig.ts` | Adicionar hooks useAreas e useAreaMutations |
+| `src/components/hr/config/CargoFormDialog.tsx` | Buscar áreas do banco dinamicamente |
 
 ---
 
-## Migrações de Banco de Dados
+## Fluxo de Uso
 
-### Migração 1: Criar tabela departamentos
-
-```sql
-CREATE TABLE departamentos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nome TEXT NOT NULL UNIQUE,
-  codigo TEXT UNIQUE,
-  is_bu BOOLEAN DEFAULT false,
-  ativo BOOLEAN DEFAULT true,
-  ordem INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Inserir departamentos existentes
-INSERT INTO departamentos (nome, codigo, is_bu) VALUES
-  ('BU - Incorporador 50K', 'incorporador', true),
-  ('BU - Consórcio', 'consorcio', true),
-  ('BU - Crédito', 'credito', true),
-  ('Diretoria', 'diretoria', false),
-  ('TI', 'ti', false),
-  ('Financeiro', 'financeiro', false),
-  ('Marketing', 'marketing', false),
-  ('RH', 'rh', false);
-```
-
-### Migração 2: Criar tabela squads
-
-```sql
-CREATE TABLE squads (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nome TEXT NOT NULL,
-  departamento_id UUID REFERENCES departamentos(id),
-  ativo BOOLEAN DEFAULT true,
-  ordem INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(nome, departamento_id)
-);
-
--- Inserir squads existentes
-INSERT INTO squads (nome, departamento_id) 
-SELECT 'Inside Sales Produto', id FROM departamentos WHERE codigo = 'incorporador';
-
-INSERT INTO squads (nome, departamento_id) 
-SELECT 'Comercial', id FROM departamentos WHERE codigo = 'incorporador';
-```
-
----
-
-## Integração com Colaboradores
-
-Depois de criadas as tabelas dinâmicas, o formulário de colaborador (`EmployeeGeneralTab.tsx`) usará:
-
-1. **Cargo**: Já usa `CargoSelect` com dados da `cargos_catalogo`
-2. **Departamento**: Passará a buscar de `departamentos` via hook
-3. **Squad**: Passará a buscar de `squads` via hook (filtrado por departamento)
-4. **Gestor**: Já busca da lista de `employees`
-
----
-
-## Acesso ao Menu
-
-A nova página será acessível via:
-- Link no menu lateral do RH (ícone de engrenagem)
-- Rota direta: `/rh/configuracoes`
+1. **Admin acessa** `/rh/configuracoes`
+2. **Clica na aba** "Áreas"
+3. **Clica em "+ Nova Área"** para adicionar uma área
+4. A área fica disponível imediatamente no seletor de cargos
+5. **Ao criar cargo**, as áreas são carregadas do banco de dados
 
 ---
 
 ## Resultado Final
 
-| Entidade | Antes | Depois |
-|----------|-------|--------|
-| Cargos | Tabela `cargos_catalogo` sem UI de gestão | CRUD completo via interface |
-| Departamentos | Lista estática em `DEPARTAMENTO_OPTIONS` | Tabela dinâmica `departamentos` |
-| Squads | Lista estática em `SQUAD_OPTIONS` | Tabela dinâmica `squads` |
-
-**Benefícios:**
-- Autonomia total para criar/editar/excluir entidades
-- Consistência de dados entre todos os módulos
-- Facilidade para adicionar novas BUs quando necessário
-- Valores OTE centralizados e fáceis de atualizar
+| Item | Antes | Depois |
+|------|-------|--------|
+| Áreas | Lista fixa no código + CHECK constraint | Tabela dinâmica `areas_catalogo` |
+| Criar cargo | Erro se área não está na constraint | Funciona com qualquer área cadastrada |
+| Adicionar área | Requer alteração de código e banco | Interface visual na página de configurações |
