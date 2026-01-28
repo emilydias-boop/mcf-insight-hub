@@ -1,73 +1,22 @@
 
-# Correção do Filtro de Tentativas + Botão de Agendamento Rápido
+# Correção: Race Condition no ResourceGuard
 
-## Problema 1: Filtro de tentativas não funciona
+## Problema Identificado
 
-### Causa Raiz
-O hook `useBatchDealActivitySummary` carrega os dados de forma assíncrona. Enquanto os dados não chegam:
-- `activitySummaries` é `undefined`
-- Para cada deal, `summary?.totalCalls || 0` retorna `0`
-- Filtro `1 a 2` rejeita todos porque `0 < 1`
+O componente `ResourceGuard` não espera o `loading` do `AuthContext` terminar antes de verificar permissões. Isso causa:
 
-### Solução
-Ignorar o filtro de tentativas enquanto `activitySummaries` ainda não carregou:
+1. Usuário navega para `/crm/negocios`
+2. `ResourceGuard` (do pai `/crm`) verifica permissões **imediatamente**
+3. `role` ainda é `null` (loading em andamento)
+4. `canView` retorna `false` → mostra "Acesso Negado"
+5. Após refresh, `loading` já terminou → funciona
 
+O `RoleGuard` não tem esse problema porque **espera o `loading`**:
 ```typescript
-// Filtro por quantidade de tentativas (range)
-if (filters.attemptsRange && activitySummaries) {
-  const summary = activitySummaries.get(deal.id);
-  const totalCalls = summary?.totalCalls ?? 0;
-  
-  if (totalCalls < filters.attemptsRange.min || 
-      totalCalls > filters.attemptsRange.max) {
-    return false;
-  }
+// RoleGuard (correto)
+if (loading) {
+  return <Spinner />; // Espera!
 }
-```
-
-A condição `&& activitySummaries` garante que o filtro só é aplicado quando os dados já carregaram.
-
----
-
-## Problema 2: Botão de agendamento direto
-
-### Objetivo
-Adicionar um botão "Agendar" ao lado do "WhatsApp" no `QuickActionsBlock.tsx` para permitir agendamento rápido sem precisar navegar para a Agenda.
-
-### Visual Esperado
-
-```text
-[ 📞 Ligar ]  [ 💬 WhatsApp ]  [ 📅 Agendar ]  |  [ Mover para... ▼ ]  [ → ]  |  [ ❌ Perdido ]
-```
-
-### Implementação
-
-1. **Adicionar estado para controlar o modal**
-2. **Importar `SdrScheduleDialog`** (que já existe e abre o `QuickScheduleModal`)
-3. **Adicionar botão com ícone de calendário**
-
-```tsx
-// Novo estado
-const [showScheduleDialog, setShowScheduleDialog] = useState(false);
-
-// Novo botão (após WhatsApp)
-<Button
-  size="sm"
-  variant="outline"
-  className="h-8 border-blue-500/50 text-blue-600 hover:bg-blue-50"
-  onClick={() => setShowScheduleDialog(true)}
->
-  <Calendar className="h-3.5 w-3.5 mr-1.5" />
-  Agendar
-</Button>
-
-// Modal no final do componente
-<SdrScheduleDialog
-  open={showScheduleDialog}
-  onOpenChange={setShowScheduleDialog}
-  dealId={deal?.id}
-  contactName={contact?.name || deal?.name}
-/>
 ```
 
 ---
@@ -76,18 +25,106 @@ const [showScheduleDialog, setShowScheduleDialog] = useState(false);
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/crm/Negocios.tsx` | Corrigir condição do filtro para verificar se `activitySummaries` carregou |
-| `src/components/crm/QuickActionsBlock.tsx` | Adicionar botão "Agendar" e integrar `SdrScheduleDialog` |
+| `src/components/auth/ResourceGuard.tsx` | Adicionar verificação de `loading` igual ao `RoleGuard` |
+
+---
+
+## Solução
+
+Adicionar verificação de `loading` no `ResourceGuard`:
+
+```typescript
+export const ResourceGuard = ({ 
+  resource, 
+  requiredLevel = 'view',
+  children, 
+  fallback 
+}: ResourceGuardProps) => {
+  const { role, loading } = useAuth(); // Adicionar 'loading'
+  const { canView, canEdit, canFull } = useResourcePermission(resource);
+  
+  // NOVO: Esperar o loading terminar antes de verificar permissões
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  // Admins sempre têm acesso (só verifica após loading terminar)
+  if (role === 'admin') {
+    return <>{children}</>;
+  }
+  
+  const hasAccess = /* ... resto do código ... */
+```
+
+---
+
+## Alteração Completa
+
+**Arquivo: `src/components/auth/ResourceGuard.tsx`**
+
+**Antes (linha 14-26):**
+```typescript
+export const ResourceGuard = ({ 
+  resource, 
+  requiredLevel = 'view',
+  children, 
+  fallback 
+}: ResourceGuardProps) => {
+  const { role } = useAuth();
+  const { canView, canEdit, canFull } = useResourcePermission(resource);
+  
+  // Admins sempre têm acesso
+  if (role === 'admin') {
+    return <>{children}</>;
+  }
+```
+
+**Depois:**
+```typescript
+export const ResourceGuard = ({ 
+  resource, 
+  requiredLevel = 'view',
+  children, 
+  fallback 
+}: ResourceGuardProps) => {
+  const { role, loading } = useAuth();
+  const { canView, canEdit, canFull } = useResourcePermission(resource);
+  
+  // Esperar o loading terminar antes de verificar permissões
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  // Admins sempre têm acesso (só verifica após loading terminar)
+  if (role === 'admin') {
+    return <>{children}</>;
+  }
+```
 
 ---
 
 ## Resultado Esperado
 
-1. **Filtro de tentativas**: Funcionará corretamente após o carregamento inicial dos dados
-2. **Botão Agendar**: Aparecerá ao lado do WhatsApp, abrindo modal de agendamento rápido
+1. **Navegação**: Ao navegar para `/crm/negocios`, aparece um spinner por ~100-500ms enquanto `loading` é `true`
+2. **Após loading**: Quando `role` carrega, verifica permissões corretamente
+3. **Sem "Acesso Negado" falso**: O erro não aparece mais durante a navegação
 
-```text
-+------------------+------------------+------------------+
-| 📞 Ligar         | 💬 WhatsApp      | 📅 Agendar       |
-+------------------+------------------+------------------+
-```
+---
+
+## Por Que Funciona Após Refresh?
+
+No refresh, a sequência é diferente:
+1. Página recarrega completamente
+2. React monta a árvore de componentes
+3. `AuthContext` inicia verificação
+4. `loading` termina antes do `ResourceGuard` verificar (devido a cache/timing)
+
+Na navegação (SPA), o `ResourceGuard` já está montado e verifica imediatamente quando `role` ainda é `null`.
