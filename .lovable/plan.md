@@ -1,110 +1,124 @@
 
-## Objetivo
-Eliminar o “trava” onde a Jessica entra e o app mostra o cargo como **Viewer** e bloqueia acesso (ex.: `/crm/agenda-r2`), e só volta ao normal após **refresh**. Isso é um sintoma clássico de **condição de corrida** no carregamento inicial das roles.
+# Corrigir Atualização Automática de "Contrato Pago" e Jornada do Lead
+
+## Problemas Identificados
+
+### 1. Webhook Falha ao Marcar Contrato Pago
+**Causa raiz:** O webhook `hubla-webhook-handler` tenta atualizar uma coluna `contract_paid_at` que **não existe** na tabela `meeting_slot_attendees`:
+
+```
+ERROR: Could not find the 'contract_paid_at' column of 'meeting_slot_attendees' in the schema cache
+```
+
+O código atual faz:
+```typescript
+.update({
+  status: 'contract_paid',
+  contract_paid_at: meeting.scheduled_at // ← COLUNA NÃO EXISTE!
+})
+```
+
+**Resultado:** A atualização falha silenciosamente, e nenhum attendee é marcado como `contract_paid`.
+
+### 2. Jornada do Lead Mostra Closer Errado (R2 no lugar de R1)
+**Causa raiz:** O hook `useIncorporadorLeadJourney` busca reuniões diretamente da tabela `meeting_slots` via `meeting_slots.deal_id`:
+
+```typescript
+const { data: meetings } = await supabase
+  .from('meeting_slots')
+  .select(...)
+  .eq('deal_id', deal.id) // ← ERRADO! meeting_slots.deal_id não é confiável
+```
+
+**O problema:** `meeting_slots.deal_id` aponta para o deal "principal" do slot (o primeiro lead agendado), mas slots são COMPARTILHADOS entre múltiplos leads. O vínculo correto está em `meeting_slot_attendees.deal_id`.
+
+Exemplo real encontrado:
+- Slot R1 do Julio: `deal_id = 1a492e2f...` (deal do Steeve, não do Christino)
+- Slot R2 da Claudia: `deal_id = 3367a1c3...` (deal do Christino)
+
+Quando o sistema busca reuniões do Christino via `meeting_slots.deal_id`, **não encontra a R1** (porque o slot aponta para outro deal), mas encontra a R2. Isso faz parecer que a R2 é a R1.
+
+### 3. Separação R1/R2 Usa Campo Errado
+O hook separa as reuniões assim:
+```typescript
+const meeting01Data = meetings?.find(m => m.lead_type !== 'R2');
+const meeting02Data = meetings?.find(m => m.lead_type === 'R2');
+```
+
+Mas o campo correto é `meeting_type` (valores: `r1`, `r2`), não `lead_type` (que é tipo de lead: A, B, C, R2).
 
 ---
 
-## Diagnóstico (com base no código atual)
-Hoje o `AuthContext` faz **duas inicializações concorrentes**:
+## Solução
 
-1) `supabase.auth.onAuthStateChange(...)`  
-2) `supabase.auth.getSession().then(...)`
+### Parte 1: Criar Coluna Faltante (SQL)
+Adicionar a coluna `contract_paid_at` na tabela `meeting_slot_attendees`:
 
-Ambos podem disparar `fetchUserRoles()` quase ao mesmo tempo.
+```sql
+ALTER TABLE meeting_slot_attendees 
+ADD COLUMN IF NOT EXISTS contract_paid_at TIMESTAMPTZ;
+```
 
-Se uma dessas chamadas:
-- falhar momentaneamente,
-- retornar vazio por qualquer motivo transitório (latência, token ainda acoplando, etc.),
-- ou simplesmente terminar por último,
+### Parte 2: Corrigir Hook `useIncorporadorLeadJourney`
+Modificar para buscar reuniões via `meeting_slot_attendees` (igual ao `useLeadJourney` do Kanban):
 
-ela pode **sobrescrever** o estado com `role = null` e `allRoles = []`.  
-No UI, `AppSidebar.getRoleLabel(null)` cai no default e mostra **Viewer**.  
-E guards (ex.: `R2AccessGuard`) podem negar acesso enquanto isso.
+**Antes (errado):**
+```typescript
+const { data: meetings } = await supabase
+  .from('meeting_slots')
+  .select(...)
+  .eq('deal_id', deal.id)
+```
 
-O refresh “resolve” porque muda a ordem/timing e a chamada “boa” vence.
+**Depois (correto):**
+```typescript
+const { data: attendees } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id,
+    status,
+    meeting_slots!inner(
+      id,
+      scheduled_at,
+      status,
+      meeting_type,
+      closer:closers(id, name, email)
+    )
+  `)
+  .eq('deal_id', deal.id)
+  .order('created_at', { ascending: false });
 
----
+// Separar por meeting_type
+const r1Attendee = attendees?.find(a => a.meeting_slots?.meeting_type === 'r1');
+const r2Attendee = attendees?.find(a => a.meeting_slots?.meeting_type === 'r2');
+```
 
-## Solução (alto nível)
-### A) Tornar a inicialização do Auth determinística (sem corrida)
-- Remover a duplicidade: usar **apenas uma fonte** para sessão inicial.
-- Preferência: usar somente o `onAuthStateChange` (evento `INITIAL_SESSION` já fornece a sessão inicial), e **eliminar** o `getSession()` separado — ou manter `getSession()` e ignorar `INITIAL_SESSION`. O importante é **não rodar os dois** fazendo fetch de roles.
-
-### B) Proteger contra respostas “atrasadas” (stale) sobrescrevendo o estado
-Mesmo com A, ainda é saudável ter proteção:
-- Implementar um `requestId`/`version` incremental para o carregamento de roles.
-- Antes de aplicar `setRole/setAllRoles`, checar se aquele requestId ainda é o “mais recente”.
-Isso impede que uma resposta antiga sobrescreva a mais nova.
-
-### C) Garantir que `loading` represente “sessão + roles prontas”
-- Hoje dá para cair num estado “logado, mas sem roles confiáveis”.
-- Ajustar `loading` para só virar `false` quando:
-  - não existe usuário (deslogado), OU
-  - existe usuário e as roles foram resolvidas (inclusive se não existir nenhuma role, definir explicitamente `primaryRole = 'viewer'` e `roles = ['viewer']`, se essa for a regra do produto).
-
-### D) Evitar “flash” de Acesso Negado nos guards durante carregamento
-- Atualizar `R2AccessGuard` para respeitar `loading` do `AuthContext`.
-- Enquanto `AuthContext.loading === true`, retornar skeleton/spinner ou `null` (mantendo consistência com outras telas), evitando aparecer “Acesso Negado” temporariamente.
-
----
-
-## Passo a passo de implementação (frontend)
-
-### 1) Refatorar `src/contexts/AuthContext.tsx`
-**Mudanças principais:**
-- Remover a segunda inicialização (o bloco `supabase.auth.getSession().then(...)`) OU tornar o `onAuthStateChange` ignorar `INITIAL_SESSION` se `getSession` foi escolhido.
-- Criar uma função única `handleSession(session)` responsável por:
-  - setar `session` e `user`
-  - validar bloqueio (profiles.access_status / blocked_until)
-  - carregar roles (`fetchUserRoles`)
-  - setar `role`, `allRoles`
-  - setar `loading` corretamente
-
-**Anti-race:**
-- Introduzir um `let roleLoadVersion = 0` (ref via `useRef`)  
-- A cada `handleSession` com usuário: `const myVersion = ++roleLoadVersion`
-- Após `await fetchUserRoles(...)`, somente aplicar estado se `myVersion === roleLoadVersion`.
-
-**Fallback de role (decisão de regra):**
-- Se `user_roles` vier vazio e isso for esperado, padronizar como viewer:
-  - `roles = ['viewer']`
-  - `primaryRole = 'viewer'`
-
-### 2) Ajustar `src/components/auth/R2AccessGuard.tsx`
-- Já usa `useMyR2Closer`, mas precisa evitar negar acesso enquanto o auth está “instável”.
-- Adicionar `const { loading } = useAuth()` e:
-  - Se `loading === true`, retornar `null` ou um loader leve.
-- Isso remove o “flash” de Acesso Negado quando a role ainda está sendo resolvida.
-
-### 3) (Opcional, recomendado) Ajustar `src/components/layout/AppSidebar.tsx`
-Problema atual: quando `role` é `null` ele mostra “Viewer”, o que confunde e expõe o bug visualmente.
-- Exibir algo como “Carregando…” enquanto `AuthContext.loading` for true.
-- Alternativamente, manter o Badge, mas com texto neutro (“Carregando”) em vez de “Viewer”, para evitar interpretação errada.
+### Parte 3: Reprocessar Pagamentos Pendentes
+Executar o edge function `reprocess-contract-payments` para marcar os contratos já pagos (Steeve, Christino, etc.) que não foram processados devido ao erro.
 
 ---
 
-## Passo a passo de validação (checklist)
-1) Logar como Jessica e navegar diretamente para `/crm/agenda-r2` (sem refresh):
-   - não deve aparecer Viewer temporário
-   - não deve aparecer “Acesso Negado”
-   - deve carregar e permitir acesso assim que roles forem resolvidas
-2) Repetir teste em:
-   - aba anônima / janela privada
-   - hard reload (Ctrl+F5)
-   - navegação interna (indo de `/crm` para `/crm/agenda-r2`)
-3) Confirmar que um usuário realmente “viewer-only” continua vendo Viewer corretamente.
-4) Confirmar que o comportamento de bloqueio/desativado (profiles.access_status / blocked_until) permanece correto.
+## Arquivos a Modificar
+
+| Arquivo | Mudança |
+|---------|---------|
+| **SQL (Supabase)** | Adicionar coluna `contract_paid_at` |
+| `src/hooks/useIncorporadorLeadJourney.ts` | Buscar via `meeting_slot_attendees` + usar `meeting_type` |
 
 ---
 
-## Riscos e cuidados
-- Ao mexer no `loading`, garantir que o app não “fique eternamente carregando” se houver erro de rede:
-  - Em caso de erro no fetch de roles, fazer retry controlado ou cair para fallback “viewer” com toast de erro.
-- Manter a lógica de multi-role (ROLE_PRIORITY) intacta.
+## Resultado Esperado
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Webhook de contrato pago | Erro silencioso | Marca attendee corretamente |
+| Jornada do Christino | Mostra R1 com Claudia | Mostra R1 com Julio, R2 com Claudia |
+| Jornada do Steeve | Mostra R1 com closer errado | Mostra R1 com Julio, R2 com Jessica |
 
 ---
 
-## Entregáveis
-- Refatoração do `AuthContext` para eliminar corrida e garantir consistência de roles.
-- Pequeno ajuste no `R2AccessGuard` para aguardar auth/roles.
-- (Opcional) Ajuste visual no `AppSidebar` para não exibir “Viewer” quando ainda está carregando.
+## Sequência de Implementação
+
+1. **Primeiro:** Executar SQL para criar coluna `contract_paid_at`
+2. **Segundo:** Corrigir hook `useIncorporadorLeadJourney`
+3. **Terceiro:** Chamar endpoint `/reprocess-contract-payments` para marcar pagamentos pendentes
