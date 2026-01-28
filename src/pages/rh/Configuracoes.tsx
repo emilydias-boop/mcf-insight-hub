@@ -1,8 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Briefcase, Building2, Users } from "lucide-react";
+import { Briefcase, Building2, Users, Layers } from "lucide-react";
 import CargosTab from "@/components/hr/config/CargosTab";
 import DepartamentosTab from "@/components/hr/config/DepartamentosTab";
 import SquadsTab from "@/components/hr/config/SquadsTab";
+import AreasTab from "@/components/hr/config/AreasTab";
 
 export default function ConfiguracoesRH() {
   return (
@@ -28,6 +29,10 @@ export default function ConfiguracoesRH() {
             <Users className="h-4 w-4" />
             Squads
           </TabsTrigger>
+          <TabsTrigger value="areas" className="flex items-center gap-2">
+            <Layers className="h-4 w-4" />
+            Áreas
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="cargos">
@@ -40,6 +45,10 @@ export default function ConfiguracoesRH() {
 
         <TabsContent value="squads">
           <SquadsTab />
+        </TabsContent>
+
+        <TabsContent value="areas">
+          <AreasTab />
         </TabsContent>
       </Tabs>
     </div>

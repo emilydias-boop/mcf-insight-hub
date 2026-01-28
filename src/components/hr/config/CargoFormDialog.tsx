@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Cargo, useCargoMutations } from "@/hooks/useHRConfig";
+import { Cargo, useCargoMutations, useAreas } from "@/hooks/useHRConfig";
 import {
   Dialog,
   DialogContent,
@@ -26,19 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const AREA_OPTIONS = [
-  'Inside Sales',
-  'Consórcio',
-  'Crédito',
-  'Projetos',
-  'Outros',
-  'Marketing',
-  'Financeiro',
-  'RH',
-  'TI',
-  'Diretoria',
-];
 
 const MODELO_VARIAVEL_OPTIONS = [
   { value: 'score_metricas', label: 'Score de Métricas' },
@@ -67,6 +54,7 @@ interface CargoFormDialogProps {
 
 export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoFormDialogProps) {
   const { create, update } = useCargoMutations();
+  const { data: areas } = useAreas();
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -181,9 +169,9 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {AREA_OPTIONS.map((area) => (
-                          <SelectItem key={area} value={area}>
-                            {area}
+                        {areas?.filter(a => a.ativo).map((area) => (
+                          <SelectItem key={area.id} value={area.nome}>
+                            {area.nome}
                           </SelectItem>
                         ))}
                       </SelectContent>
