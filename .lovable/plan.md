@@ -1,159 +1,108 @@
 
-# Correção do Alinhamento e Filtro de Status na Tab "Todas R2s"
+## Diagnóstico (por que ainda está desalinhado)
 
-## Problemas Identificados
+Pelo código atual, a coluna **Closer R2** ganhou `w-[140px]` no `<TableHead>` e no `<TableCell>`, mas o `<table>` está com **layout automático** (padrão do HTML). Nesse modo:
+- O navegador **redistribui as larguras** baseado no conteúdo (ex.: nome do lead, badges, etc.).
+- Mesmo com `w-[140px]`, o `table-layout: auto` pode “puxar” e **variar o alinhamento visual** conforme o conteúdo de outras colunas.
+- Além disso, quando `att.closer_color` é `null`, o “pontinho” não renderiza e o texto do closer **começa mais à esquerda** do que nas linhas que têm pontinho, parecendo “arrastado”.
 
-| Problema | Causa | Local no Código |
-|----------|-------|-----------------|
-| Coluna "Closer R2" desalinhada | Falta `width` fixa no `TableHead` | Linhas 418 e 443-452 |
-| Filtro Status só mostra "Aprovado" | Só lista status existentes nos dados, ignora leads sem status | Linhas 122-131 |
-| Leads sem status não têm badge | `renderStatusCell` não mostra "Pendente" para leads sem r2_status | Linhas 53-86 |
-
----
-
-## Solução
-
-### 1. Fixar largura da coluna "Closer R2"
-
-Adicionar largura fixa no `TableHead` para manter alinhamento consistente:
-
-```tsx
-// Antes (linha 418)
-<TableHead>Closer R2</TableHead>
-
-// Depois
-<TableHead className="w-[140px]">Closer R2</TableHead>
-```
-
-E na célula também garantir que não ultrapasse:
-
-```tsx
-// Linha 443-452 - adicionar max-width
-<TableCell>
-  <div className="flex items-center gap-2 max-w-[140px]">
-    ...
-  </div>
-</TableCell>
-```
-
-### 2. Adicionar opção "Pendente (Sem avaliação)" no filtro
-
-Modificar a lógica do filtro de status para incluir leads que **não têm** `r2_status_id`:
-
-```typescript
-// Adicionar opção especial para leads sem status
-const r2Statuses = useMemo(() => {
-  const unique = new Map<string, string>();
-  let hasWithoutStatus = false;
-  
-  attendees.forEach(att => {
-    if (att.r2_status_id && att.r2_status_name) {
-      unique.set(att.r2_status_id, att.r2_status_name);
-    } else {
-      hasWithoutStatus = true;  // Existem leads sem status
-    }
-  });
-  
-  const statuses = Array.from(unique.entries()).map(([id, name]) => ({ id, name }));
-  
-  // Adicionar opção para filtrar leads sem status
-  if (hasWithoutStatus) {
-    statuses.unshift({ id: '__no_status__', name: 'Pendente (Sem avaliação)' });
-  }
-  
-  return statuses;
-}, [attendees]);
-```
-
-### 3. Ajustar lógica de filtragem
-
-```typescript
-// Na linha 167
-if (statusFilter !== 'all') {
-  if (statusFilter === '__no_status__') {
-    // Filtrar leads SEM status R2
-    if (att.r2_status_id) return false;
-  } else {
-    // Filtrar por status específico
-    if (att.r2_status_id !== statusFilter) return false;
-  }
-}
-```
-
-### 4. Atualizar `renderStatusCell` para mostrar "Pendente"
-
-```typescript
-function renderStatusCell(att: R2CarrinhoAttendee) {
-  const isContractPaid = att.status === 'contract_paid' || att.meeting_status === 'contract_paid';
-  const isAprovado = att.r2_status_name?.toLowerCase().includes('aprovado');
-  
-  // Caso 1: Contrato Pago
-  if (isContractPaid) { /* ... mantém igual ... */ }
-  
-  // Caso 2: Aprovado
-  if (isAprovado) { /* ... mantém igual ... */ }
-  
-  // Caso 3: Tem status R2 definido (Em análise, Reprovado, etc)
-  if (att.r2_status_name) {
-    return (
-      <Badge variant="outline" className="text-xs bg-purple-500/10 border-purple-500 text-purple-500">
-        {att.r2_status_name}
-      </Badge>
-    );
-  }
-  
-  // Caso 4: Sem status R2 - Mostra posição (Realizada, No-show, Agendada)
-  const positionInfo = STATUS_LABELS[att.status] || STATUS_LABELS[att.meeting_status] || STATUS_LABELS.scheduled;
-  
-  return (
-    <Badge variant="outline" className={cn('text-xs', positionInfo.className)}>
-      {positionInfo.label}
-    </Badge>
-  );
-}
-```
+## Objetivo do ajuste
+1) Garantir que a tabela use **layout fixo** (colunas com largura realmente estável).
+2) Garantir que o conteúdo da célula de closer tenha **prefixo com largura constante** (pontinho sempre ocupa espaço), mantendo o texto alinhado.
+3) (Relacionado ao que você comentou antes) Garantir que o filtro de status mostre **todos os status** e principalmente os **sem atualização**, mesmo quando o `r2_status_name` estiver vindo nulo por causa do mapeamento.
 
 ---
 
-## Arquivo a Modificar
+## Mudanças propostas
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/components/crm/R2AgendadasList.tsx` | Corrigir larguras, adicionar opção "Sem status", melhorar badges |
+### A) Travar layout da tabela (resolver desalinhamento estrutural)
+**Arquivo:** `src/components/crm/R2AgendadasList.tsx`
+
+- Adicionar `table-fixed` na tabela:
+  - ` <Table className="table-fixed"> ... </Table> `
+- Definir largura também para as outras colunas para reduzir “efeito sanfona”:
+  - Horário: `w-[80px]`
+  - Dia R1: `w-[90px]`
+  - Closer: `w-[160px]` (podemos aumentar um pouco para nomes longos) + `min-w-[160px]`
+  - Status: `w-[180px]` + `min-w-[180px]` (porque badges/CP podem variar)
+  - Nome Lead fica como a coluna “flexível” (sem width fixa)
+
+**Resultado esperado:** as colunas deixam de mudar de largura dependendo do conteúdo e o alinhamento vertical por coluna fica estável.
 
 ---
 
-## Resultado Esperado
+### B) Alinhamento interno do conteúdo “Closer” (resolver “arrastando o nome”)
+**Arquivo:** `src/components/crm/R2AgendadasList.tsx`
 
-### Filtro de Status com todas as opções:
-```
-▼ Todos Status
-  ✓ Todos Status
-  Pendente (Sem avaliação)   ← NOVO
-  Aprovado
-  Em análise
-  Reprovado
-  Desistente
-  ...
-```
+Hoje o “pontinho” só aparece quando `att.closer_color` existe. Em linhas sem cor, o texto começa antes.
 
-### Coluna Status mostrando corretamente:
-| Situação | Badge Exibido |
-|----------|---------------|
-| Contrato pago + Aprovado | `CP 28/01` + `Aprovado` |
-| Aprovado (sem CP) | `Aprovado` (verde) |
-| Reprovado/Desistente | `Reprovado` / `Desistente` (roxo) |
-| Sem avaliação + Realizada | `Realizada` (verde) |
-| Sem avaliação + No-show | `No-show` (vermelho) |
-| Sem avaliação + Agendada | `Agendada` (azul) |
+- Renderizar **sempre** um “slot” do pontinho com largura fixa:
+  - Se tiver cor: bolinha normal
+  - Se não tiver cor: bolinha “invisível” (`opacity-0`) ou `bg-transparent`, mas ocupando o mesmo espaço
 
-### Coluna Closer alinhada:
-```
-| Closer R2         |
-|-------------------|
-| ● Jessica Bellini |
-| ● Jessica Bellini |
-| ● Thobson Motta   |
-```
+Exemplo de abordagem:
+- Trocar:
+  - ` {att.closer_color && <div className="w-2.5 h-2.5 ..." />}`
+- Por:
+  - `<div className="w-2.5 h-2.5 rounded-full shrink-0" style={...} />`
+  - Quando não houver cor, usar `opacity-0` (mantém espaço) e remover o `style`.
 
-Todas as linhas com alinhamento consistente graças à largura fixa.
+- Completar com:
+  - `truncate` e `whitespace-nowrap` no texto para nunca quebrar linha e empurrar layout.
+
+**Resultado esperado:** o nome do closer começa sempre no mesmo X (mesma “coluna interna”), independente de ter cor ou não.
+
+---
+
+### C) “Status faltando” (garantir lista completa e incluir não atualizados)
+O componente já adiciona “Pendente (Sem avaliação)” quando `r2_status_id` é nulo. Porém você relatou que só aparece “Aprovado” e o resto não.
+
+A causa mais provável (pela arquitetura atual):
+- `useR2CarrinhoData` busca `r2_status_options` com `.eq('is_active', true)`.
+- Se existem status antigos/inativos, o attendee pode ter `r2_status_id` preenchido, mas o `statusMap` não encontra o nome => `r2_status_name` vira `null`.
+- Assim:
+  - A lista `r2Statuses` no `R2AgendadasList` não consegue listar esses status (porque depende de `r2_status_name`).
+  - O render do status pode cair no fallback (posição) ou parecer “vazio” dependendo do layout/badge.
+
+**Ajuste proposto (mínimo e efetivo):**
+**Arquivo:** `src/hooks/useR2CarrinhoData.ts`
+- Alterar a query de status options para trazer **todos** os status (remover o filtro `is_active = true`) pelo menos para o carrinho/listagens:
+  - de: `.eq('is_active', true)`
+  - para: (sem esse filtro) ou `.select('id,name')` sem restrição
+
+**E no componente `R2AgendadasList.tsx`**
+- Ao montar `r2Statuses`, considerar também casos em que:
+  - `att.r2_status_id` existe, mas `att.r2_status_name` ainda é nulo (isso deve diminuir muito após o ajuste no hook).
+  - Se ainda ocorrer, exibir um label fallback tipo: `Status (sem nome)` para não “sumir”.
+
+**Resultado esperado:**
+- O dropdown de status passa a listar: Aprovado, Em análise, Reprovado, Desistente etc.
+- E “Pendente (Sem avaliação)” continua cobrindo quem não tem status.
+
+---
+
+## Checklist de validação (QA)
+1) Na tab **Todas R2s**, olhar 3 dias diferentes e confirmar:
+   - “Closer R2” está alinhado (texto sempre começa na mesma posição).
+   - A largura da coluna não oscila conforme nomes/badges.
+2) Filtrar por:
+   - Status: “Pendente (Sem avaliação)”
+   - Status: um status diferente de Aprovado (ex.: Reprovado/Em análise) e confirmar que aparece.
+3) Testar em tela menor (responsivo) com scroll horizontal:
+   - Tabela permanece estável e legível.
+
+---
+
+## Arquivos que serão alterados
+- `src/components/crm/R2AgendadasList.tsx`
+  - `Table` com `table-fixed`
+  - widths/min-widths nas colunas
+  - “slot fixo” do pontinho do closer (mesmo sem cor)
+- `src/hooks/useR2CarrinhoData.ts`
+  - buscar `r2_status_options` sem restringir por `is_active`, para não perder nomes de status existentes nos dados
+
+---
+
+## Riscos e cuidados
+- Remover o filtro `is_active` pode expor status antigos no mapeamento (somente leitura/visualização). Isso é desejado aqui para não “sumir” status históricos.
+- Caso exista algum lugar no app que dependa estritamente de “ativos” para criação/edição (select de edição), manteremos esses outros hooks como estão (somente o `useR2CarrinhoData` muda para exibição correta).
