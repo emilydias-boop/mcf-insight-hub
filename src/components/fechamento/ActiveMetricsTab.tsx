@@ -36,8 +36,8 @@ interface MetricaLocal {
 
 export const ActiveMetricsTab = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedCargoId, setSelectedCargoId] = useState<string>('');
-  const [selectedSquad, setSelectedSquad] = useState<string>('');
+  const [selectedCargoId, setSelectedCargoId] = useState<string>('__all__');
+  const [selectedSquad, setSelectedSquad] = useState<string>('__all__');
   const [localMetrics, setLocalMetrics] = useState<MetricaLocal[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -61,8 +61,8 @@ export const ActiveMetricsTab = () => {
   // Buscar métricas salvas
   const { data: savedMetrics, isLoading } = useFechamentoMetricas(
     anoMes, 
-    selectedCargoId || undefined, 
-    selectedSquad || undefined
+    selectedCargoId === '__all__' ? undefined : selectedCargoId, 
+    selectedSquad === '__all__' ? undefined : selectedSquad
   );
 
   // Mutations
@@ -120,8 +120,8 @@ export const ActiveMetricsTab = () => {
       .filter(m => m.ativo)
       .map(m => ({
         ano_mes: anoMes,
-        cargo_catalogo_id: selectedCargoId || null,
-        squad: selectedSquad || null,
+        cargo_catalogo_id: selectedCargoId === '__all__' ? null : selectedCargoId,
+        squad: selectedSquad === '__all__' ? null : selectedSquad,
         nome_metrica: m.nome_metrica,
         label_exibicao: m.label_exibicao,
         peso_percentual: m.peso_percentual,
@@ -236,7 +236,7 @@ export const ActiveMetricsTab = () => {
                 <SelectValue placeholder="Todos os cargos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos os cargos</SelectItem>
+                <SelectItem value="__all__">Todos os cargos</SelectItem>
                 {Object.entries(cargosByArea).map(([area, cargosArea]) => (
                   <div key={area}>
                     <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground bg-muted/50">
@@ -261,7 +261,7 @@ export const ActiveMetricsTab = () => {
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas</SelectItem>
+                <SelectItem value="__all__">Todas</SelectItem>
                 <SelectItem value="incorporador">Incorporador</SelectItem>
                 <SelectItem value="consorcio">Consórcio</SelectItem>
                 <SelectItem value="credito">Crédito</SelectItem>
