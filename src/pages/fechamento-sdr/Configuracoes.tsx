@@ -47,9 +47,10 @@ import {
 } from '@/hooks/useSdrFechamento';
 import { Sdr, SdrCompPlan, SdrStatus } from '@/types/sdr-fechamento';
 import { formatCurrency } from '@/lib/formatters';
-import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight, Trash2, Target } from 'lucide-react';
 import { toast } from 'sonner';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
+import { ActiveMetricsTab } from '@/components/fechamento/ActiveMetricsTab';
 
 const StatusBadge = ({ status }: { status: SdrStatus }) => {
   const config = {
@@ -571,21 +572,25 @@ const ConfiguracoesSdr = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Configurações de Fechamento SDR</h1>
+        <h1 className="text-3xl font-bold">Configurações de Fechamento</h1>
         <p className="text-muted-foreground">
-          Gerencie SDRs e planos de compensação OTE
+          Gerencie equipe, planos de compensação e métricas
         </p>
       </div>
 
-      <Tabs defaultValue="sdrs" className="space-y-4">
+      <Tabs defaultValue="equipe" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="sdrs" className="flex items-center gap-2">
+          <TabsTrigger value="equipe" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            SDRs
+            Equipe
           </TabsTrigger>
           <TabsTrigger value="plans" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Planos OTE
+          </TabsTrigger>
+          <TabsTrigger value="metricas" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Métricas Ativas
           </TabsTrigger>
           <TabsTrigger value="calendar" className="flex items-center gap-2">
             <Calendar className="h-4 w-4" />
@@ -593,10 +598,10 @@ const ConfiguracoesSdr = () => {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sdrs">
+        <TabsContent value="equipe">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>SDRs Cadastrados</CardTitle>
+              <CardTitle>Equipe Cadastrada</CardTitle>
               <SdrFormDialog onSuccess={() => refetchSdrs()} />
             </CardHeader>
             <CardContent>
@@ -778,6 +783,10 @@ const ConfiguracoesSdr = () => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="metricas">
+          <ActiveMetricsTab />
         </TabsContent>
 
         <TabsContent value="calendar">

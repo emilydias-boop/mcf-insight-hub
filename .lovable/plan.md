@@ -227,10 +227,12 @@ CREATE POLICY "Managers can manage metrics" ON fechamento_metricas_mes
 
 ## Sequência de Implementação
 
-### Fase 1: Renomear e Ajustar UI (Imediato)
-1. Renomear títulos e labels na página de configurações
-2. Mudar nome da aba "SDRs" para "Equipe"
-3. Implementar expand/collapse no calendário de dias úteis
+### Fase 1: Renomear e Ajustar UI ✅ CONCLUÍDO
+1. ✅ Renomear títulos e labels na página de configurações
+2. ✅ Mudar nome da aba "SDRs" para "Equipe"
+3. ✅ Implementar expand/collapse no calendário de dias úteis
+4. ✅ Adicionar nova aba "Métricas Ativas"
+5. ✅ Criar tabela `fechamento_metricas_mes` no banco
 
 ### Fase 2: Integração com Employees (Próximo)
 1. Criar `TeamMembersTab.tsx` usando `useEmployees()`
@@ -238,9 +240,9 @@ CREATE POLICY "Managers can manage metrics" ON fechamento_metricas_mes
 3. Manter sincronização com tabela `sdr` existente
 
 ### Fase 3: Métricas Dinâmicas (Futuro)
-1. Criar tabela `fechamento_metricas_mes`
-2. Criar hook `useFechamentoMetricas`
-3. Criar componente `ActiveMetricsTab.tsx`
+1. ✅ Criar tabela `fechamento_metricas_mes`
+2. ✅ Criar hook `useFechamentoMetricas`
+3. ✅ Criar componente `ActiveMetricsTab.tsx`
 4. Modificar lógica de cálculo de payout para usar métricas dinâmicas
 
 ---

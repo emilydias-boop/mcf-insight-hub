@@ -3583,6 +3583,59 @@ export type Database = {
         }
         Relationships: []
       }
+      fechamento_metricas_mes: {
+        Row: {
+          ano_mes: string
+          ativo: boolean | null
+          cargo_catalogo_id: string | null
+          created_at: string | null
+          fonte_dados: string | null
+          id: string
+          label_exibicao: string
+          meta_valor: number | null
+          nome_metrica: string
+          peso_percentual: number | null
+          squad: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ano_mes: string
+          ativo?: boolean | null
+          cargo_catalogo_id?: string | null
+          created_at?: string | null
+          fonte_dados?: string | null
+          id?: string
+          label_exibicao: string
+          meta_valor?: number | null
+          nome_metrica: string
+          peso_percentual?: number | null
+          squad?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          ativo?: boolean | null
+          cargo_catalogo_id?: string | null
+          created_at?: string | null
+          fonte_dados?: string | null
+          id?: string
+          label_exibicao?: string
+          meta_valor?: number | null
+          nome_metrica?: string
+          peso_percentual?: number | null
+          squad?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fechamento_metricas_mes_cargo_catalogo_id_fkey"
+            columns: ["cargo_catalogo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fechamento_pessoa: {
         Row: {
           ajuste_manual_motivo: string | null
