@@ -92,6 +92,10 @@ export const getAuthorizedOriginsForRole = (role: AppRole | null): string[] => {
 };
 
 // Helper para verificar se é um SDR (acesso restrito ao Kanban)
-export const isSdrRole = (role: AppRole | null): boolean => {
-  return role === 'sdr';
+// Suporta usuários com múltiplas roles (ex: SDR + Closer)
+export const isSdrRole = (role: AppRole | null, allRoles?: AppRole[]): boolean => {
+  if (role === 'sdr') return true;
+  // Se tem allRoles, verificar se SDR está presente em qualquer role
+  if (allRoles && allRoles.includes('sdr')) return true;
+  return false;
 };

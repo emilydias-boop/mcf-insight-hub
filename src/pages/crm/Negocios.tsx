@@ -41,7 +41,7 @@ const Negocios = () => {
   // Hook que abre o modal global quando lead atende (via TwilioContext)
   useCallQualificationTrigger();
   
-  const { role, user } = useAuth();
+  const { role, user, allRoles } = useAuth();
   const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
   const [filters, setFilters] = useState<DealFiltersState>({
@@ -63,7 +63,8 @@ const Negocios = () => {
   const { data: myBU, isLoading: isLoadingBU } = useMyBU();
   
   // Verificar se é SDR (acesso restrito ao Pipeline Inside Sales)
-  const isSdr = isSdrRole(role);
+  // Usa allRoles para suportar usuários com múltiplas roles (ex: SDR + Closer)
+  const isSdr = isSdrRole(role, allRoles);
   const authorizedOrigins = getAuthorizedOriginsForRole(role);
   
   // Origens autorizadas baseadas na BU do usuário
