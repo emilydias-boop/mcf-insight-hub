@@ -1,152 +1,193 @@
 
-# Corrigir No-Shows que Aparecem Mesmo Após Reembolso
+# Corrigir Acesso de Usuário com Múltiplas Roles (SDR + Closer)
 
-## Problema Identificado
+## Contexto do Problema
 
-**Caso concreto: Diéssi Borba**
+A usuária **Jessica Martins** possui duas roles no sistema: `sdr` e `closer`. Devido ao sistema de prioridade de roles, o sistema a trata apenas como `closer` (prioridade 4), ignorando suas funções de SDR (prioridade 8).
 
-A lead Diéssi aparece na lista de No-Shows mesmo após ter solicitado reembolso. Isso ocorre porque:
-
-1. Ela foi marcada como **"No-show"** primeiro → `meeting_slot_attendees.status = 'no_show'`
-2. Depois, clicaram em **"Reembolso"** no drawer → `meeting_slots.status = 'refunded'`
-3. **Porém**, o `RefundModal` usa `useUpdateR2MeetingStatus`, que **não atualiza** o `meeting_slot_attendees.status`
-
-### Diferença nos Fluxos
-
-| Ação | Hook Usado | Atualiza Attendee? |
-|------|------------|-------------------|
-| "Realizada" / "No-show" | `useUpdateAttendeeAndSlotStatus` | Sim |
-| "Reembolso" | `useUpdateR2MeetingStatus` | Não (só meeting) |
-
-### Resultado
-
-A query de No-Shows busca `meeting_slot_attendees.status = 'no_show'`, então a Diéssi continua aparecendo mesmo que o meeting esteja como `refunded`.
+### Dados do Usuário
+- **User ID:** `b0ea004d-ca72-4190-ab69-a9685b34bd06`
+- **Email:** jessica.martins@minhacasafinanciada.com
+- **Roles:** closer (prioridade 4), sdr (prioridade 8)
+- **Cadastro em closers:** meeting_type = 'r2' (R2 apenas)
+- **Deals como owner:** 361 no PIPELINE INSIDE SALES
+- **BU:** incorporador
 
 ---
 
-## Solução em Duas Partes
+## Problemas Identificados
 
-### Parte 1: Corrigir `useUpdateR2MeetingStatus` para Atualizar Attendees
+### 1. Agenda R1 Vazia
+O sistema detecta `role === 'closer'`, então mostra "Minha Agenda" para closers. Porém:
+- O hook `useMyCloser` encontra Jessica na tabela `closers`
+- Mas ela está cadastrada com `meeting_type = 'r2'`
+- A Agenda R1 filtra `meeting_type = 'r1'`
+- **Resultado:** Nenhuma reunião aparece
 
-**Arquivo:** `src/hooks/useR2AgendaData.ts`
+### 2. Negócios Não Mostram Deals
+- A função `isSdrRole(role)` retorna `false` porque `role === 'closer'`
+- Isso faz com que a lógica de pré-seleção de origem para SDRs não funcione
+- O filtro de deals usa `isRestrictedRole` que inclui closers, mas não usa a lógica específica de SDR
 
-Adicionar atualização de todos os attendees do meeting para o mesmo status (especialmente para `refunded`):
-
-```text
-// Após atualizar meeting_slots.status (linha 33)
-// Adicionar: Atualizar status de todos os attendees deste meeting
-await supabase
-  .from('meeting_slot_attendees')
-  .update({ status })
-  .eq('meeting_slot_id', meetingId);
-```
-
-**Motivo:** Quando um meeting inteiro é marcado como `refunded`, faz sentido que todos os participantes também tenham esse status.
-
-### Parte 2: Adicionar Filtro de Segurança na Query de No-Shows
-
-**Arquivo:** `src/hooks/useR2NoShowLeads.ts`
-
-Adicionar verificação para excluir attendees cujo deal tenha `reembolso_solicitado = true`:
-
-Na transformação dos leads (após linha 242), adicionar:
-
-```text
-// Skip if deal has reembolso_solicitado flag
-const customFields = att.deal?.custom_fields as Record<string, unknown> | null;
-if (customFields?.reembolso_solicitado === true) {
-  return;
-}
-```
-
-E no contador (`useR2NoShowsCount`), fazer verificação similar buscando os deal_ids e filtrando aqueles com flag de reembolso.
+### 3. Agenda R2 Sem Visão Personalizada
+- A Agenda R2 mostra todos os closers R2 sem filtro "Minha Agenda"
+- Jessica deveria ver apenas suas próprias reuniões R2
 
 ---
 
-## Mudanças Detalhadas
+## Solução Proposta
 
-### 1. `src/hooks/useR2AgendaData.ts` - `useUpdateR2MeetingStatus`
+### Parte 1: Corrigir Verificação de SDR para Multi-Roles
 
-**Adicionar após linha 33 (após atualizar meeting_slots):**
+**Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
 
-```typescript
-// 1.5 Update all attendees of this meeting to the same status
-await supabase
-  .from('meeting_slot_attendees')
-  .update({ status })
-  .eq('meeting_slot_id', meetingId);
+Modificar a função `isSdrRole` para aceitar o array `allRoles` e verificar se o usuário tem role SDR:
+
+```text
+// ANTES: Verifica apenas o role principal
+export const isSdrRole = (role: AppRole | null): boolean => {
+  return role === 'sdr';
+};
+
+// DEPOIS: Verifica se tem SDR em qualquer role
+export const isSdrRole = (role: AppRole | null, allRoles?: AppRole[]): boolean => {
+  if (role === 'sdr') return true;
+  // Se tem allRoles, verificar se SDR está presente
+  if (allRoles && allRoles.includes('sdr')) return true;
+  return false;
+};
 ```
 
-### 2. `src/hooks/useR2NoShowLeads.ts` - `useR2NoShowLeads`
+### Parte 2: Passar `allRoles` para Verificação em Negocios.tsx
 
-**Modificar a transformação de attendees (linha 242) para verificar flag de reembolso:**
+**Arquivo:** `src/pages/crm/Negocios.tsx`
 
-Adicionar condição:
+Modificar para usar `allRoles` do AuthContext:
 
-```typescript
-// Skip if deal has reembolso_solicitado flag  
-const customFields = att.deal?.custom_fields as Record<string, unknown> | null;
-if (customFields?.reembolso_solicitado === true) {
-  return;
-}
+```text
+// ANTES
+const { role, user } = useAuth();
+const isSdr = isSdrRole(role);
+
+// DEPOIS
+const { role, user, allRoles } = useAuth();
+const isSdr = isSdrRole(role, allRoles);
 ```
 
-### 3. `src/hooks/useR2NoShowLeads.ts` - `useR2NoShowsCount`
+### Parte 3: Ajustar Agenda R1 para Usuários Multi-Role
 
-**Adicionar busca de deals com reembolso para subtrair do contador:**
+**Arquivo:** `src/pages/crm/Agenda.tsx`
 
-```typescript
-// Step 2.5: Get deal_ids of no-shows and check for refunded deals
-const { data: noShowDeals } = await supabase
-  .from('meeting_slot_attendees')
-  .select('id, deal_id')
-  .in('id', noShowIds);
+Modificar a lógica para verificar se o usuário é "apenas closer" ou "também SDR":
 
-// Filter out those with reembolso_solicitado
-const dealIdsToCheck = noShowDeals?.filter(a => a.deal_id).map(a => a.deal_id as string) || [];
-let refundedDealIds = new Set<string>();
-if (dealIdsToCheck.length > 0) {
-  const { data: refundedDeals } = await supabase
-    .from('crm_deals')
-    .select('id, custom_fields')
-    .in('id', dealIdsToCheck);
+```text
+// ANTES
+const isCloser = role === 'closer';
+
+// DEPOIS
+const { role, allRoles } = useAuth();
+// Usuário é closer PURO se tem role closer mas NÃO tem SDR
+const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
+// Para filtering de reuniões e UI "Minha Agenda"
+const isCloser = role === 'closer';
+```
+
+Se o usuário tem SDR também, mostrar a agenda normal (não "Minha Agenda") para que possa agendar para outros closers.
+
+### Parte 4: Adicionar Visão "Minha Agenda" na Agenda R2
+
+**Arquivo:** `src/pages/crm/AgendaR2.tsx`
+
+Adicionar lógica similar à Agenda R1 para closers R2:
+
+```text
+// Adicionar hook para identificar closer R2 do usuário
+const { data: myR2Closer } = useMyR2Closer();
+const isR2Closer = !!myR2Closer?.id;
+
+// Filtrar reuniões se é closer R2
+const filteredMeetings = useMemo(() => {
+  let filtered = meetings;
   
-  refundedDealIds = new Set(
-    refundedDeals?.filter(d => (d.custom_fields as any)?.reembolso_solicitado === true).map(d => d.id) || []
-  );
-}
-
-// Map no-show IDs to their deal_ids for filtering
-const noShowsWithRefundedDeals = new Set(
-  noShowDeals?.filter(a => a.deal_id && refundedDealIds.has(a.deal_id)).map(a => a.id) || []
-);
-
-// Step 3: Count = total - rescheduled - refunded_deals
-return noShowIds.length - rescheduledParentIds.size - noShowsWithRefundedDeals.size;
+  // Se é closer R2, mostrar apenas suas reuniões
+  if (isR2Closer && myR2Closer?.id) {
+    filtered = filtered.filter(m => m.closer?.id === myR2Closer.id);
+  }
+  
+  // ... resto dos filtros
+}, [meetings, isR2Closer, myR2Closer?.id, closerFilter, statusFilter]);
 ```
+
+### Parte 5: Criar Hook `useMyR2Closer`
+
+**Arquivo:** `src/hooks/useMyR2Closer.ts` (novo arquivo)
+
+```text
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+
+export function useMyR2Closer() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['my-r2-closer', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+
+      // Buscar email do usuário
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.email) return null;
+
+      // Buscar closer R2 pelo email
+      const { data: closer, error } = await supabase
+        .from('closers')
+        .select('id, name, email, is_active')
+        .ilike('email', profile.email)
+        .eq('meeting_type', 'r2')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error) throw error;
+      return closer;
+    },
+    enabled: !!user?.id,
+  });
+}
+```
+
+---
+
+## Resumo das Mudanças
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/auth/NegociosAccessGuard.tsx` | Modificar `isSdrRole` para aceitar `allRoles` |
+| `src/pages/crm/Negocios.tsx` | Passar `allRoles` para `isSdrRole` |
+| `src/pages/crm/Agenda.tsx` | Usar `allRoles` para determinar comportamento |
+| `src/pages/crm/AgendaR2.tsx` | Adicionar visão "Minha Agenda" para closers R2 |
+| `src/hooks/useMyR2Closer.ts` | Criar hook para identificar closer R2 |
 
 ---
 
 ## Resultado Esperado
 
-| Situação | Antes | Depois |
-|----------|-------|--------|
-| No-show → Reembolso | Continua em No-Shows | Sai de No-Shows imediatamente |
-| Contador de No-Shows | Conta leads reembolsados | Não conta leads reembolsados |
-| Dados antigos (Diéssi) | Aparece na lista | Não aparece (filtro por flag) |
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Jessica na Agenda R1 | Vazia (closer R2) | Mostra como SDR (pode agendar) |
+| Jessica nos Negócios | Não mostra deals | Mostra 361 deals como owner |
+| Jessica na Agenda R2 | Vê todos os closers | Vê apenas suas reuniões R2 |
 
 ---
 
-## Arquivos a Modificar
+## Observações Técnicas
 
-1. `src/hooks/useR2AgendaData.ts` - Atualizar attendees junto com meeting
-2. `src/hooks/useR2NoShowLeads.ts` - Filtrar leads com flag de reembolso (lista e contador)
-
----
-
-## Nota sobre Retroatividade
-
-- **Parte 1** corrige novos reembolsos (atualiza attendee automaticamente)
-- **Parte 2** corrige dados históricos (exclui por flag no deal)
-
-Juntas, as duas partes garantem que nenhum lead reembolsado apareça em No-Shows.
+- A mudança é retrocompatível: usuários com apenas uma role continuarão funcionando normalmente
+- A prioridade de roles continua existindo para UI/redirecionamento
+- A verificação `allRoles.includes('sdr')` garante que usuários multi-role tenham acesso correto
+- O hook `useMyR2Closer` é separado do `useMyCloser` para evitar conflitos de `meeting_type`
