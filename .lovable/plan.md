@@ -1,206 +1,140 @@
 
+# Simplificar Campos de Qualificação R2
 
-# Adicionar Configurações ao Sidebar + Nova Página de Prova Equipe
+## Resumo das Alterações
 
-## Problema 1: Configurações do RH não aparece no sidebar
-
-O menu RH atualmente só tem "Colaboradores". A página `/rh/configuracoes` existe e está roteada, mas não está visível no sidebar.
-
-## Problema 2: Funcionalidade de Prova Equipe
-
-Diego precisa de uma interface para:
-1. Criar provas com tema/assunto
-2. Buscar colaboradores pelo nome
-3. Registrar a nota de cada colaborador
-4. Visualizar o histórico de notas (refletir na ficha do colaborador)
+| Campo | Estado Atual | Novo Formato |
+|-------|--------------|--------------|
+| **Profissão** | Select com ~15 opções | Input de texto livre |
+| **Tem terreno?** | Select com 4 opções | Select com apenas "Sim" / "Não" |
+| **Tem imóvel?** | Select com 3 opções | Select com apenas "Sim" / "Não" |
+| **Já constrói?** | Select com 3 opções | Select com apenas "Sim" / "Não" |
 
 ---
-
-## Alterações no Sidebar
-
-**Arquivo:** `src/components/layout/AppSidebar.tsx`
-
-Atualizar o item "RH" para incluir subitens:
-
-| Subitem | Rota | Descrição |
-|---------|------|-----------|
-| Colaboradores | /rh/colaboradores | Lista de colaboradores |
-| Prova Equipe | /rh/prova-equipe | Registro de notas de prova |
-| Configurações | /rh/configuracoes | Cargos, áreas, squads, departamentos |
-
----
-
-## Nova Tabela: `employee_exams`
-
-Armazenar as provas/avaliações aplicadas:
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID | Identificador |
-| titulo | TEXT | Tema/nome da prova (ex: "Prova Semanal 28/01") |
-| descricao | TEXT | Descrição opcional |
-| data_aplicacao | DATE | Data em que foi aplicada |
-| aplicador_id | UUID | Quem aplicou (user_id) |
-| ativo | BOOLEAN | Se a prova está ativa |
-| created_at / updated_at | TIMESTAMPTZ | Timestamps |
-
-## Nova Tabela: `employee_exam_scores`
-
-Armazenar as notas individuais:
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID | Identificador |
-| exam_id | UUID | FK para employee_exams |
-| employee_id | UUID | FK para employees |
-| nota | DECIMAL | Nota obtida (0-10 ou %) |
-| observacao | TEXT | Comentário opcional |
-| created_at / updated_at | TIMESTAMPTZ | Timestamps |
-
----
-
-## Nova Página: Prova Equipe
-
-**Rota:** `/rh/prova-equipe`
-
-### Interface proposta:
-
-```text
-+--------------------------------------------------+
-| Prova Equipe                                      |
-| Registre notas de provas e avaliações da equipe  |
-+--------------------------------------------------+
-| [+ Nova Prova]                                   |
-+--------------------------------------------------+
-| Provas Recentes                                  |
-+--------------------------------------------------+
-| Data       | Tema              | Participantes  |
-| 28/01/2026 | Técnicas de Venda |      12        |
-| 21/01/2026 | Produto MCF       |       8        |
-+--------------------------------------------------+
-```
-
-### Dialog de Nova Prova:
-- Campo: Título da prova
-- Campo: Data de aplicação (default: hoje)
-- Campo: Descrição (opcional)
-
-### Drawer de Registro de Notas:
-Ao clicar em uma prova:
-
-```text
-+--------------------------------------------------+
-| Prova: Técnicas de Venda | 28/01/2026            |
-+--------------------------------------------------+
-| [Buscar colaborador...]                          |
-+--------------------------------------------------+
-| Participante        | Nota    | Obs     | Ação  |
-| João Silva          |  8.5    |         | [x]   |
-| Maria Santos        |  9.0    | Ótimo!  | [x]   |
-+--------------------------------------------------+
-| [+ Adicionar participante]                       |
-+--------------------------------------------------+
-```
-
-### Reflexo na Ficha do Colaborador:
-
-Adicionar uma nova aba "Avaliações" no drawer do colaborador mostrando:
-- Histórico de provas realizadas
-- Notas obtidas
-- Média geral
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/pages/rh/ProvaEquipe.tsx` | Página principal de provas |
-| `src/components/hr/exams/ExamFormDialog.tsx` | Dialog para criar prova |
-| `src/components/hr/exams/ExamScoresDrawer.tsx` | Drawer para registrar notas |
-| `src/components/hr/exams/EmployeeSearchCombobox.tsx` | Busca de colaboradores por nome |
-| `src/components/hr/tabs/EmployeeExamsTab.tsx` | Aba de avaliações no drawer do colaborador |
-| `src/hooks/useExams.ts` | Hooks para CRUD de provas e notas |
 
 ## Arquivos a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/components/layout/AppSidebar.tsx` | Adicionar subitens ao menu RH |
-| `src/App.tsx` | Adicionar rota /rh/prova-equipe |
-| `src/components/hr/EmployeeDrawer.tsx` | Adicionar aba de Avaliações |
-
----
-
-## Migração SQL
-
-```sql
--- Tabela de provas/avaliações
-CREATE TABLE employee_exams (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  titulo TEXT NOT NULL,
-  descricao TEXT,
-  data_aplicacao DATE DEFAULT CURRENT_DATE,
-  aplicador_id UUID REFERENCES auth.users(id),
-  ativo BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Tabela de notas
-CREATE TABLE employee_exam_scores (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  exam_id UUID NOT NULL REFERENCES employee_exams(id) ON DELETE CASCADE,
-  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  nota DECIMAL(5,2) NOT NULL CHECK (nota >= 0 AND nota <= 10),
-  observacao TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  created_by UUID REFERENCES auth.users(id),
-  UNIQUE(exam_id, employee_id)
-);
-
--- RLS
-ALTER TABLE employee_exams ENABLE ROW LEVEL SECURITY;
-ALTER TABLE employee_exam_scores ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Auth read exams" ON employee_exams FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Auth write exams" ON employee_exams FOR ALL USING (auth.role() = 'authenticated');
-
-CREATE POLICY "Auth read scores" ON employee_exam_scores FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Auth write scores" ON employee_exam_scores FOR ALL USING (auth.role() = 'authenticated');
-```
-
----
-
-## Fluxo de Uso
-
-1. Diego acessa **RH > Prova Equipe**
-2. Clica em **"+ Nova Prova"** e preenche o tema
-3. Na lista, clica na prova para abrir o drawer de notas
-4. Busca colaboradores pelo nome e registra as notas
-5. As notas aparecem na ficha individual de cada colaborador (aba Avaliações)
+| `src/types/r2Agenda.ts` | Simplificar `TERRENO_OPTIONS`, `IMOVEL_OPTIONS` e `JA_CONSTROI_OPTIONS` |
+| `src/components/crm/r2-drawer/R2QualificationTab.tsx` | Trocar Profissão de Select para Input |
 
 ---
 
 ## Detalhes Técnicos
 
-### Hook useExams.ts
-- `useExams()` - Lista todas as provas com contagem de participantes
-- `useExam(id)` - Detalhes de uma prova específica
-- `useExamScores(examId)` - Notas de uma prova
-- `useEmployeeExamHistory(employeeId)` - Histórico de provas do colaborador
-- Mutations para CRUD completo
+### 1. Alterações em `src/types/r2Agenda.ts`
 
-### Componente EmployeeSearchCombobox
-- Input com autocomplete
-- Busca na tabela employees por nome
-- Usa Combobox do shadcn/ui (cmdk)
-- Filtra colaboradores ativos
+**Antes:**
+```typescript
+export const JA_CONSTROI_OPTIONS = [
+  { value: 'sim', label: 'Sim, já construiu' },
+  { value: 'nao', label: 'Não' },
+  { value: 'pretende', label: 'Pretende começar' },
+];
 
-### Aba Avaliações no EmployeeDrawer
-- Lista de provas realizadas pelo colaborador
-- Nota obtida em cada prova
-- Média geral calculada
-- Data de cada avaliação
+export const TERRENO_OPTIONS = [
+  { value: 'sim', label: 'Sim' },
+  { value: 'nao_pretende', label: 'Não, mas pretende comprar' },
+  { value: 'nao', label: 'Não e não pretende' },
+  { value: 'nao_informou', label: 'Não informou' },
+];
+
+export const IMOVEL_OPTIONS = [
+  { value: 'sim', label: 'Sim' },
+  { value: 'nao', label: 'Não' },
+  { value: 'nao_informou', label: 'Não informou' },
+];
+```
+
+**Depois:**
+```typescript
+export const JA_CONSTROI_OPTIONS = [
+  { value: 'sim', label: 'Sim' },
+  { value: 'nao', label: 'Não' },
+];
+
+export const TERRENO_OPTIONS = [
+  { value: 'sim', label: 'Sim' },
+  { value: 'nao', label: 'Não' },
+];
+
+export const IMOVEL_OPTIONS = [
+  { value: 'sim', label: 'Sim' },
+  { value: 'nao', label: 'Não' },
+];
+```
+
+### 2. Alterações em `R2QualificationTab.tsx`
+
+Trocar o campo **Profissão** de `Select` para `Input`:
+
+**Antes:**
+```tsx
+<Select
+  value={localProfissao}
+  onValueChange={(v) => handleFieldUpdate('profissao', v, setLocalProfissao)}
+>
+  <SelectTrigger>
+    <SelectValue placeholder="Selecione" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="__none__">— Não informado —</SelectItem>
+    {PROFISSAO_OPTIONS.map(opt => (
+      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+```
+
+**Depois:**
+```tsx
+<Input
+  value={localProfissao}
+  onChange={(e) => setLocalProfissao(e.target.value)}
+  onBlur={handleProfissaoBlur}
+  placeholder="Ex: Engenheiro, Advogado..."
+/>
+```
+
+Adicionar handler para salvar no blur:
+```typescript
+const handleProfissaoBlur = () => {
+  if (!dealId || localProfissao === (customFields.profissao || '')) return;
+  
+  updateCustomFields.mutate({
+    dealId,
+    customFields: { profissao: localProfissao || null }
+  });
+};
+```
+
+---
+
+## Resultado Visual Esperado
+
+```text
++---------------------------+---------------------------+
+| 👤 Profissão              | 📍 Estado                 |
+| [________________]        | [Dropdown: AM, SP...]     |
++---------------------------+---------------------------+
+| 💰 Renda                  | 🎂 Idade                  |
+| [Dropdown: faixas]        | [40]                      |
++---------------------------+---------------------------+
+| 🏗️ Já constrói?           | 🏡 Tem terreno?           |
+| [Sim ▼] [Não]             | [Sim ▼] [Não]             |
++---------------------------+---------------------------+
+| 🏠 Tem imóvel?            | ⏱️ Conhece MCF?           |
+| [Sim ▼] [Não]             | [Dropdown: tempo]         |
++---------------------------+---------------------------+
+```
+
+---
+
+## Compatibilidade
+
+Os valores antigos continuarão funcionando:
+- Se um lead tinha "Sim, já construiu" no campo `ja_constroi`, ele mostrará normalmente
+- As novas seleções salvarão apenas "sim" ou "nao"
+- O campo profissão texto livre aceita qualquer valor existente
 
