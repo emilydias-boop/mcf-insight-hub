@@ -134,15 +134,33 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     }
   }, [originData, allowedOriginIds, hasBUFilter]);
   
-  // Query separada para buscar grupos (para o modo collapsed)
+  // Query separada para buscar grupos (para o modo collapsed) - com deduplicação
   const { data: allGroups } = useQuery({
     queryKey: ['crm-groups-for-collapsed-sidebar'],
     queryFn: async () => {
       const { data } = await supabase
         .from('crm_groups')
-        .select('id, name, display_name')
-        .order('name');
-      return data || [];
+        .select('id, name, display_name, created_at, is_archived')
+        .order('created_at', { ascending: false }); // Mais recentes primeiro
+      
+      if (!data) return [];
+      
+      // Filtrar arquivados
+      const activeGroups = data.filter(g => g.is_archived !== true);
+      
+      // Deduplicar por nome (manter o mais recente de cada)
+      const seen = new Map<string, typeof activeGroups[0]>();
+      activeGroups.forEach(g => {
+        const key = (g.display_name ?? g.name).trim().toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, g);
+        }
+      });
+      
+      // Converter de volta para array e ordenar alfabeticamente
+      return Array.from(seen.values()).sort((a, b) => 
+        (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
+      );
     },
   });
   
