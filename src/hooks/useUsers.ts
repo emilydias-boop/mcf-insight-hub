@@ -33,14 +33,25 @@ export const useUserDetails = (userId: string | null) => {
 
       if (profileError) throw profileError;
 
-      // Get role
+      // Get roles (pode ter múltiplas)
       const { data: roleData, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", userId)
-        .single();
+        .eq("user_id", userId);
 
       if (roleError && roleError.code !== "PGRST116") throw roleError;
+
+      // Determinar role principal por prioridade
+      const ROLE_PRIORITY: Record<string, number> = {
+        admin: 1, manager: 2, coordenador: 3, closer: 4,
+        closer_sombra: 5, financeiro: 6, rh: 7, sdr: 8, viewer: 9,
+      };
+
+      const primaryRole = roleData?.length 
+        ? roleData.sort((a, b) => 
+            (ROLE_PRIORITY[a.role] || 99) - (ROLE_PRIORITY[b.role] || 99)
+          )[0].role 
+        : null;
 
       // Get employment data
       const { data: employment, error: employmentError } = await supabase
@@ -53,7 +64,7 @@ export const useUserDetails = (userId: string | null) => {
 
       return {
         ...profile,
-        role: roleData?.role || null,
+        role: primaryRole || null,
         access_status: (profile as any).access_status as AccessStatus || 'ativo',
         blocked_until: (profile as any).blocked_until || null,
         last_login_at: (profile as any).last_login_at || null,
