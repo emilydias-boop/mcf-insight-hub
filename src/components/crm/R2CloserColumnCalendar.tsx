@@ -35,8 +35,8 @@ const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; shortLabel: string
   rescheduled: { label: "Reagendado", shortLabel: "Reag.", bgClass: "bg-yellow-600/80" },
 };
 
-// Fixed time slots for R2 (07:00 to 21:00, 30-min intervals)
-const ALL_TIME_SLOTS = Array.from({ length: 29 }, (_, i) => {
+// Fixed time slots for R2 (07:00 to 23:30, 30-min intervals)
+const ALL_TIME_SLOTS = Array.from({ length: 34 }, (_, i) => {
   const hour = Math.floor(i / 2) + 7;
   const minute = (i % 2) * 30;
   return { hour, minute, label: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}` };
