@@ -1,128 +1,250 @@
 
+# Sistema de Gestão de Entidades do RH
 
-# Correção: Filtrar por BU válida E cargo do catálogo
+## Visão Geral
 
-## Problema Identificado
+Criar uma página de **Configurações do RH** (`/rh/configuracoes`) que permite gerenciar todas as entidades organizacionais:
 
-Mesmo com o filtro de BU em "Todas", aparecem colaboradores que:
-- **Não pertencem a nenhuma BU válida** (ex: CEO, TI, departamento null)
-- **Não têm cargo do catálogo** (sem valores OTE definidos)
+1. **Cargos / Funções** - Com níveis e valores de remuneração
+2. **Departamentos / BUs** - Business Units dinâmicas
+3. **Squads / Equipes** - Equipes dentro das BUs
 
-### Colaboradores que aparecem indevidamente:
-
-| Colaborador | Departamento | Cargo | cargo_catalogo_id |
-|-------------|--------------|-------|-------------------|
-| Claudia Carielo | null | Closer R2 | null? |
-| Emily Caroline Dias | null | Outro | null? |
-| Emily Segundario | TI | SDR | null? |
-| Grimaldo de Oliveira Melo Neto | Diretoria | CEO | null? |
-| Jessica Bellini R2 | null | Closer R2 | null? |
-| Julio Caetano | null | Closer | null? |
-| Matheus Rodrigeus | null | null | null |
-| Thaynar Tavares | null | Closer | null? |
-| Vinicius Motta Campos | null | null | null |
+Essas entidades passarão de listas estáticas no código para tabelas dinâmicas no banco de dados, permitindo criar, editar e excluir sem precisar de alterações no código.
 
 ---
 
-## Solução
+## Estrutura de Dados (Banco de Dados)
 
-Modificar o filtro `filteredEmployees` para aplicar **duas condições sempre**:
+### Tabelas a Criar
 
-1. **BU válida**: O colaborador deve pertencer a uma das BUs mapeadas (Incorporador, Consórcio, Crédito)
-2. **Cargo do catálogo**: O colaborador deve ter `cargo_catalogo_id` vinculado
+| Tabela | Campos Principais |
+|--------|-------------------|
+| `departamentos` | id, nome, codigo, bu_relacionada, ativo, ordem |
+| `squads` | id, nome, departamento_id, ativo, ordem |
 
-### Código Atual (incorreto)
+A tabela `cargos_catalogo` já existe e será reutilizada.
 
-```tsx
-const filteredEmployees = useMemo(() => {
-  if (!employees) return [];
-  
-  return employees.filter(emp => {
-    // Filtro por cargo
-    if (selectedCargoId !== '__all__' && emp.cargo_catalogo_id !== selectedCargoId) {
-      return false;
-    }
+### Relacionamentos
+
+```text
+departamentos (BUs)
+    └── squads (Equipes)
     
-    // Filtro por BU - só aplica quando != '__all__'
-    if (selectedBU !== '__all__') {
-      const expectedDept = BU_MAPPING[selectedBU];
-      if (!expectedDept || emp.departamento !== expectedDept) {
-        return false;
-      }
-    }
-    
-    return true;
-  });
-}, [employees, selectedCargoId, selectedBU]);
-```
-
-### Código Corrigido
-
-```tsx
-// Lista de departamentos válidos (todas as BUs)
-const VALID_DEPARTMENTS = Object.values(BU_MAPPING);
-
-const filteredEmployees = useMemo(() => {
-  if (!employees) return [];
-  
-  return employees.filter(emp => {
-    // OBRIGATÓRIO: Deve ter cargo do catálogo vinculado
-    if (!emp.cargo_catalogo_id) {
-      return false;
-    }
-    
-    // OBRIGATÓRIO: Deve pertencer a uma BU válida (sempre, mesmo em "Todas")
-    if (!emp.departamento || !VALID_DEPARTMENTS.includes(emp.departamento)) {
-      return false;
-    }
-    
-    // Filtro específico por cargo (quando selecionado)
-    if (selectedCargoId !== '__all__' && emp.cargo_catalogo_id !== selectedCargoId) {
-      return false;
-    }
-    
-    // Filtro específico por BU (quando selecionado)
-    if (selectedBU !== '__all__') {
-      const expectedDept = BU_MAPPING[selectedBU];
-      if (emp.departamento !== expectedDept) {
-        return false;
-      }
-    }
-    
-    return true;
-  });
-}, [employees, selectedCargoId, selectedBU]);
+cargos_catalogo (separado, por área)
+    └── employees.cargo_catalogo_id
 ```
 
 ---
 
-## Arquivo a Modificar
+## Interface do Usuário
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/fechamento/PlansOteTab.tsx` | Adicionar filtros obrigatórios de BU válida e cargo catálogo |
+### Nova Página: Configurações do RH
+
+**Rota:** `/rh/configuracoes`
+
+**Abas:**
+1. **Cargos** - CRUD completo do catálogo de cargos
+2. **Departamentos** - CRUD de BUs/departamentos
+3. **Squads** - CRUD de equipes por departamento
 
 ---
 
-## Resultado Esperado
+### Aba 1: Cargos
 
-| Filtro | Antes | Depois |
-|--------|-------|--------|
-| BU: Todas, Cargo: Todos | 23 colaboradores (inclui CEO, TI, etc) | ~14 colaboradores (apenas BUs válidas + cargo catálogo) |
-| BU: Incorporador | 12 colaboradores | 12 colaboradores (sem mudança) |
-| BU: Consórcio | 2 colaboradores | 2 colaboradores (sem mudança) |
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  [+ Novo Cargo]                    [🔍 Buscar...]               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ▼ Inside Sales (12 cargos)                                     │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ SDR Inside N1  │ N1 │ R$ 2.800│ R$ 1.200│ R$ 4.000│ [✏️][🗑]│  │
+│  │ SDR Inside N2  │ N2 │ R$ 3.150│ R$ 1.350│ R$ 4.500│ [✏️][🗑]│  │
+│  │ Closer Inside  │ N3 │ R$ 3.500│ R$ 2.000│ R$ 5.500│ [✏️][🗑]│  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ▼ Consórcio (4 cargos)                                         │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ SDR Consórcio   │ N1 │ R$ 1.800│ R$ 1.500│ R$ 3.300│ [✏️][🗑]│  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-### Quem será filtrado:
+**Dialog de Criar/Editar Cargo:**
 
-| Colaborador | Motivo da exclusão |
-|-------------|-------------------|
-| Claudia Carielo | Departamento null |
-| Emily Caroline Dias | Departamento null |
-| Emily Segundario | Departamento TI (não é BU) |
-| Grimaldo de Oliveira Melo Neto | Departamento Diretoria (não é BU) |
-| Jessica Bellini R2 | Departamento null |
-| Julio Caetano | Departamento null |
-| Matheus Rodrigeus | Departamento null + sem cargo catálogo |
-| Thaynar Tavares | Departamento null |
-| Vinicius Motta Campos | Departamento null + sem cargo catálogo |
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| Nome de Exibição | texto | Ex: "SDR Inside N1" |
+| Cargo Base | texto | Ex: "SDR" |
+| Área | select | Inside Sales, Consórcio, Crédito, etc |
+| Nível | número | 1-7 (opcional) |
+| Fixo (R$) | moeda | Valor fixo mensal |
+| Variável (R$) | moeda | Valor variável potencial |
+| OTE Total (R$) | moeda | Auto-calculado: Fixo + Variável |
+| Modelo Variável | select | score_metricas, componentes_regua_global |
 
+---
+
+### Aba 2: Departamentos (BUs)
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  [+ Novo Departamento]                                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 🏢 BU - Incorporador 50K   │  4 colaboradores  │ [✏️][🗑]   │  │
+│  │ 🏢 BU - Consórcio          │  2 colaboradores  │ [✏️][🗑]   │  │
+│  │ 🏢 BU - Crédito            │  3 colaboradores  │ [✏️][🗑]   │  │
+│  │ 🏢 Diretoria               │  1 colaborador    │ [✏️][🗑]   │  │
+│  │ 🏢 TI                      │  2 colaboradores  │ [✏️][🗑]   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Dialog de Criar/Editar Departamento:**
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| Nome | texto | Ex: "BU - Incorporador 50K" |
+| Código | texto | Ex: "incorporador" (para mapeamentos) |
+| É BU? | checkbox | Indica se é uma Business Unit válida |
+
+---
+
+### Aba 3: Squads
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  [+ Nova Squad]              Departamento: [Todos ▼]            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ▼ BU - Incorporador 50K                                        │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 👥 Inside Sales Produto    │  8 colaboradores  │ [✏️][🗑]   │  │
+│  │ 👥 Comercial               │  4 colaboradores  │ [✏️][🗑]   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ▼ BU - Consórcio                                               │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │ 👥 Vendas Consórcio        │  2 colaboradores  │ [✏️][🗑]   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/pages/rh/Configuracoes.tsx` | Página principal com abas |
+| `src/components/hr/config/CargosTab.tsx` | Gestão de cargos |
+| `src/components/hr/config/CargoFormDialog.tsx` | Dialog criar/editar cargo |
+| `src/components/hr/config/DepartamentosTab.tsx` | Gestão de departamentos |
+| `src/components/hr/config/DepartamentoFormDialog.tsx` | Dialog criar/editar depto |
+| `src/components/hr/config/SquadsTab.tsx` | Gestão de squads |
+| `src/components/hr/config/SquadFormDialog.tsx` | Dialog criar/editar squad |
+| `src/hooks/useHRConfig.ts` | Hooks para CRUD das entidades |
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/App.tsx` | Adicionar rota `/rh/configuracoes` |
+| `src/components/hr/tabs/EmployeeGeneralTab.tsx` | Usar dados dinâmicos das tabelas |
+| `src/components/hr/CargoSelect.tsx` | Já usa `cargos_catalogo`, sem mudança |
+| `src/types/hr.ts` | Manter opções estáticas como fallback |
+| `src/hooks/useOrganograma.ts` | Adicionar mutations para cargos |
+
+---
+
+## Migrações de Banco de Dados
+
+### Migração 1: Criar tabela departamentos
+
+```sql
+CREATE TABLE departamentos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL UNIQUE,
+  codigo TEXT UNIQUE,
+  is_bu BOOLEAN DEFAULT false,
+  ativo BOOLEAN DEFAULT true,
+  ordem INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Inserir departamentos existentes
+INSERT INTO departamentos (nome, codigo, is_bu) VALUES
+  ('BU - Incorporador 50K', 'incorporador', true),
+  ('BU - Consórcio', 'consorcio', true),
+  ('BU - Crédito', 'credito', true),
+  ('Diretoria', 'diretoria', false),
+  ('TI', 'ti', false),
+  ('Financeiro', 'financeiro', false),
+  ('Marketing', 'marketing', false),
+  ('RH', 'rh', false);
+```
+
+### Migração 2: Criar tabela squads
+
+```sql
+CREATE TABLE squads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL,
+  departamento_id UUID REFERENCES departamentos(id),
+  ativo BOOLEAN DEFAULT true,
+  ordem INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(nome, departamento_id)
+);
+
+-- Inserir squads existentes
+INSERT INTO squads (nome, departamento_id) 
+SELECT 'Inside Sales Produto', id FROM departamentos WHERE codigo = 'incorporador';
+
+INSERT INTO squads (nome, departamento_id) 
+SELECT 'Comercial', id FROM departamentos WHERE codigo = 'incorporador';
+```
+
+---
+
+## Integração com Colaboradores
+
+Depois de criadas as tabelas dinâmicas, o formulário de colaborador (`EmployeeGeneralTab.tsx`) usará:
+
+1. **Cargo**: Já usa `CargoSelect` com dados da `cargos_catalogo`
+2. **Departamento**: Passará a buscar de `departamentos` via hook
+3. **Squad**: Passará a buscar de `squads` via hook (filtrado por departamento)
+4. **Gestor**: Já busca da lista de `employees`
+
+---
+
+## Acesso ao Menu
+
+A nova página será acessível via:
+- Link no menu lateral do RH (ícone de engrenagem)
+- Rota direta: `/rh/configuracoes`
+
+---
+
+## Resultado Final
+
+| Entidade | Antes | Depois |
+|----------|-------|--------|
+| Cargos | Tabela `cargos_catalogo` sem UI de gestão | CRUD completo via interface |
+| Departamentos | Lista estática em `DEPARTAMENTO_OPTIONS` | Tabela dinâmica `departamentos` |
+| Squads | Lista estática em `SQUAD_OPTIONS` | Tabela dinâmica `squads` |
+
+**Benefícios:**
+- Autonomia total para criar/editar/excluir entidades
+- Consistência de dados entre todos os módulos
+- Facilidade para adicionar novas BUs quando necessário
+- Valores OTE centralizados e fáceis de atualizar
