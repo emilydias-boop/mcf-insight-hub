@@ -165,6 +165,75 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
         });
       });
 
+      // ========== CONTRACT PAID BY PAYMENT DATE ==========
+      // Buscar contratos pagos pela DATA DO PAGAMENTO (não da reunião)
+      // Isso captura follow-ups onde a reunião foi em outro dia
+      const { data: contractsByPaymentDate, error: contractsError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          contract_paid_at,
+          booked_by,
+          meeting_slot:meeting_slots!inner(
+            closer_id,
+            meeting_type,
+            scheduled_at
+          )
+        `)
+        .eq('status', 'contract_paid')
+        .eq('meeting_slot.meeting_type', 'r1')
+        .gte('contract_paid_at', start)
+        .lte('contract_paid_at', end);
+
+      if (contractsError) throw contractsError;
+
+      // Também buscar contratos SEM contract_paid_at (fallback para scheduled_at)
+      // Esses são contratos antigos que não têm timestamp de pagamento
+      const { data: contractsWithoutTimestamp } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          contract_paid_at,
+          booked_by,
+          meeting_slot:meeting_slots!inner(
+            closer_id,
+            meeting_type,
+            scheduled_at
+          )
+        `)
+        .eq('status', 'contract_paid')
+        .eq('meeting_slot.meeting_type', 'r1')
+        .is('contract_paid_at', null)
+        .gte('meeting_slot.scheduled_at', start)
+        .lte('meeting_slot.scheduled_at', end);
+
+      // Mapear contratos pagos no período por closer
+      const contractsByCloser = new Map<string, number>();
+      
+      // Processar contratos COM contract_paid_at
+      contractsByPaymentDate?.forEach(att => {
+        const closerId = (att.meeting_slot as any)?.closer_id;
+        if (closerId && att.booked_by) {
+          const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
+          if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
+            contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+          }
+        }
+      });
+
+      // Processar contratos SEM contract_paid_at (fallback)
+      contractsWithoutTimestamp?.forEach(att => {
+        const closerId = (att.meeting_slot as any)?.closer_id;
+        if (closerId && att.booked_by) {
+          const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
+          if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
+            contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+          }
+        }
+      });
+
       // ========== OUTSIDE DETECTION ==========
       // Outside = lead bought contract BEFORE their R1 meeting
       
@@ -263,7 +332,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
           r1_agendada: 0,
           r1_realizada: 0,
           noshow: 0,
-          contrato_pago: 0,
+          contrato_pago: contractsByCloser.get(closer.id) || 0,
           outside: outsideByCloser.get(closer.id) || 0,
           r2_agendada: r2CountByCloser.get(closer.id) || 0,
         });
@@ -285,7 +354,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
             r1_agendada: 0,
             r1_realizada: 0,
             noshow: 0,
-            contrato_pago: 0,
+            contrato_pago: contractsByCloser.get(closerId) || 0,
             outside: outsideByCloser.get(closerId) || 0,
             r2_agendada: r2CountByCloser.get(closerId) || 0,
           };
@@ -317,10 +386,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
             metric!.noshow++;
           }
           
-          // Contrato Pago
-          if (status === 'contract_paid') {
-            metric!.contrato_pago++;
-          }
+          // Contrato Pago - NÃO contar aqui, já é contado por contract_paid_at acima
         });
       });
 
