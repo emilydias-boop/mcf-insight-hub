@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 
 interface AttendeeNotesSectionProps {
   attendeeId: string | null | undefined;
+  dealId?: string | null;
   participantName: string;
   canAddNotes?: boolean;
 }
@@ -101,6 +102,7 @@ function NoteItem({
 
 export function AttendeeNotesSection({ 
   attendeeId, 
+  dealId,
   participantName,
   canAddNotes = true 
 }: AttendeeNotesSectionProps) {
@@ -108,52 +110,77 @@ export function AttendeeNotesSection({
   const [showAddNote, setShowAddNote] = useState(false);
   const [newNote, setNewNote] = useState('');
   
-  const { data: notes = [], isLoading } = useAttendeeNotes(attendeeId);
+  // Pass dealId to fetch historical notes from all attendees
+  const { data: notes = [], isLoading } = useAttendeeNotes(attendeeId, dealId);
   const addNote = useAddAttendeeNote();
   const deleteNote = useDeleteAttendeeNote();
 
-  // Fetch the original scheduling note from meeting_slot_attendees.notes
-  const { data: schedulingNote, isLoading: isLoadingSchedulingNote } = useQuery({
-    queryKey: ['attendee-scheduling-note', attendeeId],
+  // Fetch scheduling notes from ALL attendees for this deal (historical)
+  const { data: schedulingNotes, isLoading: isLoadingSchedulingNotes } = useQuery({
+    queryKey: ['attendee-scheduling-notes', attendeeId, dealId],
     queryFn: async () => {
-      if (!attendeeId) return null;
+      // Build list of attendee IDs to fetch scheduling notes for
+      let allAttendeeIds: string[] = [];
+      
+      if (dealId) {
+        const { data: allAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id')
+          .eq('deal_id', dealId);
+        allAttendeeIds = (allAttendees || []).map(a => a.id);
+      }
+      
+      if (attendeeId && !allAttendeeIds.includes(attendeeId)) {
+        allAttendeeIds.push(attendeeId);
+      }
+      
+      if (allAttendeeIds.length === 0 && attendeeId) {
+        allAttendeeIds = [attendeeId];
+      }
+      
+      if (allAttendeeIds.length === 0) return [];
       
       const { data, error } = await supabase
         .from('meeting_slot_attendees')
         .select(`
+          id,
           notes,
           booked_by,
           created_at,
           booked_by_profile:profiles!meeting_slot_attendees_booked_by_fkey(id, full_name, email)
         `)
-        .eq('id', attendeeId)
-        .single();
+        .in('id', allAttendeeIds)
+        .not('notes', 'is', null);
       
-      if (error) return null;
-      return data;
+      if (error) return [];
+      return data || [];
     },
-    enabled: !!attendeeId,
+    enabled: !!(attendeeId || dealId),
   });
 
-  // Combine scheduling note with attendee_notes
+  // Combine scheduling notes with attendee_notes
   const allNotes = useMemo(() => {
     const combined: AttendeeNote[] = [];
     
-    // Add scheduling note as first note (type initial) if exists
-    if (schedulingNote?.notes && schedulingNote.notes.trim()) {
-      const profile = schedulingNote.booked_by_profile;
-      combined.push({
-        id: 'scheduling-note-' + attendeeId,
-        attendee_id: attendeeId || '',
-        note: schedulingNote.notes,
-        note_type: 'initial' as NoteType,
-        created_by: schedulingNote.booked_by,
-        created_at: schedulingNote.created_at || new Date().toISOString(),
-        created_by_profile: profile ? {
-          id: profile.id,
-          full_name: profile.full_name,
-          email: profile.email,
-        } : null,
+    // Add scheduling notes as initial notes (from meeting_slot_attendees.notes)
+    if (schedulingNotes && schedulingNotes.length > 0) {
+      schedulingNotes.forEach(sn => {
+        if (sn.notes && sn.notes.trim()) {
+          const profile = sn.booked_by_profile;
+          combined.push({
+            id: 'scheduling-note-' + sn.id,
+            attendee_id: sn.id,
+            note: sn.notes,
+            note_type: 'initial' as NoteType,
+            created_by: sn.booked_by,
+            created_at: sn.created_at || new Date().toISOString(),
+            created_by_profile: profile ? {
+              id: profile.id,
+              full_name: profile.full_name,
+              email: profile.email,
+            } : null,
+          });
+        }
       });
     }
     
@@ -162,8 +189,11 @@ export function AttendeeNotesSection({
       combined.push(...notes);
     }
     
+    // Sort all notes by date ascending
+    combined.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    
     return combined;
-  }, [schedulingNote, notes, attendeeId]);
+  }, [schedulingNotes, notes]);
 
   const handleAddNote = () => {
     if (!newNote.trim() || !attendeeId) {
@@ -208,10 +238,10 @@ export function AttendeeNotesSection({
     );
   };
 
-  if (!attendeeId) return null;
+  if (!attendeeId && !dealId) return null;
 
   const firstName = participantName?.split(' ')[0] || 'Participante';
-  const isLoadingAll = isLoading || isLoadingSchedulingNote;
+  const isLoadingAll = isLoading || isLoadingSchedulingNotes;
 
   return (
     <div className="space-y-3">
@@ -220,7 +250,7 @@ export function AttendeeNotesSection({
           <MessageCircle className="h-4 w-4 text-primary" />
           Notas sobre {firstName}
         </h4>
-        {canAddNotes && !showAddNote && (
+        {canAddNotes && !showAddNote && attendeeId && (
           <Button
             variant="ghost"
             size="sm"

@@ -445,6 +445,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         id: att.id,
         name,
         phone,
+        dealId: att.deal_id || activeMeeting.deal_id,
         isPartner: att.is_partner || false,
         notifiedAt: att.notified_at,
         bookedBy: att.booked_by || activeMeeting.booked_by,
@@ -813,6 +814,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                   <div className="pt-2 border-t border-blue-500/20">
                     <AttendeeNotesSection
                       attendeeId={selectedParticipant.id}
+                      dealId={selectedParticipant.dealId}
                       participantName={selectedParticipant.name}
                       canAddNotes={true}
                     />
