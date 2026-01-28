@@ -1,123 +1,152 @@
 
-# Correção: Sincronização de owner_profile_id na Transferência em Massa
+# Filtro por Quantidade de Tentativas (Range)
 
-## Problema Identificado
+## Objetivo
+Adicionar um filtro com inputs numéricos para definir intervalo de tentativas de contato:
+- **Mínimo**: Quantidade mínima de tentativas (ex: 0)
+- **Máximo**: Quantidade máxima de tentativas (ex: 1)
 
-A transferência em massa de leads atualizou o campo **`owner_id` (email)** mas **não atualizou o campo `owner_profile_id` (UUID)**. 
-
-**Evidência do banco de dados:**
-- 66 deals têm `owner_id = alex.dias@minhacasafinanciada.com` (correto)
-- Mas o `owner_profile_id` ainda aponta para **Vinicius** (`992a3790-424f-4126-8ef1-e329e2003f99`)
-
-O filtro de owner na página Negócios usa `owner_profile_id`, então quando você filtra por Alex, esses deals não aparecem.
+Exemplo: `0 a 1` mostraria leads com 0 ou 1 tentativa (menos trabalhados como Márcia, Jean, Cristina)
 
 ---
 
-## Causa Raiz
+## Visual do Componente
 
-Há dois locais no código que atualizam ownership mas **não atualizam `owner_profile_id`**:
-
-| Arquivo | Linha | Problema |
-|---------|-------|----------|
-| `src/hooks/useOrphanDeals.ts` | 186 | Atualiza só `owner_id` |
-| `src/hooks/useAgendaData.ts` | 1455 | Atualiza só `owner_id` |
-
-Possivelmente a transferência usou um desses métodos (ou foi feita via outro mecanismo).
+```text
++------------------------------------------+
+| 📞 Tentativas                            |
+| +------+ a +------+  [Aplicar]           |
+| |  0   |   |  2   |                      |
+| +------+   +------+                      |
++------------------------------------------+
+```
 
 ---
 
-## Solução em 2 Partes
+## Arquivos a Modificar
 
-### Parte 1: Query de Correção Imediata (SQL)
-
-Executar uma query para sincronizar os 66 deals do Alex:
-
-```sql
-UPDATE crm_deals d
-SET owner_profile_id = p.id
-FROM profiles p
-WHERE d.owner_id = p.email
-  AND d.owner_id = 'alex.dias@minhacasafinanciada.com'
-  AND d.owner_profile_id != p.id;
-```
-
-### Parte 2: Correção no Código
-
-**Arquivo: `src/hooks/useOrphanDeals.ts`**
-
-Atualizar a mutation `useBulkAssignOwner` para também atualizar `owner_profile_id`:
-
-- Receber o `profile_id` do novo owner
-- Atualizar ambos campos: `owner_id` e `owner_profile_id`
-
-**Arquivo: `src/hooks/useAgendaData.ts`**
-
-Na função `syncDealStageFromAgenda`, quando transfere ownership para o closer:
-- Buscar o `profile_id` do closer pelo email
-- Atualizar `owner_id` **e** `owner_profile_id`
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/components/crm/DealFilters.tsx` | Adicionar campos min/max de tentativas com Popover |
+| `src/pages/crm/Negocios.tsx` | Aplicar filtro no `filteredDeals` usando activitySummaries |
 
 ---
 
-## Alterações Detalhadas
+## Detalhes Técnicos
 
-### useOrphanDeals.ts
-
-**Antes:**
-```typescript
-mutationFn: async ({ dealIds, ownerId }: { dealIds: string[]; ownerId: string }) => {
-  const { error } = await supabase
-    .from('crm_deals')
-    .update({ owner_id: ownerId, updated_at: new Date().toISOString() })
-    .in('id', dealIds);
-```
-
-**Depois:**
-```typescript
-mutationFn: async ({ dealIds, ownerId, ownerProfileId }: { 
-  dealIds: string[]; 
-  ownerId: string; 
-  ownerProfileId?: string;
-}) => {
-  const updateData: any = { 
-    owner_id: ownerId, 
-    updated_at: new Date().toISOString() 
-  };
-  
-  if (ownerProfileId) {
-    updateData.owner_profile_id = ownerProfileId;
-  }
-  
-  const { error } = await supabase
-    .from('crm_deals')
-    .update(updateData)
-    .in('id', dealIds);
-```
-
-### useAgendaData.ts
-
-Na transferência de ownership (linha ~1455), adicionar lookup do profile:
+### 1. Atualizar `DealFiltersState` em DealFilters.tsx
 
 ```typescript
-// Buscar profile_id do closer
-const { data: closerProfile } = await supabase
-  .from('profiles')
-  .select('id')
-  .eq('email', closerEmail)
-  .single();
-
-updateData.owner_id = closerEmail;
-if (closerProfile) {
-  updateData.owner_profile_id = closerProfile.id;
+export interface DealFiltersState {
+  search: string;
+  dateRange: DateRange | undefined;
+  owner: string | null;
+  dealStatus: 'all' | 'open' | 'won' | 'lost';
+  inactivityDays: number | null;
+  salesChannel: SalesChannelFilter;
+  // NOVO: Filtro por range de tentativas
+  attemptsRange: { min: number; max: number } | null;
 }
 ```
 
+### 2. Componente de Filtro (Popover com inputs)
+
+Adicionar um Popover com dois inputs numéricos e botão Aplicar:
+
+```tsx
+{/* Filtro de Tentativas (Range) */}
+<Popover>
+  <PopoverTrigger asChild>
+    <Button variant="outline" className="justify-start text-left font-normal">
+      <Phone className="mr-2 h-4 w-4" />
+      {filters.attemptsRange 
+        ? `${filters.attemptsRange.min} a ${filters.attemptsRange.max} tent.`
+        : "Tentativas"
+      }
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent className="w-64">
+    <div className="space-y-3">
+      <Label className="text-sm font-medium">Quantidade de tentativas</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          placeholder="Mín"
+          value={localMinAttempts}
+          onChange={(e) => setLocalMinAttempts(e.target.value)}
+          className="w-20"
+        />
+        <span className="text-muted-foreground">a</span>
+        <Input
+          type="number"
+          min={0}
+          placeholder="Máx"
+          value={localMaxAttempts}
+          onChange={(e) => setLocalMaxAttempts(e.target.value)}
+          className="w-20"
+        />
+      </div>
+      <Button size="sm" onClick={handleApplyAttemptsFilter}>
+        Aplicar
+      </Button>
+    </div>
+  </PopoverContent>
+</Popover>
+```
+
+### 3. Lógica de Aplicação (Negocios.tsx)
+
+No `filteredDeals`, adicionar verificação do range:
+
+```typescript
+// Filtro por quantidade de tentativas (range)
+if (filters.attemptsRange) {
+  const summary = activitySummaries?.get(deal.id);
+  const totalCalls = summary?.totalCalls || 0;
+  
+  if (totalCalls < filters.attemptsRange.min || 
+      totalCalls > filters.attemptsRange.max) {
+    return false;
+  }
+}
+```
+
+### 4. Atualizar Estado Inicial e clearFilters
+
+```typescript
+// Estado inicial
+const [filters, setFilters] = useState<DealFiltersState>({
+  ...
+  attemptsRange: null,
+});
+
+// Limpar filtros
+const clearFilters = () => {
+  setFilters({
+    ...
+    attemptsRange: null,
+  });
+};
+```
+
 ---
 
-## Resultado Esperado
+## Exemplos de Uso
 
-1. **Imediato**: A query SQL corrige os 66 deals do Alex
-2. **Futuro**: Todas as transferências manterão `owner_profile_id` sincronizado
+| Filtro | Resultado |
+|--------|-----------|
+| `0 a 0` | Leads sem nenhuma tentativa |
+| `0 a 1` | Leads com 0 ou 1 tentativa (menos trabalhados) |
+| `4 a 5` | Leads com 4 ou 5 tentativas (mais trabalhados, como Tabatha) |
+| `3 a 10` | Leads com 3+ tentativas |
 
-Após executar:
-- Filtrar por "Alex Dias" mostrará os ~67 leads corretamente
-- Filtrar por "Vinicius" mostrará apenas os leads que realmente são dele
+---
+
+## Comportamento
+
+1. Clicar no botão "Tentativas" abre um popover
+2. Usuário digita min (ex: 0) e max (ex: 1)
+3. Clicar em "Aplicar" fecha o popover e filtra
+4. O botão mostra o filtro ativo: "0 a 1 tent."
+5. "Limpar" remove o filtro junto com os outros
