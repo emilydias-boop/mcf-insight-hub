@@ -1452,8 +1452,18 @@ export async function syncDealStageFromAgenda(
         console.log(`Saved R2 Closer: ${closerEmail}`);
       }
       
+      // Buscar profile_id do closer para manter owner_profile_id sincronizado
+      const { data: closerProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', closerEmail)
+        .maybeSingle();
+      
       updateData.owner_id = closerEmail;
-      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (status: ${agendaStatus}, type: ${meetingType})`);
+      if (closerProfile) {
+        updateData.owner_profile_id = closerProfile.id;
+      }
+      console.log(`Ownership transfer: Deal ${dealId} -> ${closerEmail} (profile: ${closerProfile?.id || 'not found'}, status: ${agendaStatus}, type: ${meetingType})`);
     }
 
     if (Object.keys(updateData).length === 0) return;
