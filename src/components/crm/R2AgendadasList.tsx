@@ -1,8 +1,16 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Phone, User, Clock } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +29,37 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   refunded: { label: 'Reembolsado', className: 'bg-orange-500 text-white border-orange-500' },
   pending: { label: 'Pendente', className: 'bg-yellow-500 text-black border-yellow-500' },
 };
+
+function renderStatusCell(att: R2CarrinhoAttendee) {
+  const isContractPaid = att.status === 'contract_paid' || att.meeting_status === 'contract_paid';
+  const isAprovado = att.r2_status_name?.toLowerCase().includes('aprovado');
+  
+  if (isContractPaid) {
+    return (
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-emerald-600 text-sm font-medium">
+          CP {att.contract_paid_at ? format(new Date(att.contract_paid_at), 'dd/MM') : ''}
+        </span>
+        {isAprovado && (
+          <Badge className="bg-emerald-500 text-white text-xs">Aprovado</Badge>
+        )}
+      </div>
+    );
+  }
+  
+  const statusInfo = STATUS_LABELS[att.status] || STATUS_LABELS[att.meeting_status] || STATUS_LABELS.scheduled;
+  
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
+        {statusInfo.label}
+      </Badge>
+      {isAprovado && (
+        <span className="text-emerald-500 font-medium">✓</span>
+      )}
+    </div>
+  );
+}
 
 export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2AgendadasListProps) {
   if (isLoading) {
@@ -74,59 +113,57 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y">
-                  {sortedAttendees.map((att) => {
-                    const statusInfo = STATUS_LABELS[att.status] || STATUS_LABELS.scheduled;
-                    
-                    return (
-                      <div
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[80px]">Horário</TableHead>
+                      <TableHead>Nome Lead</TableHead>
+                      <TableHead>Closer R2</TableHead>
+                      <TableHead className="w-[90px]">Dia R1</TableHead>
+                      <TableHead className="text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedAttendees.map((att) => (
+                      <TableRow
                         key={att.id}
-                        className="p-3 hover:bg-muted/30 cursor-pointer transition-colors"
+                        className="cursor-pointer hover:bg-muted/30"
                         onClick={() => onSelectAttendee?.(att)}
                       >
-                        {/* Linha 1: Horário + Nome + Telefone */}
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1.5 text-primary font-semibold min-w-[60px]">
-                            <Clock className="h-4 w-4" />
-                            <span>{format(new Date(att.scheduled_at), 'HH:mm')}</span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                            <span className="font-medium truncate">
+                        <TableCell className="font-mono font-medium text-primary">
+                          {format(new Date(att.scheduled_at), 'HH:mm')}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium truncate max-w-[200px]">
                               {att.attendee_name || att.deal_name || 'Sem nome'}
                             </span>
                             {att.partner_name && (
                               <span className="text-xs text-muted-foreground">+ {att.partner_name}</span>
                             )}
                           </div>
-                          <div className="flex items-center gap-1.5 font-mono text-sm text-muted-foreground">
-                            <Phone className="h-3.5 w-3.5" />
-                            <span>{att.attendee_phone || att.contact_phone || '-'}</span>
-                          </div>
-                        </div>
-                        
-                        {/* Linha 2: Closer + Status */}
-                        <div className="flex items-center justify-between mt-1.5 pl-[72px]">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
                             {att.closer_color && (
                               <div 
-                                className="w-2.5 h-2.5 rounded-full" 
+                                className="w-2.5 h-2.5 rounded-full shrink-0" 
                                 style={{ backgroundColor: att.closer_color }}
                               />
                             )}
-                            <span>Closer: {att.closer_name || '-'}</span>
+                            <span className="truncate">{att.closer_name || '-'}</span>
                           </div>
-                          <Badge 
-                            variant="outline" 
-                            className={cn('text-xs', statusInfo.className)}
-                          >
-                            {statusInfo.label}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground">
+                          {att.r1_date ? format(new Date(att.r1_date), 'dd/MM') : '-'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {renderStatusCell(att)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           );
