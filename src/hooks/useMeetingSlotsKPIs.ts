@@ -21,10 +21,11 @@ export function useMeetingSlotsKPIs(startDate: Date, endDate: Date) {
         .from("meeting_slot_attendees")
         .select(`
           status,
-          meeting_slot:meeting_slots!inner(scheduled_at)
+          meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
         `)
         .gte("meeting_slot.scheduled_at", startISO)
-        .lte("meeting_slot.scheduled_at", endISO);
+        .lte("meeting_slot.scheduled_at", endISO)
+        .eq("meeting_slot.meeting_type", "r1");
 
       if (error) {
         console.error("Error fetching meeting slot attendees KPIs:", error);
