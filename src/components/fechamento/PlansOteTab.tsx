@@ -33,6 +33,9 @@ const BU_MAPPING: Record<string, string> = {
   'credito': 'BU - Crédito',
 };
 
+// Lista de departamentos válidos (todas as BUs)
+const VALID_DEPARTMENTS = Object.values(BU_MAPPING);
+
 // Squads disponíveis
 const SQUADS = [
   { value: '__all__', label: 'Todas' },
@@ -79,16 +82,25 @@ export const PlansOteTab = () => {
     if (!employees) return [];
     
     return employees.filter(emp => {
-      // Filtro por cargo
+      // OBRIGATÓRIO: Deve ter cargo do catálogo vinculado
+      if (!emp.cargo_catalogo_id) {
+        return false;
+      }
+      
+      // OBRIGATÓRIO: Deve pertencer a uma BU válida (sempre, mesmo em "Todas")
+      if (!emp.departamento || !VALID_DEPARTMENTS.includes(emp.departamento)) {
+        return false;
+      }
+      
+      // Filtro específico por cargo (quando selecionado)
       if (selectedCargoId !== '__all__' && emp.cargo_catalogo_id !== selectedCargoId) {
         return false;
       }
       
-      // Filtro por BU/Departamento - só incluir quem CORRESPONDE ao departamento esperado
+      // Filtro específico por BU (quando selecionado)
       if (selectedBU !== '__all__') {
         const expectedDept = BU_MAPPING[selectedBU];
-        // Excluir se: não existe mapeamento OU departamento é null OU departamento é diferente
-        if (!expectedDept || emp.departamento !== expectedDept) {
+        if (emp.departamento !== expectedDept) {
           return false;
         }
       }
