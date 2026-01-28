@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table';
 import { R2CarrinhoAttendee } from '@/hooks/useR2CarrinhoData';
 import { cn } from '@/lib/utils';
+import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
 
 interface R2AgendadasListProps {
   attendees: R2CarrinhoAttendee[];
@@ -34,6 +35,7 @@ function renderStatusCell(att: R2CarrinhoAttendee) {
   const isContractPaid = att.status === 'contract_paid' || att.meeting_status === 'contract_paid';
   const isAprovado = att.r2_status_name?.toLowerCase().includes('aprovado');
   
+  // Caso 1: Contrato Pago
   if (isContractPaid) {
     return (
       <div className="flex items-center justify-end gap-2">
@@ -47,17 +49,20 @@ function renderStatusCell(att: R2CarrinhoAttendee) {
     );
   }
   
+  // Caso 2: Aprovado (sem contrato pago) - Badge prominente
+  if (isAprovado) {
+    return (
+      <Badge className="bg-emerald-500 text-white text-xs">Aprovado</Badge>
+    );
+  }
+  
+  // Caso 3: Outros status (Agendada, Realizada, No-show, etc)
   const statusInfo = STATUS_LABELS[att.status] || STATUS_LABELS[att.meeting_status] || STATUS_LABELS.scheduled;
   
   return (
-    <div className="flex items-center justify-end gap-2">
-      <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
-        {statusInfo.label}
-      </Badge>
-      {isAprovado && (
-        <span className="text-emerald-500 font-medium">✓</span>
-      )}
-    </div>
+    <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
+      {statusInfo.label}
+    </Badge>
   );
 }
 
@@ -106,8 +111,8 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
             <Card key={day}>
               <CardHeader className="py-3 px-4 bg-muted/50">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold capitalize">
-                    {format(new Date(day), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                <span className="font-semibold capitalize">
+                    {format(parseDateWithoutTimezone(day), "EEEE, dd 'de' MMMM", { locale: ptBR })}
                   </span>
                   <Badge variant="outline">{dayAttendees.length}</Badge>
                 </div>
