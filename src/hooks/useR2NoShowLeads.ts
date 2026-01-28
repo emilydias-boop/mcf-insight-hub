@@ -245,6 +245,12 @@ export function useR2NoShowLeads({
             return;
           }
 
+          // Skip if deal has reembolso_solicitado flag (refunded leads)
+          const customFields = att.deal?.custom_fields as Record<string, unknown> | null;
+          if (customFields?.reembolso_solicitado === true) {
+            return;
+          }
+
           const sdrProfile = att.booked_by ? profileMap.get(att.booked_by) : null;
           const r1Info = att.deal_id ? r1Map.get(att.deal_id) : null;
           
@@ -326,8 +332,33 @@ export function useR2NoShowsCount() {
         (childAttendees || []).map(c => c.parent_attendee_id).filter(Boolean)
       );
 
-      // Step 3: Count = total no_shows - rescheduled ones
-      return noShowIds.length - rescheduledParentIds.size;
+      // Step 2.5: Get deal_ids of no-shows and check for refunded deals
+      const { data: noShowAttendeeDeals } = await supabase
+        .from('meeting_slot_attendees')
+        .select('id, deal_id')
+        .in('id', noShowIds);
+
+      const dealIdsToCheck = noShowAttendeeDeals?.filter(a => a.deal_id).map(a => a.deal_id as string) || [];
+      let refundedDealIds = new Set<string>();
+      
+      if (dealIdsToCheck.length > 0) {
+        const { data: refundedDeals } = await supabase
+          .from('crm_deals')
+          .select('id, custom_fields')
+          .in('id', dealIdsToCheck);
+        
+        refundedDealIds = new Set(
+          refundedDeals?.filter(d => (d.custom_fields as Record<string, unknown>)?.reembolso_solicitado === true).map(d => d.id) || []
+        );
+      }
+
+      // Map no-show IDs to their deal_ids for filtering
+      const noShowsWithRefundedDeals = new Set(
+        noShowAttendeeDeals?.filter(a => a.deal_id && refundedDealIds.has(a.deal_id)).map(a => a.id) || []
+      );
+
+      // Step 3: Count = total - rescheduled - refunded_deals
+      return noShowIds.length - rescheduledParentIds.size - noShowsWithRefundedDeals.size;
     },
     staleTime: 5 * 60 * 1000,
   });

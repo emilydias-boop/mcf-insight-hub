@@ -34,6 +34,13 @@ export function useUpdateR2MeetingStatus() {
 
       if (error) throw error;
 
+      // 1.5 Update all attendees of this meeting to the same status
+      // This ensures refunded/completed status propagates to attendees
+      await supabase
+        .from('meeting_slot_attendees')
+        .update({ status })
+        .eq('meeting_slot_id', meetingId);
+
       // 2. Fetch deal_id and closer email for CRM sync
       const { data: attendees } = await supabase
         .from('meeting_slot_attendees')
