@@ -34,7 +34,7 @@ interface R2AgendadasListProps {
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   scheduled: { label: 'Agendada', className: 'bg-blue-500 text-white border-blue-500' },
-  invited: { label: 'Convidado', className: 'bg-purple-500 text-white border-purple-500' },
+  invited: { label: 'Agendado', className: 'bg-purple-500 text-white border-purple-500' },
   completed: { label: 'Realizada', className: 'bg-green-500 text-white border-green-500' },
   no_show: { label: 'No-show', className: 'bg-red-500 text-white border-red-500' },
   contract_paid: { label: 'Contrato Pago', className: 'bg-emerald-600 text-white border-emerald-600' },
@@ -44,7 +44,7 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
 
 const POSITION_OPTIONS = [
   { value: 'scheduled', label: 'Agendada' },
-  { value: 'invited', label: 'Convidado' },
+  { value: 'invited', label: 'Agendado' },
   { value: 'completed', label: 'Realizada' },
   { value: 'no_show', label: 'No-show' },
   { value: 'contract_paid', label: 'Contrato Pago' },
