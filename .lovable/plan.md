@@ -1,5 +1,4 @@
 
-
 # Limpeza Completa dos Pipelines Duplicados
 
 ## Problema Identificado
@@ -82,4 +81,3 @@ Após a limpeza, o dropdown "Funil" mostrará apenas:
 1. Acesse o [Supabase SQL Editor](https://supabase.com/dashboard/project/rehcfgqvigfcekiipqkc/sql/new)
 2. Cole e execute o SQL acima
 3. Recarregue a página /crm/negocios para ver a lista limpa
-
