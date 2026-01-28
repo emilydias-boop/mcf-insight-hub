@@ -103,23 +103,23 @@ const normalizeStageId = (stageName: string): string => {
 };
 
 export const useStagePermissions = () => {
-  const { role } = useAuth();
+  const { role, allRoles } = useAuth();
   
-  // Carregar permissões por role
+  // Carregar permissões para TODAS as roles do usuário (multi-role support)
   const { data: permissions = [], isLoading: permissionsLoading } = useQuery({
-    queryKey: ['stage-permissions', role],
+    queryKey: ['stage-permissions', allRoles],
     queryFn: async () => {
-      if (!role) return [];
+      if (!allRoles || allRoles.length === 0) return [];
       
       const { data, error } = await supabase
         .from('stage_permissions')
         .select('*')
-        .eq('role', role);
+        .in('role', allRoles);
       
       if (error) throw error;
       return data as StagePermission[];
     },
-    enabled: !!role,
+    enabled: allRoles && allRoles.length > 0,
   });
   
   // Carregar mapeamento de stages UUID -> nome
