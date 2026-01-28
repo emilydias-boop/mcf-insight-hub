@@ -200,7 +200,7 @@ export function R2MeetingDetailDrawer({
                               )}
                               {isSelected && (
                                 <Badge className="text-xs bg-primary text-primary-foreground shrink-0">
-                                  Selecionado
+                                  Em foco
                                 </Badge>
                               )}
                               {att.status && att.status !== 'scheduled' && attStatusInfo && (
