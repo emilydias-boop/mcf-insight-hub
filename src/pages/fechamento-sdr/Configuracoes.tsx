@@ -51,6 +51,7 @@ import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLef
 import { toast } from 'sonner';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
 import { ActiveMetricsTab } from '@/components/fechamento/ActiveMetricsTab';
+import { PlansOteTab } from '@/components/fechamento/PlansOteTab';
 
 const StatusBadge = ({ status }: { status: SdrStatus }) => {
   const config = {
@@ -694,95 +695,7 @@ const ConfiguracoesSdr = () => {
         </TabsContent>
 
         <TabsContent value="plans">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Planos OTE</CardTitle>
-              <CompPlanFormDialog sdrs={sdrs || []} onSuccess={() => refetchPlans()} />
-            </CardHeader>
-            <CardContent>
-              {plansLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : !compPlans || compPlans.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhum plano OTE cadastrado.
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SDR</TableHead>
-                      <TableHead>Vigência</TableHead>
-                      <TableHead className="text-right">OTE Total</TableHead>
-                      <TableHead className="text-right">Fixo</TableHead>
-                      <TableHead className="text-right">Variável</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {compPlans.map((plan) => (
-                      <TableRow key={plan.id}>
-                        <TableCell className="font-medium">{(plan as any).sdr?.name || 'N/A'}</TableCell>
-                        <TableCell>
-                          {format(new Date(plan.vigencia_inicio), 'dd/MM/yyyy', { locale: ptBR })}
-                          {plan.vigencia_fim && ` - ${format(new Date(plan.vigencia_fim), 'dd/MM/yyyy', { locale: ptBR })}`}
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(plan.ote_total)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(plan.fixo_valor)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(plan.variavel_total)}</TableCell>
-                        <TableCell>
-                          <StatusBadge status={(plan.status as string) === 'active' ? 'APPROVED' : plan.status} />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {plan.status === 'PENDING' && isAdmin && (
-                              <>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-green-500 hover:text-green-400"
-                                  onClick={() => handleApproveCompPlan(plan.id, true)}
-                                  disabled={approveCompPlan.isPending}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-red-500 hover:text-red-400"
-                                  onClick={() => handleApproveCompPlan(plan.id, false)}
-                                  disabled={approveCompPlan.isPending}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                            {(plan.status === 'APPROVED' || (plan.status as string) === 'active') && (
-                              <>
-                                <EditCompPlanDialog plan={plan as SdrCompPlan} onSuccess={() => refetchPlans()} />
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-red-500 hover:text-red-400"
-                                  onClick={() => handleDeleteCompPlan(plan.id, (plan as any).sdr?.name || 'N/A')}
-                                  disabled={deleteCompPlan.isPending}
-                                  title="Excluir plano OTE"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          <PlansOteTab />
         </TabsContent>
 
         <TabsContent value="metricas">
