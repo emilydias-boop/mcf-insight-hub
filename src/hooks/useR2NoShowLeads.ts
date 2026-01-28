@@ -129,6 +129,30 @@ export function useR2NoShowLeads({
       if (error) throw error;
       if (!meetings) return [];
 
+      // Collect all no_show attendee IDs to check for rescheduled children
+      const noShowAttendeeIds: string[] = [];
+      meetings.forEach((m) => {
+        const attendees = m.meeting_slot_attendees as Array<{ id: string }>;
+        attendees?.forEach((att) => {
+          noShowAttendeeIds.push(att.id);
+        });
+      });
+
+      // Query for any attendees that have these no_show IDs as parent (meaning they were rescheduled)
+      let rescheduledParentIds = new Set<string>();
+      if (noShowAttendeeIds.length > 0) {
+        const { data: childAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('parent_attendee_id')
+          .in('parent_attendee_id', noShowAttendeeIds);
+
+        if (childAttendees) {
+          rescheduledParentIds = new Set(
+            childAttendees.map(c => c.parent_attendee_id).filter(Boolean) as string[]
+          );
+        }
+      }
+
       // Collect booked_by IDs to get SDR names
       const bookedByIds = new Set<string>();
       meetings.forEach((m) => {
@@ -190,7 +214,7 @@ export function useR2NoShowLeads({
         });
       }
 
-      // Transform to R2NoShowLead format
+      // Transform to R2NoShowLead format, EXCLUDING already rescheduled no-shows
       const leads: R2NoShowLead[] = [];
       
       meetings.forEach((m) => {
@@ -216,6 +240,11 @@ export function useR2NoShowLeads({
         }>;
         
         attendees?.forEach((att) => {
+          // Skip if this no_show has already been rescheduled (has a child attendee)
+          if (rescheduledParentIds.has(att.id)) {
+            return;
+          }
+
           const sdrProfile = att.booked_by ? profileMap.get(att.booked_by) : null;
           const r1Info = att.deal_id ? r1Map.get(att.deal_id) : null;
           
@@ -240,9 +269,9 @@ export function useR2NoShowLeads({
             r1_closer_name: r1Info?.closer_name || null,
             r1_date: r1Info?.date || null,
             
-            lead_profile: null, // Will be fetched from deal custom_fields if needed
+            lead_profile: null,
             already_builds: att.already_builds || null,
-            r1_qualification_note: null, // Not directly available on attendee
+            r1_qualification_note: null,
             
             deal_id: att.deal_id || null,
             deal: att.deal ? {
@@ -263,7 +292,9 @@ export function useR2NoShowLeads({
   });
 }
 
-// Hook para contar no-shows (para badge)
+/**
+ * Hook to count no-shows (for badge), excluding those that have been rescheduled
+ */
 export function useR2NoShowsCount() {
   return useQuery({
     queryKey: ['r2-noshow-count'],
@@ -272,15 +303,31 @@ export function useR2NoShowsCount() {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      const { count, error } = await supabase
+      // Step 1: Get IDs of all no_show attendees in the last 30 days
+      const { data: noShowAttendees, error } = await supabase
         .from('meeting_slot_attendees')
-        .select('id, meeting_slot:meeting_slots!inner(meeting_type)', { count: 'exact', head: true })
+        .select('id, meeting_slot:meeting_slots!inner(meeting_type, scheduled_at)')
         .eq('status', 'no_show')
         .eq('meeting_slot.meeting_type', 'r2')
         .gte('meeting_slot.scheduled_at', thirtyDaysAgo.toISOString());
 
       if (error) throw error;
-      return count || 0;
+      if (!noShowAttendees || noShowAttendees.length === 0) return 0;
+
+      const noShowIds = noShowAttendees.map(a => a.id);
+
+      // Step 2: Find which of these have been rescheduled (have a child attendee)
+      const { data: childAttendees } = await supabase
+        .from('meeting_slot_attendees')
+        .select('parent_attendee_id')
+        .in('parent_attendee_id', noShowIds);
+
+      const rescheduledParentIds = new Set(
+        (childAttendees || []).map(c => c.parent_attendee_id).filter(Boolean)
+      );
+
+      // Step 3: Count = total no_shows - rescheduled ones
+      return noShowIds.length - rescheduledParentIds.size;
     },
     staleTime: 5 * 60 * 1000,
   });
