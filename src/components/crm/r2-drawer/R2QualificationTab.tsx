@@ -20,7 +20,7 @@ import {
   IMOVEL_OPTIONS,
   RENDA_OPTIONS
 } from '@/types/r2Agenda';
-import { PROFISSAO_OPTIONS, ESTADO_OPTIONS } from '../qualification/QualificationFields';
+import { ESTADO_OPTIONS } from '../qualification/QualificationFields';
 import { useUpdateDealCustomFields } from '@/hooks/useUpdateDealCustomFields';
 import { toast } from 'sonner';
 
@@ -82,6 +82,15 @@ export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
     });
   };
 
+  const handleProfissaoBlur = () => {
+    if (!dealId || localProfissao === (customFields.profissao || '')) return;
+    
+    updateCustomFields.mutate({
+      dealId,
+      customFields: { profissao: localProfissao || null }
+    });
+  };
+
   const [isNoteOpen, setIsNoteOpen] = useState(true);
 
   return (
@@ -122,20 +131,12 @@ export function R2QualificationTab({ attendee }: R2QualificationTabProps) {
         {/* Profissão */}
         <div className="space-y-1.5">
           <Label className="text-xs">👤 Profissão</Label>
-          <Select
+          <Input
             value={localProfissao}
-            onValueChange={(v) => handleFieldUpdate('profissao', v, setLocalProfissao)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">— Não informado —</SelectItem>
-              {PROFISSAO_OPTIONS.map(opt => (
-                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(e) => setLocalProfissao(e.target.value)}
+            onBlur={handleProfissaoBlur}
+            placeholder="Ex: Engenheiro, Advogado..."
+          />
         </div>
 
         {/* Estado */}
