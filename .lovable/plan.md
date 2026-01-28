@@ -1,177 +1,118 @@
 
-# Corrigir Acesso de Usuário com Múltiplas Roles (SDR + Closer)
-
-## Contexto do Problema
-
-A usuária **Jessica Martins** possui duas roles no sistema: `sdr` e `closer`. Devido ao sistema de prioridade de roles, o sistema a trata apenas como `closer` (prioridade 4), ignorando suas funções de SDR (prioridade 8).
-
-### Dados do Usuário
-- **User ID:** `b0ea004d-ca72-4190-ab69-a9685b34bd06`
-- **Email:** jessica.martins@minhacasafinanciada.com
-- **Roles:** closer (prioridade 4), sdr (prioridade 8)
-- **Cadastro em closers:** meeting_type = 'r2' (R2 apenas)
-- **Deals como owner:** 361 no PIPELINE INSIDE SALES
-- **BU:** incorporador
-
----
+# Corrigir Acesso de Jessica Martins (Multi-Role: SDR + Closer R2)
 
 ## Problemas Identificados
 
-### 1. Agenda R1 Vazia
-O sistema detecta `role === 'closer'`, então mostra "Minha Agenda" para closers. Porém:
-- O hook `useMyCloser` encontra Jessica na tabela `closers`
-- Mas ela está cadastrada com `meeting_type = 'r2'`
-- A Agenda R1 filtra `meeting_type = 'r1'`
-- **Resultado:** Nenhuma reunião aparece
+### 1. Negócios: Stages não aparecem
+**Causa raiz:** A política RLS da tabela `stage_permissions` usa comparação inválida para usuários com múltiplas roles:
 
-### 2. Negócios Não Mostram Deals
-- A função `isSdrRole(role)` retorna `false` porque `role === 'closer'`
-- Isso faz com que a lógica de pré-seleção de origem para SDRs não funcione
-- O filtro de deals usa `isRestrictedRole` que inclui closers, mas não usa a lógica específica de SDR
+```sql
+-- Política atual (QUEBRADA para multi-role)
+role = (SELECT user_roles.role FROM user_roles WHERE user_roles.user_id = auth.uid())
+```
 
-### 3. Agenda R2 Sem Visão Personalizada
-- A Agenda R2 mostra todos os closers R2 sem filtro "Minha Agenda"
-- Jessica deveria ver apenas suas próprias reuniões R2
+Quando Jessica (com roles `sdr` E `closer`) acessa, o subquery retorna **2 linhas**, e a comparação `role = (2 linhas)` falha silenciosamente, retornando **0 permissões**.
+
+**Resultado:** `canViewStage()` retorna `false` para todas as stages → Kanban vazio.
+
+### 2. Agenda R2: Sem acesso
+**Causa raiz:** O `R2AccessGuard` permite apenas:
+- Roles: `admin`, `manager`, `coordenador`
+- Usuários específicos (lista hardcoded)
+
+Jessica tem role `closer` (não na lista) e não está na lista de usuários autorizados.
+
+**Resultado:** Jessica vê "Acesso Negado" ao tentar acessar `/crm/agenda-r2`.
 
 ---
 
-## Solução Proposta
+## Solução
 
-### Parte 1: Corrigir Verificação de SDR para Multi-Roles
+### Parte 1: Corrigir RLS de `stage_permissions` (Banco de Dados)
 
-**Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
+Atualizar a política para usar `IN` em vez de `=`:
 
-Modificar a função `isSdrRole` para aceitar o array `allRoles` e verificar se o usuário tem role SDR:
+```sql
+-- Dropar política existente
+DROP POLICY IF EXISTS "Users can view their role permissions" ON stage_permissions;
 
-```text
-// ANTES: Verifica apenas o role principal
-export const isSdrRole = (role: AppRole | null): boolean => {
-  return role === 'sdr';
-};
-
-// DEPOIS: Verifica se tem SDR em qualquer role
-export const isSdrRole = (role: AppRole | null, allRoles?: AppRole[]): boolean => {
-  if (role === 'sdr') return true;
-  // Se tem allRoles, verificar se SDR está presente
-  if (allRoles && allRoles.includes('sdr')) return true;
-  return false;
-};
+-- Criar nova política que suporta múltiplas roles
+CREATE POLICY "Users can view their role permissions"
+ON stage_permissions
+FOR SELECT
+USING (
+  role IN (
+    SELECT user_roles.role 
+    FROM user_roles 
+    WHERE user_roles.user_id = auth.uid()
+  )
+  OR has_role(auth.uid(), 'admin'::app_role)
+);
 ```
 
-### Parte 2: Passar `allRoles` para Verificação em Negocios.tsx
+### Parte 2: Atualizar `R2AccessGuard` para Closers R2
 
-**Arquivo:** `src/pages/crm/Negocios.tsx`
+**Arquivo:** `src/components/auth/R2AccessGuard.tsx`
 
-Modificar para usar `allRoles` do AuthContext:
+Adicionar verificação para closers com `meeting_type = 'r2'`:
 
-```text
-// ANTES
-const { role, user } = useAuth();
-const isSdr = isSdrRole(role);
+```typescript
+// Adicionar 'closer' à lista de roles permitidas
+const R2_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador', 'closer'];
 
-// DEPOIS
-const { role, user, allRoles } = useAuth();
-const isSdr = isSdrRole(role, allRoles);
+// E verificar se é closer R2 válido
+const { data: isR2Closer } = useQuery({
+  queryKey: ['is-r2-closer', user?.id],
+  queryFn: async () => {
+    // Buscar via employees.user_id ou por email
+    const { data: closer } = await supabase
+      .from('closers')
+      .select('id')
+      .eq('meeting_type', 'r2')
+      .eq('is_active', true)
+      // ... lógica de match por user_id ou email
+    return !!closer;
+  },
+  enabled: role === 'closer' && !!user?.id,
+});
 ```
 
-### Parte 3: Ajustar Agenda R1 para Usuários Multi-Role
+### Parte 3: Ajustar `useStagePermissions` para Multi-Role
 
-**Arquivo:** `src/pages/crm/Agenda.tsx`
+**Arquivo:** `src/hooks/useStagePermissions.ts`
 
-Modificar a lógica para verificar se o usuário é "apenas closer" ou "também SDR":
+Modificar o hook para buscar permissões de TODAS as roles do usuário:
 
-```text
-// ANTES
-const isCloser = role === 'closer';
-
-// DEPOIS
+```typescript
 const { role, allRoles } = useAuth();
-// Usuário é closer PURO se tem role closer mas NÃO tem SDR
-const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
-// Para filtering de reuniões e UI "Minha Agenda"
-const isCloser = role === 'closer';
-```
 
-Se o usuário tem SDR também, mostrar a agenda normal (não "Minha Agenda") para que possa agendar para outros closers.
-
-### Parte 4: Adicionar Visão "Minha Agenda" na Agenda R2
-
-**Arquivo:** `src/pages/crm/AgendaR2.tsx`
-
-Adicionar lógica similar à Agenda R1 para closers R2:
-
-```text
-// Adicionar hook para identificar closer R2 do usuário
-const { data: myR2Closer } = useMyR2Closer();
-const isR2Closer = !!myR2Closer?.id;
-
-// Filtrar reuniões se é closer R2
-const filteredMeetings = useMemo(() => {
-  let filtered = meetings;
-  
-  // Se é closer R2, mostrar apenas suas reuniões
-  if (isR2Closer && myR2Closer?.id) {
-    filtered = filtered.filter(m => m.closer?.id === myR2Closer.id);
-  }
-  
-  // ... resto dos filtros
-}, [meetings, isR2Closer, myR2Closer?.id, closerFilter, statusFilter]);
-```
-
-### Parte 5: Criar Hook `useMyR2Closer`
-
-**Arquivo:** `src/hooks/useMyR2Closer.ts` (novo arquivo)
-
-```text
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-
-export function useMyR2Closer() {
-  const { user } = useAuth();
-
-  return useQuery({
-    queryKey: ['my-r2-closer', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-
-      // Buscar email do usuário
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile?.email) return null;
-
-      // Buscar closer R2 pelo email
-      const { data: closer, error } = await supabase
-        .from('closers')
-        .select('id, name, email, is_active')
-        .ilike('email', profile.email)
-        .eq('meeting_type', 'r2')
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (error) throw error;
-      return closer;
-    },
-    enabled: !!user?.id,
-  });
-}
+// Buscar permissões para TODAS as roles do usuário
+const { data: permissions = [] } = useQuery({
+  queryKey: ['stage-permissions', allRoles],
+  queryFn: async () => {
+    if (!allRoles || allRoles.length === 0) return [];
+    
+    const { data, error } = await supabase
+      .from('stage_permissions')
+      .select('*')
+      .in('role', allRoles); // Buscar para todas as roles
+    
+    if (error) throw error;
+    return data;
+  },
+  enabled: allRoles && allRoles.length > 0,
+});
 ```
 
 ---
 
-## Resumo das Mudanças
+## Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/auth/NegociosAccessGuard.tsx` | Modificar `isSdrRole` para aceitar `allRoles` |
-| `src/pages/crm/Negocios.tsx` | Passar `allRoles` para `isSdrRole` |
-| `src/pages/crm/Agenda.tsx` | Usar `allRoles` para determinar comportamento |
-| `src/pages/crm/AgendaR2.tsx` | Adicionar visão "Minha Agenda" para closers R2 |
-| `src/hooks/useMyR2Closer.ts` | Criar hook para identificar closer R2 |
+| **SQL (Supabase)** | Atualizar política RLS de `stage_permissions` |
+| `src/components/auth/R2AccessGuard.tsx` | Adicionar suporte para closers R2 |
+| `src/hooks/useStagePermissions.ts` | Usar `allRoles` em vez de `role` |
 
 ---
 
@@ -179,15 +120,39 @@ export function useMyR2Closer() {
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Jessica na Agenda R1 | Vazia (closer R2) | Mostra como SDR (pode agendar) |
-| Jessica nos Negócios | Não mostra deals | Mostra 361 deals como owner |
-| Jessica na Agenda R2 | Vê todos os closers | Vê apenas suas reuniões R2 |
+| Jessica no Negócios | Kanban vazio (0 stages) | Stages aparecem normalmente |
+| Jessica na Agenda R2 | "Acesso Negado" | Vê suas reuniões R2 |
+| Outros usuários single-role | Funciona | Continua funcionando |
 
 ---
 
-## Observações Técnicas
+## Sequência de Implementação
 
-- A mudança é retrocompatível: usuários com apenas uma role continuarão funcionando normalmente
-- A prioridade de roles continua existindo para UI/redirecionamento
-- A verificação `allRoles.includes('sdr')` garante que usuários multi-role tenham acesso correto
-- O hook `useMyR2Closer` é separado do `useMyCloser` para evitar conflitos de `meeting_type`
+1. **Primeiro:** Corrigir a RLS de `stage_permissions` (resolve Negócios imediatamente)
+2. **Segundo:** Atualizar `useStagePermissions` para usar `allRoles` (melhora performance)
+3. **Terceiro:** Atualizar `R2AccessGuard` para permitir closers R2 (resolve Agenda R2)
+
+---
+
+## Detalhes Técnicos
+
+### Por que a RLS falha para multi-role?
+
+```sql
+-- Para Jessica que tem 2 roles:
+SELECT role FROM user_roles WHERE user_id = 'b0ea004d-...'
+-- Retorna:
+--   'sdr'
+--   'closer'
+
+-- A comparação "role = (subquery)" espera 1 valor, mas recebe 2
+-- Resultado: condição falha para TODAS as linhas
+```
+
+### Por que usar `IN` resolve?
+
+```sql
+-- Com IN, funciona para 1 ou mais valores:
+role IN (SELECT role FROM user_roles WHERE user_id = auth.uid())
+-- Se user tem 'sdr' e 'closer', retorna permissões de AMBAS as roles
+```
