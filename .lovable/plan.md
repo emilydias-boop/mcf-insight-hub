@@ -1,140 +1,123 @@
 
-# Simplificar Campos de Qualificação R2
+# Correção: Sincronização de owner_profile_id na Transferência em Massa
 
-## Resumo das Alterações
+## Problema Identificado
 
-| Campo | Estado Atual | Novo Formato |
-|-------|--------------|--------------|
-| **Profissão** | Select com ~15 opções | Input de texto livre |
-| **Tem terreno?** | Select com 4 opções | Select com apenas "Sim" / "Não" |
-| **Tem imóvel?** | Select com 3 opções | Select com apenas "Sim" / "Não" |
-| **Já constrói?** | Select com 3 opções | Select com apenas "Sim" / "Não" |
+A transferência em massa de leads atualizou o campo **`owner_id` (email)** mas **não atualizou o campo `owner_profile_id` (UUID)**. 
 
----
+**Evidência do banco de dados:**
+- 66 deals têm `owner_id = alex.dias@minhacasafinanciada.com` (correto)
+- Mas o `owner_profile_id` ainda aponta para **Vinicius** (`992a3790-424f-4126-8ef1-e329e2003f99`)
 
-## Arquivos a Modificar
-
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/types/r2Agenda.ts` | Simplificar `TERRENO_OPTIONS`, `IMOVEL_OPTIONS` e `JA_CONSTROI_OPTIONS` |
-| `src/components/crm/r2-drawer/R2QualificationTab.tsx` | Trocar Profissão de Select para Input |
+O filtro de owner na página Negócios usa `owner_profile_id`, então quando você filtra por Alex, esses deals não aparecem.
 
 ---
 
-## Detalhes Técnicos
+## Causa Raiz
 
-### 1. Alterações em `src/types/r2Agenda.ts`
+Há dois locais no código que atualizam ownership mas **não atualizam `owner_profile_id`**:
+
+| Arquivo | Linha | Problema |
+|---------|-------|----------|
+| `src/hooks/useOrphanDeals.ts` | 186 | Atualiza só `owner_id` |
+| `src/hooks/useAgendaData.ts` | 1455 | Atualiza só `owner_id` |
+
+Possivelmente a transferência usou um desses métodos (ou foi feita via outro mecanismo).
+
+---
+
+## Solução em 2 Partes
+
+### Parte 1: Query de Correção Imediata (SQL)
+
+Executar uma query para sincronizar os 66 deals do Alex:
+
+```sql
+UPDATE crm_deals d
+SET owner_profile_id = p.id
+FROM profiles p
+WHERE d.owner_id = p.email
+  AND d.owner_id = 'alex.dias@minhacasafinanciada.com'
+  AND d.owner_profile_id != p.id;
+```
+
+### Parte 2: Correção no Código
+
+**Arquivo: `src/hooks/useOrphanDeals.ts`**
+
+Atualizar a mutation `useBulkAssignOwner` para também atualizar `owner_profile_id`:
+
+- Receber o `profile_id` do novo owner
+- Atualizar ambos campos: `owner_id` e `owner_profile_id`
+
+**Arquivo: `src/hooks/useAgendaData.ts`**
+
+Na função `syncDealStageFromAgenda`, quando transfere ownership para o closer:
+- Buscar o `profile_id` do closer pelo email
+- Atualizar `owner_id` **e** `owner_profile_id`
+
+---
+
+## Alterações Detalhadas
+
+### useOrphanDeals.ts
 
 **Antes:**
 ```typescript
-export const JA_CONSTROI_OPTIONS = [
-  { value: 'sim', label: 'Sim, já construiu' },
-  { value: 'nao', label: 'Não' },
-  { value: 'pretende', label: 'Pretende começar' },
-];
-
-export const TERRENO_OPTIONS = [
-  { value: 'sim', label: 'Sim' },
-  { value: 'nao_pretende', label: 'Não, mas pretende comprar' },
-  { value: 'nao', label: 'Não e não pretende' },
-  { value: 'nao_informou', label: 'Não informou' },
-];
-
-export const IMOVEL_OPTIONS = [
-  { value: 'sim', label: 'Sim' },
-  { value: 'nao', label: 'Não' },
-  { value: 'nao_informou', label: 'Não informou' },
-];
+mutationFn: async ({ dealIds, ownerId }: { dealIds: string[]; ownerId: string }) => {
+  const { error } = await supabase
+    .from('crm_deals')
+    .update({ owner_id: ownerId, updated_at: new Date().toISOString() })
+    .in('id', dealIds);
 ```
 
 **Depois:**
 ```typescript
-export const JA_CONSTROI_OPTIONS = [
-  { value: 'sim', label: 'Sim' },
-  { value: 'nao', label: 'Não' },
-];
-
-export const TERRENO_OPTIONS = [
-  { value: 'sim', label: 'Sim' },
-  { value: 'nao', label: 'Não' },
-];
-
-export const IMOVEL_OPTIONS = [
-  { value: 'sim', label: 'Sim' },
-  { value: 'nao', label: 'Não' },
-];
-```
-
-### 2. Alterações em `R2QualificationTab.tsx`
-
-Trocar o campo **Profissão** de `Select` para `Input`:
-
-**Antes:**
-```tsx
-<Select
-  value={localProfissao}
-  onValueChange={(v) => handleFieldUpdate('profissao', v, setLocalProfissao)}
->
-  <SelectTrigger>
-    <SelectValue placeholder="Selecione" />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectItem value="__none__">— Não informado —</SelectItem>
-    {PROFISSAO_OPTIONS.map(opt => (
-      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-```
-
-**Depois:**
-```tsx
-<Input
-  value={localProfissao}
-  onChange={(e) => setLocalProfissao(e.target.value)}
-  onBlur={handleProfissaoBlur}
-  placeholder="Ex: Engenheiro, Advogado..."
-/>
-```
-
-Adicionar handler para salvar no blur:
-```typescript
-const handleProfissaoBlur = () => {
-  if (!dealId || localProfissao === (customFields.profissao || '')) return;
+mutationFn: async ({ dealIds, ownerId, ownerProfileId }: { 
+  dealIds: string[]; 
+  ownerId: string; 
+  ownerProfileId?: string;
+}) => {
+  const updateData: any = { 
+    owner_id: ownerId, 
+    updated_at: new Date().toISOString() 
+  };
   
-  updateCustomFields.mutate({
-    dealId,
-    customFields: { profissao: localProfissao || null }
-  });
-};
+  if (ownerProfileId) {
+    updateData.owner_profile_id = ownerProfileId;
+  }
+  
+  const { error } = await supabase
+    .from('crm_deals')
+    .update(updateData)
+    .in('id', dealIds);
+```
+
+### useAgendaData.ts
+
+Na transferência de ownership (linha ~1455), adicionar lookup do profile:
+
+```typescript
+// Buscar profile_id do closer
+const { data: closerProfile } = await supabase
+  .from('profiles')
+  .select('id')
+  .eq('email', closerEmail)
+  .single();
+
+updateData.owner_id = closerEmail;
+if (closerProfile) {
+  updateData.owner_profile_id = closerProfile.id;
+}
 ```
 
 ---
 
-## Resultado Visual Esperado
+## Resultado Esperado
 
-```text
-+---------------------------+---------------------------+
-| 👤 Profissão              | 📍 Estado                 |
-| [________________]        | [Dropdown: AM, SP...]     |
-+---------------------------+---------------------------+
-| 💰 Renda                  | 🎂 Idade                  |
-| [Dropdown: faixas]        | [40]                      |
-+---------------------------+---------------------------+
-| 🏗️ Já constrói?           | 🏡 Tem terreno?           |
-| [Sim ▼] [Não]             | [Sim ▼] [Não]             |
-+---------------------------+---------------------------+
-| 🏠 Tem imóvel?            | ⏱️ Conhece MCF?           |
-| [Sim ▼] [Não]             | [Dropdown: tempo]         |
-+---------------------------+---------------------------+
-```
+1. **Imediato**: A query SQL corrige os 66 deals do Alex
+2. **Futuro**: Todas as transferências manterão `owner_profile_id` sincronizado
 
----
-
-## Compatibilidade
-
-Os valores antigos continuarão funcionando:
-- Se um lead tinha "Sim, já construiu" no campo `ja_constroi`, ele mostrará normalmente
-- As novas seleções salvarão apenas "sim" ou "nao"
-- O campo profissão texto livre aceita qualquer valor existente
-
+Após executar:
+- Filtrar por "Alex Dias" mostrará os ~67 leads corretamente
+- Filtrar por "Vinicius" mostrará apenas os leads que realmente são dele
