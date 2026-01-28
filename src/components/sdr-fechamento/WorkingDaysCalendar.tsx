@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -22,8 +23,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { formatCurrency } from '@/lib/formatters';
-import { RefreshCw, Edit2, Calendar } from 'lucide-react';
+import { getDiasUteisMes } from '@/lib/businessDays';
+import { RefreshCw, Edit2, Calendar, Plus, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WorkingDay {
@@ -174,6 +183,8 @@ const EditWorkingDayDialog = ({
 
 export const WorkingDaysCalendar = () => {
   const queryClient = useQueryClient();
+  const currentYear = new Date().getFullYear();
+  const [selectedYearToAdd, setSelectedYearToAdd] = useState(currentYear.toString());
 
   const { data: workingDays, isLoading, refetch } = useQuery({
     queryKey: ['working-days-calendar'],
@@ -184,6 +195,48 @@ export const WorkingDaysCalendar = () => {
         .order('ano_mes', { ascending: true });
       if (error) throw error;
       return data as WorkingDay[];
+    },
+  });
+
+  // Check if current year exists
+  const hasCurrentYear = workingDays?.some(wd => wd.ano_mes.startsWith(String(currentYear)));
+
+  // Get available years to add (current + next 2 years that don't exist yet)
+  const existingYears = new Set(workingDays?.map(wd => wd.ano_mes.split('-')[0]) || []);
+  const availableYearsToAdd = [currentYear, currentYear + 1, currentYear + 2]
+    .filter(y => !existingYears.has(String(y)));
+
+  // Mutation to generate year data
+  const addYearMutation = useMutation({
+    mutationFn: async (year: number) => {
+      const months = [];
+      for (let month = 0; month < 12; month++) {
+        const date = new Date(year, month, 1);
+        const anoMes = `${year}-${String(month + 1).padStart(2, '0')}`;
+        const diasUteis = getDiasUteisMes(date);
+        
+        months.push({
+          ano_mes: anoMes,
+          dias_uteis_base: diasUteis,
+          dias_uteis_final: diasUteis,
+          ifood_valor_dia: 30, // Default value
+          observacoes: `${MONTH_NAMES[month]} ${year}`,
+        });
+      }
+      
+      const { error } = await supabase
+        .from('working_days_calendar')
+        .upsert(months, { onConflict: 'ano_mes' });
+      
+      if (error) throw error;
+      return year;
+    },
+    onSuccess: (year) => {
+      queryClient.invalidateQueries({ queryKey: ['working-days-calendar'] });
+      toast.success(`Calendário de ${year} gerado com sucesso!`);
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao gerar calendário: ${error.message}`);
     },
   });
 
@@ -200,17 +253,64 @@ export const WorkingDaysCalendar = () => {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-primary" />
-          <div>
-            <CardTitle>Calendário de Dias Úteis</CardTitle>
-            <CardDescription>
-              Configure dias úteis e valor iFood por mês. O iFood Mensal é calculado automaticamente.
-            </CardDescription>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle>Calendário de Dias Úteis</CardTitle>
+              <CardDescription>
+                Configure dias úteis e valor iFood por mês. O iFood Mensal é calculado automaticamente.
+              </CardDescription>
+            </div>
           </div>
+          
+          {availableYearsToAdd.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select value={selectedYearToAdd} onValueChange={setSelectedYearToAdd}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYearsToAdd.map(year => (
+                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                onClick={() => addYearMutation.mutate(parseInt(selectedYearToAdd))}
+                disabled={addYearMutation.isPending}
+                size="sm"
+              >
+                {addYearMutation.isPending ? (
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
+                Adicionar Ano
+              </Button>
+            </div>
+          )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {/* Alert if current year is missing */}
+        {!hasCurrentYear && (
+          <Alert variant="destructive" className="bg-yellow-500/10 border-yellow-500/30 text-yellow-400">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="flex items-center gap-2">
+              <span>O calendário não possui dados para {currentYear}.</span>
+              <Button 
+                variant="link" 
+                className="p-0 h-auto text-yellow-400 underline"
+                onClick={() => addYearMutation.mutate(currentYear)}
+                disabled={addYearMutation.isPending}
+              >
+                Clique aqui para adicionar
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Table>
           <TableHeader>
             <TableRow>
