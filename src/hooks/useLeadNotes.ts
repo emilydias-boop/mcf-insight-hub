@@ -119,23 +119,34 @@ export function useLeadNotes(dealId: string | null | undefined, attendeeId: stri
         }
       }
       
-      // 3. Fetch scheduling notes from meeting_slot_attendees.notes
+      // 3. Fetch scheduling notes AND closer notes from meeting_slot_attendees
       if (allAttendeeIds.length > 0) {
-        const { data: schedulingNotes } = await supabase
+        const { data: attendeeData } = await supabase
           .from('meeting_slot_attendees')
-          .select('id, notes, created_at')
-          .in('id', allAttendeeIds)
-          .not('notes', 'is', null);
+          .select('id, notes, closer_notes, created_at, updated_at')
+          .in('id', allAttendeeIds);
         
-        if (schedulingNotes) {
-          schedulingNotes.forEach(sn => {
-            if (sn.notes) {
+        if (attendeeData) {
+          attendeeData.forEach(item => {
+            // Notas de agendamento (SDR)
+            if (item.notes) {
               notes.push({
-                id: `scheduling-${sn.id}`,
+                id: `scheduling-${item.id}`,
                 type: 'scheduling',
-                content: sn.notes,
+                content: item.notes,
                 author: null,
-                created_at: sn.created_at || new Date().toISOString(),
+                created_at: item.created_at || new Date().toISOString(),
+              });
+            }
+            
+            // Notas do Closer R1
+            if (item.closer_notes) {
+              notes.push({
+                id: `closer-${item.id}`,
+                type: 'closer',
+                content: item.closer_notes,
+                author: null,
+                created_at: item.updated_at || item.created_at || new Date().toISOString(),
               });
             }
           });
