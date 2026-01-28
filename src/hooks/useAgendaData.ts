@@ -1547,9 +1547,16 @@ export function useUpdateAttendeeAndSlotStatus() {
       }
 
       // 3. Update attendee status
+      const updateData: { status: string; contract_paid_at?: string } = { status };
+      
+      // Se o status for contract_paid, registrar timestamp do pagamento
+      if (status === 'contract_paid') {
+        updateData.contract_paid_at = new Date().toISOString();
+      }
+      
       const { error: attendeeError } = await supabase
         .from('meeting_slot_attendees')
-        .update({ status })
+        .update(updateData)
         .eq('id', attendeeId);
 
       if (attendeeError) throw attendeeError;
