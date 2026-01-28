@@ -17,10 +17,19 @@ export const ResourceGuard = ({
   children, 
   fallback 
 }: ResourceGuardProps) => {
-  const { role } = useAuth();
+  const { role, loading } = useAuth();
   const { canView, canEdit, canFull } = useResourcePermission(resource);
   
-  // Admins sempre têm acesso
+  // Esperar o loading terminar antes de verificar permissões
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  // Admins sempre têm acesso (só verifica após loading terminar)
   if (role === 'admin') {
     return <>{children}</>;
   }
