@@ -1,104 +1,122 @@
 
-Objetivo
-- Fazer a tela /crm/negocios voltar a carregar negócios imediatamente (o “não apareceu nada” hoje é um bug de seleção/IDs).
-- Enquanto isso, deixar o dropdown “Funil” mostrar só 1 “Lançamento” (o mais recente), mesmo que ainda existam duplicados no banco (Live), para você não ficar travada esperando limpeza manual.
 
-Diagnóstico (o que está acontecendo agora)
-1) Bug de ID (causa do “não apareceu nada”)
-- Em src/pages/crm/Negocios.tsx, o estado selectedPipelineId está sendo usado como se fosse “pipeline/group id”.
-- Porém, o código de default (SDR_AUTHORIZED_ORIGIN_ID e BU_DEFAULT_ORIGIN_MAP) está setando selectedPipelineId com um ORIGIN_ID em alguns casos.
-- Aí o hook useCRMOriginsByPipeline (src/hooks/useCRMOriginsByPipeline.ts) assume que pipelineId é group_id e faz:
-  - crm_origins.eq('group_id', pipelineId)
-  - Se pipelineId é um origin_id, isso volta vazio → pipelineOrigins fica vazio → effectiveOriginId pode ficar undefined → a tela não carrega negócios.
-- Isso explica o comportamento “vazio”, independentemente de você ter duplicados ou não.
+# Corrigir Carregamento de Stages para Pipelines Criados pelo Wizard
 
-2) Duplicados no dropdown (causa do “aparece várias e vazias”)
-- PipelineSelector busca TODOS os crm_groups e renderiza direto.
-- Não há filtro para:
-  - is_archived = false
-  - deduplicar por nome/display_name (ex: manter só o mais recente “Lançamento / Live”)
-- Então, mesmo após você limpar Test, o Live segue com “n” grupos iguais e o dropdown continua poluído.
+## Problema Identificado
 
-Solução proposta (em duas camadas)
-Camada A (urgente): corrigir a lógica para sempre existir um effectiveOriginId válido
-- Ajustar Negocios.tsx e/ou useCRMOriginsByPipeline.ts para lidar quando “pipelineId” na prática for um origin_id.
-- Resultado: a tela volta a mostrar negócios hoje, sem depender da limpeza do banco.
+O pipeline "Lançamento / Live" (`39b2fa34`) foi criado pelo Wizard e tem a seguinte estrutura:
 
-Camada B (UX / “aparecer um deles pra ontem”): deduplicar e filtrar pipelines no frontend
-- Mesmo que o banco Live ainda tenha duplicatas, o dropdown vai exibir apenas:
-  - 1 item por nome (o mais recente)
-  - e ocultar arquivados (is_archived=true)
-- Resultado: você “some” com as duplicatas imediatamente no UI, e depois você pode limpar o Live com calma.
+```text
+Grupo: 39b2fa34 (Lançamento / Live)
+  └── Origem filha: 3228de9a (Lançamento)
+        └── 6 stages locais (Novo Lead, Lead Qualificado, R2 Agendada, etc.)
+```
 
-Detalhamento técnico das mudanças (o que vou implementar no código)
-1) Corrigir “pipelineId pode ser originId” (não quebrar mais)
-Arquivo: src/hooks/useCRMOriginsByPipeline.ts
-- Hoje o hook assume “pipelineId = group_id” sempre.
-- Vou torná-lo resiliente:
-  - Se pipelineId vier preenchido:
-    - Primeiro tentar confirmar se pipelineId existe em crm_groups (select id where id=eq(pipelineId)).
-      - Se existir: comportamento atual (buscar origens por group_id).
-      - Se NÃO existir: tratar pipelineId como origin_id:
-        - Buscar a origin por id
-        - Retornar [origin] (lista flat) para alimentar a sidebar e para o Negocios conseguir pegar default.
-- Também vou corrigir um detalhe que hoje está errado:
-  - Tem um trecho que faz crm_deals.eq('origin_id', pipelineId) pensando que pipelineId é origin. Isso está inconsistente (pipelineId é group_id nessa branch). Vou remover/ajustar para contar deals apenas via originIds reais (in(origin_id, originIds)).
+O hook `useCRMStages` quando recebe um **group_id**:
+1. Detecta corretamente que é um grupo
+2. Busca `local_pipeline_stages` filtrando por `group_id = 39b2fa34`
+3. Mas as stages estão salvas com `origin_id = 3228de9a` (a origem filha)
+4. Resultado: 0 stages encontradas
 
-Arquivo: src/pages/crm/Negocios.tsx
-- Vou ajustar o default do effectiveOriginId para cobrir o cenário:
-  - Se selectedPipelineId for um originId (detectado porque pipelineOrigins vem vazio OU o hook indicar que retornou uma origin única), usar ele diretamente como effectiveOriginId.
-- Assim, mesmo que BU_DEFAULT_ORIGIN_MAP continue sendo origin_id, a tela volta a funcionar.
+## Solução
 
-2) Mostrar só o pipeline mais recente no dropdown (dedupe)
-Arquivo: src/components/crm/PipelineSelector.tsx
-- Alterar query de pipelines para trazer também created_at e is_archived:
-  - select('id, name, display_name, created_at, is_archived')
-  - filtrar is_archived = false (se coluna existir; pela memória do projeto existe)
-- Deduplicar no frontend:
-  - Chave de dedupe: normalizar (display_name ?? name).trim().toLowerCase()
-  - Para cada chave, manter o registro com created_at mais recente.
-- Renderizar só a lista deduplicada.
-- Resultado: “Lançamento / Live” aparece uma vez só (o mais novo).
+Modificar o hook `useCRMStages` para, quando receber um grupo, buscar também as `local_pipeline_stages` das **origens filhas** desse grupo.
 
-3) Sidebar collapsed coerente com o dropdown (opcional, mas recomendado)
-Arquivo: src/components/crm/OriginsSidebar.tsx
-- A query allGroups (usada quando sidebar está collapsed) hoje busca crm_groups sem filtrar is_archived e sem dedupe.
-- Vou aplicar a mesma regra do PipelineSelector:
-  - filtrar is_archived=false
-  - dedupe por nome
-- Resultado: sidebar collapsed não mostra “vários ícones iguais”.
+## Arquivo a Modificar
 
-4) Validação rápida (como vamos conferir)
-- Abrir /crm/negocios:
-  - Deve aparecer negócios (sem “tela vazia” por effectiveOriginId undefined).
-- Dropdown Funil:
-  - Deve aparecer só 1 “Lançamento / Live” (o mais recente), mesmo que o Live ainda tenha duplicados.
-- Selecionar “Todos os funis”:
-  - Deve carregar sidebar em árvore normalmente.
-- Selecionar um funil específico:
-  - Deve carregar lista de origens do grupo.
-- Confirmar que não aparece mais o estado “Configure os estágios…” por causa de pipeline incorreto (a não ser que realmente esteja sem estágio).
+**`src/hooks/useCRMData.ts`** - função `useCRMStages`
 
-Dependências / riscos
-- Se a coluna is_archived não existir em crm_groups no Live/Test, o filtro vai falhar. Para evitar quebrar:
-  - Vou implementar o filtro de forma defensiva (se der erro de coluna, fallback para não filtrar; e ainda assim aplicar dedupe).
-- Se RLS estiver bloqueando select em crm_groups/crm_origins, nada vai aparecer. Mas como vocês já veem itens no dropdown hoje, isso provavelmente está ok.
+## Mudanças no Código
 
-O que você vai ganhar “pra ontem”
-- Mesmo sem rodar mais SQL nenhum agora:
-  - O dropdown vai parar de mostrar “várias e vazias” (dedupe no frontend).
-  - A tela vai voltar a carregar negócios (fix de effectiveOriginId).
+### Lógica Atual (problemática)
 
-Depois (opcional): limpeza definitiva no Live
-- Ainda recomendo executar a limpeza no Live quando você quiser deixar o banco “limpo de verdade”, mas o UI já vai ficar ok imediatamente após o patch.
+```typescript
+// Linha 33-43: Busca local_pipeline_stages apenas por group_id
+const localStagesQuery = isGroup
+  ? supabase
+      .from('local_pipeline_stages')
+      .select('*')
+      .eq('group_id', originOrGroupId)  // <-- Problema: stages estão em origin_id
+      .eq('is_active', true)
+  : supabase
+      .from('local_pipeline_stages')
+      .select('*')
+      .eq('origin_id', originOrGroupId)
+      .eq('is_active', true);
+```
 
-Arquivos que serão alterados
-- src/hooks/useCRMOriginsByPipeline.ts
-- src/pages/crm/Negocios.tsx
-- src/components/crm/PipelineSelector.tsx
-- src/components/crm/OriginsSidebar.tsx
+### Lógica Corrigida
 
-Critério de pronto (DoD)
-- Em /crm/negocios, a lista de negócios carrega sem ficar vazia por pipeline/origin mismatch.
-- No dropdown “Funil”, “Lançamento / Live” aparece apenas uma vez (o mais recente).
-- Nenhum erro novo no console relacionado a queries de crm_groups/crm_origins.
+Quando for um grupo:
+1. Primeiro buscar origens filhas do grupo
+2. Buscar `local_pipeline_stages` onde `origin_id` está na lista de origens OU `group_id` é o grupo
+3. Deduplicar por nome (caso haja stages em múltiplas origens)
+
+```typescript
+if (isGroup) {
+  // Buscar origens filhas do grupo
+  const { data: childOrigins } = await supabase
+    .from('crm_origins')
+    .select('id')
+    .eq('group_id', originOrGroupId);
+  
+  const originIds = childOrigins?.map(o => o.id) || [];
+  
+  // Buscar local_pipeline_stages em qualquer origem filha OU diretamente no grupo
+  let localStagesQuery = supabase
+    .from('local_pipeline_stages')
+    .select('*')
+    .eq('is_active', true);
+  
+  if (originIds.length > 0) {
+    // Buscar por origin_id nas origens filhas OU por group_id diretamente
+    localStagesQuery = localStagesQuery.or(
+      `origin_id.in.(${originIds.join(',')}),group_id.eq.${originOrGroupId}`
+    );
+  } else {
+    localStagesQuery = localStagesQuery.eq('group_id', originOrGroupId);
+  }
+  
+  const { data: localStages } = await localStagesQuery.order('stage_order');
+  
+  // Deduplicar por nome mantendo o primeiro (menor stage_order)
+  if (localStages && localStages.length > 0) {
+    const uniqueStages = localStages.reduce((acc, stage) => {
+      if (!acc.find(s => s.name === stage.name)) {
+        acc.push(stage);
+      }
+      return acc;
+    }, []);
+    
+    return uniqueStages.map(s => ({
+      id: s.id,
+      stage_name: s.name,
+      color: s.color,
+      stage_order: s.stage_order,
+      stage_type: s.stage_type,
+      is_active: s.is_active,
+      origin_id: s.origin_id || s.group_id,
+      clint_id: `local-${s.id}`,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+    }));
+  }
+}
+```
+
+## Resultado Esperado
+
+Após a correção:
+- Pipeline "Lançamento / Live" mostrará as 6 colunas do Kanban
+- Outros pipelines criados pelo Wizard também funcionarão
+- Pipelines existentes (como PIPELINE INSIDE SALES) continuarão funcionando normalmente
+
+## Detalhes Técnicos
+
+| Item | Valor |
+|------|-------|
+| Group ID | `39b2fa34-4dc2-43cb-9ce1-e7b3ffa8ab3d` |
+| Origin filha | `3228de9a-610e-4b57-b031-02236bd2ed73` |
+| Stages locais | 6 (Novo Lead, Lead Qualificado, R2 Agendada, R2 Realizada, Venda Realizada, Sem Interesse) |
+| Tabela | `local_pipeline_stages` |
+
