@@ -60,6 +60,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useR2DailySlotsForView } from "@/hooks/useR2DailySlotsForView";
 import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
+import { useMyR2Closer } from "@/hooks/useMyR2Closer";
+import { useAuth } from "@/contexts/AuthContext";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -84,6 +86,13 @@ export default function AgendaR2() {
   const [preselectedDate, setPreselectedDate] = useState<Date | undefined>();
   const [availabilityConfigOpen, setAvailabilityConfigOpen] = useState(false);
   const [statusConfigOpen, setStatusConfigOpen] = useState(false);
+
+  // Auth e closer R2 do usuário logado
+  const { role, allRoles } = useAuth();
+  const { data: myR2Closer, isLoading: isLoadingMyR2Closer } = useMyR2Closer();
+  
+  // Verifica se usuário é closer R2 puro (não tem outras roles privilegiadas)
+  const isR2Closer = !!myR2Closer?.id && role === 'closer' && !allRoles.includes('sdr') && !allRoles.includes('admin') && !allRoles.includes('manager') && !allRoles.includes('coordenador');
 
   // Handle URL param changes
   useEffect(() => {
@@ -130,9 +139,15 @@ export default function AgendaR2() {
   // Filter meetings by closer and status, then consolidate meetings with same closer+time
   const filteredMeetings = useMemo(() => {
     let filtered = meetings;
-    if (closerFilter !== "all") {
+    
+    // Se é closer R2, mostrar apenas suas próprias reuniões ("Minha Agenda")
+    if (isR2Closer && myR2Closer?.id) {
+      filtered = filtered.filter((m) => m.closer?.id === myR2Closer.id);
+    } else if (closerFilter !== "all") {
+      // Filtro manual de closer (para admins/managers)
       filtered = filtered.filter((m) => m.closer?.id === closerFilter);
     }
+    
     if (statusFilter !== "all") {
       filtered = filtered.filter((m) => m.status === statusFilter);
     }
@@ -150,13 +165,16 @@ export default function AgendaR2() {
       ...group[0],
       attendees: group.flatMap((m) => m.attendees || []),
     }));
-  }, [meetings, closerFilter, statusFilter]);
+  }, [meetings, closerFilter, statusFilter, isR2Closer, myR2Closer?.id]);
 
-  // Filter closers based on filter
+  // Filter closers based on filter (ou mostrar apenas o próprio closer se for R2 closer)
   const displayClosers = useMemo(() => {
+    if (isR2Closer && myR2Closer?.id) {
+      return closers.filter((c) => c.id === myR2Closer.id);
+    }
     if (closerFilter === "all") return closers;
     return closers.filter((c) => c.id === closerFilter);
-  }, [closers, closerFilter]);
+  }, [closers, closerFilter, isR2Closer, myR2Closer?.id]);
 
   // Convert R2Meeting to MeetingSlot for AgendaCalendar compatibility
   const meetingsAsMeetingSlots: MeetingSlot[] = useMemo(() => {
@@ -337,28 +355,37 @@ export default function AgendaR2() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Agenda R2</h1>
+          <h1 className="text-2xl font-bold">
+            {isR2Closer ? 'Minha Agenda R2' : 'Agenda R2'}
+          </h1>
           <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20">
-            Reunião 02
+            {isR2Closer ? myR2Closer?.name : 'Reunião 02'}
           </Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setStatusConfigOpen(true)}>
-            <Sliders className="h-4 w-4 mr-2" />
-            Status/Tags
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Closers
-          </Button>
+          {/* Mostrar botões de config apenas para não-closers */}
+          {!isR2Closer && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setStatusConfigOpen(true)}>
+                <Sliders className="h-4 w-4 mr-2" />
+                Status/Tags
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setAvailabilityConfigOpen(true)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Closers
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
           </Button>
-          <Button size="sm" onClick={() => setQuickScheduleOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Agendar R2
-          </Button>
+          {!isR2Closer && (
+            <Button size="sm" onClick={() => setQuickScheduleOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Agendar R2
+            </Button>
+          )}
         </div>
       </div>
 
@@ -410,20 +437,22 @@ export default function AgendaR2() {
             ))}
           </div>
 
-          {/* Closer Filter */}
-          <Select value={closerFilter} onValueChange={setCloserFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filtrar closer" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os closers</SelectItem>
-              {closers.map((closer) => (
-                <SelectItem key={closer.id} value={closer.id}>
-                  {closer.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Closer Filter - escondido para closers R2 (eles veem apenas sua agenda) */}
+          {!isR2Closer && (
+            <Select value={closerFilter} onValueChange={setCloserFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar closer" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os closers</SelectItem>
+                {closers.map((closer) => (
+                  <SelectItem key={closer.id} value={closer.id}>
+                    {closer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {/* Status Filter */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>

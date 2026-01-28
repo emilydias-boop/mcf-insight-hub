@@ -27,10 +27,13 @@ import { useMyCloser } from '@/hooks/useMyCloser';
 
 export default function Agenda() {
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { role, allRoles } = useAuth();
   const { data: myCloser } = useMyCloser();
   
-  const isCloser = role === 'closer';
+  // Verifica se usuário é closer PURO (não tem SDR)
+  // Usuários com múltiplas roles (SDR + Closer) veem a agenda como SDR para poder agendar
+  const isCloserOnly = role === 'closer' && !allRoles.includes('sdr');
+  const isCloser = isCloserOnly;
   
   useMeetingReminders(); // Automatic 15-min reminders
   const [selectedDate, setSelectedDate] = useState(new Date());
