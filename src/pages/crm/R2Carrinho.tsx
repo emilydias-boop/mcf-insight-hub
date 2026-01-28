@@ -79,7 +79,7 @@ export default function R2Carrinho() {
 
   const kpiCards = [
     { label: 'Contratos (R1)', value: kpis?.contratosPagos ?? 0, color: 'bg-blue-500' },
-    { label: 'R2 Agendadas', value: kpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
+    { label: 'R2 Pendentes', value: kpis?.r2Agendadas ?? 0, color: 'bg-indigo-500' },
     { label: 'R2 Realizadas', value: kpis?.r2Realizadas ?? 0, color: 'bg-green-500' },
     { label: 'Fora do Carrinho', value: kpis?.foraDoCarrinho ?? 0, color: 'bg-red-500' },
     { label: 'Aprovados', value: kpis?.aprovados ?? 0, color: 'bg-emerald-500' },
@@ -145,7 +145,7 @@ export default function R2Carrinho() {
       <Tabs defaultValue="metricas" className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="agendadas" className="flex items-center gap-2">
-            R2 Agendadas
+            📋 Todas R2s
             <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
               {agendadasData.length}
             </span>
