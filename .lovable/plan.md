@@ -1,46 +1,65 @@
 
 
-# Trocar "Selecionado" para Termo Mais Claro
+# Corrigir Data dos Leads de Follow-up (R2 Pendentes)
 
-## Problema
-O badge verde "Selecionado" no drawer de detalhes da R2 está causando confusão, pois o termo também é usado no contexto do "Carrinho" (leads selecionados/aprovados). O usuário pode achar que significa status do lead no funil, quando na verdade indica apenas qual participante está sendo visualizado no drawer.
+## Problema Identificado
+Os leads de follow-up dos closers R1 no painel "Pendentes" estão mostrando a **data de criação do registro** (created_at) em vez da **data real do pagamento do contrato** (contract_paid_at) ou da **data da reunião agendada** (scheduled_at).
 
----
+Isso acontece porque o hook `useR2PendingLeads.ts`:
+1. Busca o campo `created_at` (linha 51) mas **não busca** o campo `contract_paid_at` do banco
+2. Depois **substitui** `created_at` pelo campo `contract_paid_at` (linhas 91, 123, 167)
+3. Ordena pela data errada (linha 68)
 
-## Sugestões de Nome Alternativo
-
-| Opção | Significado |
-|-------|-------------|
-| **Em foco** | Indica que é o item atualmente exibido |
-| **Visualizando** | Indica que o usuário está vendo os detalhes deste |
-| **Ativo** | O participante ativo na seleção |
-| **Atual** | O atual sendo exibido |
-
-**Recomendação:** Usar **"Em foco"** ou **"Visualizando"** — termos que deixam claro que é uma indicação de UI, não de status de negócio.
+O resultado é que o painel mostra "há X dias" baseado na data de criação do attendee, não na data do pagamento ou da reunião.
 
 ---
 
-## Mudança Técnica
+## Solução Proposta
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Linha 203 - Trocar "Selecionado" para o novo termo |
+| `src/hooks/useR2PendingLeads.ts` | Buscar `contract_paid_at` do banco e usar como fallback a data da reunião (`scheduled_at`) |
 
-```tsx
-// Linha 202-204 - Antes
-{isSelected && (
-  <Badge className="text-xs bg-primary text-primary-foreground shrink-0">
-    Selecionado
-  </Badge>
-)}
+---
 
-// Depois (exemplo com "Em foco")
-{isSelected && (
-  <Badge className="text-xs bg-primary text-primary-foreground shrink-0">
-    Em foco
-  </Badge>
-)}
+## Mudanças Técnicas
+
+### 1. Adicionar `contract_paid_at` na query (linha 51)
+```typescript
+// Antes
+created_at,
+
+// Depois
+created_at,
+contract_paid_at,
 ```
+
+### 2. Ordenar por `contract_paid_at` ou `scheduled_at` (linha 68)
+```typescript
+// Antes
+.order('created_at', { ascending: false });
+
+// Depois  
+.order('contract_paid_at', { ascending: false, nullsFirst: false });
+```
+
+### 3. Usar `contract_paid_at` real com fallback para `scheduled_at` (linhas 89-92, 121-124, 165-168)
+```typescript
+// Antes (em 3 lugares)
+contract_paid_at: a.created_at,
+
+// Depois
+contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
+```
+
+---
+
+## Lógica de Prioridade para Data
+
+A data exibida seguirá esta hierarquia:
+1. **contract_paid_at** - Data real registrada quando o contrato foi pago (webhook ou manual)
+2. **scheduled_at** - Data da reunião R1 (fallback se contract_paid_at for null)
+3. **created_at** - Data de criação do registro (último fallback)
 
 ---
 
@@ -48,7 +67,8 @@ O badge verde "Selecionado" no drawer de detalhes da R2 está causando confusão
 
 | Antes | Depois |
 |-------|--------|
-| Badge "Selecionado" verde | Badge "Em foco" verde |
+| "há 15 dias" (baseado em created_at) | "há 2 dias" (baseado em contract_paid_at ou scheduled_at) |
+| Leads antigos aparecem no topo | Leads com pagamento recente aparecem no topo |
 
-O termo novo deixará claro que se trata de uma indicação de interface (qual lead está sendo visualizado), sem confundir com status de negócio do carrinho.
+O painel de "Leads Pendentes" agora mostrará corretamente quanto tempo se passou desde o pagamento do contrato (ou desde a reunião), não desde a criação do registro no sistema.
 
