@@ -6633,14 +6633,14 @@ export type Database = {
           {
             foreignKeyName: "user_roles_user_id_profiles_fkey"
             columns: ["user_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "user_roles_user_id_profiles_fkey"
             columns: ["user_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "user_performance_summary"
             referencedColumns: ["user_id"]
           },
