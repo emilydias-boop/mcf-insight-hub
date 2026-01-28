@@ -1,74 +1,108 @@
 
-
-# Corrigir Data dos Leads de Follow-up (R2 Pendentes)
+# Contabilizar Contratos de Follow-up por Data do Pagamento
 
 ## Problema Identificado
-Os leads de follow-up dos closers R1 no painel "Pendentes" estão mostrando a **data de criação do registro** (created_at) em vez da **data real do pagamento do contrato** (contract_paid_at) ou da **data da reunião agendada** (scheduled_at).
+O painel de métricas de Closers filtra reuniões apenas por `scheduled_at` (data da reunião original). Quando um **follow-up** resulta em pagamento de contrato **hoje**, mas a reunião foi em **outro dia**, esse contrato **não é contabilizado** nas métricas do dia.
 
-Isso acontece porque o hook `useR2PendingLeads.ts`:
-1. Busca o campo `created_at` (linha 51) mas **não busca** o campo `contract_paid_at` do banco
-2. Depois **substitui** `created_at` pelo campo `contract_paid_at` (linhas 91, 123, 167)
-3. Ordena pela data errada (linha 68)
-
-O resultado é que o painel mostra "há X dias" baseado na data de criação do attendee, não na data do pagamento ou da reunião.
+**Exemplo Real:**
+- Thayna teve reunião dia 25/01 com um lead
+- Fez follow-up e o lead pagou o contrato dia 28/01
+- O sistema mostra 3 contratos pagos para hoje (reuniões de hoje)
+- Mas o contrato do follow-up não aparece porque `scheduled_at` é 25/01
 
 ---
 
 ## Solução Proposta
 
+Criar uma **contagem adicional** de contratos pagos baseada na data do pagamento (`contract_paid_at`), não na data da reunião.
+
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useR2PendingLeads.ts` | Buscar `contract_paid_at` do banco e usar como fallback a data da reunião (`scheduled_at`) |
+| `src/hooks/useR1CloserMetrics.ts` | Adicionar busca de contratos por `contract_paid_at` no período |
 
 ---
 
 ## Mudanças Técnicas
 
-### 1. Adicionar `contract_paid_at` na query (linha 51)
-```typescript
-// Antes
-created_at,
+### 1. Nova Query para Contratos por Data de Pagamento
 
-// Depois
-created_at,
-contract_paid_at,
+Adicionar query que busca attendees com:
+- `status = 'contract_paid'`
+- `contract_paid_at` dentro do período selecionado
+- Independente da data do `scheduled_at`
+
+```typescript
+// Buscar contratos pagos pela DATA DO PAGAMENTO (não da reunião)
+const { data: contractsByPaymentDate } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id,
+    status,
+    contract_paid_at,
+    booked_by,
+    meeting_slot:meeting_slots!inner(
+      closer_id,
+      meeting_type
+    )
+  `)
+  .eq('status', 'contract_paid')
+  .eq('meeting_slots.meeting_type', 'r1')
+  .gte('contract_paid_at', start)
+  .lte('contract_paid_at', end);
 ```
 
-### 2. Ordenar por `contract_paid_at` ou `scheduled_at` (linha 68)
-```typescript
-// Antes
-.order('created_at', { ascending: false });
+### 2. Atualizar Lógica de Contagem
 
-// Depois  
-.order('contract_paid_at', { ascending: false, nullsFirst: false });
+Substituir a contagem atual de `contrato_pago` que usa `scheduled_at` pela nova lógica que usa `contract_paid_at`:
+
+```typescript
+// Antes (conta por scheduled_at)
+if (status === 'contract_paid') {
+  metric!.contrato_pago++;
+}
+
+// Depois (conta por contract_paid_at no período)
+// Mover para nova lógica baseada em contractsByPaymentDate
 ```
 
-### 3. Usar `contract_paid_at` real com fallback para `scheduled_at` (linhas 89-92, 121-124, 165-168)
-```typescript
-// Antes (em 3 lugares)
-contract_paid_at: a.created_at,
+### 3. Contar por Data de Pagamento por Closer
 
-// Depois
-contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
+```typescript
+// Mapear contratos pagos no período por closer
+const contractsByCloser = new Map<string, number>();
+contractsByPaymentDate?.forEach(att => {
+  const closerId = att.meeting_slot?.closer_id;
+  if (closerId) {
+    // Validar se booked_by é SDR válido
+    const bookedByEmail = att.booked_by ? profileEmailMap.get(att.booked_by) : null;
+    if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
+      contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+    }
+  }
+});
+
+// Usar no cálculo final
+contrato_pago: contractsByCloser.get(closer.id) || 0,
 ```
 
 ---
 
-## Lógica de Prioridade para Data
+## Comportamento Esperado
 
-A data exibida seguirá esta hierarquia:
-1. **contract_paid_at** - Data real registrada quando o contrato foi pago (webhook ou manual)
-2. **scheduled_at** - Data da reunião R1 (fallback se contract_paid_at for null)
-3. **created_at** - Data de criação do registro (último fallback)
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Reunião dia 25, pagou dia 28 | Não conta em "Hoje" | Conta em "Hoje" |
+| Reunião dia 28, pagou dia 28 | Conta em "Hoje" | Conta em "Hoje" |
+| Reunião dia 28, pagou dia 30 | Conta em "Hoje" (errado) | Não conta em "Hoje" |
+
+O sistema passará a contar contratos pela **data real do pagamento**, refletindo corretamente os resultados de follow-up.
 
 ---
 
-## Resultado Esperado
+## Observação Importante
 
-| Antes | Depois |
-|-------|--------|
-| "há 15 dias" (baseado em created_at) | "há 2 dias" (baseado em contract_paid_at ou scheduled_at) |
-| Leads antigos aparecem no topo | Leads com pagamento recente aparecem no topo |
+Alguns registros têm `contract_paid_at = NULL` mesmo com status `contract_paid`. Para manter compatibilidade:
+- Se `contract_paid_at` existir → usar essa data
+- Se `contract_paid_at` for NULL → fallback para `scheduled_at` (comportamento atual)
 
-O painel de "Leads Pendentes" agora mostrará corretamente quanto tempo se passou desde o pagamento do contrato (ou desde a reunião), não desde a criação do registro no sistema.
-
+Isso garante que contratos antigos sem timestamp continuem sendo contabilizados.
