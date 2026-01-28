@@ -75,12 +75,21 @@ function renderStatusCell(att: R2CarrinhoAttendee) {
     );
   }
   
-  // Caso 3: Outros status (Agendada, Realizada, No-show, etc)
-  const statusInfo = STATUS_LABELS[att.status] || STATUS_LABELS[att.meeting_status] || STATUS_LABELS.scheduled;
+  // Caso 3: Tem status R2 definido (Em análise, Reprovado, Desistente, etc)
+  if (att.r2_status_name) {
+    return (
+      <Badge variant="outline" className="text-xs bg-purple-500/10 border-purple-500 text-purple-500">
+        {att.r2_status_name}
+      </Badge>
+    );
+  }
+  
+  // Caso 4: Sem status R2 - Mostra posição da reunião (Realizada, No-show, Agendada)
+  const positionInfo = STATUS_LABELS[att.status] || STATUS_LABELS[att.meeting_status] || STATUS_LABELS.scheduled;
   
   return (
-    <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
-      {statusInfo.label}
+    <Badge variant="outline" className={cn('text-xs', positionInfo.className)}>
+      {positionInfo.label}
     </Badge>
   );
 }
@@ -119,15 +128,27 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
     return Array.from(uniqueDates).sort();
   }, [attendees]);
 
-  // Extract unique R2 statuses from attendees
+  // Extract unique R2 statuses from attendees - including "Pendente" for those without status
   const r2Statuses = useMemo(() => {
     const unique = new Map<string, string>();
+    let hasWithoutStatus = false;
+    
     attendees.forEach(att => {
       if (att.r2_status_id && att.r2_status_name) {
         unique.set(att.r2_status_id, att.r2_status_name);
+      } else {
+        hasWithoutStatus = true;
       }
     });
-    return Array.from(unique.entries()).map(([id, name]) => ({ id, name }));
+    
+    const statuses = Array.from(unique.entries()).map(([id, name]) => ({ id, name }));
+    
+    // Add option for leads without R2 status
+    if (hasWithoutStatus) {
+      statuses.unshift({ id: '__no_status__', name: 'Pendente (Sem avaliação)' });
+    }
+    
+    return statuses;
   }, [attendees]);
 
   // Filter attendees based on all criteria
@@ -164,8 +185,14 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
       }
       
       // Status R2 filter (Aprovado, Pendente, etc)
-      if (statusFilter !== 'all' && att.r2_status_id !== statusFilter) {
-        return false;
+      if (statusFilter !== 'all') {
+        if (statusFilter === '__no_status__') {
+          // Filter leads WITHOUT R2 status
+          if (att.r2_status_id) return false;
+        } else {
+          // Filter by specific status
+          if (att.r2_status_id !== statusFilter) return false;
+        }
       }
       
       // Position filter (Realizada, No-show, Agendada)
@@ -415,7 +442,7 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                       <TableRow>
                         <TableHead className="w-[80px]">Horário</TableHead>
                         <TableHead>Nome Lead</TableHead>
-                        <TableHead>Closer R2</TableHead>
+                        <TableHead className="w-[140px]">Closer R2</TableHead>
                         <TableHead className="w-[90px]">Dia R1</TableHead>
                         <TableHead className="text-right">Status</TableHead>
                       </TableRow>
@@ -440,8 +467,8 @@ export function R2AgendadasList({ attendees, isLoading, onSelectAttendee }: R2Ag
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
+                          <TableCell className="w-[140px]">
+                            <div className="flex items-center gap-2 max-w-[140px]">
                               {att.closer_color && (
                                 <div 
                                   className="w-2.5 h-2.5 rounded-full shrink-0" 
