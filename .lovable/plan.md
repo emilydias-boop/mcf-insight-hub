@@ -98,4 +98,3 @@ O Supabase tem dois ambientes separados:
 - **Live**: Dados de produção (o que você vê na aplicação)
 
 O SQL foi executado no Test, mas a aplicação em produção usa o Live.
-
