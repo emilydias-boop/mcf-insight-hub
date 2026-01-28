@@ -30,19 +30,48 @@ export const useCRMStages = (originOrGroupId?: string) => {
       const isGroup = !!groupCheck;
       
       // 2. Buscar stages locais primeiro (prioridade sobre Clint)
-      const localStagesQuery = isGroup
-        ? supabase
-            .from('local_pipeline_stages')
-            .select('*')
-            .eq('group_id', originOrGroupId)
-            .eq('is_active', true)
-        : supabase
-            .from('local_pipeline_stages')
-            .select('*')
-            .eq('origin_id', originOrGroupId)
-            .eq('is_active', true);
+      let localStages: any[] | null = null;
+      let localError: any = null;
       
-      const { data: localStages, error: localError } = await localStagesQuery.order('stage_order');
+      if (isGroup) {
+        // Para grupos: buscar origens filhas primeiro
+        const { data: childOrigins } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .eq('group_id', originOrGroupId);
+        
+        const originIds = childOrigins?.map(o => o.id) || [];
+        
+        // Buscar local_pipeline_stages em qualquer origem filha OU diretamente no grupo
+        let query = supabase
+          .from('local_pipeline_stages')
+          .select('*')
+          .eq('is_active', true);
+        
+        if (originIds.length > 0) {
+          // Buscar por origin_id nas origens filhas OU por group_id diretamente
+          query = query.or(
+            `origin_id.in.(${originIds.join(',')}),group_id.eq.${originOrGroupId}`
+          );
+        } else {
+          query = query.eq('group_id', originOrGroupId);
+        }
+        
+        const result = await query.order('stage_order');
+        localStages = result.data;
+        localError = result.error;
+      } else {
+        // Para origens: buscar diretamente por origin_id
+        const result = await supabase
+          .from('local_pipeline_stages')
+          .select('*')
+          .eq('origin_id', originOrGroupId)
+          .eq('is_active', true)
+          .order('stage_order');
+        
+        localStages = result.data;
+        localError = result.error;
+      }
       
       if (localError) {
         console.error('Erro ao buscar stages locais:', localError);
@@ -50,7 +79,15 @@ export const useCRMStages = (originOrGroupId?: string) => {
       
       // Se tem stages locais, converter para formato compatível com crm_stages
       if (localStages && localStages.length > 0) {
-        return localStages.map(s => ({
+        // Deduplicar por nome mantendo o primeiro (menor stage_order)
+        const uniqueStages = localStages.reduce((acc: any[], stage) => {
+          if (!acc.find(s => s.name === stage.name)) {
+            acc.push(stage);
+          }
+          return acc;
+        }, []);
+        
+        return uniqueStages.map(s => ({
           id: s.id,
           stage_name: s.name,
           color: s.color,
