@@ -3,6 +3,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 // Types
+export interface Area {
+  id: string;
+  nome: string;
+  codigo: string | null;
+  ordem: number;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  // Computed
+  cargo_count?: number;
+}
+
 export interface Departamento {
   id: string;
   nome: string;
@@ -342,6 +354,102 @@ export function useCargoMutations() {
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao desativar cargo', description: error.message, variant: 'destructive' });
+    }
+  });
+
+  return { create, update, remove };
+}
+
+// ============= ÁREAS =============
+
+export function useAreas() {
+  return useQuery({
+    queryKey: ['areas-config'],
+    queryFn: async (): Promise<Area[]> => {
+      const { data, error } = await supabase
+        .from('areas_catalogo')
+        .select('*')
+        .order('ordem', { ascending: true });
+
+      if (error) throw error;
+      
+      // Get cargo count per area
+      const { data: cargos } = await supabase
+        .from('cargos_catalogo')
+        .select('area')
+        .eq('ativo', true);
+      
+      const countMap: Record<string, number> = {};
+      cargos?.forEach(c => {
+        if (c.area) {
+          countMap[c.area] = (countMap[c.area] || 0) + 1;
+        }
+      });
+      
+      return (data || []).map(a => ({
+        ...a,
+        cargo_count: countMap[a.nome] || 0
+      }));
+    }
+  });
+}
+
+export function useAreaMutations() {
+  const queryClient = useQueryClient();
+
+  const create = useMutation({
+    mutationFn: async (data: Partial<Area>) => {
+      const { data: result, error } = await supabase
+        .from('areas_catalogo')
+        .insert([data as any])
+        .select()
+        .single();
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['areas-config'] });
+      toast({ title: 'Área criada com sucesso' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao criar área', description: error.message, variant: 'destructive' });
+    }
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Area> }) => {
+      const { data: result, error } = await supabase
+        .from('areas_catalogo')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['areas-config'] });
+      toast({ title: 'Área atualizada' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar área', description: error.message, variant: 'destructive' });
+    }
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('areas_catalogo')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['areas-config'] });
+      toast({ title: 'Área removida' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover área', description: error.message, variant: 'destructive' });
     }
   });
 

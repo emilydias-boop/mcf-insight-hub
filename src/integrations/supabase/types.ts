@@ -230,6 +230,36 @@ export type Database = {
         }
         Relationships: []
       }
+      areas_catalogo: {
+        Row: {
+          ativo: boolean | null
+          codigo: string | null
+          created_at: string | null
+          id: string
+          nome: string
+          ordem: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          codigo?: string | null
+          created_at?: string | null
+          id?: string
+          nome: string
+          ordem?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          codigo?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string
+          ordem?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       attendee_movement_logs: {
         Row: {
           attendee_id: string
