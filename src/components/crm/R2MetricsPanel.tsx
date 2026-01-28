@@ -195,24 +195,30 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
           />
           <MetricCard
             icon={<ShoppingBag className="h-5 w-5" />}
-            label="Vendas"
-            value={metrics.vendas}
+            label="Vendas (Semana)"
+            value={metrics.vendas - metrics.vendasExtras}
             color="#059669"
+          />
+          <MetricCard
+            icon={<ShoppingBag className="h-5 w-5" />}
+            label="Vendas Extras"
+            value={metrics.vendasExtras}
+            color="#F97316"
             badge={
               metrics.vendasExtras > 0 && (
-                <Badge variant="outline" className="text-xs">
-                  +{metrics.vendasExtras} extras
+                <Badge variant="outline" className="text-xs bg-orange-100/80 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200 border-orange-300 dark:border-orange-700">
+                  Sem. anterior
                 </Badge>
               )
             }
           />
           <MetricCard
             icon={<Percent className="h-5 w-5" />}
-            label="Conversão Geral"
-            value={`${metrics.conversaoGeral.toFixed(2)}%`}
+            label="Conversão (Semana)"
+            value={`${(metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0).toFixed(2)}%`}
             color={
-              metrics.conversaoGeral >= 60 ? '#10B981' : 
-              metrics.conversaoGeral >= 30 ? '#F59E0B' : '#EF4444'
+              (metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0) >= 60 ? '#10B981' : 
+              (metrics.selecionados > 0 ? ((metrics.vendas - metrics.vendasExtras) / metrics.selecionados) * 100 : 0) >= 30 ? '#F59E0B' : '#EF4444'
             }
           />
         </div>
