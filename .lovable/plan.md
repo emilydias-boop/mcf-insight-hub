@@ -1,114 +1,152 @@
 
-## Objetivo
-Fazer “Pendentes” e “No‑Shows” refletirem a realidade do banco (inclusive em casos antigos), corrigindo dois problemas de lógica:
-1) Pendentes filtra por `deal_id`, mas existem casos onde o R1 (Contrato Pago) está em um `deal_id` e o R2 aconteceu em outro `deal_id` (mesmo contato). Ex.: **Silas Cavalheiro**.
-2) No‑Shows (lista e contador) contam registros `no_show` mesmo quando já existe um reagendamento criado como “filho” (`parent_attendee_id`). Ex.: **Odesmar Martins da Silva Júnior** tem um `no_show` original + um novo attendee “rescheduled”.
+# Corrigir No-Shows que Aparecem Mesmo Após Reembolso
+
+## Problema Identificado
+
+**Caso concreto: Diéssi Borba**
+
+A lead Diéssi aparece na lista de No-Shows mesmo após ter solicitado reembolso. Isso ocorre porque:
+
+1. Ela foi marcada como **"No-show"** primeiro → `meeting_slot_attendees.status = 'no_show'`
+2. Depois, clicaram em **"Reembolso"** no drawer → `meeting_slots.status = 'refunded'`
+3. **Porém**, o `RefundModal` usa `useUpdateR2MeetingStatus`, que **não atualiza** o `meeting_slot_attendees.status`
+
+### Diferença nos Fluxos
+
+| Ação | Hook Usado | Atualiza Attendee? |
+|------|------------|-------------------|
+| "Realizada" / "No-show" | `useUpdateAttendeeAndSlotStatus` | Sim |
+| "Reembolso" | `useUpdateR2MeetingStatus` | Não (só meeting) |
+
+### Resultado
+
+A query de No-Shows busca `meeting_slot_attendees.status = 'no_show'`, então a Diéssi continua aparecendo mesmo que o meeting esteja como `refunded`.
 
 ---
 
-## Diagnóstico confirmado (com dados do banco)
-### Caso “Silas Cavalheiro”
-- R1 `contract_paid` está no deal **49396fe1-...**
-- R2 `completed` está no deal **3565446f-...**
-- Ambos apontam para o mesmo `contact_id` **779c8061-...**
-Ou seja: o filtro atual de Pendentes (por `deal_id`) não consegue perceber que o contato já fez R2.
+## Solução em Duas Partes
 
-### Caso “Odesmar Martins da Silva Júnior”
-- Existe um attendee `no_show` (original)
-- Existe um attendee `rescheduled` com `parent_attendee_id = (id do no_show)`
-Mesmo que o reagendamento exista, o hook de No‑Shows continua listando/contando o original.
+### Parte 1: Corrigir `useUpdateR2MeetingStatus` para Atualizar Attendees
 
----
+**Arquivo:** `src/hooks/useR2AgendaData.ts`
 
-## Mudanças propostas (código)
-### 1) Corrigir lógica de “Pendentes” para deduplicar por contato (contact_id) e não só por deal_id
-**Arquivo:** `src/hooks/useR2PendingLeads.ts`
+Adicionar atualização de todos os attendees do meeting para o mesmo status (especialmente para `refunded`):
 
-**Como ficará a regra:**
-- Continuamos buscando os R1 com `status = contract_paid`.
-- Em vez de excluir apenas por “há R2 para o mesmo `deal_id`”, passaremos a excluir por:
-  - “há qualquer R2 (qualquer status válido) para qualquer deal que pertença ao mesmo `contact_id` do lead pendente”.
+```text
+// Após atualizar meeting_slots.status (linha 33)
+// Adicionar: Atualizar status de todos os attendees deste meeting
+await supabase
+  .from('meeting_slot_attendees')
+  .update({ status })
+  .eq('meeting_slot_id', meetingId);
+```
 
-**Implementação (passos):**
-1. No resultado de `paidAttendees`, extrair:
-   - `deal_id` (como já faz)
-   - `contact_id` a partir de `deal.contact.id` (já vem no select, vamos garantir tipagem/uso).
-2. Buscar todos os deals pertencentes a esses `contact_id`:
-   - `select id, contact_id from crm_deals where contact_id in (...)`
-3. Com a lista de `deal.id` desses contatos, buscar R2 existentes:
-   - `meeting_slot_attendees` com `deal_id in (...)` e `meeting_slots.meeting_type = 'r2'`
-4. Marcar `contact_id` como “já tem R2” se qualquer deal daquele contato tiver R2.
-5. Filtrar pendentes removendo todos que pertencem a um `contact_id` que “já tem R2”.
+**Motivo:** Quando um meeting inteiro é marcado como `refunded`, faz sentido que todos os participantes também tenham esse status.
 
-**Resultado esperado:**
-- Silas (e todos os casos “mesmo contato, outro deal”) somem de Pendentes.
+### Parte 2: Adicionar Filtro de Segurança na Query de No-Shows
 
----
-
-### 2) Corrigir lista de No‑Shows para ignorar no‑shows que já foram reagendados (via parent_attendee_id)
 **Arquivo:** `src/hooks/useR2NoShowLeads.ts`
 
-**Problema atual:**
-- A query busca `meeting_slot_attendees.status = 'no_show'` e transforma em cards.
-- Não há filtro para remover `no_show` que já possui um “filho” reagendado (`meeting_slot_attendees.parent_attendee_id = <id do no_show>`).
+Adicionar verificação para excluir attendees cujo deal tenha `reembolso_solicitado = true`:
 
-**Implementação (sem precisar mudar banco/RPC):**
-Após carregar os meetings:
-1. Coletar todos os IDs de attendees `no_show` retornados.
-2. Fazer uma segunda query:
-   - `select parent_attendee_id from meeting_slot_attendees where parent_attendee_id in (<noShowIds>)`
-3. Criar um Set `rescheduledParents` com os `parent_attendee_id` encontrados.
-4. Na transformação final, **pular** qualquer attendee `no_show` cujo `id` esteja em `rescheduledParents`.
+Na transformação dos leads (após linha 242), adicionar:
 
-**Resultado esperado:**
-- Odesmar deixa de aparecer em No‑Shows, porque o no_show dele tem um reagendamento filho.
+```text
+// Skip if deal has reembolso_solicitado flag
+const customFields = att.deal?.custom_fields as Record<string, unknown> | null;
+if (customFields?.reembolso_solicitado === true) {
+  return;
+}
+```
 
----
-
-### 3) Corrigir o contador de No‑Shows para aplicar a mesma regra (excluir no‑shows já reagendados)
-**Arquivo:** `src/hooks/useR2NoShowLeads.ts` (hook `useR2NoShowsCount`)
-
-**Problema atual:**
-- O contador usa `count: 'exact'` direto no PostgREST, que não permite excluir “no_show com filho” sem SQL.
-
-**Implementação (robusta, com pequeno custo):**
-1. Buscar os `id` dos `no_show` (em vez de `head: true`) dentro da janela (últimos 30 dias), como array:
-   - `select id` com join `meeting_slots!inner` filtrando `meeting_type='r2'` e `scheduled_at >= ...`
-2. Se não houver IDs, retorna 0.
-3. Buscar filhos:
-   - `select parent_attendee_id from meeting_slot_attendees where parent_attendee_id in (<noShowIds>)`
-4. Contar = `noShowIds.length - unique(parent_attendee_id).size`
-
-**Resultado esperado:**
-- O badge de No‑Shows diminui automaticamente em casos como Odesmar (inclusive para registros antigos).
+E no contador (`useR2NoShowsCount`), fazer verificação similar buscando os deal_ids e filtrando aqueles com flag de reembolso.
 
 ---
 
-## Mudanças propostas (comportamento)
-- “Deve sumir ao agendar”: Pendentes passa a sumir mesmo com inconsistência de deal (desde que o contato já tenha R2).
-- “No‑shows remover do no‑show”: qualquer no_show que já foi reagendado (por vínculo `parent_attendee_id`) deixa de contar e de aparecer.
+## Mudanças Detalhadas
+
+### 1. `src/hooks/useR2AgendaData.ts` - `useUpdateR2MeetingStatus`
+
+**Adicionar após linha 33 (após atualizar meeting_slots):**
+
+```typescript
+// 1.5 Update all attendees of this meeting to the same status
+await supabase
+  .from('meeting_slot_attendees')
+  .update({ status })
+  .eq('meeting_slot_id', meetingId);
+```
+
+### 2. `src/hooks/useR2NoShowLeads.ts` - `useR2NoShowLeads`
+
+**Modificar a transformação de attendees (linha 242) para verificar flag de reembolso:**
+
+Adicionar condição:
+
+```typescript
+// Skip if deal has reembolso_solicitado flag  
+const customFields = att.deal?.custom_fields as Record<string, unknown> | null;
+if (customFields?.reembolso_solicitado === true) {
+  return;
+}
+```
+
+### 3. `src/hooks/useR2NoShowLeads.ts` - `useR2NoShowsCount`
+
+**Adicionar busca de deals com reembolso para subtrair do contador:**
+
+```typescript
+// Step 2.5: Get deal_ids of no-shows and check for refunded deals
+const { data: noShowDeals } = await supabase
+  .from('meeting_slot_attendees')
+  .select('id, deal_id')
+  .in('id', noShowIds);
+
+// Filter out those with reembolso_solicitado
+const dealIdsToCheck = noShowDeals?.filter(a => a.deal_id).map(a => a.deal_id as string) || [];
+let refundedDealIds = new Set<string>();
+if (dealIdsToCheck.length > 0) {
+  const { data: refundedDeals } = await supabase
+    .from('crm_deals')
+    .select('id, custom_fields')
+    .in('id', dealIdsToCheck);
+  
+  refundedDealIds = new Set(
+    refundedDeals?.filter(d => (d.custom_fields as any)?.reembolso_solicitado === true).map(d => d.id) || []
+  );
+}
+
+// Map no-show IDs to their deal_ids for filtering
+const noShowsWithRefundedDeals = new Set(
+  noShowDeals?.filter(a => a.deal_id && refundedDealIds.has(a.deal_id)).map(a => a.id) || []
+);
+
+// Step 3: Count = total - rescheduled - refunded_deals
+return noShowIds.length - rescheduledParentIds.size - noShowsWithRefundedDeals.size;
+```
 
 ---
 
-## Arquivos que serão alterados
-1. `src/hooks/useR2PendingLeads.ts`
-2. `src/hooks/useR2NoShowLeads.ts`
+## Resultado Esperado
+
+| Situação | Antes | Depois |
+|----------|-------|--------|
+| No-show → Reembolso | Continua em No-Shows | Sai de No-Shows imediatamente |
+| Contador de No-Shows | Conta leads reembolsados | Não conta leads reembolsados |
+| Dados antigos (Diéssi) | Aparece na lista | Não aparece (filtro por flag) |
 
 ---
 
-## Testes (passo a passo)
-1. Recarregar `/crm/agenda-r2` (hard refresh).
-2. Abrir aba “Pendentes”:
-   - Confirmar que **Silas Cavalheiro** não aparece mais.
-3. Abrir aba “No‑Shows”:
-   - Confirmar que **Odesmar Martins da Silva Júnior** não aparece mais.
-4. Reproduzir um caso real:
-   - Marcar um R2 como `no_show` → confirmar que entra na lista/contador
-   - Reagendar esse `no_show` (criando filho) → confirmar que o original some da lista/contador imediatamente.
-5. Validar que Pendentes ainda funciona para leads realmente sem R2.
+## Arquivos a Modificar
+
+1. `src/hooks/useR2AgendaData.ts` - Atualizar attendees junto com meeting
+2. `src/hooks/useR2NoShowLeads.ts` - Filtrar leads com flag de reembolso (lista e contador)
 
 ---
 
-## Observações técnicas (para evitar regressão)
-- Essa correção é intencionalmente “tolerante” a dados inconsistentes: se o CRM gerar múltiplos deals para o mesmo contato, Pendentes não vai sugerir agendamento duplicado.
-- O contador de No‑Shows deixa de usar `head: true` para permitir a exclusão de registros com filhos; se o volume ficar alto, podemos evoluir para uma RPC SQL (otimização), mas primeiro vamos corrigir a lógica com impacto mínimo no backend.
+## Nota sobre Retroatividade
+
+- **Parte 1** corrige novos reembolsos (atualiza attendee automaticamente)
+- **Parte 2** corrige dados históricos (exclui por flag no deal)
+
+Juntas, as duas partes garantem que nenhum lead reembolsado apareça em No-Shows.
