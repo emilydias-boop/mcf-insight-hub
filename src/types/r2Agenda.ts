@@ -169,24 +169,20 @@ export const TEMPO_CONHECE_MCF_OPTIONS = [
 
 // Já constrói options
 export const JA_CONSTROI_OPTIONS = [
-  { value: 'sim', label: 'Sim, já construiu' },
+  { value: 'sim', label: 'Sim' },
   { value: 'nao', label: 'Não' },
-  { value: 'pretende', label: 'Pretende começar' },
 ];
 
 // Terreno options
 export const TERRENO_OPTIONS = [
   { value: 'sim', label: 'Sim' },
-  { value: 'nao_pretende', label: 'Não, mas pretende comprar' },
-  { value: 'nao', label: 'Não e não pretende' },
-  { value: 'nao_informou', label: 'Não informou' },
+  { value: 'nao', label: 'Não' },
 ];
 
 // Imóvel options
 export const IMOVEL_OPTIONS = [
   { value: 'sim', label: 'Sim' },
   { value: 'nao', label: 'Não' },
-  { value: 'nao_informou', label: 'Não informou' },
 ];
 
 // Renda options
