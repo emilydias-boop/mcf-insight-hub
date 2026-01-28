@@ -118,9 +118,10 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
   const generateReport = () => {
     const dateStr = format(weekEnd, 'dd/MM', { locale: ptBR });
     let report = `*Carrinho ${dateStr}*\n\n`;
-    report += `*SELECIONADOS\t${attendees.length}*\t\tLISTA DOS QUE NÃO COMPRARAM AINDA\n\n`;
+    report += `*SELECIONADOS ${attendees.length}*\n\n`;
+    report += `LISTA DOS QUE NÃO COMPRARAM AINDA: ${displayedAttendees.length}\n\n`;
 
-    displayedAttendees.forEach((att, idx) => {
+    displayedAttendees.forEach((att) => {
       const name = att.attendee_name || att.deal_name || 'Sem nome';
       const phone = att.attendee_phone || att.contact_phone || '-';
       const closer = att.closer_name || '-';
@@ -134,7 +135,7 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
         suffix = ' - quer desistir';
       }
 
-      report += `${idx + 1} ${name}\t${phone}\t*Aprovado*\t${closer}${suffix}\n`;
+      report += `${name}\t${phone}\t${closer}${suffix}\n`;
     });
 
     return report;
