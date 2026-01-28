@@ -1,158 +1,110 @@
 
-# Corrigir Acesso de Jessica Martins (Multi-Role: SDR + Closer R2)
-
-## Problemas Identificados
-
-### 1. Negócios: Stages não aparecem
-**Causa raiz:** A política RLS da tabela `stage_permissions` usa comparação inválida para usuários com múltiplas roles:
-
-```sql
--- Política atual (QUEBRADA para multi-role)
-role = (SELECT user_roles.role FROM user_roles WHERE user_roles.user_id = auth.uid())
-```
-
-Quando Jessica (com roles `sdr` E `closer`) acessa, o subquery retorna **2 linhas**, e a comparação `role = (2 linhas)` falha silenciosamente, retornando **0 permissões**.
-
-**Resultado:** `canViewStage()` retorna `false` para todas as stages → Kanban vazio.
-
-### 2. Agenda R2: Sem acesso
-**Causa raiz:** O `R2AccessGuard` permite apenas:
-- Roles: `admin`, `manager`, `coordenador`
-- Usuários específicos (lista hardcoded)
-
-Jessica tem role `closer` (não na lista) e não está na lista de usuários autorizados.
-
-**Resultado:** Jessica vê "Acesso Negado" ao tentar acessar `/crm/agenda-r2`.
+## Objetivo
+Eliminar o “trava” onde a Jessica entra e o app mostra o cargo como **Viewer** e bloqueia acesso (ex.: `/crm/agenda-r2`), e só volta ao normal após **refresh**. Isso é um sintoma clássico de **condição de corrida** no carregamento inicial das roles.
 
 ---
 
-## Solução
+## Diagnóstico (com base no código atual)
+Hoje o `AuthContext` faz **duas inicializações concorrentes**:
 
-### Parte 1: Corrigir RLS de `stage_permissions` (Banco de Dados)
+1) `supabase.auth.onAuthStateChange(...)`  
+2) `supabase.auth.getSession().then(...)`
 
-Atualizar a política para usar `IN` em vez de `=`:
+Ambos podem disparar `fetchUserRoles()` quase ao mesmo tempo.
 
-```sql
--- Dropar política existente
-DROP POLICY IF EXISTS "Users can view their role permissions" ON stage_permissions;
+Se uma dessas chamadas:
+- falhar momentaneamente,
+- retornar vazio por qualquer motivo transitório (latência, token ainda acoplando, etc.),
+- ou simplesmente terminar por último,
 
--- Criar nova política que suporta múltiplas roles
-CREATE POLICY "Users can view their role permissions"
-ON stage_permissions
-FOR SELECT
-USING (
-  role IN (
-    SELECT user_roles.role 
-    FROM user_roles 
-    WHERE user_roles.user_id = auth.uid()
-  )
-  OR has_role(auth.uid(), 'admin'::app_role)
-);
-```
+ela pode **sobrescrever** o estado com `role = null` e `allRoles = []`.  
+No UI, `AppSidebar.getRoleLabel(null)` cai no default e mostra **Viewer**.  
+E guards (ex.: `R2AccessGuard`) podem negar acesso enquanto isso.
 
-### Parte 2: Atualizar `R2AccessGuard` para Closers R2
-
-**Arquivo:** `src/components/auth/R2AccessGuard.tsx`
-
-Adicionar verificação para closers com `meeting_type = 'r2'`:
-
-```typescript
-// Adicionar 'closer' à lista de roles permitidas
-const R2_ALLOWED_ROLES: AppRole[] = ['admin', 'manager', 'coordenador', 'closer'];
-
-// E verificar se é closer R2 válido
-const { data: isR2Closer } = useQuery({
-  queryKey: ['is-r2-closer', user?.id],
-  queryFn: async () => {
-    // Buscar via employees.user_id ou por email
-    const { data: closer } = await supabase
-      .from('closers')
-      .select('id')
-      .eq('meeting_type', 'r2')
-      .eq('is_active', true)
-      // ... lógica de match por user_id ou email
-    return !!closer;
-  },
-  enabled: role === 'closer' && !!user?.id,
-});
-```
-
-### Parte 3: Ajustar `useStagePermissions` para Multi-Role
-
-**Arquivo:** `src/hooks/useStagePermissions.ts`
-
-Modificar o hook para buscar permissões de TODAS as roles do usuário:
-
-```typescript
-const { role, allRoles } = useAuth();
-
-// Buscar permissões para TODAS as roles do usuário
-const { data: permissions = [] } = useQuery({
-  queryKey: ['stage-permissions', allRoles],
-  queryFn: async () => {
-    if (!allRoles || allRoles.length === 0) return [];
-    
-    const { data, error } = await supabase
-      .from('stage_permissions')
-      .select('*')
-      .in('role', allRoles); // Buscar para todas as roles
-    
-    if (error) throw error;
-    return data;
-  },
-  enabled: allRoles && allRoles.length > 0,
-});
-```
+O refresh “resolve” porque muda a ordem/timing e a chamada “boa” vence.
 
 ---
 
-## Arquivos a Modificar
+## Solução (alto nível)
+### A) Tornar a inicialização do Auth determinística (sem corrida)
+- Remover a duplicidade: usar **apenas uma fonte** para sessão inicial.
+- Preferência: usar somente o `onAuthStateChange` (evento `INITIAL_SESSION` já fornece a sessão inicial), e **eliminar** o `getSession()` separado — ou manter `getSession()` e ignorar `INITIAL_SESSION`. O importante é **não rodar os dois** fazendo fetch de roles.
 
-| Arquivo | Mudança |
-|---------|---------|
-| **SQL (Supabase)** | Atualizar política RLS de `stage_permissions` |
-| `src/components/auth/R2AccessGuard.tsx` | Adicionar suporte para closers R2 |
-| `src/hooks/useStagePermissions.ts` | Usar `allRoles` em vez de `role` |
+### B) Proteger contra respostas “atrasadas” (stale) sobrescrevendo o estado
+Mesmo com A, ainda é saudável ter proteção:
+- Implementar um `requestId`/`version` incremental para o carregamento de roles.
+- Antes de aplicar `setRole/setAllRoles`, checar se aquele requestId ainda é o “mais recente”.
+Isso impede que uma resposta antiga sobrescreva a mais nova.
 
----
+### C) Garantir que `loading` represente “sessão + roles prontas”
+- Hoje dá para cair num estado “logado, mas sem roles confiáveis”.
+- Ajustar `loading` para só virar `false` quando:
+  - não existe usuário (deslogado), OU
+  - existe usuário e as roles foram resolvidas (inclusive se não existir nenhuma role, definir explicitamente `primaryRole = 'viewer'` e `roles = ['viewer']`, se essa for a regra do produto).
 
-## Resultado Esperado
-
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Jessica no Negócios | Kanban vazio (0 stages) | Stages aparecem normalmente |
-| Jessica na Agenda R2 | "Acesso Negado" | Vê suas reuniões R2 |
-| Outros usuários single-role | Funciona | Continua funcionando |
-
----
-
-## Sequência de Implementação
-
-1. **Primeiro:** Corrigir a RLS de `stage_permissions` (resolve Negócios imediatamente)
-2. **Segundo:** Atualizar `useStagePermissions` para usar `allRoles` (melhora performance)
-3. **Terceiro:** Atualizar `R2AccessGuard` para permitir closers R2 (resolve Agenda R2)
+### D) Evitar “flash” de Acesso Negado nos guards durante carregamento
+- Atualizar `R2AccessGuard` para respeitar `loading` do `AuthContext`.
+- Enquanto `AuthContext.loading === true`, retornar skeleton/spinner ou `null` (mantendo consistência com outras telas), evitando aparecer “Acesso Negado” temporariamente.
 
 ---
 
-## Detalhes Técnicos
+## Passo a passo de implementação (frontend)
 
-### Por que a RLS falha para multi-role?
+### 1) Refatorar `src/contexts/AuthContext.tsx`
+**Mudanças principais:**
+- Remover a segunda inicialização (o bloco `supabase.auth.getSession().then(...)`) OU tornar o `onAuthStateChange` ignorar `INITIAL_SESSION` se `getSession` foi escolhido.
+- Criar uma função única `handleSession(session)` responsável por:
+  - setar `session` e `user`
+  - validar bloqueio (profiles.access_status / blocked_until)
+  - carregar roles (`fetchUserRoles`)
+  - setar `role`, `allRoles`
+  - setar `loading` corretamente
 
-```sql
--- Para Jessica que tem 2 roles:
-SELECT role FROM user_roles WHERE user_id = 'b0ea004d-...'
--- Retorna:
---   'sdr'
---   'closer'
+**Anti-race:**
+- Introduzir um `let roleLoadVersion = 0` (ref via `useRef`)  
+- A cada `handleSession` com usuário: `const myVersion = ++roleLoadVersion`
+- Após `await fetchUserRoles(...)`, somente aplicar estado se `myVersion === roleLoadVersion`.
 
--- A comparação "role = (subquery)" espera 1 valor, mas recebe 2
--- Resultado: condição falha para TODAS as linhas
-```
+**Fallback de role (decisão de regra):**
+- Se `user_roles` vier vazio e isso for esperado, padronizar como viewer:
+  - `roles = ['viewer']`
+  - `primaryRole = 'viewer'`
 
-### Por que usar `IN` resolve?
+### 2) Ajustar `src/components/auth/R2AccessGuard.tsx`
+- Já usa `useMyR2Closer`, mas precisa evitar negar acesso enquanto o auth está “instável”.
+- Adicionar `const { loading } = useAuth()` e:
+  - Se `loading === true`, retornar `null` ou um loader leve.
+- Isso remove o “flash” de Acesso Negado quando a role ainda está sendo resolvida.
 
-```sql
--- Com IN, funciona para 1 ou mais valores:
-role IN (SELECT role FROM user_roles WHERE user_id = auth.uid())
--- Se user tem 'sdr' e 'closer', retorna permissões de AMBAS as roles
-```
+### 3) (Opcional, recomendado) Ajustar `src/components/layout/AppSidebar.tsx`
+Problema atual: quando `role` é `null` ele mostra “Viewer”, o que confunde e expõe o bug visualmente.
+- Exibir algo como “Carregando…” enquanto `AuthContext.loading` for true.
+- Alternativamente, manter o Badge, mas com texto neutro (“Carregando”) em vez de “Viewer”, para evitar interpretação errada.
+
+---
+
+## Passo a passo de validação (checklist)
+1) Logar como Jessica e navegar diretamente para `/crm/agenda-r2` (sem refresh):
+   - não deve aparecer Viewer temporário
+   - não deve aparecer “Acesso Negado”
+   - deve carregar e permitir acesso assim que roles forem resolvidas
+2) Repetir teste em:
+   - aba anônima / janela privada
+   - hard reload (Ctrl+F5)
+   - navegação interna (indo de `/crm` para `/crm/agenda-r2`)
+3) Confirmar que um usuário realmente “viewer-only” continua vendo Viewer corretamente.
+4) Confirmar que o comportamento de bloqueio/desativado (profiles.access_status / blocked_until) permanece correto.
+
+---
+
+## Riscos e cuidados
+- Ao mexer no `loading`, garantir que o app não “fique eternamente carregando” se houver erro de rede:
+  - Em caso de erro no fetch de roles, fazer retry controlado ou cair para fallback “viewer” com toast de erro.
+- Manter a lógica de multi-role (ROLE_PRIORITY) intacta.
+
+---
+
+## Entregáveis
+- Refatoração do `AuthContext` para eliminar corrida e garantir consistência de roles.
+- Pequeno ajuste no `R2AccessGuard` para aguardar auth/roles.
+- (Opcional) Ajuste visual no `AppSidebar` para não exibir “Viewer” quando ainda está carregando.
