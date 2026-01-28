@@ -91,15 +91,25 @@ const Negocios = () => {
     // Se já tem uma origem selecionada manualmente, usar ela
     if (selectedOriginId) return selectedOriginId;
     
-    // Se tem um pipeline selecionado, verificar se é um grupo ou uma origem
+    // Se tem um pipeline selecionado, verificar o que o hook retornou
     if (selectedPipelineId && pipelineOrigins && Array.isArray(pipelineOrigins)) {
-      // pipelineOrigins pode ser uma lista flat de origens quando um pipeline está selecionado
-      // Nesse caso, não há originId implícito - precisamos que o usuário selecione
-      // Ou podemos pegar a primeira origem como default
+      // pipelineOrigins pode ser uma lista flat de origens
       if (pipelineOrigins.length > 0 && !('children' in pipelineOrigins[0])) {
-        // É uma lista flat de origens - pegar a primeira como default
+        // É uma lista flat de origens
+        // Se só tem uma origem (caso selectedPipelineId seja um originId), usar ela
+        if (pipelineOrigins.length === 1) {
+          return (pipelineOrigins[0] as any).id;
+        }
+        // Se tem múltiplas origens, pegar a primeira como default
         return (pipelineOrigins[0] as any).id;
       }
+    }
+    
+    // Fallback: se selectedPipelineId parece ser um UUID válido e não temos origens,
+    // pode ser que selectedPipelineId seja diretamente um originId (caso BU_DEFAULT_ORIGIN_MAP)
+    // Retornar ele diretamente para permitir a query funcionar
+    if (selectedPipelineId && (!pipelineOrigins || (Array.isArray(pipelineOrigins) && pipelineOrigins.length === 0))) {
+      return selectedPipelineId;
     }
     
     return undefined;

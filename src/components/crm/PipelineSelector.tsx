@@ -15,7 +15,7 @@ interface PipelineSelectorProps {
   onSelectPipeline: (id: string | null) => void;
 }
 
-// Hook para buscar grupos principais (funis)
+// Hook para buscar grupos principais (funis) - com deduplicação por nome
 export const useCRMPipelines = () => {
   return useQuery({
     queryKey: ['crm-pipelines'],
@@ -23,11 +23,29 @@ export const useCRMPipelines = () => {
       // Buscar grupos (que são os funis principais)
       const { data, error } = await supabase
         .from('crm_groups')
-        .select('id, name, display_name')
-        .order('name');
+        .select('id, name, display_name, created_at, is_archived')
+        .order('created_at', { ascending: false }); // Mais recentes primeiro
       
       if (error) throw error;
-      return data || [];
+      if (!data) return [];
+      
+      // Filtrar arquivados (se coluna existir, senão ignora)
+      const activeGroups = data.filter(g => g.is_archived !== true);
+      
+      // Deduplicar por nome (manter o mais recente de cada)
+      const seen = new Map<string, typeof activeGroups[0]>();
+      activeGroups.forEach(g => {
+        const key = (g.display_name ?? g.name).trim().toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, g);
+        }
+        // Se já existe, ignorar (já temos o mais recente pois ordenamos por created_at desc)
+      });
+      
+      // Converter de volta para array e ordenar alfabeticamente por nome
+      return Array.from(seen.values()).sort((a, b) => 
+        (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
+      );
     },
   });
 };

@@ -17,7 +17,7 @@ interface Group {
   children: Origin[];
 }
 
-export const useCRMOriginsByPipeline = (pipelineId: string | null) => {
+export const useCRMOriginsByPipeline = (pipelineId: string | null | undefined) => {
   return useQuery({
     queryKey: ['crm-origins-by-pipeline', pipelineId],
     queryFn: async () => {
@@ -51,43 +51,69 @@ export const useCRMOriginsByPipeline = (pipelineId: string | null) => {
         return buildOriginTree(originsWithCounts || [], groupsRes.data || []);
       }
       
-      // pipelineId é na verdade um group_id (vindo do PipelineSelector que lista crm_groups)
-      // Buscar todas as origens desse grupo diretamente
-      const { data: origins, error: originsError } = await supabase
+      // Verificar se pipelineId é um group_id ou um origin_id
+      // Primeiro, tentar buscar como grupo
+      const { data: groupCheck } = await supabase
+        .from('crm_groups')
+        .select('id')
+        .eq('id', pipelineId)
+        .maybeSingle();
+      
+      // Se existir como grupo, buscar origens do grupo
+      if (groupCheck) {
+        const { data: origins, error: originsError } = await supabase
+          .from('crm_origins')
+          .select('*')
+          .eq('group_id', pipelineId)
+          .order('name');
+        
+        if (originsError) throw originsError;
+        
+        // Contar deals para as origens do grupo
+        const originIds = origins?.map(o => o.id) || [];
+        const { data: dealCounts } = originIds.length > 0 
+          ? await supabase
+              .from('crm_deals')
+              .select('origin_id')
+              .in('origin_id', originIds)
+          : { data: [] };
+        
+        const dealCountMap = new Map<string, number>();
+        dealCounts?.forEach(d => {
+          if (d.origin_id) {
+            dealCountMap.set(d.origin_id, (dealCountMap.get(d.origin_id) || 0) + 1);
+          }
+        });
+        
+        return origins?.map(o => ({
+          ...o,
+          deal_count: dealCountMap.get(o.id) || 0
+        })) || [];
+      }
+      
+      // Se não é grupo, tentar como origin_id diretamente
+      const { data: originCheck } = await supabase
         .from('crm_origins')
         .select('*')
-        .eq('group_id', pipelineId)
-        .order('name');
+        .eq('id', pipelineId)
+        .maybeSingle();
       
-      if (originsError) throw originsError;
+      if (originCheck) {
+        // pipelineId era na verdade um originId
+        // Contar deals dessa origem
+        const { data: dealCounts } = await supabase
+          .from('crm_deals')
+          .select('origin_id')
+          .eq('origin_id', pipelineId);
+        
+        return [{
+          ...originCheck,
+          deal_count: dealCounts?.length || 0
+        }];
+      }
       
-      // Contar deals por origem (do pipeline)
-      const { data: dealCounts } = await supabase
-        .from('crm_deals')
-        .select('origin_id')
-        .eq('origin_id', pipelineId);
-      
-      // Também contar para sub-origens se houver
-      const originIds = origins?.map(o => o.id) || [];
-      const { data: subDealCounts } = await supabase
-        .from('crm_deals')
-        .select('origin_id')
-        .in('origin_id', originIds);
-      
-      const dealCountMap = new Map<string, number>();
-      [...(dealCounts || []), ...(subDealCounts || [])].forEach(d => {
-        if (d.origin_id) {
-          dealCountMap.set(d.origin_id, (dealCountMap.get(d.origin_id) || 0) + 1);
-        }
-      });
-      
-      const originsWithCounts = origins?.map(o => ({
-        ...o,
-        deal_count: dealCountMap.get(o.id) || 0
-      })) || [];
-      
-      // Retornar como lista flat (não agrupada) para o pipeline específico
-      return originsWithCounts;
+      // Não encontrou nem como grupo nem como origem
+      return [];
     },
     staleTime: 0, // Forçar refresh
     enabled: true,
