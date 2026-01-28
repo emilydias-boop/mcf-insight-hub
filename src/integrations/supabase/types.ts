@@ -6826,7 +6826,7 @@ export type Database = {
             foreignKeyName: "webhook_endpoints_stage_id_fkey"
             columns: ["stage_id"]
             isOneToOne: false
-            referencedRelation: "crm_stages"
+            referencedRelation: "local_pipeline_stages"
             referencedColumns: ["id"]
           },
         ]
