@@ -221,7 +221,11 @@ const menuItems: MenuItem[] = [
     icon: Users,
     resource: "rh" as any,
     requiredRoles: ["admin", "rh"],
-    items: [{ title: "Colaboradores", url: "/rh/colaboradores" }],
+    items: [
+      { title: "Colaboradores", url: "/rh/colaboradores" },
+      { title: "Prova Equipe", url: "/rh/prova-equipe" },
+      { title: "Configurações", url: "/rh/configuracoes" },
+    ],
   },
 
   // TAREFAS

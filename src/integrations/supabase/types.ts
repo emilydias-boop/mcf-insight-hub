@@ -3229,6 +3229,87 @@ export type Database = {
           },
         ]
       }
+      employee_exam_scores: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          employee_id: string
+          exam_id: string
+          id: string
+          nota: number
+          observacao: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          employee_id: string
+          exam_id: string
+          id?: string
+          nota: number
+          observacao?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          employee_id?: string
+          exam_id?: string
+          id?: string
+          nota?: number
+          observacao?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_exam_scores_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_exam_scores_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "employee_exams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_exams: {
+        Row: {
+          aplicador_id: string | null
+          ativo: boolean | null
+          created_at: string | null
+          data_aplicacao: string | null
+          descricao: string | null
+          id: string
+          titulo: string
+          updated_at: string | null
+        }
+        Insert: {
+          aplicador_id?: string | null
+          ativo?: boolean | null
+          created_at?: string | null
+          data_aplicacao?: string | null
+          descricao?: string | null
+          id?: string
+          titulo: string
+          updated_at?: string | null
+        }
+        Update: {
+          aplicador_id?: string | null
+          ativo?: boolean | null
+          created_at?: string | null
+          data_aplicacao?: string | null
+          descricao?: string | null
+          id?: string
+          titulo?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       employee_notes: {
         Row: {
           conteudo: string
