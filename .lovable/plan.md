@@ -1,139 +1,72 @@
 
-# Tornar Áreas Editáveis Dinamicamente
+# Correção do Status de Wenderson + Remoção do Botão Contrato Pago
 
-## Problema Identificado
+## Parte 1: SQL para Reverter Wenderson para No-Show
 
-1. **Erro ao criar cargo**: A tabela `cargos_catalogo` tem uma CHECK constraint (`cargos_catalogo_area_check`) que restringe o campo `area` a valores fixos
-2. **Inconsistência**: O formulário oferece opções como "TI", "RH", "Diretoria" que não estão na constraint
-3. **Falta de flexibilidade**: O usuário não consegue adicionar novas áreas sem alterar o banco de dados
-
-### Áreas permitidas atualmente (constraint):
-- Inside Sales, Consórcio, Crédito, Marketing, Tecnologia, Financeiro, Projetos, Avulsos
-
-### Áreas no formulário (incorretas):
-- Inside Sales, Consórcio, Crédito, Projetos, Outros, Marketing, Financeiro, RH, TI, Diretoria
-
----
-
-## Solução Proposta
-
-### Fase 1: Criar tabela de áreas dinâmicas
-
-Criar uma tabela `areas_catalogo` para armazenar as áreas e remover a CHECK constraint da tabela `cargos_catalogo`.
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID | Identificador único |
-| nome | TEXT | Nome da área (ex: "Inside Sales") |
-| codigo | TEXT | Código interno (ex: "inside_sales") |
-| ordem | INTEGER | Ordem de exibição |
-| ativo | BOOLEAN | Se a área está ativa |
-
-### Fase 2: Adicionar nova aba "Áreas" na página de Configurações
-
-Nova aba no `/rh/configuracoes` para gerenciar áreas:
-
-```text
-[Cargos] [Departamentos/BUs] [Squads] [Áreas]
-```
-
-Interface da aba Áreas:
-```text
-+--------------------------------------------------+
-|  [+ Nova Área]                                   |
-+--------------------------------------------------+
-| Nome              | Código       | Cargos | Ações|
-+--------------------------------------------------+
-| Inside Sales      | inside_sales |   12   | [✏️][🗑]|
-| Consórcio         | consorcio    |    4   | [✏️][🗑]|
-| Crédito           | credito      |    3   | [✏️][🗑]|
-| Projetos          | projetos     |    2   | [✏️][🗑]|
-| Marketing         | marketing    |    1   | [✏️][🗑]|
-| Financeiro        | financeiro   |    1   | [✏️][🗑]|
-| Tecnologia        | tecnologia   |    0   | [✏️][🗑]|
-| RH                | rh           |    0   | [✏️][🗑]|
-+--------------------------------------------------+
-```
-
-### Fase 3: Atualizar formulário de cargos
-
-O `CargoFormDialog.tsx` passará a buscar as áreas dinamicamente da tabela `areas_catalogo` em vez de usar a lista estática.
-
----
-
-## Alterações de Banco de Dados
-
-### Migração SQL:
+Execute este SQL no Supabase (Cloud View > Run SQL):
 
 ```sql
--- 1. Criar tabela de áreas
-CREATE TABLE areas_catalogo (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nome TEXT NOT NULL UNIQUE,
-  codigo TEXT UNIQUE,
-  ordem INTEGER DEFAULT 0,
-  ativo BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- 1. Reverter o attendee para no_show
+UPDATE meeting_slot_attendees
+SET 
+  status = 'no_show',
+  contract_paid_at = NULL,
+  updated_at = NOW()
+WHERE id = 'dfc31d56-0ad0-4467-86b6-3e983b6d8247';
 
--- 2. Popular com áreas existentes
-INSERT INTO areas_catalogo (nome, codigo, ordem) VALUES
-  ('Inside Sales', 'inside_sales', 1),
-  ('Consórcio', 'consorcio', 2),
-  ('Crédito', 'credito', 3),
-  ('Projetos', 'projetos', 4),
-  ('Marketing', 'marketing', 5),
-  ('Financeiro', 'financeiro', 6),
-  ('Tecnologia', 'tecnologia', 7),
-  ('RH', 'rh', 8),
-  ('Diretoria', 'diretoria', 9),
-  ('Avulsos', 'avulsos', 10);
+-- 2. Reverter o meeting slot para scheduled (já que o lead é no-show)
+UPDATE meeting_slots
+SET 
+  status = 'scheduled',
+  updated_at = NOW()
+WHERE id = '7e51df8c-7bca-4ed6-bff9-f76f3dd69e02';
 
--- 3. Remover CHECK constraint da área
-ALTER TABLE cargos_catalogo 
-  DROP CONSTRAINT cargos_catalogo_area_check;
-
--- 4. Adicionar RLS
-ALTER TABLE areas_catalogo ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read" ON areas_catalogo FOR SELECT USING (true);
-CREATE POLICY "Auth write" ON areas_catalogo 
-  FOR ALL USING (auth.role() = 'authenticated');
+-- 3. Atualizar o deal para No-Show stage (opcional - depende se quer mover no CRM)
+-- UPDATE crm_deals
+-- SET stage_id = '6bb76ad9-3d48-4e91-b24a-c6e8e18d9e9e' -- No-Show stage
+-- WHERE id = '779915e5-744a-49bb-ac3a-602b60e12abb';
 ```
 
 ---
 
-## Arquivos a Criar
+## Parte 2: Remover Botão "Contrato Pago" do R1 Drawer
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/hr/config/AreasTab.tsx` | Aba de gestão de áreas |
-| `src/components/hr/config/AreaFormDialog.tsx` | Dialog para criar/editar área |
+### Modificação no arquivo
 
-## Arquivos a Modificar
+**Arquivo:** `src/components/crm/AgendaMeetingDrawer.tsx`
+
+**Alteração:** Remover o botão "Contrato Pago" interativo, mas manter a exibição visual (badge) quando o status for `contract_paid` (marcado pela automação).
+
+### Lógica proposta
+
+1. Remover o botão clicável de "Contrato Pago" (linhas 967-982)
+2. Manter o badge de status "Contrato Pago" visível quando a automação marcar
+3. Usuário continua vendo badges coloridos indicando o status atual
+
+### Interface resultante
+
+| Status | Antes | Depois |
+|--------|-------|--------|
+| Agendada | Botão ativo | Botão ativo |
+| Realizada | Botão ativo | Botão ativo |
+| No-Show | Botão ativo | Botão ativo |
+| Contrato Pago | Botão ativo clicável | Badge indicativo (sem ação) |
+
+Assim, quando a automação (webhook) marcar como `contract_paid`, o usuário verá o badge "Contrato Pago" no topo, mas não terá mais a opção de marcar manualmente.
+
+---
+
+## Arquivos a modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/rh/Configuracoes.tsx` | Adicionar aba "Áreas" |
-| `src/hooks/useHRConfig.ts` | Adicionar hooks useAreas e useAreaMutations |
-| `src/components/hr/config/CargoFormDialog.tsx` | Buscar áreas do banco dinamicamente |
+| `src/components/crm/AgendaMeetingDrawer.tsx` | Remover botão "Contrato Pago" e functions relacionadas |
 
 ---
 
-## Fluxo de Uso
+## Resultado esperado
 
-1. **Admin acessa** `/rh/configuracoes`
-2. **Clica na aba** "Áreas"
-3. **Clica em "+ Nova Área"** para adicionar uma área
-4. A área fica disponível imediatamente no seletor de cargos
-5. **Ao criar cargo**, as áreas são carregadas do banco de dados
-
----
-
-## Resultado Final
-
-| Item | Antes | Depois |
-|------|-------|--------|
-| Áreas | Lista fixa no código + CHECK constraint | Tabela dinâmica `areas_catalogo` |
-| Criar cargo | Erro se área não está na constraint | Funciona com qualquer área cadastrada |
-| Adicionar área | Requer alteração de código e banco | Interface visual na página de configurações |
+1. Wenderson reverte para "No-show" imediatamente após rodar o SQL
+2. Botão "Contrato Pago" não aparece mais para marcação manual
+3. Badge "Contrato Pago" continua visível quando automação detectar pagamento
+4. Workflow de status fica: Agendada ↔ Realizada ↔ No-Show (automação marca CP)
