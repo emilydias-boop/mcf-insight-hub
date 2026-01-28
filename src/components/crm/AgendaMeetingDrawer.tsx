@@ -964,22 +964,13 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </Button>
                     )}
                     
-                    {/* Contrato Pago */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "flex-col h-14 gap-1",
-                        selectedParticipant.status === 'contract_paid' 
-                          ? "bg-emerald-500/10 border-emerald-500 text-emerald-600" 
-                          : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
-                      )}
-                      onClick={handleContractPaid}
-                      disabled={updateAttendeeAndSlotStatus.isPending || selectedParticipant.status === 'contract_paid'}
-                    >
-                      <DollarSign className="h-4 w-4" />
-                      <span className="text-xs">{selectedParticipant.status === 'contract_paid' ? 'Contrato Pago ✓' : 'Contrato Pago'}</span>
-                    </Button>
+                    {/* Badge Contrato Pago (somente exibição - marcado via automação) */}
+                    {selectedParticipant.status === 'contract_paid' && (
+                      <div className="flex-col h-14 gap-1 px-3 flex items-center justify-center bg-emerald-500/10 border border-emerald-500 text-emerald-600 rounded-md">
+                        <DollarSign className="h-4 w-4" />
+                        <span className="text-xs font-medium">Contrato Pago ✓</span>
+                      </div>
+                    )}
                     
                     {/* Mover para outra reunião */}
                     <Button
