@@ -29,6 +29,7 @@ import {
   Sliders,
   AlertCircle,
   FileText,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -312,6 +313,33 @@ export default function AgendaR2() {
     setRescheduleModalOpen(true);
   };
 
+  // Export list handler for Bruna (names + phones)
+  const handleExportList = () => {
+    const headers = ['Nome', 'Telefone', 'Closer', 'Data/Hora', 'Status'];
+    const rows = filteredMeetings.flatMap(m => {
+      return (m.attendees || []).map(att => [
+        att.name || att.deal?.contact?.name || 'Sem nome',
+        att.phone || att.deal?.contact?.phone || '-',
+        m.closer?.name || '-',
+        format(new Date(m.scheduled_at), 'dd/MM HH:mm', { locale: ptBR }),
+        att.status === 'completed' ? 'Realizada' :
+        att.status === 'no_show' ? 'No-show' :
+        att.status === 'invited' ? 'Agendada' : att.status
+      ]);
+    });
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `agenda-r2-${format(rangeStart, 'dd-MM-yyyy', { locale: ptBR })}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
   // Convert R2MeetingRow to R2Meeting for child components (use filteredMeetings for consolidation)
   const meetingsAsR2Meeting = useMemo(() => {
     return filteredMeetings.map((m) => ({
@@ -376,6 +404,10 @@ export default function AgendaR2() {
               </Button>
             </>
           )}
+          <Button variant="outline" size="sm" onClick={() => handleExportList()}>
+            <Download className="h-4 w-4 mr-2" />
+            Exportar Lista
+          </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar

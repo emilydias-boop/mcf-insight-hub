@@ -100,14 +100,88 @@ export function useR2MetricsData(weekDate: Date) {
 
       if (vendasExtrasError) throw vendasExtrasError;
 
-      // 4. Count metrics
+      // 4. Collect all attendee IDs for no-show rescheduling check
+      const allAttendeeIds: string[] = [];
+      const allDealIds: string[] = [];
+      const noShowAttendeesRaw: Array<{
+        id: string;
+        name: string;
+        phone: string | null;
+        meetingId: string;
+        deal_id: string | null;
+      }> = [];
+
+      // First pass: collect all attendee info
+      meetings?.forEach(meeting => {
+        const attendees = meeting.attendees as Array<{
+          id: string;
+          attendee_name: string | null;
+          attendee_phone: string | null;
+          status: string;
+          r2_status_id: string | null;
+          carrinho_status: string | null;
+          deal_id: string | null;
+          deal: { id: string; contact: { email: string | null; phone: string | null } | null } | null;
+        }> || [];
+
+        attendees.forEach(att => {
+          allAttendeeIds.push(att.id);
+          if (att.deal_id) allDealIds.push(att.deal_id);
+          
+          if (att.status === 'no_show') {
+            noShowAttendeesRaw.push({
+              id: att.id,
+              name: att.attendee_name || 'Sem nome',
+              phone: att.attendee_phone,
+              meetingId: meeting.id,
+              deal_id: att.deal_id,
+            });
+          }
+        });
+      });
+
+      // 5. Check which no-shows were rescheduled (have children with parent_attendee_id)
+      const noShowIds = noShowAttendeesRaw.map(ns => ns.id);
+      let rescheduledIds = new Set<string>();
+      
+      if (noShowIds.length > 0) {
+        const { data: rescheduledChildren } = await supabase
+          .from('meeting_slot_attendees')
+          .select('parent_attendee_id')
+          .in('parent_attendee_id', noShowIds);
+        
+        rescheduledIds = new Set(rescheduledChildren?.map(c => c.parent_attendee_id).filter(Boolean) as string[]);
+      }
+
+      // 6. Check which deals have reembolso_solicitado flag
+      const noShowDealIds = noShowAttendeesRaw.filter(ns => ns.deal_id).map(ns => ns.deal_id!);
+      let refundedDealIds = new Set<string>();
+      
+      if (noShowDealIds.length > 0) {
+        const { data: refundedDeals } = await supabase
+          .from('crm_deals')
+          .select('id, custom_fields')
+          .in('id', noShowDealIds);
+        
+        refundedDealIds = new Set(
+          refundedDeals?.filter(d => (d.custom_fields as Record<string, unknown>)?.reembolso_solicitado).map(d => d.id) || []
+        );
+      }
+
+      // 7. Count metrics with proper no-show filtering
       let totalLeads = 0;
       let desistentes = 0;
       let reprovados = 0;
-      let reembolsos = 0;
       let proximaSemana = 0;
-      let noShow = 0;
-      const noShowAttendees: R2MetricsData['noShowAttendees'] = [];
+      
+      // Clean no-show list (excluding rescheduled and refunded)
+      const noShowAttendeesClean = noShowAttendeesRaw.filter(ns => 
+        !rescheduledIds.has(ns.id) && 
+        !(ns.deal_id && refundedDealIds.has(ns.deal_id))
+      );
+      const noShow = noShowAttendeesClean.length;
+      const noShowAttendees: R2MetricsData['noShowAttendees'] = noShowAttendeesClean;
+
       let aprovados = 0;
       const approvedEmails: string[] = [];
       const approvedPhones: string[] = [];
@@ -151,13 +225,11 @@ export function useR2MetricsData(weekDate: Date) {
           
           const statusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
           
-          // Count by status
+          // Count by R2 status (these are exclusive categories)
           if (statusName.includes('desistente')) {
             desistentes++;
           } else if (statusName.includes('reprovado')) {
             reprovados++;
-          } else if (statusName.includes('reembolso')) {
-            reembolsos++;
           } else if (statusName.includes('próxima semana') || statusName.includes('proxima semana')) {
             proximaSemana++;
           } else if (statusName.includes('aprovado') || statusName.includes('approved')) {
@@ -174,17 +246,7 @@ export function useR2MetricsData(weekDate: Date) {
               if (normalized) approvedPhones.push(normalized);
             }
           }
-
-        // Check ATTENDEE status for no-show (not meeting status)
-        if (att.status === 'no_show') {
-            noShow++;
-            noShowAttendees.push({
-              id: att.id,
-              name: att.attendee_name || 'Sem nome',
-              phone: att.attendee_phone,
-              meetingId: meeting.id,
-            });
-          }
+          // Note: no-show is already counted separately with proper filtering above
         });
       });
 
@@ -295,8 +357,13 @@ export function useR2MetricsData(weekDate: Date) {
       });
 
       // Calculate percentages
-      const leadsPerdidos = desistentes + reprovados + reembolsos + noShow;
-      const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidos / totalLeads) * 100 : 0;
+      // Reembolsos = Reprovados + Desistentes (fluxo de reembolso)
+      const reembolsos = reprovados + desistentes;
+      
+      // Leads perdidos = soma única sem duplicidade (cada lead em uma categoria)
+      // Não inclui reembolsos separadamente pois já são reprovados+desistentes
+      const leadsPerdidosCount = desistentes + reprovados + proximaSemana + noShow;
+      const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidosCount / totalLeads) * 100 : 0;
       
       const selecionados = aprovados;
       const totalVendas = vendas + (vendasExtras?.length || 0);
