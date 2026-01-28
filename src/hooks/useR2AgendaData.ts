@@ -242,6 +242,7 @@ export function useRescheduleR2Meeting() {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['r2-noshows'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       toast.success('Reunião R2 reagendada');
     },
     onError: () => {
@@ -336,6 +337,7 @@ export function useCreateR2Meeting() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       toast.success('Reunião R2 agendada com sucesso');
     },
     onError: () => {
