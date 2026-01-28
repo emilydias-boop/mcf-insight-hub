@@ -1,96 +1,176 @@
 
-# Correção do Layout R2 Agendadas - Data e Status
+# Corrigir Notas Históricas em Leads Reagendados (R1)
 
-## Problemas Identificados
+## Problema
+Quando um lead é reagendado na R1, as notas antigas não aparecem porque:
+1. Um **novo** `meeting_slot_attendee` é criado com novo ID
+2. As notas antigas estão vinculadas ao ID do attendee anterior
+3. O componente `AttendeeNotesSection` só busca notas do attendee atual
 
-### 1. Domingo Aparecendo em Vez de Segunda
-**Causa raiz:** Bug de timezone no parsing de data.
-
-Linha 110 em `R2AgendadasList.tsx`:
-```typescript
-{format(new Date(day), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-```
-
-Quando `day` é "2025-01-26", `new Date("2025-01-26")` interpreta como meia-noite UTC. No Brasil (UTC-3), isso vira "2025-01-25 21:00" (dia anterior!).
-
-**Solução:** Usar `parseDateWithoutTimezone` de `dateHelpers.ts` que já existe no projeto.
-
-### 2. Status "Aprovado" Não Destacado Corretamente
-**Situação atual:** Maurício foi aprovado na R2 (Status Final = Aprovado), mas aparece como "Realizada ✓" com apenas o ícone de checkmark.
-
-**Expectativa do usuário:** Mostrar "Aprovado" de forma mais visível, independente de ter pago contrato ou não.
-
-**Nova lógica proposta para coluna Status:**
-- Se `contract_paid`: "CP DD/MM" + badge "Aprovado" (se aprovado)
-- Se apenas `aprovado` (sem CP): Badge "Aprovado" verde prominente
-- Se não aprovado: Badge do status (Agendada, Realizada, No-show, etc)
+## Solução
+Modificar o `AttendeeNotesSection` e `useAttendeeNotes` para buscar notas de **TODOS os attendees** relacionados ao mesmo `deal_id`.
 
 ---
 
-## Arquivo a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/crm/R2AgendadasList.tsx` | Corrigir parsing de data + ajustar lógica de status |
+| `src/hooks/useAttendeeNotes.ts` | Adicionar busca por deal_id |
+| `src/components/crm/AttendeeNotesSection.tsx` | Adicionar prop dealId e usar nova lógica |
+| `src/components/crm/AgendaMeetingDrawer.tsx` | Passar dealId do attendee para o componente |
 
 ---
 
 ## Mudanças Detalhadas
 
-### 1. Corrigir Parsing de Data (Linha 110)
+### 1. Atualizar `useAttendeeNotes.ts`
 
-**Antes:**
+Adicionar parâmetro opcional `dealId` e buscar notas de todos os attendees relacionados:
+
 ```typescript
-{format(new Date(day), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-```
-
-**Depois:**
-```typescript
-import { parseDateWithoutTimezone } from '@/lib/dateHelpers';
-// ...
-{format(parseDateWithoutTimezone(day), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-```
-
-### 2. Ajustar Função `renderStatusCell`
-
-**Nova lógica:**
-```typescript
-function renderStatusCell(att: R2CarrinhoAttendee) {
-  const isContractPaid = att.status === 'contract_paid' || att.meeting_status === 'contract_paid';
-  const isAprovado = att.r2_status_name?.toLowerCase().includes('aprovado');
-  
-  // Caso 1: Contrato Pago
-  if (isContractPaid) {
-    return (
-      <div className="flex items-center justify-end gap-2">
-        <span className="text-emerald-600 text-sm font-medium">
-          CP {att.contract_paid_at ? format(new Date(att.contract_paid_at), 'dd/MM') : ''}
-        </span>
-        {isAprovado && (
-          <Badge className="bg-emerald-500 text-white text-xs">Aprovado</Badge>
-        )}
-      </div>
-    );
-  }
-  
-  // Caso 2: Aprovado (sem contrato pago) - NOVA PRIORIDADE
-  if (isAprovado) {
-    return (
-      <div className="flex items-center justify-end gap-2">
-        <Badge className="bg-emerald-500 text-white text-xs">Aprovado</Badge>
-      </div>
-    );
-  }
-  
-  // Caso 3: Outros status (Agendada, Realizada, No-show, etc)
-  const statusInfo = STATUS_LABELS[att.status] || STATUS_LABELS[att.meeting_status] || STATUS_LABELS.scheduled;
-  
-  return (
-    <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
-      {statusInfo.label}
-    </Badge>
-  );
+export function useAttendeeNotes(
+  attendeeId: string | null | undefined,
+  dealId?: string | null  // NOVO: opcional para buscar notas históricas
+) {
+  return useQuery({
+    queryKey: ['attendee-notes', attendeeId, dealId],
+    queryFn: async () => {
+      if (!attendeeId && !dealId) return [];
+      
+      // Se tiver dealId, buscar TODOS os attendeeIds relacionados
+      let allAttendeeIds: string[] = [];
+      
+      if (dealId) {
+        const { data: allAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id')
+          .eq('deal_id', dealId);
+        
+        allAttendeeIds = (allAttendees || []).map(a => a.id);
+      }
+      
+      // Adicionar attendeeId atual se não estiver na lista
+      if (attendeeId && !allAttendeeIds.includes(attendeeId)) {
+        allAttendeeIds.push(attendeeId);
+      }
+      
+      // Se não tiver nenhum ID, usar só o attendeeId original
+      if (allAttendeeIds.length === 0 && attendeeId) {
+        allAttendeeIds = [attendeeId];
+      }
+      
+      const { data, error } = await supabase
+        .from('attendee_notes')
+        .select(`id, attendee_id, note, note_type, created_by, created_at`)
+        .in('attendee_id', allAttendeeIds)  // ← Busca de TODOS
+        .order('created_at', { ascending: true });
+      
+      // ... resto do código (mapear profiles)
+    },
+    enabled: !!(attendeeId || dealId),
+  });
 }
+```
+
+### 2. Atualizar `AttendeeNotesSection.tsx`
+
+Adicionar prop `dealId` e atualizar a query de scheduling notes:
+
+```typescript
+interface AttendeeNotesSectionProps {
+  attendeeId: string | null | undefined;
+  dealId?: string | null;  // NOVO
+  participantName: string;
+  canAddNotes?: boolean;
+}
+
+export function AttendeeNotesSection({ 
+  attendeeId, 
+  dealId,  // NOVO
+  participantName,
+  canAddNotes = true 
+}: AttendeeNotesSectionProps) {
+  // Passar dealId para buscar notas históricas
+  const { data: notes = [], isLoading } = useAttendeeNotes(attendeeId, dealId);
+  
+  // Também buscar scheduling notes de TODOS os attendees do deal
+  const { data: schedulingNotes, isLoading: isLoadingSchedulingNotes } = useQuery({
+    queryKey: ['attendee-scheduling-notes', attendeeId, dealId],
+    queryFn: async () => {
+      let allAttendeeIds: string[] = [];
+      
+      if (dealId) {
+        const { data: allAttendees } = await supabase
+          .from('meeting_slot_attendees')
+          .select('id')
+          .eq('deal_id', dealId);
+        allAttendeeIds = (allAttendees || []).map(a => a.id);
+      }
+      
+      if (attendeeId && !allAttendeeIds.includes(attendeeId)) {
+        allAttendeeIds.push(attendeeId);
+      }
+      
+      if (allAttendeeIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id, notes, booked_by, created_at,
+          booked_by_profile:profiles!meeting_slot_attendees_booked_by_fkey(id, full_name, email)
+        `)
+        .in('id', allAttendeeIds)
+        .not('notes', 'is', null);
+      
+      return data || [];
+    },
+    enabled: !!(attendeeId || dealId),
+  });
+  
+  // ... resto do componente combinando todas as notas
+}
+```
+
+### 3. Atualizar `AgendaMeetingDrawer.tsx`
+
+Obter o `deal_id` do attendee e passá-lo para o componente:
+
+```typescript
+// Linha ~444 em getParticipantsList
+return {
+  id: att.id,
+  name,
+  phone,
+  dealId: att.deal_id,  // NOVO: incluir deal_id
+  // ... resto
+};
+
+// Linha ~814 onde AttendeeNotesSection é usado
+<AttendeeNotesSection
+  attendeeId={selectedParticipant.id}
+  dealId={selectedParticipant.dealId || activeMeeting?.deal_id}  // NOVO
+  participantName={selectedParticipant.name}
+  canAddNotes={true}
+/>
+```
+
+---
+
+## Fluxo de Dados Corrigido
+
+```
+Antes (Bugado):
+┌─────────────────┐    ┌─────────────────┐
+│ Attendee Atual  │ →  │ Notas atuais    │  ← Só notas do attendee atual
+│ (ID: abc123)    │    │ (1 nota)        │
+└─────────────────┘    └─────────────────┘
+
+Depois (Corrigido):
+┌─────────────────┐    ┌─────────────────┐
+│ Deal ID         │ →  │ Todos Attendees │ → │ Todas Notas │
+│ (deal-xyz)      │    │ (abc123, def456)│   │ (5 notas)   │
+└─────────────────┘    └─────────────────┘   └─────────────┘
 ```
 
 ---
@@ -99,16 +179,17 @@ function renderStatusCell(att: R2CarrinhoAttendee) {
 
 | Situação | Antes | Depois |
 |----------|-------|--------|
-| Agrupamento por dia | Domingo (erro timezone) | Segunda-feira (correto) |
-| Aprovado sem CP | "Realizada ✓" | Badge "Aprovado" verde |
-| Com Contrato Pago | "CP DD/MM + Aprovado" | Mantém igual |
-| Agendada/No-show | Badge colorido | Mantém igual |
+| Lead reagendado 1x | Só nota do reagendamento | Nota original + reagendamento |
+| Lead reagendado 3x | Só última nota | Todas as 4 notas (original + 3 reagend.) |
+| Lead novo | 1 nota | 1 nota (sem mudança) |
 
 ---
 
 ## Sequência de Implementação
 
-1. Adicionar import de `parseDateWithoutTimezone`
-2. Corrigir linha do header do dia usando a função
-3. Reescrever função `renderStatusCell` com nova prioridade de status
-4. Testar visualização na aba "R2 Agendadas"
+1. Modificar `useAttendeeNotes` para aceitar `dealId` opcional
+2. Atualizar query para buscar notas de todos os attendees do deal
+3. Atualizar `AttendeeNotesSection` com nova prop e lógica
+4. Atualizar `getParticipantsList` para incluir `dealId`
+5. Passar `dealId` para `AttendeeNotesSection` no drawer
+6. Testar com lead reagendado para verificar notas históricas
