@@ -35,6 +35,9 @@ const ATTENDEE_STATUS_CONFIG: Record<string, { label: string; shortLabel: string
   rescheduled: { label: "Reagendado", shortLabel: "Reag.", bgClass: "bg-yellow-600/80" },
 };
 
+// Meta de leads por closer por dia (R2)
+const R2_CLOSER_META = 18;
+
 // Fixed time slots for R2 (07:00 to 23:30, 30-min intervals)
 const ALL_TIME_SLOTS = Array.from({ length: 34 }, (_, i) => {
   const hour = Math.floor(i / 2) + 7;
@@ -125,6 +128,24 @@ export function R2CloserColumnCalendar({
     return ALL_TIME_SLOTS.filter(slot => configuredTimes.has(slot.label));
   }, [configuredSlotsMap, selectedDate]);
 
+  // Contador de leads (attendees) agendados por closer no dia
+  const dailyLeadCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    
+    meetings.forEach((meeting) => {
+      const closerId = meeting.closer?.id;
+      if (!closerId) return;
+      
+      // Verificar se a reunião é no dia selecionado
+      if (!isSameDay(parseISO(meeting.scheduled_at), selectedDate)) return;
+      
+      const attendeesCount = meeting.attendees?.length || 0;
+      counts[closerId] = (counts[closerId] || 0) + attendeesCount;
+    });
+    
+    return counts;
+  }, [meetings, selectedDate]);
+
   const now = new Date();
   const isToday = isSameDay(selectedDate, now);
 
@@ -171,13 +192,23 @@ export function R2CloserColumnCalendar({
         <div className="p-3 text-center text-xs font-medium text-muted-foreground border-r flex items-center justify-center">
           <span>{format(selectedDate, "EEE dd/MM", { locale: ptBR })}</span>
         </div>
-        {closers.map((closer) => (
-          <div key={closer.id} className="p-2 text-center border-l">
-            <div className="flex items-center justify-center gap-2">
-              <span className="font-medium text-sm">{closer.name}</span>
+        {closers.map((closer) => {
+          const leadCount = dailyLeadCounts[closer.id] || 0;
+          return (
+            <div key={closer.id} className="p-2 text-center border-l">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: closer.color || '#9333EA' }} />
+                <span className="font-medium text-sm">{closer.name}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                <span className={cn("font-medium", leadCount >= R2_CLOSER_META ? "text-green-500" : "text-yellow-500")}>
+                  {leadCount}
+                </span>
+                <span> / {R2_CLOSER_META} leads</span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Time slots grid */}
