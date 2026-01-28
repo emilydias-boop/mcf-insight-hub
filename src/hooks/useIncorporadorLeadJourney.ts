@@ -6,6 +6,7 @@ export interface IncorporadorMeeting {
   closerName: string | null;
   status: string | null;
   leadType: string | null;
+  meetingType: string | null;
 }
 
 export interface IncorporadorLeadJourney {
@@ -61,7 +62,6 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
 
       if (rpcResult && rpcResult.length > 0) {
         contactId = rpcResult[0].contact_id;
-        // Determinar método de match baseado nos parâmetros
         if (email) {
           matchMethod = 'email';
         } else if (phoneSuffix.length >= 8) {
@@ -113,51 +113,78 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
           ),
           crm_origins!crm_deals_origin_id_fkey (
             name
-          ),
-          meeting_slots (id)
+          )
         `)
         .eq('contact_id', contactId)
         .order('created_at', { ascending: false });
 
-      // Priorizar deal que TEM reunião agendada
-      const dealWithMeeting = deals?.find(d => (d.meeting_slots as any[])?.length > 0);
+      // Buscar attendees para cada deal para priorizar deals com reuniões
+      let dealWithMeeting: typeof deals extends (infer T)[] | null ? T : never = null;
+      if (deals && deals.length > 0) {
+        for (const deal of deals) {
+          const { data: attendeeCheck } = await supabase
+            .from('meeting_slot_attendees')
+            .select('id')
+            .eq('deal_id', deal.id)
+            .limit(1);
+          
+          if (attendeeCheck && attendeeCheck.length > 0) {
+            dealWithMeeting = deal;
+            break;
+          }
+        }
+      }
+
       const deal = dealWithMeeting || deals?.[0];
       if (!deal) return null;
 
-      // 4. Buscar reuniões do deal (sem relação profiles que não existe)
-      const { data: meetings } = await supabase
-        .from('meeting_slots')
+      // 5. CORRIGIDO: Buscar reuniões via meeting_slot_attendees (não meeting_slots.deal_id)
+      const { data: attendees } = await supabase
+        .from('meeting_slot_attendees')
         .select(`
           id,
-          scheduled_at,
           status,
-          lead_type,
-          closer_id,
-          booked_by,
-          closers (name)
+          deal_id,
+          meeting_slot_id,
+          created_at,
+          meeting_slots!inner (
+            id,
+            scheduled_at,
+            status,
+            meeting_type,
+            lead_type,
+            closer_id,
+            booked_by,
+            closers (
+              id,
+              name,
+              email
+            )
+          )
         `)
         .eq('deal_id', deal.id)
-        .order('scheduled_at', { ascending: true });
+        .order('created_at', { ascending: true });
 
-      // 5. Buscar perfil do SDR separadamente se tiver booked_by
-      const firstMeeting = meetings?.[0];
+      // 6. Buscar perfil do SDR separadamente se tiver booked_by na primeira reunião
+      const firstAttendee = attendees?.[0];
+      const firstSlot = firstAttendee?.meeting_slots as any;
       let sdrProfile: { full_name?: string; email?: string } | null = null;
-      if (firstMeeting?.booked_by) {
+      
+      if (firstSlot?.booked_by) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('full_name, email')
-          .eq('id', firstMeeting.booked_by)
+          .eq('id', firstSlot.booked_by)
           .maybeSingle();
         sdrProfile = profile;
       }
 
-      // 6. Extrair SDR com lógica de prioridade e filtro de closers
+      // 7. Extrair SDR com lógica de prioridade e filtro de closers
       let sdrName: string | null = null;
       let sdrEmail: string | null = null;
 
       // Prioridade 1: booked_by da primeira reunião (quem agendou)
       if (sdrProfile?.email) {
-        // Verificar se não é um closer
         if (!closerEmails.has(sdrProfile.email.toLowerCase())) {
           sdrName = sdrProfile.full_name || null;
           sdrEmail = sdrProfile.email;
@@ -178,7 +205,6 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
         const r1Meta = r1Activity?.metadata as Record<string, any> | null;
         const activityOwnerEmail = r1Meta?.owner_email || r1Meta?.deal_user;
         
-        // Só usar se NÃO for closer
         if (activityOwnerEmail && !closerEmails.has(activityOwnerEmail.toLowerCase())) {
           sdrEmail = activityOwnerEmail;
           sdrName = r1Meta?.deal_user_name || null;
@@ -196,31 +222,49 @@ export const useIncorporadorLeadJourney = (email: string | null, phone: string |
         }
       }
 
-      // 7. Separar Reunião 01 e R2
-      const meeting01Data = meetings?.find(m => m.lead_type !== 'R2');
-      const meeting02Data = meetings?.find(m => m.lead_type === 'R2');
+      // 8. CORRIGIDO: Separar Reunião 01 e R2 usando meeting_type (não lead_type)
+      // meeting_type = 'r1' ou 'r2'
+      const r1Attendee = attendees?.find(a => {
+        const slot = a.meeting_slots as any;
+        return slot?.meeting_type === 'r1';
+      });
+      
+      const r2Attendee = attendees?.find(a => {
+        const slot = a.meeting_slots as any;
+        return slot?.meeting_type === 'r2';
+      });
 
-      // Type assertion para closers
-      const getCloserName = (meeting: any): string | null => {
-        if (!meeting?.closers) return null;
-        if (Array.isArray(meeting.closers)) {
-          return meeting.closers[0]?.name || null;
+      // Fallback: se não tiver meeting_type definido, usar ordem cronológica
+      const fallbackR1 = !r1Attendee && !r2Attendee && attendees?.[0] ? attendees[0] : null;
+      const fallbackR2 = !r1Attendee && !r2Attendee && attendees?.[1] ? attendees[1] : null;
+
+      // Helper para extrair dados do closer
+      const getCloserFromSlot = (slot: any): string | null => {
+        if (!slot?.closers) return null;
+        if (Array.isArray(slot.closers)) {
+          return slot.closers[0]?.name || null;
         }
-        return (meeting.closers as { name?: string })?.name || null;
+        return slot.closers?.name || null;
       };
 
-      const meeting01: IncorporadorMeeting | null = meeting01Data ? {
-        scheduledAt: meeting01Data.scheduled_at,
-        closerName: getCloserName(meeting01Data),
-        status: meeting01Data.status,
-        leadType: meeting01Data.lead_type,
+      // Construir meeting01
+      const r1SlotData = (r1Attendee?.meeting_slots || fallbackR1?.meeting_slots) as any;
+      const meeting01: IncorporadorMeeting | null = r1SlotData ? {
+        scheduledAt: r1SlotData.scheduled_at,
+        closerName: getCloserFromSlot(r1SlotData),
+        status: r1Attendee?.status || fallbackR1?.status || r1SlotData.status,
+        leadType: r1SlotData.lead_type,
+        meetingType: r1SlotData.meeting_type,
       } : null;
 
-      const meeting02: IncorporadorMeeting | null = meeting02Data ? {
-        scheduledAt: meeting02Data.scheduled_at,
-        closerName: getCloserName(meeting02Data),
-        status: meeting02Data.status,
-        leadType: meeting02Data.lead_type,
+      // Construir meeting02
+      const r2SlotData = (r2Attendee?.meeting_slots || fallbackR2?.meeting_slots) as any;
+      const meeting02: IncorporadorMeeting | null = r2SlotData ? {
+        scheduledAt: r2SlotData.scheduled_at,
+        closerName: getCloserFromSlot(r2SlotData),
+        status: r2Attendee?.status || fallbackR2?.status || r2SlotData.status,
+        leadType: r2SlotData.lead_type,
+        meetingType: r2SlotData.meeting_type,
       } : null;
 
       // Type assertion para stage e origin
