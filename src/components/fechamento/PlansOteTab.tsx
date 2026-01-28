@@ -84,10 +84,11 @@ export const PlansOteTab = () => {
         return false;
       }
       
-      // Filtro por BU/Departamento
+      // Filtro por BU/Departamento - só incluir quem CORRESPONDE ao departamento esperado
       if (selectedBU !== '__all__') {
         const expectedDept = BU_MAPPING[selectedBU];
-        if (expectedDept && emp.departamento !== expectedDept) {
+        // Excluir se: não existe mapeamento OU departamento é null OU departamento é diferente
+        if (!expectedDept || emp.departamento !== expectedDept) {
           return false;
         }
       }
