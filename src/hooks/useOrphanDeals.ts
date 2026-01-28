@@ -180,10 +180,23 @@ export function useAssignDealOwner() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ dealIds, ownerId }: { dealIds: string[]; ownerId: string }) => {
+    mutationFn: async ({ dealIds, ownerId, ownerProfileId }: { 
+      dealIds: string[]; 
+      ownerId: string; 
+      ownerProfileId?: string;
+    }) => {
+      const updateData: Record<string, unknown> = { 
+        owner_id: ownerId, 
+        updated_at: new Date().toISOString() 
+      };
+      
+      if (ownerProfileId) {
+        updateData.owner_profile_id = ownerProfileId;
+      }
+      
       const { error } = await supabase
         .from('crm_deals')
-        .update({ owner_id: ownerId, updated_at: new Date().toISOString() })
+        .update(updateData)
         .in('id', dealIds);
 
       if (error) throw error;
