@@ -1,38 +1,45 @@
 
 
-# Trocar "Convidado" para "Agendado"
+# Trocar "Selecionado" para Termo Mais Claro
 
 ## Problema
-O status `invited` está exibindo "Convidado" como label, mas o termo mais claro e alinhado com o fluxo do sistema seria **"Agendado"**.
+O badge verde "Selecionado" no drawer de detalhes da R2 está causando confusão, pois o termo também é usado no contexto do "Carrinho" (leads selecionados/aprovados). O usuário pode achar que significa status do lead no funil, quando na verdade indica apenas qual participante está sendo visualizado no drawer.
 
 ---
 
-## Mudança Simples
+## Sugestões de Nome Alternativo
+
+| Opção | Significado |
+|-------|-------------|
+| **Em foco** | Indica que é o item atualmente exibido |
+| **Visualizando** | Indica que o usuário está vendo os detalhes deste |
+| **Ativo** | O participante ativo na seleção |
+| **Atual** | O atual sendo exibido |
+
+**Recomendação:** Usar **"Em foco"** ou **"Visualizando"** — termos que deixam claro que é uma indicação de UI, não de status de negócio.
+
+---
+
+## Mudança Técnica
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/R2AgendadasList.tsx` | Trocar label de "Convidado" para "Agendado" em 2 lugares |
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Linha 203 - Trocar "Selecionado" para o novo termo |
 
----
+```tsx
+// Linha 202-204 - Antes
+{isSelected && (
+  <Badge className="text-xs bg-primary text-primary-foreground shrink-0">
+    Selecionado
+  </Badge>
+)}
 
-## Detalhes Técnicos
-
-### 1. STATUS_LABELS (linha 37)
-```typescript
-// Antes
-invited: { label: 'Convidado', className: 'bg-purple-500 text-white border-purple-500' },
-
-// Depois
-invited: { label: 'Agendado', className: 'bg-purple-500 text-white border-purple-500' },
-```
-
-### 2. POSITION_OPTIONS (linha 47)
-```typescript
-// Antes
-{ value: 'invited', label: 'Convidado' },
-
-// Depois
-{ value: 'invited', label: 'Agendado' },
+// Depois (exemplo com "Em foco")
+{isSelected && (
+  <Badge className="text-xs bg-primary text-primary-foreground shrink-0">
+    Em foco
+  </Badge>
+)}
 ```
 
 ---
@@ -41,8 +48,7 @@ invited: { label: 'Agendado', className: 'bg-purple-500 text-white border-purple
 
 | Antes | Depois |
 |-------|--------|
-| Badge roxo "Convidado" | Badge roxo "Agendado" |
-| Filtro "Convidado" | Filtro "Agendado" |
+| Badge "Selecionado" verde | Badge "Em foco" verde |
 
-O usuário verá consistentemente o termo **"Agendado"** que é mais claro no contexto do Carrinho R2.
+O termo novo deixará claro que se trata de uma indicação de interface (qual lead está sendo visualizado), sem confundir com status de negócio do carrinho.
 
