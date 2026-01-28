@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -45,6 +45,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [allRoles, setAllRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  
+  // Anti-race: versão incremental para evitar respostas stale
+  const roleLoadVersion = useRef(0);
+  // Flag para evitar processamento duplo
+  const initialSessionHandled = useRef(false);
 
   const fetchUserRoles = async (userId: string): Promise<{ primaryRole: AppRole | null; roles: AppRole[] }> => {
     // Buscar TODAS as roles do usuário (sem .single())
@@ -74,67 +79,110 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { primaryRole: sortedRoles[0], roles };
   };
 
-  useEffect(() => {
-    // Setup auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+  // Função unificada para processar sessão - evita corrida
+  const handleSession = async (newSession: Session | null) => {
+    // Incrementa versão para invalidar chamadas anteriores
+    const myVersion = ++roleLoadVersion.current;
+    
+    if (!newSession?.user) {
+      // Usuário deslogado
+      setSession(null);
+      setUser(null);
+      setRole(null);
+      setAllRoles([]);
+      setLoading(false);
+      return;
+    }
+
+    // Atualiza sessão e usuário imediatamente
+    setSession(newSession);
+    setUser(newSession.user);
+
+    try {
+      // Verificar status de acesso
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('access_status, blocked_until')
+        .eq('id', newSession.user.id)
+        .single();
+
+      // Verifica se ainda é a versão mais recente antes de continuar
+      if (myVersion !== roleLoadVersion.current) {
+        return; // Outra chamada mais recente já está processando
+      }
+
+      if (profile) {
+        const isBlocked = profile.access_status === 'bloqueado' || 
+                         profile.access_status === 'desativado' ||
+                         (profile.blocked_until && new Date(profile.blocked_until) > new Date());
         
-        if (session?.user) {
-          // Defer role fetching and access validation with setTimeout to avoid deadlock
-          setTimeout(async () => {
-            // Verificar status de acesso para sessões existentes
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('access_status, blocked_until')
-              .eq('id', session.user.id)
-              .single();
-
-            if (profile) {
-              const isBlocked = profile.access_status === 'bloqueado' || 
-                                profile.access_status === 'desativado' ||
-                                (profile.blocked_until && new Date(profile.blocked_until) > new Date());
-              
-              if (isBlocked) {
-                await supabase.auth.signOut();
-                setUser(null);
-                setSession(null);
-                setRole(null);
-                setAllRoles([]);
-                setLoading(false);
-                toast.error('Sua conta foi bloqueada ou desativada.');
-                return;
-              }
-            }
-
-            fetchUserRoles(session.user.id).then(({ primaryRole, roles }) => {
-              setRole(primaryRole);
-              setAllRoles(roles);
-              setLoading(false);
-            });
-          }, 0);
-        } else {
+        if (isBlocked) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setSession(null);
           setRole(null);
           setAllRoles([]);
           setLoading(false);
+          toast.error('Sua conta foi bloqueada ou desativada.');
+          return;
         }
+      }
+
+      // Buscar roles
+      const { primaryRole, roles } = await fetchUserRoles(newSession.user.id);
+      
+      // Verifica novamente se ainda é a versão mais recente
+      if (myVersion !== roleLoadVersion.current) {
+        return; // Outra chamada mais recente já está processando
+      }
+
+      // Aplica o estado com fallback para viewer se não houver roles
+      if (roles.length === 0) {
+        setRole('viewer');
+        setAllRoles(['viewer']);
+      } else {
+        setRole(primaryRole);
+        setAllRoles(roles);
+      }
+    } catch (error) {
+      console.error('Error handling session:', error);
+      // Em caso de erro, verifica versão e aplica fallback
+      if (myVersion === roleLoadVersion.current) {
+        setRole('viewer');
+        setAllRoles(['viewer']);
+      }
+    } finally {
+      // Só atualiza loading se ainda for a versão correta
+      if (myVersion === roleLoadVersion.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Setup auth state listener - ÚNICA FONTE DE VERDADE
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        // Para INITIAL_SESSION, só processa se ainda não foi tratado
+        if (event === 'INITIAL_SESSION') {
+          if (initialSessionHandled.current) {
+            return; // Já foi tratado pelo getSession
+          }
+          initialSessionHandled.current = true;
+        }
+        
+        // Para outros eventos (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED),
+        // sempre processa
+        handleSession(newSession);
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserRoles(session.user.id).then(({ primaryRole, roles }) => {
-          setRole(primaryRole);
-          setAllRoles(roles);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
+    // Busca sessão inicial - caso onAuthStateChange demore
+    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      // Só processa se INITIAL_SESSION ainda não foi tratado
+      if (!initialSessionHandled.current) {
+        initialSessionHandled.current = true;
+        handleSession(existingSession);
       }
     });
 
@@ -187,7 +235,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Buscar role do usuário para redirect condicional
       const { primaryRole: userRole, roles } = await fetchUserRoles(authData.user.id);
-      setAllRoles(roles);
+      setAllRoles(roles.length > 0 ? roles : ['viewer']);
       
       toast.success('Login realizado com sucesso!');
       
