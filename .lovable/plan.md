@@ -1,76 +1,71 @@
 
-# Correção: Foreign Key Aponta para Tabela Errada
 
-## Problema Identificado
+# Limpeza de Dados Legados e Correção do Wizard
 
-A constraint `webhook_endpoints_stage_id_fkey` referencia a tabela **`crm_stages`**, mas o wizard cria stages na tabela **`local_pipeline_stages`**:
+## Diagnóstico
 
-```sql
--- Constraint atual:
-FOREIGN KEY (stage_id) REFERENCES crm_stages(id) ON DELETE SET NULL
+O wizard de criação de pipelines **já está funcionando corretamente** após as correções feitas. As origens e grupos criados sem stages são **resíduos das tentativas anteriores** durante o período de bugs (23:48 - 23:51).
 
--- Mas os stages são criados em:
-local_pipeline_stages
-```
+### Prova do funcionamento atual:
+| Criado às | Origin ID | Stages |
+|-----------|-----------|--------|
+| 00:00:26 | 3228de9a... | 6 stages ✅ |
+| 23:56:57 | 429c41fc... | 6 stages ✅ |
+| 23:55:06 | 2a0b302f... | 6 stages ✅ |
+| 23:55:00 | 82c0dfc8... | 6 stages ✅ |
+| 23:52:22 | f3c87687... | 6 stages ✅ |
+| 23:52:17 | c6083dae... | 6 stages ✅ |
+| **23:51:03** | **90333457...** | **0 stages** ❌ (antes da correção) |
+| **23:49:58** | **735336d1...** | **0 stages** ❌ (antes da correção) |
+| **23:48:41** | **e62fdc3e...** | **0 stages** ❌ (antes da correção) |
 
-Isso significa que, mesmo mapeando corretamente os IDs temporários para os IDs reais do banco, a FK sempre vai falhar porque o ID existe em `local_pipeline_stages`, não em `crm_stages`.
+## Solução
 
-## Opções de Solução
-
-### Opção A: Alterar a FK no banco de dados (Recomendada)
-Modificar a constraint para referenciar `local_pipeline_stages` ao invés de `crm_stages`.
-
-```sql
--- Remover constraint antiga
-ALTER TABLE webhook_endpoints 
-DROP CONSTRAINT webhook_endpoints_stage_id_fkey;
-
--- Adicionar nova constraint
-ALTER TABLE webhook_endpoints 
-ADD CONSTRAINT webhook_endpoints_stage_id_fkey 
-FOREIGN KEY (stage_id) REFERENCES local_pipeline_stages(id) ON DELETE SET NULL;
-```
-
-### Opção B: Workaround no código (Rápida)
-Não associar `stage_id` nos webhooks criados via wizard (deixar como `null`), já que a funcionalidade de "etapa inicial" pode ser implementada de outra forma.
-
-## Solução Recomendada
-
-Aplicar a **Opção A** (alterar FK no banco) pois:
-1. Mantém a integridade referencial correta
-2. O sistema já usa `local_pipeline_stages` para todas as operações de stages
-3. A tabela `crm_stages` parece ser legado/sync de sistema externo
-
-## Mudanças Necessárias
-
-### 1. Migração SQL (executar no Supabase SQL Editor)
+### Passo 1: Limpar dados duplicados
+Executar SQL no Supabase para remover as origens e grupos duplicados criados sem stages:
 
 ```sql
--- Alterar FK de webhook_endpoints.stage_id
-ALTER TABLE webhook_endpoints 
-DROP CONSTRAINT IF EXISTS webhook_endpoints_stage_id_fkey;
+-- 1. Identificar e remover origens sem stages criadas após 23:48
+DELETE FROM crm_origins 
+WHERE id IN (
+  '90333457-7fa1-4903-8b01-e5f73a8665d2',
+  '735336d1-88a7-4024-b012-19d916aff69c',
+  'e62fdc3e-1a6a-4702-9ad4-74a0cd01d9b3'
+);
 
-ALTER TABLE webhook_endpoints 
-ADD CONSTRAINT webhook_endpoints_stage_id_fkey 
-FOREIGN KEY (stage_id) REFERENCES local_pipeline_stages(id) ON DELETE SET NULL;
+-- 2. Remover grupos órfãos (que ficaram sem origens)
+DELETE FROM crm_groups 
+WHERE id IN (
+  '403f5335-b61f-452b-8a62-c9bae36f9280',
+  '9df77a6f-397d-4262-a3a2-936e0acfe38d',
+  '58766888-b7cc-4340-8ca4-18ddbb024cbb'
+);
 ```
 
-### 2. Código já está correto
-O código em `useCreatePipeline.ts` já mapeia corretamente os IDs temporários para os IDs reais do `local_pipeline_stages`. Após a migração SQL, funcionará perfeitamente.
+### Passo 2: Remover duplicatas restantes (opcional)
+Se quiser manter apenas uma cópia de "Lançamento / Live":
 
-## Passos para Implementar
+```sql
+-- Ver todas as cópias funcionais
+SELECT g.id, g.name, g.created_at,
+       (SELECT o.id FROM crm_origins o WHERE o.group_id = g.id LIMIT 1) as origin_id
+FROM crm_groups g
+WHERE g.name LIKE 'Lançamento%'
+AND g.created_at > '2026-01-27 23:52:00'
+ORDER BY g.created_at;
 
-1. Executar a migração SQL no Supabase SQL Editor (ambiente de desenvolvimento primeiro)
-2. Testar a criação de pipeline com webhook
-3. Se funcionar, aplicar em produção
-
-## Alternativa Temporária (se não puder alterar o banco agora)
-
-Modificar o código para **não salvar** o `stage_id` no webhook, deixando a configuração manual posterior:
-
-```typescript
-// Em useCreatePipeline.ts, linha 142
-stage_id: null, // Temporariamente desabilitado até corrigir FK
+-- Deletar as cópias excedentes mantendo apenas a mais recente
+-- (executar após identificar qual manter)
 ```
 
-Isso permite criar o pipeline, e o usuário pode configurar a etapa inicial depois via edição do webhook.
+## Resultado Esperado
+
+Após a limpeza:
+- O dropdown "Funil" mostrará apenas uma entrada para cada pipeline
+- Todas as origens terão suas stages configuradas
+- O wizard continuará funcionando normalmente para novas criações
+
+## Verificação
+
+O sistema está funcionando corretamente - não há bugs a corrigir no código. Apenas dados legados a serem removidos.
+
