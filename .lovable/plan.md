@@ -1,133 +1,117 @@
 
-# Integrar Notas do Closer R1 nas Notas do Lead
+# Corrigir Métricas R1 no TeamGoalsPanel e KPI Cards
 
-## Problema Identificado
+## Diagnóstico Confirmado
 
-Quando o closer de R1 salva uma nota no drawer de reunião (campo "Notas da Closer para: [Nome]"), essa nota é armazenada em `meeting_slot_attendees.closer_notes`, mas **não é exibida** nas notas consolidadas do lead que os sócios de R2 visualizam.
+### Evidência do Banco de Dados (28/01/2026)
+| meeting_type | status | total |
+|--------------|--------|-------|
+| **R1** | invited | 32 |
+| **R1** | no_show | 3 |
+| **R1** | completed | 1 |
+| R2 | invited | 12 |
+| R2 | contract_paid | 1 |
 
-### Fluxo Atual
-| Fonte | Armazenamento | Buscado por useLeadNotes? |
-|-------|---------------|---------------------------|
-| Nota de agendamento (SDR) | `meeting_slot_attendees.notes` | ✅ Sim |
-| **Nota do Closer R1** | `meeting_slot_attendees.closer_notes` | ❌ **NÃO** |
-| Notas de attendee | `attendee_notes` | ✅ Sim |
-| Notas de ligação | `calls.notes` | ✅ Sim |
-| Notas manuais | `deal_activities` | ✅ Sim |
+**Totais:**
+- R1 apenas: **36 attendees** ← correto na agenda visual
+- R1 + R2: **49 attendees** ← o que os hooks retornam
+
+### Discrepância Identificada
+| Métrica | UI mostra | Deveria ser | Causa |
+|---------|-----------|-------------|-------|
+| R1 Agendada (DIA) | 48 | 36 | Hook inclui R2 |
+| Pendentes Hoje | 43 | 32 | Hook inclui R2 |
+
+---
+
+## Causa Raiz
+
+### 1. `useMeetingSlotsKPIs.ts` (linhas 20-27)
+```typescript
+const { data, error } = await supabase
+  .from("meeting_slot_attendees")
+  .select(`status, meeting_slot:meeting_slots!inner(scheduled_at)`)
+  .gte("meeting_slot.scheduled_at", startISO)
+  .lte("meeting_slot.scheduled_at", endISO);
+  // ❌ FALTA: .eq("meeting_slot.meeting_type", "r1")
+```
+
+### 2. `useMeetingsPendentesHoje.ts` (linhas 17-24)
+```typescript
+const { data, error } = await supabase
+  .from("meeting_slot_attendees")
+  .select(`status, meeting_slot:meeting_slots!inner(scheduled_at)`)
+  .gte("meeting_slot.scheduled_at", startISO)
+  .lte("meeting_slot.scheduled_at", endISO);
+  // ❌ FALTA: .eq("meeting_slot.meeting_type", "r1")
+```
 
 ---
 
 ## Solução
 
-Modificar o hook `useLeadNotes.ts` para **incluir `closer_notes`** na busca de notas de agendamento.
+Adicionar filtro `meeting_type = 'r1'` em ambos os hooks para contar apenas reuniões R1.
 
-### Arquivo: `src/hooks/useLeadNotes.ts`
+### Arquivo 1: `src/hooks/useMeetingSlotsKPIs.ts`
 
-#### Mudança (linhas 122-142):
-
-**De:**
+**Mudança (linhas 20-27):**
 ```typescript
-// 3. Fetch scheduling notes from meeting_slot_attendees.notes
-if (allAttendeeIds.length > 0) {
-  const { data: schedulingNotes } = await supabase
-    .from('meeting_slot_attendees')
-    .select('id, notes, created_at')  // ← SÓ 'notes'
-    .in('id', allAttendeeIds)
-    .not('notes', 'is', null);
-  
-  if (schedulingNotes) {
-    schedulingNotes.forEach(sn => {
-      if (sn.notes) {
-        notes.push({
-          id: `scheduling-${sn.id}`,
-          type: 'scheduling',
-          content: sn.notes,
-          author: null,
-          created_at: sn.created_at || new Date().toISOString(),
-        });
-      }
-    });
-  }
-}
+const { data, error } = await supabase
+  .from("meeting_slot_attendees")
+  .select(`
+    status,
+    meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+  `)
+  .gte("meeting_slot.scheduled_at", startISO)
+  .lte("meeting_slot.scheduled_at", endISO)
+  .eq("meeting_slot.meeting_type", "r1"); // ← ADICIONAR
 ```
 
-**Para:**
+### Arquivo 2: `src/hooks/useMeetingsPendentesHoje.ts`
+
+**Mudança (linhas 17-24):**
 ```typescript
-// 3. Fetch scheduling notes AND closer notes from meeting_slot_attendees
-if (allAttendeeIds.length > 0) {
-  const { data: attendeeData } = await supabase
-    .from('meeting_slot_attendees')
-    .select('id, notes, closer_notes, created_at, updated_at')
-    .in('id', allAttendeeIds);
-  
-  if (attendeeData) {
-    attendeeData.forEach(item => {
-      // Notas de agendamento (SDR)
-      if (item.notes) {
-        notes.push({
-          id: `scheduling-${item.id}`,
-          type: 'scheduling',
-          content: item.notes,
-          author: null,
-          created_at: item.created_at || new Date().toISOString(),
-        });
-      }
-      
-      // Notas do Closer R1
-      if (item.closer_notes) {
-        notes.push({
-          id: `closer-${item.id}`,
-          type: 'closer',
-          content: item.closer_notes,
-          author: null, // Poderia buscar o closer name no futuro
-          created_at: item.updated_at || item.created_at || new Date().toISOString(),
-        });
-      }
-    });
-  }
-}
+const { data, error } = await supabase
+  .from("meeting_slot_attendees")
+  .select(`
+    status,
+    meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+  `)
+  .gte("meeting_slot.scheduled_at", startISO)
+  .lte("meeting_slot.scheduled_at", endISO)
+  .eq("meeting_slot.meeting_type", "r1"); // ← ADICIONAR
 ```
 
 ---
 
 ## Resultado Esperado
 
-### Na aba "Notas" do drawer R2:
-| Tipo | Badge | Fonte |
-|------|-------|-------|
-| Nota SDR | "Nota SDR" (azul) | deal_activities |
-| Agendamento | "Agendamento" (roxo) | meeting_slot_attendees.notes |
-| **Closer** | **"Closer" (verde)** | **meeting_slot_attendees.closer_notes** ← NOVA |
-| Ligação | "Ligação" (âmbar) | calls.notes |
-| R2 | "R2" (índigo) | attendee_notes |
-| Qualificação | "Qualificação" (teal) | deal_activities (qualification_note) |
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| R1 Agendada (DIA) | 48 | 36 |
+| Pendentes Hoje | 43 | 32 |
+| Agenda R1 | 36 | 36 ✓ Bate |
+
+### Comportamento Corrigido
+- "R1 Agendada" no TeamGoalsPanel contará apenas reuniões R1
+- "Pendentes Hoje" nos KPI Cards contará apenas R1 pendentes
+- Métricas R2 continuam separadas nos seus próprios hooks (`useR2MeetingSlotsKPIs`)
 
 ---
 
-## Melhoria Futura (Opcional)
+## Arquivos a Modificar
 
-Para mostrar o **nome do closer** que escreveu a nota, podemos fazer um JOIN com `meeting_slots` → `closers`:
-
-```typescript
-const { data: attendeeData } = await supabase
-  .from('meeting_slot_attendees')
-  .select(`
-    id, notes, closer_notes, created_at, updated_at,
-    meeting_slots(closers(name))
-  `)
-  .in('id', allAttendeeIds);
-
-// E usar:
-author: item.meeting_slots?.closers?.name || 'Closer'
-```
+| Arquivo | Mudança | Impacto |
+|---------|---------|---------|
+| `src/hooks/useMeetingSlotsKPIs.ts` | Adicionar `.eq("meeting_slot.meeting_type", "r1")` | R1 Agendada, Realizada, No-Show corretos |
+| `src/hooks/useMeetingsPendentesHoje.ts` | Adicionar `.eq("meeting_slot.meeting_type", "r1")` | Pendentes Hoje correto |
 
 ---
 
 ## Resumo
 
-| Item | Valor |
-|------|-------|
-| **Arquivo** | `src/hooks/useLeadNotes.ts` |
-| **Linhas** | 122-142 |
-| **Mudança** | Adicionar `closer_notes` na query e criar entrada com `type: 'closer'` |
-| **Impacto** | Notas do Closer R1 aparecem no R2 NotesTab |
-| **Risco** | Baixo (apenas adiciona dados, não remove nada) |
+**Problema**: Hooks R1 incluíam attendees de R2, inflando métricas (48 vs 36).
+
+**Solução**: Filtrar por `meeting_type = 'r1'` nas queries.
+
+**Risco**: Baixo (apenas corrige contagem, não altera dados).
