@@ -193,3 +193,34 @@ export const calculateNoShowPerformance = (noShows: number, agendadas: number): 
     return Math.max(0, 100 - ((taxaNoShow - 30) / 30) * 100);
   }
 };
+
+// === Novos tipos para Fechamento da Equipe ===
+
+export interface FechamentoMetricaMes {
+  id: string;
+  ano_mes: string;
+  cargo_catalogo_id: string | null;
+  squad: string | null;
+  nome_metrica: string;
+  label_exibicao: string;
+  peso_percentual: number;
+  meta_valor: number | null;
+  fonte_dados: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Lista de métricas disponíveis para configuração
+export const METRICAS_DISPONIVEIS = [
+  { nome: 'agendamentos', label: 'Agendamentos R1', fonte: 'agenda' },
+  { nome: 'realizadas', label: 'R1 Realizadas', fonte: 'agenda' },
+  { nome: 'contratos', label: 'Contratos Pagos', fonte: 'hubla' },
+  { nome: 'tentativas', label: 'Tentativas de Ligação', fonte: 'twilio' },
+  { nome: 'organizacao', label: 'Organização', fonte: 'manual' },
+  { nome: 'no_show', label: 'No-Show (inverso)', fonte: 'agenda' },
+  { nome: 'outside_sales', label: 'Outside Sales', fonte: 'manual' },
+  { nome: 'r2_agendadas', label: 'R2 Agendadas', fonte: 'agenda' },
+] as const;
+
+export type MetricaNome = typeof METRICAS_DISPONIVEIS[number]['nome'];

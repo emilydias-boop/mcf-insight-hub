@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -30,9 +30,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { formatCurrency } from '@/lib/formatters';
 import { getDiasUteisMes } from '@/lib/businessDays';
-import { RefreshCw, Edit2, Calendar, Plus, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Edit2, Calendar, Plus, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface WorkingDay {
@@ -181,10 +186,57 @@ const EditWorkingDayDialog = ({
   );
 };
 
+// Componente para renderizar os meses de um ano
+const YearMonthsTable = ({ 
+  months, 
+  onRefetch 
+}: { 
+  months: WorkingDay[]; 
+  onRefetch: () => void;
+}) => (
+  <Table>
+    <TableHeader>
+      <TableRow>
+        <TableHead>Mês</TableHead>
+        <TableHead className="text-center">Dias Base</TableHead>
+        <TableHead className="text-center">Dias Final</TableHead>
+        <TableHead className="text-right">R$/Dia</TableHead>
+        <TableHead className="text-right">iFood Mensal</TableHead>
+        <TableHead>Observações</TableHead>
+        <TableHead className="w-12"></TableHead>
+      </TableRow>
+    </TableHeader>
+    <TableBody>
+      {months.map((wd) => (
+        <TableRow key={wd.id}>
+          <TableCell className="font-medium">
+            {formatMonthLabel(wd.ano_mes)}
+          </TableCell>
+          <TableCell className="text-center">{wd.dias_uteis_base}</TableCell>
+          <TableCell className="text-center">{wd.dias_uteis_final}</TableCell>
+          <TableCell className="text-right">{formatCurrency(wd.ifood_valor_dia)}</TableCell>
+          <TableCell className="text-right font-semibold">
+            {formatCurrency(wd.ifood_mensal_calculado || 0)}
+          </TableCell>
+          <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
+            {wd.observacoes || '-'}
+          </TableCell>
+          <TableCell>
+            <EditWorkingDayDialog workingDay={wd} onSuccess={onRefetch} />
+          </TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </Table>
+);
+
 export const WorkingDaysCalendar = () => {
   const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
   const [selectedYearToAdd, setSelectedYearToAdd] = useState(currentYear.toString());
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(
+    new Set([currentYear.toString()])
+  );
 
   const { data: workingDays, isLoading, refetch } = useQuery({
     queryKey: ['working-days-calendar'],
@@ -192,11 +244,27 @@ export const WorkingDaysCalendar = () => {
       const { data, error } = await supabase
         .from('working_days_calendar')
         .select('*')
-        .order('ano_mes', { ascending: true });
+        .order('ano_mes', { ascending: false });
       if (error) throw error;
       return data as WorkingDay[];
     },
   });
+
+  // Group by year
+  const groupedByYear = useMemo(() => {
+    if (!workingDays) return {};
+    return workingDays.reduce((acc, wd) => {
+      const year = wd.ano_mes.split('-')[0];
+      if (!acc[year]) acc[year] = [];
+      acc[year].push(wd);
+      return acc;
+    }, {} as Record<string, WorkingDay[]>);
+  }, [workingDays]);
+
+  // Sort years descending
+  const sortedYears = useMemo(() => {
+    return Object.keys(groupedByYear).sort((a, b) => parseInt(b) - parseInt(a));
+  }, [groupedByYear]);
 
   // Check if current year exists
   const hasCurrentYear = workingDays?.some(wd => wd.ano_mes.startsWith(String(currentYear)));
@@ -233,12 +301,26 @@ export const WorkingDaysCalendar = () => {
     },
     onSuccess: (year) => {
       queryClient.invalidateQueries({ queryKey: ['working-days-calendar'] });
+      // Auto-expand the newly added year
+      setExpandedYears(prev => new Set([...prev, String(year)]));
       toast.success(`Calendário de ${year} gerado com sucesso!`);
     },
     onError: (error: any) => {
       toast.error(`Erro ao gerar calendário: ${error.message}`);
     },
   });
+
+  const toggleYear = (year: string) => {
+    setExpandedYears(prev => {
+      const next = new Set(prev);
+      if (next.has(year)) {
+        next.delete(year);
+      } else {
+        next.add(year);
+      }
+      return next;
+    });
+  };
 
   if (isLoading) {
     return (
@@ -259,7 +341,7 @@ export const WorkingDaysCalendar = () => {
             <div>
               <CardTitle>Calendário de Dias Úteis</CardTitle>
               <CardDescription>
-                Configure dias úteis e valor iFood por mês. O iFood Mensal é calculado automaticamente.
+                Configure dias úteis e valor iFood por mês. Clique no ano para expandir/recolher.
               </CardDescription>
             </div>
           </div>
@@ -311,40 +393,50 @@ export const WorkingDaysCalendar = () => {
           </Alert>
         )}
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Mês</TableHead>
-              <TableHead className="text-center">Dias Base</TableHead>
-              <TableHead className="text-center">Dias Final</TableHead>
-              <TableHead className="text-right">R$/Dia</TableHead>
-              <TableHead className="text-right">iFood Mensal</TableHead>
-              <TableHead>Observações</TableHead>
-              <TableHead className="w-12"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {workingDays?.map((wd) => (
-              <TableRow key={wd.id}>
-                <TableCell className="font-medium">
-                  {formatMonthLabel(wd.ano_mes)}
-                </TableCell>
-                <TableCell className="text-center">{wd.dias_uteis_base}</TableCell>
-                <TableCell className="text-center">{wd.dias_uteis_final}</TableCell>
-                <TableCell className="text-right">{formatCurrency(wd.ifood_valor_dia)}</TableCell>
-                <TableCell className="text-right font-semibold">
-                  {formatCurrency(wd.ifood_mensal_calculado || 0)}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
-                  {wd.observacoes || '-'}
-                </TableCell>
-                <TableCell>
-                  <EditWorkingDayDialog workingDay={wd} onSuccess={() => refetch()} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        {/* Collapsible years */}
+        <div className="space-y-2">
+          {sortedYears.map(year => {
+            const months = groupedByYear[year] || [];
+            const isExpanded = expandedYears.has(year);
+            const totalIfood = months.reduce((sum, m) => sum + (m.ifood_mensal_calculado || 0), 0);
+            
+            return (
+              <Collapsible 
+                key={year} 
+                open={isExpanded} 
+                onOpenChange={() => toggleYear(year)}
+              >
+                <CollapsibleTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full justify-between h-12 px-4 hover:bg-muted/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                      <span className="text-lg font-semibold">{year}</span>
+                      <span className="text-sm text-muted-foreground">
+                        ({months.length} meses)
+                      </span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      Total iFood: {formatCurrency(totalIfood)}
+                    </span>
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="border rounded-lg mt-1 overflow-hidden">
+                  <YearMonthsTable 
+                    months={months.sort((a, b) => a.ano_mes.localeCompare(b.ano_mes))} 
+                    onRefetch={() => refetch()} 
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );
