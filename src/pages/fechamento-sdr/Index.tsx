@@ -24,7 +24,7 @@ import { Input } from '@/components/ui/input';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { useSdrPayouts, useRecalculateAllPayouts } from '@/hooks/useSdrFechamento';
 import { formatCurrency } from '@/lib/formatters';
-import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed, Search, Users } from 'lucide-react';
+import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed, Search, Users, Settings } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -270,6 +270,14 @@ const FechamentoSDRList = () => {
             <Button variant="outline" onClick={handleExportCSV}>
               <Download className="h-4 w-4 mr-2" />
               Exportar CSV
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => navigate('/fechamento-sdr/configuracoes')}
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Configurações
             </Button>
           </div>
         </div>
