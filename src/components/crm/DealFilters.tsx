@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -14,7 +15,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, CheckSquare, Clock, Radio } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, CheckSquare, Clock, Radio, Phone } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -31,6 +32,7 @@ export interface DealFiltersState {
   dealStatus: 'all' | 'open' | 'won' | 'lost';
   inactivityDays: number | null;
   salesChannel: SalesChannelFilter;
+  attemptsRange: { min: number; max: number } | null;
 }
 
 interface DealFiltersProps {
@@ -52,6 +54,30 @@ export const DealFilters = ({
   ownerOptions,
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
+  const [localMinAttempts, setLocalMinAttempts] = useState('');
+  const [localMaxAttempts, setLocalMaxAttempts] = useState('');
+  
+  // Handler para aplicar filtro de tentativas
+  const handleApplyAttemptsFilter = () => {
+    const min = localMinAttempts === '' ? 0 : parseInt(localMinAttempts, 10);
+    const max = localMaxAttempts === '' ? 999 : parseInt(localMaxAttempts, 10);
+    
+    if (isNaN(min) || isNaN(max) || min > max) {
+      return; // Validação básica
+    }
+    
+    onChange({ ...filters, attemptsRange: { min, max } });
+    setIsAttemptsPopoverOpen(false);
+  };
+  
+  // Limpar filtro de tentativas
+  const handleClearAttemptsFilter = () => {
+    onChange({ ...filters, attemptsRange: null });
+    setLocalMinAttempts('');
+    setLocalMaxAttempts('');
+    setIsAttemptsPopoverOpen(false);
+  };
   
   // Buscar ativos e ex-funcionários (desativados) para filtro de responsável
   const { data: dealOwners } = useQuery({
@@ -98,6 +124,7 @@ export const DealFilters = ({
     filters.dealStatus !== 'all',
     filters.inactivityDays !== null,
     filters.salesChannel !== 'all',
+    filters.attemptsRange !== null,
   ].filter(Boolean).length;
   
   return (
@@ -274,6 +301,56 @@ export const DealFilters = ({
           </SelectItem>
         </SelectContent>
       </Select>
+      
+      {/* Filtro de Tentativas (Range) */}
+      <Popover open={isAttemptsPopoverOpen} onOpenChange={setIsAttemptsPopoverOpen}>
+        <PopoverTrigger asChild>
+          <Button 
+            variant={filters.attemptsRange ? "default" : "outline"} 
+            className="justify-start text-left font-normal"
+          >
+            <Phone className="mr-2 h-4 w-4" />
+            {filters.attemptsRange 
+              ? `${filters.attemptsRange.min} a ${filters.attemptsRange.max} tent.`
+              : "Tentativas"
+            }
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64" align="start">
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Quantidade de tentativas</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                placeholder="Mín"
+                value={localMinAttempts}
+                onChange={(e) => setLocalMinAttempts(e.target.value)}
+                className="w-20"
+              />
+              <span className="text-muted-foreground">a</span>
+              <Input
+                type="number"
+                min={0}
+                placeholder="Máx"
+                value={localMaxAttempts}
+                onChange={(e) => setLocalMaxAttempts(e.target.value)}
+                className="w-20"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleApplyAttemptsFilter} className="flex-1">
+                Aplicar
+              </Button>
+              {filters.attemptsRange && (
+                <Button size="sm" variant="ghost" onClick={handleClearAttemptsFilter}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
       
       {/* Filtro de Data */}
       <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>

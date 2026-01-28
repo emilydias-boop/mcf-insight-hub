@@ -51,6 +51,7 @@ const Negocios = () => {
     dealStatus: 'all',
     inactivityDays: null,
     salesChannel: 'all',
+    attemptsRange: null,
   });
   
   // Estado para modo de seleção e transferência em massa
@@ -368,6 +369,17 @@ const Negocios = () => {
         if (filters.salesChannel !== channel) return false;
       }
       
+      // Filtro por quantidade de tentativas (range)
+      if (filters.attemptsRange) {
+        const summary = activitySummaries?.get(deal.id);
+        const totalCalls = summary?.totalCalls || 0;
+        
+        if (totalCalls < filters.attemptsRange.min || 
+            totalCalls > filters.attemptsRange.max) {
+          return false;
+        }
+      }
+      
       return true;
     });
   }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap]);
@@ -380,6 +392,7 @@ const Negocios = () => {
       dealStatus: 'all',
       inactivityDays: null,
       salesChannel: 'all',
+      attemptsRange: null,
     });
   };
   
