@@ -1,72 +1,206 @@
 
-# Correção do Status de Wenderson + Remoção do Botão Contrato Pago
 
-## Parte 1: SQL para Reverter Wenderson para No-Show
+# Adicionar Configurações ao Sidebar + Nova Página de Prova Equipe
 
-Execute este SQL no Supabase (Cloud View > Run SQL):
+## Problema 1: Configurações do RH não aparece no sidebar
+
+O menu RH atualmente só tem "Colaboradores". A página `/rh/configuracoes` existe e está roteada, mas não está visível no sidebar.
+
+## Problema 2: Funcionalidade de Prova Equipe
+
+Diego precisa de uma interface para:
+1. Criar provas com tema/assunto
+2. Buscar colaboradores pelo nome
+3. Registrar a nota de cada colaborador
+4. Visualizar o histórico de notas (refletir na ficha do colaborador)
+
+---
+
+## Alterações no Sidebar
+
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
+
+Atualizar o item "RH" para incluir subitens:
+
+| Subitem | Rota | Descrição |
+|---------|------|-----------|
+| Colaboradores | /rh/colaboradores | Lista de colaboradores |
+| Prova Equipe | /rh/prova-equipe | Registro de notas de prova |
+| Configurações | /rh/configuracoes | Cargos, áreas, squads, departamentos |
+
+---
+
+## Nova Tabela: `employee_exams`
+
+Armazenar as provas/avaliações aplicadas:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | UUID | Identificador |
+| titulo | TEXT | Tema/nome da prova (ex: "Prova Semanal 28/01") |
+| descricao | TEXT | Descrição opcional |
+| data_aplicacao | DATE | Data em que foi aplicada |
+| aplicador_id | UUID | Quem aplicou (user_id) |
+| ativo | BOOLEAN | Se a prova está ativa |
+| created_at / updated_at | TIMESTAMPTZ | Timestamps |
+
+## Nova Tabela: `employee_exam_scores`
+
+Armazenar as notas individuais:
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| id | UUID | Identificador |
+| exam_id | UUID | FK para employee_exams |
+| employee_id | UUID | FK para employees |
+| nota | DECIMAL | Nota obtida (0-10 ou %) |
+| observacao | TEXT | Comentário opcional |
+| created_at / updated_at | TIMESTAMPTZ | Timestamps |
+
+---
+
+## Nova Página: Prova Equipe
+
+**Rota:** `/rh/prova-equipe`
+
+### Interface proposta:
+
+```text
++--------------------------------------------------+
+| Prova Equipe                                      |
+| Registre notas de provas e avaliações da equipe  |
++--------------------------------------------------+
+| [+ Nova Prova]                                   |
++--------------------------------------------------+
+| Provas Recentes                                  |
++--------------------------------------------------+
+| Data       | Tema              | Participantes  |
+| 28/01/2026 | Técnicas de Venda |      12        |
+| 21/01/2026 | Produto MCF       |       8        |
++--------------------------------------------------+
+```
+
+### Dialog de Nova Prova:
+- Campo: Título da prova
+- Campo: Data de aplicação (default: hoje)
+- Campo: Descrição (opcional)
+
+### Drawer de Registro de Notas:
+Ao clicar em uma prova:
+
+```text
++--------------------------------------------------+
+| Prova: Técnicas de Venda | 28/01/2026            |
++--------------------------------------------------+
+| [Buscar colaborador...]                          |
++--------------------------------------------------+
+| Participante        | Nota    | Obs     | Ação  |
+| João Silva          |  8.5    |         | [x]   |
+| Maria Santos        |  9.0    | Ótimo!  | [x]   |
++--------------------------------------------------+
+| [+ Adicionar participante]                       |
++--------------------------------------------------+
+```
+
+### Reflexo na Ficha do Colaborador:
+
+Adicionar uma nova aba "Avaliações" no drawer do colaborador mostrando:
+- Histórico de provas realizadas
+- Notas obtidas
+- Média geral
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/pages/rh/ProvaEquipe.tsx` | Página principal de provas |
+| `src/components/hr/exams/ExamFormDialog.tsx` | Dialog para criar prova |
+| `src/components/hr/exams/ExamScoresDrawer.tsx` | Drawer para registrar notas |
+| `src/components/hr/exams/EmployeeSearchCombobox.tsx` | Busca de colaboradores por nome |
+| `src/components/hr/tabs/EmployeeExamsTab.tsx` | Aba de avaliações no drawer do colaborador |
+| `src/hooks/useExams.ts` | Hooks para CRUD de provas e notas |
+
+## Arquivos a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/components/layout/AppSidebar.tsx` | Adicionar subitens ao menu RH |
+| `src/App.tsx` | Adicionar rota /rh/prova-equipe |
+| `src/components/hr/EmployeeDrawer.tsx` | Adicionar aba de Avaliações |
+
+---
+
+## Migração SQL
 
 ```sql
--- 1. Reverter o attendee para no_show
-UPDATE meeting_slot_attendees
-SET 
-  status = 'no_show',
-  contract_paid_at = NULL,
-  updated_at = NOW()
-WHERE id = 'dfc31d56-0ad0-4467-86b6-3e983b6d8247';
+-- Tabela de provas/avaliações
+CREATE TABLE employee_exams (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  titulo TEXT NOT NULL,
+  descricao TEXT,
+  data_aplicacao DATE DEFAULT CURRENT_DATE,
+  aplicador_id UUID REFERENCES auth.users(id),
+  ativo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- 2. Reverter o meeting slot para scheduled (já que o lead é no-show)
-UPDATE meeting_slots
-SET 
-  status = 'scheduled',
-  updated_at = NOW()
-WHERE id = '7e51df8c-7bca-4ed6-bff9-f76f3dd69e02';
+-- Tabela de notas
+CREATE TABLE employee_exam_scores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  exam_id UUID NOT NULL REFERENCES employee_exams(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  nota DECIMAL(5,2) NOT NULL CHECK (nota >= 0 AND nota <= 10),
+  observacao TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+  UNIQUE(exam_id, employee_id)
+);
 
--- 3. Atualizar o deal para No-Show stage (opcional - depende se quer mover no CRM)
--- UPDATE crm_deals
--- SET stage_id = '6bb76ad9-3d48-4e91-b24a-c6e8e18d9e9e' -- No-Show stage
--- WHERE id = '779915e5-744a-49bb-ac3a-602b60e12abb';
+-- RLS
+ALTER TABLE employee_exams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee_exam_scores ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Auth read exams" ON employee_exams FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Auth write exams" ON employee_exams FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Auth read scores" ON employee_exam_scores FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Auth write scores" ON employee_exam_scores FOR ALL USING (auth.role() = 'authenticated');
 ```
 
 ---
 
-## Parte 2: Remover Botão "Contrato Pago" do R1 Drawer
+## Fluxo de Uso
 
-### Modificação no arquivo
-
-**Arquivo:** `src/components/crm/AgendaMeetingDrawer.tsx`
-
-**Alteração:** Remover o botão "Contrato Pago" interativo, mas manter a exibição visual (badge) quando o status for `contract_paid` (marcado pela automação).
-
-### Lógica proposta
-
-1. Remover o botão clicável de "Contrato Pago" (linhas 967-982)
-2. Manter o badge de status "Contrato Pago" visível quando a automação marcar
-3. Usuário continua vendo badges coloridos indicando o status atual
-
-### Interface resultante
-
-| Status | Antes | Depois |
-|--------|-------|--------|
-| Agendada | Botão ativo | Botão ativo |
-| Realizada | Botão ativo | Botão ativo |
-| No-Show | Botão ativo | Botão ativo |
-| Contrato Pago | Botão ativo clicável | Badge indicativo (sem ação) |
-
-Assim, quando a automação (webhook) marcar como `contract_paid`, o usuário verá o badge "Contrato Pago" no topo, mas não terá mais a opção de marcar manualmente.
+1. Diego acessa **RH > Prova Equipe**
+2. Clica em **"+ Nova Prova"** e preenche o tema
+3. Na lista, clica na prova para abrir o drawer de notas
+4. Busca colaboradores pelo nome e registra as notas
+5. As notas aparecem na ficha individual de cada colaborador (aba Avaliações)
 
 ---
 
-## Arquivos a modificar
+## Detalhes Técnicos
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/components/crm/AgendaMeetingDrawer.tsx` | Remover botão "Contrato Pago" e functions relacionadas |
+### Hook useExams.ts
+- `useExams()` - Lista todas as provas com contagem de participantes
+- `useExam(id)` - Detalhes de uma prova específica
+- `useExamScores(examId)` - Notas de uma prova
+- `useEmployeeExamHistory(employeeId)` - Histórico de provas do colaborador
+- Mutations para CRUD completo
 
----
+### Componente EmployeeSearchCombobox
+- Input com autocomplete
+- Busca na tabela employees por nome
+- Usa Combobox do shadcn/ui (cmdk)
+- Filtra colaboradores ativos
 
-## Resultado esperado
+### Aba Avaliações no EmployeeDrawer
+- Lista de provas realizadas pelo colaborador
+- Nota obtida em cada prova
+- Média geral calculada
+- Data de cada avaliação
 
-1. Wenderson reverte para "No-show" imediatamente após rodar o SQL
-2. Botão "Contrato Pago" não aparece mais para marcação manual
-3. Badge "Contrato Pago" continua visível quando automação detectar pagamento
-4. Workflow de status fica: Agendada ↔ Realizada ↔ No-Show (automação marca CP)
