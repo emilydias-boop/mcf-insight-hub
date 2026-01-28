@@ -24,6 +24,8 @@ export interface R2CarrinhoAttendee {
   contact_phone: string | null;
   contact_email: string | null;
   partner_name: string | null;
+  r1_date: string | null;
+  contract_paid_at: string | null;
 }
 
 export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_show' | 'realizadas' | 'aprovados') {
@@ -71,6 +73,7 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
             carrinho_updated_at,
             deal_id,
             partner_name,
+            contract_paid_at,
             deal:crm_deals(
               id,
               name,
@@ -103,6 +106,38 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
 
       if (error) throw error;
 
+      // Collect all deal IDs for R1 lookup
+      const dealIds = new Set<string>();
+      for (const meeting of meetings || []) {
+        const attendeesArr = (meeting.attendees || []) as Array<{ deal_id: string | null }>;
+        for (const att of attendeesArr) {
+          if (att.deal_id) dealIds.add(att.deal_id);
+        }
+      }
+
+      // Fetch R1 meetings for these deals
+      const r1Map = new Map<string, string>();
+      if (dealIds.size > 0) {
+        const { data: r1Meetings } = await supabase
+          .from('meeting_slots')
+          .select(`
+            scheduled_at,
+            meeting_slot_attendees!inner(deal_id)
+          `)
+          .eq('meeting_type', 'r1')
+          .in('meeting_slot_attendees.deal_id', Array.from(dealIds));
+
+        // Build map: deal_id -> r1_date (first R1 for each deal)
+        r1Meetings?.forEach(r1 => {
+          const r1Attendees = r1.meeting_slot_attendees as Array<{ deal_id: string | null }>;
+          r1Attendees.forEach(att => {
+            if (att.deal_id && !r1Map.has(att.deal_id)) {
+              r1Map.set(att.deal_id, r1.scheduled_at);
+            }
+          });
+        });
+      }
+
       // Flatten to attendees with meeting info
       const attendees: R2CarrinhoAttendee[] = [];
 
@@ -118,6 +153,7 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
           carrinho_updated_at: string | null;
           deal_id: string | null;
           partner_name: string | null;
+          contract_paid_at: string | null;
           deal: { id: string; name: string; contact: { phone: string | null; email: string | null } | null } | null;
         }>;
 
@@ -147,6 +183,8 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
             contact_phone: att.deal?.contact?.phone || null,
             contact_email: att.deal?.contact?.email || null,
             partner_name: att.partner_name,
+            r1_date: att.deal_id ? r1Map.get(att.deal_id) || null : null,
+            contract_paid_at: att.contract_paid_at,
           });
         }
       }
