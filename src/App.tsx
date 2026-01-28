@@ -75,6 +75,7 @@ import TransacoesIncorp from "./pages/bu-incorporador/TransacoesIncorp";
 import IncorporadorRelatorios from "./pages/bu-incorporador/Relatorios";
 
 import RHColaboradores from "./pages/rh/Colaboradores";
+import ConfiguracoesRH from "./pages/rh/Configuracoes";
 import Financeiro from "./pages/Financeiro";
 import MeuRH from "./pages/MeuRH";
 import MinhasReunioes from "./pages/sdr/MinhasReunioes";
@@ -220,6 +221,7 @@ const App = () => (
               
               <Route path="playbook" element={<MeuPlaybook />} />
               <Route path="rh/colaboradores" element={<ResourceGuard resource={"rh" as any}><RHColaboradores /></ResourceGuard>} />
+              <Route path="rh/configuracoes" element={<RoleGuard allowedRoles={['admin', 'manager']}><ConfiguracoesRH /></RoleGuard>} />
               <Route path="financeiro" element={<ResourceGuard resource={"financeiro" as any}><Financeiro /></ResourceGuard>} />
               <Route path="tarefas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><Tarefas /></RoleGuard>} />
               <Route path="meu-rh" element={<MeuRH />} />
