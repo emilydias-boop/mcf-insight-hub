@@ -8,6 +8,7 @@ import { MeuRHDadosPessoaisSection } from "@/components/meu-rh/MeuRHDadosPessoai
 import { MeuRHRemuneracaoSection } from "@/components/meu-rh/MeuRHRemuneracaoSection";
 import { MeuRHNfseSection } from "@/components/meu-rh/MeuRHNfseSection";
 import { MeuRHDocumentosSection } from "@/components/meu-rh/MeuRHDocumentosSection";
+import { MeuRHAvaliacoesSection } from "@/components/meu-rh/MeuRHAvaliacoesSection";
 import { MeuRHHistoricoSection } from "@/components/meu-rh/MeuRHHistoricoSection";
 
 export default function MeuRH() {
@@ -83,7 +84,10 @@ export default function MeuRH() {
       {/* 6. Documentos */}
       <MeuRHDocumentosSection employee={employee} />
 
-      {/* 7. Histórico */}
+      {/* 7. Avaliações */}
+      <MeuRHAvaliacoesSection employee={employee} />
+
+      {/* 8. Histórico */}
       <MeuRHHistoricoSection employee={employee} />
     </div>
   );
