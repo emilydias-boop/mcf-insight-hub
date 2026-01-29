@@ -1,199 +1,156 @@
 
-# Plano: Corrigir Horários do Modal de Reagendamento R2
+# Plano: Filtrar Closers R1 e Adicionar Canal de Venda
 
-## Problema Identificado
+## Problemas Identificados
 
-O modal "Reagendar Reunião R2" (`R2RescheduleModal.tsx`) usa slots de tempo **fixos** de 30 minutos (09:00 a 18:00), em vez de buscar os horários configurados para o closer selecionado.
+### 1. Closers Errados no Filtro
+O filtro de Closer está mostrando **todos os closers** (incluindo R2), mas o relatório de Contratos do BU Incorporador deveria mostrar apenas **closers R1** (Cristiane, Julio, Thayna).
 
-| Modal | Implementação | Comportamento |
-|-------|---------------|---------------|
-| `R2QuickScheduleModal` | Usa `useR2CloserAvailableSlots` | ✅ Mostra horários configurados do closer |
-| `R2RescheduleModal` | Usa array fixo `TIME_SLOTS` | ❌ Mostra apenas 09:00-18:00 em intervalos de 30min |
+**Causa**: O hook `useGestorClosers` não filtra por `meeting_type`.
 
-O código problemático está nas linhas 46-51:
-```typescript
-// Fixed time slots for R2 (9:00 to 18:00, 30-min intervals)
-const TIME_SLOTS = Array.from({ length: 19 }, (_, i) => {
-  ...
-});
-```
+| Closer | meeting_type | Deveria aparecer? |
+|--------|--------------|-------------------|
+| Cristiane Gomes | r1 | ✅ Sim |
+| Julio | r1 | ✅ Sim |
+| Thayna | r1 | ✅ Sim |
+| Jessica Bellini | r2 | ❌ Não |
+| Jessica Martins | r2 | ❌ Não |
+| Claudia Carielo | r2 | ❌ Não |
 
----
+### 2. Falta Canal de Venda
+O relatório não mostra o canal de venda (A010, BIO ou LIVE), que é importante para análise comercial.
 
-## Solução
-
-Atualizar o `R2RescheduleModal` para usar o mesmo padrão do `R2QuickScheduleModal`:
-
-1. Importar e usar o hook `useR2CloserAvailableSlots`
-2. Buscar os horários configurados baseado no closer e data selecionados
-3. Mostrar disponibilidade com indicadores visuais (ocupado/disponível)
+**Lógica de classificação:**
+- **A010**: Lead comprou produto A010 na Hubla (email confirmado em `hubla_transactions`)
+- **BIO**: Lead tem tag "bio" ou "instagram" no CRM
+- **LIVE**: Padrão (leads gratuitos de lives)
 
 ---
 
-## Arquivo a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/crm/R2RescheduleModal.tsx` | **Modificar** - Usar `useR2CloserAvailableSlots` em vez de TIME_SLOTS fixo |
+| `src/hooks/useGestorClosers.ts` | **Modificar** - Adicionar filtro por `meeting_type` (opcional) |
+| `src/hooks/useContractReport.ts` | **Modificar** - Adicionar lógica de detecção de sales channel e filtro |
+| `src/components/relatorios/ContractReportPanel.tsx` | **Modificar** - Adicionar filtro de canal e coluna na tabela |
 
 ---
 
 ## Alterações Detalhadas
 
-### 1. Adicionar imports necessários
+### 1. useGestorClosers.ts - Adicionar filtro por meeting_type
+
+Adicionar parâmetro opcional para filtrar closers por tipo:
 
 ```typescript
-import { Loader2, ExternalLink } from 'lucide-react';
-import { useR2CloserAvailableSlots } from '@/hooks/useR2CloserAvailableSlots';
-```
-
-### 2. Remover TIME_SLOTS estático
-
-Remover linhas 46-51 (o array fixo não será mais necessário).
-
-### 3. Adicionar chamada do hook
-
-Dentro do componente, após os estados existentes:
-
-```typescript
-// Fetch available slots for selected closer + date
-const { data: closerSlots, isLoading: loadingSlots } = useR2CloserAvailableSlots(
-  selectedCloser || undefined,
-  selectedDate
-);
-
-// Available time slots based on closer configuration
-const availableTimeSlots = useMemo(() => {
-  if (!closerSlots) return [];
-  return closerSlots.availableSlots.filter(s => s.isAvailable);
-}, [closerSlots]);
-
-// All configured slots (for showing occupied ones too)
-const allConfiguredSlots = useMemo(() => {
-  if (!closerSlots) return [];
-  return closerSlots.availableSlots;
-}, [closerSlots]);
-```
-
-### 4. Adicionar reset do horário quando closer/data mudam
-
-```typescript
-// Reset time when closer or date changes
-useEffect(() => {
-  setSelectedTime('');
-}, [selectedCloser, selectedDate]);
-```
-
-### 5. Atualizar UI do seletor de horário
-
-Substituir o Select de horário atual por:
-
-```tsx
-<div className="space-y-2">
-  <Label className="flex items-center gap-1">
-    Horário
-    {loadingSlots && <Loader2 className="h-3 w-3 animate-spin" />}
-  </Label>
-  <Select 
-    value={selectedTime} 
-    onValueChange={setSelectedTime}
-    disabled={!selectedCloser || !selectedDate || loadingSlots || availableTimeSlots.length === 0}
-  >
-    <SelectTrigger>
-      <Clock className="h-4 w-4 mr-2" />
-      <SelectValue placeholder={getTimePlaceholder()} />
-    </SelectTrigger>
-    <SelectContent>
-      {allConfiguredSlots.map(slot => (
-        <SelectItem 
-          key={slot.time} 
-          value={slot.time}
-          disabled={!slot.isAvailable}
-          className={cn(!slot.isAvailable && "opacity-50")}
-        >
-          <span className="flex items-center gap-2">
-            {slot.time}
-            {slot.link && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
-            {!slot.isAvailable && <span className="text-xs text-destructive">(ocupado)</span>}
-          </span>
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-</div>
-```
-
-### 6. Adicionar helper para placeholder dinâmico
-
-```typescript
-const getTimePlaceholder = () => {
-  if (!selectedCloser) return 'Selecione closer';
-  if (!selectedDate) return 'Selecione data';
-  if (loadingSlots) return 'Carregando...';
-  if (allConfiguredSlots.length === 0) return 'Sem horários';
-  if (availableTimeSlots.length === 0) return 'Todos ocupados';
-  return 'Selecione';
-};
-```
-
-### 7. Adicionar mensagem quando não há horários
-
-Abaixo do grid de data/hora:
-
-```tsx
-{selectedCloser && selectedDate && !loadingSlots && allConfiguredSlots.length === 0 && (
-  <p className="text-xs text-amber-600">
-    Closer sem horários configurados para {format(selectedDate, 'EEEE', { locale: ptBR })}.
-  </p>
-)}
-```
-
-### 8. Atualizar validação do botão submit
-
-```typescript
-disabled={
-  !selectedDate || 
-  !selectedTime || 
-  rescheduleMeeting.isPending || 
-  updateAttendee.isPending
+export const useGestorClosers = (meetingType?: 'r1' | 'r2') => {
+  // Nas queries, adicionar:
+  if (meetingType) {
+    query = query.eq('meeting_type', meetingType);
+  }
 }
 ```
 
+### 2. ContractReportPanel.tsx - Usar apenas closers R1
+
+```typescript
+// Mudar de:
+const { data: closers = [] } = useGestorClosers();
+
+// Para:
+const { data: closers = [] } = useGestorClosers('r1');
+```
+
+### 3. useContractReport.ts - Adicionar sales_channel ao retorno
+
+**Novo campo na interface:**
+```typescript
+interface ContractReportRow {
+  // ... campos existentes
+  salesChannel: 'a010' | 'bio' | 'live';
+  contactEmail: string | null;  // Para cálculo do canal
+  contactTags: string[];        // Para cálculo do canal
+}
+```
+
+**Nova lógica no hook:**
+1. Buscar também `crm_contacts.email` e `crm_contacts.tags` no join
+2. Coletar todos os emails do resultado
+3. Buscar emails A010 em `hubla_transactions`
+4. Usar função `detectSalesChannel()` existente para classificar cada lead
+
+### 4. ContractReportPanel.tsx - Adicionar filtro e coluna
+
+**Novo filtro de Canal:**
+```tsx
+<Select value={selectedChannel} onValueChange={setSelectedChannel}>
+  <SelectContent>
+    <SelectItem value="all">Todos os Canais</SelectItem>
+    <SelectItem value="a010">A010</SelectItem>
+    <SelectItem value="bio">BIO</SelectItem>
+    <SelectItem value="live">LIVE</SelectItem>
+  </SelectContent>
+</Select>
+```
+
+**Nova coluna na tabela:**
+```tsx
+<TableHead>Canal</TableHead>
+// ...
+<TableCell>
+  <Badge variant={row.salesChannel === 'a010' ? 'default' : 'outline'}>
+    {row.salesChannel.toUpperCase()}
+  </Badge>
+</TableCell>
+```
+
+**Filtro no render:**
+```typescript
+const displayData = filteredReportData.filter(row => 
+  selectedChannel === 'all' || row.salesChannel === selectedChannel
+);
+```
+
 ---
 
-## Resultado Esperado
-
-| Antes | Depois |
-|-------|--------|
-| Dropdown com 09:00-18:00 em intervalos de 30min | Dropdown com horários configurados do closer |
-| Sem indicação de ocupação | Mostra "(ocupado)" e desabilita slots cheios |
-| Permite agendar em horários não configurados | Só permite horários válidos do closer |
-| Sem feedback visual de loading | Mostra spinner enquanto carrega |
-
----
-
-## Fluxo do Usuário
+## Fluxo de Dados
 
 ```text
-1. Seleciona Closer "Jessica Bellini"
-   └── (aguarda seleção de data)
+1. ContractReportPanel carrega
+   └── useGestorClosers('r1') → Retorna apenas Cristiane, Julio, Thayna
 
-2. Seleciona Data "29/01/2026"
-   └── Hook busca horários de Jessica para 29/01
-   └── Retorna: 09:00, 10:30, 11:00, 14:00, 15:30
+2. Usuário seleciona filtros
+   └── useContractReport busca dados
+       ├── Join com crm_contacts para email e tags
+       ├── Busca emails A010 em hubla_transactions
+       └── Calcula salesChannel para cada row
 
-3. Abre dropdown de Horário
-   └── Mostra apenas os 5 horários configurados
-   └── Horários ocupados aparecem desabilitados com "(ocupado)"
-
-4. Seleciona horário disponível e reagenda ✓
+3. Renderiza tabela com nova coluna "Canal"
+   └── Badge colorido: A010 (azul), BIO (verde), LIVE (cinza)
 ```
+
+---
+
+## Visual Final
+
+**Filtros:**
+```
+[Período: Jan 2026] [Closer: Todos (R1)] [Pipeline: Todas] [Canal: Todos] [Exportar]
+```
+
+**Tabela:**
+| Closer | Data | Lead | Telefone | SDR | Pipeline | Canal | Estado |
+|--------|------|------|----------|-----|----------|-------|--------|
+| Julio | 28/01 | Maria | 11999... | Julia | Inside Sales | **A010** | SP |
+| Cristiane | 27/01 | João | 21888... | Antony | Inside Sales | **LIVE** | RJ |
+| Thayna | 26/01 | Ana | 31777... | Caroline | Inside Sales | **BIO** | MG |
 
 ---
 
 ## Impacto
 
-- **Consistência**: Mesmo comportamento do modal de agendamento
-- **Precisão**: Só permite horários realmente configurados
-- **UX**: Feedback visual de disponibilidade
-- **Integridade**: Respeita capacidade máxima por slot do closer
+- **Filtro de Closer**: Mostrará apenas 3 closers R1 em vez de 7+
+- **Nova coluna Canal**: Classificação visual A010/BIO/LIVE
+- **Filtro de Canal**: Permite análise segmentada
+- **Exportação Excel**: Incluirá nova coluna "Canal"
