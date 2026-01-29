@@ -1,49 +1,51 @@
 
-# Plano: Filtrar Origens por Business Unit na Sidebar
+# Plano: Integrar Aba "Equipe" do Fechamento com RH (Employees)
 
-## Problema Atual
+## Contexto do Problema
 
-Quando o usuário está na BU Incorporador (rota `/incorporador/crm/negocios` ou perfil BU=incorporador), a sidebar de origens mostra **todos os 65 grupos e 3978 origens** do sistema, quando deveria mostrar apenas:
-- **Grupo**: Perpétuo - X1 (`a6f3cbfc-0567-427f-a405-5a869aaa6010`)
-- **Origens do grupo**: PIPELINE INSIDE SALES e outras 10 origens dentro deste grupo
+A página de Configurações de Fechamento (`/fechamento-sdr/configuracoes`) possui **duas abas com fontes de dados diferentes**:
+
+| Aba | Fonte de Dados | Problema |
+|-----|---------------|----------|
+| **Equipe** | Tabela `sdr` (sistema legado) | Mostra pessoas que não são do comercial do Incorporador |
+| **Planos OTE** | Tabela `employees` + `cargos_catalogo` | Mostra apenas colaboradores com cargo do catálogo vinculado |
+
+### Dados Encontrados
+
+**Tabela `sdr`** (usada na aba Equipe):
+- Claudia Carielo: squad=incorporador, role_type=closer
+- Jessica Bellini: squad=incorporador, role_type=closer
+- Thobson Motta: squad=incorporador, role_type=closer (mas na verdade é do Consórcio!)
+
+**Tabela `employees`** (usada na aba Planos OTE):
+- Claudia Carielo: departamento=NULL, cargo_catalogo_id=NULL
+- Jessica Bellini R2: departamento=NULL, cargo_catalogo_id=NULL
+- Thobson Motta: departamento=BU - Consórcio, cargo_catalogo_id=NULL
+- Thaynar Tavares: departamento=BU - Incorporador 50K, cargo_catalogo_id=NULL
+
+### Problema Central
+
+1. A tabela `sdr` é um sistema **legado/antigo** usado apenas para fechamento SDR
+2. A tabela `employees` é o **cadastro oficial de RH** com departamentos e cargos corretos
+3. As duas abas mostram dados inconsistentes porque consultam tabelas diferentes
+4. Thaynar não aparece em "Planos OTE" porque não tem `cargo_catalogo_id` (não está vinculada a um cargo do catálogo)
 
 ---
 
-## Causa Raiz
+## Solução Proposta
 
-1. O mapeamento `BU_PIPELINE_MAP` para `incorporador` contém apenas 1 origem:
-   ```typescript
-   incorporador: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'] // PIPELINE INSIDE SALES (origem)
-   ```
-   Falta incluir o grupo pai `a6f3cbfc-0567-427f-a405-5a869aaa6010` (Perpétuo - X1)
+Migrar a aba "Equipe" para usar a tabela `employees` (RH) como fonte única da verdade, mantendo compatibilidade com o sistema antigo.
 
-2. O `PipelineSelector` (dropdown "Funil:") não recebe filtro de BU - mostra todos os grupos
+### Etapa 1: Atualizar a Aba "Equipe" para usar `employees`
 
-3. A lógica de filtro na `OriginsSidebar` está correta, mas precisa receber os IDs corretos
+Modificar a aba "Equipe" na página de Configurações para:
+1. Buscar dados da tabela `employees` em vez de `sdr`
+2. Filtrar por departamentos de BU válidos (igual à aba "Planos OTE")
+3. Manter funcionalidade de edição direcionando para o RH
 
----
+### Etapa 2: Adicionar Filtro de BU na Aba "Equipe"
 
-## Solução
-
-### Etapa 1: Atualizar mapeamento BU → Pipelines
-
-Adicionar o grupo pai ao mapeamento para cada BU:
-
-| BU | Antes | Depois |
-|----|-------|--------|
-| incorporador | Apenas 1 origem (PIPELINE INSIDE SALES) | Grupo (Perpétuo X1) + todas origens do grupo |
-| consorcio | Grupo + 1 origem (já correto) | Mantém |
-| credito | Origem genérica | Grupo específico + origens |
-| projetos | Origem genérica | Grupo específico + origens |
-| leilao | Origem específica (já correto) | Mantém |
-
-### Etapa 2: Modificar PipelineSelector para aceitar filtro
-
-O componente `PipelineSelector` precisa receber uma prop `allowedGroupIds` para filtrar quais grupos aparecem no dropdown.
-
-### Etapa 3: Passar filtro de grupos para o selector
-
-O componente `OriginsSidebar` passará os grupos permitidos da BU para o `PipelineSelector`.
+Adicionar seletor de BU para mostrar apenas colaboradores da BU selecionada (Incorporador, Consórcio, Crédito).
 
 ---
 
@@ -51,121 +53,95 @@ O componente `OriginsSidebar` passará os grupos permitidos da BU para o `Pipeli
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/components/auth/NegociosAccessGuard.tsx` | Atualizar `BU_PIPELINE_MAP` para incluir grupos pais + criar `BU_GROUP_MAP` |
-| `src/components/crm/PipelineSelector.tsx` | Adicionar prop `allowedGroupIds` para filtrar dropdown |
-| `src/components/crm/OriginsSidebar.tsx` | Passar `allowedGroupIds` baseado na BU ativa |
-| `src/pages/crm/Negocios.tsx` | Passar informação de grupos permitidos para sidebar |
+| `src/pages/fechamento-sdr/Configuracoes.tsx` | Substituir `useSdrsAll()` por `useEmployeesWithCargo()` na aba Equipe; Adicionar filtro de BU |
 
 ---
 
 ## Detalhes Técnicos
 
-### 1. Novo mapeamento de grupos por BU
-
+### Antes (código atual):
 ```typescript
-// NegociosAccessGuard.tsx
-
-// Grupos que cada BU pode ver no dropdown de funis
-export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
-  incorporador: ['a6f3cbfc-0567-427f-a405-5a869aaa6010'], // Perpétuo - X1
-  consorcio: ['b98e3746-d727-445b-b878-fc5742b6e6b8'],    // Perpétuo - Construa para Alugar  
-  credito: ['8d33bad6-46ab-4f9c-a570-dc7b74be2ac9'],      // Grupo de Crédito (a definir)
-  projetos: [],                                            // A definir
-  leilao: ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'],       // BU - LEILÃO
-};
-
-// Atualizar BU_PIPELINE_MAP para incluir TODAS as origens do grupo
-export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
-  incorporador: [
-    'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Grupo: Perpétuo - X1
-    'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // Origem: PIPELINE INSIDE SALES
-    // + outras 10 origens do grupo automaticamente via lógica de grupo
-  ],
-  // ... outras BUs
-};
+const { data: sdrs, isLoading: sdrsLoading } = useSdrsAll();
+// Mostra todos os registros da tabela 'sdr' sem filtro de BU
 ```
 
-### 2. PipelineSelector com filtro
-
+### Depois (proposta):
 ```typescript
-// PipelineSelector.tsx
-interface PipelineSelectorProps {
-  selectedPipelineId: string | null;
-  onSelectPipeline: (id: string | null) => void;
-  allowedGroupIds?: string[]; // NOVO: grupos permitidos pela BU
-}
+const { data: employees, isLoading: employeesLoading } = useEmployeesWithCargo();
 
-export const PipelineSelector = ({ 
-  selectedPipelineId, 
-  onSelectPipeline,
-  allowedGroupIds 
-}: PipelineSelectorProps) => {
-  const { data: pipelines, isLoading } = useCRMPipelines();
+// Filtrar colaboradores ativos que pertencem a uma BU válida
+const filteredEmployees = useMemo(() => {
+  if (!employees) return [];
   
-  // Filtrar pipelines se houver restrição de BU
-  const filteredPipelines = useMemo(() => {
-    if (!allowedGroupIds || allowedGroupIds.length === 0) {
-      return pipelines; // Sem filtro = admin vê tudo
+  return employees.filter(emp => {
+    // Apenas BUs comerciais válidas
+    const validDepts = ['BU - Incorporador 50K', 'BU - Consórcio', 'BU - Crédito'];
+    if (!emp.departamento || !validDepts.includes(emp.departamento)) {
+      return false;
     }
-    return pipelines?.filter(p => allowedGroupIds.includes(p.id));
-  }, [pipelines, allowedGroupIds]);
-  
-  // ... resto do componente usando filteredPipelines
-};
+    
+    // Filtro por BU selecionada (se houver)
+    if (selectedBU !== '__all__') {
+      const buMapping = {
+        'incorporador': 'BU - Incorporador 50K',
+        'consorcio': 'BU - Consórcio',
+        'credito': 'BU - Crédito',
+      };
+      if (emp.departamento !== buMapping[selectedBU]) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+}, [employees, selectedBU]);
 ```
 
-### 3. OriginsSidebar passando filtro
+### Mudança na Interface da Tabela
 
-```typescript
-// OriginsSidebar.tsx
-<PipelineSelector
-  selectedPipelineId={pipelineId || null}
-  onSelectPipeline={onSelectPipeline}
-  allowedGroupIds={allowedGroupIds} // Grupos da BU ativa
-/>
-```
+| Antes (tabela `sdr`) | Depois (tabela `employees`) |
+|---------------------|---------------------------|
+| Nome | Nome Completo |
+| Email | Email do Cargo ou Telefone |
+| Nível (campo `nivel`) | Nível do cargo do catálogo |
+| Status | Status de colaborador (ativo/inativo) |
+| Ativo | Status de colaborador |
+| Data Criação | Data de Admissão |
+| Ações (Editar/Aprovar) | Link para página de RH |
 
-### 4. Negocios.tsx passando grupos
+---
 
-```typescript
-// Negocios.tsx
-import { BU_GROUP_MAP } from '@/components/auth/NegociosAccessGuard';
+## Benefícios da Mudança
 
-// Grupos permitidos baseados na BU ativa
-const buAllowedGroups = useMemo(() => {
-  if (!activeBU) return []; // Admin vê tudo
-  return BU_GROUP_MAP[activeBU] || [];
-}, [activeBU]);
+1. **Fonte única da verdade**: Dados vêm do RH (employees), não de tabela legada
+2. **Filtro por BU**: Cada gerente vê apenas sua equipe
+3. **Dados consistentes**: Ambas as abas (Equipe e Planos OTE) mostram os mesmos colaboradores
+4. **Menos duplicação**: Não precisa manter cadastros em duas tabelas
 
-// Passar para sidebar
-<OriginsSidebar
-  allowedOriginIds={buAuthorizedOrigins}
-  allowedGroupIds={buAllowedGroups}
-  // ...
-/>
-```
+---
+
+## Considerações Importantes
+
+### Colaboradores que não aparecem na aba "Planos OTE"
+
+Thaynar Tavares não aparece porque não tem `cargo_catalogo_id`. Para corrigir:
+1. Acessar o RH (`/rh`)
+2. Editar o cadastro de Thaynar
+3. Vincular ao cargo do catálogo correto (ex: "Closer Inside N1")
+
+### Migração de Dados (Opcional)
+
+Se desejar, podemos criar uma ferramenta para sincronizar os dados da tabela `sdr` para `employees`, mas isso é uma tarefa separada de migração de dados.
 
 ---
 
 ## Resultado Esperado
 
-### Para BU Incorporador:
-- Dropdown "Funil:" mostra apenas: **Perpétuo - X1**
-- Lista de origens mostra apenas as 11 origens do grupo Perpétuo - X1
-- PIPELINE INSIDE SALES aparece como origem principal
+**Aba Equipe (após mudança)**:
+- Mostra apenas colaboradores do RH que pertencem a BUs comerciais
+- Thobson, Claudia e Jessica Bellini NÃO aparecem (pois não têm departamento comercial correto no RH)
+- Thaynar APARECE (pois está em BU - Incorporador 50K no RH)
 
-### Para BU Consórcio:
-- Dropdown "Funil:" mostra apenas: **Perpétuo - Construa para Alugar**
-- Lista de origens mostra as origens desse grupo
-
-### Para Admin (sem BU):
-- Comportamento atual mantido: vê todos os grupos e origens
-
----
-
-## Benefícios
-
-1. Interface limpa e focada para cada equipe
-2. Reduz confusão com pipelines de outras BUs
-3. Carregamento mais rápido (menos dados)
-4. Consistência com o design de BUs separadas
+**Aba Planos OTE**:
+- Mantém comportamento atual
+- Thaynar passará a aparecer quando for vinculada a um cargo do catálogo
