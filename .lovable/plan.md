@@ -1,13 +1,19 @@
 
-# Plano: Corrigir Atribuição de SDR para Sócios
+# Plano: Corrigir Notas Aparecendo Erradas para Sócios
 
 ## Problema Identificado
 
-Quando um sócio (partner) é adicionado a um lead, o campo "SDR que Agendou" mostra o SDR errado. No exemplo:
-- **Rafaela Bravim** → Corretamente mostra Caroline Souza
-- **Gilmar Melo (Sócio de Rafaela)** → Erroneamente mostra Antony Elias (deveria ser Caroline Souza)
+João (sócio de Rafaela) está mostrando as notas de Antony porque:
 
-Isso ocorre porque sócios herdam o `booked_by_profile` do **meeting slot** em vez do **parent attendee**.
+1. **Ao criar o sócio**: O `deal_id` não é passado, resultando em `null` no banco
+2. **Ao exibir no drawer**: O fallback `att.deal_id || activeMeeting.deal_id` usa o deal do meeting slot
+3. **O meeting slot tem o deal do Antony** (primeiro participante ou outro contexto)
+4. **As notas são buscadas por deal_id**, resultando nas notas erradas
+
+| Campo | Valor Atual | Valor Correto |
+|-------|-------------|---------------|
+| João.deal_id | `null` | Igual ao da Rafaela |
+| Fallback dealId | `activeMeeting.deal_id` (Antony) | `parentAttendee.deal_id` (Rafaela) |
 
 ---
 
@@ -15,65 +21,59 @@ Isso ocorre porque sócios herdam o `booked_by_profile` do **meeting slot** em v
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/crm/AgendaMeetingDrawer.tsx` | **Modificar** - Corrigir fallback do bookedByProfile |
-| `src/hooks/useAgendaData.ts` | **Modificar** - Herdar booked_by do parent ao criar sócio |
+| `src/components/crm/AgendaMeetingDrawer.tsx` | **Modificar** - Passar dealId do parent ao criar sócio + corrigir fallback |
+| `src/hooks/useAgendaData.ts` | **Modificar** - Herdar deal_id do parent (além do booked_by) |
 
 ---
 
 ## Alterações
 
-### 1. AgendaMeetingDrawer.tsx (linhas 451 e 455)
+### 1. AgendaMeetingDrawer.tsx - handleAddPartner (linhas 397-403)
 
-O problema está no fallback que não considera o parent attendee:
+Passar o `dealId` do parent ao criar sócio:
 
-De:
 ```typescript
-bookedBy: att.booked_by || activeMeeting.booked_by,
-...
-bookedByProfile: att.booked_by_profile || activeMeeting.booked_by_profile,
-```
-
-Para:
-```typescript
-bookedBy: att.booked_by || parentAttendee?.booked_by || activeMeeting.booked_by,
-...
-bookedByProfile: att.booked_by_profile || parentAttendee?.booked_by_profile || activeMeeting.booked_by_profile,
-```
-
-Isso garante que sócios herdem a informação do SDR do lead principal (parent) antes de cair no fallback do meeting slot.
-
-### 2. useAgendaData.ts - Hook useAddMeetingAttendee (linha 1048)
-
-Ao adicionar um sócio com `parentAttendeeId`, devemos buscar o `booked_by` do parent e herdar:
-
-De:
-```typescript
-const { error } = await supabase.from('meeting_slot_attendees').insert({
-  meeting_slot_id: meetingSlotId,
-  deal_id: dealId || null,
-  ...
+addAttendee.mutate({
+  meetingSlotId: activeMeeting.id,
+  dealId: selectedParticipant.dealId,  // ✅ NOVO: Herda deal do parent
+  attendeeName: partnerName,
+  attendeePhone: partnerPhone || undefined,
+  isPartner: true,
+  parentAttendeeId: selectedParticipant.id,
 });
 ```
 
-Para:
+### 2. AgendaMeetingDrawer.tsx - getParticipantsList (linha 448)
+
+Corrigir fallback para usar parent attendee antes do meeting slot:
+
 ```typescript
-// Se for sócio, herdar booked_by do parent
+dealId: att.deal_id || parentAttendee?.deal_id || activeMeeting.deal_id,
+```
+
+### 3. useAgendaData.ts - useAddMeetingAttendee (linhas 1049-1059)
+
+Herdar também o `deal_id` do parent quando não fornecido:
+
+```typescript
+// Se for sócio, herdar booked_by e deal_id do parent
 let inheritedBookedBy: string | null = null;
+let inheritedDealId: string | null = null;
 if (parentAttendeeId) {
   const { data: parentData } = await supabase
     .from('meeting_slot_attendees')
-    .select('booked_by')
+    .select('booked_by, deal_id')  // ✅ Incluir deal_id
     .eq('id', parentAttendeeId)
-    .single();
+    .maybeSingle();
   
   inheritedBookedBy = parentData?.booked_by || null;
+  inheritedDealId = parentData?.deal_id || null;
 }
 
 const { error } = await supabase.from('meeting_slot_attendees').insert({
-  meeting_slot_id: meetingSlotId,
-  deal_id: dealId || null,
-  booked_by: inheritedBookedBy,
   ...
+  deal_id: dealId || inheritedDealId,  // ✅ Usar deal herdado como fallback
+  booked_by: inheritedBookedBy,
 });
 ```
 
@@ -82,37 +82,41 @@ const { error } = await supabase.from('meeting_slot_attendees').insert({
 ## Fluxo Corrigido
 
 ```text
-Adicionar Sócio de Rafaela (Gilmar)
+Adicionar João (Sócio de Rafaela)
 │
 ├── parentAttendeeId = ID da Rafaela
-├── Buscar booked_by de Rafaela → Caroline Souza (UUID)
+├── selectedParticipant.dealId = Deal da Rafaela ✓
 │
-└── Inserir Gilmar com:
-    └── booked_by = UUID da Caroline Souza ✓
+└── Inserir João com:
+    ├── deal_id = Deal da Rafaela ✓
+    └── booked_by = SDR da Rafaela (Caroline) ✓
 ```
 
 ```text
-Exibir "SDR que Agendou Gilmar" no Drawer
+Buscar Notas de João no Drawer
 │
-├── Gilmar.booked_by_profile → (preenchido agora)
-├── FALLBACK: parentAttendee.booked_by_profile → Caroline Souza ✓
-└── FALLBACK: activeMeeting.booked_by_profile → (não usado mais)
+├── João.deal_id = Deal da Rafaela ✓
+├── Busca notas por deal_id da Rafaela
+│
+└── Resultado: Nenhuma nota (deal da Rafaela é novo)
+    └── OU notas antigas da Rafaela (se existirem)
 ```
 
 ---
 
 ## Resultado Esperado
 
-| Participante | Antes | Depois |
-|--------------|-------|--------|
-| Rafaela Bravim | Caroline Souza | Caroline Souza ✓ |
-| Gilmar Melo (Sócio de Rafaela) | Antony Elias ❌ | Caroline Souza ✓ |
-| João Victor Costa | Antony Elias | Antony Elias ✓ |
+| Participante | deal_id Antes | deal_id Depois | Notas Exibidas |
+|--------------|---------------|----------------|----------------|
+| Rafaela Bravim | Deal Rafaela | Deal Rafaela | Rafaela ✓ |
+| João (Sócio) | null → Antony | Deal Rafaela | Nenhuma ou Rafaela ✓ |
+| Antony Elias | Deal Antony | Deal Antony | Antony ✓ |
 
 ---
 
 ## Impacto
 
-- **Sócios já existentes sem booked_by**: Serão corrigidos pela nova lógica de fallback no drawer
-- **Novos sócios**: Já terão o booked_by corretamente preenchido na inserção
-- **Notas**: As notas continuarão agregadas por deal_id, sem impacto
+- **Sócios já existentes sem deal_id**: Corrigidos pelo fallback no drawer (parentAttendee.deal_id)
+- **Novos sócios**: Já serão criados com o deal_id correto
+- **Notas existentes**: Continuam associadas aos deals corretos
+- **KPIs/Métricas**: Sem impacto (sócios não afetam contagem por deal)
