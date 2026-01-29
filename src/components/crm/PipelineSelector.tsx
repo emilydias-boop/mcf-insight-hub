@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -13,6 +14,7 @@ import { Loader2 } from 'lucide-react';
 interface PipelineSelectorProps {
   selectedPipelineId: string | null;
   onSelectPipeline: (id: string | null) => void;
+  allowedGroupIds?: string[]; // Grupos permitidos pela BU (vazio = sem filtro)
 }
 
 // Hook para buscar grupos principais (funis) - com deduplicação por nome
@@ -50,8 +52,16 @@ export const useCRMPipelines = () => {
   });
 };
 
-export const PipelineSelector = ({ selectedPipelineId, onSelectPipeline }: PipelineSelectorProps) => {
+export const PipelineSelector = ({ selectedPipelineId, onSelectPipeline, allowedGroupIds }: PipelineSelectorProps) => {
   const { data: pipelines, isLoading } = useCRMPipelines();
+  
+  // Filtrar pipelines se houver restrição de BU
+  const filteredPipelines = useMemo(() => {
+    if (!allowedGroupIds || allowedGroupIds.length === 0) {
+      return pipelines; // Sem filtro = admin vê tudo
+    }
+    return pipelines?.filter(p => allowedGroupIds.includes(p.id));
+  }, [pipelines, allowedGroupIds]);
   
   if (isLoading) {
     return (
@@ -76,8 +86,11 @@ export const PipelineSelector = ({ selectedPipelineId, onSelectPipeline }: Pipel
           <SelectValue placeholder="Selecione um funil" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Todos os funis</SelectItem>
-          {pipelines?.map(pipeline => (
+          {/* Só mostrar "Todos" se não houver filtro de BU */}
+          {(!allowedGroupIds || allowedGroupIds.length === 0) && (
+            <SelectItem value="all">Todos os funis</SelectItem>
+          )}
+          {filteredPipelines?.map(pipeline => (
             <SelectItem key={pipeline.id} value={pipeline.id}>
               {pipeline.display_name || pipeline.name}
             </SelectItem>

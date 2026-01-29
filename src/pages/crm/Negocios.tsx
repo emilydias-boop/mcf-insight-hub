@@ -25,6 +25,7 @@ import {
   SDR_AUTHORIZED_ORIGIN_ID,
   BU_PIPELINE_MAP,
   BU_DEFAULT_ORIGIN_MAP,
+  BU_GROUP_MAP,
 } from '@/components/auth/NegociosAccessGuard';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 import { useBulkA010Check, detectSalesChannel, SalesChannel } from '@/hooks/useBulkA010Check';
@@ -73,6 +74,12 @@ const Negocios = () => {
   const buAuthorizedOrigins = useMemo(() => {
     if (!activeBU) return []; // Sem BU = vê tudo (admin)
     return BU_PIPELINE_MAP[activeBU] || [];
+  }, [activeBU]);
+  
+  // Grupos permitidos no dropdown de funis baseados na BU ativa
+  const buAllowedGroups = useMemo(() => {
+    if (!activeBU) return []; // Sem BU = vê tudo (admin)
+    return BU_GROUP_MAP[activeBU] || [];
   }, [activeBU]);
   
   // Ref para garantir que só define o default UMA VEZ
@@ -418,6 +425,7 @@ const Negocios = () => {
             onSelectOrigin={setSelectedOriginId}
             onSelectPipeline={handlePipelineChange}
             allowedOriginIds={buAuthorizedOrigins}
+            allowedGroupIds={buAllowedGroups}
           />
         </div>
       )}
