@@ -1,105 +1,103 @@
 
 
-# Plano de Correção: Stages e Webhook do CRM por BU
+# Plano de Correção: Stages do Leilão não aparecem no Kanban
 
-## Problemas Identificados
+## Problema Identificado
 
-### 1. Stages não aparecem no CRM Consórcio
-O componente `Negocios.tsx` usa `useMyBU()` (BU do perfil do usuário) em vez de `useActiveBU()` (BU da rota).  
-Quando você acessa `/consorcio/crm/negocios`, o sistema ainda busca pipelines baseados na BU do seu **perfil** e não no contexto da **rota**.
+As stages do CRM do Leilão não aparecem porque o sistema de **permissões de stages** não consegue reconhecê-las:
 
-### 2. Webhook Consórcio (esclarecimento)
-O webhook `webhook-consorcio` já existe e está funcionando, mas ele insere dados na tabela `consortium_cards` (gestão de cartas de consórcio), **não** no CRM de deals/Kanban.
+### Fluxo do problema:
 
-Para receber leads no CRM do Consórcio (Kanban), deve-se usar o sistema `webhook-lead-receiver` que já existe, configurando um endpoint via interface do CRM.
+1. O `DealKanbanBoard` filtra stages por permissão: `activeStages.filter(s => canViewStage(s.id))`
+
+2. A função `canViewStage` no hook `useStagePermissions` tenta encontrar permissões por:
+   - **UUID direto** → Não encontra (tabela `stage_permissions` usa IDs como `novo_lead`, `lead_qualificado`)
+   - **Fallback por nome** → Busca no `stagesMap` que vem de `crm_stages`
+
+3. **As stages do Leilão estão em `local_pipeline_stages`**, não em `crm_stages`, então o `stagesMap` não as conhece
+
+4. Resultado: `canViewStage` retorna `false` para todas as stages do Leilão → **nenhuma coluna aparece**
+
+## Solução
+
+Atualizar o hook `useStagePermissions` para incluir stages de `local_pipeline_stages` no mapeamento UUID → nome.
 
 ---
 
-## Correção Técnica
+## Alterações Necessárias
 
-### Arquivo: `src/pages/crm/Negocios.tsx`
+### Arquivo: `src/hooks/useStagePermissions.ts`
 
-**Problema**: Linhas 64 e 72-75 usam `useMyBU()` que busca a BU do perfil do usuário.
+Atualizar a query `stages-map` para incluir dados de ambas as tabelas:
 
-**Solução**: Substituir por `useActiveBU()` que respeita o contexto da rota.
-
+**Antes (linha 126-139):**
 ```typescript
-// ANTES (linha 64):
-const { data: myBU, isLoading: isLoadingBU } = useMyBU();
-
-// DEPOIS:
-import { useActiveBU } from '@/hooks/useActiveBU';
-// ...
-const activeBU = useActiveBU();
-const isLoadingBU = false; // useActiveBU é síncrono
+const { data: stagesMap = {}, isLoading: stagesLoading } = useQuery({
+  queryKey: ['stages-map'],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('crm_stages')
+      .select('id, stage_name');
+    
+    if (error) throw error;
+    
+    const map: Record<string, string> = {};
+    data?.forEach(s => { map[s.id] = s.stage_name; });
+    return map;
+  },
+});
 ```
 
-**E atualizar as referências**:
+**Depois:**
 ```typescript
-// ANTES (linha 72-75):
-const buAuthorizedOrigins = useMemo(() => {
-  if (!myBU) return [];
-  return BU_PIPELINE_MAP[myBU] || [];
-}, [myBU]);
-
-// DEPOIS:
-const buAuthorizedOrigins = useMemo(() => {
-  if (!activeBU) return [];
-  return BU_PIPELINE_MAP[activeBU] || [];
-}, [activeBU]);
-
-// ANTES (linha 132):
-if (myBU && BU_DEFAULT_ORIGIN_MAP[myBU]) {
-  setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[myBU]);
-
-// DEPOIS:
-if (activeBU && BU_DEFAULT_ORIGIN_MAP[activeBU]) {
-  setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[activeBU]);
+const { data: stagesMap = {}, isLoading: stagesLoading } = useQuery({
+  queryKey: ['stages-map'],
+  queryFn: async () => {
+    // Buscar de ambas as tabelas
+    const [crmRes, localRes] = await Promise.all([
+      supabase.from('crm_stages').select('id, stage_name'),
+      supabase.from('local_pipeline_stages').select('id, name'),
+    ]);
+    
+    const map: Record<string, string> = {};
+    
+    // Mapear crm_stages
+    crmRes.data?.forEach(s => { 
+      map[s.id] = s.stage_name; 
+    });
+    
+    // Mapear local_pipeline_stages (name → stage_name)
+    localRes.data?.forEach(s => { 
+      map[s.id] = s.name; 
+    });
+    
+    return map;
+  },
+});
 ```
 
 ---
 
-## Verificação de Dados
+## Por que isso resolve?
 
-Confirmei que as stages do Consórcio já existem no banco:
+1. O `stagesMap` agora incluirá os UUIDs das stages do Leilão:
+   - `ef930b3b-abc1-41d9-8d41-dcace0793cb7` → `Novo Lead`
+   - `a973963d-669e-452f-9e5a-f4cb4ddf9858` → `Lead Qualificado`
+   - `bef6f4db-a2ee-444f-90f7-0e03d0246f34` → `Sem Interesse`
+   - (etc.)
 
-| origin_id | name | stage_order |
-|-----------|------|-------------|
-| `4e2b810a-...` | NOVO LEAD GRATUITO | 1 |
-| `4e2b810a-...` | NOVO LEAD | 2 |
-| `4e2b810a-...` | LEAD QUALIFICADO | 3 |
-| `4e2b810a-...` | REUNIÃO 1 AGENDADA | 4 |
-| ... | ... | ... |
+2. O fallback da função `findPermission` vai funcionar:
+   - UUID `ef930b3b-...` → nome `Novo Lead` → normalizado `novo_lead`
+   - Encontra permissão em `stage_permissions` com `stage_id = 'novo_lead'`
+   - Retorna `can_view: true`
 
-A origem mapeada para `consorcio` é `4e2b810a-6782-4ce9-9c0d-10d04c018636` e já tem 9 stages configuradas.
+3. As stages aparecem no Kanban!
 
 ---
 
-## Resumo das Alterações
+## Resumo
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/crm/Negocios.tsx` | Substituir `useMyBU()` por `useActiveBU()` |
-
----
-
-## Resultado Esperado
-
-Após a correção:
-- `/consorcio/crm/negocios` → Mostrará as stages do Consórcio
-- `/leilao/crm/negocios` → Mostrará as stages do Leilão
-- `/crm/negocios` → Continuará usando a BU do perfil do usuário
-
----
-
-## Webhook para CRM (Orientação)
-
-Se desejar receber leads diretamente no Kanban do Consórcio:
-
-1. Acessar o CRM Consórcio → Configurações da pipeline
-2. Ir em **Integrações → Webhooks de Entrada**
-3. Criar novo webhook (ex: slug `consorcio-leads`)
-4. Endpoint gerado: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver?slug=consorcio-leads`
-
-O webhook `webhook-consorcio` existente continuará servindo para a gestão de **cartas de consórcio** (tabela `consortium_cards`), que é um módulo diferente.
+| `src/hooks/useStagePermissions.ts` | Atualizar query `stages-map` para incluir `local_pipeline_stages` |
 
