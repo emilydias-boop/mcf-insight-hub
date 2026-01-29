@@ -10,10 +10,13 @@ import { FileSpreadsheet, DollarSign, ShoppingCart, TrendingUp, Loader2, Search 
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
-import { useTransactionsByBU, } from '@/hooks/useTransactionsByBU';
+import { useTransactionsByBU } from '@/hooks/useTransactionsByBU';
 import { formatCurrency } from '@/lib/formatters';
 import * as XLSX from 'xlsx';
 import { BusinessUnit } from '@/hooks/useMyBU';
+import { useGestorClosers } from '@/hooks/useGestorClosers';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SalesReportPanelProps {
   bu: BusinessUnit;
@@ -34,6 +37,11 @@ const detectSalesChannel = (productName: string | null): 'A010' | 'BIO' | 'LIVE'
   return 'LIVE';
 };
 
+// Normaliza telefone para comparação
+const normalizePhone = (phone: string | null | undefined): string => {
+  return (phone || '').replace(/\D/g, '');
+};
+
 export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -41,6 +49,9 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   });
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
+  const [selectedSource, setSelectedSource] = useState<string>('all');
+  const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
+  const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   
   const filters = useMemo(() => ({
     startDate: dateRange?.from,
@@ -49,15 +60,120 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
   
   const { data: transactions = [], isLoading } = useTransactionsByBU(bu, filters);
   
+  // Closers R1
+  const { data: closers = [] } = useGestorClosers('r1');
+  
+  // Interface para origins
+  interface OriginOption {
+    id: string;
+    name: string;
+    display_name: string | null;
+  }
+
+  // Pipelines (origins)
+  const { data: origins = [] } = useQuery<OriginOption[]>({
+    queryKey: ['crm-origins-simple'],
+    queryFn: async (): Promise<OriginOption[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (supabase as any)
+        .from('crm_origins')
+        .select('id, name, display_name')
+        .eq('is_active', true);
+      if (result.error) throw result.error;
+      const typedData = result.data as OriginOption[];
+      return (typedData || []).sort((a, b) => 
+        (a.display_name || a.name).localeCompare(b.display_name || b.name)
+      );
+    },
+  });
+  
+  // Interface para attendees
+  interface AttendeeMatch {
+    id: string;
+    attendee_phone: string | null;
+    deal_id: string | null;
+    meeting_slots: { closer_id: string | null } | null;
+    crm_deals: { crm_contacts: { email: string | null; phone: string | null } | null } | null;
+  }
+
+  // Attendees para matching com closers
+  const { data: attendees = [] } = useQuery<AttendeeMatch[]>({
+    queryKey: ['attendees-for-sales-matching', dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    queryFn: async (): Promise<AttendeeMatch[]> => {
+      if (!dateRange?.from) return [];
+      
+      const startDate = dateRange.from.toISOString();
+      const endDate = dateRange.to 
+        ? new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)).toISOString()
+        : undefined;
+      
+      let query = supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id, attendee_phone, deal_id,
+          meeting_slots!inner(closer_id),
+          crm_deals!deal_id(crm_contacts!contact_id(email, phone))
+        `)
+        .eq('status', 'contract_paid')
+        .gte('contract_paid_at', startDate);
+      
+      if (endDate) {
+        query = query.lte('contract_paid_at', endDate);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as unknown as AttendeeMatch[];
+    },
+    enabled: !!dateRange?.from,
+  });
+  
   // Dados filtrados
   const filteredTransactions = useMemo(() => {
     let filtered = [...transactions];
+    
+    // Filtro por fonte (Hubla/Make)
+    if (selectedSource !== 'all') {
+      filtered = filtered.filter(t => t.source === selectedSource);
+    }
+    
+    // Filtro por pipeline (origin/categoria)
+    if (selectedOriginId !== 'all') {
+      filtered = filtered.filter(t => t.product_category === selectedOriginId);
+    }
     
     // Filtro por canal
     if (selectedChannel !== 'all') {
       filtered = filtered.filter(t => {
         const channel = detectSalesChannel(t.product_name);
         return channel === selectedChannel.toUpperCase();
+      });
+    }
+    
+    // Filtro por closer (via matching com attendees)
+    if (selectedCloserId !== 'all') {
+      const closerAttendees = attendees.filter((a: any) => 
+        a.meeting_slots?.closer_id === selectedCloserId
+      );
+      
+      const closerEmails = new Set(
+        closerAttendees
+          .map((a: any) => a.crm_deals?.crm_contacts?.email?.toLowerCase())
+          .filter(Boolean)
+      );
+      
+      const closerPhones = new Set(
+        closerAttendees
+          .map((a: any) => normalizePhone(a.crm_deals?.crm_contacts?.phone))
+          .filter((p: string) => p.length >= 8)
+      );
+      
+      filtered = filtered.filter(t => {
+        const txEmail = (t.customer_email || '').toLowerCase();
+        const txPhone = normalizePhone(t.customer_phone);
+        
+        return closerEmails.has(txEmail) || 
+               (txPhone.length >= 8 && closerPhones.has(txPhone));
       });
     }
     
@@ -77,7 +193,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     }
     
     return filtered;
-  }, [transactions, selectedChannel, searchTerm]);
+  }, [transactions, selectedChannel, selectedSource, selectedOriginId, selectedCloserId, searchTerm, attendees]);
   
   // Calculate stats from filtered data
   const stats = useMemo(() => {
@@ -120,7 +236,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[180px]">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Período</label>
               <DatePickerCustom
                 mode="range"
@@ -130,7 +246,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
               />
             </div>
             
-            <div className="w-[250px]">
+            <div className="w-[200px]">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -143,7 +259,56 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
               </div>
             </div>
             
-            <div className="w-[150px]">
+            <div className="w-[120px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Fonte</label>
+              <Select value={selectedSource} onValueChange={setSelectedSource}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Fonte" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="hubla">Hubla</SelectItem>
+                  <SelectItem value="make">Make</SelectItem>
+                  <SelectItem value="manual">Manual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="w-[160px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Closer</label>
+              <Select value={selectedCloserId} onValueChange={setSelectedCloserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Closer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {closers.map(closer => (
+                    <SelectItem key={closer.id} value={closer.id}>
+                      {closer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="w-[160px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Pipeline</label>
+              <Select value={selectedOriginId} onValueChange={setSelectedOriginId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pipeline" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {origins.map(origin => (
+                    <SelectItem key={origin.id} value={origin.id}>
+                      {origin.display_name || origin.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="w-[120px]">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Canal</label>
               <Select value={selectedChannel} onValueChange={setSelectedChannel}>
                 <SelectTrigger>
@@ -160,7 +325,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
             
             <Button onClick={handleExportExcel} disabled={filteredTransactions.length === 0}>
               <FileSpreadsheet className="h-4 w-4 mr-2" />
-              Exportar Excel
+              Excel
             </Button>
           </div>
         </CardContent>
