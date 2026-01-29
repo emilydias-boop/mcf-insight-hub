@@ -9,19 +9,24 @@ interface CloserInfo {
   color: string | null;
 }
 
-export const useGestorClosers = () => {
+export const useGestorClosers = (meetingType?: 'r1' | 'r2') => {
   const { role, user } = useAuth();
   
   return useQuery({
-    queryKey: ['gestor-closers', user?.id, role],
+    queryKey: ['gestor-closers', user?.id, role, meetingType],
     queryFn: async (): Promise<CloserInfo[]> => {
       // Admin e manager veem todos os closers
       if (role === 'admin' || role === 'manager') {
-        const { data, error } = await supabase
+        let query = supabase
           .from('closers')
           .select('id, name, email, color')
-          .eq('is_active', true)
-          .order('name');
+          .eq('is_active', true);
+        
+        if (meetingType) {
+          query = query.eq('meeting_type', meetingType);
+        }
+        
+        const { data, error } = await query.order('name');
         
         if (error) throw error;
         return data || [];
@@ -54,12 +59,17 @@ export const useGestorClosers = () => {
         }
         
         // Buscar closers que correspondem a esses employees
-        const { data: closers, error: closerError } = await supabase
+        let closerQuery = supabase
           .from('closers')
           .select('id, name, email, color, employee_id')
           .eq('is_active', true)
-          .in('employee_id', employeeIds)
-          .order('name');
+          .in('employee_id', employeeIds);
+        
+        if (meetingType) {
+          closerQuery = closerQuery.eq('meeting_type', meetingType);
+        }
+        
+        const { data: closers, error: closerError } = await closerQuery.order('name');
         
         if (closerError) throw closerError;
         return closers || [];

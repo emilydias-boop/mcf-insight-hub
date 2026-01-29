@@ -34,9 +34,10 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   });
   const [selectedCloserId, setSelectedCloserId] = useState<string>('all');
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
+  const [selectedChannel, setSelectedChannel] = useState<string>('all');
   
   // Fetch closers available for this user
-  const { data: closers = [], isLoading: loadingClosers } = useGestorClosers();
+  const { data: closers = [], isLoading: loadingClosers } = useGestorClosers('r1');
   
   // Fetch origins for filter (filtered by BU if applicable)
   interface OriginOption {
@@ -77,9 +78,12 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   // Fetch report data
   const { data: reportData = [], isLoading: loadingReport } = useContractReport(filters, allowedCloserIds);
   
-  // Use report data directly - no additional BU filtering needed
-  // All contract_paid attendees are relevant for the report
-  const filteredReportData = reportData;
+  // Filter by sales channel
+  const filteredReportData = useMemo(() => {
+    return reportData.filter(row => 
+      selectedChannel === 'all' || row.salesChannel === selectedChannel
+    );
+  }, [reportData, selectedChannel]);
   
   // Calculate stats
   const stats = useMemo(() => {
@@ -102,6 +106,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       'SDR': row.sdrName,
       'Email SDR': row.sdrEmail,
       'Pipeline': row.originName,
+      'Canal': row.salesChannel.toUpperCase(),
       'Estágio Atual': row.currentStage,
       'Profissão': row.customFields?.profissao || '',
       'Estado': row.customFields?.estado || '',
@@ -170,6 +175,20 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
               </Select>
             </div>
             
+            <div className="w-[150px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Canal</label>
+              <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="a010">A010</SelectItem>
+                  <SelectItem value="bio">BIO</SelectItem>
+                  <SelectItem value="live">LIVE</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button onClick={handleExportExcel} disabled={filteredReportData.length === 0}>
               <FileSpreadsheet className="h-4 w-4 mr-2" />
               Exportar Excel
@@ -251,6 +270,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                     <TableHead>Telefone</TableHead>
                     <TableHead>SDR</TableHead>
                     <TableHead>Pipeline</TableHead>
+                    <TableHead>Canal</TableHead>
                     <TableHead>Estágio</TableHead>
                     <TableHead>Profissão</TableHead>
                     <TableHead>Estado</TableHead>
@@ -271,6 +291,20 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                       <TableCell>{row.sdrName}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{row.originName}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={row.salesChannel === 'a010' ? 'default' : 'secondary'}
+                          className={
+                            row.salesChannel === 'a010' 
+                              ? 'bg-primary text-primary-foreground' 
+                              : row.salesChannel === 'bio'
+                                ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30'
+                                : ''
+                          }
+                        >
+                          {row.salesChannel.toUpperCase()}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{row.currentStage}</Badge>
