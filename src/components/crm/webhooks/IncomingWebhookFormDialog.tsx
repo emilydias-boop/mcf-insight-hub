@@ -80,20 +80,23 @@ export const IncomingWebhookFormDialog = ({
   const isEditing = !!endpointId;
   const endpoint = endpoints?.find((e) => e.id === endpointId);
 
-  // Fetch stages for this origin
+  // Fetch stages for this origin from local_pipeline_stages (correct FK target)
   const { data: stages } = useQuery({
-    queryKey: ['crm-stages', originId],
+    queryKey: ['local-pipeline-stages', originId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('crm_stages')
-        .select('id, stage_name, stage_order')
+        .from('local_pipeline_stages')
+        .select('id, name, stage_order, is_active')
         .eq('origin_id', originId)
+        .eq('is_active', true)
         .order('stage_order');
       if (error) throw error;
       return data;
     },
     enabled: !!originId,
   });
+
+  const hasNoStages = stages && stages.length === 0;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -315,14 +318,20 @@ export const IncomingWebhookFormDialog = ({
                     <SelectContent>
                       {stages?.map((stage) => (
                         <SelectItem key={stage.id} value={stage.id}>
-                          {stage.stage_name}
+                          {stage.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormDescription>
-                    Etapa onde os leads entrarão no funil
-                  </FormDescription>
+                  {hasNoStages ? (
+                    <FormDescription className="text-destructive">
+                      Esta pipeline não possui etapas ativas. Crie uma etapa antes de configurar o webhook.
+                    </FormDescription>
+                  ) : (
+                    <FormDescription>
+                      Etapa onde os leads entrarão no funil
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -430,7 +439,7 @@ export const IncomingWebhookFormDialog = ({
               </Button>
               <Button 
                 type="submit" 
-                disabled={createMutation.isPending || updateMutation.isPending}
+                disabled={createMutation.isPending || updateMutation.isPending || hasNoStages}
               >
                 {createMutation.isPending || updateMutation.isPending
                   ? 'Salvando...'
