@@ -1,84 +1,149 @@
 
-# Correção do data_source para Webhook Lead Receiver
 
-## Problema Identificado
+# Plano: Detectar Leads LIVE pelas Tags do Clint
 
-O webhook `webhook-lead-receiver` não está salvando leads porque utiliza `data_source: 'webhook-${slug}'` (ex: `'webhook-lead-form-50k'`), mas a tabela `crm_deals` possui uma constraint que só aceita os valores:
-- `csv`
-- `webhook`
-- `manual`
-- `bubble`
+## Contexto
 
-### Impacto
-Todos os leads recebidos via qualquer slug do `webhook-lead-receiver` estão falhando com o erro:
-```
-new row for relation "crm_deals" violates check constraint "crm_deals_data_source_check"
+O webhook do Clint envia a tag `Lead-Live` através do campo `contact_tag`. O sistema já processa corretamente essas tags e as salva nos deals via `clint-webhook-handler`. No entanto, o relatório de vendas (`SalesReportPanel`) detecta o canal de vendas **apenas pelo nome do produto**, ignorando as tags.
+
+## Dados Confirmados
+
+Os deals já possuem a tag `Lead-Live` no array `tags`:
+```text
+tags: [Lead-Live, SDR - VC, A010 - Construa para Vender, ...]
 ```
 
----
-
-## Análise dos Webhooks por BU
-
-| Webhook | Tabela alvo | data_source | Status |
-|---------|-------------|-------------|--------|
-| `webhook-lead-receiver` | `crm_deals` | `webhook-${slug}` ❌ | **Precisa corrigir** |
-| `webhook-live-leads` | `crm_deals` | `'webhook'` ✅ | OK |
-| `webhook-consorcio` | `consortium_cards` | N/A | OK (tabela diferente) |
-| `webhook-leilao` | `auctions` | N/A | OK (tabela diferente) |
-| `webhook-credito` | `credit_deals` | N/A | OK (tabela diferente) |
-| `webhook-projetos` | `projects` | N/A | OK (tabela diferente) |
-
-Apenas o `webhook-lead-receiver` precisa de correção.
-
----
-
-## Alterações Necessárias
-
-### Arquivo: `supabase/functions/webhook-lead-receiver/index.ts`
-
-**Linha 153** - Criar contato:
+O `clint-webhook-handler` já extrai as tags do `contact_tag`:
 ```typescript
-// ANTES:
-data_source: `webhook-${slug}`
-
-// DEPOIS:
-data_source: 'webhook'
+// Linha 380-382 do clint-webhook-handler/index.ts
+if (data.contact_tag) {
+  return parseClintTags(data.contact_tag);
+}
 ```
 
-**Linha 243** - Criar deal:
+---
+
+## Solução Proposta
+
+### Modificação 1: Atualizar função RPC para incluir tags
+
+Criar uma nova versão da função `get_hubla_transactions_by_bu` que retorna também as tags do deal/contato associado à transação.
+
+**Nova coluna retornada:**
+- `deal_tags` - Tags do deal associado (via email/telefone)
+
+### Modificação 2: Atualizar detecção de canal no relatório
+
+Modificar a função `detectSalesChannel` em `SalesReportPanel.tsx` para considerar as tags:
+
+**Antes:**
 ```typescript
-// ANTES:
-data_source: `webhook-${slug}`,
+const detectSalesChannel = (productName: string | null): 'A010' | 'BIO' | 'LIVE' => {
+  const name = (productName || '').toLowerCase();
+  if (name.includes('a010')) return 'A010';
+  if (name.includes('bio') || name.includes('instagram')) return 'BIO';
+  return 'LIVE';
+};
+```
 
-// DEPOIS:
-data_source: 'webhook',
+**Depois:**
+```typescript
+const detectSalesChannel = (
+  productName: string | null, 
+  dealTags: string[] = []
+): 'A010' | 'BIO' | 'LIVE' => {
+  const name = (productName || '').toLowerCase();
+  const tagsStr = dealTags.join(' ').toLowerCase();
+  
+  // 1. Verificar tags primeiro (mais preciso)
+  if (tagsStr.includes('lead-live') || tagsStr.includes('live-')) {
+    return 'LIVE';
+  }
+  if (tagsStr.includes('lead-instagram') || tagsStr.includes('bio')) {
+    return 'BIO';
+  }
+  
+  // 2. Fallback para nome do produto
+  if (name.includes('a010')) return 'A010';
+  if (name.includes('bio') || name.includes('instagram')) return 'BIO';
+  
+  return 'LIVE';
+};
 ```
 
 ---
 
-## Rastreabilidade Mantida
-
-A informação específica do slug continua disponível em:
-- `custom_fields.source` → slug do endpoint
-- `custom_fields.webhook_endpoint` → nome do endpoint
-- `custom_fields.lead_channel` → slug em uppercase
-
-Não há perda de informação para fins de analytics ou debug.
-
----
-
-## Resumo
+## Arquivos a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `supabase/functions/webhook-lead-receiver/index.ts` | Alterar `data_source` de `'webhook-${slug}'` para `'webhook'` em 2 locais (linhas 153 e 243) |
+| Nova migration SQL | Atualizar `get_hubla_transactions_by_bu` para incluir `deal_tags` |
+| `src/hooks/useTransactionsByBU.ts` | Adicionar campo `deal_tags` no tipo de retorno |
+| `src/components/relatorios/SalesReportPanel.tsx` | Atualizar `detectSalesChannel()` para usar tags |
+| `src/hooks/useAllHublaTransactions.ts` | Adicionar `deal_tags` na interface `HublaTransaction` |
+
+---
+
+## Detalhes Técnicos
+
+### Nova RPC (migration)
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_hubla_transactions_by_bu(...)
+RETURNS TABLE(
+  -- campos existentes...
+  id uuid,
+  product_name text,
+  customer_email text,
+  -- ...
+  -- NOVO campo:
+  deal_tags text[]
+)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.product_name,
+    -- ...
+    -- JOIN para buscar tags do deal
+    COALESCE(d.tags, ARRAY[]::text[]) as deal_tags
+  FROM hubla_transactions ht
+  LEFT JOIN crm_contacts c ON LOWER(c.email) = LOWER(ht.customer_email)
+  LEFT JOIN crm_deals d ON d.contact_id = c.id
+  WHERE ...
+END;
+$$
+```
+
+### Atualização do tipo TypeScript
+
+```typescript
+export interface HublaTransaction {
+  // ...campos existentes
+  deal_tags?: string[];
+}
+```
+
+### Lógica de detecção atualizada
+
+```typescript
+// Em SalesReportPanel.tsx
+const channel = detectSalesChannel(row.product_name, row.deal_tags || []);
+```
 
 ---
 
 ## Resultado Esperado
 
-Após a correção:
-1. ✅ Leads do `lead-form-50k` aparecerão no Kanban
-2. ✅ Leads de qualquer outro slug configurado funcionarão
-3. ✅ Todas as BUs (Consórcio, Leilão, Crédito, Projetos) poderão receber leads via `webhook-lead-receiver`
-4. ✅ A rastreabilidade da origem permanece via `custom_fields`
+1. ✅ Transações cujo deal tem tag `Lead-Live` serão identificadas como canal LIVE
+2. ✅ Tags `Lead-instagram`, `BIO` serão identificadas como canal BIO  
+3. ✅ Fallback para o nome do produto quando não há tags
+4. ✅ Compatibilidade retroativa mantida
+
+---
+
+## Alternativa Simplificada
+
+Se preferir não modificar a RPC, podemos fazer um JOIN no frontend usando React Query para enriquecer os dados das transações com as tags dos deals/contatos. Isso seria menos performático mas evitaria migration de banco.
+
