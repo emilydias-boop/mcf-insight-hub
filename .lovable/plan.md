@@ -1,161 +1,150 @@
 
-# Plano: Adicionar Fallback para Etapas de Pipelines Legadas
+# Plano: Criar BU de Leilão no CRM
 
-## Problema Identificado
+## Objetivo
 
-O modal de criação de webhook busca etapas **apenas** em `local_pipeline_stages`, mas:
-
-| Tabela | Pipelines com etapas |
-|--------|---------------------|
-| `local_pipeline_stages` | **7** |
-| `crm_stages` (legada) | **558** |
-
-A maioria das pipelines (como as do Perpétuo X1) ainda usa a tabela legada `crm_stages`, por isso o dropdown de etapas aparece vazio.
+Criar uma nova Business Unit (BU) de Leilão no sistema CRM com:
+- Pipeline Kanban completo para gerenciar leads/deals de leilão
+- Integração pronta para receber leads via webhook
+- Controle de acesso baseado em BU (quem é do time de leilão só vê leads de leilão)
 
 ---
 
-## Causa Raiz
+## Estrutura a Ser Criada
 
-No arquivo `IncomingWebhookFormDialog.tsx`, a query busca apenas em `local_pipeline_stages`:
-
-```typescript
-const { data: stages } = useQuery({
-  queryKey: ['local-pipeline-stages', originId],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('local_pipeline_stages')  // ← Apenas aqui
-      .select('id, name, stage_order, is_active')
-      .eq('origin_id', originId)
-      .eq('is_active', true)
-      .order('stage_order');
-    return data;
-  },
-});
+```text
+📁 BU - LEILÃO (crm_groups)
+   └── 📋 Pipeline Leilão (crm_origins)
+       ├── Novo Lead
+       ├── Em Contato
+       ├── Lead Qualificado
+       ├── Proposta Enviada
+       ├── Análise Documental
+       ├── Contrato
+       └── Sem Interesse
 ```
 
 ---
 
-## Solução: Fallback para `crm_stages`
+## Etapas de Implementação
 
-### Lógica
+### Etapa 1: Criar Grupo e Origem no Banco (SQL)
 
-1. Buscar primeiro em `local_pipeline_stages`
-2. Se retornar vazio (ou null), buscar em `crm_stages`
-3. Normalizar os campos para ter mesma estrutura
-
-### Alteração no Arquivo
-
-**`src/components/crm/webhooks/IncomingWebhookFormDialog.tsx`**
-
-```typescript
-// Fetch stages - primeiro local_pipeline_stages, fallback para crm_stages
-const { data: stages } = useQuery({
-  queryKey: ['pipeline-stages-with-fallback', originId],
-  queryFn: async () => {
-    // Tentar primeiro em local_pipeline_stages
-    const { data: localStages, error: localError } = await supabase
-      .from('local_pipeline_stages')
-      .select('id, name, stage_order, is_active')
-      .eq('origin_id', originId)
-      .eq('is_active', true)
-      .order('stage_order');
-    
-    if (!localError && localStages && localStages.length > 0) {
-      return localStages;
-    }
-    
-    // Fallback para crm_stages (tabela legada)
-    const { data: crmStages, error: crmError } = await supabase
-      .from('crm_stages')
-      .select('id, stage_name, stage_order')
-      .eq('origin_id', originId)
-      .order('stage_order');
-    
-    if (crmError) throw crmError;
-    
-    // Normalizar campos para manter compatibilidade
-    return (crmStages || []).map(s => ({
-      id: s.id,
-      name: s.stage_name,  // stage_name → name
-      stage_order: s.stage_order,
-      is_active: true
-    }));
-  },
-  enabled: !!originId,
-});
-```
-
----
-
-## Importante: Constraint de FK
-
-Há um problema: `webhook_endpoints.stage_id` tem FK para `local_pipeline_stages`, **não** para `crm_stages`.
-
-Isso significa que:
-- Se usarmos IDs de `crm_stages`, o insert vai falhar com erro de FK
-- Pipelines legadas precisariam ter suas etapas migradas para `local_pipeline_stages`
-
-### Opções de Resolução
-
-**Opção A: Migração única (recomendada)**
-- Rodar script SQL que copia etapas de `crm_stages` para `local_pipeline_stages` onde não existem
-- Depois, o frontend funciona sem alteração
-
-**Opção B: Alterar FK no banco**
-- Remover/ajustar FK para permitir IDs de ambas as tabelas
-- Mais complexo e pode afetar integridade
-
-**Opção C: Criar webhook sem stage_id**
-- Permitir criar webhook com `stage_id = null`
-- Leads entrariam sem etapa definida (precisaria de lógica de fallback no processamento)
-
----
-
-## Plano de Ação Recomendado
-
-### Passo 1: Script de Migração (SQL)
+**Ação**: Executar script SQL para criar o grupo e a origem
 
 ```sql
--- Copiar etapas de crm_stages para local_pipeline_stages onde não existem
-INSERT INTO local_pipeline_stages (id, origin_id, name, stage_order, is_active, color)
+-- 1. Criar Grupo (funil principal)
+INSERT INTO crm_groups (id, clint_id, name, display_name, is_archived)
+VALUES (
+  gen_random_uuid(),
+  'local-group-bu-leilao',
+  'BU - LEILÃO',
+  'BU - LEILÃO',
+  false
+) RETURNING id;
+
+-- 2. Criar Origem (pipeline) vinculada ao grupo
+INSERT INTO crm_origins (id, clint_id, name, display_name, group_id, pipeline_type, is_archived)
+VALUES (
+  gen_random_uuid(),
+  'local-origin-leilao-pipeline',
+  'Pipeline Leilão',
+  'Pipeline Leilão',
+  (SELECT id FROM crm_groups WHERE clint_id = 'local-group-bu-leilao'),
+  'outros',
+  false
+) RETURNING id;
+
+-- 3. Criar etapas do Kanban
+INSERT INTO local_pipeline_stages (origin_id, name, stage_order, is_active, stage_type, color)
 SELECT 
-  cs.id,
-  cs.origin_id,
-  cs.stage_name as name,
-  cs.stage_order,
-  true as is_active,
-  null as color
-FROM crm_stages cs
-WHERE NOT EXISTS (
-  SELECT 1 FROM local_pipeline_stages lps 
-  WHERE lps.origin_id = cs.origin_id
-)
-ON CONFLICT (id) DO NOTHING;
+  (SELECT id FROM crm_origins WHERE clint_id = 'local-origin-leilao-pipeline'),
+  stage.name,
+  stage.stage_order,
+  true,
+  stage.stage_type,
+  stage.color
+FROM (VALUES
+  ('Novo Lead', 0, 'active', '#3B82F6'),
+  ('Em Contato', 1, 'active', '#8B5CF6'),
+  ('Lead Qualificado', 2, 'active', '#10B981'),
+  ('Proposta Enviada', 3, 'active', '#F59E0B'),
+  ('Análise Documental', 4, 'active', '#6366F1'),
+  ('Contrato Assinado', 5, 'won', '#22C55E'),
+  ('Sem Interesse', 6, 'lost', '#EF4444')
+) AS stage(name, stage_order, stage_type, color);
 ```
 
-Este script:
-- Copia todas as etapas de pipelines que só existem em `crm_stages`
-- Usa o mesmo ID para manter consistência
-- Não afeta pipelines que já têm etapas em `local_pipeline_stages`
+---
 
-### Passo 2: Verificar Resultado
+### Etapa 2: Atualizar Código Frontend
 
-Após rodar o script, a query do frontend (`local_pipeline_stages`) retornará etapas para todas as pipelines.
+#### 2.1 Adicionar "leilao" ao tipo BusinessUnit
+
+**Arquivo**: `src/hooks/useMyBU.ts`
+
+```typescript
+// Antes:
+export type BusinessUnit = 'incorporador' | 'consorcio' | 'credito' | 'projetos';
+
+// Depois:
+export type BusinessUnit = 'incorporador' | 'consorcio' | 'credito' | 'projetos' | 'leilao';
+
+// Adicionar opção no BU_OPTIONS:
+{ value: "leilao", label: "BU - Leilão" },
+```
+
+#### 2.2 Adicionar mapeamento de pipelines para a nova BU
+
+**Arquivo**: `src/components/auth/NegociosAccessGuard.tsx`
+
+```typescript
+// Adicionar no BU_PIPELINE_MAP:
+leilao: ['<ID_DA_ORIGEM_CRIADA>'], // Pipeline Leilão
+
+// Adicionar no BU_DEFAULT_ORIGIN_MAP:
+leilao: '<ID_DA_ORIGEM_CRIADA>',
+
+// Adicionar no BU_DEFAULT_GROUP_MAP:
+leilao: '<ID_DO_GRUPO_CRIADO>',
+```
+
+---
+
+### Etapa 3: Configurar Webhook de Entrada (Opcional)
+
+Se você quiser receber leads de uma fonte externa (formulário, plataforma de leilão):
+
+1. Acessar a Pipeline "Pipeline Leilão" no CRM
+2. Clicar em ⋮ → Configurações
+3. Ir em Integrações → Webhooks de Entrada
+4. Criar novo webhook com slug (ex: `leilao-leads`)
+5. O endpoint gerado será: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver?slug=leilao-leads`
+
+---
+
+## Resumo das Alterações
+
+| Componente | Ação |
+|------------|------|
+| Banco de Dados | Criar grupo, origem e etapas via SQL |
+| `useMyBU.ts` | Adicionar tipo `leilao` e opção no dropdown |
+| `NegociosAccessGuard.tsx` | Adicionar mapeamentos de ID para a BU |
+| CRM UI | Webhook de entrada pode ser criado via interface |
 
 ---
 
 ## Resultado Esperado
 
-- Todas as pipelines terão etapas disponíveis no dropdown
-- Webhooks poderão ser criados em qualquer pipeline
-- FK continua válida (todos os IDs existem em `local_pipeline_stages`)
+- Nova BU "Leilão" aparecerá no sidebar do CRM
+- Usuários com squad = "leilao" verão apenas a pipeline de leilão
+- Pipeline terá Kanban com 7 etapas prontas
+- Pronto para receber leads via webhook ou criação manual
 
 ---
 
-## Resumo
+## Observação sobre o Webhook Consórcio
 
-| Etapa | Ação |
-|-------|------|
-| 1 | Rodar script SQL de migração |
-| 2 | Testar criação de webhook nas pipelines que antes falhavam |
-| 3 | Confirmar que etapas aparecem no dropdown |
+O webhook `webhook-consorcio` que você mencionou insere dados na tabela `consortium_cards` (gestão de cartas de consórcio), **não** no CRM de deals. Se quiser integrar leads de leilão no CRM, usaremos o sistema de `webhook-lead-receiver` que já existe e cria deals no Kanban.
+
+Se precisar de um webhook específico para leilão similar ao consórcio (com tabela própria para contratos de leilão), isso seria um desenvolvimento adicional.
