@@ -72,6 +72,11 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   // Determine allowed closers (null = all for admin/manager)
   const allowedCloserIds = useMemo(() => {
     if (role === 'admin' || role === 'manager') return null;
+    // Coordenador sees only their squad's closers
+    if (role === 'coordenador') {
+      return closers.map(c => c.id);
+    }
+    // Other roles - pass the closers list (may be empty for restricted access)
     return closers.map(c => c.id);
   }, [role, closers]);
   
