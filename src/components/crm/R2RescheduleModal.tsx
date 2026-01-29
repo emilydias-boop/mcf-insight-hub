@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar, Clock, User, StickyNote, Link2, FileText, Tag } from 'lucide-react';
+import { Calendar, Clock, User, StickyNote, Link2, FileText, Tag, Loader2, ExternalLink } from 'lucide-react';
+import { useR2CloserAvailableSlots } from '@/hooks/useR2CloserAvailableSlots';
 import {
   Dialog,
   DialogContent,
@@ -43,12 +44,6 @@ interface R2RescheduleModalProps {
   thermometerOptions: R2ThermometerOption[];
 }
 
-// Fixed time slots for R2 (9:00 to 18:00, 30-min intervals)
-const TIME_SLOTS = Array.from({ length: 19 }, (_, i) => {
-  const hour = Math.floor(i / 2) + 9;
-  const minute = (i % 2) * 30;
-  return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-});
 
 export function R2RescheduleModal({ 
   meeting, 
@@ -76,6 +71,34 @@ export function R2RescheduleModal({
   const rescheduleMeeting = useRescheduleR2Meeting();
   const updateAttendee = useUpdateR2Attendee();
 
+  // Fetch available slots for selected closer + date
+  const { data: closerSlots, isLoading: loadingSlots } = useR2CloserAvailableSlots(
+    selectedCloser || undefined,
+    selectedDate
+  );
+
+  // All configured slots (for showing occupied ones too)
+  const allConfiguredSlots = useMemo(() => {
+    if (!closerSlots) return [];
+    return closerSlots.availableSlots;
+  }, [closerSlots]);
+
+  // Available time slots based on closer configuration
+  const availableTimeSlots = useMemo(() => {
+    if (!closerSlots) return [];
+    return closerSlots.availableSlots.filter(s => s.isAvailable);
+  }, [closerSlots]);
+
+  // Helper for placeholder text
+  const getTimePlaceholder = () => {
+    if (!selectedCloser) return 'Selecione closer';
+    if (!selectedDate) return 'Selecione data';
+    if (loadingSlots) return 'Carregando...';
+    if (allConfiguredSlots.length === 0) return 'Sem horários';
+    if (availableTimeSlots.length === 0) return 'Todos ocupados';
+    return 'Selecione';
+  };
+
   // Load existing attendee data when modal opens
   useEffect(() => {
     if (meeting && open) {
@@ -93,6 +116,11 @@ export function R2RescheduleModal({
       }
     }
   }, [meeting, open]);
+
+  // Reset time when closer or date changes
+  useEffect(() => {
+    setSelectedTime('');
+  }, [selectedCloser, selectedDate]);
 
   if (!meeting) return null;
 
@@ -238,22 +266,45 @@ export function R2RescheduleModal({
               </div>
 
               <div className="space-y-2">
-                <Label>Horário</Label>
-                <Select value={selectedTime} onValueChange={setSelectedTime}>
+                <Label className="flex items-center gap-1">
+                  Horário
+                  {loadingSlots && <Loader2 className="h-3 w-3 animate-spin" />}
+                </Label>
+                <Select 
+                  value={selectedTime} 
+                  onValueChange={setSelectedTime}
+                  disabled={!selectedCloser || !selectedDate || loadingSlots || allConfiguredSlots.length === 0}
+                >
                   <SelectTrigger>
                     <Clock className="h-4 w-4 mr-2" />
-                    <SelectValue />
+                    <SelectValue placeholder={getTimePlaceholder()} />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIME_SLOTS.map(time => (
-                      <SelectItem key={time} value={time}>
-                        {time}
+                    {allConfiguredSlots.map(slot => (
+                      <SelectItem 
+                        key={slot.time} 
+                        value={slot.time}
+                        disabled={!slot.isAvailable}
+                        className={cn(!slot.isAvailable && "opacity-50")}
+                      >
+                        <span className="flex items-center gap-2">
+                          {slot.time}
+                          {slot.link && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
+                          {!slot.isAvailable && <span className="text-xs text-destructive">(ocupado)</span>}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {/* Warning when no slots configured */}
+            {selectedCloser && selectedDate && !loadingSlots && allConfiguredSlots.length === 0 && (
+              <p className="text-xs text-amber-600">
+                Closer sem horários configurados para {format(selectedDate, 'EEEE', { locale: ptBR })}.
+              </p>
+            )}
 
             {/* Reschedule Note */}
             <div className="space-y-2">
