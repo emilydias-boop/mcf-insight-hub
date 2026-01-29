@@ -22,14 +22,23 @@ interface SalesReportPanelProps {
   bu: BusinessUnit;
 }
 
-// Detectar canal de vendas baseado no nome do produto
-const detectSalesChannel = (productName: string | null): 'A010' | 'BIO' | 'LIVE' => {
+// Detectar canal de vendas baseado nas tags do Clint ou nome do produto
+const detectSalesChannel = (productName: string | null, dealTags: string[] = []): 'A010' | 'BIO' | 'LIVE' => {
   const name = (productName || '').toLowerCase();
+  const tagsStr = dealTags.join(' ').toLowerCase();
   
+  // 1. Verificar tags primeiro (mais preciso - vem do Clint)
+  if (tagsStr.includes('lead-live') || tagsStr.includes('live-')) {
+    return 'LIVE';
+  }
+  if (tagsStr.includes('lead-instagram') || tagsStr.includes('bio')) {
+    return 'BIO';
+  }
+  
+  // 2. Fallback para nome do produto
   if (name.includes('a010')) {
     return 'A010';
   }
-  
   if (name.includes('bio') || name.includes('instagram')) {
     return 'BIO';
   }
@@ -145,7 +154,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     // Filtro por canal
     if (selectedChannel !== 'all') {
       filtered = filtered.filter(t => {
-        const channel = detectSalesChannel(t.product_name);
+        const channel = detectSalesChannel(t.product_name, t.deal_tags || []);
         return channel === selectedChannel.toUpperCase();
       });
     }
@@ -210,7 +219,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
     const exportData = filteredTransactions.map(row => ({
       'Data': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
       'Produto': row.product_name || '',
-      'Canal': detectSalesChannel(row.product_name),
+      'Canal': detectSalesChannel(row.product_name, row.deal_tags || []),
       'Categoria': row.product_category || '',
       'Cliente': row.customer_name || '',
       'Email': row.customer_email || '',
@@ -220,6 +229,7 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
       'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
       'Status': row.sale_status || '',
       'Fonte': row.source || '',
+      'Tags': (row.deal_tags || []).join(', '),
     }));
     
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -424,8 +434,8 @@ export function SalesReportPanel({ bu }: SalesReportPanelProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.slice(0, 100).map((row, index) => {
-                    const channel = detectSalesChannel(row.product_name);
+                {filteredTransactions.slice(0, 100).map((row, index) => {
+                    const channel = detectSalesChannel(row.product_name, row.deal_tags || []);
                     return (
                       <TableRow key={row.id || index}>
                         <TableCell>
