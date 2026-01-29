@@ -30,7 +30,7 @@ import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 import { useBulkA010Check, detectSalesChannel, SalesChannel } from '@/hooks/useBulkA010Check';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { useBulkTransfer } from '@/hooks/useBulkTransfer';
-import { useMyBU } from '@/hooks/useMyBU';
+import { useActiveBU } from '@/hooks/useActiveBU';
 import { differenceInDays } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
 
@@ -60,19 +60,20 @@ const Negocios = () => {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
   
-  // Buscar BU do usuário para filtrar pipelines
-  const { data: myBU, isLoading: isLoadingBU } = useMyBU();
+  // Usar BU ativa (do contexto da rota ou do perfil do usuário)
+  const activeBU = useActiveBU();
+  const isLoadingBU = false; // useActiveBU é síncrono
   
   // Verificar se é SDR (acesso restrito ao Pipeline Inside Sales)
   // Usa allRoles para suportar usuários com múltiplas roles (ex: SDR + Closer)
   const isSdr = isSdrRole(role, allRoles);
   const authorizedOrigins = getAuthorizedOriginsForRole(role);
   
-  // Origens autorizadas baseadas na BU do usuário
+  // Origens autorizadas baseadas na BU ativa (rota ou perfil)
   const buAuthorizedOrigins = useMemo(() => {
-    if (!myBU) return []; // Sem BU = vê tudo (admin)
-    return BU_PIPELINE_MAP[myBU] || [];
-  }, [myBU]);
+    if (!activeBU) return []; // Sem BU = vê tudo (admin)
+    return BU_PIPELINE_MAP[activeBU] || [];
+  }, [activeBU]);
   
   // Ref para garantir que só define o default UMA VEZ
   const hasSetDefault = useRef(false);
@@ -128,9 +129,9 @@ const Negocios = () => {
         return;
       }
       
-      // Se tem BU definida, usar a origem padrão da BU
-      if (myBU && BU_DEFAULT_ORIGIN_MAP[myBU]) {
-        setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[myBU]);
+      // Se tem BU ativa (da rota ou perfil), usar a origem padrão da BU
+      if (activeBU && BU_DEFAULT_ORIGIN_MAP[activeBU]) {
+        setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[activeBU]);
         return;
       }
       
@@ -145,7 +146,7 @@ const Negocios = () => {
         setSelectedPipelineId(pipelines[0].id);
       }
     }
-  }, [pipelines, isSdr, myBU, isLoadingBU]);
+  }, [pipelines, isSdr, activeBU, isLoadingBU]);
   
   // Buscar email do usuário logado
   const { data: userProfile } = useQuery({
