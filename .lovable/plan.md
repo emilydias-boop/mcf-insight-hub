@@ -1,141 +1,172 @@
 
-# Plano: Adicionar Filtro de Busca e KPIs Dinâmicas no Relatório de Contratos
+# Plano: Adicionar Filtros, Busca e Coluna Canal no Relatório de Vendas
 
 ## Objetivo
 
-Adicionar um campo de busca por **nome, email ou telefone** no relatório de Contratos, e fazer com que as **KPIs (cards de métricas)** se atualizem automaticamente de acordo com os resultados filtrados.
+Aplicar no relatório de **Vendas** as mesmas melhorias feitas no relatório de **Contratos**:
+1. Campo de busca por nome, email ou telefone
+2. Filtro por Canal de Vendas (A010, BIO, LIVE)
+3. Coluna "Canal" na tabela mostrando a classificação
+4. KPIs dinâmicas que acompanham os filtros aplicados
 
 ---
 
-## Análise do Estado Atual
+## Arquivos a Modificar
 
-O `ContractReportPanel.tsx` já possui vários filtros:
-- Período (DatePicker)
-- Fonte (Ambos, Agenda, Hubla A000, Pendentes)
-- Closer
-- Pipeline
-- Canal
-
-Porém **não possui** um campo de busca textual.
-
-As KPIs atualmente são calculadas a partir dos dados completos (`agendaData`, `hublaData`, `hublaPending`), sem considerar o filtro da tabela.
+| Arquivo | Ação |
+|---------|------|
+| `src/components/relatorios/SalesReportPanel.tsx` | Adicionar filtros, busca, coluna Canal e KPIs dinâmicas |
 
 ---
 
-## Alterações Necessárias
+## Alterações Detalhadas
 
-### Arquivo: `src/components/relatorios/ContractReportPanel.tsx`
-
-| Mudança | Descrição |
-|---------|-----------|
-| Novo estado `searchTerm` | Para armazenar o texto de busca |
-| Novo Input de busca | Campo com ícone de lupa na área de filtros |
-| Filtro no `unifiedData` | Adicionar lógica para filtrar por nome, email ou telefone |
-| KPIs recalculadas | Usar os dados filtrados para calcular as métricas |
-
----
-
-## Implementação Detalhada
-
-### 1. Adicionar Estado de Busca
+### 1. Novos Estados
 
 ```typescript
-const [searchTerm, setSearchTerm] = useState('');
+const [searchTerm, setSearchTerm] = useState<string>('');
+const [selectedChannel, setSelectedChannel] = useState<string>('all');
 ```
 
-### 2. Adicionar Input de Busca na UI
+### 2. Detectar Canal de Vendas
 
-Inserir entre o seletor de "Período" e "Fonte":
-
-```tsx
-<div className="w-[250px]">
-  <label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar</label>
-  <div className="relative">
-    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-    <Input
-      placeholder="Nome, email ou telefone..."
-      value={searchTerm}
-      onChange={(e) => setSearchTerm(e.target.value)}
-      className="pl-9"
-    />
-  </div>
-</div>
-```
-
-### 3. Aplicar Filtro de Busca no `unifiedData`
-
-Modificar o `useMemo` que cria `unifiedData` para incluir filtro por `searchTerm`:
+Criar lógica para classificar cada transação:
 
 ```typescript
-const unifiedData = useMemo((): UnifiedContractRow[] => {
-  const rows: UnifiedContractRow[] = [];
+const detectSalesChannel = (productName: string | null): 'A010' | 'BIO' | 'LIVE' => {
+  const name = (productName || '').toLowerCase();
   
-  // ... lógica existente para popular rows ...
+  // A010 - produto do curso A010
+  if (name.includes('a010')) {
+    return 'A010';
+  }
   
-  // Filtro por canal (existente)
-  let filtered = rows.filter(row => 
-    selectedChannel === 'all' || row.salesChannel === selectedChannel.toUpperCase() || row.source !== 'agenda'
-  );
+  // BIO - produtos relacionados (pode ser expandido)
+  if (name.includes('bio') || name.includes('instagram')) {
+    return 'BIO';
+  }
   
-  // NOVO: Filtro por busca textual
+  // LIVE - padrão (vendas ao vivo)
+  return 'LIVE';
+};
+```
+
+### 3. Dados Filtrados com Memoização
+
+```typescript
+const filteredTransactions = useMemo(() => {
+  let filtered = [...transactions];
+  
+  // Filtro por canal
+  if (selectedChannel !== 'all') {
+    filtered = filtered.filter(t => {
+      const channel = detectSalesChannel(t.product_name);
+      return channel === selectedChannel.toUpperCase();
+    });
+  }
+  
+  // Filtro por busca textual
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase().trim();
-    const termDigits = searchTerm.replace(/\D/g, ''); // Para busca por telefone
+    const termDigits = searchTerm.replace(/\D/g, '');
     
-    filtered = filtered.filter(row => {
-      const nameMatch = row.leadName.toLowerCase().includes(term);
-      const emailMatch = row.leadEmail.toLowerCase().includes(term);
-      const phoneMatch = termDigits.length >= 4 && row.leadPhone.replace(/\D/g, '').includes(termDigits);
+    filtered = filtered.filter(t => {
+      const nameMatch = (t.customer_name || '').toLowerCase().includes(term);
+      const emailMatch = (t.customer_email || '').toLowerCase().includes(term);
+      const phoneMatch = termDigits.length >= 4 && 
+        (t.customer_phone || '').replace(/\D/g, '').includes(termDigits);
       
       return nameMatch || emailMatch || phoneMatch;
     });
   }
   
-  // Ordenar por data DESC
-  return filtered.sort((a, b) => b.date.localeCompare(a.date));
-}, [agendaData, hublaData, hublaPending, selectedSource, selectedChannel, searchTerm]);
+  return filtered;
+}, [transactions, selectedChannel, searchTerm]);
 ```
 
-### 4. Recalcular KPIs com Base nos Dados Filtrados
+### 4. KPIs Dinâmicas
 
-Modificar o `useMemo` de `stats` para usar `unifiedData` filtrado em vez dos dados brutos:
+Recalcular stats a partir dos dados **filtrados**:
 
 ```typescript
 const stats = useMemo(() => {
-  // Contagens baseadas nos dados FILTRADOS
-  const agendaTotal = unifiedData.filter(r => r.source === 'agenda').length;
-  const hublaTotal = unifiedData.filter(r => r.source === 'hubla' || r.source === 'pending').length;
-  const pendingTotal = unifiedData.filter(r => r.source === 'pending').length;
-  const uniqueClosers = new Set(
-    unifiedData
-      .filter(r => r.source === 'agenda')
-      .map(r => r.closerEmail)
-  ).size;
+  const totalGross = filteredTransactions.reduce(
+    (sum, t) => sum + (t.gross_override || t.product_price || 0), 0
+  );
+  const totalNet = filteredTransactions.reduce(
+    (sum, t) => sum + (t.net_value || 0), 0
+  );
+  const count = filteredTransactions.length;
+  const avgTicket = count > 0 ? totalNet / count : 0;
   
-  return { agendaTotal, hublaTotal, pendingTotal, uniqueClosers };
-}, [unifiedData]);
+  return { totalGross, totalNet, count, avgTicket };
+}, [filteredTransactions]);
 ```
 
-### 5. Adicionar Import do Ícone e Input
+### 5. UI - Área de Filtros
 
-No topo do arquivo:
+Layout inspirado no ContractReportPanel:
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│  Período           │  Buscar              │  Canal           │  [Exportar Excel]  │
+│  [01/01 - 31/01]   │  [🔍 Nome, email...] │  [Todos ▼]       │                    │
+└────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Componentes:**
+- DatePickerCustom (existente)
+- Input com ícone Search (novo)
+- Select para Canal: Todos, A010, BIO, LIVE (novo)
+- Button Exportar Excel (existente)
+
+### 6. Coluna "Canal" na Tabela
+
+Adicionar nova coluna entre "Email" e "Valor Bruto":
+
+```tsx
+<TableHead>Canal</TableHead>
+
+// Na row:
+<TableCell>
+  <Badge variant={channel === 'A010' ? 'default' : channel === 'BIO' ? 'secondary' : 'outline'}>
+    {channel}
+  </Badge>
+</TableCell>
+```
+
+### 7. Exportação Excel Atualizada
+
+Adicionar coluna "Canal" na exportação e usar dados filtrados:
 
 ```typescript
-import { Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+const handleExportExcel = () => {
+  const exportData = filteredTransactions.map(row => ({
+    'Data': row.sale_date ? format(parseISO(row.sale_date), 'dd/MM/yyyy', { locale: ptBR }) : '',
+    'Produto': row.product_name || '',
+    'Canal': detectSalesChannel(row.product_name), // NOVO
+    'Categoria': row.product_category || '',
+    'Cliente': row.customer_name || '',
+    'Email': row.customer_email || '',
+    'Telefone': row.customer_phone || '',
+    'Valor Bruto': row.gross_override || row.product_price || 0,
+    'Valor Líquido': row.net_value || 0,
+    'Parcela': row.installment_number ? `${row.installment_number}/${row.total_installments}` : '-',
+    'Status': row.sale_status || '',
+    'Fonte': row.source || '',
+  }));
+  // ...
+};
 ```
 
 ---
 
-## Layout Visual do Filtro
+## Imports Adicionais
 
-A nova linha de filtros ficará assim:
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  Período           │  Buscar              │  Fonte  │  Closer  │  Pipeline  │  Canal │
-│  [01/01 - 31/01]   │  [🔍 Nome, email...] │  [Ambos]│  [Todos] │  [Todas]   │ [Todos]│
-└─────────────────────────────────────────────────────────────────────────────────────┘
+```typescript
+import { Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 ```
 
 ---
@@ -144,42 +175,37 @@ A nova linha de filtros ficará assim:
 
 | Ação | Resultado |
 |------|-----------|
-| Digitar "Julio" | Filtra leads com "Julio" no nome |
-| Digitar "email@teste.com" | Filtra leads com esse email |
-| Digitar "999947809" | Filtra leads com esse telefone |
-| Limpar busca | Volta a mostrar todos os registros |
-| KPIs | Atualizam instantaneamente conforme filtro |
+| Digitar "João" na busca | Filtra por clientes com "João" no nome |
+| Digitar "email@teste.com" | Filtra por esse email |
+| Selecionar "A010" no Canal | Mostra apenas transações de produtos A010 |
+| Combinar filtros | Busca + Canal funcionam juntos |
+| KPIs | Atualizam instantaneamente |
+| Exportar Excel | Exporta dados filtrados com coluna Canal |
 
 ---
 
-## Exemplo de Interação
+## Layout Visual da Tabela
 
-1. Usuário digita "Willian" no campo de busca
-2. Tabela mostra apenas registros onde o nome do lead contém "Willian"
-3. KPIs se atualizam:
-   - Agenda (Atribuídos): 1 (apenas os da agenda que casam)
-   - Hubla A000: 0 (ou N, se houver match na Hubla)
-   - Pendentes: 0
-   - Closers Ativos: 1 (único closer dos resultados)
+```text
+┌─────────┬──────────────────────────┬─────────┬───────────────────┬─────────────┬──────────────┬─────────┬───────────┐
+│  Data   │  Produto                 │  Canal  │  Cliente          │  Email      │  Valor Bruto │  V. Líq │  Status   │
+├─────────┼──────────────────────────┼─────────┼───────────────────┼─────────────┼──────────────┼─────────┼───────────┤
+│ 29/01   │ A010 - Consultoria...    │  A010   │  Alex Silva       │  alex@...   │  R$ 47,00    │  R$ 35  │ completed │
+│ 29/01   │ A000 - Contrato          │  LIVE   │  Diego Jerônimo   │  diego@...  │  R$ 497,00   │  R$ 388 │ completed │
+└─────────┴──────────────────────────┴─────────┴───────────────────┴─────────────┴──────────────┴─────────┴───────────┘
+```
 
 ---
 
 ## Resumo das Mudanças
 
-| Linha | Tipo | Descrição |
-|-------|------|-----------|
-| ~8 | Import | Adicionar `Search` do lucide-react |
-| ~9 | Import | Adicionar `Input` dos componentes UI |
-| ~57 | State | Adicionar `const [searchTerm, setSearchTerm] = useState('')` |
-| ~296-306 | UI | Inserir campo de busca na área de filtros |
-| ~242-248 | Lógica | Adicionar filtro por `searchTerm` no `unifiedData` |
-| ~251-258 | Lógica | Recalcular `stats` a partir do `unifiedData` filtrado |
-
----
-
-## Impacto
-
-- **UX**: Usuários podem localizar rapidamente um contrato específico
-- **KPIs**: Refletem os dados visíveis na tabela
-- **Excel**: Exportação considera o filtro aplicado (comportamento existente)
-- **Performance**: Filtro é client-side no `useMemo`, sem novas requisições ao banco
+| Componente | Mudança |
+|------------|---------|
+| Estados | `searchTerm`, `selectedChannel` |
+| Função | `detectSalesChannel()` |
+| useMemo | `filteredTransactions` para aplicar filtros |
+| useMemo | `stats` recalculado com dados filtrados |
+| UI Filtros | Input busca + Select canal |
+| Tabela | Nova coluna "Canal" com Badge |
+| Excel | Coluna "Canal" + dados filtrados |
+| Imports | `Search`, `Input`, `Select` components |
