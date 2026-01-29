@@ -1046,21 +1046,23 @@ export function useAddMeetingAttendee() {
       isPartner?: boolean;
       parentAttendeeId?: string;
     }) => {
-      // Se for sócio, herdar booked_by do parent
+      // Se for sócio, herdar booked_by e deal_id do parent
       let inheritedBookedBy: string | null = null;
+      let inheritedDealId: string | null = null;
       if (parentAttendeeId) {
         const { data: parentData } = await supabase
           .from('meeting_slot_attendees')
-          .select('booked_by')
+          .select('booked_by, deal_id')
           .eq('id', parentAttendeeId)
           .maybeSingle();
         
         inheritedBookedBy = parentData?.booked_by || null;
+        inheritedDealId = parentData?.deal_id || null;
       }
 
       const { error } = await supabase.from('meeting_slot_attendees').insert({
         meeting_slot_id: meetingSlotId,
-        deal_id: dealId || null,
+        deal_id: dealId || inheritedDealId || null,
         contact_id: contactId || null,
         attendee_name: attendeeName || null,
         attendee_phone: attendeePhone || null,

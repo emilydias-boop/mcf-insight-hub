@@ -396,6 +396,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     
     addAttendee.mutate({
       meetingSlotId: activeMeeting.id,
+      dealId: selectedParticipant.dealId,
       attendeeName: partnerName,
       attendeePhone: partnerPhone || undefined,
       isPartner: true,
@@ -445,7 +446,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         id: att.id,
         name,
         phone,
-        dealId: att.deal_id || activeMeeting.deal_id,
+        dealId: att.deal_id || parentAttendee?.deal_id || activeMeeting.deal_id,
         isPartner: att.is_partner || false,
         notifiedAt: att.notified_at,
         bookedBy: att.booked_by || parentAttendee?.booked_by || activeMeeting.booked_by,
