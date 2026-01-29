@@ -1,22 +1,33 @@
 
-# Plano: Corrigir Relatório de Contratos Mostrando Zero Resultados
+# Plano: Corrigir Relatório de Contratos - Filtrar por Data do Pagamento
 
-## Diagnóstico
+## Problema Identificado
 
-Após análise, identifiquei que o relatório não está mostrando dados devido a um problema na lógica de permissões:
+A query atual filtra contratos pela **data da reunião** (`scheduled_at`), mas deveria filtrar pela **data do pagamento** (`contract_paid_at`). Isso causa discrepâncias nos números:
 
-| Etapa | Comportamento Atual | Problema |
-|-------|---------------------|----------|
-| 1. `useGestorClosers('r1')` | Para viewer/sem role → retorna `[]` | OK (comportamento correto) |
-| 2. `allowedCloserIds` | `closers.map(c => c.id)` → `[]` | **Não diferencia admin/manager** |
-| 3. `useContractReport` | Se `allowedCloserIds.length === 0` → `return []` | Bloqueia todos os dados |
+| Filtro | Quantidade |
+|--------|------------|
+| `scheduled_at` em Janeiro (query atual errada) | 200 |
+| `contract_paid_at` em Janeiro (correto) | **225** |
+| Transações A000/Contrato na Hubla | ~236-777 (inclui parcelas/duplicatas) |
 
-**Causa raiz:** A lógica no `ContractReportPanel` depende do array de closers retornado para definir `allowedCloserIds`, mas deveria usar o **role diretamente** para decidir se aplica filtro ou não.
+## Causa Raiz
 
-**Fluxo correto:**
-- **Admin/Manager**: `allowedCloserIds = null` → vê **todos** os contratos
-- **Coordenador**: `allowedCloserIds = [ids dos closers do squad]` → vê apenas contratos do squad
-- **Outros roles**: não deveriam nem acessar (RoleGuard bloqueia)
+O hook `useContractReport.ts` linha 93-94:
+```typescript
+.gte('meeting_slots.scheduled_at', startISO)  // ← ERRADO
+.lte('meeting_slots.scheduled_at', endISO)    // ← ERRADO
+```
+
+Deveria filtrar por:
+```typescript
+.gte('contract_paid_at', startISO)  // ← CORRETO
+.lte('contract_paid_at', endISO)    // ← CORRETO
+```
+
+## Solução
+
+Modificar o hook para filtrar pelo campo correto e também adicionar uma seção de resumo mostrando contratos pendentes de atribuição (transações sem match na agenda).
 
 ---
 
@@ -24,81 +35,81 @@ Após análise, identifiquei que o relatório não está mostrando dados devido 
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/relatorios/ContractReportPanel.tsx` | **Modificar** - Ajustar lógica de `allowedCloserIds` |
+| `src/hooks/useContractReport.ts` | **Modificar** - Trocar filtro de `scheduled_at` para `contract_paid_at` |
 
 ---
 
-## Alteração
+## Alterações Detalhadas
 
-### ContractReportPanel.tsx - Linha ~73
+### useContractReport.ts - Corrigir Filtro de Data
 
-**Código atual (problemático):**
+**Código atual (linhas 91-94):**
 ```typescript
-const allowedCloserIds = useMemo(() => {
-  if (role === 'admin' || role === 'manager') return null;
-  return closers.map(c => c.id);  // Se closers = [], retorna []
-}, [role, closers]);
+.eq('status', 'contract_paid')
+.gte('meeting_slots.scheduled_at', startISO)
+.lte('meeting_slots.scheduled_at', endISO);
 ```
 
 **Código corrigido:**
 ```typescript
-const allowedCloserIds = useMemo(() => {
-  // Admin e manager veem TODOS os closers (null = sem filtro)
-  if (role === 'admin' || role === 'manager') return null;
-  
-  // Coordenador vê apenas closers do squad
-  // Se ainda está carregando, retorna undefined para aguardar
-  if (loadingClosers) return undefined;
-  
-  // Se não há closers permitidos (coordenador sem equipe), retorna array vazio
-  return closers.map(c => c.id);
-}, [role, closers, loadingClosers]);
+.eq('status', 'contract_paid')
+.gte('contract_paid_at', startISO)
+.lte('contract_paid_at', endISO);
 ```
 
-E atualizar o hook para tratar `undefined`:
+### Ajuste da Query para Manter Join com meeting_slots
+
+Como `contract_paid_at` está na tabela `meeting_slot_attendees` (não no join), a sintaxe permanece simples. Remover os filtros de `meeting_slots.scheduled_at` e usar `contract_paid_at` diretamente:
 
 ```typescript
-const { data: reportData = [], isLoading: loadingReport } = useContractReport(
-  filters, 
-  allowedCloserIds === undefined ? null : allowedCloserIds
-);
-```
-
-**Alternativa mais simples (recomendada):**
-
-Não usar o array de closers para filtrar - confiar apenas no role:
-
-```typescript
-const allowedCloserIds = useMemo(() => {
-  // Admin e manager veem todos os closers
-  if (role === 'admin' || role === 'manager') return null;
-  
-  // Coordenador: passa os IDs dos closers do squad quando carregados
-  // Se lista vazia, query não retornará nada (comportamento correto)
-  if (role === 'coordenador') {
-    return closers.map(c => c.id);
-  }
-  
-  // Outros roles (não deveriam chegar aqui devido ao RoleGuard)
-  return [];
-}, [role, closers]);
+let query = supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id,
+    attendee_name,
+    attendee_phone,
+    attendee_email,
+    status,
+    deal_id,
+    contract_paid_at,  // Adicionar este campo
+    meeting_slots!inner (...),
+    crm_deals (...)
+  `)
+  .eq('status', 'contract_paid')
+  .gte('contract_paid_at', startISO)
+  .lte('contract_paid_at', endISO);
 ```
 
 ---
 
 ## Resultado Esperado
 
-| Role | Comportamento |
-|------|---------------|
-| Admin | Vê todos os contratos de todos os closers R1 |
-| Manager | Vê todos os contratos de todos os closers R1 |
-| Coordenador | Vê apenas contratos dos closers do seu squad |
-| Viewer/Outros | Bloqueado pelo RoleGuard |
+| Antes | Depois |
+|-------|--------|
+| 0-200 contratos (filtro errado) | **225 contratos** (filtro correto) |
+| Data base: data da reunião | Data base: data do pagamento |
+
+---
+
+## Fluxo Corrigido
+
+```text
+1. Usuário seleciona período: 01/01/2026 - 31/01/2026
+
+2. Query busca:
+   WHERE status = 'contract_paid'
+   AND contract_paid_at >= '2026-01-01'
+   AND contract_paid_at <= '2026-01-31'
+
+3. Retorna 225 contratos atribuídos a closers R1
+
+4. Relatório mostra dados corretos ✓
+```
 
 ---
 
 ## Impacto
 
-- **Admin/Manager**: Relatório funcionará normalmente, mostrando todos os contratos
-- **Coordenador**: Continuará vendo apenas seu squad
-- **Segurança**: Mantida pelo RoleGuard que bloqueia acesso à página
+- **Precisão**: Relatório refletirá contratos PAGOS no período, não reuniões realizadas
+- **Consistência**: Números alinhados com outras métricas do sistema
+- **Admin/Manager**: Verão todos os 225 contratos de Janeiro
