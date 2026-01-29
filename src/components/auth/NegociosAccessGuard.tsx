@@ -7,14 +7,29 @@ import { BusinessUnit } from '@/hooks/useMyBU';
 // ============ MAPEAMENTO BU → PIPELINES ============
 // Define quais origens/grupos cada Business Unit pode ver
 export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
-  incorporador: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // PIPELINE INSIDE SALES
-  consorcio: [
-    '4e2b810a-6782-4ce9-9c0d-10d04c018636', // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
-    'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar (grupo)
+  incorporador: [
+    'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Grupo: Perpétuo - X1
+    'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // Origem: PIPELINE INSIDE SALES
   ],
-  credito: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão
-  projetos: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão
-  leilao: ['a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'], // Pipeline Leilão
+  consorcio: [
+    'b98e3746-d727-445b-b878-fc5742b6e6b8', // Grupo: Perpétuo - Construa para Alugar
+    '4e2b810a-6782-4ce9-9c0d-10d04c018636', // Origem: PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
+  ],
+  credito: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão (a definir)
+  projetos: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão (a definir)
+  leilao: [
+    'f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c', // Grupo: BU - LEILÃO
+    'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', // Origem: Pipeline Leilão
+  ],
+};
+
+// ============ MAPEAMENTO BU → GRUPOS (para filtrar dropdown de funis) ============
+export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
+  incorporador: ['a6f3cbfc-0567-427f-a405-5a869aaa6010'], // Perpétuo - X1
+  consorcio: ['b98e3746-d727-445b-b878-fc5742b6e6b8'],    // Perpétuo - Construa para Alugar
+  credito: [],    // A definir
+  projetos: [],   // A definir
+  leilao: ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'],       // BU - LEILÃO
 };
 
 // Grupo/Origem padrão para cada BU (para selecionar ao abrir)

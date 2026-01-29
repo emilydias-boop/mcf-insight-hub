@@ -24,6 +24,7 @@ interface OriginsSidebarProps {
   onSelectOrigin: (originId: string | null) => void;
   onSelectPipeline: (pipelineId: string | null) => void;
   allowedOriginIds?: string[]; // IDs das origens permitidas pela BU
+  allowedGroupIds?: string[];  // IDs dos grupos permitidos pela BU (para filtrar dropdown)
 }
 
 interface Group {
@@ -93,7 +94,7 @@ const useFavorites = () => {
   return { favorites, toggleFavorite, isFavorite };
 };
 
-export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline, allowedOriginIds }: OriginsSidebarProps) => {
+export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, onSelectPipeline, allowedOriginIds, allowedGroupIds }: OriginsSidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -385,6 +386,7 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             <PipelineSelector
               selectedPipelineId={pipelineId || null}
               onSelectPipeline={onSelectPipeline}
+              allowedGroupIds={allowedGroupIds}
             />
             <Button 
               variant="outline" 
