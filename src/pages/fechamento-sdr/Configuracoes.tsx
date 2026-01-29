@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,13 +46,22 @@ import {
   useUpdateSdr,
   useUpdateCompPlan,
 } from '@/hooks/useSdrFechamento';
+import { useEmployeesWithCargo } from '@/hooks/useEmployees';
 import { Sdr, SdrCompPlan, SdrStatus } from '@/types/sdr-fechamento';
 import { formatCurrency } from '@/lib/formatters';
-import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight, Trash2, Target } from 'lucide-react';
+import { Plus, Check, X, Users, FileText, RefreshCw, Calendar, Pencil, ToggleLeft, ToggleRight, Trash2, Target, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
 import { ActiveMetricsTab } from '@/components/fechamento/ActiveMetricsTab';
 import { PlansOteTab } from '@/components/fechamento/PlansOteTab';
+
+// Mapeamento de BUs comerciais válidas
+const VALID_COMMERCIAL_DEPTS = ['BU - Incorporador 50K', 'BU - Consórcio', 'BU - Crédito'];
+const BU_FILTER_MAP: Record<string, string> = {
+  'incorporador': 'BU - Incorporador 50K',
+  'consorcio': 'BU - Consórcio',
+  'credito': 'BU - Crédito',
+};
 
 const StatusBadge = ({ status }: { status: SdrStatus }) => {
   const config = {
@@ -535,7 +545,37 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
 const ConfiguracoesSdr = () => {
   const { role, user } = useAuth();
   const isAdmin = role === 'admin';
+  const navigate = useNavigate();
   
+  // Estado para filtro de BU na aba Equipe
+  const [selectedBU, setSelectedBU] = useState<string>('__all__');
+  
+  // Buscar colaboradores do RH para aba Equipe
+  const { data: employees, isLoading: employeesLoading, refetch: refetchEmployees } = useEmployeesWithCargo();
+  
+  // Filtrar colaboradores por BU comercial válida
+  const filteredEmployees = useMemo(() => {
+    if (!employees) return [];
+    
+    return employees.filter(emp => {
+      // Apenas BUs comerciais válidas
+      if (!emp.departamento || !VALID_COMMERCIAL_DEPTS.includes(emp.departamento)) {
+        return false;
+      }
+      
+      // Filtro por BU selecionada (se houver)
+      if (selectedBU !== '__all__') {
+        const expectedDept = BU_FILTER_MAP[selectedBU];
+        if (emp.departamento !== expectedDept) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }, [employees, selectedBU]);
+  
+  // Legacy hooks (ainda usados para Planos OTE e outras funcionalidades)
   const { data: sdrs, isLoading: sdrsLoading, refetch: refetchSdrs } = useSdrsAll();
   const { data: compPlans, isLoading: plansLoading, refetch: refetchPlans } = useAllCompPlans();
   
@@ -602,94 +642,103 @@ const ConfiguracoesSdr = () => {
         <TabsContent value="equipe">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Equipe Cadastrada</CardTitle>
-              <SdrFormDialog onSuccess={() => refetchSdrs()} />
+              <div className="flex items-center gap-4">
+                <CardTitle>Equipe Comercial</CardTitle>
+                <Select value={selectedBU} onValueChange={setSelectedBU}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filtrar por BU" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todas as BUs</SelectItem>
+                    <SelectItem value="incorporador">Incorporador</SelectItem>
+                    <SelectItem value="consorcio">Consórcio</SelectItem>
+                    <SelectItem value="credito">Crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={() => navigate('/rh')}>
+                <Plus className="h-4 w-4 mr-2" />
+                Gerenciar no RH
+              </Button>
             </CardHeader>
             <CardContent>
-              {sdrsLoading ? (
+              {employeesLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : !sdrs || sdrs.length === 0 ? (
+              ) : !filteredEmployees || filteredEmployees.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  Nenhum SDR cadastrado.
+                  {selectedBU !== '__all__' 
+                    ? `Nenhum colaborador encontrado para a BU selecionada.`
+                    : 'Nenhum colaborador comercial cadastrado no RH.'}
+                  <p className="text-sm mt-2">
+                    Acesse o módulo de RH para cadastrar colaboradores em BUs comerciais.
+                  </p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Email</TableHead>
+                      <TableHead>Nome Completo</TableHead>
+                      <TableHead>Departamento</TableHead>
+                      <TableHead>Cargo</TableHead>
                       <TableHead className="text-center">Nível</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Ativo</TableHead>
-                      <TableHead>Data Criação</TableHead>
+                      <TableHead>Admissão</TableHead>
                       <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sdrs.map((sdr) => (
-                      <TableRow key={sdr.id}>
-                        <TableCell className="font-medium">{sdr.name}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{sdr.email || '-'}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="font-mono">N{sdr.nivel || 1}</Badge>
-                        </TableCell>
-                        <TableCell><StatusBadge status={sdr.status} /></TableCell>
+                    {filteredEmployees.map((emp) => (
+                      <TableRow key={emp.id}>
+                        <TableCell className="font-medium">{emp.nome_completo}</TableCell>
                         <TableCell>
-                          <Badge variant={sdr.active ? 'default' : 'outline'}>
-                            {sdr.active ? 'Sim' : 'Não'}
+                          <Badge variant="outline" className="text-xs">
+                            {emp.departamento?.replace('BU - ', '') || '-'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {emp.cargo_catalogo?.nome_exibicao || emp.cargo || '-'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {emp.cargo_catalogo?.nivel ? (
+                            <Badge variant="outline" className="font-mono">N{emp.cargo_catalogo.nivel}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={emp.status === 'ativo' ? 'default' : 'outline'}>
+                            {emp.status === 'ativo' ? 'Ativo' : 'Inativo'}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {format(new Date(sdr.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+                          {emp.data_admissao 
+                            ? format(new Date(emp.data_admissao), 'dd/MM/yyyy', { locale: ptBR })
+                            : '-'}
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {sdr.status === 'PENDING' && isAdmin && (
-                              <>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-green-500 hover:text-green-400"
-                                  onClick={() => handleApproveSdr(sdr.id, true)}
-                                  disabled={approveSdr.isPending}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-red-500 hover:text-red-400"
-                                  onClick={() => handleApproveSdr(sdr.id, false)}
-                                  disabled={approveSdr.isPending}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                            {sdr.status === 'APPROVED' && (
-                              <>
-                                <EditSdrDialog sdr={sdr} onSuccess={() => refetchSdrs()} />
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className={sdr.active ? "text-orange-500 hover:text-orange-400" : "text-green-500 hover:text-green-400"}
-                                  onClick={() => handleToggleActive(sdr)}
-                                  disabled={updateSdr.isPending}
-                                  title={sdr.active ? "Desativar SDR" : "Ativar SDR"}
-                                >
-                                  {sdr.active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                                </Button>
-                              </>
-                            )}
-                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => navigate(`/rh?employee=${emp.id}`)}
+                            title="Editar no RH"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               )}
+              
+              {/* Nota informativa */}
+              <div className="mt-4 text-xs text-muted-foreground bg-muted/50 rounded-md p-3 border">
+                <strong>Fonte de dados:</strong> Os colaboradores são gerenciados no módulo de RH. 
+                Para aparecer nesta lista, o colaborador deve estar em uma BU comercial (Incorporador, Consórcio ou Crédito).
+                Para aparecer em "Planos OTE", deve também ter um cargo do catálogo vinculado.
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
