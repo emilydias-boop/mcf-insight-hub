@@ -1,67 +1,105 @@
-# CRM Dedicado por Business Unit - IMPLEMENTADO ✅
 
-## Status: Concluído
 
-Cada Business Unit (Consórcio, Crédito, Projetos, Leilão) agora possui seu próprio CRM completo, com as mesmas funcionalidades do CRM principal (Incorporador).
+# Plano de Correção: Stages e Webhook do CRM por BU
+
+## Problemas Identificados
+
+### 1. Stages não aparecem no CRM Consórcio
+O componente `Negocios.tsx` usa `useMyBU()` (BU do perfil do usuário) em vez de `useActiveBU()` (BU da rota).  
+Quando você acessa `/consorcio/crm/negocios`, o sistema ainda busca pipelines baseados na BU do seu **perfil** e não no contexto da **rota**.
+
+### 2. Webhook Consórcio (esclarecimento)
+O webhook `webhook-consorcio` já existe e está funcionando, mas ele insere dados na tabela `consortium_cards` (gestão de cartas de consórcio), **não** no CRM de deals/Kanban.
+
+Para receber leads no CRM do Consórcio (Kanban), deve-se usar o sistema `webhook-lead-receiver` que já existe, configurando um endpoint via interface do CRM.
 
 ---
 
-## Arquitetura Implementada
+## Correção Técnica
 
-### Estrutura de Rotas
+### Arquivo: `src/pages/crm/Negocios.tsx`
 
-```text
-📁 /crm                          → CRM da BU Incorporador (original)
-📁 /consorcio/crm/*              → CRM da BU Consórcio ✅
-📁 /bu-credito/crm/*             → CRM da BU Crédito ✅
-📁 /bu-projetos/crm/*            → CRM da BU Projetos ✅
-📁 /leilao/crm/*                 → CRM da BU Leilão ✅
+**Problema**: Linhas 64 e 72-75 usam `useMyBU()` que busca a BU do perfil do usuário.
+
+**Solução**: Substituir por `useActiveBU()` que respeita o contexto da rota.
+
+```typescript
+// ANTES (linha 64):
+const { data: myBU, isLoading: isLoadingBU } = useMyBU();
+
+// DEPOIS:
+import { useActiveBU } from '@/hooks/useActiveBU';
+// ...
+const activeBU = useActiveBU();
+const isLoadingBU = false; // useActiveBU é síncrono
 ```
 
-### Componentes Criados
+**E atualizar as referências**:
+```typescript
+// ANTES (linha 72-75):
+const buAuthorizedOrigins = useMemo(() => {
+  if (!myBU) return [];
+  return BU_PIPELINE_MAP[myBU] || [];
+}, [myBU]);
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/contexts/BUContext.tsx` | Contexto que define a BU ativa na rota |
-| `src/hooks/useActiveBU.ts` | Hook para obter a BU ativa (contexto ou perfil) |
-| `src/pages/crm/BUCRMLayout.tsx` | Layout wrapper para CRMs de BU específica |
+// DEPOIS:
+const buAuthorizedOrigins = useMemo(() => {
+  if (!activeBU) return [];
+  return BU_PIPELINE_MAP[activeBU] || [];
+}, [activeBU]);
 
-### Arquivos Modificados
+// ANTES (linha 132):
+if (myBU && BU_DEFAULT_ORIGIN_MAP[myBU]) {
+  setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[myBU]);
+
+// DEPOIS:
+if (activeBU && BU_DEFAULT_ORIGIN_MAP[activeBU]) {
+  setSelectedPipelineId(BU_DEFAULT_ORIGIN_MAP[activeBU]);
+```
+
+---
+
+## Verificação de Dados
+
+Confirmei que as stages do Consórcio já existem no banco:
+
+| origin_id | name | stage_order |
+|-----------|------|-------------|
+| `4e2b810a-...` | NOVO LEAD GRATUITO | 1 |
+| `4e2b810a-...` | NOVO LEAD | 2 |
+| `4e2b810a-...` | LEAD QUALIFICADO | 3 |
+| `4e2b810a-...` | REUNIÃO 1 AGENDADA | 4 |
+| ... | ... | ... |
+
+A origem mapeada para `consorcio` é `4e2b810a-6782-4ce9-9c0d-10d04c018636` e já tem 9 stages configuradas.
+
+---
+
+## Resumo das Alterações
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/App.tsx` | Rotas CRM para cada BU com sub-rotas aninhadas |
-| `src/components/layout/AppSidebar.tsx` | Links CRM nas BUs de Crédito, Projetos e Leilão |
-| `src/hooks/useMyBU.ts` | Tipo BusinessUnit inclui 'leilao' |
-| `src/hooks/useGestorClosers.ts` | Filtro por BU ativa |
-| `src/hooks/useAgendaData.ts` | `useClosersWithAvailability(buFilter)` |
-| `src/hooks/useR2Closers.ts` | `useActiveR2Closers(buFilter)` e `useR2ClosersList(buFilter)` |
-| `src/pages/crm/Agenda.tsx` | Usa `useActiveBU()` para filtrar closers |
-| `src/pages/crm/AgendaR2.tsx` | Usa `useActiveBU()` para filtrar closers R2 |
-| `src/pages/crm/R2Carrinho.tsx` | Importa `useActiveBU` (preparado para filtros futuros) |
-
-### Migração de Banco
-
-```sql
-ALTER TABLE closers ADD COLUMN IF NOT EXISTS bu TEXT;
-COMMENT ON COLUMN closers.bu IS 'Business Unit: incorporador, consorcio, credito, projetos, leilao';
-UPDATE closers SET bu = 'incorporador' WHERE bu IS NULL;
-```
+| `src/pages/crm/Negocios.tsx` | Substituir `useMyBU()` por `useActiveBU()` |
 
 ---
 
-## Como Funciona
+## Resultado Esperado
 
-1. **Navegação**: Cada BU no sidebar tem um link "CRM" que leva ao seu CRM dedicado
-2. **Contexto**: O `BUCRMLayout` envolve as rotas e injeta a BU no contexto
-3. **Filtragem**: Os hooks de closers e agendas usam `useActiveBU()` para filtrar dados
-4. **Componentes Reutilizados**: Os mesmos componentes CRM são usados, apenas com filtros diferentes
+Após a correção:
+- `/consorcio/crm/negocios` → Mostrará as stages do Consórcio
+- `/leilao/crm/negocios` → Mostrará as stages do Leilão
+- `/crm/negocios` → Continuará usando a BU do perfil do usuário
 
 ---
 
-## Próximos Passos (Opcionais)
+## Webhook para CRM (Orientação)
 
-- [ ] Atribuir closers existentes às suas respectivas BUs via interface admin
-- [ ] Filtrar reuniões por BU na agenda (além de filtrar closers)
-- [ ] Filtrar deals/negócios por BU automaticamente
-- [ ] Criar dashboard de métricas por BU
+Se desejar receber leads diretamente no Kanban do Consórcio:
+
+1. Acessar o CRM Consórcio → Configurações da pipeline
+2. Ir em **Integrações → Webhooks de Entrada**
+3. Criar novo webhook (ex: slug `consorcio-leads`)
+4. Endpoint gerado: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver?slug=consorcio-leads`
+
+O webhook `webhook-consorcio` existente continuará servindo para a gestão de **cartas de consórcio** (tabela `consortium_cards`), que é um módulo diferente.
+
