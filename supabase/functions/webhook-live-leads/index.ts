@@ -69,8 +69,7 @@ serve(async (req) => {
           email: payload.email.trim().toLowerCase(),
           phone: normalizedPhone,
           origin_id: LIVE_ORIGIN_ID,
-          tags: ['Lead-Live'],
-          data_source: 'webhook-live'
+          tags: ['Lead-Live']
         })
         .select('id')
         .single();
@@ -146,7 +145,7 @@ serve(async (req) => {
         product_name: 'LIVE',
         tags: ['Lead-Live'],
         custom_fields: customFields,
-        data_source: 'webhook-live',
+        data_source: 'webhook',
         created_at: dealCreatedAt
       })
       .select('id')
