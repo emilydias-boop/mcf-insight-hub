@@ -1,19 +1,15 @@
 
-# Plano: Corrigir Notas Aparecendo Erradas para Sócios
+# Plano: Adicionar Botão de Reembolso na Lista de Pendentes R2
 
-## Problema Identificado
+## Contexto
 
-João (sócio de Rafaela) está mostrando as notas de Antony porque:
+Na aba "Pendentes" da Agenda R2, existem leads com "Contrato Pago" vindos de R1 que ainda não têm R2 agendada. Alguns desses leads são, na verdade, reembolsos antigos que precisam ser tratados. O usuário quer um botão "Reembolso" ao lado do "Agendar R2" para processar esses casos.
 
-1. **Ao criar o sócio**: O `deal_id` não é passado, resultando em `null` no banco
-2. **Ao exibir no drawer**: O fallback `att.deal_id || activeMeeting.deal_id` usa o deal do meeting slot
-3. **O meeting slot tem o deal do Antony** (primeiro participante ou outro contexto)
-4. **As notas são buscadas por deal_id**, resultando nas notas erradas
-
-| Campo | Valor Atual | Valor Correto |
-|-------|-------------|---------------|
-| João.deal_id | `null` | Igual ao da Rafaela |
-| Fallback dealId | `activeMeeting.deal_id` (Antony) | `parentAttendee.deal_id` (Rafaela) |
+**Fluxo desejado:**
+1. Clicar no botão "Reembolso"
+2. Abrir modal solicitando motivo e justificativa
+3. Processar o reembolso (marcar deal como perdido, setar flags)
+4. Remover o lead da lista de pendentes
 
 ---
 
@@ -21,102 +17,164 @@ João (sócio de Rafaela) está mostrando as notas de Antony porque:
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/crm/AgendaMeetingDrawer.tsx` | **Modificar** - Passar dealId do parent ao criar sócio + corrigir fallback |
-| `src/hooks/useAgendaData.ts` | **Modificar** - Herdar deal_id do parent (além do booked_by) |
+| `src/components/crm/R2PendingLeadsPanel.tsx` | **Modificar** - Adicionar botão de Reembolso e integrar com RefundModal |
 
 ---
 
 ## Alterações
 
-### 1. AgendaMeetingDrawer.tsx - handleAddPartner (linhas 397-403)
+### R2PendingLeadsPanel.tsx
 
-Passar o `dealId` do parent ao criar sócio:
+#### 1. Adicionar imports necessários
 
 ```typescript
-addAttendee.mutate({
-  meetingSlotId: activeMeeting.id,
-  dealId: selectedParticipant.dealId,  // ✅ NOVO: Herda deal do parent
-  attendeeName: partnerName,
-  attendeePhone: partnerPhone || undefined,
-  isPartner: true,
-  parentAttendeeId: selectedParticipant.id,
-});
+import { RotateCcw } from 'lucide-react';
+import { RefundModal } from './RefundModal';
 ```
 
-### 2. AgendaMeetingDrawer.tsx - getParticipantsList (linha 448)
-
-Corrigir fallback para usar parent attendee antes do meeting slot:
+#### 2. Adicionar estados para o modal de reembolso
 
 ```typescript
-dealId: att.deal_id || parentAttendee?.deal_id || activeMeeting.deal_id,
+const [refundModalOpen, setRefundModalOpen] = useState(false);
+const [refundLead, setRefundLead] = useState<R2PendingLead | null>(null);
 ```
 
-### 3. useAgendaData.ts - useAddMeetingAttendee (linhas 1049-1059)
-
-Herdar também o `deal_id` do parent quando não fornecido:
+#### 3. Criar handler para abrir o modal de reembolso
 
 ```typescript
-// Se for sócio, herdar booked_by e deal_id do parent
-let inheritedBookedBy: string | null = null;
-let inheritedDealId: string | null = null;
-if (parentAttendeeId) {
-  const { data: parentData } = await supabase
-    .from('meeting_slot_attendees')
-    .select('booked_by, deal_id')  // ✅ Incluir deal_id
-    .eq('id', parentAttendeeId)
-    .maybeSingle();
-  
-  inheritedBookedBy = parentData?.booked_by || null;
-  inheritedDealId = parentData?.deal_id || null;
+const handleRefund = (lead: R2PendingLead) => {
+  setRefundLead(lead);
+  setRefundModalOpen(true);
+};
+```
+
+#### 4. Adicionar botão de Reembolso ao lado do "Agendar R2"
+
+Modificar a área de botões de ação para incluir dois botões:
+
+```tsx
+{/* Action Buttons */}
+<div className="flex items-center gap-2 shrink-0">
+  <Button 
+    size="sm" 
+    variant="outline"
+    className="text-orange-600 border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950"
+    onClick={(e) => {
+      e.stopPropagation();
+      handleRefund(lead);
+    }}
+  >
+    <RotateCcw className="h-4 w-4 mr-1" />
+    Reembolso
+  </Button>
+  <Button 
+    size="sm" 
+    className="bg-purple-600 hover:bg-purple-700"
+    onClick={(e) => {
+      e.stopPropagation();
+      handleScheduleR2(lead);
+    }}
+  >
+    <Calendar className="h-4 w-4 mr-1" />
+    Agendar R2
+    <ArrowRight className="h-4 w-4 ml-1" />
+  </Button>
+</div>
+```
+
+#### 5. Adaptar o RefundModal para leads da R1
+
+O `RefundModal` atual espera um `meetingId` de R2. Para leads pendentes (vindos de R1), precisamos passar o `meeting_slot.id` da R1 e adaptar o fluxo:
+
+```tsx
+{/* Refund Modal */}
+<RefundModal
+  open={refundModalOpen}
+  onOpenChange={(open) => {
+    setRefundModalOpen(open);
+    if (!open) setRefundLead(null);
+  }}
+  meetingId={refundLead?.meeting_slot?.id || ''}
+  dealId={refundLead?.deal?.id || null}
+  dealName={refundLead?.attendee_name || refundLead?.deal?.name}
+  currentCustomFields={undefined}
+  onSuccess={() => {
+    // RefundModal já invalida as queries necessárias
+    // O lead sumirá da lista porque o status será alterado
+  }}
+/>
+```
+
+**Problema identificado:** O `RefundModal` usa `useUpdateR2MeetingStatus` que atualiza `meeting_slots` para R2. Para R1, precisamos apenas:
+1. Atualizar o attendee status para 'refunded'
+2. Marcar o deal como perdido com flags de reembolso
+
+#### 6. Criar versão adaptada do RefundModal OU modificar o existente
+
+Como o fluxo é similar mas atua em R1, a melhor solução é **criar um hook dedicado** ou **modificar o RefundModal** para aceitar um parâmetro `meetingType`:
+
+**Opção A (recomendada):** Modificar o `RefundModal` para aceitar `meetingType` e usar lógica condicional:
+
+```typescript
+// RefundModal.tsx - adicionar prop
+interface RefundModalProps {
+  // ... props existentes
+  meetingType?: 'r1' | 'r2';  // Default: 'r2'
 }
 
-const { error } = await supabase.from('meeting_slot_attendees').insert({
-  ...
-  deal_id: dealId || inheritedDealId,  // ✅ Usar deal herdado como fallback
-  booked_by: inheritedBookedBy,
-});
+// Na lógica do handleConfirm:
+if (meetingType === 'r1') {
+  // Para R1: atualizar status do attendee para 'refunded'
+  await supabase
+    .from('meeting_slot_attendees')
+    .update({ status: 'refunded' })
+    .eq('meeting_slot_id', meetingId);
+} else {
+  // Para R2: comportamento atual (atualiza meeting_slots)
+  await updateMeetingStatus.mutateAsync({ meetingId, status: 'refunded' });
+}
+```
+
+E adicionar invalidação da query de pendentes:
+
+```typescript
+queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
 ```
 
 ---
 
-## Fluxo Corrigido
+## Fluxo Final
 
 ```text
-Adicionar João (Sócio de Rafaela)
+Usuário clica "Reembolso" em lead pendente
 │
-├── parentAttendeeId = ID da Rafaela
-├── selectedParticipant.dealId = Deal da Rafaela ✓
+├── Abre RefundModal com meetingType='r1'
+├── Usuário seleciona motivo e justificativa
 │
-└── Inserir João com:
-    ├── deal_id = Deal da Rafaela ✓
-    └── booked_by = SDR da Rafaela (Caroline) ✓
-```
-
-```text
-Buscar Notas de João no Drawer
-│
-├── João.deal_id = Deal da Rafaela ✓
-├── Busca notas por deal_id da Rafaela
-│
-└── Resultado: Nenhuma nota (deal da Rafaela é novo)
-    └── OU notas antigas da Rafaela (se existirem)
+└── handleConfirm:
+    ├── Atualiza attendee.status = 'refunded'
+    ├── Move deal para stage "Perdido"
+    ├── Seta flags no custom_fields (reembolso_solicitado, motivo, etc)
+    ├── Registra atividade no deal
+    │
+    └── Invalida query 'r2-pending-leads'
+        └── Lead some da lista ✓
 ```
 
 ---
 
 ## Resultado Esperado
 
-| Participante | deal_id Antes | deal_id Depois | Notas Exibidas |
-|--------------|---------------|----------------|----------------|
-| Rafaela Bravim | Deal Rafaela | Deal Rafaela | Rafaela ✓ |
-| João (Sócio) | null → Antony | Deal Rafaela | Nenhuma ou Rafaela ✓ |
-| Antony Elias | Deal Antony | Deal Antony | Antony ✓ |
+| Antes | Depois |
+|-------|--------|
+| Apenas botão "Agendar R2" | Dois botões: "Reembolso" (laranja) + "Agendar R2" (roxo) |
+| Leads antigos reembolsados aparecem na lista | Podem ser marcados como reembolso e removidos |
 
 ---
 
 ## Impacto
 
-- **Sócios já existentes sem deal_id**: Corrigidos pelo fallback no drawer (parentAttendee.deal_id)
-- **Novos sócios**: Já serão criados com o deal_id correto
-- **Notas existentes**: Continuam associadas aos deals corretos
-- **KPIs/Métricas**: Sem impacto (sócios não afetam contagem por deal)
+- **Lista de Pendentes**: Leads reembolsados serão removidos (status não será mais 'contract_paid')
+- **CRM Deals**: Serão movidos para "Perdido" com flag de reembolso
+- **Métricas**: Reembolsos serão rastreados corretamente
+- **R1 Meetings**: Status do attendee será atualizado para 'refunded'
