@@ -1,29 +1,22 @@
 
-# Plano: Filtrar Closers R1 e Adicionar Canal de Venda
+# Plano: Corrigir Relatório de Contratos Mostrando Zero Resultados
 
-## Problemas Identificados
+## Diagnóstico
 
-### 1. Closers Errados no Filtro
-O filtro de Closer está mostrando **todos os closers** (incluindo R2), mas o relatório de Contratos do BU Incorporador deveria mostrar apenas **closers R1** (Cristiane, Julio, Thayna).
+Após análise, identifiquei que o relatório não está mostrando dados devido a um problema na lógica de permissões:
 
-**Causa**: O hook `useGestorClosers` não filtra por `meeting_type`.
+| Etapa | Comportamento Atual | Problema |
+|-------|---------------------|----------|
+| 1. `useGestorClosers('r1')` | Para viewer/sem role → retorna `[]` | OK (comportamento correto) |
+| 2. `allowedCloserIds` | `closers.map(c => c.id)` → `[]` | **Não diferencia admin/manager** |
+| 3. `useContractReport` | Se `allowedCloserIds.length === 0` → `return []` | Bloqueia todos os dados |
 
-| Closer | meeting_type | Deveria aparecer? |
-|--------|--------------|-------------------|
-| Cristiane Gomes | r1 | ✅ Sim |
-| Julio | r1 | ✅ Sim |
-| Thayna | r1 | ✅ Sim |
-| Jessica Bellini | r2 | ❌ Não |
-| Jessica Martins | r2 | ❌ Não |
-| Claudia Carielo | r2 | ❌ Não |
+**Causa raiz:** A lógica no `ContractReportPanel` depende do array de closers retornado para definir `allowedCloserIds`, mas deveria usar o **role diretamente** para decidir se aplica filtro ou não.
 
-### 2. Falta Canal de Venda
-O relatório não mostra o canal de venda (A010, BIO ou LIVE), que é importante para análise comercial.
-
-**Lógica de classificação:**
-- **A010**: Lead comprou produto A010 na Hubla (email confirmado em `hubla_transactions`)
-- **BIO**: Lead tem tag "bio" ou "instagram" no CRM
-- **LIVE**: Padrão (leads gratuitos de lives)
+**Fluxo correto:**
+- **Admin/Manager**: `allowedCloserIds = null` → vê **todos** os contratos
+- **Coordenador**: `allowedCloserIds = [ids dos closers do squad]` → vê apenas contratos do squad
+- **Outros roles**: não deveriam nem acessar (RoleGuard bloqueia)
 
 ---
 
@@ -31,126 +24,81 @@ O relatório não mostra o canal de venda (A010, BIO ou LIVE), que é importante
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useGestorClosers.ts` | **Modificar** - Adicionar filtro por `meeting_type` (opcional) |
-| `src/hooks/useContractReport.ts` | **Modificar** - Adicionar lógica de detecção de sales channel e filtro |
-| `src/components/relatorios/ContractReportPanel.tsx` | **Modificar** - Adicionar filtro de canal e coluna na tabela |
+| `src/components/relatorios/ContractReportPanel.tsx` | **Modificar** - Ajustar lógica de `allowedCloserIds` |
 
 ---
 
-## Alterações Detalhadas
+## Alteração
 
-### 1. useGestorClosers.ts - Adicionar filtro por meeting_type
+### ContractReportPanel.tsx - Linha ~73
 
-Adicionar parâmetro opcional para filtrar closers por tipo:
+**Código atual (problemático):**
+```typescript
+const allowedCloserIds = useMemo(() => {
+  if (role === 'admin' || role === 'manager') return null;
+  return closers.map(c => c.id);  // Se closers = [], retorna []
+}, [role, closers]);
+```
+
+**Código corrigido:**
+```typescript
+const allowedCloserIds = useMemo(() => {
+  // Admin e manager veem TODOS os closers (null = sem filtro)
+  if (role === 'admin' || role === 'manager') return null;
+  
+  // Coordenador vê apenas closers do squad
+  // Se ainda está carregando, retorna undefined para aguardar
+  if (loadingClosers) return undefined;
+  
+  // Se não há closers permitidos (coordenador sem equipe), retorna array vazio
+  return closers.map(c => c.id);
+}, [role, closers, loadingClosers]);
+```
+
+E atualizar o hook para tratar `undefined`:
 
 ```typescript
-export const useGestorClosers = (meetingType?: 'r1' | 'r2') => {
-  // Nas queries, adicionar:
-  if (meetingType) {
-    query = query.eq('meeting_type', meetingType);
-  }
-}
-```
-
-### 2. ContractReportPanel.tsx - Usar apenas closers R1
-
-```typescript
-// Mudar de:
-const { data: closers = [] } = useGestorClosers();
-
-// Para:
-const { data: closers = [] } = useGestorClosers('r1');
-```
-
-### 3. useContractReport.ts - Adicionar sales_channel ao retorno
-
-**Novo campo na interface:**
-```typescript
-interface ContractReportRow {
-  // ... campos existentes
-  salesChannel: 'a010' | 'bio' | 'live';
-  contactEmail: string | null;  // Para cálculo do canal
-  contactTags: string[];        // Para cálculo do canal
-}
-```
-
-**Nova lógica no hook:**
-1. Buscar também `crm_contacts.email` e `crm_contacts.tags` no join
-2. Coletar todos os emails do resultado
-3. Buscar emails A010 em `hubla_transactions`
-4. Usar função `detectSalesChannel()` existente para classificar cada lead
-
-### 4. ContractReportPanel.tsx - Adicionar filtro e coluna
-
-**Novo filtro de Canal:**
-```tsx
-<Select value={selectedChannel} onValueChange={setSelectedChannel}>
-  <SelectContent>
-    <SelectItem value="all">Todos os Canais</SelectItem>
-    <SelectItem value="a010">A010</SelectItem>
-    <SelectItem value="bio">BIO</SelectItem>
-    <SelectItem value="live">LIVE</SelectItem>
-  </SelectContent>
-</Select>
-```
-
-**Nova coluna na tabela:**
-```tsx
-<TableHead>Canal</TableHead>
-// ...
-<TableCell>
-  <Badge variant={row.salesChannel === 'a010' ? 'default' : 'outline'}>
-    {row.salesChannel.toUpperCase()}
-  </Badge>
-</TableCell>
-```
-
-**Filtro no render:**
-```typescript
-const displayData = filteredReportData.filter(row => 
-  selectedChannel === 'all' || row.salesChannel === selectedChannel
+const { data: reportData = [], isLoading: loadingReport } = useContractReport(
+  filters, 
+  allowedCloserIds === undefined ? null : allowedCloserIds
 );
 ```
 
----
+**Alternativa mais simples (recomendada):**
 
-## Fluxo de Dados
+Não usar o array de closers para filtrar - confiar apenas no role:
 
-```text
-1. ContractReportPanel carrega
-   └── useGestorClosers('r1') → Retorna apenas Cristiane, Julio, Thayna
-
-2. Usuário seleciona filtros
-   └── useContractReport busca dados
-       ├── Join com crm_contacts para email e tags
-       ├── Busca emails A010 em hubla_transactions
-       └── Calcula salesChannel para cada row
-
-3. Renderiza tabela com nova coluna "Canal"
-   └── Badge colorido: A010 (azul), BIO (verde), LIVE (cinza)
+```typescript
+const allowedCloserIds = useMemo(() => {
+  // Admin e manager veem todos os closers
+  if (role === 'admin' || role === 'manager') return null;
+  
+  // Coordenador: passa os IDs dos closers do squad quando carregados
+  // Se lista vazia, query não retornará nada (comportamento correto)
+  if (role === 'coordenador') {
+    return closers.map(c => c.id);
+  }
+  
+  // Outros roles (não deveriam chegar aqui devido ao RoleGuard)
+  return [];
+}, [role, closers]);
 ```
 
 ---
 
-## Visual Final
+## Resultado Esperado
 
-**Filtros:**
-```
-[Período: Jan 2026] [Closer: Todos (R1)] [Pipeline: Todas] [Canal: Todos] [Exportar]
-```
-
-**Tabela:**
-| Closer | Data | Lead | Telefone | SDR | Pipeline | Canal | Estado |
-|--------|------|------|----------|-----|----------|-------|--------|
-| Julio | 28/01 | Maria | 11999... | Julia | Inside Sales | **A010** | SP |
-| Cristiane | 27/01 | João | 21888... | Antony | Inside Sales | **LIVE** | RJ |
-| Thayna | 26/01 | Ana | 31777... | Caroline | Inside Sales | **BIO** | MG |
+| Role | Comportamento |
+|------|---------------|
+| Admin | Vê todos os contratos de todos os closers R1 |
+| Manager | Vê todos os contratos de todos os closers R1 |
+| Coordenador | Vê apenas contratos dos closers do seu squad |
+| Viewer/Outros | Bloqueado pelo RoleGuard |
 
 ---
 
 ## Impacto
 
-- **Filtro de Closer**: Mostrará apenas 3 closers R1 em vez de 7+
-- **Nova coluna Canal**: Classificação visual A010/BIO/LIVE
-- **Filtro de Canal**: Permite análise segmentada
-- **Exportação Excel**: Incluirá nova coluna "Canal"
+- **Admin/Manager**: Relatório funcionará normalmente, mostrando todos os contratos
+- **Coordenador**: Continuará vendo apenas seu squad
+- **Segurança**: Mantida pelo RoleGuard que bloqueia acesso à página
