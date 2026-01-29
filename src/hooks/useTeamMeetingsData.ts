@@ -85,8 +85,8 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
     const totalNoShows = bySDR.reduce((sum, s) => sum + s.noShows, 0);
     const totalContratos = bySDR.reduce((sum, s) => sum + s.contratos, 0);
 
-    const taxaConversao = totalAgendamentos > 0
-      ? (totalRealizadas / totalAgendamentos) * 100
+    const taxaConversao = totalRealizadas > 0
+      ? (totalContratos / totalRealizadas) * 100
       : 0;
     const taxaNoShow = totalAgendamentos > 0
       ? (totalNoShows / totalAgendamentos) * 100
