@@ -51,7 +51,6 @@ export const useContractReport = (
           id,
           attendee_name,
           attendee_phone,
-          attendee_email,
           status,
           deal_id,
           contract_paid_at,
@@ -87,6 +86,7 @@ export const useContractReport = (
             crm_contacts (
               id,
               email,
+              phone,
               tags
             )
           )
@@ -191,7 +191,8 @@ export const useContractReport = (
         const customFields = deal?.custom_fields || {};
         const sdrEmail = deal?.owner_id || '';
         
-        const contactEmail = contact?.email || row.attendee_email || null;
+        const contactEmail = contact?.email || null;
+        const contactPhone = contact?.phone || row.attendee_phone || null;
         const contactTags: string[] = Array.isArray(contact?.tags) ? contact.tags : [];
         const salesChannel = detectSalesChannel(contactEmail, contactTags);
         
