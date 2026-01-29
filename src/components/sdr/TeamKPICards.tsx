@@ -81,7 +81,7 @@ export function TeamKPICards({ kpis, isLoading, isToday, pendentesHoje }: TeamKP
       icon: TrendingUp,
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
-      tooltip: "Realizadas / Total Agendamentos × 100"
+      tooltip: "Contratos / Realizadas × 100"
     },
     {
       title: "Taxa No-Show",
