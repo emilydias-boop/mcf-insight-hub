@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileSpreadsheet, Users, Calendar, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
+import { Download, FileSpreadsheet, Users, Calendar, TrendingUp, Loader2, AlertCircle, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
@@ -54,6 +55,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
   const [selectedOriginId, setSelectedOriginId] = useState<string>('all');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [selectedSource, setSelectedSource] = useState<DataSource>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   
   // Fetch closers available for this user
   const { data: closers = [], isLoading: loadingClosers } = useGestorClosers('r1');
@@ -239,23 +241,39 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
     }
     
     // Filter by sales channel
-    const filtered = rows.filter(row => 
+    let filtered = rows.filter(row => 
       selectedChannel === 'all' || row.salesChannel === selectedChannel.toUpperCase() || row.source !== 'agenda'
     );
     
+    // Filter by search term (name, email, phone)
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      const termDigits = searchTerm.replace(/\D/g, '');
+      
+      filtered = filtered.filter(row => {
+        const nameMatch = row.leadName.toLowerCase().includes(term);
+        const emailMatch = row.leadEmail.toLowerCase().includes(term);
+        const phoneMatch = termDigits.length >= 4 && row.leadPhone.replace(/\D/g, '').includes(termDigits);
+        
+        return nameMatch || emailMatch || phoneMatch;
+      });
+    }
+    
     // Sort by date DESC
     return filtered.sort((a, b) => b.date.localeCompare(a.date));
-  }, [agendaData, hublaData, hublaPending, selectedSource, selectedChannel]);
+  }, [agendaData, hublaData, hublaPending, selectedSource, selectedChannel, searchTerm]);
   
-  // Calculate stats
+  // Calculate stats from filtered data
   const stats = useMemo(() => {
-    const agendaTotal = agendaData.length;
-    const hublaTotal = hublaData.length;
-    const pendingTotal = hublaPending.length;
-    const uniqueClosers = new Set(agendaData.map(r => r.closerEmail)).size;
+    const agendaTotal = unifiedData.filter(r => r.source === 'agenda').length;
+    const hublaTotal = unifiedData.filter(r => r.source === 'hubla' || r.source === 'pending').length;
+    const pendingTotal = unifiedData.filter(r => r.source === 'pending').length;
+    const uniqueClosers = new Set(
+      unifiedData.filter(r => r.source === 'agenda').map(r => r.closerEmail)
+    ).size;
     
     return { agendaTotal, hublaTotal, pendingTotal, uniqueClosers };
-  }, [agendaData, hublaData, hublaPending]);
+  }, [unifiedData]);
   
   // Export to Excel
   const handleExportExcel = () => {
@@ -294,7 +312,7 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[200px]">
+            <div className="min-w-[200px]">
               <label className="text-sm font-medium text-muted-foreground mb-2 block">Período</label>
               <DatePickerCustom
                 mode="range"
@@ -302,6 +320,19 @@ export function ContractReportPanel({ bu }: ContractReportPanelProps) {
                 onSelect={(range) => range && setDateRange(range as DateRange)}
                 placeholder="Selecione o período"
               />
+            </div>
+            
+            <div className="w-[250px]">
+              <label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Nome, email ou telefone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
             </div>
             
             <div className="w-[180px]">
