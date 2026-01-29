@@ -150,7 +150,7 @@ serve(async (req) => {
           phone: normalizedPhone,
           origin_id: endpoint.origin_id,
           tags: autoTags,
-          data_source: `webhook-${slug}`
+          data_source: 'webhook'
         })
         .select('id')
         .single();
@@ -240,7 +240,7 @@ serve(async (req) => {
         product_name: endpoint.name,
         tags: autoTags,
         custom_fields: customFields,
-        data_source: `webhook-${slug}`,
+        data_source: 'webhook',
         created_at: dealCreatedAt
       })
       .select('id')
