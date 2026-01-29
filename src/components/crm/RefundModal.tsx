@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useUpdateR2MeetingStatus } from '@/hooks/useR2AgendaData';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
@@ -35,10 +36,12 @@ interface RefundModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   meetingId: string;
+  attendeeId?: string;
   dealId: string | null;
   dealName?: string;
   originId?: string;
   currentCustomFields?: Record<string, any>;
+  meetingType?: 'r1' | 'r2';
   onSuccess?: () => void;
 }
 
@@ -46,16 +49,19 @@ export function RefundModal({
   open,
   onOpenChange,
   meetingId,
+  attendeeId,
   dealId,
   dealName,
   originId,
   currentCustomFields,
+  meetingType = 'r2',
   onSuccess,
 }: RefundModalProps) {
   const [selectedReason, setSelectedReason] = useState('');
   const [justification, setJustification] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  const queryClient = useQueryClient();
   const updateMeetingStatus = useUpdateR2MeetingStatus();
 
   const handleConfirm = async () => {
@@ -72,11 +78,27 @@ export function RefundModal({
     setIsSubmitting(true);
 
     try {
-      // 1. Update meeting status to refunded
-      await updateMeetingStatus.mutateAsync({ 
-        meetingId, 
-        status: 'refunded' 
-      });
+      // 1. Update meeting/attendee status based on meeting type
+      if (meetingType === 'r1') {
+        // For R1: update the specific attendee status to 'refunded'
+        if (attendeeId) {
+          const { error: attendeeError } = await supabase
+            .from('meeting_slot_attendees')
+            .update({ status: 'refunded' })
+            .eq('id', attendeeId);
+          
+          if (attendeeError) {
+            console.error('Error updating attendee status:', attendeeError);
+            throw attendeeError;
+          }
+        }
+      } else {
+        // For R2: update meeting slot status (original behavior)
+        await updateMeetingStatus.mutateAsync({ 
+          meetingId, 
+          status: 'refunded' 
+        });
+      }
 
       // 2. If we have a dealId, mark it as lost with refund flags
       if (dealId) {
@@ -155,6 +177,11 @@ export function RefundModal({
       }
 
       toast.warning('Lead marcado como REEMBOLSO e movido para perdidos');
+      
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['meetings'] });
       
       // Reset form
       setSelectedReason('');

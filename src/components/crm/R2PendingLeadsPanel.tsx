@@ -8,7 +8,8 @@ import {
   Clock, 
   CheckCircle, 
   AlertCircle,
-  ArrowRight 
+  ArrowRight,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useR2PendingLeads, R2PendingLead } from '@/hooks/useR2PendingLeads';
 import { R2QuickScheduleModal } from './R2QuickScheduleModal';
+import { RefundModal } from './RefundModal';
 import { R2CloserWithAvailability } from '@/hooks/useR2AgendaData';
 import { useR2StatusOptions, useR2ThermometerOptions } from '@/hooks/useR2StatusOptions';
 import { cn } from '@/lib/utils';
@@ -31,10 +33,17 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
   const { data: thermometerOptions = [] } = useR2ThermometerOptions();
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<R2PendingLead | null>(null);
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundLead, setRefundLead] = useState<R2PendingLead | null>(null);
 
   const handleScheduleR2 = (lead: R2PendingLead) => {
     setSelectedLead(lead);
     setScheduleModalOpen(true);
+  };
+
+  const handleRefund = (lead: R2PendingLead) => {
+    setRefundLead(lead);
+    setRefundModalOpen(true);
   };
 
   if (isLoading) {
@@ -142,19 +151,33 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
                       </div>
                     </div>
 
-                    {/* Action Button */}
-                    <Button 
-                      size="sm" 
-                      className="bg-purple-600 hover:bg-purple-700 shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleScheduleR2(lead);
-                      }}
-                    >
-                      <Calendar className="h-4 w-4 mr-1" />
-                      Agendar R2
-                      <ArrowRight className="h-4 w-4 ml-1" />
-                    </Button>
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="text-orange-600 border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRefund(lead);
+                        }}
+                      >
+                        <RotateCcw className="h-4 w-4 mr-1" />
+                        Reembolso
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        className="bg-purple-600 hover:bg-purple-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleScheduleR2(lead);
+                        }}
+                      >
+                        <Calendar className="h-4 w-4 mr-1" />
+                        Agendar R2
+                        <ArrowRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -188,6 +211,20 @@ export function R2PendingLeadsPanel({ closers }: R2PendingLeadsPanelProps) {
             email: null,
           }
         } : undefined}
+      />
+
+      {/* Refund Modal for R1 leads */}
+      <RefundModal
+        open={refundModalOpen}
+        onOpenChange={(open) => {
+          setRefundModalOpen(open);
+          if (!open) setRefundLead(null);
+        }}
+        meetingId={refundLead?.meeting_slot?.id || ''}
+        attendeeId={refundLead?.id}
+        dealId={refundLead?.deal?.id || null}
+        dealName={refundLead?.attendee_name || refundLead?.deal?.name}
+        meetingType="r1"
       />
     </>
   );
