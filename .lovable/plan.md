@@ -1,73 +1,161 @@
 
-Contexto do erro
-- O toast/console mostra:
-  - code: 23503
-  - message: viola FK "webhook_endpoints_stage_id_fkey"
-  - details: Key is not present in table "local_pipeline_stages"
-- Ou seja: o formulário está enviando um stage_id que não existe em local_pipeline_stages.
-- Hoje o modal “Novo Webhook de Entrada” (IncomingWebhookFormDialog) busca etapas na tabela errada (crm_stages) e usa esses IDs no insert de webhook_endpoints.
-- Porém a FK de webhook_endpoints.stage_id aponta para local_pipeline_stages (confirmado em src/integrations/supabase/types.ts).
+# Plano: Adicionar Fallback para Etapas de Pipelines Legadas
 
-Objetivo
-- Permitir criar webhook de entrada em qualquer pipeline (origin) sem erro de FK, usando corretamente as etapas da pipeline (local_pipeline_stages).
+## Problema Identificado
 
-Causa raiz (código atual)
-Arquivo: src/components/crm/webhooks/IncomingWebhookFormDialog.tsx
-- Fetch de stages:
-  - from('crm_stages').select('id, stage_name, stage_order').eq('origin_id', originId)
-- Dropdown usa stage.stage_name e envia stage.id
-- Na hora de criar webhook_endpoints, esse stage.id (de crm_stages) vai para stage_id, mas o banco exige que stage_id exista em local_pipeline_stages.
+O modal de criação de webhook busca etapas **apenas** em `local_pipeline_stages`, mas:
 
-Solução proposta (ajuste no frontend)
-1) Trocar a fonte de “Etapa Inicial” de crm_stages para local_pipeline_stages
-- Alterar o useQuery de stages para:
-  - from('local_pipeline_stages')
-  - select('id, name, stage_order, is_active')
-  - eq('origin_id', originId)
-  - eq('is_active', true)
-  - order('stage_order')
-- Atualizar o render do SelectItem para mostrar stage.name (em vez de stage.stage_name)
+| Tabela | Pipelines com etapas |
+|--------|---------------------|
+| `local_pipeline_stages` | **7** |
+| `crm_stages` (legada) | **558** |
 
-2) Ajustar defaults e validação do stage_id no formulário
-- Hoje o default stage_id tenta usar stages?.[0]?.id (mas stages eram de crm_stages).
-- Manter a mesma lógica, mas agora com local_pipeline_stages:
-  - ao abrir modal em modo “novo”, setar stage_id = firstStageId (se existir) senão ''/undefined.
-- Garantir que ao enviar para createMutation:
-  - stage_id seja null quando vazio (para evitar enviar string vazia)
-  - Observação: o hook useCreateWebhookEndpoint já converte para null usando `stage_id: endpoint.stage_id || null`, mas vamos garantir também no onSubmit para consistência.
+A maioria das pipelines (como as do Perpétuo X1) ainda usa a tabela legada `crm_stages`, por isso o dropdown de etapas aparece vazio.
 
-3) UX de segurança (quando pipeline não tem etapas ativas)
-- Se stages vier vazio:
-  - Exibir mensagem no campo “Etapa Inicial”: “Esta pipeline não possui etapas ativas. Crie uma etapa antes de configurar o webhook.”
-  - Desabilitar o botão “Criar Webhook” (ou permitir criar com stage_id null, dependendo da regra do produto).
-  - Recomendo: permitir salvar com stage_id null apenas se o receptor de leads suportar fallback para “primeira etapa da pipeline”. Se não existir fallback, bloquear criação para evitar leads “sem etapa”.
+---
 
-4) Conferir consistência com o restante do sistema
-- O Wizard de pipeline já cria etapas em local_pipeline_stages e, quando cria webhook automaticamente, ele já mapeia IDs temporários -> IDs de local_pipeline_stages (useCreatePipeline.ts). Isso confirma que o padrão correto é local_pipeline_stages.
-- Após a correção do modal, a criação manual de webhook vai ficar alinhada com o Wizard.
+## Causa Raiz
 
-Plano de testes (manual, rápido)
-1) Abrir /crm/negocios
-2) Ir em Configurações da Pipeline A (onde antes falhava)
-3) Webhooks de Entrada → Novo Webhook
-4) Selecionar “Etapa Inicial” e criar
-   - Esperado: criar sem toast de FK
-5) Repetir em outra pipeline (origin) diferente
-6) Confirmar no Supabase (tabela webhook_endpoints) que:
-   - origin_id = pipeline selecionada
-   - stage_id = id existente em local_pipeline_stages
-7) Enviar um POST de teste para o endpoint criado (quando aplicável) e confirmar que o lead cai na etapa correta
+No arquivo `IncomingWebhookFormDialog.tsx`, a query busca apenas em `local_pipeline_stages`:
 
-Arquivos a alterar
-- src/components/crm/webhooks/IncomingWebhookFormDialog.tsx
-  - trocar query de stages para local_pipeline_stages
-  - ajustar campos exibidos (name)
-  - reforçar stage_id null quando vazio
-  - tratar caso sem etapas
+```typescript
+const { data: stages } = useQuery({
+  queryKey: ['local-pipeline-stages', originId],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('local_pipeline_stages')  // ← Apenas aqui
+      .select('id, name, stage_order, is_active')
+      .eq('origin_id', originId)
+      .eq('is_active', true)
+      .order('stage_order');
+    return data;
+  },
+});
+```
 
-Risco/impacto
-- Baixo: mudança localizada no modal de criação/edição do webhook.
-- Impacto positivo imediato: desbloqueia criação de webhook em qualquer pipeline e elimina o erro de FK.
+---
 
-Observação importante
-- Se ainda existir alguma pipeline “antiga” que use crm_stages (legado) e não tenha local_pipeline_stages, ela continuará sem etapas no dropdown. Nesse caso, a correção certa é migrar/garantir etapas em local_pipeline_stages (mas primeiro vamos validar se isso ocorre no seu ambiente).
+## Solução: Fallback para `crm_stages`
+
+### Lógica
+
+1. Buscar primeiro em `local_pipeline_stages`
+2. Se retornar vazio (ou null), buscar em `crm_stages`
+3. Normalizar os campos para ter mesma estrutura
+
+### Alteração no Arquivo
+
+**`src/components/crm/webhooks/IncomingWebhookFormDialog.tsx`**
+
+```typescript
+// Fetch stages - primeiro local_pipeline_stages, fallback para crm_stages
+const { data: stages } = useQuery({
+  queryKey: ['pipeline-stages-with-fallback', originId],
+  queryFn: async () => {
+    // Tentar primeiro em local_pipeline_stages
+    const { data: localStages, error: localError } = await supabase
+      .from('local_pipeline_stages')
+      .select('id, name, stage_order, is_active')
+      .eq('origin_id', originId)
+      .eq('is_active', true)
+      .order('stage_order');
+    
+    if (!localError && localStages && localStages.length > 0) {
+      return localStages;
+    }
+    
+    // Fallback para crm_stages (tabela legada)
+    const { data: crmStages, error: crmError } = await supabase
+      .from('crm_stages')
+      .select('id, stage_name, stage_order')
+      .eq('origin_id', originId)
+      .order('stage_order');
+    
+    if (crmError) throw crmError;
+    
+    // Normalizar campos para manter compatibilidade
+    return (crmStages || []).map(s => ({
+      id: s.id,
+      name: s.stage_name,  // stage_name → name
+      stage_order: s.stage_order,
+      is_active: true
+    }));
+  },
+  enabled: !!originId,
+});
+```
+
+---
+
+## Importante: Constraint de FK
+
+Há um problema: `webhook_endpoints.stage_id` tem FK para `local_pipeline_stages`, **não** para `crm_stages`.
+
+Isso significa que:
+- Se usarmos IDs de `crm_stages`, o insert vai falhar com erro de FK
+- Pipelines legadas precisariam ter suas etapas migradas para `local_pipeline_stages`
+
+### Opções de Resolução
+
+**Opção A: Migração única (recomendada)**
+- Rodar script SQL que copia etapas de `crm_stages` para `local_pipeline_stages` onde não existem
+- Depois, o frontend funciona sem alteração
+
+**Opção B: Alterar FK no banco**
+- Remover/ajustar FK para permitir IDs de ambas as tabelas
+- Mais complexo e pode afetar integridade
+
+**Opção C: Criar webhook sem stage_id**
+- Permitir criar webhook com `stage_id = null`
+- Leads entrariam sem etapa definida (precisaria de lógica de fallback no processamento)
+
+---
+
+## Plano de Ação Recomendado
+
+### Passo 1: Script de Migração (SQL)
+
+```sql
+-- Copiar etapas de crm_stages para local_pipeline_stages onde não existem
+INSERT INTO local_pipeline_stages (id, origin_id, name, stage_order, is_active, color)
+SELECT 
+  cs.id,
+  cs.origin_id,
+  cs.stage_name as name,
+  cs.stage_order,
+  true as is_active,
+  null as color
+FROM crm_stages cs
+WHERE NOT EXISTS (
+  SELECT 1 FROM local_pipeline_stages lps 
+  WHERE lps.origin_id = cs.origin_id
+)
+ON CONFLICT (id) DO NOTHING;
+```
+
+Este script:
+- Copia todas as etapas de pipelines que só existem em `crm_stages`
+- Usa o mesmo ID para manter consistência
+- Não afeta pipelines que já têm etapas em `local_pipeline_stages`
+
+### Passo 2: Verificar Resultado
+
+Após rodar o script, a query do frontend (`local_pipeline_stages`) retornará etapas para todas as pipelines.
+
+---
+
+## Resultado Esperado
+
+- Todas as pipelines terão etapas disponíveis no dropdown
+- Webhooks poderão ser criados em qualquer pipeline
+- FK continua válida (todos os IDs existem em `local_pipeline_stages`)
+
+---
+
+## Resumo
+
+| Etapa | Ação |
+|-------|------|
+| 1 | Rodar script SQL de migração |
+| 2 | Testar criação de webhook nas pipelines que antes falhavam |
+| 3 | Confirmar que etapas aparecem no dropdown |
