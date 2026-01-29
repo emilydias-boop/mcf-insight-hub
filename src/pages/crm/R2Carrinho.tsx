@@ -19,6 +19,7 @@ import { useR2CarrinhoVendas } from '@/hooks/useR2CarrinhoVendas';
 import { useR2MeetingsExtended } from '@/hooks/useR2MeetingsExtended';
 import { R2MeetingDetailDrawer } from '@/components/crm/R2MeetingDetailDrawer';
 import { useQueryClient } from '@tanstack/react-query';
+import { useActiveBU } from '@/hooks/useActiveBU';
 
 export default function R2Carrinho() {
   const [weekDate, setWeekDate] = useState(new Date());

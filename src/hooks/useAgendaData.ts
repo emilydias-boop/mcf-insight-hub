@@ -291,16 +291,22 @@ export function useUpcomingMeetings(date: Date) {
 
 // ============ Closers Hooks ============
 
-export function useClosersWithAvailability() {
+export function useClosersWithAvailability(buFilter?: string | null) {
   return useQuery({
-    queryKey: ['closers-with-availability'],
+    queryKey: ['closers-with-availability', buFilter],
     queryFn: async () => {
-      const { data: closers, error: closersError } = await supabase
+      let query = supabase
         .from('closers')
         .select('*')
         .eq('is_active', true)
-        .or('meeting_type.is.null,meeting_type.eq.r1')
-        .order('name');
+        .or('meeting_type.is.null,meeting_type.eq.r1');
+      
+      // Filtrar por BU se especificado
+      if (buFilter) {
+        query = query.eq('bu', buFilter);
+      }
+      
+      const { data: closers, error: closersError } = await query.order('name');
 
       if (closersError) throw closersError;
 

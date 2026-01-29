@@ -63,6 +63,7 @@ import { useR2DailySlotsForView } from "@/hooks/useR2DailySlotsForView";
 import { R2CloserWithAvailability } from "@/hooks/useR2AgendaData";
 import { useMyR2Closer } from "@/hooks/useMyR2Closer";
 import { useAuth } from "@/contexts/AuthContext";
+import { useActiveBU } from "@/hooks/useActiveBU";
 
 type ViewMode = "day" | "week" | "month";
 
@@ -91,6 +92,7 @@ export default function AgendaR2() {
   // Auth e closer R2 do usuário logado
   const { role, allRoles } = useAuth();
   const { data: myR2Closer, isLoading: isLoadingMyR2Closer } = useMyR2Closer();
+  const activeBU = useActiveBU();
   
   // Verifica se usuário é closer R2 puro (não tem outras roles privilegiadas)
   const isR2Closer = !!myR2Closer?.id && role === 'closer' && !allRoles.includes('sdr') && !allRoles.includes('admin') && !allRoles.includes('manager') && !allRoles.includes('coordenador');
@@ -120,9 +122,9 @@ export default function AgendaR2() {
     }
   }, [selectedDate, viewMode]);
 
-  // Fetch data
-  const { data: closers = [], isLoading: isLoadingClosers } = useActiveR2Closers();
-  const { data: allClosers = [], isLoading: isLoadingAllClosers } = useR2ClosersList();
+  // Fetch data - passar filtro de BU para closers
+  const { data: closers = [], isLoading: isLoadingClosers } = useActiveR2Closers(activeBU);
+  const { data: allClosers = [], isLoading: isLoadingAllClosers } = useR2ClosersList(activeBU);
   const {
     data: meetings = [],
     isLoading: isLoadingMeetings,

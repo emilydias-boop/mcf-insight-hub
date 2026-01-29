@@ -24,11 +24,13 @@ import { useMeetingReminders } from '@/hooks/useMeetingReminders';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMyCloser } from '@/hooks/useMyCloser';
+import { useActiveBU } from '@/hooks/useActiveBU';
 
 export default function Agenda() {
   const navigate = useNavigate();
   const { role, allRoles } = useAuth();
   const { data: myCloser } = useMyCloser();
+  const activeBU = useActiveBU();
   
   // Verifica se usuário é closer PURO (não tem SDR)
   // Usuários com múltiplas roles (SDR + Closer) veem a agenda como SDR para poder agendar
@@ -64,7 +66,8 @@ export default function Agenda() {
   }, [selectedDate, viewMode]);
 
   const { data: meetings = [], isLoading: meetingsLoading, refetch } = useAgendaMeetings(rangeStart, rangeEnd);
-  const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability();
+  // Passar filtro de BU para buscar apenas closers da BU ativa
+  const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(activeBU);
   const { data: blockedDates = [] } = useBlockedDates();
 
   // Fail-closed: se é closer mas não tem vínculo, não mostra nada

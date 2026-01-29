@@ -1380,6 +1380,7 @@ export type Database = {
       }
       closers: {
         Row: {
+          bu: string | null
           calendly_default_link: string | null
           calendly_event_type_uri: string | null
           color: string | null
@@ -1397,6 +1398,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          bu?: string | null
           calendly_default_link?: string | null
           calendly_event_type_uri?: string | null
           color?: string | null
@@ -1414,6 +1416,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          bu?: string | null
           calendly_default_link?: string | null
           calendly_event_type_uri?: string | null
           color?: string | null
