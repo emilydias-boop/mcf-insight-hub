@@ -22,6 +22,9 @@ export interface ContractReportRow {
   originName: string;
   currentStage: string;
   contractPaidAt: string;
+  salesChannel: 'a010' | 'bio' | 'live';
+  contactEmail: string | null;
+  contactTags: string[];
   customFields: {
     profissao?: string;
     renda?: string;
@@ -47,6 +50,7 @@ export const useContractReport = (
         id,
         attendee_name,
         attendee_phone,
+        attendee_email,
         status,
         deal_id,
           meeting_slots!inner (
@@ -68,6 +72,7 @@ export const useContractReport = (
             custom_fields,
             origin_id,
             stage_id,
+            contact_id,
             crm_origins (
               id,
               name,
@@ -76,6 +81,11 @@ export const useContractReport = (
             crm_stages (
               id,
               stage_name
+            ),
+            crm_contacts (
+              id,
+              email,
+              tags
             )
           )
         `)
@@ -132,6 +142,42 @@ export const useContractReport = (
         }
       }
       
+      // Collect all contact emails to check for A010 purchases
+      const contactEmails = sortedData
+        .map((row: any) => row.crm_deals?.crm_contacts?.email || row.attendee_email)
+        .filter(Boolean) as string[];
+      
+      // Fetch A010 buyers from hubla_transactions
+      let a010Emails = new Set<string>();
+      if (contactEmails.length > 0) {
+        const { data: hublaData } = await supabase
+          .from('hubla_transactions')
+          .select('customer_email')
+          .ilike('product_name', '%a010%')
+          .in('customer_email', contactEmails);
+        
+        if (hublaData) {
+          a010Emails = new Set(hublaData.map(h => h.customer_email?.toLowerCase() || ''));
+        }
+      }
+      
+      // Helper to detect sales channel
+      const detectSalesChannel = (email: string | null, tags: string[]): 'a010' | 'bio' | 'live' => {
+        // Check A010 first (highest priority)
+        if (email && a010Emails.has(email.toLowerCase())) {
+          return 'a010';
+        }
+        
+        // Check BIO tags
+        const normalizedTags = tags.map(t => t.toLowerCase());
+        if (normalizedTags.some(t => t.includes('bio') || t.includes('instagram'))) {
+          return 'bio';
+        }
+        
+        // Default to LIVE
+        return 'live';
+      };
+      
       // Transform data
       return sortedData.map((row: any) => {
         const slot = row.meeting_slots;
@@ -139,8 +185,13 @@ export const useContractReport = (
         const deal = row.crm_deals;
         const origin = deal?.crm_origins;
         const stage = deal?.crm_stages;
+        const contact = deal?.crm_contacts;
         const customFields = deal?.custom_fields || {};
         const sdrEmail = deal?.owner_id || '';
+        
+        const contactEmail = contact?.email || row.attendee_email || null;
+        const contactTags: string[] = Array.isArray(contact?.tags) ? contact.tags : [];
+        const salesChannel = detectSalesChannel(contactEmail, contactTags);
         
         return {
           id: row.id,
@@ -155,6 +206,9 @@ export const useContractReport = (
           originName: origin?.display_name || origin?.name || 'N/A',
           currentStage: stage?.stage_name || 'N/A',
           contractPaidAt: slot?.scheduled_at || '',
+          salesChannel,
+          contactEmail,
+          contactTags,
           customFields,
         };
       });
