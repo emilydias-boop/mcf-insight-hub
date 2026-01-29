@@ -1,97 +1,69 @@
 
-
-# Plano de Correção: Stages do Leilão não aparecem no Kanban
+# Correção do data_source para Webhook Lead Receiver
 
 ## Problema Identificado
 
-As stages do CRM do Leilão não aparecem porque o sistema de **permissões de stages** não consegue reconhecê-las:
+O webhook `webhook-lead-receiver` não está salvando leads porque utiliza `data_source: 'webhook-${slug}'` (ex: `'webhook-lead-form-50k'`), mas a tabela `crm_deals` possui uma constraint que só aceita os valores:
+- `csv`
+- `webhook`
+- `manual`
+- `bubble`
 
-### Fluxo do problema:
+### Impacto
+Todos os leads recebidos via qualquer slug do `webhook-lead-receiver` estão falhando com o erro:
+```
+new row for relation "crm_deals" violates check constraint "crm_deals_data_source_check"
+```
 
-1. O `DealKanbanBoard` filtra stages por permissão: `activeStages.filter(s => canViewStage(s.id))`
+---
 
-2. A função `canViewStage` no hook `useStagePermissions` tenta encontrar permissões por:
-   - **UUID direto** → Não encontra (tabela `stage_permissions` usa IDs como `novo_lead`, `lead_qualificado`)
-   - **Fallback por nome** → Busca no `stagesMap` que vem de `crm_stages`
+## Análise dos Webhooks por BU
 
-3. **As stages do Leilão estão em `local_pipeline_stages`**, não em `crm_stages`, então o `stagesMap` não as conhece
+| Webhook | Tabela alvo | data_source | Status |
+|---------|-------------|-------------|--------|
+| `webhook-lead-receiver` | `crm_deals` | `webhook-${slug}` ❌ | **Precisa corrigir** |
+| `webhook-live-leads` | `crm_deals` | `'webhook'` ✅ | OK |
+| `webhook-consorcio` | `consortium_cards` | N/A | OK (tabela diferente) |
+| `webhook-leilao` | `auctions` | N/A | OK (tabela diferente) |
+| `webhook-credito` | `credit_deals` | N/A | OK (tabela diferente) |
+| `webhook-projetos` | `projects` | N/A | OK (tabela diferente) |
 
-4. Resultado: `canViewStage` retorna `false` para todas as stages do Leilão → **nenhuma coluna aparece**
-
-## Solução
-
-Atualizar o hook `useStagePermissions` para incluir stages de `local_pipeline_stages` no mapeamento UUID → nome.
+Apenas o `webhook-lead-receiver` precisa de correção.
 
 ---
 
 ## Alterações Necessárias
 
-### Arquivo: `src/hooks/useStagePermissions.ts`
+### Arquivo: `supabase/functions/webhook-lead-receiver/index.ts`
 
-Atualizar a query `stages-map` para incluir dados de ambas as tabelas:
-
-**Antes (linha 126-139):**
+**Linha 153** - Criar contato:
 ```typescript
-const { data: stagesMap = {}, isLoading: stagesLoading } = useQuery({
-  queryKey: ['stages-map'],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('crm_stages')
-      .select('id, stage_name');
-    
-    if (error) throw error;
-    
-    const map: Record<string, string> = {};
-    data?.forEach(s => { map[s.id] = s.stage_name; });
-    return map;
-  },
-});
+// ANTES:
+data_source: `webhook-${slug}`
+
+// DEPOIS:
+data_source: 'webhook'
 ```
 
-**Depois:**
+**Linha 243** - Criar deal:
 ```typescript
-const { data: stagesMap = {}, isLoading: stagesLoading } = useQuery({
-  queryKey: ['stages-map'],
-  queryFn: async () => {
-    // Buscar de ambas as tabelas
-    const [crmRes, localRes] = await Promise.all([
-      supabase.from('crm_stages').select('id, stage_name'),
-      supabase.from('local_pipeline_stages').select('id, name'),
-    ]);
-    
-    const map: Record<string, string> = {};
-    
-    // Mapear crm_stages
-    crmRes.data?.forEach(s => { 
-      map[s.id] = s.stage_name; 
-    });
-    
-    // Mapear local_pipeline_stages (name → stage_name)
-    localRes.data?.forEach(s => { 
-      map[s.id] = s.name; 
-    });
-    
-    return map;
-  },
-});
+// ANTES:
+data_source: `webhook-${slug}`,
+
+// DEPOIS:
+data_source: 'webhook',
 ```
 
 ---
 
-## Por que isso resolve?
+## Rastreabilidade Mantida
 
-1. O `stagesMap` agora incluirá os UUIDs das stages do Leilão:
-   - `ef930b3b-abc1-41d9-8d41-dcace0793cb7` → `Novo Lead`
-   - `a973963d-669e-452f-9e5a-f4cb4ddf9858` → `Lead Qualificado`
-   - `bef6f4db-a2ee-444f-90f7-0e03d0246f34` → `Sem Interesse`
-   - (etc.)
+A informação específica do slug continua disponível em:
+- `custom_fields.source` → slug do endpoint
+- `custom_fields.webhook_endpoint` → nome do endpoint
+- `custom_fields.lead_channel` → slug em uppercase
 
-2. O fallback da função `findPermission` vai funcionar:
-   - UUID `ef930b3b-...` → nome `Novo Lead` → normalizado `novo_lead`
-   - Encontra permissão em `stage_permissions` com `stage_id = 'novo_lead'`
-   - Retorna `can_view: true`
-
-3. As stages aparecem no Kanban!
+Não há perda de informação para fins de analytics ou debug.
 
 ---
 
@@ -99,5 +71,14 @@ const { data: stagesMap = {}, isLoading: stagesLoading } = useQuery({
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/hooks/useStagePermissions.ts` | Atualizar query `stages-map` para incluir `local_pipeline_stages` |
+| `supabase/functions/webhook-lead-receiver/index.ts` | Alterar `data_source` de `'webhook-${slug}'` para `'webhook'` em 2 locais (linhas 153 e 243) |
 
+---
+
+## Resultado Esperado
+
+Após a correção:
+1. ✅ Leads do `lead-form-50k` aparecerão no Kanban
+2. ✅ Leads de qualquer outro slug configurado funcionarão
+3. ✅ Todas as BUs (Consórcio, Leilão, Crédito, Projetos) poderão receber leads via `webhook-lead-receiver`
+4. ✅ A rastreabilidade da origem permanece via `custom_fields`
