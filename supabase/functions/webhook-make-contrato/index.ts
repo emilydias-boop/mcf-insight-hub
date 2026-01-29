@@ -51,7 +51,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
-    // Buscar attendees R1 dos últimos 14 dias
+    // Buscar attendees R1 dos últimos 14 dias - com JOIN para trazer email/phone do contato
     const { data: attendeesRaw, error: queryError } = await supabase
       .from('meeting_slot_attendees')
       .select(`
@@ -67,6 +67,10 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
           status,
           meeting_type,
           closer_id
+        ),
+        crm_deals!deal_id(
+          id,
+          crm_contacts!contact_id(email, phone)
         )
       `)
       .eq('meeting_slots.meeting_type', 'r1')
@@ -104,15 +108,9 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
         continue;
       }
 
-      // Buscar email/phone do contato via deal_id
-      const { data: deal } = await supabase
-        .from('crm_deals')
-        .select('contact:crm_contacts(email, phone)')
-        .eq('id', attendee.deal_id)
-        .maybeSingle();
-
-      const contactEmail = deal?.contact?.email?.toLowerCase()?.trim() || '';
-      const contactPhone = deal?.contact?.phone?.replace(/\D/g, '') || '';
+      // Dados do contato já vieram no JOIN - sem query adicional!
+      const contactEmail = attendee.crm_deals?.crm_contacts?.email?.toLowerCase()?.trim() || '';
+      const contactPhone = (attendee.crm_deals?.crm_contacts?.phone || '').replace(/\D/g, '');
 
       // Log para debug detalhado
       console.log(`🔍 Verificando: ${attendee.attendee_name} | CRM email: "${contactEmail}" | CRM phone: "${contactPhone}" | deal: ${attendee.deal_id}`);
