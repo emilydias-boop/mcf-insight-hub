@@ -44,15 +44,17 @@ export const useContractReport = (
       const endISO = format(filters.endDate, 'yyyy-MM-dd') + 'T23:59:59';
       
       // Query meeting_slot_attendees with status = 'contract_paid'
+      // Filter by contract_paid_at (payment date), not scheduled_at (meeting date)
       let query = supabase
         .from('meeting_slot_attendees')
         .select(`
-        id,
-        attendee_name,
-        attendee_phone,
-        attendee_email,
-        status,
-        deal_id,
+          id,
+          attendee_name,
+          attendee_phone,
+          attendee_email,
+          status,
+          deal_id,
+          contract_paid_at,
           meeting_slots!inner (
             id,
             scheduled_at,
@@ -90,8 +92,8 @@ export const useContractReport = (
           )
         `)
         .eq('status', 'contract_paid')
-        .gte('meeting_slots.scheduled_at', startISO)
-        .lte('meeting_slots.scheduled_at', endISO);
+        .gte('contract_paid_at', startISO)
+        .lte('contract_paid_at', endISO);
       
       // Filter by specific closer if provided
       if (filters.closerId) {
@@ -112,10 +114,10 @@ export const useContractReport = (
       
       if (!data) return [];
       
-      // Sort by meeting date (DESC - most recent first)
+      // Sort by payment date (DESC - most recent first)
       const sortedData = [...data].sort((a: any, b: any) => {
-        const dateA = a.meeting_slots?.scheduled_at || '';
-        const dateB = b.meeting_slots?.scheduled_at || '';
+        const dateA = a.contract_paid_at || '';
+        const dateB = b.contract_paid_at || '';
         return dateB.localeCompare(dateA);
       });
       
@@ -205,7 +207,7 @@ export const useContractReport = (
           sdrName: sdrNameMap[sdrEmail] || sdrEmail,
           originName: origin?.display_name || origin?.name || 'N/A',
           currentStage: stage?.stage_name || 'N/A',
-          contractPaidAt: slot?.scheduled_at || '',
+          contractPaidAt: row.contract_paid_at || slot?.scheduled_at || '',
           salesChannel,
           contactEmail,
           contactTags,
