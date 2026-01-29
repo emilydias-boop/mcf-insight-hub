@@ -15,6 +15,300 @@ interface MakeContratoPayload {
   tipo_contrato?: string;
 }
 
+// ============= HELPER: Auto-marcar Contrato Pago =============
+interface AutoMarkData {
+  customerEmail: string | null;
+  customerPhone: string | null;
+  customerName: string | null;
+  saleDate: string;
+}
+
+interface AutoMarkResult {
+  matched: boolean;
+  attendee_id?: string;
+  attendee_name?: string;
+  match_type?: string;
+  deal_transferred?: boolean;
+  closer_email?: string;
+}
+
+// deno-lint-ignore no-explicit-any
+async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<AutoMarkResult> {
+  if (!data.customerEmail && !data.customerPhone) {
+    console.log('🎯 [AUTO-PAGO] Sem email ou telefone para buscar reunião');
+    return { matched: false };
+  }
+
+  // Normalizar dados para busca
+  const phoneDigits = data.customerPhone?.replace(/\D/g, '') || '';
+  const phoneSuffix = phoneDigits.slice(-9);
+  const emailLower = data.customerEmail?.toLowerCase()?.trim() || '';
+
+  console.log(`🎯 [AUTO-PAGO] Buscando match para: email="${emailLower}", phone_suffix="${phoneSuffix}", name="${data.customerName}"`);
+
+  try {
+    // Limitar busca aos últimos 14 dias
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+    // Buscar attendees R1 dos últimos 14 dias
+    const { data: attendeesRaw, error: queryError } = await supabase
+      .from('meeting_slot_attendees')
+      .select(`
+        id,
+        status,
+        meeting_slot_id,
+        attendee_name,
+        attendee_phone,
+        deal_id,
+        meeting_slots!inner(
+          id,
+          scheduled_at,
+          status,
+          meeting_type,
+          closer_id
+        )
+      `)
+      .eq('meeting_slots.meeting_type', 'r1')
+      .gte('meeting_slots.scheduled_at', twoWeeksAgo.toISOString())
+      .in('meeting_slots.status', ['scheduled', 'completed', 'rescheduled', 'contract_paid'])
+      .in('status', ['scheduled', 'invited', 'completed', 'rescheduled']);
+
+    if (queryError) {
+      console.error('🎯 [AUTO-PAGO] Erro na query:', queryError.message);
+      return { matched: false };
+    }
+
+    if (!attendeesRaw?.length) {
+      console.log('🎯 [AUTO-PAGO] Nenhum attendee R1 encontrado nos últimos 14 dias');
+      return { matched: false };
+    }
+
+    // Ordenar em JavaScript (mais confiável que ordenação nested do Supabase)
+    const attendees = [...attendeesRaw].sort((a: any, b: any) => {
+      const dateA = new Date(a.meeting_slots?.scheduled_at || 0).getTime();
+      const dateB = new Date(b.meeting_slots?.scheduled_at || 0).getTime();
+      return dateB - dateA; // Mais recente primeiro
+    });
+
+    console.log(`🎯 [AUTO-PAGO] ${attendees.length} attendees encontrados (últimos 14 dias)`);
+
+    // Match em duas fases - email primeiro, telefone como fallback
+    let matchingAttendee: any = null;
+    let meeting: any = null;
+    let matchType: string = '';
+    let phoneMatchCandidate: { attendee: any; meeting: any } | null = null;
+
+    for (const attendee of attendees) {
+      if (!attendee.deal_id) {
+        continue;
+      }
+
+      // Buscar email/phone do contato via deal_id
+      const { data: deal } = await supabase
+        .from('crm_deals')
+        .select('contact:crm_contacts(email, phone)')
+        .eq('id', attendee.deal_id)
+        .maybeSingle();
+
+      const contactEmail = deal?.contact?.email?.toLowerCase()?.trim() || '';
+      const contactPhone = deal?.contact?.phone?.replace(/\D/g, '') || '';
+
+      // Log para debug detalhado
+      console.log(`🔍 Verificando: ${attendee.attendee_name} | CRM email: "${contactEmail}" | CRM phone: "${contactPhone}" | deal: ${attendee.deal_id}`);
+
+      // Match por EMAIL (prioridade 1) - break imediato
+      if (emailLower && contactEmail && contactEmail === emailLower) {
+        matchingAttendee = attendee;
+        meeting = attendee.meeting_slots;
+        matchType = 'email';
+        console.log(`✅ [AUTO-PAGO] Match por EMAIL: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
+        break;
+      }
+
+      // Match por TELEFONE (prioridade 2) - guardar como candidato, continuar buscando email
+      if (phoneSuffix.length >= 8 && !phoneMatchCandidate) {
+        const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
+        if (contactPhone.endsWith(phoneSuffix) || attendeePhoneClean.endsWith(phoneSuffix)) {
+          phoneMatchCandidate = { attendee, meeting: attendee.meeting_slots };
+          console.log(`📞 [AUTO-PAGO] Candidato por TELEFONE: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
+        }
+      }
+    }
+
+    // Se não encontrou por email, usar candidato de telefone
+    if (!matchingAttendee && phoneMatchCandidate) {
+      matchingAttendee = phoneMatchCandidate.attendee;
+      meeting = phoneMatchCandidate.meeting;
+      matchType = 'telefone';
+      console.log(`✅ [AUTO-PAGO] Match final por TELEFONE: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
+    }
+
+    if (!matchingAttendee) {
+      console.log(`🎯 [AUTO-PAGO] Nenhum match encontrado para email="${emailLower}" ou phone_suffix="${phoneSuffix}"`);
+      return { matched: false };
+    }
+
+    console.log(`🎉 [AUTO-PAGO] Match por ${matchType.toUpperCase()}: Attendee ${matchingAttendee.id} (${matchingAttendee.attendee_name}) - Reunião: ${meeting.id}`);
+
+    // Atualizar attendee para contract_paid com a data da reunião
+    const { error: updateError } = await supabase
+      .from('meeting_slot_attendees')
+      .update({
+        status: 'contract_paid',
+        contract_paid_at: meeting.scheduled_at
+      })
+      .eq('id', matchingAttendee.id);
+
+    if (updateError) {
+      console.error('🎯 [AUTO-PAGO] Erro ao atualizar attendee:', updateError.message);
+      return { matched: false };
+    }
+
+    console.log(`✅ [AUTO-PAGO] Attendee ${matchingAttendee.id} marcado como contract_paid`);
+
+    // Atualizar reunião para completed se ainda não estiver
+    if (meeting.status === 'scheduled' || meeting.status === 'rescheduled') {
+      await supabase
+        .from('meeting_slots')
+        .update({ status: 'completed' })
+        .eq('id', meeting.id);
+      
+      console.log(`✅ [AUTO-PAGO] Reunião ${meeting.id} marcada como completed`);
+    }
+
+    // Criar notificação para o closer agendar R2
+    if (meeting.closer_id) {
+      const { error: notifError } = await supabase
+        .from('user_notifications')
+        .insert({
+          user_id: meeting.closer_id,
+          type: 'contract_paid',
+          title: '💰 Contrato Pago - Agendar R2',
+          message: `${data.customerName || matchingAttendee.attendee_name || 'Cliente'} pagou o contrato! Agende a R2.`,
+          data: {
+            attendee_id: matchingAttendee.id,
+            meeting_id: meeting.id,
+            customer_name: data.customerName,
+            sale_date: data.saleDate,
+            attendee_name: matchingAttendee.attendee_name
+          },
+          read: false
+        });
+
+      if (notifError) {
+        console.error('🎯 [AUTO-PAGO] Erro ao criar notificação:', notifError.message);
+      } else {
+        console.log(`🔔 [AUTO-PAGO] Notificação criada para closer: ${meeting.closer_id}`);
+      }
+    }
+
+    // TRANSFERIR OWNERSHIP E MOVER ESTÁGIO DO DEAL
+    let closerEmail: string | undefined;
+    let dealTransferred = false;
+    
+    if (matchingAttendee.deal_id && meeting.closer_id) {
+      try {
+        // Buscar email do closer
+        const { data: closerData } = await supabase
+          .from('closers')
+          .select('email')
+          .eq('id', meeting.closer_id)
+          .maybeSingle();
+        
+        closerEmail = closerData?.email;
+        
+        if (closerEmail) {
+          // Buscar deal atual
+          const { data: deal } = await supabase
+            .from('crm_deals')
+            .select('owner_id, original_sdr_email, r1_closer_email, origin_id')
+            .eq('id', matchingAttendee.deal_id)
+            .maybeSingle();
+          
+          if (deal) {
+            // Buscar lista de closers para verificar se owner atual é closer
+            const { data: closersList } = await supabase
+              .from('closers')
+              .select('email')
+              .eq('is_active', true);
+            
+            const closerEmails = closersList?.map((c: { email: string }) => c.email.toLowerCase()) || [];
+            const isOwnerCloser = closerEmails.includes(deal.owner_id?.toLowerCase() || '');
+            
+            // Buscar profile_id do closer para owner_profile_id
+            const { data: closerProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', closerEmail)
+              .maybeSingle();
+            
+            // Buscar stage "Contrato Pago" no pipeline
+            const { data: contractPaidStage } = await supabase
+              .from('crm_stages')
+              .select('id')
+              .eq('origin_id', deal.origin_id)
+              .ilike('stage_name', '%Contrato Pago%')
+              .maybeSingle();
+            
+            // Atualizar deal com transferência de ownership
+            const updatePayload: Record<string, unknown> = {
+              owner_id: closerEmail,
+              r1_closer_email: closerEmail,
+            };
+            
+            // Preservar SDR original se owner atual não é closer
+            if (!deal.original_sdr_email && deal.owner_id && !isOwnerCloser) {
+              updatePayload.original_sdr_email = deal.owner_id;
+            }
+            
+            // Atualizar owner_profile_id se encontrou o profile
+            if (closerProfile?.id) {
+              updatePayload.owner_profile_id = closerProfile.id;
+            }
+            
+            // Mover para estágio Contrato Pago se encontrou
+            if (contractPaidStage?.id) {
+              updatePayload.stage_id = contractPaidStage.id;
+            }
+            
+            const { error: dealUpdateError } = await supabase
+              .from('crm_deals')
+              .update(updatePayload)
+              .eq('id', matchingAttendee.deal_id);
+            
+            if (dealUpdateError) {
+              console.error(`❌ [AUTO-PAGO] Erro ao transferir deal:`, dealUpdateError.message);
+            } else {
+              dealTransferred = true;
+              console.log(`✅ [AUTO-PAGO] Deal ${matchingAttendee.deal_id} transferido para ${closerEmail}`);
+              console.log(`📋 [AUTO-PAGO] Campos atualizados:`, JSON.stringify(updatePayload));
+            }
+          }
+        } else {
+          console.log(`⚠️ [AUTO-PAGO] Closer ${meeting.closer_id} não encontrado na tabela closers`);
+        }
+      } catch (ownershipErr: any) {
+        console.error(`❌ [AUTO-PAGO] Erro na transferência de ownership:`, ownershipErr.message);
+      }
+    }
+
+    console.log(`🎉 [AUTO-PAGO] Contrato marcado como pago automaticamente!`);
+    
+    return {
+      matched: true,
+      attendee_id: matchingAttendee.id,
+      attendee_name: matchingAttendee.attendee_name,
+      match_type: matchType,
+      deal_transferred: dealTransferred,
+      closer_email: closerEmail,
+    };
+  } catch (err: any) {
+    console.error('🎯 [AUTO-PAGO] Erro:', err.message);
+    return { matched: false };
+  }
+}
+
 Deno.serve(async (req) => {
   const startTime = Date.now();
   
@@ -196,6 +490,15 @@ Deno.serve(async (req) => {
     const processingTime = Date.now() - startTime;
     console.log(`✅ Contrato inserido com sucesso em ${processingTime}ms:`, insertedData);
 
+    // ===== AUTO-MARCAR CONTRATO PAGO =====
+    console.log('🎯 Iniciando auto-marcação de contrato pago...');
+    const autoMarkResult = await autoMarkContractPaid(supabase, {
+      customerEmail: body.email,
+      customerPhone: body.telefone || null,
+      customerName: body.nome,
+      saleDate: saleDate,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -208,6 +511,7 @@ Deno.serve(async (req) => {
         valor_corrigido: valorCorrigido,
         valor_original_make: valorCorrigido ? valorOriginalMake : undefined,
         processing_time_ms: processingTime,
+        auto_mark_result: autoMarkResult,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
