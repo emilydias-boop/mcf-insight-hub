@@ -1,79 +1,91 @@
 
-# Adicionar Seção "Minhas Avaliações" na Página MeuRH
+# Correção do Webhook Make para Auto-Marcar Contrato Pago
 
-## Objetivo
-Permitir que os colaboradores visualizem suas próprias notas de avaliações diretamente na página **Meu RH** (`/meu-rh`), sem precisar de acesso ao módulo de RH.
+## Problema Identificado
+
+O webhook `webhook-make-contrato` **apenas insere** a transação na tabela `hubla_transactions`, mas **não executa** a função `autoMarkContractPaid` que:
+1. Busca o attendee R1 correspondente por email/telefone
+2. Marca o attendee como `contract_paid`
+3. Atualiza o slot para `completed`
+4. Notifica o closer para agendar R2
+5. Transfere ownership do deal para o closer
+
+Isso explica porque os contratos de Victor, Juliano e Claudia não foram marcados automaticamente.
 
 ---
 
-## Arquivos a Criar/Modificar
+## Arquivos a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/meu-rh/MeuRHAvaliacoesSection.tsx` | **Criar** - Nova seção de avaliações |
-| `src/pages/MeuRH.tsx` | **Modificar** - Importar e renderizar a nova seção |
+| `supabase/functions/webhook-make-contrato/index.ts` | **Modificar** - Adicionar lógica de auto-marcação |
 
 ---
 
-## Nova Seção: MeuRHAvaliacoesSection
+## Solução Técnica
 
-Componente que exibe:
-1. **Card de Resumo** - Média geral e total de avaliações realizadas
-2. **Histórico de Notas** - Lista das avaliações com:
-   - Título da prova
-   - Data de aplicação
-   - Nota (com badge colorido por faixa)
-   - Observação do avaliador (se houver)
+### 1. Adicionar a função `autoMarkContractPaid` ao webhook Make
 
-Seguirá o mesmo padrão visual das outras seções (Documentos, Histórico, etc).
+Copiar a mesma função do `hubla-webhook-handler` para o `webhook-make-contrato`, garantindo:
+- Busca de attendees R1 dos últimos 14 dias
+- Match em duas fases: email primeiro, telefone como fallback
+- Atualização do attendee para `contract_paid`
+- Marcação do slot como `completed`
+- Notificação ao closer
+- Transferência de ownership do deal
 
----
+### 2. Chamar `autoMarkContractPaid` após inserção
 
-## Estrutura do Componente
-
-```
-MeuRHAvaliacoesSection
-├── Card Header: "Avaliações" com ícone ClipboardList
-├── Card Resumo (se houver notas)
-│   ├── Média Geral com badge colorido
-│   └── Total de avaliações
-└── Lista de Avaliações
-    └── Para cada nota:
-        ├── Título da prova
-        ├── Data de aplicação
-        ├── Nota com badge (verde ≥7, cinza ≥5, vermelho <5)
-        └── Observação (opcional)
-```
+Após inserir a transação com sucesso, chamar a função passando:
+- `customerEmail`: email do payload
+- `customerPhone`: telefone do payload
+- `customerName`: nome do payload
+- `saleDate`: data da venda
 
 ---
 
-## Integração na Página MeuRH
+## Fluxo Atualizado
 
-Adicionar a seção entre **Documentos** e **Histórico**:
-
-```
-1. Header
-2. Resumo do vínculo
-3. Dados pessoais
-4. Remuneração
-5. NFSe (PJ only)
-6. Documentos
-7. Avaliações ← NOVA SEÇÃO
-8. Histórico
+```text
+Webhook Make Contrato
+├── 1. Validar payload
+├── 2. Corrigir valor (se necessário)
+├── 3. Inserir em hubla_transactions
+├── 4. [NOVO] Executar autoMarkContractPaid()
+│   ├── 4.1 Buscar attendees R1 (últimos 14 dias)
+│   ├── 4.2 Match por email OU telefone
+│   ├── 4.3 Atualizar attendee → contract_paid
+│   ├── 4.4 Atualizar slot → completed
+│   ├── 4.5 Notificar closer
+│   └── 4.6 Transferir ownership do deal
+└── 5. Retornar sucesso
 ```
 
 ---
 
 ## Detalhes Técnicos
 
-O componente utilizará o hook existente `useEmployeeExamHistory` do arquivo `src/hooks/useExams.ts`, que já busca o histórico de notas por `employee_id`.
+A função `autoMarkContractPaid` será adicionada ao arquivo `webhook-make-contrato/index.ts` com a mesma lógica robusta do `hubla-webhook-handler`:
 
-### Estados Visuais
-- **Loading**: Skeleton de carregamento
-- **Sem avaliações**: Mensagem "Nenhuma avaliação registrada"
-- **Com avaliações**: Card resumo + lista de notas
+1. **Normalização de dados**: Extração dos últimos 9 dígitos do telefone para matching
+2. **Busca limitada**: Apenas attendees dos últimos 14 dias com `meeting_type = 'r1'`
+3. **Match em duas fases**:
+   - Fase 1: Match exato por email (break imediato se encontrar)
+   - Fase 2: Match por sufixo de telefone (9 últimos dígitos)
+4. **Ordenação JavaScript**: Mais recente primeiro (mais confiável que ordenação aninhada do Supabase)
+5. **Atualizações**:
+   - `meeting_slot_attendees.status` → `contract_paid`
+   - `meeting_slot_attendees.contract_paid_at` → data da reunião
+   - `meeting_slots.status` → `completed`
+   - `crm_deals.owner_id` → email do closer
+   - `crm_deals.stage_id` → estágio "Contrato Pago"
+6. **Notificação**: Criar registro em `user_notifications` para o closer
 
-### Cores dos Badges de Nota
-- Verde (default): nota ≥ 7.0
-- Cinza (secondary): nota entre 5.0 e 6.9
-- Vermelho (destructive): nota < 5.0
+---
+
+## Próximos Passos (Opcionais)
+
+Após implementar a correção, posso também:
+1. **Criar relatório de contratos não sincronizados**: Listar transações Make dos últimos 30 dias sem attendee correspondente
+2. **Reprocessar contratos históricos**: Executar função de reprocessamento para pegar contratos antigos
+
