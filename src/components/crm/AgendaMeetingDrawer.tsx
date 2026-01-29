@@ -448,11 +448,11 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         dealId: att.deal_id || activeMeeting.deal_id,
         isPartner: att.is_partner || false,
         notifiedAt: att.notified_at,
-        bookedBy: att.booked_by || activeMeeting.booked_by,
+        bookedBy: att.booked_by || parentAttendee?.booked_by || activeMeeting.booked_by,
         notes: att.notes,
         closerNotes: att.closer_notes,
         status: att.status || 'scheduled',
-        bookedByProfile: att.booked_by_profile || activeMeeting.booked_by_profile,
+        bookedByProfile: att.booked_by_profile || parentAttendee?.booked_by_profile || activeMeeting.booked_by_profile,
         parentAttendeeId: att.parent_attendee_id,
         parentAttendeeName: parentAttendee ? (parentAttendee.attendee_name || parentAttendee.contact?.name || 'Lead') : null,
       };
