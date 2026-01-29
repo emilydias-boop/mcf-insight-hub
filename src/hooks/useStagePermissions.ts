@@ -122,18 +122,28 @@ export const useStagePermissions = () => {
     enabled: allRoles && allRoles.length > 0,
   });
   
-  // Carregar mapeamento de stages UUID -> nome
+  // Carregar mapeamento de stages UUID -> nome (de ambas as tabelas)
   const { data: stagesMap = {}, isLoading: stagesLoading } = useQuery({
     queryKey: ['stages-map'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_stages')
-        .select('id, stage_name');
-      
-      if (error) throw error;
+      // Buscar de ambas as tabelas em paralelo
+      const [crmRes, localRes] = await Promise.all([
+        supabase.from('crm_stages').select('id, stage_name'),
+        supabase.from('local_pipeline_stages').select('id, name'),
+      ]);
       
       const map: Record<string, string> = {};
-      data?.forEach(s => { map[s.id] = s.stage_name; });
+      
+      // Mapear crm_stages
+      crmRes.data?.forEach(s => { 
+        map[s.id] = s.stage_name; 
+      });
+      
+      // Mapear local_pipeline_stages (name → stage_name)
+      localRes.data?.forEach(s => { 
+        map[s.id] = s.name; 
+      });
+      
       return map;
     },
   });
