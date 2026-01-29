@@ -1,150 +1,235 @@
 
-# Plano: Criar BU de Leilão no CRM
+# Plano: CRM Dedicado para Cada Business Unit
 
 ## Objetivo
 
-Criar uma nova Business Unit (BU) de Leilão no sistema CRM com:
-- Pipeline Kanban completo para gerenciar leads/deals de leilão
-- Integração pronta para receber leads via webhook
-- Controle de acesso baseado em BU (quem é do time de leilão só vê leads de leilão)
+Replicar a estrutura completa do CRM (atualmente em `/crm`) para cada Business Unit, de forma que cada BU tenha seu próprio módulo CRM com:
+
+- Visão Geral
+- Contatos
+- Negócios (Kanban)
+- Atendimentos  
+- Agenda R1
+- Agenda R2
+- Carrinho R2
+- Órfãos
+- Duplicados
+- Auditoria
+- Configurações
 
 ---
 
-## Estrutura a Ser Criada
+## Situação Atual
 
 ```text
-📁 BU - LEILÃO (crm_groups)
-   └── 📋 Pipeline Leilão (crm_origins)
-       ├── Novo Lead
-       ├── Em Contato
-       ├── Lead Qualificado
-       ├── Proposta Enviada
-       ├── Análise Documental
-       ├── Contrato
-       └── Sem Interesse
+📁 /crm (CRM centralizado - atualmente usado pela BU Incorporador)
+   ├── Visão Geral
+   ├── Contatos
+   ├── Negócios
+   ├── Atendimentos
+   ├── Agenda R1
+   ├── Agenda R2
+   ├── Carrinho R2
+   ├── Órfãos
+   ├── Duplicados
+   ├── Auditoria
+   └── Configurações
+
+📁 /consorcio
+   ├── Fechamento
+   ├── CRM ← placeholder "Em Desenvolvimento"
+   ├── Painel Equipe
+   ├── Vendas
+   ├── Controle Consorcio
+   └── Importar
 ```
 
 ---
 
-## Etapas de Implementação
+## Abordagem: CRM Unificado com Contexto de BU
 
-### Etapa 1: Criar Grupo e Origem no Banco (SQL)
+Em vez de duplicar todo o código do CRM para cada BU (que criaria manutenção exponencial), a solução é criar um **CRM genérico parametrizado por BU**.
 
-**Ação**: Executar script SQL para criar o grupo e a origem
+### Arquitetura Proposta
+
+```text
+📁 /crm                          → CRM da BU Incorporador (mantido como está)
+📁 /consorcio/crm/*              → CRM da BU Consórcio (novo)
+📁 /bu-credito/crm/*             → CRM da BU Crédito (novo)
+📁 /bu-projetos/crm/*            → CRM da BU Projetos (novo)
+📁 /leilao/crm/*                 → CRM da BU Leilão (novo)
+```
+
+Cada rota `/bu-X/crm` usará o **mesmo conjunto de componentes** do CRM existente, mas com um **contexto de BU** que:
+
+1. Filtra automaticamente os pipelines/origens para aquela BU
+2. Filtra as reuniões (Agenda) para closers daquela BU
+3. Filtra o carrinho R2 para negócios daquela BU
+
+---
+
+## Implementação Detalhada
+
+### Fase 1: Criar Componente CRM Genérico com Contexto de BU
+
+**Novo arquivo**: `src/contexts/BUContext.tsx`
+
+```typescript
+// Contexto que define qual BU está ativa na rota atual
+export const BUContext = createContext<{
+  activeBU: BusinessUnit | null;
+  isGlobalCRM: boolean; // true se for /crm (vê tudo)
+}>({ activeBU: null, isGlobalCRM: true });
+```
+
+### Fase 2: Criar Layout CRM Parametrizado
+
+**Novo arquivo**: `src/pages/crm/BUCRMLayout.tsx`
+
+Este componente será um wrapper que:
+- Recebe a BU como prop
+- Configura o contexto
+- Renderiza as mesmas tabs do CRM atual
+
+```typescript
+interface BUCRMLayoutProps {
+  bu: BusinessUnit;
+  basePath: string; // ex: "/consorcio/crm"
+}
+```
+
+### Fase 3: Configurar Rotas para Cada BU
+
+**Arquivo**: `src/App.tsx`
+
+Adicionar rotas para cada BU apontando para o mesmo conjunto de componentes:
+
+```typescript
+// BU Consórcio CRM
+<Route path="consorcio/crm" element={<BUCRMLayout bu="consorcio" basePath="/consorcio/crm" />}>
+  <Route index element={<CRMOverview />} />
+  <Route path="contatos" element={<Contatos />} />
+  <Route path="negocios" element={<Negocios />} />
+  <Route path="agenda" element={<Agenda />} />
+  <Route path="agenda-r2" element={<AgendaR2 />} />
+  <Route path="r2-carrinho" element={<R2Carrinho />} />
+  {/* ... demais rotas */}
+</Route>
+```
+
+### Fase 4: Adaptar Componentes para Usar Contexto de BU
+
+Os componentes que precisam de adaptação:
+
+| Componente | Adaptação Necessária |
+|------------|---------------------|
+| `Negocios.tsx` | Já usa `useMyBU()` - precisa respeitar contexto forçado |
+| `Agenda.tsx` | Filtrar closers por BU |
+| `AgendaR2.tsx` | Filtrar closers R2 por BU |
+| `R2Carrinho.tsx` | Filtrar carrinho por BU |
+| `Overview.tsx` | Filtrar estatísticas por BU |
+
+A adaptação será adicionar um hook:
+
+```typescript
+// Hook que retorna a BU ativa (do contexto ou do usuário)
+function useActiveBU() {
+  const contextBU = useContext(BUContext);
+  const { data: userBU } = useMyBU();
+  
+  // Se estiver em rota de BU específica, usar essa
+  // Senão, usar a BU do usuário
+  return contextBU.activeBU || userBU;
+}
+```
+
+### Fase 5: Adicionar Associação Closer x BU
+
+Para filtrar reuniões por BU, precisamos saber qual closer pertence a qual BU.
+
+**Alteração no banco**: Adicionar coluna `bu` na tabela `closers`
 
 ```sql
--- 1. Criar Grupo (funil principal)
-INSERT INTO crm_groups (id, clint_id, name, display_name, is_archived)
-VALUES (
-  gen_random_uuid(),
-  'local-group-bu-leilao',
-  'BU - LEILÃO',
-  'BU - LEILÃO',
-  false
-) RETURNING id;
+ALTER TABLE closers ADD COLUMN bu TEXT;
+-- Valores: 'incorporador', 'consorcio', 'credito', 'projetos', 'leilao'
+```
 
--- 2. Criar Origem (pipeline) vinculada ao grupo
-INSERT INTO crm_origins (id, clint_id, name, display_name, group_id, pipeline_type, is_archived)
-VALUES (
-  gen_random_uuid(),
-  'local-origin-leilao-pipeline',
-  'Pipeline Leilão',
-  'Pipeline Leilão',
-  (SELECT id FROM crm_groups WHERE clint_id = 'local-group-bu-leilao'),
-  'outros',
-  false
-) RETURNING id;
+Isso permitirá que as Agendas R1/R2 filtrem:
+- `/crm/agenda` → Mostra closers da BU Incorporador
+- `/consorcio/crm/agenda` → Mostra closers da BU Consórcio
 
--- 3. Criar etapas do Kanban
-INSERT INTO local_pipeline_stages (origin_id, name, stage_order, is_active, stage_type, color)
-SELECT 
-  (SELECT id FROM crm_origins WHERE clint_id = 'local-origin-leilao-pipeline'),
-  stage.name,
-  stage.stage_order,
-  true,
-  stage.stage_type,
-  stage.color
-FROM (VALUES
-  ('Novo Lead', 0, 'active', '#3B82F6'),
-  ('Em Contato', 1, 'active', '#8B5CF6'),
-  ('Lead Qualificado', 2, 'active', '#10B981'),
-  ('Proposta Enviada', 3, 'active', '#F59E0B'),
-  ('Análise Documental', 4, 'active', '#6366F1'),
-  ('Contrato Assinado', 5, 'won', '#22C55E'),
-  ('Sem Interesse', 6, 'lost', '#EF4444')
-) AS stage(name, stage_order, stage_type, color);
+---
+
+## Resumo de Arquivos a Criar/Modificar
+
+### Novos Arquivos
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/contexts/BUContext.tsx` | Contexto de BU ativa |
+| `src/pages/crm/BUCRMLayout.tsx` | Layout CRM genérico parametrizado |
+| `src/hooks/useActiveBU.ts` | Hook para obter BU ativa |
+
+### Arquivos a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/App.tsx` | Adicionar rotas CRM para cada BU |
+| `src/components/layout/AppSidebar.tsx` | Atualizar links do menu |
+| `src/pages/crm/Negocios.tsx` | Usar `useActiveBU` |
+| `src/pages/crm/Agenda.tsx` | Filtrar closers por BU |
+| `src/pages/crm/AgendaR2.tsx` | Filtrar closers R2 por BU |
+| `src/pages/crm/R2Carrinho.tsx` | Filtrar por BU |
+| `src/pages/crm/Overview.tsx` | Filtrar estatísticas por BU |
+
+### Migração de Banco
+
+```sql
+-- Adicionar coluna BU aos closers
+ALTER TABLE closers ADD COLUMN IF NOT EXISTS bu TEXT;
+
+-- Opcional: Popular baseado em padrões existentes
+UPDATE closers SET bu = 'incorporador' WHERE bu IS NULL;
 ```
 
 ---
 
-### Etapa 2: Atualizar Código Frontend
+## Cronograma de Implementação
 
-#### 2.1 Adicionar "leilao" ao tipo BusinessUnit
+| Etapa | Descrição | Complexidade |
+|-------|-----------|--------------|
+| 1 | Criar BUContext e useActiveBU | Baixa |
+| 2 | Criar BUCRMLayout | Média |
+| 3 | Configurar rotas no App.tsx | Baixa |
+| 4 | Adaptar Negocios.tsx | Baixa |
+| 5 | Adaptar Agenda.tsx e AgendaR2.tsx | Média |
+| 6 | Adaptar R2Carrinho.tsx | Média |
+| 7 | Adaptar Overview.tsx | Baixa |
+| 8 | Atualizar sidebar com novos links | Baixa |
+| 9 | Migração banco (closers.bu) | Baixa |
 
-**Arquivo**: `src/hooks/useMyBU.ts`
+---
 
-```typescript
-// Antes:
-export type BusinessUnit = 'incorporador' | 'consorcio' | 'credito' | 'projetos';
+## Resultado Final
 
-// Depois:
-export type BusinessUnit = 'incorporador' | 'consorcio' | 'credito' | 'projetos' | 'leilao';
+Após implementação, cada BU terá seu CRM completo:
 
-// Adicionar opção no BU_OPTIONS:
-{ value: "leilao", label: "BU - Leilão" },
+```text
+/consorcio/crm              → Visão Geral (filtrada)
+/consorcio/crm/contatos     → Contatos (filtrados por origem)
+/consorcio/crm/negocios     → Kanban (pipelines do consórcio)
+/consorcio/crm/agenda       → Agenda R1 (closers do consórcio)
+/consorcio/crm/agenda-r2    → Agenda R2 (closers R2 do consórcio)
+/consorcio/crm/r2-carrinho  → Carrinho R2 (negócios do consórcio)
+...
+
+/leilao/crm                 → CRM da BU Leilão
+/bu-credito/crm             → CRM da BU Crédito
+/bu-projetos/crm            → CRM da BU Projetos
 ```
 
-#### 2.2 Adicionar mapeamento de pipelines para a nova BU
-
-**Arquivo**: `src/components/auth/NegociosAccessGuard.tsx`
-
-```typescript
-// Adicionar no BU_PIPELINE_MAP:
-leilao: ['<ID_DA_ORIGEM_CRIADA>'], // Pipeline Leilão
-
-// Adicionar no BU_DEFAULT_ORIGIN_MAP:
-leilao: '<ID_DA_ORIGEM_CRIADA>',
-
-// Adicionar no BU_DEFAULT_GROUP_MAP:
-leilao: '<ID_DO_GRUPO_CRIADO>',
-```
-
 ---
 
-### Etapa 3: Configurar Webhook de Entrada (Opcional)
+## Próximos Passos
 
-Se você quiser receber leads de uma fonte externa (formulário, plataforma de leilão):
-
-1. Acessar a Pipeline "Pipeline Leilão" no CRM
-2. Clicar em ⋮ → Configurações
-3. Ir em Integrações → Webhooks de Entrada
-4. Criar novo webhook com slug (ex: `leilao-leads`)
-5. O endpoint gerado será: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver?slug=leilao-leads`
-
----
-
-## Resumo das Alterações
-
-| Componente | Ação |
-|------------|------|
-| Banco de Dados | Criar grupo, origem e etapas via SQL |
-| `useMyBU.ts` | Adicionar tipo `leilao` e opção no dropdown |
-| `NegociosAccessGuard.tsx` | Adicionar mapeamentos de ID para a BU |
-| CRM UI | Webhook de entrada pode ser criado via interface |
-
----
-
-## Resultado Esperado
-
-- Nova BU "Leilão" aparecerá no sidebar do CRM
-- Usuários com squad = "leilao" verão apenas a pipeline de leilão
-- Pipeline terá Kanban com 7 etapas prontas
-- Pronto para receber leads via webhook ou criação manual
-
----
-
-## Observação sobre o Webhook Consórcio
-
-O webhook `webhook-consorcio` que você mencionou insere dados na tabela `consortium_cards` (gestão de cartas de consórcio), **não** no CRM de deals. Se quiser integrar leads de leilão no CRM, usaremos o sistema de `webhook-lead-receiver` que já existe e cria deals no Kanban.
-
-Se precisar de um webhook específico para leilão similar ao consórcio (com tabela própria para contratos de leilão), isso seria um desenvolvimento adicional.
+Confirme se deseja prosseguir com esta abordagem e posso começar a implementação fase por fase, começando pelo contexto de BU e layout genérico.
