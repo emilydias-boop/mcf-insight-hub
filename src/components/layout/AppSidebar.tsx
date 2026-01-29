@@ -162,6 +162,7 @@ const menuItems: MenuItem[] = [
       { title: "Negócios", url: "/bu-credito/deals" },
       { title: "Sócios", url: "/bu-credito/socios" },
       { title: "Clientes", url: "/bu-credito/clientes" },
+      { title: "CRM", url: "/bu-credito/crm" },
       { title: "Gestão Legado", url: "/credito" },
       { title: "Relatórios", url: "/bu-credito/relatorios" },
     ],
@@ -174,6 +175,7 @@ const menuItems: MenuItem[] = [
     resource: "projetos",
     items: [
       { title: "Gestão de Projetos", url: "/projetos" },
+      { title: "CRM", url: "/bu-projetos/crm" },
       { title: "Relatórios", url: "/bu-projetos/relatorios" },
     ],
   },
@@ -184,7 +186,10 @@ const menuItems: MenuItem[] = [
     icon: Gavel,
     resource: "leilao",
     requiredRoles: ["admin", "manager"],
-    items: [{ title: "Leilões Imobiliários", url: "/leilao" }],
+    items: [
+      { title: "Leilões Imobiliários", url: "/leilao" },
+      { title: "CRM", url: "/leilao/crm" },
+    ],
   },
 
   // ===== OPERACIONAL =====

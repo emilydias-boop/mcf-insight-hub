@@ -1,29 +1,38 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveBU } from '@/hooks/useActiveBU';
+import { BusinessUnit } from '@/hooks/useMyBU';
 
 interface CloserInfo {
   id: string;
   name: string;
   email: string;
   color: string | null;
+  bu: string | null;
 }
 
 export const useGestorClosers = (meetingType?: 'r1' | 'r2') => {
   const { role, user } = useAuth();
+  const activeBU = useActiveBU();
   
   return useQuery({
-    queryKey: ['gestor-closers', user?.id, role, meetingType],
+    queryKey: ['gestor-closers', user?.id, role, meetingType, activeBU],
     queryFn: async (): Promise<CloserInfo[]> => {
-      // Admin e manager veem todos os closers
+      // Admin e manager veem todos os closers (opcionalmente filtrado por BU)
       if (role === 'admin' || role === 'manager') {
         let query = supabase
           .from('closers')
-          .select('id, name, email, color')
+          .select('id, name, email, color, bu')
           .eq('is_active', true);
         
         if (meetingType) {
           query = query.eq('meeting_type', meetingType);
+        }
+        
+        // Filtrar por BU se estiver em uma rota de BU específica
+        if (activeBU) {
+          query = query.eq('bu', activeBU);
         }
         
         const { data, error } = await query.order('name');
@@ -61,12 +70,17 @@ export const useGestorClosers = (meetingType?: 'r1' | 'r2') => {
         // Buscar closers que correspondem a esses employees
         let closerQuery = supabase
           .from('closers')
-          .select('id, name, email, color, employee_id')
+          .select('id, name, email, color, bu, employee_id')
           .eq('is_active', true)
           .in('employee_id', employeeIds);
         
         if (meetingType) {
           closerQuery = closerQuery.eq('meeting_type', meetingType);
+        }
+        
+        // Filtrar por BU se estiver em uma rota de BU específica
+        if (activeBU) {
+          closerQuery = closerQuery.eq('bu', activeBU);
         }
         
         const { data: closers, error: closerError } = await closerQuery.order('name');

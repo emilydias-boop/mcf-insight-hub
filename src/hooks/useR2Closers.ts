@@ -30,14 +30,21 @@ export interface R2CloserFormData {
   max_leads_per_slot?: number;
 }
 
-export function useR2ClosersList() {
+export function useR2ClosersList(buFilter?: string | null) {
   return useQuery({
-    queryKey: ['r2-closers-list'],
+    queryKey: ['r2-closers-list', buFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('closers')
         .select('*')
-        .eq('meeting_type', 'r2')
+        .eq('meeting_type', 'r2');
+      
+      // Filtrar por BU se especificado
+      if (buFilter) {
+        query = query.eq('bu', buFilter);
+      }
+      
+      const { data, error } = await query
         .order('priority', { ascending: true, nullsFirst: false })
         .order('name');
       
@@ -47,15 +54,22 @@ export function useR2ClosersList() {
   });
 }
 
-export function useActiveR2Closers() {
+export function useActiveR2Closers(buFilter?: string | null) {
   return useQuery({
-    queryKey: ['r2-closers-active'],
+    queryKey: ['r2-closers-active', buFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('closers')
         .select('*')
         .eq('meeting_type', 'r2')
-        .eq('is_active', true)
+        .eq('is_active', true);
+      
+      // Filtrar por BU se especificado
+      if (buFilter) {
+        query = query.eq('bu', buFilter);
+      }
+      
+      const { data, error } = await query
         .order('priority', { ascending: true, nullsFirst: false })
         .order('name');
       
