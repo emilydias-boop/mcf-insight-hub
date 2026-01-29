@@ -112,10 +112,12 @@ import OutrosVendas from "./pages/bu-outros/Vendas";
 // BU Consórcio - Páginas Unificadas
 import ConsorcioFechamento from "./pages/bu-consorcio/Fechamento";
 import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
-import ConsorcioCRM from "./pages/bu-consorcio/CRM";
 import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import Chairman from "./pages/Chairman";
+
+// BU CRM Layout
+import BUCRMLayout from "./pages/crm/BUCRMLayout";
 
 const queryClient = new QueryClient();
 
@@ -172,9 +174,23 @@ const App = () => (
               <Route path="consorcio/importar" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioImportar /></RoleGuard>} />
               <Route path="consorcio/fechamento" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioFechamento /></RoleGuard>} />
               <Route path="consorcio/relatorio" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioRelatorio /></RoleGuard>} />
-              <Route path="consorcio/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioCRM /></RoleGuard>} />
               <Route path="consorcio/painel-equipe" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioPainelEquipe /></RoleGuard>} />
               <Route path="consorcio/vendas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ConsorcioVendas /></RoleGuard>} />
+              
+              {/* BU Consórcio CRM - Dedicado */}
+              <Route path="consorcio/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="consorcio" basePath="/consorcio/crm" /></RoleGuard>}>
+                <Route index element={<CRMOverview />} />
+                <Route path="contatos" element={<Contatos />} />
+                <Route path="negocios" element={<Negocios />} />
+                <Route path="atendimentos" element={<Atendimentos />} />
+                <Route path="agenda" element={<Agenda />} />
+                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
+                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
+                <Route path="deals-orfaos" element={<DealsOrfaos />} />
+                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
+                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
+                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
+              </Route>
               
               <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
               <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />
@@ -190,6 +206,21 @@ const App = () => (
               </Route>
               <Route path="bu-credito/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><CreditoRelatorios /></RoleGuard>} />
               
+              {/* BU Crédito CRM - Dedicado */}
+              <Route path="bu-credito/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="credito" basePath="/bu-credito/crm" /></RoleGuard>}>
+                <Route index element={<CRMOverview />} />
+                <Route path="contatos" element={<Contatos />} />
+                <Route path="negocios" element={<Negocios />} />
+                <Route path="atendimentos" element={<Atendimentos />} />
+                <Route path="agenda" element={<Agenda />} />
+                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
+                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
+                <Route path="deals-orfaos" element={<DealsOrfaos />} />
+                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
+                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
+                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
+              </Route>
+              
               {/* BU Projetos Routes */}
               <Route path="bu-projetos" element={<BUProjetosIndex />}>
                 <Route index element={<ProjetosVendas />} />
@@ -197,10 +228,40 @@ const App = () => (
               </Route>
               <Route path="bu-projetos/relatorios" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><ProjetosRelatorios /></RoleGuard>} />
               
+              {/* BU Projetos CRM - Dedicado */}
+              <Route path="bu-projetos/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="projetos" basePath="/bu-projetos/crm" /></RoleGuard>}>
+                <Route index element={<CRMOverview />} />
+                <Route path="contatos" element={<Contatos />} />
+                <Route path="negocios" element={<Negocios />} />
+                <Route path="atendimentos" element={<Atendimentos />} />
+                <Route path="agenda" element={<Agenda />} />
+                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
+                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
+                <Route path="deals-orfaos" element={<DealsOrfaos />} />
+                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
+                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
+                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
+              </Route>
+              
               {/* BU Outros Routes */}
               <Route path="bu-outros" element={<BUOutrosIndex />}>
                 <Route index element={<OutrosVendas />} />
                 <Route path="vendas" element={<OutrosVendas />} />
+              </Route>
+              
+              {/* BU Leilão CRM - Dedicado */}
+              <Route path="leilao/crm" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador', 'sdr', 'closer']}><BUCRMLayout bu="leilao" basePath="/leilao/crm" /></RoleGuard>}>
+                <Route index element={<CRMOverview />} />
+                <Route path="contatos" element={<Contatos />} />
+                <Route path="negocios" element={<Negocios />} />
+                <Route path="atendimentos" element={<Atendimentos />} />
+                <Route path="agenda" element={<Agenda />} />
+                <Route path="agenda-r2" element={<R2AccessGuard><AgendaR2 /></R2AccessGuard>} />
+                <Route path="r2-carrinho" element={<R2AccessGuard><R2Carrinho /></R2AccessGuard>} />
+                <Route path="deals-orfaos" element={<DealsOrfaos />} />
+                <Route path="contatos-duplicados" element={<ContatosDuplicados />} />
+                <Route path="auditoria-agendamentos" element={<AuditoriaAgendamentos />} />
+                <Route path="configuracoes" element={<ConfiguracoesCRM />} />
               </Route>
               
               <Route path="leilao" element={<ResourceGuard resource="leilao"><Leilao /></ResourceGuard>} />
