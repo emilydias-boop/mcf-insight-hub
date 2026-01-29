@@ -1,16 +1,17 @@
 
-# Correção do Webhook Make para Auto-Marcar Contrato Pago
+# Plano: Sincronizar Contagem de Contratos SDR com Closers + Incluir Reembolsos
 
-## Problema Identificado
+## Resumo do Problema
 
-O webhook `webhook-make-contrato` **apenas insere** a transação na tabela `hubla_transactions`, mas **não executa** a função `autoMarkContractPaid` que:
-1. Busca o attendee R1 correspondente por email/telefone
-2. Marca o attendee como `contract_paid`
-3. Atualiza o slot para `completed`
-4. Notifica o closer para agendar R2
-5. Transfere ownership do deal para o closer
+A contagem de contratos está inconsistente entre as abas SDRs e Closers no Painel Comercial:
 
-Isso explica porque os contratos de Victor, Juliano e Claudia não foram marcados automaticamente.
+| Fonte | Lógica Atual | Resultado 28/01 |
+|-------|--------------|-----------------|
+| Closers | `contract_paid_at` (data do pagamento) | 15 contratos |
+| SDRs | `scheduled_at` (data da reunião) | 8 contratos |
+| Diferença | Follow-ups não contados para SDRs | 7 contratos |
+
+Além disso, reembolsos (status `refunded`) não estão sendo contabilizados no total de contratos.
 
 ---
 
@@ -18,74 +19,110 @@ Isso explica porque os contratos de Victor, Juliano e Claudia não foram marcado
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/webhook-make-contrato/index.ts` | **Modificar** - Adicionar lógica de auto-marcação |
+| Nova Migration SQL | **Criar** - Atualizar função `get_sdr_metrics_from_agenda` |
 
 ---
 
 ## Solução Técnica
 
-### 1. Adicionar a função `autoMarkContractPaid` ao webhook Make
+### Alteração na Função SQL
 
-Copiar a mesma função do `hubla-webhook-handler` para o `webhook-make-contrato`, garantindo:
-- Busca de attendees R1 dos últimos 14 dias
-- Match em duas fases: email primeiro, telefone como fallback
-- Atualização do attendee para `contract_paid`
-- Marcação do slot como `completed`
-- Notificação ao closer
-- Transferência de ownership do deal
+A função `get_sdr_metrics_from_agenda` será atualizada para:
 
-### 2. Chamar `autoMarkContractPaid` após inserção
+1. **Contar contratos pela data do pagamento** (`contract_paid_at`), igual aos closers
+2. **Fallback para `scheduled_at`** quando `contract_paid_at` é nulo (registros antigos)
+3. **Incluir status `refunded`** no total de contratos
 
-Após inserir a transação com sucesso, chamar a função passando:
-- `customerEmail`: email do payload
-- `customerPhone`: telefone do payload
-- `customerName`: nome do payload
-- `saleDate`: data da venda
+A lógica de contagem de contratos muda de:
+
+```sql
+-- ANTES: Conta apenas por scheduled_at
+COUNT(CASE WHEN ms.scheduled_at::date >= start_date::DATE 
+            AND ms.scheduled_at::date <= end_date::DATE 
+            AND msa.status = 'contract_paid' THEN 1 END) as contratos
+```
+
+Para:
+
+```sql
+-- DEPOIS: Conta por contract_paid_at com fallback + inclui refunded
+COUNT(CASE 
+  WHEN msa.status IN ('contract_paid', 'refunded')
+   AND (
+     -- Contratos COM timestamp: usar data do pagamento
+     (msa.contract_paid_at IS NOT NULL 
+      AND msa.contract_paid_at::date >= start_date::DATE 
+      AND msa.contract_paid_at::date <= end_date::DATE)
+     -- Fallback para contratos antigos: usar scheduled_at
+     OR (msa.contract_paid_at IS NULL 
+         AND ms.scheduled_at::date >= start_date::DATE 
+         AND ms.scheduled_at::date <= end_date::DATE)
+   ) 
+  THEN 1 
+END) as contratos
+```
 
 ---
 
-## Fluxo Atualizado
+## Resultado Esperado
+
+Após a implementação:
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| KPI Card "Contratos" SDR | 8 | 15+ (inclui follow-ups e reembolsos) |
+| Aba SDRs - Total | 8 | 15+ |
+| Aba Closers - Total | 15 | 15 (sem alteração) |
+
+**Importante:** Reembolsos como o caso do Danilo Soares agora serão contabilizados no total de contratos dos SDRs.
+
+---
+
+## Fluxo de Atribuição
 
 ```text
-Webhook Make Contrato
-├── 1. Validar payload
-├── 2. Corrigir valor (se necessário)
-├── 3. Inserir em hubla_transactions
-├── 4. [NOVO] Executar autoMarkContractPaid()
-│   ├── 4.1 Buscar attendees R1 (últimos 14 dias)
-│   ├── 4.2 Match por email OU telefone
-│   ├── 4.3 Atualizar attendee → contract_paid
-│   ├── 4.4 Atualizar slot → completed
-│   ├── 4.5 Notificar closer
-│   └── 4.6 Transferir ownership do deal
-└── 5. Retornar sucesso
+Pagamento Contrato (Webhook)
+├── Marca attendee como contract_paid
+├── Preenche contract_paid_at = NOW()
+│
+└── Contagem de Métricas
+    ├── Closers: Usa contract_paid_at ✓
+    └── SDRs: Usa contract_paid_at ✓ (após correção)
+        └── Fallback: scheduled_at (se nulo)
 ```
 
 ---
 
 ## Detalhes Técnicos
 
-A função `autoMarkContractPaid` será adicionada ao arquivo `webhook-make-contrato/index.ts` com a mesma lógica robusta do `hubla-webhook-handler`:
+A migration completa irá recriar a função `get_sdr_metrics_from_agenda` mantendo toda a lógica existente de:
+- Contagem de agendamentos (por `booked_at`)
+- Contagem de R1 Agendada (por `scheduled_at`)
+- Contagem de R1 Realizada (por `scheduled_at`)
+- Contagem de No-Shows (por `scheduled_at`)
+- Regras de deduplicação (originais + 1º reagendamento apenas)
 
-1. **Normalização de dados**: Extração dos últimos 9 dígitos do telefone para matching
-2. **Busca limitada**: Apenas attendees dos últimos 14 dias com `meeting_type = 'r1'`
-3. **Match em duas fases**:
-   - Fase 1: Match exato por email (break imediato se encontrar)
-   - Fase 2: Match por sufixo de telefone (9 últimos dígitos)
-4. **Ordenação JavaScript**: Mais recente primeiro (mais confiável que ordenação aninhada do Supabase)
-5. **Atualizações**:
-   - `meeting_slot_attendees.status` → `contract_paid`
-   - `meeting_slot_attendees.contract_paid_at` → data da reunião
-   - `meeting_slots.status` → `completed`
-   - `crm_deals.owner_id` → email do closer
-   - `crm_deals.stage_id` → estágio "Contrato Pago"
-6. **Notificação**: Criar registro em `user_notifications` para o closer
+E alterando apenas a contagem de contratos para:
+- Usar `contract_paid_at` quando disponível
+- Fallback para `scheduled_at` quando nulo
+- Incluir status `refunded` além de `contract_paid`
 
 ---
 
-## Próximos Passos (Opcionais)
+## Impacto em Outros Componentes
 
-Após implementar a correção, posso também:
-1. **Criar relatório de contratos não sincronizados**: Listar transações Make dos últimos 30 dias sem attendee correspondente
-2. **Reprocessar contratos históricos**: Executar função de reprocessamento para pegar contratos antigos
+Esta alteração afeta apenas a função SQL. Os seguintes componentes continuarão funcionando normalmente:
 
+- `useTeamMeetingsData.ts` - Consome a RPC sem alterações
+- `useSdrMetricsFromAgenda.ts` - Consome a RPC sem alterações
+- Painel SDR (aba SDRs) - Mostrará números corretos automaticamente
+- KPI Cards - Mostrarão totais corretos automaticamente
+- `recalculate-sdr-payout` Edge Function - Usará dados corretos
+
+---
+
+## Próximos Passos Sugeridos (pós-implementação)
+
+1. **Verificar no painel** se os 15 contratos agora aparecem para SDRs
+2. **Verificar caso Danilo Soares** (reembolso) se aparece na contagem
+3. **Relatório de inconsistências** - Listar contratos Make dos últimos 30 dias sem match
