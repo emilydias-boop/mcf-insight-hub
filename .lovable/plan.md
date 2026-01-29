@@ -1,75 +1,49 @@
 
+# Plano: Filtrar Origens por Business Unit na Sidebar
 
-# Plano: Detectar Leads LIVE pelas Tags do Clint
+## Problema Atual
 
-## Contexto
-
-O webhook do Clint envia a tag `Lead-Live` através do campo `contact_tag`. O sistema já processa corretamente essas tags e as salva nos deals via `clint-webhook-handler`. No entanto, o relatório de vendas (`SalesReportPanel`) detecta o canal de vendas **apenas pelo nome do produto**, ignorando as tags.
-
-## Dados Confirmados
-
-Os deals já possuem a tag `Lead-Live` no array `tags`:
-```text
-tags: [Lead-Live, SDR - VC, A010 - Construa para Vender, ...]
-```
-
-O `clint-webhook-handler` já extrai as tags do `contact_tag`:
-```typescript
-// Linha 380-382 do clint-webhook-handler/index.ts
-if (data.contact_tag) {
-  return parseClintTags(data.contact_tag);
-}
-```
+Quando o usuário está na BU Incorporador (rota `/incorporador/crm/negocios` ou perfil BU=incorporador), a sidebar de origens mostra **todos os 65 grupos e 3978 origens** do sistema, quando deveria mostrar apenas:
+- **Grupo**: Perpétuo - X1 (`a6f3cbfc-0567-427f-a405-5a869aaa6010`)
+- **Origens do grupo**: PIPELINE INSIDE SALES e outras 10 origens dentro deste grupo
 
 ---
 
-## Solução Proposta
+## Causa Raiz
 
-### Modificação 1: Atualizar função RPC para incluir tags
+1. O mapeamento `BU_PIPELINE_MAP` para `incorporador` contém apenas 1 origem:
+   ```typescript
+   incorporador: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'] // PIPELINE INSIDE SALES (origem)
+   ```
+   Falta incluir o grupo pai `a6f3cbfc-0567-427f-a405-5a869aaa6010` (Perpétuo - X1)
 
-Criar uma nova versão da função `get_hubla_transactions_by_bu` que retorna também as tags do deal/contato associado à transação.
+2. O `PipelineSelector` (dropdown "Funil:") não recebe filtro de BU - mostra todos os grupos
 
-**Nova coluna retornada:**
-- `deal_tags` - Tags do deal associado (via email/telefone)
+3. A lógica de filtro na `OriginsSidebar` está correta, mas precisa receber os IDs corretos
 
-### Modificação 2: Atualizar detecção de canal no relatório
+---
 
-Modificar a função `detectSalesChannel` em `SalesReportPanel.tsx` para considerar as tags:
+## Solução
 
-**Antes:**
-```typescript
-const detectSalesChannel = (productName: string | null): 'A010' | 'BIO' | 'LIVE' => {
-  const name = (productName || '').toLowerCase();
-  if (name.includes('a010')) return 'A010';
-  if (name.includes('bio') || name.includes('instagram')) return 'BIO';
-  return 'LIVE';
-};
-```
+### Etapa 1: Atualizar mapeamento BU → Pipelines
 
-**Depois:**
-```typescript
-const detectSalesChannel = (
-  productName: string | null, 
-  dealTags: string[] = []
-): 'A010' | 'BIO' | 'LIVE' => {
-  const name = (productName || '').toLowerCase();
-  const tagsStr = dealTags.join(' ').toLowerCase();
-  
-  // 1. Verificar tags primeiro (mais preciso)
-  if (tagsStr.includes('lead-live') || tagsStr.includes('live-')) {
-    return 'LIVE';
-  }
-  if (tagsStr.includes('lead-instagram') || tagsStr.includes('bio')) {
-    return 'BIO';
-  }
-  
-  // 2. Fallback para nome do produto
-  if (name.includes('a010')) return 'A010';
-  if (name.includes('bio') || name.includes('instagram')) return 'BIO';
-  
-  return 'LIVE';
-};
-```
+Adicionar o grupo pai ao mapeamento para cada BU:
+
+| BU | Antes | Depois |
+|----|-------|--------|
+| incorporador | Apenas 1 origem (PIPELINE INSIDE SALES) | Grupo (Perpétuo X1) + todas origens do grupo |
+| consorcio | Grupo + 1 origem (já correto) | Mantém |
+| credito | Origem genérica | Grupo específico + origens |
+| projetos | Origem genérica | Grupo específico + origens |
+| leilao | Origem específica (já correto) | Mantém |
+
+### Etapa 2: Modificar PipelineSelector para aceitar filtro
+
+O componente `PipelineSelector` precisa receber uma prop `allowedGroupIds` para filtrar quais grupos aparecem no dropdown.
+
+### Etapa 3: Passar filtro de grupos para o selector
+
+O componente `OriginsSidebar` passará os grupos permitidos da BU para o `PipelineSelector`.
 
 ---
 
@@ -77,73 +51,121 @@ const detectSalesChannel = (
 
 | Arquivo | Modificação |
 |---------|-------------|
-| Nova migration SQL | Atualizar `get_hubla_transactions_by_bu` para incluir `deal_tags` |
-| `src/hooks/useTransactionsByBU.ts` | Adicionar campo `deal_tags` no tipo de retorno |
-| `src/components/relatorios/SalesReportPanel.tsx` | Atualizar `detectSalesChannel()` para usar tags |
-| `src/hooks/useAllHublaTransactions.ts` | Adicionar `deal_tags` na interface `HublaTransaction` |
+| `src/components/auth/NegociosAccessGuard.tsx` | Atualizar `BU_PIPELINE_MAP` para incluir grupos pais + criar `BU_GROUP_MAP` |
+| `src/components/crm/PipelineSelector.tsx` | Adicionar prop `allowedGroupIds` para filtrar dropdown |
+| `src/components/crm/OriginsSidebar.tsx` | Passar `allowedGroupIds` baseado na BU ativa |
+| `src/pages/crm/Negocios.tsx` | Passar informação de grupos permitidos para sidebar |
 
 ---
 
 ## Detalhes Técnicos
 
-### Nova RPC (migration)
-
-```sql
-CREATE OR REPLACE FUNCTION public.get_hubla_transactions_by_bu(...)
-RETURNS TABLE(
-  -- campos existentes...
-  id uuid,
-  product_name text,
-  customer_email text,
-  -- ...
-  -- NOVO campo:
-  deal_tags text[]
-)
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    ht.id,
-    ht.product_name,
-    -- ...
-    -- JOIN para buscar tags do deal
-    COALESCE(d.tags, ARRAY[]::text[]) as deal_tags
-  FROM hubla_transactions ht
-  LEFT JOIN crm_contacts c ON LOWER(c.email) = LOWER(ht.customer_email)
-  LEFT JOIN crm_deals d ON d.contact_id = c.id
-  WHERE ...
-END;
-$$
-```
-
-### Atualização do tipo TypeScript
+### 1. Novo mapeamento de grupos por BU
 
 ```typescript
-export interface HublaTransaction {
-  // ...campos existentes
-  deal_tags?: string[];
+// NegociosAccessGuard.tsx
+
+// Grupos que cada BU pode ver no dropdown de funis
+export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
+  incorporador: ['a6f3cbfc-0567-427f-a405-5a869aaa6010'], // Perpétuo - X1
+  consorcio: ['b98e3746-d727-445b-b878-fc5742b6e6b8'],    // Perpétuo - Construa para Alugar  
+  credito: ['8d33bad6-46ab-4f9c-a570-dc7b74be2ac9'],      // Grupo de Crédito (a definir)
+  projetos: [],                                            // A definir
+  leilao: ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'],       // BU - LEILÃO
+};
+
+// Atualizar BU_PIPELINE_MAP para incluir TODAS as origens do grupo
+export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
+  incorporador: [
+    'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Grupo: Perpétuo - X1
+    'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // Origem: PIPELINE INSIDE SALES
+    // + outras 10 origens do grupo automaticamente via lógica de grupo
+  ],
+  // ... outras BUs
+};
+```
+
+### 2. PipelineSelector com filtro
+
+```typescript
+// PipelineSelector.tsx
+interface PipelineSelectorProps {
+  selectedPipelineId: string | null;
+  onSelectPipeline: (id: string | null) => void;
+  allowedGroupIds?: string[]; // NOVO: grupos permitidos pela BU
 }
+
+export const PipelineSelector = ({ 
+  selectedPipelineId, 
+  onSelectPipeline,
+  allowedGroupIds 
+}: PipelineSelectorProps) => {
+  const { data: pipelines, isLoading } = useCRMPipelines();
+  
+  // Filtrar pipelines se houver restrição de BU
+  const filteredPipelines = useMemo(() => {
+    if (!allowedGroupIds || allowedGroupIds.length === 0) {
+      return pipelines; // Sem filtro = admin vê tudo
+    }
+    return pipelines?.filter(p => allowedGroupIds.includes(p.id));
+  }, [pipelines, allowedGroupIds]);
+  
+  // ... resto do componente usando filteredPipelines
+};
 ```
 
-### Lógica de detecção atualizada
+### 3. OriginsSidebar passando filtro
 
 ```typescript
-// Em SalesReportPanel.tsx
-const channel = detectSalesChannel(row.product_name, row.deal_tags || []);
+// OriginsSidebar.tsx
+<PipelineSelector
+  selectedPipelineId={pipelineId || null}
+  onSelectPipeline={onSelectPipeline}
+  allowedGroupIds={allowedGroupIds} // Grupos da BU ativa
+/>
+```
+
+### 4. Negocios.tsx passando grupos
+
+```typescript
+// Negocios.tsx
+import { BU_GROUP_MAP } from '@/components/auth/NegociosAccessGuard';
+
+// Grupos permitidos baseados na BU ativa
+const buAllowedGroups = useMemo(() => {
+  if (!activeBU) return []; // Admin vê tudo
+  return BU_GROUP_MAP[activeBU] || [];
+}, [activeBU]);
+
+// Passar para sidebar
+<OriginsSidebar
+  allowedOriginIds={buAuthorizedOrigins}
+  allowedGroupIds={buAllowedGroups}
+  // ...
+/>
 ```
 
 ---
 
 ## Resultado Esperado
 
-1. ✅ Transações cujo deal tem tag `Lead-Live` serão identificadas como canal LIVE
-2. ✅ Tags `Lead-instagram`, `BIO` serão identificadas como canal BIO  
-3. ✅ Fallback para o nome do produto quando não há tags
-4. ✅ Compatibilidade retroativa mantida
+### Para BU Incorporador:
+- Dropdown "Funil:" mostra apenas: **Perpétuo - X1**
+- Lista de origens mostra apenas as 11 origens do grupo Perpétuo - X1
+- PIPELINE INSIDE SALES aparece como origem principal
+
+### Para BU Consórcio:
+- Dropdown "Funil:" mostra apenas: **Perpétuo - Construa para Alugar**
+- Lista de origens mostra as origens desse grupo
+
+### Para Admin (sem BU):
+- Comportamento atual mantido: vê todos os grupos e origens
 
 ---
 
-## Alternativa Simplificada
+## Benefícios
 
-Se preferir não modificar a RPC, podemos fazer um JOIN no frontend usando React Query para enriquecer os dados das transações com as tags dos deals/contatos. Isso seria menos performático mas evitaria migration de banco.
-
+1. Interface limpa e focada para cada equipe
+2. Reduz confusão com pipelines de outras BUs
+3. Carregamento mais rápido (menos dados)
+4. Consistência com o design de BUs separadas
