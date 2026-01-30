@@ -97,8 +97,9 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
       } else if (filter === 'realizadas') {
         query = query.eq('status', 'completed');
       } else if (filter === 'aprovados') {
-        // For aprovados, include completed AND scheduled meetings (exclude only cancelled/rescheduled)
-        query = query.not('status', 'in', '(cancelled,rescheduled)');
+        // For aprovados, include all meetings except cancelled
+        // Rescheduled meetings should still show if attendee was approved
+        query = query.not('status', 'eq', 'cancelled');
       }
 
       const { data: meetings, error } = await query;
