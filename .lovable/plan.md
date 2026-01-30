@@ -1,106 +1,172 @@
 
 
-# Plano: Sincronizar Métricas do Carrinho R2
+# Plano de Limpeza e Otimização do Sistema
 
-## Problema Identificado
+## Diagnóstico Realizado
 
-As métricas do Carrinho R2 estão inconsistentes entre diferentes componentes:
+Fiz uma varredura completa do sistema e identifiquei **3 categorias principais de problemas**:
 
-| Métrica | Valor | Esperado | Problema |
-|---------|-------|----------|----------|
-| **Aprovados (KPI)** | 50 | ✅ Correto | - |
-| **Aprovados (Tab)** | 50 | ✅ Correto | - |
-| **Selecionados** | 49 | 50 | Falta 1 lead |
-| **No Carrinho** | 57 | 50 | +7 leads extras |
-
-### Diagnóstico Técnico
-
-1. **"Selecionados" = 49** (deveria ser 50):
-   - Em `useR2MetricsData`, a lógica `else if` só conta "aprovados" se o lead NÃO for classificado antes como no-show, desistente, etc.
-   - Se um lead estava como no-show e depois foi reagendado e aprovado, a lógica de prioridade pode manter `is_no_show = true` se o critério de substituição não for atendido
-
-2. **"No Carrinho" = 57** (deveria ser 50):
-   - O cálculo atual: `leadsAtivos = totalLeads - leadsPerdidosCount`
-   - Isso inclui TODOS os leads que não são "perdidos", não apenas aprovados
-   - Inclui: Aprovados + Leads sem status + Leads "Em Análise"
-
-### A Confusão
-
-| Métrica | Significado Atual | Significado Esperado |
-|---------|-------------------|----------------------|
-| **No Carrinho** | Total de leads menos perdidos (inclui pendentes) | Leads aprovados ativos |
-| **Selecionados** | Aprovados (contagem com bug) | Aprovados |
+| Categoria | Quantidade | Impacto |
+|-----------|------------|---------|
+| Hooks não utilizados | 8+ arquivos | Código morto, confusão |
+| Edge functions obsoletas | 15+ funções | Deploy desnecessário, custos |
+| Polling excessivo | 29 hooks com refetchInterval | Sobrecarga do banco de dados |
 
 ---
 
-## Solução Proposta
+## 1. Hooks Órfãos (Não Utilizados)
 
-### Opção 1: Renomear para Clareza (Recomendada)
+Hooks criados mas **nunca importados** em nenhum componente:
 
-Manter as duas métricas com nomes mais claros:
+| Arquivo | Última referência | Ação |
+|---------|-------------------|------|
+| `useDirectorKPIsFromMetrics.ts` | Nenhuma | REMOVER |
+| `useSyncSdrKpis.ts` | Nenhuma | REMOVER |
+| `useAgendamentosCreatedToday.ts` | Nenhuma | REMOVER |
+| `useFunnelData.ts` | Apenas auto-referência | REMOVER |
+| `useUpdateBookedAt.ts` | Nenhuma | REMOVER |
 
-| Métrica | Nome Atual | Nome Novo | Descrição |
-|---------|------------|-----------|-----------|
-| `leadsAtivos` | No Carrinho | **Em Avaliação** | Total - Perdidos (inclui pendentes + aprovados) |
-| `selecionados` | Selecionados | **Aprovados** | Apenas leads com status "Aprovado" |
-
-### Opção 2: Corrigir "No Carrinho" para = Aprovados
-
-Se "No Carrinho" deve significar **apenas aprovados**, então:
-- `leadsAtivos = aprovados` (não `totalLeads - perdidos`)
+**Total: 5 hooks órfãos identificados**
 
 ---
 
-## Arquivos a Modificar
+## 2. Edge Functions de Correção One-Time
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/hooks/useR2MetricsData.ts` | Corrigir lógica de contagem de aprovados |
-| `src/components/crm/R2MetricsPanel.tsx` | Ajustar exibição das métricas |
+Functions criadas para correções pontuais que **não são mais necessárias**:
+
+| Função | Propósito | Ação |
+|--------|-----------|------|
+| `fix-ads-cost` | Corrigir custo de ads específico | REMOVER |
+| `fix-csv-orderbumps` | Processar order bumps de CSV | REMOVER |
+| `fix-hubla-values` | Reprocessar valores Hubla | REMOVER |
+| `fix-hubla-discrepancies` | Corrigir discrepâncias | REMOVER |
+| `fix-reprocessed-activities` | Corrigir atividades | REMOVER |
+| `backfill-deal-activities` | Preenchimento inicial | MANTER (pode ser útil) |
+| `backfill-deal-owners` | Preenchimento inicial | MANTER (pode ser útil) |
+| `backfill-deal-tasks` | Preenchimento inicial | MANTER (pode ser útil) |
+| `backfill-orphan-owners` | Preenchimento inicial | MANTER (pode ser útil) |
+| `reprocess-hubla-events` | Reprocessar eventos | AVALIAR (usado ocasionalmente?) |
+| `reprocess-hubla-webhooks` | Reprocessar webhooks | AVALIAR (usado ocasionalmente?) |
+| `reprocess-failed-webhooks` | Reprocessar falhas | MANTER (útil para erros) |
+| `reprocess-failed-webhooks-cron` | Cron de reprocessamento | MANTER (automação) |
+| `reprocess-missing-activities` | Reprocessar atividades | AVALIAR |
+| `reprocess-contract-payments` | Reprocessar pagamentos | MANTER (usado recentemente) |
+
+**Total: 5 functions para remover imediatamente, 4 para avaliar**
 
 ---
 
-## Implementação Técnica
+## 3. Otimização de Polling (refetchInterval)
 
-### 1. Corrigir contagem de "Aprovados/Selecionados"
+### Problema Atual
+29 hooks com `refetchInterval: 30000` (30 segundos) criando **~60 queries/minuto** por usuário.
 
-O problema está na priorização do status. Quando um lead tem múltiplas reuniões:
-- R2 #1: No-show
-- R2 #2: Aprovado
+### Classificação por Criticidade
 
-A lógica atual pode manter `is_no_show = true` se a priorização não funcionar corretamente.
+| Nível | Intervalo Recomendado | Hooks |
+|-------|----------------------|-------|
+| **Alta** | 30s (manter) | `useWebhookLogs`, `useMeetingsPendentesHoje` |
+| **Média** | 60s | `useR2MetricsData`, `useSdrMetricsV2`, `useCloserR2Metrics` |
+| **Baixa** | 120s | `useWeeklyMetrics`, `useDirectorKPIs`, `useEvolutionData` |
+| **Muito Baixa** | 300s | `useChairmanMetrics` (já está correto), `useCourseCRM` |
 
-```typescript
-// Ajustar prioridade: Aprovado deve sempre sobrescrever no-show
-const statusPriority = (status: string): number => {
-  if (status.includes('aprovado')) return 100;  // Maior prioridade
-  if (status.includes('reprovado')) return 90;
-  if (status.includes('desistente')) return 80;
-  if (status.includes('reembolso')) return 70;
-  if (status.includes('próxima semana')) return 60;
-  return 0;
-};
+### Hooks para Ajustar
 
-// Na comparação de leads:
-const shouldReplace = !existing || 
-  statusPriority(statusName) > statusPriority(existing.r2_status) ||
-  (statusPriority(statusName) === statusPriority(existing.r2_status) && 
-   new Date(meeting.scheduled_at) > new Date(existing.scheduled_at));
+```text
+30s → 60s:
+- useR2MetricsData
+- useSdrMetricsV2
+- useSdrMetricsFromAgenda
+- useCloserR2Metrics
+- useSDRR2Metrics
+- useCloserCarrinhoMetrics
+- useSDRCarrinhoMetrics
+
+30s → 120s:
+- useWeeklyMetrics (2 lugares)
+- useEvolutionData (remove refetch - dados históricos)
+- useA010Sales
+- useHublaTransactions (3 lugares)
+- useUnlinkedTransactions
+- useUnlinkedContracts
+- useIncorporadorTransactions
+- useR2CarrinhoVendas
+- useAutomationLogs
+- useCoursesSales
 ```
 
-### 2. Ajustar métrica "No Carrinho"
+**Impacto estimado**: Redução de ~60% nas queries de polling
 
-Mudar para igualar aos aprovados (se esse for o objetivo):
+---
 
-```typescript
-// ANTES
-const leadsAtivos = totalLeads - leadsPerdidosCount;
+## 4. Resumo das Ações
 
-// DEPOIS
-const leadsAtivos = aprovados; // "No Carrinho" = Aprovados
+### Fase 1: Remoção Imediata (Baixo Risco)
+
+| Tipo | Arquivos | Ação |
+|------|----------|------|
+| Hooks órfãos | 5 arquivos | Deletar |
+| Edge functions fix-* | 5 funções | Deletar e undeploy |
+
+### Fase 2: Otimização de Performance
+
+| Ação | Arquivos afetados |
+|------|-------------------|
+| Aumentar refetchInterval | ~20 hooks |
+| Adicionar staleTime | Hooks que não têm |
+
+### Fase 3: Avaliação Posterior
+
+| Item | Decisão necessária |
+|------|-------------------|
+| Edge functions reprocess-* | Confirmar se ainda são usadas |
+| Edge functions backfill-* | Manter para casos especiais |
+
+---
+
+## Arquivos a Remover
+
+### Hooks (src/hooks/)
+```text
+useDirectorKPIsFromMetrics.ts
+useSyncSdrKpis.ts
+useAgendamentosCreatedToday.ts
+useFunnelData.ts
+useUpdateBookedAt.ts
 ```
 
-**OU** renomear para "Em Avaliação" se quiser manter o conceito atual.
+### Edge Functions (supabase/functions/)
+```text
+fix-ads-cost/
+fix-csv-orderbumps/
+fix-hubla-values/
+fix-hubla-discrepancies/
+fix-reprocessed-activities/
+```
+
+---
+
+## Arquivos a Modificar (Polling)
+
+| Arquivo | Mudança |
+|---------|---------|
+| `useWeeklyMetrics.ts` | 30s → 120s |
+| `useR2MetricsData.ts` | 60s → 90s |
+| `useHublaTransactions.ts` | 30s → 60s |
+| `useA010Sales.ts` | 30s → 60s |
+| `useEvolutionData.ts` | Remover refetchInterval (dados históricos) |
+| `useCoursesSales.ts` | 30s → 60s |
+| `useIncorporadorTransactions.ts` | 30s → 60s |
+| `useUnlinkedTransactions.ts` | 30s → 60s |
+| `useUnlinkedContracts.ts` | 30s → 60s |
+| `useR2CarrinhoVendas.ts` | 30s → 60s |
+| `useCloserCarrinhoMetrics.ts` | 30s → 60s |
+| `useSDRCarrinhoMetrics.ts` | 30s → 60s |
+| `useCloserR2Metrics.ts` | 30s → 60s |
+| `useSDRR2Metrics.ts` | 30s → 60s |
+| `useSdrMetricsV2.ts` | 60s (já está) |
+| `useSdrMetricsFromAgenda.ts` | 60s (já está) |
+| `useAutomationLogs.ts` | 30s → 60s |
 
 ---
 
@@ -108,21 +174,18 @@ const leadsAtivos = aprovados; // "No Carrinho" = Aprovados
 
 | Métrica | Antes | Depois |
 |---------|-------|--------|
-| Aprovados (KPI) | 50 | 50 |
-| Aprovados (Tab) | 50 | 50 |
-| Selecionados | 49 | 50 |
-| No Carrinho | 57 | 50 |
-
-Todas as métricas sincronizadas = **50 aprovados únicos**.
+| Hooks órfãos | 5+ | 0 |
+| Edge functions obsoletas | 5+ | 0 |
+| Queries de polling/min | ~60 | ~25 |
+| Tempo de carregamento | Lento | Mais rápido |
+| Timeouts do banco | Frequentes | Raros |
 
 ---
 
-## Impacto
+## Observações Técnicas
 
-| Componente | Impacto |
-|------------|---------|
-| KPIs do Carrinho R2 | Sem mudança (já correto) |
-| Tab "Aprovados" | Sem mudança (já correto) |
-| Métricas Panel | ✅ Corrigido |
-| Cálculo de Conversão | ✅ Usará base correta |
+1. **Não remover** edge functions de backfill - podem ser úteis para migrações futuras
+2. **Manter** functions de reprocess-failed - são automações importantes
+3. **Testar** após cada fase para garantir que nada quebrou
+4. A limpeza de hooks órfãos é segura pois não há imports
 
