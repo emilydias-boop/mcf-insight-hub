@@ -1,33 +1,62 @@
 
-# Plano de Correção - Erro "column ht.gross_value does not exist"
+
+# Plano de Correção - Erro "column pc.original_name does not exist"
 
 ## Diagnóstico
 
-A migration anterior criou a função `get_all_hubla_transactions` com referências a colunas que **não existem** na tabela `hubla_transactions`:
+A migration anterior referenciou uma coluna **inexistente** na tabela `product_configurations`:
 
-| Coluna Usada (Errada) | Coluna Real |
-|----------------------|-------------|
-| `ht.gross_value` | `ht.product_price` ou calculado via `product_configurations.reference_price` |
-| `ht.fee_value` | Não existe (usar `installment_fee_cents` ou remover) |
+| Coluna Usada (Errada) | Coluna Correta |
+|----------------------|----------------|
+| `pc.original_name` | `pc.product_name` |
+
+### Schema Real da Tabela `product_configurations`:
+- `id` (uuid)
+- `product_name` (text) ← **Esta é a coluna correta para o JOIN**
+- `product_code` (text)
+- `display_name` (text)
+- `product_category` (text)
+- `target_bu` (text)
+- `reference_price` (numeric)
+- `is_active` (boolean)
+- `count_in_dashboard` (boolean)
+- `notes` (text)
+- `created_at`, `updated_at`
+
+---
 
 ## Solução
 
-Criar uma migration corretiva que recria a função `get_all_hubla_transactions` usando o schema correto (baseado na versão funcional anterior), com as seguintes alterações:
+Criar uma nova migration para corrigir as funções usando `pc.product_name` em vez de `pc.original_name`:
 
-### Mudanças:
-1. Restaurar os campos corretos: `product_price`, `net_value`, `gross_override`
-2. Manter join via `LOWER(pc.original_name)` em vez de `pc.product_name`
-3. **Adicionar** `'make'` ao filtro de sources
-4. **Manter** exclusão de `newsale-%`
+### Alterações nas Funções:
 
-### SQL da Correção
+**`get_all_hubla_transactions`:**
+```sql
+-- ANTES (errado):
+INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.original_name)
+
+-- DEPOIS (correto):
+INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.product_name)
+```
+
+**`get_first_transaction_ids`:**
+```sql
+-- ANTES (errado):
+INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.original_name)
+
+-- DEPOIS (correto):
+INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.product_name)
+```
+
+---
+
+## SQL da Correção
 
 ```sql
--- Fix: Recriar get_all_hubla_transactions com schema correto
--- Inclui source 'make' e exclui newsale-% (transações parent)
+-- Fix: Usar pc.product_name em vez de pc.original_name
 
 DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
-DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamp with time zone, timestamp with time zone, integer);
 
 CREATE FUNCTION public.get_all_hubla_transactions(
   p_search text DEFAULT NULL,
@@ -75,11 +104,12 @@ BEGIN
     ht.source::text,
     ht.gross_override::numeric
   FROM hubla_transactions ht
-  INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.original_name)
+  INNER JOIN product_configurations pc 
+    ON LOWER(ht.product_name) = LOWER(pc.product_name)  -- CORRIGIDO
   WHERE 
     ht.sale_status IN ('completed', 'refunded')
     AND ht.hubla_id NOT LIKE 'newsale-%'
-    AND ht.source IN ('hubla', 'manual', 'make')  -- NOVO: incluir make
+    AND ht.source IN ('hubla', 'manual', 'make')
     AND NOT EXISTS (
       SELECT 1 FROM product_configurations pc_parent
       WHERE pc_parent.child_offer_ids IS NOT NULL
@@ -96,7 +126,6 @@ BEGIN
 END;
 $$;
 
--- Atualizar também get_first_transaction_ids para incluir source 'make'
 CREATE OR REPLACE FUNCTION public.get_first_transaction_ids()
 RETURNS TABLE(id uuid)
 LANGUAGE plpgsql
@@ -131,13 +160,13 @@ BEGIN
       ) AS rn
     FROM hubla_transactions ht
     INNER JOIN product_configurations pc 
-      ON LOWER(ht.product_name) = LOWER(pc.original_name)
+      ON LOWER(ht.product_name) = LOWER(pc.product_name)  -- CORRIGIDO
       AND pc.target_bu = 'incorporador'
       AND pc.is_active = true
     WHERE 
       ht.sale_status IN ('completed', 'refunded')
       AND ht.hubla_id NOT LIKE 'newsale-%'
-      AND ht.source IN ('hubla', 'manual', 'make')  -- NOVO: incluir make
+      AND ht.source IN ('hubla', 'manual', 'make')
       AND ht.hubla_id NOT IN (SELECT parent_id FROM parent_ids)
   )
   SELECT ranked_transactions.id
@@ -146,19 +175,29 @@ BEGIN
 END;
 $function$;
 
--- Garantir permissões
 GRANT EXECUTE ON FUNCTION public.get_all_hubla_transactions(text, text, text, integer) TO anon, authenticated;
 ```
 
-## Arquivos a Modificar
+---
 
-| Arquivo | Ação |
-|---------|------|
-| Nova migration SQL | Corrigir função `get_all_hubla_transactions` e `get_first_transaction_ids` |
+## Detalhes Técnicos
+
+### Por que aconteceu esse erro?
+
+O plano anterior estava documentado incorretamente - ele mencionava uma coluna `original_name` que não existe no schema atual. O mapeamento correto é:
+
+| Contexto | Coluna |
+|----------|--------|
+| Nome do produto na transação Hubla | `hubla_transactions.product_name` |
+| Nome do produto na configuração | `product_configurations.product_name` |
+| Nome de exibição (display) | `product_configurations.display_name` |
+
+---
 
 ## Resultado Esperado
 
-1. Erro "column ht.gross_value does not exist" corrigido
-2. Transações do source `make` aparecem na listagem
-3. Transações `newsale-%` continuam excluídas (sem duplicatas)
-4. Bruto calculado corretamente: `COALESCE(gross_override, reference_price, product_price)`
+1. Erro "column pc.original_name does not exist" corrigido
+2. Transações carregam normalmente na página de vendas
+3. Source `make` incluído e `newsale-%` excluído conforme planejado
+4. Bruto calculado: `COALESCE(gross_override, reference_price, product_price)`
+
