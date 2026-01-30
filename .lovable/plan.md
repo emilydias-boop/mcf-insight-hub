@@ -1,114 +1,33 @@
 
-# Plano de Correção - Transações "Recorrente" Incorretas na Listagem de Vendas
+# Plano de Correção - Erro "column ht.gross_value does not exist"
 
-## Diagnóstico Confirmado
+## Diagnóstico
 
-Há dois problemas distintos na página "Vendas MCF INCORPORADOR" (`/bu-incorporador/transacoes`):
+A migration anterior criou a função `get_all_hubla_transactions` com referências a colunas que **não existem** na tabela `hubla_transactions`:
 
-### Problema 1: Transações "newsale-" aparecem como duplicatas "Recorrente"
+| Coluna Usada (Errada) | Coluna Real |
+|----------------------|-------------|
+| `ht.gross_value` | `ht.product_price` ou calculado via `product_configurations.reference_price` |
+| `ht.fee_value` | Não existe (usar `installment_fee_cents` ou remover) |
 
-O Hubla cria múltiplas transações para cada venda:
-- Uma transação "parent" com `hubla_id` começando com `newsale-` e valor inflado (ex: R$ 23.298)
-- Uma ou mais transações "offer" com o valor real do produto (ex: R$ 19.500)
+## Solução
 
-A função `get_first_transaction_ids` corretamente **exclui** `newsale-%` da deduplicação. Porém, a função `get_all_hubla_transactions` **não exclui** essas transações da listagem.
+Criar uma migration corretiva que recria a função `get_all_hubla_transactions` usando o schema correto (baseado na versão funcional anterior), com as seguintes alterações:
 
-**Resultado**: Clientes como Livie, Raissa, Lucas aparecem com 2 linhas cada:
-- Linha 1: `newsale-...` com Bruto R$ 0,00 (dup) → "Recorrente" 
-- Linha 2: transação real com Bruto correto → "Novo"
+### Mudanças:
+1. Restaurar os campos corretos: `product_price`, `net_value`, `gross_override`
+2. Manter join via `LOWER(pc.original_name)` em vez de `pc.product_name`
+3. **Adicionar** `'make'` ao filtro de sources
+4. **Manter** exclusão de `newsale-%`
 
-### Problema 2: Transações do source "make" não aparecem
-
-A função RPC filtra apenas `source IN ('hubla', 'manual')`, excluindo transações vindas do Make.
-
-Isso faz com que vendas registradas via Make (como a do Lucas com `source: 'make'`) não apareçam na listagem, mesmo sendo parcerias válidas.
-
----
-
-## Solução Proposta
-
-### Parte A: Excluir transações "newsale-" da listagem
-
-Atualizar a função `get_all_hubla_transactions` para excluir transações parent:
+### SQL da Correção
 
 ```sql
--- Adicionar filtro:
-AND (ht.hubla_id IS NULL OR ht.hubla_id NOT LIKE 'newsale-%')
-```
-
-### Parte B: Incluir transações do source "make" na listagem
-
-Atualizar o filtro de source para incluir 'make':
-
-```sql
--- Antes:
-AND ht.source IN ('hubla', 'manual')
-
--- Depois:
-AND ht.source IN ('hubla', 'manual', 'make')
-```
-
-### Parte C: Sincronizar get_first_transaction_ids
-
-Atualizar a função de deduplicação para também considerar transações 'make':
-
-```sql
--- Antes:
-AND ht.source IN ('hubla', 'manual')
-
--- Depois:
-AND ht.source IN ('hubla', 'manual', 'make')
-```
-
-### Parte D: Registrar produtos "make" na tabela product_configurations (se necessário)
-
-Verificar se os nomes de produto usados pelo Make estão mapeados:
-- `A009 - MCF INCORPORADOR + THE CLUB` ✅ já existe
-- `Parceria` ❌ pode não estar mapeado
-
-Se necessário, adicionar configuração para produtos genéricos do Make.
-
----
-
-## Arquivos a Modificar
-
-### 1. Nova Migration SQL
-
-Criar migration para atualizar ambas as funções RPC:
-
-```sql
--- get_all_hubla_transactions: 
--- 1. Excluir newsale-% (transações parent)
--- 2. Incluir source 'make'
-
--- get_first_transaction_ids:
--- 1. Incluir source 'make'
-```
-
-### 2. (Opcional) Frontend - TransactionGroupRow.tsx
-
-O agrupamento por `hubla_id` pode ser melhorado para consolidar transações Make/Manual com transações Hubla do mesmo cliente, mas isso é secundário. O problema principal está no SQL.
-
----
-
-## Resultado Esperado
-
-| Cliente | Antes | Depois |
-|---------|-------|--------|
-| Livie Magalhães | 2 linhas (1 Novo + 1 Recorrente) | 1 linha (Novo, Bruto R$ 19.500) |
-| Raissa Farah | 2 linhas (1 Novo + 1 Recorrente) | 1 linha (Novo, Bruto R$ 19.500) |
-| Lucas Falvela | 1 linha (Manual) | 2 linhas (Manual + Make, consolidáveis) |
-
----
-
-## Detalhes Técnicos da Migration
-
-```sql
--- Atualiza get_all_hubla_transactions para:
--- 1. Excluir transações parent (hubla_id LIKE 'newsale-%')
--- 2. Incluir source 'make'
+-- Fix: Recriar get_all_hubla_transactions com schema correto
+-- Inclui source 'make' e exclui newsale-% (transações parent)
 
 DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
+DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamp with time zone, timestamp with time zone, integer);
 
 CREATE FUNCTION public.get_all_hubla_transactions(
   p_search text DEFAULT NULL,
@@ -117,21 +36,21 @@ CREATE FUNCTION public.get_all_hubla_transactions(
   p_limit integer DEFAULT 5000
 )
 RETURNS TABLE(
-  id uuid,
+  id text,
   hubla_id text,
-  sale_date timestamptz,
+  product_name text,
+  product_category text,
+  product_price numeric,
+  net_value numeric,
   customer_name text,
   customer_email text,
-  product_name text,
-  gross_value numeric,
-  net_value numeric,
-  fee_value numeric,
+  customer_phone text,
+  sale_date timestamp with time zone,
   sale_status text,
-  payment_method text,
   installment_number integer,
   total_installments integer,
   source text,
-  created_at timestamptz
+  gross_override numeric
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -140,32 +59,36 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT 
-    ht.id,
+    ht.id::text,
     ht.hubla_id::text,
-    ht.sale_date,
+    COALESCE(pc.display_name, ht.product_name)::text as product_name,
+    pc.product_code::text as product_category,
+    COALESCE(ht.gross_override, pc.reference_price, ht.product_price)::numeric as product_price,
+    ht.net_value::numeric,
     ht.customer_name::text,
     ht.customer_email::text,
-    ht.product_name::text,
-    ht.gross_value,
-    ht.net_value,
-    ht.fee_value,
+    ht.customer_phone::text,
+    ht.sale_date,
     ht.sale_status::text,
-    ht.payment_method::text,
-    ht.installment_number,
-    ht.total_installments,
+    ht.installment_number::integer,
+    ht.total_installments::integer,
     ht.source::text,
-    ht.created_at
+    ht.gross_override::numeric
   FROM hubla_transactions ht
-  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
-  WHERE pc.target_bu = 'incorporador'
-    AND ht.sale_status IN ('completed', 'refunded')
+  INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.original_name)
+  WHERE 
+    ht.sale_status IN ('completed', 'refunded')
+    AND ht.hubla_id NOT LIKE 'newsale-%'
     AND ht.source IN ('hubla', 'manual', 'make')  -- NOVO: incluir make
-    AND (ht.hubla_id IS NULL OR ht.hubla_id NOT LIKE 'newsale-%')  -- NOVO: excluir parents
-    AND (p_search IS NULL OR (
-      ht.customer_name ILIKE '%' || p_search || '%' OR
-      ht.customer_email ILIKE '%' || p_search || '%' OR
-      ht.product_name ILIKE '%' || p_search || '%'
-    ))
+    AND NOT EXISTS (
+      SELECT 1 FROM product_configurations pc_parent
+      WHERE pc_parent.child_offer_ids IS NOT NULL
+        AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
+    )
+    AND (p_search IS NULL OR 
+         ht.customer_name ILIKE '%' || p_search || '%' OR 
+         ht.customer_email ILIKE '%' || p_search || '%' OR
+         ht.product_name ILIKE '%' || p_search || '%')
     AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
     AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
   ORDER BY ht.sale_date DESC
@@ -173,7 +96,7 @@ BEGIN
 END;
 $$;
 
--- Atualiza get_first_transaction_ids para incluir source 'make'
+-- Atualizar também get_first_transaction_ids para incluir source 'make'
 CREATE OR REPLACE FUNCTION public.get_first_transaction_ids()
 RETURNS TABLE(id uuid)
 LANGUAGE plpgsql
@@ -208,7 +131,7 @@ BEGIN
       ) AS rn
     FROM hubla_transactions ht
     INNER JOIN product_configurations pc 
-      ON ht.product_name = pc.product_name 
+      ON LOWER(ht.product_name) = LOWER(pc.original_name)
       AND pc.target_bu = 'incorporador'
       AND pc.is_active = true
     WHERE 
@@ -223,17 +146,19 @@ BEGIN
 END;
 $function$;
 
--- Grant permissions
+-- Garantir permissões
 GRANT EXECUTE ON FUNCTION public.get_all_hubla_transactions(text, text, text, integer) TO anon, authenticated;
 ```
 
----
+## Arquivos a Modificar
 
-## Critérios de Aceite
+| Arquivo | Ação |
+|---------|------|
+| Nova migration SQL | Corrigir função `get_all_hubla_transactions` e `get_first_transaction_ids` |
 
-1. ✅ Transações `newsale-%` não aparecem mais na listagem
-2. ✅ Transações do source `make` aparecem na listagem
-3. ✅ Apenas 1 linha por venda real (não duplicatas)
-4. ✅ Badge "Novo" para primeira compra do cliente+produto
-5. ✅ Badge "Recorrente" apenas para clientes que já compraram antes
-6. ✅ Bruto Total correto (sem inflação por parents ou duplicatas)
+## Resultado Esperado
+
+1. Erro "column ht.gross_value does not exist" corrigido
+2. Transações do source `make` aparecem na listagem
+3. Transações `newsale-%` continuam excluídas (sem duplicatas)
+4. Bruto calculado corretamente: `COALESCE(gross_override, reference_price, product_price)`
