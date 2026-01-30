@@ -1,177 +1,239 @@
 
-# Plano de Correção - "Acesso Negado" Intermitente no CRM/Negócios
+# Plano de Correção - Transações "Recorrente" Incorretas na Listagem de Vendas
 
 ## Diagnóstico Confirmado
 
-O problema ocorre devido a uma **race condition** entre o carregamento de roles e a verificação de permissões:
+Há dois problemas distintos na página "Vendas MCF INCORPORADOR" (`/bu-incorporador/transacoes`):
 
-```text
-Fluxo atual (problemático):
-──────────────────────────────────────────────────────────
-1. AuthContext: sessão detectada
-2. AuthContext: loading=false, role='viewer' (fallback)  ← IMEDIATO
-3. ProtectedRoute: libera acesso (user existe)
-4. ResourceGuard: verifica permissões com role='viewer'  ← PROBLEMA!
-5. useResourcePermission: busca permissões do 'viewer'
-6. Resultado: 'viewer' não tem acesso ao CRM → "Acesso Negado"
-7. [Background] loadRolesInBackground: role='admin' (correto)
-8. Mas a UI já mostrou o erro
-──────────────────────────────────────────────────────────
+### Problema 1: Transações "newsale-" aparecem como duplicatas "Recorrente"
 
-Fluxo após refresh (funciona):
-──────────────────────────────────────────────────────────
-1. AuthContext: sessão detectada
-2. React Query cache já tem a role correta
-3. role='admin' (do cache anterior)
-4. ResourceGuard: verifica permissões com role='admin'
-5. Resultado: acesso concedido ✓
-──────────────────────────────────────────────────────────
-```
+O Hubla cria múltiplas transações para cada venda:
+- Uma transação "parent" com `hubla_id` começando com `newsale-` e valor inflado (ex: R$ 23.298)
+- Uma ou mais transações "offer" com o valor real do produto (ex: R$ 19.500)
+
+A função `get_first_transaction_ids` corretamente **exclui** `newsale-%` da deduplicação. Porém, a função `get_all_hubla_transactions` **não exclui** essas transações da listagem.
+
+**Resultado**: Clientes como Livie, Raissa, Lucas aparecem com 2 linhas cada:
+- Linha 1: `newsale-...` com Bruto R$ 0,00 (dup) → "Recorrente" 
+- Linha 2: transação real com Bruto correto → "Novo"
+
+### Problema 2: Transações do source "make" não aparecem
+
+A função RPC filtra apenas `source IN ('hubla', 'manual')`, excluindo transações vindas do Make.
+
+Isso faz com que vendas registradas via Make (como a do Lucas com `source: 'make'`) não apareçam na listagem, mesmo sendo parcerias válidas.
+
+---
 
 ## Solução Proposta
 
-Fazer o `ResourceGuard` **aguardar o `roleLoading` terminar** antes de negar acesso. Enquanto as roles estão carregando, mostrar um loading spinner, não a mensagem de acesso negado.
+### Parte A: Excluir transações "newsale-" da listagem
 
-## Mudanças Necessárias
+Atualizar a função `get_all_hubla_transactions` para excluir transações parent:
 
-### Arquivo 1: `src/components/auth/ResourceGuard.tsx`
-
-**Problema atual:**
-- Usa apenas `loading` do AuthContext (que agora é só authLoading)
-- Não considera `roleLoading` ao verificar permissões
-
-**Correção:**
-```typescript
-// Antes
-const { role, loading } = useAuth();
-
-// Esperar o loading terminar antes de verificar permissões
-if (loading) {
-  return <Spinner />;
-}
-
-// Depois
-const { role, loading, roleLoading } = useAuth();
-
-// Esperar AMBOS os loadings terminarem antes de verificar permissões
-if (loading || roleLoading) {
-  return <Spinner />;
-}
+```sql
+-- Adicionar filtro:
+AND (ht.hubla_id IS NULL OR ht.hubla_id NOT LIKE 'newsale-%')
 ```
 
-### Arquivo 2: `src/components/auth/RoleGuard.tsx`
+### Parte B: Incluir transações do source "make" na listagem
 
-**Mesma correção:**
-- Adicionar verificação de `roleLoading` antes de negar acesso
+Atualizar o filtro de source para incluir 'make':
 
-### Arquivo 3: `src/components/auth/R2AccessGuard.tsx`
+```sql
+-- Antes:
+AND ht.source IN ('hubla', 'manual')
 
-**Mesma correção:**
-- Adicionar verificação de `roleLoading` antes de negar acesso
-
-### Arquivo 4: `src/components/auth/NegociosAccessGuard.tsx`
-
-**Verificar se precisa da mesma correção** (embora atualmente esteja liberado para todos, pode ter condições futuras)
-
-## Detalhes Técnicos
-
-### Alteração no ResourceGuard
-
-```typescript
-export const ResourceGuard = ({ 
-  resource, 
-  requiredLevel = 'view',
-  children, 
-  fallback 
-}: ResourceGuardProps) => {
-  const { role, loading, roleLoading } = useAuth();  // ← Adicionar roleLoading
-  const { canView, canEdit, canFull } = useResourcePermission(resource);
-  
-  // Esperar AMBOS loading e roleLoading terminarem
-  // Isso evita mostrar "Acesso Negado" enquanto as roles reais estão carregando
-  if (loading || roleLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
-  // Admins sempre têm acesso (só verifica após loading terminar)
-  if (role === 'admin') {
-    return <>{children}</>;
-  }
-  
-  // ... resto do código
-};
+-- Depois:
+AND ht.source IN ('hubla', 'manual', 'make')
 ```
 
-### Alteração no RoleGuard
+### Parte C: Sincronizar get_first_transaction_ids
 
-```typescript
-export const RoleGuard = ({ 
-  allowedRoles, 
-  children, 
-  fallback 
-}: RoleGuardProps) => {
-  const { role, loading, roleLoading, allRoles } = useAuth();  // ← Adicionar roleLoading
-  
-  // Esperar AMBOS loading e roleLoading terminarem
-  if (loading || roleLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-  
-  // ... resto do código
-};
+Atualizar a função de deduplicação para também considerar transações 'make':
+
+```sql
+-- Antes:
+AND ht.source IN ('hubla', 'manual')
+
+-- Depois:
+AND ht.source IN ('hubla', 'manual', 'make')
 ```
 
-## Comportamento Esperado Após Correção
+### Parte D: Registrar produtos "make" na tabela product_configurations (se necessário)
 
-```text
-Fluxo corrigido:
-──────────────────────────────────────────────────────────
-1. AuthContext: sessão detectada
-2. AuthContext: loading=false, roleLoading=true, role='viewer' (fallback)
-3. ProtectedRoute: libera acesso (user existe)
-4. ResourceGuard: roleLoading=true → mostra SPINNER (não "Acesso Negado")
-5. [Background] loadRolesInBackground: role='admin' (correto)
-6. AuthContext: roleLoading=false, role='admin'
-7. ResourceGuard: verifica permissões com role='admin'
-8. Resultado: acesso concedido ✓
-──────────────────────────────────────────────────────────
-```
+Verificar se os nomes de produto usados pelo Make estão mapeados:
+- `A009 - MCF INCORPORADOR + THE CLUB` ✅ já existe
+- `Parceria` ❌ pode não estar mapeado
+
+Se necessário, adicionar configuração para produtos genéricos do Make.
+
+---
 
 ## Arquivos a Modificar
 
-1. `src/components/auth/ResourceGuard.tsx`
-   - Adicionar `roleLoading` do useAuth
-   - Mostrar spinner enquanto `roleLoading=true`
+### 1. Nova Migration SQL
 
-2. `src/components/auth/RoleGuard.tsx`
-   - Mesma modificação
+Criar migration para atualizar ambas as funções RPC:
 
-3. `src/components/auth/R2AccessGuard.tsx`
-   - Mesma modificação
+```sql
+-- get_all_hubla_transactions: 
+-- 1. Excluir newsale-% (transações parent)
+-- 2. Incluir source 'make'
+
+-- get_first_transaction_ids:
+-- 1. Incluir source 'make'
+```
+
+### 2. (Opcional) Frontend - TransactionGroupRow.tsx
+
+O agrupamento por `hubla_id` pode ser melhorado para consolidar transações Make/Manual com transações Hubla do mesmo cliente, mas isso é secundário. O problema principal está no SQL.
+
+---
+
+## Resultado Esperado
+
+| Cliente | Antes | Depois |
+|---------|-------|--------|
+| Livie Magalhães | 2 linhas (1 Novo + 1 Recorrente) | 1 linha (Novo, Bruto R$ 19.500) |
+| Raissa Farah | 2 linhas (1 Novo + 1 Recorrente) | 1 linha (Novo, Bruto R$ 19.500) |
+| Lucas Falvela | 1 linha (Manual) | 2 linhas (Manual + Make, consolidáveis) |
+
+---
+
+## Detalhes Técnicos da Migration
+
+```sql
+-- Atualiza get_all_hubla_transactions para:
+-- 1. Excluir transações parent (hubla_id LIKE 'newsale-%')
+-- 2. Incluir source 'make'
+
+DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
+
+CREATE FUNCTION public.get_all_hubla_transactions(
+  p_search text DEFAULT NULL,
+  p_start_date text DEFAULT NULL,
+  p_end_date text DEFAULT NULL,
+  p_limit integer DEFAULT 5000
+)
+RETURNS TABLE(
+  id uuid,
+  hubla_id text,
+  sale_date timestamptz,
+  customer_name text,
+  customer_email text,
+  product_name text,
+  gross_value numeric,
+  net_value numeric,
+  fee_value numeric,
+  sale_status text,
+  payment_method text,
+  installment_number integer,
+  total_installments integer,
+  source text,
+  created_at timestamptz
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.hubla_id::text,
+    ht.sale_date,
+    ht.customer_name::text,
+    ht.customer_email::text,
+    ht.product_name::text,
+    ht.gross_value,
+    ht.net_value,
+    ht.fee_value,
+    ht.sale_status::text,
+    ht.payment_method::text,
+    ht.installment_number,
+    ht.total_installments,
+    ht.source::text,
+    ht.created_at
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = 'incorporador'
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND ht.source IN ('hubla', 'manual', 'make')  -- NOVO: incluir make
+    AND (ht.hubla_id IS NULL OR ht.hubla_id NOT LIKE 'newsale-%')  -- NOVO: excluir parents
+    AND (p_search IS NULL OR (
+      ht.customer_name ILIKE '%' || p_search || '%' OR
+      ht.customer_email ILIKE '%' || p_search || '%' OR
+      ht.product_name ILIKE '%' || p_search || '%'
+    ))
+    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
+
+-- Atualiza get_first_transaction_ids para incluir source 'make'
+CREATE OR REPLACE FUNCTION public.get_first_transaction_ids()
+RETURNS TABLE(id uuid)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN QUERY
+  WITH parent_ids AS (
+    SELECT DISTINCT SPLIT_PART(hubla_id, '-offer-', 1) as parent_id
+    FROM hubla_transactions 
+    WHERE hubla_id LIKE '%-offer-%'
+  ),
+  ranked_transactions AS (
+    SELECT 
+      ht.id,
+      ROW_NUMBER() OVER (
+        PARTITION BY 
+          LOWER(COALESCE(NULLIF(TRIM(ht.customer_email), ''), 'unknown')),
+          CASE 
+            WHEN UPPER(ht.product_name) LIKE '%A009%' THEN 'A009'
+            WHEN UPPER(ht.product_name) LIKE '%A005%' THEN 'A005'
+            WHEN UPPER(ht.product_name) LIKE '%A004%' THEN 'A004'
+            WHEN UPPER(ht.product_name) LIKE '%A003%' THEN 'A003'
+            WHEN UPPER(ht.product_name) LIKE '%A001%' THEN 'A001'
+            WHEN UPPER(ht.product_name) LIKE '%A010%' THEN 'A010'
+            WHEN UPPER(ht.product_name) LIKE '%A000%' OR UPPER(ht.product_name) LIKE '%CONTRATO%' THEN 'A000'
+            WHEN UPPER(ht.product_name) LIKE '%PLANO CONSTRUTOR%' THEN 'PLANO_CONSTRUTOR'
+            ELSE LEFT(UPPER(TRIM(ht.product_name)), 40)
+          END
+        ORDER BY ht.sale_date ASC
+      ) AS rn
+    FROM hubla_transactions ht
+    INNER JOIN product_configurations pc 
+      ON ht.product_name = pc.product_name 
+      AND pc.target_bu = 'incorporador'
+      AND pc.is_active = true
+    WHERE 
+      ht.sale_status IN ('completed', 'refunded')
+      AND ht.hubla_id NOT LIKE 'newsale-%'
+      AND ht.source IN ('hubla', 'manual', 'make')  -- NOVO: incluir make
+      AND ht.hubla_id NOT IN (SELECT parent_id FROM parent_ids)
+  )
+  SELECT ranked_transactions.id
+  FROM ranked_transactions
+  WHERE rn = 1;
+END;
+$function$;
+
+-- Grant permissions
+GRANT EXECUTE ON FUNCTION public.get_all_hubla_transactions(text, text, text, integer) TO anon, authenticated;
+```
+
+---
 
 ## Critérios de Aceite
 
-1. Ao acessar `/crm/negocios`:
-   - Durante carregamento: mostrar spinner (não "Acesso Negado")
-   - Após roles carregadas: mostrar conteúdo correto baseado na role real
-
-2. Comportamento consistente em:
-   - Primeiro acesso (sem cache)
-   - Refresh (F5)
-   - Navegação interna entre abas
-
-3. Sem regressões:
-   - Login/logout continua funcionando
-   - Usuários sem permissão real continuam vendo "Acesso Negado" (após roleLoading=false)
-
-## Tempo de Loading Esperado
-
-O `roleLoading` normalmente termina em 1-3 segundos (dependendo do Supabase). Com o timeout de 8s configurado, no pior caso o usuário vê o spinner por até 8 segundos antes de ver o conteúdo (ou fallback para viewer se timeout).
+1. ✅ Transações `newsale-%` não aparecem mais na listagem
+2. ✅ Transações do source `make` aparecem na listagem
+3. ✅ Apenas 1 linha por venda real (não duplicatas)
+4. ✅ Badge "Novo" para primeira compra do cliente+produto
+5. ✅ Badge "Recorrente" apenas para clientes que já compraram antes
+6. ✅ Bruto Total correto (sem inflação por parents ou duplicatas)
