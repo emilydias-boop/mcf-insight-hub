@@ -50,7 +50,8 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
           attendees:meeting_slot_attendees(
             id,
             status,
-            r2_status_id
+            r2_status_id,
+            deal_id
           )
         `)
         .eq('meeting_type', 'r2')
@@ -100,11 +101,31 @@ export function useR2CarrinhoKPIs(weekDate: Date) {
         .map(s => s.id) || [];
 
       // ===== ATTENDEE STATUS COUNTS =====
-      const allAttendees = (r2Meetings || []).flatMap(m => m.attendees || []);
+      const allAttendees = (r2Meetings || []).flatMap(m => 
+        (m.attendees || []).map(a => ({
+          ...a,
+          scheduled_at: m.scheduled_at,
+          meeting_status: m.status
+        }))
+      );
       
-      const aprovados = allAttendees.filter(a => 
-        a.r2_status_id === aprovadoStatusId
-      ).length;
+      // Deduplicar aprovados por deal_id
+      const aprovadoAttendees = allAttendees.filter(a => a.r2_status_id === aprovadoStatusId);
+      const aprovadosDeduplicated = new Map<string, typeof aprovadoAttendees[0]>();
+
+      for (const att of aprovadoAttendees) {
+        const key = att.deal_id || att.id;
+        const existing = aprovadosDeduplicated.get(key);
+        
+        if (!existing || 
+            (att.meeting_status === 'completed' && existing.meeting_status !== 'completed') ||
+            (att.meeting_status === existing.meeting_status && 
+             new Date(att.scheduled_at) > new Date(existing.scheduled_at))) {
+          aprovadosDeduplicated.set(key, att);
+        }
+      }
+
+      const aprovados = aprovadosDeduplicated.size;
 
       const pendentes = allAttendees.filter(a => 
         a.r2_status_id === pendenteStatusId
