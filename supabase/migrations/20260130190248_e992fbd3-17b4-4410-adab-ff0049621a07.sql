@@ -1,0 +1,2 @@
+-- Remove a versão "pesada" da função que causa ambiguidade (a que começa com p_search primeiro)
+DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamp with time zone, timestamp with time zone, integer);
