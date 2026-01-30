@@ -1,130 +1,92 @@
 
-
-# Plano: Corrigir Popup de Nova Transação na Aba Vendas do Carrinho R2
+# Plano: Sincronizar Aba "Aprovados" com Vendas Reais
 
 ## Problema Identificado
 
-Você adicionou a transação do **Maurício Felipe Bezerra de Sousa** pela aba "Vendas" do Carrinho R2, mas ela não apareceu na lista. Consultei o banco e encontrei:
+O **Iago Oliveira** (e outros leads) aparece na aba "Aprovados" mesmo após a venda ter sido registrada na aba "Vendas". Isso acontece porque:
 
-| Campo | Valor Atual | Valor Necessário |
-|-------|-------------|------------------|
-| `product_category` | `NULL` | `parceria` |
-| `linked_attendee_id` | `NULL` | UUID do lead aprovado |
+| Aba | Lógica Atual | Problema |
+|-----|--------------|----------|
+| **Vendas** | Match por email/telefone com `hubla_transactions.product_category = 'parceria'` | ✅ Funciona corretamente |
+| **Aprovados** | Filtra apenas por `carrinho_status !== 'comprou'` (status manual) | ❌ Ignora vendas reais |
 
-O hook `useR2CarrinhoVendas` filtra por `product_category = 'parceria'` (linha 142), por isso a transação não aparece.
-
-## Causa Raiz
-
-O popup "Nova Transação" na aba Vendas usa o componente genérico `TransactionFormDialog` do módulo Incorporador, que:
-
-1. **Não define** `product_category = 'parceria'` ao criar a transação
-2. **Não oferece** opção de selecionar um lead aprovado para vincular a venda
-3. Lista produtos do Incorporador (A001, A009, etc.) em vez de produtos específicos de parceria
+O Iago tem:
+- Transação: `iagoofr507@gmail.com`, `product_category = 'parceria'` ✅
+- Attendee: `iagoofr507@gmail.com`, `carrinho_status = NULL` ❌
 
 ## Solução Proposta
 
-Criar um novo componente `R2CarrinhoTransactionFormDialog` específico para a aba Vendas do Carrinho R2 que:
+Modificar a aba "Aprovados" para **excluir automaticamente leads que têm vendas reais** (mesmo sem marcar manualmente como "comprou").
 
-### 1. Seleção de Lead Aprovado (nova funcionalidade)
+### Abordagem: Cruzar dados com vendas
 
-- Campo select/dropdown listando leads aprovados da semana atual
-- Opção "Buscar em outras semanas" (toggle para expandir busca)
-- Campo de busca para filtrar por nome/email/telefone
-- Ao selecionar um lead, preenche automaticamente:
-  - Nome do cliente
-  - Email do cliente  
-  - Telefone do cliente
+No componente `R2AprovadosList.tsx`, já temos acesso aos dados de vendas via:
 
-### 2. Campos do Formulário
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    Nova Venda de Parceria                   │
-├─────────────────────────────────────────────────────────────┤
-│  Lead Aprovado *                                            │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ Buscar lead aprovado...                            ▼ │  │
-│  └───────────────────────────────────────────────────────┘  │
-│  [ ] Buscar em outras semanas                               │
-│                                                             │
-│  Produto *                                                  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │ A009 - MCF INCORPORADOR COMPLETO + THE CLUB        ▼ │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                                                             │
-│  ┌──────────────────────┐  ┌──────────────────────────────┐ │
-│  │ Nome do Cliente *    │  │ Email *                      │ │
-│  │ [auto-preenchido]    │  │ [auto-preenchido]            │ │
-│  └──────────────────────┘  └──────────────────────────────┘ │
-│                                                             │
-│  ┌──────────────────────┐  ┌──────────────────────────────┐ │
-│  │ Telefone             │  │ Data da Venda *              │ │
-│  │ [auto-preenchido]    │  │ [📅 30/01/2026]              │ │
-│  └──────────────────────┘  └──────────────────────────────┘ │
-│                                                             │
-│  ┌──────────────────────┐  ┌──────────────────────────────┐ │
-│  │ Valor Bruto (R$)     │  │ Valor Líquido (R$) *         │ │
-│  │ [R$ 19.500,00]       │  │ [R$ 13.089,70]               │ │
-│  └──────────────────────┘  └──────────────────────────────┘ │
-│                                                             │
-│                        [Cancelar]  [Criar Venda]            │
-└─────────────────────────────────────────────────────────────┘
+```typescript
+const { data: vendasData = [] } = useR2CarrinhoVendas(weekEnd);
 ```
 
-### 3. Lógica de Criação
+Vamos criar um **Set de emails/telefones que já compraram** e usar para filtrar:
 
-Ao criar a transação:
-
-```text
-{
-  hubla_id: `manual-${Date.now()}`,
-  product_name: <produto selecionado>,
-  product_category: 'parceria',           // ← CHAVE para aparecer na lista
-  linked_attendee_id: <id do lead>,       // ← Vincula ao lead aprovado
-  customer_name: <do lead ou editado>,
-  customer_email: <do lead ou editado>,
-  customer_phone: <do lead ou editado>,
-  sale_date: <data selecionada>,
-  product_price: <preço de referência>,
-  net_value: <valor líquido>,
-  source: 'manual',
-  sale_status: 'completed',
-  count_in_dashboard: true
-}
+```typescript
+// Criar set de emails/phones que já compraram
+const soldIdentifiers = useMemo(() => {
+  const set = new Set<string>();
+  vendasData.forEach(venda => {
+    if (venda.customer_email) {
+      set.add(venda.customer_email.toLowerCase());
+    }
+    if (venda.customer_phone) {
+      const normalized = venda.customer_phone.replace(/\D/g, '').slice(-11);
+      if (normalized.length >= 10) set.add(normalized);
+    }
+  });
+  return set;
+}, [vendasData]);
 ```
 
-## Arquivos a Modificar/Criar
+E atualizar o filtro de `displayedAttendees`:
 
-### Novos Arquivos
+```typescript
+const displayedAttendees = useMemo(() => {
+  return attendees
+    .filter(att => {
+      // Excluir status manual "comprou"
+      if (att.carrinho_status === 'comprou') return false;
+      
+      // Excluir se tem venda real (match por email ou telefone)
+      const email = att.contact_email?.toLowerCase();
+      const phone = (att.attendee_phone || att.contact_phone)?.replace(/\D/g, '').slice(-11);
+      
+      if (email && soldIdentifiers.has(email)) return false;
+      if (phone && phone.length >= 10 && soldIdentifiers.has(phone)) return false;
+      
+      return true;
+    })
+    // ... resto dos filtros (search, closer, date)
+}, [attendees, soldIdentifiers, searchTerm, closerFilter, dateFilter]);
+```
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/crm/R2CarrinhoTransactionFormDialog.tsx` | Novo dialog específico para vendas do carrinho |
-| `src/hooks/useCreateCarrinhoTransaction.ts` | Hook para criar transação com `product_category = 'parceria'` e vinculação |
-
-### Arquivos a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/components/crm/R2VendasList.tsx` | Trocar `TransactionFormDialog` por `R2CarrinhoTransactionFormDialog` |
+| `src/components/crm/R2AprovadosList.tsx` | Adicionar lógica para excluir leads com vendas reais |
 
-## Correção Imediata da Transação Existente
+## Resultado Esperado
 
-Executar SQL para corrigir a transação do Maurício que já foi criada:
+1. **Iago Oliveira** sai automaticamente da aba "Aprovados"
+2. Qualquer lead com venda real (por match de email/telefone) é removido
+3. Contagem "48 em acompanhamento" diminui conforme vendas são feitas
+4. Status manual "comprou" continua funcionando como backup
 
-```sql
-UPDATE hubla_transactions 
-SET product_category = 'parceria'
-WHERE id = 'f4876eaf-66b2-4a14-8dd5-e529aab0ce38';
-```
+## Sem Necessidade de SQL
 
-Nota: A vinculação com o lead aprovado (`linked_attendee_id`) pode ser feita manualmente via UI depois, usando o botão "Vincular" que já existe.
+A correção é 100% no frontend - os dados de vendas já estão disponíveis no componente.
 
-## Benefícios
+## Checklist de Aceitação
 
-1. **Transações aparecem na lista** - `product_category = 'parceria'` garante o filtro
-2. **Vinculação automática** - Lead selecionado já é vinculado (`linked_attendee_id`)
-3. **Preenchimento automático** - Dados do lead preenchem o formulário
-4. **Atribuição correta** - Closer do lead é usado nas métricas
-5. **UX melhorada** - Fluxo mais intuitivo para adicionar vendas manuais
-
+- [ ] Iago Oliveira não aparece mais na aba "Aprovados" (só em "Vendas")
+- [ ] Outros leads com vendas também são removidos automaticamente
+- [ ] Contagem "X em acompanhamento" reflete leads sem venda
+- [ ] Filtros (busca, closer, data) continuam funcionando
