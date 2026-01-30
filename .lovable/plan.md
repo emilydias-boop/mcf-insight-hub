@@ -1,80 +1,32 @@
 
-# Plano: Corrigir Reembolso para Afetar Apenas o Attendee Individual
+# Plano: Sincronizar Métricas "Fora do Carrinho" com KPIs
 
 ## Problema Identificado
 
-Você está correto! Quando um reembolso é processado no R2:
+| Fonte | Valor | Lógica |
+|-------|-------|--------|
+| **KPI "Fora do Carrinho"** | 6 | Conta attendees com `r2_status_id` IN (Reembolso, Desistente, Reprovado, etc.) |
+| **Métricas "Reembolsos"** | 0 | Calcula `reprovados + desistentes` (linha 395) |
 
-| Comportamento Atual | Comportamento Correto |
-|--------------------|----------------------|
-| Atualiza `meeting_slots.status` → "refunded" | NÃO deve alterar o slot |
-| Atualiza TODOS `meeting_slot_attendees.status` → "refunded" | Deve atualizar APENAS o attendee específico |
+### Causas Raiz
 
-### Causas no Código
+1. **Cálculo errado**: O campo "Reembolsos" nas métricas usa `reprovados + desistentes`, não conta o status "Reembolso" real
 
-1. **R2MeetingDetailDrawer.tsx (linha 408)**: Não passa o `attendeeId` para o `RefundModal`, mesmo tendo acesso a `attendee.id`
+2. **Filtro de reuniões diferente**: 
+   - Métricas exclui `(cancelled, rescheduled)`
+   - KPIs/Fora do Carrinho NÃO exclui
 
-2. **RefundModal.tsx (linhas 95-101)**: Para R2, chama `useUpdateR2MeetingStatus` que atualiza o slot inteiro
-
-3. **useR2AgendaData.ts (linhas 37-42)**: O hook `useUpdateR2MeetingStatus` propaga o status para TODOS os attendees do slot
+3. **Status "Reembolso" não é contado**: No loop de contagem (linhas 228-249), não há verificação para `statusName.includes('reembolso')`
 
 ---
 
 ## Solução Proposta
 
-### Etapa 1: Passar attendeeId para o RefundModal
+### Modificação em `useR2MetricsData.ts`
 
-No `R2MeetingDetailDrawer.tsx`, adicionar a prop `attendeeId`:
-
-```typescript
-<RefundModal
-  open={refundModalOpen}
-  onOpenChange={setRefundModalOpen}
-  meetingId={meeting.id}
-  attendeeId={attendee.id}  // ← ADICIONAR
-  dealId={attendee.deal_id}
-  ...
-/>
-```
-
-### Etapa 2: Atualizar RefundModal para R2
-
-No `RefundModal.tsx`, para R2 com `attendeeId`, atualizar apenas o attendee individual (similar ao R1):
-
-```typescript
-} else {
-  // For R2: update individual attendee, NOT the slot
-  if (attendeeId) {
-    // 1. Update attendee status to 'refunded'
-    await supabase
-      .from('meeting_slot_attendees')
-      .update({ status: 'refunded' })
-      .eq('id', attendeeId);
-    
-    // 2. Update r2_status_id to "Reembolso"
-    const { data: reembolsoStatus } = await supabase
-      .from('r2_status_options')
-      .select('id')
-      .ilike('name', '%reembolso%')
-      .single();
-    
-    if (reembolsoStatus?.id) {
-      await supabase
-        .from('meeting_slot_attendees')
-        .update({ r2_status_id: reembolsoStatus.id })
-        .eq('id', attendeeId);
-    }
-  }
-}
-```
-
-### Etapa 3: Adicionar invalidações do Carrinho
-
-```typescript
-queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
-queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
-queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
-```
+1. **Adicionar contador separado para Reembolsos reais**
+2. **Ajustar o filtro para incluir reuniões rescheduled** (manter exclusão apenas de cancelled)
+3. **Contar attendees com `r2_status_id = Reembolso`**
 
 ---
 
@@ -82,33 +34,99 @@ queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Adicionar `attendeeId={attendee.id}` ao RefundModal |
-| `src/components/crm/RefundModal.tsx` | Para R2: atualizar apenas o attendee individual + r2_status_id + invalidar queries do carrinho |
+| `src/hooks/useR2MetricsData.ts` | Corrigir contagem de Reembolsos e filtro de reuniões |
+
+---
+
+## Detalhes Técnicos
+
+### Mudança 1: Ajustar filtro de reuniões (linha 80)
+
+**Antes:**
+```typescript
+.not('status', 'in', '(cancelled,rescheduled)');
+```
+
+**Depois:**
+```typescript
+.not('status', 'eq', 'cancelled');
+```
+
+### Mudança 2: Adicionar contador de reembolsos (no loop de contagem)
+
+**Antes (linhas 228-249):**
+```typescript
+if (statusName.includes('desistente')) {
+  desistentes++;
+} else if (statusName.includes('reprovado')) {
+  reprovados++;
+} else if (statusName.includes('próxima semana') || ...) {
+  proximaSemana++;
+} else if (statusName.includes('aprovado') || ...) {
+  aprovados++;
+  // ...
+}
+```
+
+**Depois:**
+```typescript
+// Inicializar contador
+let reembolsosCount = 0;
+
+// No loop:
+if (statusName.includes('desistente')) {
+  desistentes++;
+} else if (statusName.includes('reembolso')) {
+  reembolsosCount++;
+} else if (statusName.includes('reprovado')) {
+  reprovados++;
+} else if (statusName.includes('próxima semana') || ...) {
+  proximaSemana++;
+} else if (statusName.includes('aprovado') || ...) {
+  aprovados++;
+  // ...
+}
+```
+
+### Mudança 3: Ajustar retorno (linhas 393-395)
+
+**Antes:**
+```typescript
+const reembolsos = reprovados + desistentes;
+```
+
+**Depois:**
+```typescript
+// Usar o contador real de reembolsos
+// (não somar reprovados+desistentes)
+```
+
+### Mudança 4: Ajustar cálculo de leads perdidos (linha 399)
+
+**Antes:**
+```typescript
+const leadsPerdidosCount = desistentes + reprovados + proximaSemana + noShow;
+```
+
+**Depois:**
+```typescript
+const leadsPerdidosCount = desistentes + reprovados + reembolsosCount + proximaSemana + noShow;
+```
 
 ---
 
 ## Resultado Esperado
 
-| Cenário | Antes | Depois |
+| Métrica | Antes | Depois |
 |---------|-------|--------|
-| R2 com 2 attendees, 1 pede reembolso | Slot inteiro fica "refunded", afeta ambos | Apenas o attendee específico fica "refunded" |
-| KPI de Aprovados | Não atualiza | Diminui em 1 (por causa do r2_status_id) |
-| KPI Fora do Carrinho | Não atualiza | Aumenta em 1 |
-| Outros attendees do mesmo slot | São afetados | Não são afetados |
+| Reembolsos | 0 (reprovados+desistentes) | 6 (contagem real do status) |
+| Desistentes | Correto | Mantido |
+| Reprovados | Correto | Mantido |
 
 ---
 
-## Fluxo Corrigido
+## Validação
 
-```text
-1. Usuário seleciona um attendee no drawer R2
-2. Clica "Reembolso"
-3. Preenche motivo e justificativa
-4. Sistema executa:
-   a) meeting_slot_attendees.status → "refunded" (APENAS o attendee selecionado)
-   b) meeting_slot_attendees.r2_status_id → ID do status "Reembolso"
-   c) crm_deals.custom_fields → flags de reembolso
-   d) Invalida queries do carrinho
-5. Slot e outros attendees NÃO são afetados
-6. KPIs são recalculados automaticamente
-```
+Os números das métricas devem agora corresponder aos KPIs:
+- **Fora do Carrinho (KPI)**: 6
+- **Reembolsos (Métricas)**: 6
