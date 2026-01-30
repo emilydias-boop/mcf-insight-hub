@@ -1,132 +1,160 @@
 
-# Plano: Sincronizar Métricas "Fora do Carrinho" com KPIs
+# Plano: Vincular Contrato Manualmente a Lead R1
 
-## Problema Identificado
+## Cenário do Problema
 
-| Fonte | Valor | Lógica |
-|-------|-------|--------|
-| **KPI "Fora do Carrinho"** | 6 | Conta attendees com `r2_status_id` IN (Reembolso, Desistente, Reprovado, etc.) |
-| **Métricas "Reembolsos"** | 0 | Calcula `reprovados + desistentes` (linha 395) |
-
-### Causas Raiz
-
-1. **Cálculo errado**: O campo "Reembolsos" nas métricas usa `reprovados + desistentes`, não conta o status "Reembolso" real
-
-2. **Filtro de reuniões diferente**: 
-   - Métricas exclui `(cancelled, rescheduled)`
-   - KPIs/Fora do Carrinho NÃO exclui
-
-3. **Status "Reembolso" não é contado**: No loop de contagem (linhas 228-249), não há verificação para `statusName.includes('reembolso')`
+| Situação | Descrição |
+|----------|-----------|
+| **Lead R1** | Igor Willian Silveira Pinto - R1 concluída em 27/01 com Julio |
+| **Pagamento** | Claudia Frigeri Caggiani (esposa) pagou o contrato R$ 497 em 29/01 |
+| **Resultado** | Sistema não consegue vincular automaticamente (email/telefone diferentes) |
+| **Impacto** | Lead não aparece como "Contrato Pago", não pode ter R2 agendada |
 
 ---
 
 ## Solução Proposta
 
-### Modificação em `useR2MetricsData.ts`
+Criar uma funcionalidade para **vincular manualmente** transações de contrato (R$ 497) a attendees R1, similar ao que já existe para vendas de parcerias no R2 Carrinho.
 
-1. **Adicionar contador separado para Reembolsos reais**
-2. **Ajustar o filtro para incluir reuniões rescheduled** (manter exclusão apenas de cancelled)
-3. **Contar attendees com `r2_status_id = Reembolso`**
+### Duas opções de implementação:
+
+**Opção A: Dialog no Painel de Contratos Pendentes**
+- Adicionar botão "Vincular a Lead" nas linhas de contratos pendentes
+- Abrir dialog para buscar leads R1 (similar ao `LinkAttendeeDialog`)
+- Ao vincular, atualizar `hubla_transactions.linked_attendee_id` E marcar o attendee como `contract_paid`
+
+**Opção B: Dialog no drawer do Lead R1** (Recomendado)
+- Adicionar botão "Vincular Contrato" no drawer de reunião R1 para leads sem contrato pago
+- Abrir dialog mostrando contratos pendentes que podem ser vinculados
+- Permite ao closer vincular diretamente do contexto do lead
 
 ---
+
+## Implementação Recomendada (Opção B)
+
+### Componentes Necessários
+
+| Componente | Descrição |
+|------------|-----------|
+| `LinkContractDialog` | Novo dialog para buscar e vincular contratos pendentes a um attendee R1 |
+| Hook `useUnlinkedContracts` | Novo hook para buscar contratos (categoria 'contrato') sem vinculação |
+| Hook `useLinkContractToAttendee` | Novo hook para vincular contrato + marcar attendee como contract_paid |
+
+### Fluxo de Uso
+
+```text
+1. Closer abre o drawer de reunião R1 do Igor Willian
+2. Status ainda é "Realizada" (não Contrato Pago)
+3. Closer clica em "Vincular Contrato" 
+4. Dialog abre com lista de contratos pendentes (últimos 14 dias)
+5. Closer busca "Claudia" ou pelo telefone
+6. Encontra a transação de R$ 497 da Claudia Frigeri
+7. Clica em "Vincular"
+8. Sistema:
+   a) Atualiza hubla_transactions.linked_attendee_id → Igor
+   b) Atualiza meeting_slot_attendees.status → 'contract_paid'
+   c) Atualiza meeting_slot_attendees.contract_paid_at → agora
+   d) Move deal para estágio "Contrato Pago"
+9. Lead agora aparece no painel "R2 Pendentes"
+```
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Propósito |
+|---------|-----------|
+| `src/hooks/useUnlinkedContracts.ts` | Buscar contratos pendentes (product_category = 'contrato', linked_attendee_id IS NULL) |
+| `src/hooks/useLinkContractToAttendee.ts` | Vincular contrato + marcar contract_paid |
+| `src/components/crm/LinkContractDialog.tsx` | Dialog para buscar e vincular contratos |
 
 ## Arquivos a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/hooks/useR2MetricsData.ts` | Corrigir contagem de Reembolsos e filtro de reuniões |
+| `src/components/crm/AgendaMeetingDrawer.tsx` | Adicionar botão "Vincular Contrato" para leads completed sem contract_paid |
 
 ---
 
 ## Detalhes Técnicos
 
-### Mudança 1: Ajustar filtro de reuniões (linha 80)
+### useUnlinkedContracts.ts
 
-**Antes:**
 ```typescript
-.not('status', 'in', '(cancelled,rescheduled)');
+// Buscar contratos pendentes (sem vinculação) dos últimos 14 dias
+const { data, error } = await supabase
+  .from('hubla_transactions')
+  .select('id, hubla_id, customer_name, customer_email, customer_phone, sale_date, net_value')
+  .eq('product_category', 'contrato')
+  .is('linked_attendee_id', null)
+  .gte('sale_date', twoWeeksAgo.toISOString())
+  .order('sale_date', { ascending: false });
 ```
 
-**Depois:**
-```typescript
-.not('status', 'eq', 'cancelled');
-```
+### useLinkContractToAttendee.ts
 
-### Mudança 2: Adicionar contador de reembolsos (no loop de contagem)
-
-**Antes (linhas 228-249):**
 ```typescript
-if (statusName.includes('desistente')) {
-  desistentes++;
-} else if (statusName.includes('reprovado')) {
-  reprovados++;
-} else if (statusName.includes('próxima semana') || ...) {
-  proximaSemana++;
-} else if (statusName.includes('aprovado') || ...) {
-  aprovados++;
-  // ...
+async function linkContract({ transactionId, attendeeId }: LinkParams) {
+  // 1. Vincular transação ao attendee
+  await supabase
+    .from('hubla_transactions')
+    .update({ linked_attendee_id: attendeeId })
+    .eq('id', transactionId);
+
+  // 2. Atualizar attendee para contract_paid
+  await supabase
+    .from('meeting_slot_attendees')
+    .update({ 
+      status: 'contract_paid',
+      contract_paid_at: new Date().toISOString()
+    })
+    .eq('id', attendeeId);
+
+  // 3. Atualizar slot para completed (se necessário)
+  // 4. Mover deal para estágio "Contrato Pago"
 }
 ```
 
-**Depois:**
-```typescript
-// Inicializar contador
-let reembolsosCount = 0;
+### LinkContractDialog.tsx
 
-// No loop:
-if (statusName.includes('desistente')) {
-  desistentes++;
-} else if (statusName.includes('reembolso')) {
-  reembolsosCount++;
-} else if (statusName.includes('reprovado')) {
-  reprovados++;
-} else if (statusName.includes('próxima semana') || ...) {
-  proximaSemana++;
-} else if (statusName.includes('aprovado') || ...) {
-  aprovados++;
-  // ...
-}
-```
+- Input de busca por nome, email ou telefone
+- Lista de contratos pendentes filtráveis
+- Cada item mostra: Nome do pagador, valor, data, telefone
+- Botão "Vincular" em cada item
 
-### Mudança 3: Ajustar retorno (linhas 393-395)
+### Modificação no AgendaMeetingDrawer
 
-**Antes:**
-```typescript
-const reembolsos = reprovados + desistentes;
-```
+Adicionar botão quando:
+- `meeting.status === 'completed'` ou `attendee.status === 'completed'`
+- `attendee.status !== 'contract_paid'`
 
-**Depois:**
-```typescript
-// Usar o contador real de reembolsos
-// (não somar reprovados+desistentes)
-```
-
-### Mudança 4: Ajustar cálculo de leads perdidos (linha 399)
-
-**Antes:**
-```typescript
-const leadsPerdidosCount = desistentes + reprovados + proximaSemana + noShow;
-```
-
-**Depois:**
-```typescript
-const leadsPerdidosCount = desistentes + reprovados + reembolsosCount + proximaSemana + noShow;
+```tsx
+{attendee.status === 'completed' && attendee.status !== 'contract_paid' && (
+  <Button variant="outline" onClick={() => setLinkContractOpen(true)}>
+    <Link2 className="h-4 w-4 mr-2" />
+    Vincular Contrato
+  </Button>
+)}
 ```
 
 ---
 
 ## Resultado Esperado
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Reembolsos | 0 (reprovados+desistentes) | 6 (contagem real do status) |
-| Desistentes | Correto | Mantido |
-| Reprovados | Correto | Mantido |
+| Antes | Depois |
+|-------|--------|
+| Igor Willian aparece como "Realizada" | Igor aparece como "Contrato Pago" |
+| Não aparece no painel "R2 Pendentes" | Aparece no painel "R2 Pendentes" |
+| Contrato da Claudia fica "Pendente" | Contrato vinculado ao Igor |
+| Não pode agendar R2 | Pode agendar R2 normalmente |
 
 ---
 
-## Validação
+## Observação
 
-Os números das métricas devem agora corresponder aos KPIs:
-- **Fora do Carrinho (KPI)**: 6
-- **Reembolsos (Métricas)**: 6
+Esta solução também pode ser usada para:
+- Pagamentos feitos por sócios
+- Pagamentos em nome de empresas
+- Pagamentos com email/telefone errado
+- Qualquer situação onde o matching automático falha
+
