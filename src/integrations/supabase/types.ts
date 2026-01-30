@@ -7683,17 +7683,17 @@ export type Database = {
           p_start_date?: string
         }
         Returns: {
-          created_at: string
           customer_email: string
           customer_name: string
-          fee_value: number
-          gross_value: number
+          customer_phone: string
+          gross_override: number
           hubla_id: string
           id: string
           installment_number: number
           net_value: number
-          payment_method: string
+          product_category: string
           product_name: string
+          product_price: number
           sale_date: string
           sale_status: string
           source: string

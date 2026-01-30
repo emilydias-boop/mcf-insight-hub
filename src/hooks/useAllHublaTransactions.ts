@@ -20,7 +20,6 @@ export interface HublaTransaction {
   total_installments: number | null;
   source: string | null;
   gross_override: number | null;
-  deal_tags: string[] | null;
 }
 
 export interface TransactionFilters {
