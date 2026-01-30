@@ -1,100 +1,53 @@
 
-
-# Plano de Correção - Erro "column pc_parent.child_offer_ids does not exist"
+# Plano de Correção - Transações "Parceria" e "Contrato" Duplicadas
 
 ## Diagnóstico
 
-A migration anterior incluiu uma cláusula `NOT EXISTS` que referencia uma coluna **inexistente** na tabela `product_configurations`:
+As transações com `product_name = 'Parceria'` e `product_name = 'Contrato'` (source: `make`) são **registros auxiliares** criados pela automação Make/Integromat para rastreamento interno. Elas **duplicam** as vendas reais que já existem no Hubla.
 
-```sql
--- Esta parte do código está errada:
-AND NOT EXISTS (
-  SELECT 1 FROM product_configurations pc_parent
-  WHERE pc_parent.child_offer_ids IS NOT NULL  -- ❌ COLUNA NÃO EXISTE
-    AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
-)
+### Dados do Problema
+| Produto | Source | Total | Comportamento |
+|---------|--------|-------|---------------|
+| Parceria | make | 186 | Duplica venda Hubla A009/A001/etc |
+| Contrato | make | 349 | Duplica venda Hubla A000 |
+
+### Exemplo de Duplicação (Anderson Dhonik)
 ```
-
-### Schema Real da Tabela `product_configurations`:
-A tabela **não possui** a coluna `child_offer_ids`. Ela contém apenas:
-- `id`, `product_name`, `product_code`, `display_name`
-- `product_category`, `target_bu`, `reference_price`
-- `is_active`, `count_in_dashboard`, `notes`
-- `created_at`, `updated_at`
+1. Hubla: A009 - MCF INCORPORADOR COMPLETO + THE CLUB → R$ 19.500 (Novo)
+2. Make:  Parceria                                    → R$ 0,00 (Recorrente) ❌ DUPLICATA
+```
 
 ---
 
 ## Solução
 
-Criar uma nova migration para remover a cláusula `NOT EXISTS` que está causando o erro:
+Atualizar a função `get_all_hubla_transactions` para **excluir** transações Make com nomes genéricos que são apenas registros de rastreamento:
 
-### Alteração na Função `get_all_hubla_transactions`:
-
+### Cláusula WHERE adicional:
 ```sql
--- REMOVER esta parte inteira:
-AND NOT EXISTS (
-  SELECT 1 FROM product_configurations pc_parent
-  WHERE pc_parent.child_offer_ids IS NOT NULL
-    AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
+-- Excluir transações Make auxiliares que duplicam vendas Hubla
+AND NOT (
+  ht.source = 'make' 
+  AND LOWER(ht.product_name) IN ('parceria', 'contrato', 'ob construir para alugar')
 )
 ```
-
-A exclusão de transações "parent" já está sendo feita pela cláusula `AND ht.hubla_id NOT LIKE 'newsale-%'`, então a verificação adicional com `child_offer_ids` não é necessária.
 
 ---
 
 ## SQL da Correção
 
 ```sql
--- Fix: Remover referência a pc_parent.child_offer_ids (coluna inexistente)
-
 DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
 
-CREATE FUNCTION public.get_all_hubla_transactions(
-  p_search text DEFAULT NULL,
-  p_start_date text DEFAULT NULL,
-  p_end_date text DEFAULT NULL,
-  p_limit integer DEFAULT 5000
-)
-RETURNS TABLE(
-  id text,
-  hubla_id text,
-  product_name text,
-  product_category text,
-  product_price numeric,
-  net_value numeric,
-  customer_name text,
-  customer_email text,
-  customer_phone text,
-  sale_date timestamp with time zone,
-  sale_status text,
-  installment_number integer,
-  total_installments integer,
-  source text,
-  gross_override numeric
-)
+CREATE FUNCTION public.get_all_hubla_transactions(...)
+RETURNS TABLE(...)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
   RETURN QUERY
-  SELECT 
-    ht.id::text,
-    ht.hubla_id::text,
-    COALESCE(pc.display_name, ht.product_name)::text as product_name,
-    pc.product_code::text as product_category,
-    COALESCE(ht.gross_override, pc.reference_price, ht.product_price)::numeric as product_price,
-    ht.net_value::numeric,
-    ht.customer_name::text,
-    ht.customer_email::text,
-    ht.customer_phone::text,
-    ht.sale_date,
-    ht.sale_status::text,
-    ht.installment_number::integer,
-    ht.total_installments::integer,
-    ht.source::text,
-    ht.gross_override::numeric
+  SELECT ...
   FROM hubla_transactions ht
   INNER JOIN product_configurations pc 
     ON LOWER(ht.product_name) = LOWER(pc.product_name)
@@ -102,37 +55,47 @@ BEGIN
     ht.sale_status IN ('completed', 'refunded')
     AND ht.hubla_id NOT LIKE 'newsale-%'
     AND ht.source IN ('hubla', 'manual', 'make')
-    -- NOT EXISTS removido (child_offer_ids não existe)
-    AND (p_search IS NULL OR 
-         ht.customer_name ILIKE '%' || p_search || '%' OR 
-         ht.customer_email ILIKE '%' || p_search || '%' OR
-         ht.product_name ILIKE '%' || p_search || '%')
-    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
-    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+    
+    -- NOVA REGRA: Excluir transações Make auxiliares
+    AND NOT (
+      ht.source = 'make' 
+      AND LOWER(ht.product_name) IN ('parceria', 'contrato', 'ob construir para alugar')
+    )
+    
+    AND (filtros de busca...)
   ORDER BY ht.sale_date DESC
   LIMIT p_limit;
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION public.get_all_hubla_transactions(text, text, text, integer) TO anon, authenticated;
 ```
 
 ---
 
-## Resumo das Correções Feitas
+## Impacto Esperado
 
-| Migration | Erro Corrigido |
-|-----------|----------------|
-| 1ª | `ht.gross_value` → `ht.product_price` (calculado) |
-| 2ª | `pc.original_name` → `pc.product_name` |
-| 3ª (esta) | Remover `pc_parent.child_offer_ids` (coluna inexistente) |
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Transações exibidas | ~4.203 | ~3.668 (menos duplicatas) |
+| "Recorrente" incorretos | 535+ | 0 |
+| Duplicatas visíveis | Sim | Não |
 
 ---
 
-## Resultado Esperado
+## Detalhes Técnicos
 
-1. Erro "column pc_parent.child_offer_ids does not exist" corrigido
-2. Transações carregam normalmente na página de vendas
-3. Exclusão de duplicatas mantida via `NOT LIKE 'newsale-%'`
-4. Source `make` incluído conforme planejado
+### Por que essas transações existem?
+As transações `make_parceria_*` e `make_contrato_*` são criadas automaticamente pelo sistema de automação Make para:
+1. Registrar o momento exato de uma venda via webhook
+2. Permitir rastreamento de parcerias
+3. Servir como fallback caso o webhook Hubla falhe
 
+Elas **não são vendas adicionais** - são registros de controle que espelham vendas já existentes no Hubla.
+
+### Produtos a excluir do source 'make':
+- `parceria` (registro auxiliar de venda)
+- `contrato` (registro auxiliar de A000)
+- `ob construir para alugar` (order bump auxiliar)
+
+### Produtos Make que devem CONTINUAR aparecendo:
+- Transações manuais específicas com nomes de produtos reais (ex: A009, A001)
+- Produtos que não têm equivalente automático no Hubla
