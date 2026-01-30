@@ -45,7 +45,7 @@ import { toast } from 'sonner';
 import { useR2CarrinhoVendas, R2CarrinhoVenda } from '@/hooks/useR2CarrinhoVendas';
 import { useUnlinkedTransactions } from '@/hooks/useUnlinkedTransactions';
 import { useDeleteTransaction } from '@/hooks/useHublaTransactions';
-import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
+import { R2CarrinhoTransactionFormDialog } from '@/components/crm/R2CarrinhoTransactionFormDialog';
 import { IncorporadorTransactionDrawer } from '@/components/incorporador/IncorporadorTransactionDrawer';
 import { LinkAttendeeDialog } from '@/components/crm/LinkAttendeeDialog';
 import { useQueryClient } from '@tanstack/react-query';
@@ -639,20 +639,20 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
       )}
 
       {/* Dialogs */}
-      <TransactionFormDialog
+      <R2CarrinhoTransactionFormDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
-        mode="create"
-        onSuccess={handleRefresh}
+        weekStart={weekStart}
       />
 
-      <TransactionFormDialog
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        mode="edit"
-        transaction={selectedVenda ? mapVendaToTransaction(selectedVenda) : null}
-        onSuccess={handleRefresh}
-      />
+      {/* Edit dialog - mantém o genérico para edição */}
+      {selectedVenda && editDialogOpen && (
+        <R2CarrinhoTransactionFormDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          weekStart={weekStart}
+        />
+      )}
 
       <IncorporadorTransactionDrawer
         transaction={mapVendaToTransaction(selectedVenda)}
