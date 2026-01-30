@@ -281,41 +281,87 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
+    const LOGIN_TIMEOUT_MS = 15000; // 15s timeout for login
+    
     try {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Login with timeout to prevent infinite hang
+      const authResult = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        LOGIN_TIMEOUT_MS,
+        null // fallback: null means timeout occurred
+      );
 
-      if (error) throw error;
+      // Handle timeout
+      if (!authResult) {
+        throw new Error('Servidor não respondeu. Tente novamente.');
+      }
+
+      if (authResult.error) {
+        // Detect network errors
+        const errMsg = authResult.error.message || '';
+        if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('Failed to fetch')) {
+          throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
+        }
+        throw new Error(authResult.error.message);
+      }
       
-      // Check blocked status
-      const isBlocked = await checkUserBlocked(authData.user.id);
+      if (!authResult.data?.user) {
+        throw new Error('Falha na autenticação. Tente novamente.');
+      }
+
+      const userId = authResult.data.user.id;
+      
+      // Quick blocked check with short timeout (don't block login for too long)
+      const isBlocked = await withTimeout(
+        checkUserBlocked(userId),
+        3000,
+        false // fallback: assume not blocked if timeout
+      );
       
       if (isBlocked) {
         await supabase.auth.signOut();
         throw new Error('Sua conta está bloqueada. Entre em contato com o administrador.');
       }
 
-      // Update last_login_at
-      await supabase
-        .from('profiles')
-        .update({ last_login_at: new Date().toISOString() })
-        .eq('id', authData.user.id);
-      
-      // Fetch role for redirect
-      const { primaryRole: userRole, roles } = await fetchUserRoles(authData.user.id);
-      setAllRoles(roles.length > 0 ? roles : ['viewer']);
-      
+      // SUCCESS - navigate immediately, do secondary tasks in background
       toast.success('Login realizado com sucesso!');
       
+      // Fetch role quickly to determine redirect
+      const { primaryRole: userRole, roles } = await withTimeout(
+        fetchUserRoles(userId),
+        3000,
+        { primaryRole: 'viewer' as AppRole, roles: ['viewer' as AppRole] }
+      );
+      setAllRoles(roles.length > 0 ? roles : ['viewer']);
+      
+      // Navigate based on role
       if (userRole === 'sdr') {
         navigate('/sdr/minhas-reunioes');
       } else {
         navigate('/');
       }
+
+      // Background: update last_login_at (non-blocking)
+      setTimeout(async () => {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ last_login_at: new Date().toISOString() })
+            .eq('id', userId);
+          console.log('[Auth] last_login_at updated');
+        } catch (err) {
+          console.warn('[Auth] Failed to update last_login_at:', err);
+        }
+      }, 0);
+      
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao fazer login');
+      const errMsg = error.message || 'Erro ao fazer login';
+      // Better network error detection
+      if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('Failed')) {
+        toast.error('Erro de conexão. Verifique sua internet.');
+      } else {
+        toast.error(errMsg);
+      }
       throw error;
     } finally {
       setLoading(false);
