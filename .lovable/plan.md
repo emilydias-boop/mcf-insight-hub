@@ -1,85 +1,125 @@
 
-# Correção: Popup de Edição Mostrando Formulário de Criação
 
-## O Problema
+# Correção: Transações ASAAS/Make não aparecem na página de Vendas MCF Incorporador
 
-Quando você clica no botão "Editar" (ícone de lápis) em uma venda do Carrinho R2, o popup que abre é o mesmo de "Nova Venda de Parceria" porque:
+## Diagnóstico
 
-1. O componente `R2CarrinhoTransactionFormDialog` não recebe os dados da venda selecionada
-2. Não existe distinção entre modo "criar" e modo "editar"
-3. O título é fixo como "Nova Venda de Parceria"
-4. O botão sempre diz "Criar Venda"
+Ao analisar o problema, identifiquei que as transações do **William Santos Gondim**, **Joabe Castelo Araujo** e outros leads com pagamentos via ASAAS aparecem na aba "Vendas" do Carrinho R2, mas **não aparecem** na página principal de "Vendas MCF Incorporador".
 
-## Solução Proposta
+### Causa Raiz
 
-### Etapa 1: Modificar o componente R2CarrinhoTransactionFormDialog
+A função RPC `get_all_hubla_transactions` filtra transações por `source`:
 
-Adicionar props opcionais para modo de edição:
-
-```typescript
-interface R2CarrinhoTransactionFormDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  weekStart: Date;
-  // Novas props para edição
-  editMode?: boolean;
-  transactionToEdit?: {
-    id: string;
-    product_name: string;
-    product_price: number;
-    net_value: number;
-    customer_name: string;
-    customer_email: string;
-    customer_phone: string;
-    sale_date: string;
-    linked_attendee_id?: string;
-  };
-}
+```sql
+AND ht.source IN ('hubla', 'manual', 'asaas', 'kiwify')
 ```
 
-### Etapa 2: Preencher formulário com dados existentes
+**Problema**: As transações que você editou (William, Joabe, etc.) têm `source = 'make'`, que está **excluído** do filtro.
 
-Quando `editMode=true` e `transactionToEdit` existir:
-- Pré-preencher todos os campos com os valores da transação
-- Mudar título para "Editar Venda de Parceria"
-- Mudar botão para "Salvar Alterações"
+### Dados Afetados
 
-### Etapa 3: Criar hook useUpdateCarrinhoTransaction
+| Cliente | Produto Atualizado | Source | Status |
+|---------|-------------------|--------|--------|
+| WILLIAM SANTOS GONDIM | A001 - MCF INCORPORADOR COMPLETO | make | ❌ Excluído |
+| Joabe Castelo Araujo | A001 - MCF INCORPORADOR COMPLETO | make | ❌ Excluído |
+| NELSON EBERSOL BRUM | A009 - MCF INCORPORADOR COMPLET... | make | ❌ Excluído |
 
-Novo hook para atualizar transação existente (UPDATE em vez de INSERT).
+Total: **13 transações** da semana de 24/01 - 30/01 que deveriam aparecer mas não aparecem.
 
-### Etapa 4: Atualizar R2VendasList
+## Solução
 
-Passar os dados da venda selecionada para o dialog de edição:
+Atualizar a função RPC `get_all_hubla_transactions` para incluir `'make'` no filtro de sources:
 
-```tsx
-{selectedVenda && editDialogOpen && (
-  <R2CarrinhoTransactionFormDialog
-    open={editDialogOpen}
-    onOpenChange={setEditDialogOpen}
-    weekStart={weekStart}
-    editMode={true}
-    transactionToEdit={{
-      id: selectedVenda.id,
-      product_name: selectedVenda.product_name,
-      // ... demais campos
-    }}
-  />
-)}
+```sql
+AND ht.source IN ('hubla', 'manual', 'asaas', 'kiwify', 'make')
 ```
 
-## Arquivos a Modificar
+## Implementação
+
+### Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/R2CarrinhoTransactionFormDialog.tsx` | Adicionar props de edição, lógica de preenchimento e título dinâmico |
-| `src/components/crm/R2VendasList.tsx` | Passar dados da venda selecionada para o dialog |
-| `src/hooks/useUpdateCarrinhoTransaction.ts` | Novo hook para update de transação (se não existir) |
+| Nova migration SQL | Atualizar a função RPC para incluir 'make' nos sources permitidos |
+
+### SQL da Migration
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
+  p_search TEXT DEFAULT NULL,
+  p_start_date TIMESTAMPTZ DEFAULT NULL,
+  p_end_date TIMESTAMPTZ DEFAULT NULL,
+  p_limit INT DEFAULT 1000
+)
+RETURNS TABLE (
+  id UUID,
+  hubla_id TEXT,
+  product_name TEXT,
+  product_category TEXT,
+  product_price NUMERIC,
+  net_value NUMERIC,
+  customer_name TEXT,
+  customer_email TEXT,
+  customer_phone TEXT,
+  sale_date TIMESTAMPTZ,
+  sale_status TEXT,
+  installment_number INT,
+  total_installments INT,
+  source TEXT,
+  gross_override NUMERIC
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id,
+    ht.hubla_id,
+    ht.product_name,
+    ht.product_category,
+    ht.product_price,
+    ht.net_value,
+    ht.customer_name,
+    ht.customer_email,
+    ht.customer_phone,
+    ht.sale_date,
+    ht.sale_status,
+    ht.installment_number,
+    ht.total_installments,
+    ht.source,
+    ht.gross_override
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc 
+    ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = 'incorporador'
+    AND pc.is_active = true
+    AND pc.count_in_dashboard = true
+    AND ht.source IN ('hubla', 'manual', 'asaas', 'kiwify', 'make')  -- ADICIONADO 'make'
+    AND (ht.hubla_id IS NULL OR ht.hubla_id NOT LIKE 'newsale-%')
+    AND (p_search IS NULL OR (
+      ht.customer_name ILIKE '%' || p_search || '%' OR
+      ht.customer_email ILIKE '%' || p_search || '%' OR
+      ht.product_name ILIKE '%' || p_search || '%'
+    ))
+    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date)
+    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
+```
 
 ## Resultado Esperado
 
-- Ao clicar em "Editar", o popup abre com:
-  - Título: "Editar Venda de Parceria"
-  - Campos pré-preenchidos com dados da venda
-  - Botão: "Salvar Alterações"
-- Ao salvar, atualiza a transação existente em vez de criar nova
+Após a migration:
+
+- **13 transações adicionais** da semana aparecerão na página de Vendas MCF Incorporador
+- Os totais de Bruto e Líquido serão atualizados automaticamente
+- As transações do William, Joabe, Nelson e outros serão corretamente contabilizadas
+- A consistência entre a aba "Vendas" do Carrinho R2 e a página principal de Vendas será restaurada
+
+## Notas Técnicas
+
+A fonte `make` corresponde a transações consolidadas via Make/Integromat, que inclui pagamentos de diversos gateways (incluindo ASAAS). Ao incluir esta fonte, capturamos todas as vendas que foram manualmente corrigidas na aba do Carrinho R2.
+
