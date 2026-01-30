@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Search, User, Calendar, Check } from 'lucide-react';
+import { Search, User, Calendar, Check, Pencil } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAllApprovedAttendees, ApprovedAttendeeWithWeek } from '@/hooks/useAllApprovedAttendees';
 import { useCreateCarrinhoTransaction } from '@/hooks/useCreateCarrinhoTransaction';
+import { useUpdateCarrinhoTransaction } from '@/hooks/useUpdateCarrinhoTransaction';
 
 // Produtos de parceria disponíveis
 const PARCERIA_PRODUCTS = [
@@ -46,19 +47,38 @@ const PARCERIA_PRODUCTS = [
   { name: 'A004 - INCORPORADOR START', price: 5500 },
 ];
 
+// Transaction data for edit mode
+export interface TransactionToEdit {
+  id: string;
+  product_name: string;
+  product_price: number;
+  net_value: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string | null;
+  sale_date: string;
+  linked_attendee_id?: string | null;
+}
+
 interface R2CarrinhoTransactionFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weekStart: Date;
+  // Props for edit mode
+  editMode?: boolean;
+  transactionToEdit?: TransactionToEdit;
 }
 
 export function R2CarrinhoTransactionFormDialog({
   open,
   onOpenChange,
   weekStart,
+  editMode = false,
+  transactionToEdit,
 }: R2CarrinhoTransactionFormDialogProps) {
   const { data: allApprovedAttendees = [], isLoading: isLoadingAttendees } = useAllApprovedAttendees();
   const createTransaction = useCreateCarrinhoTransaction();
+  const updateTransaction = useUpdateCarrinhoTransaction();
 
   // Form state
   const [selectedAttendee, setSelectedAttendee] = useState<ApprovedAttendeeWithWeek | null>(null);
@@ -71,6 +91,33 @@ export function R2CarrinhoTransactionFormDialog({
   const [netValue, setNetValue] = useState<number>(0);
   const [searchAllWeeks, setSearchAllWeeks] = useState(false);
   const [attendeePopoverOpen, setAttendeePopoverOpen] = useState(false);
+
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (editMode && transactionToEdit && open) {
+      setSelectedProduct(transactionToEdit.product_name || '');
+      setCustomerName(transactionToEdit.customer_name || '');
+      setCustomerEmail(transactionToEdit.customer_email || '');
+      setCustomerPhone(transactionToEdit.customer_phone || '');
+      setProductPrice(transactionToEdit.product_price || 0);
+      setNetValue(transactionToEdit.net_value || 0);
+      
+      // Format date correctly
+      if (transactionToEdit.sale_date) {
+        const date = new Date(transactionToEdit.sale_date);
+        setSaleDate(format(date, 'yyyy-MM-dd'));
+      }
+      
+      // Find and set the linked attendee if exists
+      if (transactionToEdit.linked_attendee_id && allApprovedAttendees.length > 0) {
+        const attendee = allApprovedAttendees.find(a => a.id === transactionToEdit.linked_attendee_id);
+        if (attendee) {
+          setSelectedAttendee(attendee);
+          setSearchAllWeeks(true); // Enable all weeks search since the attendee might be from another week
+        }
+      }
+    }
+  }, [editMode, transactionToEdit, open, allApprovedAttendees]);
 
   // Filtrar attendees com base na semana
   const filteredAttendees = useMemo(() => {
@@ -123,26 +170,50 @@ export function R2CarrinhoTransactionFormDialog({
 
   // Submit
   const handleSubmit = async () => {
-    if (!selectedAttendee || !selectedProduct || !customerEmail || !netValue) {
+    // For create mode, attendee is required
+    if (!editMode && !selectedAttendee) {
+      return;
+    }
+    
+    if (!selectedProduct || !customerEmail || !netValue) {
       return;
     }
 
-    await createTransaction.mutateAsync({
-      product_name: selectedProduct,
-      product_price: productPrice,
-      net_value: netValue,
-      customer_name: customerName,
-      customer_email: customerEmail,
-      customer_phone: customerPhone,
-      sale_date: new Date(saleDate).toISOString(),
-      linked_attendee_id: selectedAttendee.id,
-    });
+    if (editMode && transactionToEdit) {
+      // Update existing transaction
+      await updateTransaction.mutateAsync({
+        id: transactionToEdit.id,
+        product_name: selectedProduct,
+        product_price: productPrice,
+        net_value: netValue,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
+        sale_date: new Date(saleDate).toISOString(),
+      });
+    } else if (selectedAttendee) {
+      // Create new transaction
+      await createTransaction.mutateAsync({
+        product_name: selectedProduct,
+        product_price: productPrice,
+        net_value: netValue,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
+        sale_date: new Date(saleDate).toISOString(),
+        linked_attendee_id: selectedAttendee.id,
+      });
+    }
 
     resetForm();
     onOpenChange(false);
   };
 
-  const isFormValid = selectedAttendee && selectedProduct && customerEmail && netValue > 0;
+  const isFormValid = editMode
+    ? selectedProduct && customerEmail && netValue > 0
+    : selectedAttendee && selectedProduct && customerEmail && netValue > 0;
+    
+  const isPending = createTransaction.isPending || updateTransaction.isPending;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
@@ -152,8 +223,8 @@ export function R2CarrinhoTransactionFormDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Nova Venda de Parceria
+            {editMode ? <Pencil className="h-5 w-5" /> : <User className="h-5 w-5" />}
+            {editMode ? 'Editar Venda de Parceria' : 'Nova Venda de Parceria'}
           </DialogTitle>
         </DialogHeader>
 
@@ -341,9 +412,12 @@ export function R2CarrinhoTransactionFormDialog({
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={!isFormValid || createTransaction.isPending}
+            disabled={!isFormValid || isPending}
           >
-            {createTransaction.isPending ? 'Criando...' : 'Criar Venda'}
+            {isPending 
+              ? (editMode ? 'Salvando...' : 'Criando...') 
+              : (editMode ? 'Salvar Alterações' : 'Criar Venda')
+            }
           </Button>
         </DialogFooter>
       </DialogContent>

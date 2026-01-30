@@ -645,12 +645,24 @@ export function R2VendasList({ weekStart, weekEnd }: R2VendasListProps) {
         weekStart={weekStart}
       />
 
-      {/* Edit dialog - mantém o genérico para edição */}
+      {/* Edit dialog - with transaction data for edit mode */}
       {selectedVenda && editDialogOpen && (
         <R2CarrinhoTransactionFormDialog
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
           weekStart={weekStart}
+          editMode={true}
+          transactionToEdit={{
+            id: selectedVenda.id,
+            product_name: selectedVenda.product_name || '',
+            product_price: selectedVenda.product_price || 0,
+            net_value: selectedVenda.net_value || 0,
+            customer_name: selectedVenda.customer_name || '',
+            customer_email: selectedVenda.customer_email || '',
+            customer_phone: selectedVenda.customer_phone,
+            sale_date: selectedVenda.sale_date,
+            linked_attendee_id: selectedVenda.linked_attendee_id,
+          }}
         />
       )}
 
