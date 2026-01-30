@@ -1,67 +1,52 @@
 
-# Plano: Corrigir Erro - Remover Referência a Coluna Inexistente
+# Plano: Corrigir Conflito de Sobrecarga de Função
 
-## Problema
+## Problema Identificado
 
-A migração anterior criou a função `get_all_hubla_transactions()` com uma cláusula que referencia `pc_parent.child_offer_ids`, porém essa coluna **não existe** na tabela `product_configurations`.
+O banco de dados possui **duas versões** da função `get_all_hubla_transactions` com assinaturas diferentes:
 
-### Erro Exato
-```
-column pc_parent.child_offer_ids does not exist
-```
+| Versão | p_start_date | p_end_date | id retorno |
+|--------|--------------|------------|------------|
+| Antiga | `text` | `text` | `text` |
+| Nova | `timestamptz` | `timestamptz` | `uuid` |
 
-### Colunas Existentes em `product_configurations`
-| Coluna | Tipo |
-|--------|------|
-| id | uuid |
-| product_name | text |
-| product_code | text |
-| display_name | text |
-| product_category | text |
-| target_bu | text |
-| reference_price | numeric |
-| is_active | boolean |
-| count_in_dashboard | boolean |
-| notes | text |
-| created_at | timestamp |
-| updated_at | timestamp |
-
-**Nota**: `child_offer_ids` não existe.
+Quando o hook chama a função passando strings de data (ex: `"2026-01-01T00:00:00-03:00"`), o PostgreSQL não consegue decidir qual função usar - ambas aceitam o valor como válido.
 
 ---
 
 ## Solução
 
-Atualizar a função `get_all_hubla_transactions()` removendo a cláusula que tenta acessar `child_offer_ids`.
+Executar uma migração SQL para:
 
-### Trecho a Remover
+1. **Remover a versão antiga** da função (com parâmetros `text`)
+2. **Manter apenas a versão nova** (com parâmetros `timestamptz`)
+
+### SQL a Executar
 
 ```sql
--- Esta parte deve ser REMOVIDA:
-AND NOT EXISTS (
-  SELECT 1 FROM product_configurations pc_parent
-  WHERE pc_parent.child_offer_ids IS NOT NULL
-    AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
-)
+-- Remover a versão antiga com assinatura text
+DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
 ```
-
-A lógica de exclusão de transações make duplicadas permanece intacta.
 
 ---
 
 ## Detalhes Técnicos
 
-### Nova Migração SQL
+A versão antiga foi criada em migrações anteriores com tipo `text` para as datas. A migração mais recente criou uma nova versão com `timestamptz`, mas não removeu a antiga.
 
-Recriar a função sem a referência à coluna inexistente, mantendo apenas:
-1. Filtros básicos (status, source)
-2. Lógica de exclusão de make duplicados (que já funciona corretamente)
-3. Filtros de busca e data
+O hook `useAllHublaTransactions` passa datas como strings ISO, que podem ser interpretadas tanto como `text` quanto como `timestamptz`, causando a ambiguidade.
 
 ---
 
-## Impacto
+## Impacto Esperado
 
 - A página de transações voltará a funcionar
-- As transações serão exibidas corretamente
-- A lógica de exclusão de make duplicados continuará funcionando
+- Apenas uma função existirá no banco
+- Bruto Total mostrará o valor correto (~R$ 1.78M)
+- Transações make duplicadas serão filtradas automaticamente
+
+---
+
+## Arquivos a Modificar
+
+1. **Nova migração SQL** - DROP da função antiga com assinatura text
