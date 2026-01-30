@@ -77,7 +77,7 @@ export function useR2MetricsData(weekDate: Date) {
         .eq('meeting_type', 'r2')
         .gte('scheduled_at', weekStart.toISOString())
         .lte('scheduled_at', endOfDay(weekEnd).toISOString())
-        .not('status', 'in', '(cancelled,rescheduled)');
+        .not('status', 'eq', 'cancelled');
 
       if (meetingsError) throw meetingsError;
 
@@ -183,6 +183,7 @@ export function useR2MetricsData(weekDate: Date) {
       const noShowAttendees: R2MetricsData['noShowAttendees'] = noShowAttendeesClean;
 
       let aprovados = 0;
+      let reembolsosCount = 0;
       const approvedEmails: string[] = [];
       const approvedPhones: string[] = [];
       
@@ -228,6 +229,8 @@ export function useR2MetricsData(weekDate: Date) {
           // Count by R2 status (these are exclusive categories)
           if (statusName.includes('desistente')) {
             desistentes++;
+          } else if (statusName.includes('reembolso')) {
+            reembolsosCount++;
           } else if (statusName.includes('reprovado')) {
             reprovados++;
           } else if (statusName.includes('próxima semana') || statusName.includes('proxima semana')) {
@@ -391,12 +394,11 @@ export function useR2MetricsData(weekDate: Date) {
       });
 
       // Calculate percentages
-      // Reembolsos = Reprovados + Desistentes (fluxo de reembolso)
-      const reembolsos = reprovados + desistentes;
+      // Reembolsos = contagem real do status "Reembolso"
+      const reembolsos = reembolsosCount;
       
       // Leads perdidos = soma única sem duplicidade (cada lead em uma categoria)
-      // Não inclui reembolsos separadamente pois já são reprovados+desistentes
-      const leadsPerdidosCount = desistentes + reprovados + proximaSemana + noShow;
+      const leadsPerdidosCount = desistentes + reprovados + reembolsosCount + proximaSemana + noShow;
       const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidosCount / totalLeads) * 100 : 0;
       
       const selecionados = aprovados;
