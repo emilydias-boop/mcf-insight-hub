@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Mail, Lock, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { ConnectivityCheck } from '@/components/auth/ConnectivityCheck';
 
 export default function Auth() {
   const [loginEmail, setLoginEmail] = useState('');
@@ -85,7 +86,10 @@ export default function Auth() {
             Entre com sua conta ou crie uma nova para continuar
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Connectivity Check - shows when there are connection issues */}
+          <ConnectivityCheck />
+          
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Entrar</TabsTrigger>

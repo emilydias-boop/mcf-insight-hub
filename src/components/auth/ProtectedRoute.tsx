@@ -2,7 +2,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { resetSupabaseSession } from '@/lib/supabase-utils';
 
 const TIMEOUT_SHOW_ACTIONS_MS = 8000; // Show action buttons after 8s
 
@@ -37,13 +37,7 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   const handleClearSession = async () => {
     try {
-      await supabase.auth.signOut();
-      // Clear any supabase-related localStorage
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('sb-') || key.includes('supabase')) {
-          localStorage.removeItem(key);
-        }
-      });
+      await resetSupabaseSession();
       window.location.href = '/auth';
     } catch (e) {
       console.error('Error clearing session:', e);
