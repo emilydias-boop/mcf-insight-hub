@@ -215,10 +215,24 @@ export function useR2MetricsData(weekDate: Date) {
             !rescheduledIds.has(att.id) && 
             !(att.deal_id && refundedDealIds.has(att.deal_id));
           
-          // Prioridade: manter registro mais recente, preferindo status não-no-show
+          // Função de prioridade: Aprovado > Reprovado > outros status
+          const getStatusPriority = (r2Status: string, isNoShowStatus: boolean): number => {
+            if (r2Status.includes('aprovado') || r2Status.includes('approved')) return 100;
+            if (r2Status.includes('reprovado')) return 90;
+            if (r2Status.includes('desistente')) return 80;
+            if (r2Status.includes('reembolso')) return 70;
+            if (r2Status.includes('próxima semana') || r2Status.includes('proxima semana')) return 60;
+            if (isNoShowStatus) return 10;
+            return 0; // Sem status definido
+          };
+          
+          const currentPriority = getStatusPriority(statusName, isNoShow);
+          const existingPriority = existing ? getStatusPriority(existing.r2_status, existing.is_no_show) : -1;
+          
+          // Prioridade: status mais relevante > mais recente
           const shouldReplace = !existing || 
-            new Date(meeting.scheduled_at) > new Date(existing.scheduled_at) ||
-            (existing.is_no_show && !isNoShow);
+            currentPriority > existingPriority ||
+            (currentPriority === existingPriority && new Date(meeting.scheduled_at) > new Date(existing.scheduled_at));
           
           if (shouldReplace) {
             leadsByDeal.set(key, {
@@ -452,8 +466,8 @@ export function useR2MetricsData(weekDate: Date) {
       const leadsPerdidosCount = desistentes + reprovados + reembolsosCount + proximaSemana + noShow;
       const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidosCount / totalLeads) * 100 : 0;
       
-      // Leads ativos = total único - perdidos (leads realmente no carrinho)
-      const leadsAtivos = totalLeads - leadsPerdidosCount;
+      // Leads ativos = aprovados (sincronizado com KPIs do Carrinho)
+      const leadsAtivos = aprovados;
       
       const selecionados = aprovados;
       // Vendas extras = vendas de semanas anteriores + vendas extras manuais
