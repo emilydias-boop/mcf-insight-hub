@@ -406,6 +406,7 @@ export function R2MeetingDetailDrawer({
           open={refundModalOpen}
           onOpenChange={setRefundModalOpen}
           meetingId={meeting.id}
+          attendeeId={attendee.id}
           dealId={attendee.deal_id}
           dealName={attendee.name || attendee.deal?.contact?.name}
           originId={(attendee.deal as any)?.origin_id}
