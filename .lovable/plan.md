@@ -1,122 +1,61 @@
 
-# Plano: Buscar Produtos do Banco no Formulário de Transação
+# Diagnóstico: Inflação de R$ 73.000 no Bruto Total
 
 ## Problema Identificado
 
-O dropdown de produtos no `TransactionFormDialog` está usando uma **lista hardcoded** de apenas 8 produtos:
+A mudança que fizemos (dar prioridade ao `gross_override`) está funcionando corretamente, **mas existem 4 transações com overrides órfãos** que estão duplicando o bruto.
 
-```javascript
-const PRODUCTS = [
-  { code: "A000", name: "A000 - Contrato", price: 497 },
-  { code: "A001", name: "A001 - MCF INCORPORADOR COMPLETO", price: 14500 },
-  // ... apenas 8 produtos
-];
-```
+### O que aconteceu:
 
-Mas no banco (`product_configurations`) existem **21+ produtos** configurados para a BU `incorporador`, incluindo:
-- A000 - Pré-Reserva Plano Anticrise (R$ 997)
-- A010 - Construa para Vender sem Dinheiro (R$ 47)
-- ACESSO VITALÍCIO (R$ 57)
-- E outros produtos de lançamento
+1. Transações do **make** foram criadas com `gross_override` para registrar vendas (ex: Henrique com R$ 19.500)
+2. Depois, foram criadas transações **manuais** ou **Hubla** para o mesmo cliente/produto
+3. O sistema marcou as novas transações como "FIRST" (primeira do grupo)
+4. As transações make com override **continuaram contando** porque o override tem prioridade
 
-Isso impede que você altere uma transação para um produto de lançamento.
+### Transações inflando o bruto:
+
+| Cliente | Email | Produto | Override | Fonte |
+|---------|-------|---------|----------|-------|
+| André Luiz Gonçalves Raineri | andre.raineri@hotmail.com | A001 | R$ 14.500 | make |
+| Arão Young Kim | arao_young@hotmail.com | A009 | R$ 19.500 | make |
+| Henrique oliveira amorim | hav.arqeng@gmail.com | A009 | R$ 19.500 | make |
+| Izaquiel Leonardo Antunes | izaquiel.antunes@gmail.com | A009 | R$ 19.500 | make |
+
+**Total de inflação: R$ 73.000**
 
 ---
 
 ## Solução
 
-Modificar o `TransactionFormDialog` para:
-1. Buscar produtos do banco de dados usando o hook `useProductConfigurations` que já existe
-2. Filtrar apenas produtos da BU `incorporador` e ativos (`is_active = true`)
-3. Usar `product_name` como chave única (em vez de `code`)
-4. Manter fallback para a lista hardcoded enquanto carrega
+Zerar o `gross_override` dessas 4 transações, pois o valor bruto já está sendo contabilizado pela transação "primeira" (manual ou Hubla).
 
----
+### SQL para correção:
 
-## Mudanças Técnicas
-
-### Arquivo: `src/components/incorporador/TransactionFormDialog.tsx`
-
-1. **Importar hook existente**:
-```typescript
-import { useProductConfigurations } from "@/hooks/useProductConfigurations";
-```
-
-2. **Buscar produtos do banco**:
-```typescript
-const { data: allProducts, isLoading: isLoadingProducts } = useProductConfigurations();
-
-// Filtrar para BU incorporador e ativos
-const productsFromDB = useMemo(() => {
-  if (!allProducts) return [];
-  return allProducts
-    .filter(p => p.target_bu === 'incorporador' && p.is_active)
-    .map(p => ({
-      name: p.product_name,
-      price: p.reference_price,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}, [allProducts]);
-```
-
-3. **Atualizar schema** (usar `product_name` em vez de `product_code`):
-```typescript
-const formSchema = z.object({
-  product_name: z.string().min(1, "Selecione um produto"), // Mudança aqui
-  // ... resto igual
-});
-```
-
-4. **Atualizar dropdown**:
-```typescript
-<Select value={field.value} onValueChange={field.onChange}>
-  <SelectTrigger>
-    <SelectValue placeholder="Selecione o produto" />
-  </SelectTrigger>
-  <SelectContent className="max-h-60">
-    {productsFromDB.map((p) => (
-      <SelectItem key={p.name} value={p.name}>
-        {p.name}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-```
-
-5. **Auto-fill de preço quando produto muda**:
-```typescript
-useEffect(() => {
-  if (selectedProductName && mode === "create") {
-    const product = productsFromDB.find((p) => p.name === selectedProductName);
-    if (product) {
-      setValue("product_price", product.price);
-    }
-  }
-}, [selectedProductName, productsFromDB, mode, setValue]);
-```
-
-6. **Carregar produto correto ao editar**:
-```typescript
-// Ao editar, usar o product_name direto da transação
-reset({
-  product_name: transaction.product_name || "",
-  // ... resto igual
-});
+```sql
+-- Zerar overrides das transações duplicadas
+UPDATE hubla_transactions
+SET gross_override = 0
+WHERE id IN (
+  '10695e63-471d-4181-9d52-5e300c97433f',  -- André Raineri
+  '1569c31f-8271-416d-a9df-de8a79d315df',  -- Arão Young
+  'c89e7e6a-1c62-495b-93ac-37a2018954c1',  -- Henrique
+  'd3e063ab-1725-4fe3-95d7-b56559371d2f'   -- Izaquiel
+);
 ```
 
 ---
 
-## Benefícios
+## Prevenção Futura
 
-1. **Todos os produtos de lançamento** aparecem no dropdown
-2. **Preço correto** é preenchido automaticamente baseado no `reference_price` do banco
-3. **Centralizado**: Alterações na tabela `product_configurations` refletem automaticamente no formulário
-4. **Consistência**: Mesmo catálogo usado em relatórios e no formulário
+A lógica atual está correta para o caso do **Rodrigo Jesus** (lead de lançamento sem transação anterior válida). O problema não é o código, são dados históricos com overrides que precisam ser limpos.
+
+**Recomendação**: Após aplicar a correção, o Bruto Total deve reduzir em R$ 73.000.
 
 ---
 
-## Resultado Esperado
+## Resumo
 
-- Ao editar a transação do Rodrigo Jesus, você poderá trocar de "A000 - Contrato" para qualquer produto de lançamento configurado no banco
-- O preço bruto padrão será atualizado automaticamente
-- A transação será salva com o novo `product_name`
+- **Não é bug de código** - a prioridade do override está correta
+- **É problema de dados** - overrides criados antes das transações "oficiais"
+- **Correção**: Executar UPDATE para zerar os 4 overrides duplicados
+- **Resultado esperado**: Bruto Total volta ao valor correto (R$ 1.782.335 aproximadamente)
