@@ -1,60 +1,52 @@
 
 
-# Plano de Correção - Erro "column pc.original_name does not exist"
+# Plano de Correção - Erro "column pc_parent.child_offer_ids does not exist"
 
 ## Diagnóstico
 
-A migration anterior referenciou uma coluna **inexistente** na tabela `product_configurations`:
+A migration anterior incluiu uma cláusula `NOT EXISTS` que referencia uma coluna **inexistente** na tabela `product_configurations`:
 
-| Coluna Usada (Errada) | Coluna Correta |
-|----------------------|----------------|
-| `pc.original_name` | `pc.product_name` |
+```sql
+-- Esta parte do código está errada:
+AND NOT EXISTS (
+  SELECT 1 FROM product_configurations pc_parent
+  WHERE pc_parent.child_offer_ids IS NOT NULL  -- ❌ COLUNA NÃO EXISTE
+    AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
+)
+```
 
 ### Schema Real da Tabela `product_configurations`:
-- `id` (uuid)
-- `product_name` (text) ← **Esta é a coluna correta para o JOIN**
-- `product_code` (text)
-- `display_name` (text)
-- `product_category` (text)
-- `target_bu` (text)
-- `reference_price` (numeric)
-- `is_active` (boolean)
-- `count_in_dashboard` (boolean)
-- `notes` (text)
+A tabela **não possui** a coluna `child_offer_ids`. Ela contém apenas:
+- `id`, `product_name`, `product_code`, `display_name`
+- `product_category`, `target_bu`, `reference_price`
+- `is_active`, `count_in_dashboard`, `notes`
 - `created_at`, `updated_at`
 
 ---
 
 ## Solução
 
-Criar uma nova migration para corrigir as funções usando `pc.product_name` em vez de `pc.original_name`:
+Criar uma nova migration para remover a cláusula `NOT EXISTS` que está causando o erro:
 
-### Alterações nas Funções:
+### Alteração na Função `get_all_hubla_transactions`:
 
-**`get_all_hubla_transactions`:**
 ```sql
--- ANTES (errado):
-INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.original_name)
-
--- DEPOIS (correto):
-INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.product_name)
+-- REMOVER esta parte inteira:
+AND NOT EXISTS (
+  SELECT 1 FROM product_configurations pc_parent
+  WHERE pc_parent.child_offer_ids IS NOT NULL
+    AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
+)
 ```
 
-**`get_first_transaction_ids`:**
-```sql
--- ANTES (errado):
-INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.original_name)
-
--- DEPOIS (correto):
-INNER JOIN product_configurations pc ON LOWER(ht.product_name) = LOWER(pc.product_name)
-```
+A exclusão de transações "parent" já está sendo feita pela cláusula `AND ht.hubla_id NOT LIKE 'newsale-%'`, então a verificação adicional com `child_offer_ids` não é necessária.
 
 ---
 
 ## SQL da Correção
 
 ```sql
--- Fix: Usar pc.product_name em vez de pc.original_name
+-- Fix: Remover referência a pc_parent.child_offer_ids (coluna inexistente)
 
 DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
 
@@ -105,16 +97,12 @@ BEGIN
     ht.gross_override::numeric
   FROM hubla_transactions ht
   INNER JOIN product_configurations pc 
-    ON LOWER(ht.product_name) = LOWER(pc.product_name)  -- CORRIGIDO
+    ON LOWER(ht.product_name) = LOWER(pc.product_name)
   WHERE 
     ht.sale_status IN ('completed', 'refunded')
     AND ht.hubla_id NOT LIKE 'newsale-%'
     AND ht.source IN ('hubla', 'manual', 'make')
-    AND NOT EXISTS (
-      SELECT 1 FROM product_configurations pc_parent
-      WHERE pc_parent.child_offer_ids IS NOT NULL
-        AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
-    )
+    -- NOT EXISTS removido (child_offer_ids não existe)
     AND (p_search IS NULL OR 
          ht.customer_name ILIKE '%' || p_search || '%' OR 
          ht.customer_email ILIKE '%' || p_search || '%' OR
@@ -126,78 +114,25 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.get_first_transaction_ids()
-RETURNS TABLE(id uuid)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
-BEGIN
-  RETURN QUERY
-  WITH parent_ids AS (
-    SELECT DISTINCT SPLIT_PART(hubla_id, '-offer-', 1) as parent_id
-    FROM hubla_transactions 
-    WHERE hubla_id LIKE '%-offer-%'
-  ),
-  ranked_transactions AS (
-    SELECT 
-      ht.id,
-      ROW_NUMBER() OVER (
-        PARTITION BY 
-          LOWER(COALESCE(NULLIF(TRIM(ht.customer_email), ''), 'unknown')),
-          CASE 
-            WHEN UPPER(ht.product_name) LIKE '%A009%' THEN 'A009'
-            WHEN UPPER(ht.product_name) LIKE '%A005%' THEN 'A005'
-            WHEN UPPER(ht.product_name) LIKE '%A004%' THEN 'A004'
-            WHEN UPPER(ht.product_name) LIKE '%A003%' THEN 'A003'
-            WHEN UPPER(ht.product_name) LIKE '%A001%' THEN 'A001'
-            WHEN UPPER(ht.product_name) LIKE '%A010%' THEN 'A010'
-            WHEN UPPER(ht.product_name) LIKE '%A000%' OR UPPER(ht.product_name) LIKE '%CONTRATO%' THEN 'A000'
-            WHEN UPPER(ht.product_name) LIKE '%PLANO CONSTRUTOR%' THEN 'PLANO_CONSTRUTOR'
-            ELSE LEFT(UPPER(TRIM(ht.product_name)), 40)
-          END
-        ORDER BY ht.sale_date ASC
-      ) AS rn
-    FROM hubla_transactions ht
-    INNER JOIN product_configurations pc 
-      ON LOWER(ht.product_name) = LOWER(pc.product_name)  -- CORRIGIDO
-      AND pc.target_bu = 'incorporador'
-      AND pc.is_active = true
-    WHERE 
-      ht.sale_status IN ('completed', 'refunded')
-      AND ht.hubla_id NOT LIKE 'newsale-%'
-      AND ht.source IN ('hubla', 'manual', 'make')
-      AND ht.hubla_id NOT IN (SELECT parent_id FROM parent_ids)
-  )
-  SELECT ranked_transactions.id
-  FROM ranked_transactions
-  WHERE rn = 1;
-END;
-$function$;
-
 GRANT EXECUTE ON FUNCTION public.get_all_hubla_transactions(text, text, text, integer) TO anon, authenticated;
 ```
 
 ---
 
-## Detalhes Técnicos
+## Resumo das Correções Feitas
 
-### Por que aconteceu esse erro?
-
-O plano anterior estava documentado incorretamente - ele mencionava uma coluna `original_name` que não existe no schema atual. O mapeamento correto é:
-
-| Contexto | Coluna |
-|----------|--------|
-| Nome do produto na transação Hubla | `hubla_transactions.product_name` |
-| Nome do produto na configuração | `product_configurations.product_name` |
-| Nome de exibição (display) | `product_configurations.display_name` |
+| Migration | Erro Corrigido |
+|-----------|----------------|
+| 1ª | `ht.gross_value` → `ht.product_price` (calculado) |
+| 2ª | `pc.original_name` → `pc.product_name` |
+| 3ª (esta) | Remover `pc_parent.child_offer_ids` (coluna inexistente) |
 
 ---
 
 ## Resultado Esperado
 
-1. Erro "column pc.original_name does not exist" corrigido
+1. Erro "column pc_parent.child_offer_ids does not exist" corrigido
 2. Transações carregam normalmente na página de vendas
-3. Source `make` incluído e `newsale-%` excluído conforme planejado
-4. Bruto calculado: `COALESCE(gross_override, reference_price, product_price)`
+3. Exclusão de duplicatas mantida via `NOT LIKE 'newsale-%'`
+4. Source `make` incluído conforme planejado
 
