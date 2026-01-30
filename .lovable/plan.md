@@ -1,49 +1,30 @@
 
-# Plano: Corrigir Timeout na Página de Vendas MCF Incorporador
+# Plano: Corrigir Sincronização de Status Aprovado no Carrinho R2
 
 ## Problema Identificado
 
-A página de Vendas `/bu-incorporador/transacoes` está retornando **zero transações** após um timeout da RPC.
+| Situação | Descrição |
+|----------|-----------|
+| **Lead** | Roberto Gomes Athayde - R2 realizada em 26/01 com Claudia Carielo |
+| **Status no banco** | `r2_status_id = Aprovado` ✅ (verificado via query) |
+| **Problema** | Lead não aparece na aba "Aprovados" do Carrinho R2 |
+| **Causa raiz** | O hook `useUpdateR2Attendee` não invalida as queries do Carrinho |
 
-### Diagnóstico
+## Diagnóstico Técnico
 
-| Aspecto | Valor |
-|---------|-------|
-| **Erro** | `canceling statement due to statement timeout` (HTTP 500) |
-| **Causa Raiz** | Subconsulta correlacionada de `deal_tags` na função `get_all_hubla_transactions` |
-| **Tempo por subconsulta** | ~132ms (usa `LOWER()` sem índice em 113k contatos) |
-| **Transações no período** | ~2000 |
-| **Tempo total estimado** | 2000 × 132ms = ~264 segundos (muito acima do timeout de 30s) |
-
-### O Problema na Query
-
-```sql
--- Esta subconsulta é executada para CADA transação (2000x)
-COALESCE(
-  (SELECT d.tags 
-   FROM crm_contacts c
-   INNER JOIN crm_deals d ON d.contact_id = c.id
-   WHERE LOWER(c.email) = LOWER(ht.customer_email)
-   LIMIT 1),
-  ARRAY[]::text[]
-) as deal_tags
+O hook `useUpdateR2Attendee` (usado pelo drawer de Avaliação R2) invalida apenas:
+```typescript
+queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
 ```
 
-O `LOWER()` impede o uso do índice `idx_crm_contacts_email`, forçando um scan completo.
-
----
+Mas as abas do Carrinho R2 usam queries diferentes:
+- `r2-carrinho-data` (dados das abas)
+- `r2-carrinho-kpis` (contadores superiores)
 
 ## Solução Proposta
 
-Remover a subconsulta de `deal_tags` da RPC e buscar as tags via LEFT JOIN com pré-agregação, ou remover completamente se não forem essenciais para a listagem.
-
-### Opção Recomendada: Remover `deal_tags` da RPC
-
-A coluna `deal_tags` é usada principalmente para:
-1. Exibição visual (badge de canal)
-2. Relatórios de vendas
-
-Na tela de listagem de transações, as tags podem ser carregadas sob demanda (quando o drawer abre) em vez de para todas as 2000 linhas.
+Adicionar invalidação das queries do Carrinho R2 ao hook `useUpdateR2Attendee`.
 
 ---
 
@@ -51,72 +32,60 @@ Na tela de listagem de transações, as tags podem ser carregadas sob demanda (q
 
 | Arquivo | Modificação |
 |---------|-------------|
-| **Migração SQL** | Atualizar a função `get_all_hubla_transactions` para remover subconsulta de `deal_tags` |
+| `src/hooks/useR2AttendeeUpdate.ts` | Adicionar invalidação de `r2-carrinho-data` e `r2-carrinho-kpis` |
 
 ---
 
 ## Implementação Técnica
 
-### Nova versão da função RPC
+### Mudança em useR2AttendeeUpdate.ts
 
-```sql
-CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
-  p_search text DEFAULT NULL,
-  p_start_date text DEFAULT NULL,
-  p_end_date text DEFAULT NULL,
-  p_limit integer DEFAULT 5000
-)
-RETURNS TABLE(
-  id uuid, hubla_id text, product_name text, product_category text,
-  product_price numeric, net_value numeric, customer_name text,
-  customer_email text, customer_phone text, sale_date timestamptz,
-  sale_status text, installment_number integer, total_installments integer,
-  source text, gross_override numeric, deal_tags text[]
-)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
-AS $function$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    ht.id, ht.hubla_id::text, ht.product_name::text, ht.product_category::text,
-    ht.product_price, ht.net_value, ht.customer_name::text, ht.customer_email::text,
-    ht.customer_phone::text, ht.sale_date, ht.sale_status::text,
-    ht.installment_number, ht.total_installments, ht.source::text, ht.gross_override,
-    ARRAY[]::text[] as deal_tags  -- Retorna array vazio por padrão
-  FROM hubla_transactions ht
-  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
-  WHERE pc.target_bu = 'incorporador'
-    AND ht.sale_status IN ('completed', 'refunded')
-    AND ht.source IN ('hubla', 'manual')
-    AND ht.hubla_id NOT LIKE 'newsale-%'
-    AND (p_search IS NULL OR (
-      ht.customer_name ILIKE '%' || p_search || '%' OR
-      ht.customer_email ILIKE '%' || p_search || '%' OR
-      ht.product_name ILIKE '%' || p_search || '%'
-    ))
-    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
-    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
-  ORDER BY ht.sale_date DESC
-  LIMIT p_limit;
-END;
-$function$;
+**Antes (linhas 37-41):**
+```typescript
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+  queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+  toast.success('Atualizado');
+},
 ```
 
----
+**Depois:**
+```typescript
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+  queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+  queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+  queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+  queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
+  toast.success('Atualizado');
+},
+```
 
-## Impacto
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| **Tempo de execução** | Timeout (>30s) | ~25ms |
-| **Transações retornadas** | 0 (erro) | ~2000 |
-| **Coluna deal_tags** | Populada | Array vazio (pode ser buscada sob demanda) |
+Também aplicar a mesma correção em todas as funções do arquivo:
+- `useBatchUpdateR2Attendees` (linha 66-69)
+- `useQuickUpdateAttendeeStatus` (linha 93-95)
+- `useRemoveR2Attendee` (linha 116-119)
+- `useCancelR2Meeting` (linha 149-152)
+- `useRestoreR2Meeting` (linha 174-176)
 
 ---
 
 ## Resultado Esperado
 
-1. A página de Vendas carrega em menos de 1 segundo
-2. Todas as 2000 transações de janeiro aparecem corretamente
-3. Os totais (Bruto/Líquido) são calculados corretamente
-4. Se as tags forem necessárias no futuro, podem ser buscadas no drawer de detalhes
+| Antes | Depois |
+|-------|--------|
+| Marcar "Aprovado" não atualiza Carrinho R2 | Carrinho R2 atualiza automaticamente |
+| KPI "Aprovados" não incrementa | KPI incrementa imediatamente (46 → 47) |
+| Lead não aparece na aba "Aprovados" | Lead aparece instantaneamente |
+| Requer refresh manual da página | Tudo sincronizado sem refresh |
+
+---
+
+## Impacto
+
+Esta correção garante que qualquer alteração de status R2 (Aprovado, Reprovado, Desistente, etc.) seja refletida imediatamente em:
+- KPIs do Carrinho R2 (contadores superiores)
+- Aba "Todas R2s"
+- Aba "Aprovados"
+- Aba "Fora do Carrinho"
+- Métricas gerais
