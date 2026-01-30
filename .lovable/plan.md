@@ -1,134 +1,85 @@
 
+# Correção: Popup de Edição Mostrando Formulário de Criação
 
-# Diagnóstico: Transações Faltando no Relatório do Incorporador
+## O Problema
 
-## O que encontrei
+Quando você clica no botão "Editar" (ícone de lápis) em uma venda do Carrinho R2, o popup que abre é o mesmo de "Nova Venda de Parceria" porque:
 
-Após analisar a base de dados e comparar com sua planilha, identifiquei **3 problemas** que estão causando a diferença de valores:
+1. O componente `R2CarrinhoTransactionFormDialog` não recebe os dados da venda selecionada
+2. Não existe distinção entre modo "criar" e modo "editar"
+3. O título é fixo como "Nova Venda de Parceria"
+4. O botão sempre diz "Criar Venda"
 
----
+## Solução Proposta
 
-## Problema 1: Função SQL filtra apenas fontes `hubla` e `manual`
+### Etapa 1: Modificar o componente R2CarrinhoTransactionFormDialog
 
-A função `get_all_hubla_transactions` (que alimenta a página `/bu-incorporador/transacoes`) possui o filtro:
+Adicionar props opcionais para modo de edição:
 
-```sql
-AND ht.source IN ('hubla', 'manual')
+```typescript
+interface R2CarrinhoTransactionFormDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  weekStart: Date;
+  // Novas props para edição
+  editMode?: boolean;
+  transactionToEdit?: {
+    id: string;
+    product_name: string;
+    product_price: number;
+    net_value: number;
+    customer_name: string;
+    customer_email: string;
+    customer_phone: string;
+    sale_date: string;
+    linked_attendee_id?: string;
+  };
+}
 ```
 
-**Isso exclui automaticamente:**
-- `asaas` - 2 transações (Gabriel Santos R$19.500 + Gleidson Warlen R$19.500 = **R$39.000**)
-- `kiwify` - 4 transações relevantes (Rogerio Costa, Ricardo Guimarães, Maurício = ~**R$48.000**)
+### Etapa 2: Preencher formulário com dados existentes
 
----
+Quando `editMode=true` e `transactionToEdit` existir:
+- Pré-preencher todos os campos com os valores da transação
+- Mudar título para "Editar Venda de Parceria"
+- Mudar botão para "Salvar Alterações"
 
-## Problema 2: Nomes de produtos não mapeados
+### Etapa 3: Criar hook useUpdateCarrinhoTransaction
 
-O produto `A009 - Incorporador Completo + The Club` (formato do Asaas) **não existe** na tabela `product_configurations`.
+Novo hook para atualizar transação existente (UPDATE em vez de INSERT).
 
-Produtos configurados:
-- ✅ `A009 - MCF INCORPORADOR COMPLETO + THE CLUB`
-- ✅ `A009 - MCF INCORPORADOR + THE CLUB`
-- ❌ `A009 - Incorporador Completo + The Club` ← **FALTANDO**
+### Etapa 4: Atualizar R2VendasList
 
-Isso exclui R$39.000 em vendas do Asaas.
+Passar os dados da venda selecionada para o dialog de edição:
 
----
-
-## Problema 3: Transações ASAAS genéricas não existem
-
-Na sua planilha aparecem linhas como:
-- `05/01/2026 | ASAAS | - | - | R$ 7.500,00`
-- `08/01/2026 | ASAAS | COBRANÇAS 6,7,8 de janeiro | R$ 7.995,31`
-- etc.
-
-Essas transações **não existem na base de dados** como registros de pagamento consolidado. Precisam ser adicionadas manualmente.
-
----
-
-## Resumo do Impacto
-
-| Problema | Valor Aprox. Perdido |
-|----------|---------------------|
-| Source `asaas`/`kiwify` excluído | ~R$ 87.000 |
-| Nome de produto não mapeado | ~R$ 39.000 |
-| Transações ASAAS não cadastradas | ~R$ 92.000+ |
-| **Total estimado** | **~R$ 180.000+** |
-
----
-
-## Plano de Correção
-
-### Etapa 1: Atualizar função SQL para incluir mais fontes
-
-Modificar `get_all_hubla_transactions` para:
-
-```sql
-AND ht.source IN ('hubla', 'manual', 'asaas', 'kiwify')
+```tsx
+{selectedVenda && editDialogOpen && (
+  <R2CarrinhoTransactionFormDialog
+    open={editDialogOpen}
+    onOpenChange={setEditDialogOpen}
+    weekStart={weekStart}
+    editMode={true}
+    transactionToEdit={{
+      id: selectedVenda.id,
+      product_name: selectedVenda.product_name,
+      // ... demais campos
+    }}
+  />
+)}
 ```
 
-**Arquivos afetados:** Migration SQL
+## Arquivos a Modificar
 
----
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/crm/R2CarrinhoTransactionFormDialog.tsx` | Adicionar props de edição, lógica de preenchimento e título dinâmico |
+| `src/components/crm/R2VendasList.tsx` | Passar dados da venda selecionada para o dialog |
+| `src/hooks/useUpdateCarrinhoTransaction.ts` | Novo hook para update de transação (se não existir) |
 
-### Etapa 2: Adicionar variações de nomes de produtos
+## Resultado Esperado
 
-Inserir na tabela `product_configurations`:
-
-| product_name | target_bu | product_code | reference_price | is_active |
-|--------------|-----------|--------------|-----------------|-----------|
-| A009 - Incorporador Completo + The Club | incorporador | A009 | 19500 | true |
-| A001 - Incorporador Completo | incorporador | A001 | 14500 | true |
-
-**Arquivos afetados:** Migration SQL ou UI Admin
-
----
-
-### Etapa 3: Criar transações manuais para consolidados ASAAS
-
-Você precisará adicionar manualmente (via UI ou SQL) as transações consolidadas do ASAAS que estão na planilha mas não no sistema:
-
-| Data | Descrição | Valor Líquido |
-|------|-----------|---------------|
-| 05/01/2026 | ASAAS | R$ 7.500,00 |
-| 08/01/2026 | COBRANÇAS 6,7,8 de janeiro | R$ 7.995,31 |
-| 09/01/2026 | COBRANÇAS 9 JANEIRO | R$ 1.000,00 |
-| 11/01/2026 | COBRANÇAS 11 JANEIRO | R$ 14.500,00 |
-| 15/01/2026 | COBRANÇAS 15 JANEIRO | R$ 7.000,00 |
-| 19/01/2026 | COBRANÇAS 19 JANEIRO | R$ 2.333,32 + R$ 3.500,00 |
-| 20/01/2026 | COBRANÇAS 20 JANEIRO | R$ 5.000,00 |
-| 21/01/2026 | COBRANÇAS 21 JANEIRO | R$ 7.000,00 |
-| 23/01/2026 | Consolidados | R$ 19.500 + R$ 19.500 + R$ 12.000 + R$ 3.000 |
-
----
-
-## Ordem de Implementação
-
-1. **SQL Migration** - Alterar filtro de `source` na função + adicionar produtos faltantes
-2. **Verificar resultado** - Conferir se os valores subiram
-3. **Cadastrar ASAAS consolidados** - Via UI de transações manuais ou SQL direto
-
----
-
-## Detalhes Técnicos
-
-A migration SQL vai:
-
-```sql
--- 1. Recriar função com filtro de source expandido
-DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamptz, timestamptz, integer);
-
-CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(...)
-...
-WHERE ...
-  AND ht.source IN ('hubla', 'manual', 'asaas', 'kiwify')
-...
-
--- 2. Adicionar produtos faltantes
-INSERT INTO product_configurations (product_name, target_bu, product_code, reference_price, is_active)
-VALUES 
-  ('A009 - Incorporador Completo + The Club', 'incorporador', 'A009', 19500, true),
-  ('A001 - Incorporador Completo', 'incorporador', 'A001', 14500, true)
-ON CONFLICT (product_name) DO NOTHING;
-```
-
+- Ao clicar em "Editar", o popup abre com:
+  - Título: "Editar Venda de Parceria"
+  - Campos pré-preenchidos com dados da venda
+  - Botão: "Salvar Alterações"
+- Ao salvar, atualiza a transação existente em vez de criar nova
