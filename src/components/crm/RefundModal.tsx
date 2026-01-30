@@ -93,11 +93,37 @@ export function RefundModal({
           }
         }
       } else {
-        // For R2: update meeting slot status (original behavior)
-        await updateMeetingStatus.mutateAsync({ 
-          meetingId, 
-          status: 'refunded' 
-        });
+        // For R2: update ONLY the individual attendee, NOT the slot
+        if (attendeeId) {
+          // Fetch the "Reembolso" status ID from r2_status_options
+          const { data: reembolsoStatus } = await supabase
+            .from('r2_status_options')
+            .select('id')
+            .ilike('name', '%reembolso%')
+            .limit(1)
+            .single();
+
+          // Update attendee status to 'refunded'
+          const { error: attendeeError } = await supabase
+            .from('meeting_slot_attendees')
+            .update({ 
+              status: 'refunded',
+              // Also update r2_status_id so KPIs update correctly
+              ...(reembolsoStatus?.id ? { r2_status_id: reembolsoStatus.id } : {})
+            })
+            .eq('id', attendeeId);
+          
+          if (attendeeError) {
+            console.error('Error updating attendee status:', attendeeError);
+            throw attendeeError;
+          }
+        } else {
+          // Fallback: update meeting slot status if no attendeeId
+          await updateMeetingStatus.mutateAsync({ 
+            meetingId, 
+            status: 'refunded' 
+          });
+        }
       }
 
       // 2. If we have a dealId, mark it as lost with refund flags
@@ -182,6 +208,9 @@ export function RefundModal({
       queryClient.invalidateQueries({ queryKey: ['r2-pending-leads'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
       queryClient.invalidateQueries({ queryKey: ['meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       
       // Reset form
       setSelectedReason('');
