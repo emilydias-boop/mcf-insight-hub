@@ -37,6 +37,9 @@ export function useUpdateR2Attendee() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       toast.success('Atualizado');
     },
     onError: () => {
@@ -66,6 +69,9 @@ export function useBatchUpdateR2Attendees() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       toast.success('Atualizações salvas');
     },
     onError: () => {
@@ -93,6 +99,9 @@ export function useQuickUpdateAttendeeStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
     },
     onError: () => {
       toast.error('Erro ao atualizar status');
@@ -116,6 +125,9 @@ export function useRemoveR2Attendee() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       toast.success('Participante removido');
     },
     onError: () => {
@@ -149,6 +161,9 @@ export function useCancelR2Meeting() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       toast.success('Reunião cancelada e removida');
     },
     onError: () => {
@@ -173,6 +188,9 @@ export function useRestoreR2Meeting() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
       queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
       toast.success('Reunião restaurada');
     },
     onError: () => {
