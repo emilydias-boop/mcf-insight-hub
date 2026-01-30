@@ -10,10 +10,11 @@ interface RoleGuardProps {
 }
 
 export const RoleGuard = ({ allowedRoles, children, fallback }: RoleGuardProps) => {
-  const { role, loading } = useAuth();
+  const { role, loading, roleLoading } = useAuth();
 
-  // Esperar o loading terminar antes de verificar role
-  if (loading) {
+  // Esperar AMBOS loading e roleLoading terminarem antes de verificar role
+  // Isso evita mostrar "Acesso Negado" enquanto as roles reais estão carregando
+  if (loading || roleLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

@@ -21,11 +21,12 @@ interface R2AccessGuardProps {
 }
 
 export const R2AccessGuard = ({ children, fallback }: R2AccessGuardProps) => {
-  const { role, user, allRoles, loading: authLoading } = useAuth();
+  const { role, user, allRoles, loading: authLoading, roleLoading } = useAuth();
   const { data: myR2Closer, isLoading: loadingR2Closer } = useMyR2Closer();
 
-  // Aguarda auth resolver antes de negar acesso
-  if (authLoading) {
+  // Aguarda auth E roleLoading resolver antes de negar acesso
+  // Isso evita mostrar "Acesso Negado" enquanto as roles reais estão carregando
+  if (authLoading || roleLoading) {
     return null;
   }
 
