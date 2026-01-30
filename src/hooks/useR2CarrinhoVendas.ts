@@ -433,6 +433,6 @@ export function useR2CarrinhoVendas(weekDate: Date) {
 
       return consolidatedVendas;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1 minuto
   });
 }

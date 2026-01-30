@@ -117,6 +117,6 @@ export function useCloserR2Metrics(closerId: string | null, startDate: Date, end
       return { aprovados, vendas, taxaConversao };
     },
     enabled: !!closerId,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1 minuto
   });
 }

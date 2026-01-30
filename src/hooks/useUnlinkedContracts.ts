@@ -34,7 +34,7 @@ export function useUnlinkedContracts() {
       if (error) throw error;
       return (data || []) as UnlinkedContract[];
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1 minuto
     staleTime: 10000,
   });
 }

@@ -75,13 +75,7 @@ verify_jwt = false
 [functions.import-hubla-history]
 verify_jwt = false
 
-[functions.fix-csv-orderbumps]
-verify_jwt = false
-
 [functions.reprocess-hubla-webhooks]
-verify_jwt = false
-
-[functions.fix-hubla-values]
 verify_jwt = false
 
 [functions.recalculate-sdr-payout]
@@ -153,9 +147,6 @@ verify_jwt = false
 [functions.sync-newsale-orphans-cron]
 verify_jwt = false
 
-[functions.fix-ads-cost]
-verify_jwt = false
-
 [functions.zapi-webhook]
 verify_jwt = false
 
@@ -172,9 +163,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.apply-audit-corrections]
-verify_jwt = false
-
-[functions.fix-hubla-discrepancies]
 verify_jwt = false
 
 [functions.reconcile-clint-ids]
@@ -208,9 +196,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.repair-activity-owners]
-verify_jwt = false
-
-[functions.fix-reprocessed-activities]
 verify_jwt = false
 
 [functions.webhook-consorcio]

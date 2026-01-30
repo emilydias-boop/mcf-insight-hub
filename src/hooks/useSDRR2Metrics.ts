@@ -212,6 +212,6 @@ export function useSDRR2Metrics(weekDate: Date, sdrEmailFilter?: string) {
 
       return result;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1 minuto
   });
 }
