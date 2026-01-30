@@ -1,92 +1,67 @@
 
-# Plano: Excluir Transações Make Duplicadas da Listagem
+# Plano: Corrigir Erro - Remover Referência a Coluna Inexistente
 
-## Problema Identificado
+## Problema
 
-As transações com `source = 'make'` estão aparecendo na listagem mesmo quando já existe uma transação oficial (`hubla` ou `manual`) para o mesmo cliente e produto. Isso está causando:
+A migração anterior criou a função `get_all_hubla_transactions()` com uma cláusula que referencia `pc_parent.child_offer_ids`, porém essa coluna **não existe** na tabela `product_configurations`.
 
-1. **Inflação do Bruto Total** - R$ 19.500 extras para Judá, José Augusto, Thiago, etc.
-2. **Poluição visual** - Linhas duplicadas marcadas como "(dup)" na tabela
+### Erro Exato
+```
+column pc_parent.child_offer_ids does not exist
+```
 
-### Exemplo: Judá Ferreira
+### Colunas Existentes em `product_configurations`
+| Coluna | Tipo |
+|--------|------|
+| id | uuid |
+| product_name | text |
+| product_code | text |
+| display_name | text |
+| product_category | text |
+| target_bu | text |
+| reference_price | numeric |
+| is_active | boolean |
+| count_in_dashboard | boolean |
+| notes | text |
+| created_at | timestamp |
+| updated_at | timestamp |
 
-| Transação | Source | Bruto | Problema |
-|-----------|--------|-------|----------|
-| A009 - MCF INCORPORADOR COMPLETO + THE CLUB | hubla | R$ 19.500 | Correta |
-| A009 - MCF INCORPORADOR + THE CLUB | make | R$ 19.500 | **Duplicada - não deveria aparecer** |
+**Nota**: `child_offer_ids` não existe.
 
 ---
 
-## Solução Proposta
+## Solução
 
-### Modificar a Função `get_all_hubla_transactions()` 
+Atualizar a função `get_all_hubla_transactions()` removendo a cláusula que tenta acessar `child_offer_ids`.
 
-Adicionar filtro para excluir transações `make` quando já existe uma transação `hubla` ou `manual` para o mesmo cliente (email) e produto normalizado na mesma data.
+### Trecho a Remover
 
-### Lógica do Filtro
-
-```text
-Para cada transação make:
-  SE existe transação hubla/manual COM:
-    - Mesmo email (LOWER)
-    - Mesmo produto normalizado (A009, A001, etc.)
-    - Mesma data (DATE)
-  ENTÃO:
-    Excluir a transação make da listagem
+```sql
+-- Esta parte deve ser REMOVIDA:
+AND NOT EXISTS (
+  SELECT 1 FROM product_configurations pc_parent
+  WHERE pc_parent.child_offer_ids IS NOT NULL
+    AND ht.hubla_id = ANY(pc_parent.child_offer_ids)
+)
 ```
+
+A lógica de exclusão de transações make duplicadas permanece intacta.
 
 ---
 
 ## Detalhes Técnicos
 
-### Nova Cláusula WHERE na RPC
+### Nova Migração SQL
 
-```sql
--- Excluir transações make duplicadas
-AND NOT (
-  ht.source = 'make' 
-  AND EXISTS (
-    SELECT 1 FROM hubla_transactions ht_official
-    WHERE ht_official.source IN ('hubla', 'manual')
-      AND LOWER(ht_official.customer_email) = LOWER(ht.customer_email)
-      AND DATE(ht_official.sale_date) = DATE(ht.sale_date)
-      AND ht_official.sale_status IN ('completed', 'refunded')
-      -- Mesmo produto normalizado
-      AND (
-        (UPPER(ht.product_name) LIKE '%A009%' AND UPPER(ht_official.product_name) LIKE '%A009%')
-        OR (UPPER(ht.product_name) LIKE '%A001%' AND UPPER(ht_official.product_name) LIKE '%A001%')
-        OR (UPPER(ht.product_name) LIKE '%A000%' AND UPPER(ht_official.product_name) LIKE '%A000%')
-        -- ... outros produtos
-      )
-  )
-)
-```
+Recriar a função sem a referência à coluna inexistente, mantendo apenas:
+1. Filtros básicos (status, source)
+2. Lógica de exclusão de make duplicados (que já funciona corretamente)
+3. Filtros de busca e data
 
 ---
 
-## Impacto Esperado
+## Impacto
 
-| Cliente | Bruto Atual | Bruto Após Correção |
-|---------|-------------|---------------------|
-| Judá Ferreira | R$ 39.601 | R$ 20.101 |
-| José Augusto | Inflado | Correto |
-| Thiago Henrique | Inflado | Correto |
-
-### Total Mensal Esperado
-
-De **~R$ 1.85M** para **~R$ 1.78M** (remoção de ~R$ 70k em duplicatas)
-
----
-
-## Arquivos a Modificar
-
-1. **Nova migração SQL** - Atualizar `get_all_hubla_transactions()` com filtro de exclusão de duplicatas make
-
----
-
-## Benefícios
-
-- Listagem limpa sem linhas duplicadas
-- Bruto Total correto automaticamente
-- Não requer ajustes manuais de `gross_override`
-- Make continua sendo ingerido para tracking, mas não aparece quando há oficial
+- A página de transações voltará a funcionar
+- As transações serão exibidas corretamente
+- A lógica de exclusão de make duplicados continuará funcionando
