@@ -1,45 +1,80 @@
 
-# Plano: Corrigir Duplicação de Aprovados no Carrinho R2
+# Plano: Corrigir Reembolso para Afetar Apenas o Attendee Individual
 
 ## Problema Identificado
 
-A aba "Aprovados" mostra **54 registros**, mas 2 estão duplicados:
+Você está correto! Quando um reembolso é processado no R2:
 
-| Lead | Causa da Duplicação |
-|------|---------------------|
-| **Victor Hugo Lima Silva** | Reunião original (27/01) foi reagendada para 28/01. Ambos os registros têm status "Aprovado" |
-| **Leonardo Schwab Dias Carneiro** | Mesmo lead foi agendado em 2 reuniões diferentes (27/01 com Claudia, 28/01 com Jessica). Ambas completed |
+| Comportamento Atual | Comportamento Correto |
+|--------------------|----------------------|
+| Atualiza `meeting_slots.status` → "refunded" | NÃO deve alterar o slot |
+| Atualiza TODOS `meeting_slot_attendees.status` → "refunded" | Deve atualizar APENAS o attendee específico |
 
-### Análise dos Dados
+### Causas no Código
 
-**Victor Hugo:**
-- Attendee original (27/01): `meeting_status=rescheduled`, `parent_attendee_id=NULL`
-- Attendee reagendado (28/01): `meeting_status=completed`, `parent_attendee_id=a7e96a82...` (aponta para o original)
+1. **R2MeetingDetailDrawer.tsx (linha 408)**: Não passa o `attendeeId` para o `RefundModal`, mesmo tendo acesso a `attendee.id`
 
-**Leonardo Schwab:**
-- Attendee 1 (27/01 - Claudia): `meeting_status=completed`, `parent_attendee_id=NULL`
-- Attendee 2 (28/01 - Jessica): `meeting_status=completed`, `parent_attendee_id=NULL`
+2. **RefundModal.tsx (linhas 95-101)**: Para R2, chama `useUpdateR2MeetingStatus` que atualiza o slot inteiro
 
----
-
-## Causa Raiz
-
-O código atual em `useR2CarrinhoData.ts` não faz deduplicação por `deal_id`. Quando um lead é aprovado em múltiplas reuniões (seja por reagendamento ou agendamento duplicado), ele aparece múltiplas vezes na lista.
-
-O hook de KPIs (`useR2CarrinhoKPIs.ts`) também não deduplica - conta todos os attendees com status aprovado.
+3. **useR2AgendaData.ts (linhas 37-42)**: O hook `useUpdateR2MeetingStatus` propaga o status para TODOS os attendees do slot
 
 ---
 
 ## Solução Proposta
 
-Implementar deduplicação por `deal_id` na aba "Aprovados", mantendo apenas o registro mais recente de cada lead.
+### Etapa 1: Passar attendeeId para o RefundModal
 
-### Lógica de Deduplicação
+No `R2MeetingDetailDrawer.tsx`, adicionar a prop `attendeeId`:
 
-Para cada `deal_id` com múltiplos attendees aprovados:
-1. Priorizar attendees de reuniões `completed` sobre `rescheduled`
-2. Entre `completed`, manter o mais recente (`scheduled_at` maior)
-3. Resultado: 1 registro por lead/deal
+```typescript
+<RefundModal
+  open={refundModalOpen}
+  onOpenChange={setRefundModalOpen}
+  meetingId={meeting.id}
+  attendeeId={attendee.id}  // ← ADICIONAR
+  dealId={attendee.deal_id}
+  ...
+/>
+```
+
+### Etapa 2: Atualizar RefundModal para R2
+
+No `RefundModal.tsx`, para R2 com `attendeeId`, atualizar apenas o attendee individual (similar ao R1):
+
+```typescript
+} else {
+  // For R2: update individual attendee, NOT the slot
+  if (attendeeId) {
+    // 1. Update attendee status to 'refunded'
+    await supabase
+      .from('meeting_slot_attendees')
+      .update({ status: 'refunded' })
+      .eq('id', attendeeId);
+    
+    // 2. Update r2_status_id to "Reembolso"
+    const { data: reembolsoStatus } = await supabase
+      .from('r2_status_options')
+      .select('id')
+      .ilike('name', '%reembolso%')
+      .single();
+    
+    if (reembolsoStatus?.id) {
+      await supabase
+        .from('meeting_slot_attendees')
+        .update({ r2_status_id: reembolsoStatus.id })
+        .eq('id', attendeeId);
+    }
+  }
+}
+```
+
+### Etapa 3: Adicionar invalidações do Carrinho
+
+```typescript
+queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
+queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
+queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
+```
 
 ---
 
@@ -47,101 +82,33 @@ Para cada `deal_id` com múltiplos attendees aprovados:
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/hooks/useR2CarrinhoData.ts` | Adicionar deduplicação por `deal_id` no filtro "aprovados" |
-| `src/hooks/useR2CarrinhoKPIs.ts` | Adicionar deduplicação por `deal_id` na contagem de aprovados |
-
----
-
-## Detalhes Técnicos
-
-### Modificação em useR2CarrinhoData.ts
-
-Após coletar todos os attendees aprovados, adicionar lógica de deduplicação:
-
-```typescript
-// Após linha 190, antes do return
-
-// Para aprovados, deduplicar por deal_id (manter reunião mais recente)
-if (filter === 'aprovados') {
-  const dealMap = new Map<string, R2CarrinhoAttendee>();
-  
-  for (const att of attendees) {
-    const key = att.deal_id || att.id; // Usar attendee ID se não tiver deal
-    const existing = dealMap.get(key);
-    
-    if (!existing) {
-      dealMap.set(key, att);
-    } else {
-      // Priorizar: completed > rescheduled > outros
-      const attPriority = att.meeting_status === 'completed' ? 2 : 
-                          att.meeting_status === 'rescheduled' ? 1 : 0;
-      const existingPriority = existing.meeting_status === 'completed' ? 2 :
-                               existing.meeting_status === 'rescheduled' ? 1 : 0;
-      
-      if (attPriority > existingPriority) {
-        dealMap.set(key, att);
-      } else if (attPriority === existingPriority) {
-        // Mesmo status: manter o mais recente
-        if (new Date(att.scheduled_at) > new Date(existing.scheduled_at)) {
-          dealMap.set(key, att);
-        }
-      }
-    }
-  }
-  
-  return Array.from(dealMap.values());
-}
-
-return attendees;
-```
-
-### Modificação em useR2CarrinhoKPIs.ts
-
-Adicionar deduplicação similar na contagem de aprovados:
-
-```typescript
-// Linha 103-107: Mudar de contagem simples para deduplicação
-const allAttendees = (r2Meetings || []).flatMap(m => 
-  (m.attendees || []).map(a => ({
-    ...a,
-    scheduled_at: m.scheduled_at,
-    meeting_status: m.status
-  }))
-);
-
-// Deduplicar aprovados por deal_id
-const aprovadoAttendees = allAttendees.filter(a => a.r2_status_id === aprovadoStatusId);
-const aprovadosDeduplicated = new Map<string, typeof aprovadoAttendees[0]>();
-
-for (const att of aprovadoAttendees) {
-  // Buscar deal_id do attendee
-  const key = att.deal_id || att.id;
-  const existing = aprovadosDeduplicated.get(key);
-  
-  if (!existing || 
-      (att.meeting_status === 'completed' && existing.meeting_status !== 'completed') ||
-      (att.meeting_status === existing.meeting_status && 
-       new Date(att.scheduled_at) > new Date(existing.scheduled_at))) {
-    aprovadosDeduplicated.set(key, att);
-  }
-}
-
-const aprovados = aprovadosDeduplicated.size;
-```
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Adicionar `attendeeId={attendee.id}` ao RefundModal |
+| `src/components/crm/RefundModal.tsx` | Para R2: atualizar apenas o attendee individual + r2_status_id + invalidar queries do carrinho |
 
 ---
 
 ## Resultado Esperado
 
-| Métrica | Antes | Depois |
+| Cenário | Antes | Depois |
 |---------|-------|--------|
-| KPI Aprovados | 54 | 52 |
-| Lista Aprovados | 54 (2 duplicados) | 52 (sem duplicados) |
-| Victor Hugo Lima Silva | 2 registros | 1 registro (28/01 - completed) |
-| Leonardo Schwab Dias Carneiro | 2 registros | 1 registro (28/01 - mais recente) |
+| R2 com 2 attendees, 1 pede reembolso | Slot inteiro fica "refunded", afeta ambos | Apenas o attendee específico fica "refunded" |
+| KPI de Aprovados | Não atualiza | Diminui em 1 (por causa do r2_status_id) |
+| KPI Fora do Carrinho | Não atualiza | Aumenta em 1 |
+| Outros attendees do mesmo slot | São afetados | Não são afetados |
 
 ---
 
-## Observação
+## Fluxo Corrigido
 
-Para o caso de Leonardo Schwab, aparentemente houve um agendamento duplicado (2 reuniões diferentes com closers diferentes). A solução proposta mantém apenas o registro mais recente (28/01 - Jessica Bellini), mas pode ser necessário investigar como isso ocorreu para evitar duplicações futuras no processo de agendamento.
+```text
+1. Usuário seleciona um attendee no drawer R2
+2. Clica "Reembolso"
+3. Preenche motivo e justificativa
+4. Sistema executa:
+   a) meeting_slot_attendees.status → "refunded" (APENAS o attendee selecionado)
+   b) meeting_slot_attendees.r2_status_id → ID do status "Reembolso"
+   c) crm_deals.custom_fields → flags de reembolso
+   d) Invalida queries do carrinho
+5. Slot e outros attendees NÃO são afetados
+6. KPIs são recalculados automaticamente
+```
