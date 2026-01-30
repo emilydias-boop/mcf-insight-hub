@@ -1,84 +1,92 @@
 
-# Plano: Corrigir Deduplicação e Exclusão de Transações Make
+# Plano: Excluir Transações Make Duplicadas da Listagem
 
-## Problemas Identificados
+## Problema Identificado
 
-Após análise detalhada das 4 situações reportadas:
+As transações com `source = 'make'` estão aparecendo na listagem mesmo quando já existe uma transação oficial (`hubla` ou `manual`) para o mesmo cliente e produto. Isso está causando:
 
-### 1. André Luiz Gonçalves Raineri
-- **Esperado**: A001 com Bruto R$ 14.500 (comprou dia 23 primeira vez)
-- **Atual**: Bruto só R$ 497 (contrato), A001 tratado como recorrência
-- **Causa**: Transação **make** está sendo selecionada como "primeira" ao invés da Hubla
+1. **Inflação do Bruto Total** - R$ 19.500 extras para Judá, José Augusto, Thiago, etc.
+2. **Poluição visual** - Linhas duplicadas marcadas como "(dup)" na tabela
 
-### 2. Arão Young Kim
-- **Esperado**: A009 com Bruto R$ 19.500
-- **Atual**: Bruto R$ 0 (zerado)
-- **Causa**: Zeramos o `gross_override` da transação make, mas era ela que estava marcada como "primeira" pela deduplicação
+### Exemplo: Judá Ferreira
 
-### 3. Henrique Oliveira Amorim
-- **Status**: Correto (R$ 19.500 na transação manual "Novo")
-- **Problema visual**: Transações make ainda aparecem na listagem
-
-### 4. Izaquiel Leonardo Antunes
-- **Esperado**: A009 com Bruto R$ 19.500
-- **Atual**: Bruto R$ 0 (zerado)
-- **Causa**: Mesma situação do Arão - transação make marcada como primeira e zerada
+| Transação | Source | Bruto | Problema |
+|-----------|--------|-------|----------|
+| A009 - MCF INCORPORADOR COMPLETO + THE CLUB | hubla | R$ 19.500 | Correta |
+| A009 - MCF INCORPORADOR + THE CLUB | make | R$ 19.500 | **Duplicada - não deveria aparecer** |
 
 ---
 
-## Causa Raiz
+## Solução Proposta
 
-A função `get_first_transaction_ids()` está incluindo `source = 'make'` na deduplicação, mas:
+### Modificar a Função `get_all_hubla_transactions()` 
 
-1. **Make e Hubla têm o mesmo `sale_date`** para a mesma venda (sincronia via webhook)
-2. **O desempate é indeterminado** quando datas são iguais
-3. **Zeramos os overrides das transações make** mas elas ainda estão sendo marcadas como "primeira"
+Adicionar filtro para excluir transações `make` quando já existe uma transação `hubla` ou `manual` para o mesmo cliente (email) e produto normalizado na mesma data.
 
----
+### Lógica do Filtro
 
-## Solução em 2 Partes
-
-### Parte 1: Corrigir a Função de Deduplicação
-
-Modificar `get_first_transaction_ids()` para:
-1. **Priorizar source 'hubla' e 'manual' sobre 'make'** quando as datas são iguais
-2. Adicionar `ORDER BY sale_date ASC, CASE source WHEN 'hubla' THEN 1 WHEN 'manual' THEN 2 ELSE 3 END`
-
-```sql
-ORDER BY ht.sale_date ASC, 
-  CASE ht.source 
-    WHEN 'hubla' THEN 1 
-    WHEN 'manual' THEN 2 
-    ELSE 3 
-  END ASC
+```text
+Para cada transação make:
+  SE existe transação hubla/manual COM:
+    - Mesmo email (LOWER)
+    - Mesmo produto normalizado (A009, A001, etc.)
+    - Mesma data (DATE)
+  ENTÃO:
+    Excluir a transação make da listagem
 ```
 
-### Parte 2: Restaurar os Overrides Zerados
+---
 
-Como os overrides foram zerados incorretamente (a transação make não deveria ser a primeira), devemos:
+## Detalhes Técnicos
 
-1. **Arão Young Kim**: Restaurar `gross_override = 19500` na transação make OU deixar zerado se a Hubla passar a ser a primeira
-2. **Izaquiel**: Mesma lógica
+### Nova Cláusula WHERE na RPC
 
-**Após a correção da função**, a transação Hubla será marcada como "primeira" e receberá o bruto automaticamente via preço de referência.
+```sql
+-- Excluir transações make duplicadas
+AND NOT (
+  ht.source = 'make' 
+  AND EXISTS (
+    SELECT 1 FROM hubla_transactions ht_official
+    WHERE ht_official.source IN ('hubla', 'manual')
+      AND LOWER(ht_official.customer_email) = LOWER(ht.customer_email)
+      AND DATE(ht_official.sale_date) = DATE(ht.sale_date)
+      AND ht_official.sale_status IN ('completed', 'refunded')
+      -- Mesmo produto normalizado
+      AND (
+        (UPPER(ht.product_name) LIKE '%A009%' AND UPPER(ht_official.product_name) LIKE '%A009%')
+        OR (UPPER(ht.product_name) LIKE '%A001%' AND UPPER(ht_official.product_name) LIKE '%A001%')
+        OR (UPPER(ht.product_name) LIKE '%A000%' AND UPPER(ht_official.product_name) LIKE '%A000%')
+        -- ... outros produtos
+      )
+  )
+)
+```
 
 ---
 
-## Passos de Implementação
+## Impacto Esperado
 
-1. **Migração SQL**: Atualizar `get_first_transaction_ids()` com desempate por source
-2. **Verificação**: Confirmar que as transações Hubla passam a ser "primeira"
-3. **Sem necessidade de restaurar overrides**: O bruto será calculado pelo preço de referência do produto
+| Cliente | Bruto Atual | Bruto Após Correção |
+|---------|-------------|---------------------|
+| Judá Ferreira | R$ 39.601 | R$ 20.101 |
+| José Augusto | Inflado | Correto |
+| Thiago Henrique | Inflado | Correto |
+
+### Total Mensal Esperado
+
+De **~R$ 1.85M** para **~R$ 1.78M** (remoção de ~R$ 70k em duplicatas)
 
 ---
 
-## Resultado Esperado
+## Arquivos a Modificar
 
-| Cliente | Bruto Atual | Bruto Esperado |
-|---------|-------------|----------------|
-| André Raineri | R$ 497 | R$ 14.997 (497 + 14.500) |
-| Arão Young Kim | R$ 497 | R$ 19.997 (497 + 19.500) |
-| Izaquiel | R$ 544 | R$ 20.044 (497 + 47 + 19.500) |
-| Henrique | R$ 20.101 | R$ 20.101 (correto) |
+1. **Nova migração SQL** - Atualizar `get_all_hubla_transactions()` com filtro de exclusão de duplicatas make
 
-As transações make continuarão aparecendo na listagem como "Recorrente" (bruto zero), o que é correto pois são registros de tracking do Make.
+---
+
+## Benefícios
+
+- Listagem limpa sem linhas duplicadas
+- Bruto Total correto automaticamente
+- Não requer ajustes manuais de `gross_override`
+- Make continua sendo ingerido para tracking, mas não aparece quando há oficial
