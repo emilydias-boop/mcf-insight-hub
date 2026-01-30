@@ -80,14 +80,14 @@ export const getDeduplicatedGross = (
     return 0;
   }
   
-  // Regra 2: NÃO é a primeira transação do grupo cliente+produto = bruto zerado
-  if (!isFirstOfGroup) {
-    return 0;
-  }
-  
-  // Regra 3: Se há override manual, usa ele diretamente (permite zerar bruto)
+  // Regra 2: Override manual tem prioridade absoluta (correções de lançamento, etc)
   if (transaction.gross_override !== null && transaction.gross_override !== undefined) {
     return transaction.gross_override;
+  }
+  
+  // Regra 3: NÃO é a primeira transação do grupo cliente+produto = bruto zerado
+  if (!isFirstOfGroup) {
+    return 0;
   }
   
   // Regra 4: Se product_name é "Parceria" (genérico), usar product_price real
