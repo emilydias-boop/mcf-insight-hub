@@ -4,7 +4,7 @@ import { ptBR } from 'date-fns/locale';
 import { 
   Phone, MessageCircle, Calendar, CheckCircle, XCircle, AlertTriangle, 
   ExternalLink, Clock, User, Mail, X, Save, Copy, Users, Plus, Trash2, Send, 
-  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video
+  Lock, DollarSign, UserCircle, StickyNote, Pencil, Check, ArrowRightLeft, Video, Link2
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCloserMeetingLink } from '@/hooks/useCloserMeetingLink';
@@ -59,6 +59,7 @@ import {
 import { MoveAttendeeModal } from './MoveAttendeeModal';
 import { AttendeeNotesSection } from './AttendeeNotesSection';
 import { MovementHistorySection } from '@/components/sdr/MovementHistorySection';
+import { LinkContractDialog } from './LinkContractDialog';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useConversationsContext } from '@/contexts/ConversationsContext';
@@ -132,6 +133,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const [editedPhone, setEditedPhone] = useState('');
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showR2PromptDialog, setShowR2PromptDialog] = useState(false);
+  const [showLinkContractDialog, setShowLinkContractDialog] = useState(false);
   const [contractPaidParticipant, setContractPaidParticipant] = useState<{ id: string; name: string; dealId: string | null } | null>(null);
   
   const updateStatus = useUpdateMeetingStatus();
@@ -983,6 +985,19 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       <ArrowRightLeft className="h-4 w-4" />
                       <span className="text-xs">Mover</span>
                     </Button>
+                    
+                    {/* Vincular Contrato - Show for completed status without contract_paid */}
+                    {selectedParticipant.status === 'completed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-col h-14 gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                        onClick={() => setShowLinkContractDialog(true)}
+                      >
+                        <Link2 className="h-4 w-4" />
+                        <span className="text-xs">Vincular Contrato</span>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </>
@@ -1167,6 +1182,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Link Contract Dialog */}
+      {selectedParticipant && (
+        <LinkContractDialog
+          open={showLinkContractDialog}
+          onOpenChange={setShowLinkContractDialog}
+          attendeeId={selectedParticipant.id}
+          attendeeName={selectedParticipant.name}
+          dealId={selectedParticipant.dealId}
+        />
+      )}
     </Sheet>
   );
 }
