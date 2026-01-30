@@ -1,30 +1,36 @@
 
-# Plano: Corrigir Sincronização de Status Aprovado no Carrinho R2
+
+# Plano: Deduplicar Total Leads e Criar Métrica de Leads Ativos
 
 ## Problema Identificado
 
-| Situação | Descrição |
-|----------|-----------|
-| **Lead** | Roberto Gomes Athayde - R2 realizada em 26/01 com Claudia Carielo |
-| **Status no banco** | `r2_status_id = Aprovado` ✅ (verificado via query) |
-| **Problema** | Lead não aparece na aba "Aprovados" do Carrinho R2 |
-| **Causa raiz** | O hook `useUpdateR2Attendee` não invalida as queries do Carrinho |
+| Situação Atual | Problema |
+|----------------|----------|
+| **Total Leads = 80** | Conta cada registro de attendee, incluindo duplicatas de reagendamentos |
+| **Mesmo lead** | Pode aparecer 2-3x se foi reagendado ou tem múltiplas reuniões |
+| **Resultado** | Números inflados que não refletem a realidade |
 
-## Diagnóstico Técnico
+### Exemplo do Problema
 
-O hook `useUpdateR2Attendee` (usado pelo drawer de Avaliação R2) invalida apenas:
-```typescript
-queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
-queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+```text
+Lead: Igor Willian
+- R2 em 24/01 → No-show ⚠️
+- R2 em 27/01 → Reagendado (Aprovado) ✅
+
+Contagem atual: 2 leads
+Contagem correta: 1 lead único
 ```
 
-Mas as abas do Carrinho R2 usam queries diferentes:
-- `r2-carrinho-data` (dados das abas)
-- `r2-carrinho-kpis` (contadores superiores)
+---
 
 ## Solução Proposta
 
-Adicionar invalidação das queries do Carrinho R2 ao hook `useUpdateR2Attendee`.
+Criar **deduplicação por deal_id** e adicionar 2 métricas claras:
+
+| Métrica | Descrição |
+|---------|-----------|
+| **Total Leads** | Leads únicos que passaram pelo R2 (deduplicados por deal_id) |
+| **No Carrinho** | Leads únicos ativos = Total - Reembolsos - No-Show - Próx. Semana - Desistentes - Reprovados |
 
 ---
 
@@ -32,60 +38,106 @@ Adicionar invalidação das queries do Carrinho R2 ao hook `useUpdateR2Attendee`
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/hooks/useR2AttendeeUpdate.ts` | Adicionar invalidação de `r2-carrinho-data` e `r2-carrinho-kpis` |
+| `src/hooks/useR2MetricsData.ts` | Adicionar deduplicação por deal_id e nova métrica `leadsAtivos` |
+| `src/components/crm/R2MetricsPanel.tsx` | Exibir "No Carrinho" ao lado de "Total Leads" |
 
 ---
 
 ## Implementação Técnica
 
-### Mudança em useR2AttendeeUpdate.ts
+### useR2MetricsData.ts - Deduplicação
 
-**Antes (linhas 37-41):**
 ```typescript
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
-  queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
-  toast.success('Atualizado');
-},
+// Interface atualizada
+export interface R2MetricsData {
+  totalLeads: number;      // Leads ÚNICOS que passaram pelo R2
+  leadsAtivos: number;     // Leads únicos realmente no carrinho
+  // ... resto das métricas
+}
+
+// Lógica de deduplicação
+// Criar Map para agrupar attendees por deal_id
+const leadsByDeal = new Map<string, {
+  deal_id: string;
+  status: string;
+  r2_status: string;
+  scheduled_at: string;
+}>();
+
+meetings?.forEach(meeting => {
+  attendees.forEach(att => {
+    const key = att.deal_id || att.id; // Usar ID se não tiver deal
+    const existing = leadsByDeal.get(key);
+    
+    // Manter o registro mais recente ou o mais relevante
+    if (!existing || new Date(meeting.scheduled_at) > new Date(existing.scheduled_at)) {
+      leadsByDeal.set(key, {
+        deal_id: key,
+        status: att.status,
+        r2_status: statusMap.get(att.r2_status_id) || '',
+        scheduled_at: meeting.scheduled_at
+      });
+    }
+  });
+});
+
+// Total = leads únicos
+const totalLeads = leadsByDeal.size;
+
+// Contar por status (usando leads únicos)
+let desistentes = 0, reembolsos = 0, reprovados = 0, proximaSemana = 0, noShow = 0, aprovados = 0;
+
+leadsByDeal.forEach(lead => {
+  if (lead.r2_status.includes('desistente')) desistentes++;
+  else if (lead.r2_status.includes('reembolso')) reembolsos++;
+  // ... etc
+});
+
+// Leads ativos = total - perdidos
+const leadsPerdidos = desistentes + reembolsos + reprovados + proximaSemana + noShow;
+const leadsAtivos = totalLeads - leadsPerdidos;
 ```
 
-**Depois:**
-```typescript
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
-  queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
-  queryClient.invalidateQueries({ queryKey: ['r2-carrinho-data'] });
-  queryClient.invalidateQueries({ queryKey: ['r2-carrinho-kpis'] });
-  queryClient.invalidateQueries({ queryKey: ['r2-fora-carrinho-data'] });
-  toast.success('Atualizado');
-},
-```
+### R2MetricsPanel.tsx - Nova Exibição
 
-Também aplicar a mesma correção em todas as funções do arquivo:
-- `useBatchUpdateR2Attendees` (linha 66-69)
-- `useQuickUpdateAttendeeStatus` (linha 93-95)
-- `useRemoveR2Attendee` (linha 116-119)
-- `useCancelR2Meeting` (linha 149-152)
-- `useRestoreR2Meeting` (linha 174-176)
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LEADS DO CARRINHO                                                           │
+├─────────────┬─────────────┬───────────┬───────────┬───────────┬─────────────┤
+│ Total Leads │ No Carrinho │ Desist.   │ Reemb.    │ Reprov.   │ ...         │
+│     54      │     42      │     0     │     6     │     0     │             │
+│  (únicos)   │  (ativos)   │           │           │           │             │
+└─────────────┴─────────────┴───────────┴───────────┴───────────┴─────────────┘
+```
 
 ---
 
 ## Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Marcar "Aprovado" não atualiza Carrinho R2 | Carrinho R2 atualiza automaticamente |
-| KPI "Aprovados" não incrementa | KPI incrementa imediatamente (46 → 47) |
-| Lead não aparece na aba "Aprovados" | Lead aparece instantaneamente |
-| Requer refresh manual da página | Tudo sincronizado sem refresh |
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Total Leads | 80 (inflado) | ~54 (únicos) |
+| No Carrinho | Não existia | ~42 (ativos) |
+| Perdidos % | Calculado sobre 80 | Calculado sobre 54 |
+
+### Lógica de Deduplicação
+
+```text
+Para cada lead (deal_id):
+1. Se tem múltiplas reuniões → manter a mais recente
+2. Se foi reagendado → contar como 1 lead com o status atual
+3. Se fez no-show e depois participou → contar como 1 lead (status atual)
+```
 
 ---
 
-## Impacto
+## Impacto nas Outras Métricas
 
-Esta correção garante que qualquer alteração de status R2 (Aprovado, Reprovado, Desistente, etc.) seja refletida imediatamente em:
-- KPIs do Carrinho R2 (contadores superiores)
-- Aba "Todas R2s"
-- Aba "Aprovados"
-- Aba "Fora do Carrinho"
-- Métricas gerais
+| Métrica | Impacto |
+|---------|---------|
+| Desistentes | Agora conta leads únicos |
+| Reembolsos | Agora conta leads únicos |
+| No-Show | Exclui reagendados corretamente |
+| Aprovados | Já estava deduplicado (confirmado) |
+| % Perdidos | Agora usa base correta (total único) |
+
