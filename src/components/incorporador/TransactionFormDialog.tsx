@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,21 +21,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "@/hooks/use-toast";
 import { useCreateTransaction, useUpdateTransaction } from "@/hooks/useHublaTransactions";
-import { PRECO_REFERENCIA } from "@/lib/precosReferencia";
-
-const PRODUCTS = [
-  { code: "A000", name: "A000 - Contrato", price: 497 },
-  { code: "A001", name: "A001 - MCF INCORPORADOR COMPLETO", price: 14500 },
-  { code: "A002", name: "A002 - MCF INCORPORADOR BÁSICO", price: 7500 },
-  { code: "A003", name: "A003 - MCF Plano Anticrise Completo", price: 7503 },
-  { code: "A004", name: "A004 - MCF Plano Anticrise Básico", price: 5503 },
-  { code: "A005", name: "A005 - MCF P2", price: 0 },
-  { code: "A008", name: "A008 - The CLUB", price: 5000 },
-  { code: "A009", name: "A009 - MCF INCORPORADOR + THE CLUB", price: 19500 },
-];
+import { useProductConfigurations } from "@/hooks/useProductConfigurations";
 
 const formSchema = z.object({
-  product_code: z.string().min(1, "Selecione um produto"),
+  product_name: z.string().min(1, "Selecione um produto"),
   customer_name: z.string().min(1, "Nome é obrigatório"),
   customer_email: z.string().email("Email inválido"),
   customer_phone: z.string().optional(),
@@ -78,6 +67,21 @@ export function TransactionFormDialog({
 }: TransactionFormDialogProps) {
   const createMutation = useCreateTransaction();
   const updateMutation = useUpdateTransaction();
+  
+  // Fetch products from database
+  const { data: allProducts, isLoading: isLoadingProducts } = useProductConfigurations();
+  
+  // Filter for incorporador BU and active products
+  const productsFromDB = useMemo(() => {
+    if (!allProducts) return [];
+    return allProducts
+      .filter(p => p.target_bu === 'incorporador' && p.is_active)
+      .map(p => ({
+        name: p.product_name,
+        price: p.reference_price,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allProducts]);
 
   const {
     register,
@@ -90,7 +94,7 @@ export function TransactionFormDialog({
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      product_code: "",
+      product_name: "",
       customer_name: "",
       customer_email: "",
       customer_phone: "",
@@ -105,30 +109,25 @@ export function TransactionFormDialog({
   });
 
   const useGrossOverride = watch("use_gross_override");
-
-  const selectedProductCode = watch("product_code");
+  const selectedProductName = watch("product_name");
 
   // Auto-fill price when product changes
   useEffect(() => {
-    if (selectedProductCode && mode === "create") {
-      const product = PRODUCTS.find((p) => p.code === selectedProductCode);
+    if (selectedProductName && mode === "create") {
+      const product = productsFromDB.find((p) => p.name === selectedProductName);
       if (product) {
         setValue("product_price", product.price);
       }
     }
-  }, [selectedProductCode, mode, setValue]);
+  }, [selectedProductName, productsFromDB, mode, setValue]);
 
   // Fill form when editing
   useEffect(() => {
     if (mode === "edit" && transaction && open) {
-      const productCode = PRODUCTS.find((p) =>
-        transaction.product_name?.toUpperCase().includes(p.code)
-      )?.code || "";
-
       const hasOverride = transaction.gross_override !== null && transaction.gross_override !== undefined;
 
       reset({
-        product_code: productCode,
+        product_name: transaction.product_name || "",
         customer_name: transaction.customer_name || "",
         customer_email: transaction.customer_email || "",
         customer_phone: "",
@@ -142,7 +141,7 @@ export function TransactionFormDialog({
       });
     } else if (mode === "create" && open) {
       reset({
-        product_code: "",
+        product_name: "",
         customer_name: "",
         customer_email: "",
         customer_phone: "",
@@ -159,12 +158,9 @@ export function TransactionFormDialog({
 
   const onSubmit = async (data: FormData) => {
     try {
-      const product = PRODUCTS.find((p) => p.code === data.product_code);
-      const productName = product?.name || data.product_code;
-
       if (mode === "create") {
         await createMutation.mutateAsync({
-          product_name: productName,
+          product_name: data.product_name,
           customer_name: data.customer_name,
           customer_email: data.customer_email,
           customer_phone: data.customer_phone || undefined,
@@ -178,7 +174,7 @@ export function TransactionFormDialog({
       } else if (transaction) {
         await updateMutation.mutateAsync({
           id: transaction.id,
-          product_name: productName,
+          product_name: data.product_name,
           customer_name: data.customer_name,
           customer_email: data.customer_email,
           customer_phone: data.customer_phone || undefined,
@@ -205,7 +201,7 @@ export function TransactionFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Nova Transação" : "Editar Transação"}
@@ -216,16 +212,16 @@ export function TransactionFormDialog({
           <div className="space-y-2">
             <Label>Produto *</Label>
             <Controller
-              name="product_code"
+              name="product_name"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value} onValueChange={field.onChange} disabled={isLoadingProducts}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o produto" />
+                    <SelectValue placeholder={isLoadingProducts ? "Carregando..." : "Selecione o produto"} />
                   </SelectTrigger>
-                  <SelectContent>
-                    {PRODUCTS.map((p) => (
-                      <SelectItem key={p.code} value={p.code}>
+                  <SelectContent className="max-h-60">
+                    {productsFromDB.map((p) => (
+                      <SelectItem key={p.name} value={p.name}>
                         {p.name}
                       </SelectItem>
                     ))}
@@ -233,8 +229,8 @@ export function TransactionFormDialog({
                 </Select>
               )}
             />
-            {errors.product_code && (
-              <p className="text-sm text-destructive">{errors.product_code.message}</p>
+            {errors.product_name && (
+              <p className="text-sm text-destructive">{errors.product_name.message}</p>
             )}
           </div>
 
