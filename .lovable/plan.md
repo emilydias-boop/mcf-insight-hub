@@ -1,191 +1,106 @@
 
+Objetivo
+- Eliminar o “Carregando…” infinito (tela do ProtectedRoute) e garantir que o app sempre:
+  1) mostra o /auth quando não tem sessão
+  2) entra no app quando tem sessão
+  3) se o banco/roles/profiles estiver lento, não trava a UI (carrega em “modo degradado” e tenta completar depois)
 
-# Plano de Limpeza e Otimização do Sistema
+O que vimos / hipótese mais provável
+- A tela “Carregando…” que você printou é exatamente a UI do `ProtectedRoute`.
+- O `ProtectedRoute` fica preso quando `useAuth().loading` nunca vira `false`.
+- No `AuthContext`, hoje o `loading` só vira `false` depois de completar (ou falhar) chamadas ao banco:
+  - `profiles` ( `.single()` ) + `user_roles`
+- Se o Postgres/Supabase estiver intermitente ou lento (timeout/544, picos de carga, etc.), essas chamadas podem demorar muito (ou “pendurar” tempo suficiente para parecer travamento). Resultado: `loading` fica `true` e o app não sai do spinner.
 
-## Diagnóstico Realizado
+Estratégia de correção (robusta)
+1) Separar “carregamento de sessão” de “carregamento de perfil/roles”
+- Hoje: `loading` = sessão + profile + roles (tudo junto) → trava UI quando profile/roles atrasam
+- Proposto:
+  - `authLoading` (rápido): só valida “tem sessão?” e atualiza `user/session`
+  - `roleLoading` (lento): busca perfil/roles em background com timeout e retry
+- O `ProtectedRoute` deve depender APENAS do `authLoading` (não do `roleLoading`).
 
-Fiz uma varredura completa do sistema e identifiquei **3 categorias principais de problemas**:
+2) Sempre encerrar o loading da rota em poucos segundos (timeout hard)
+- Implementar um “watchdog” no `AuthProvider`:
+  - Se após X segundos (ex.: 6–10s) a inicialização não terminou, forçar:
+    - `authLoading = false`
+    - se não houver user -> direcionar para `/auth`
+    - se houver user -> liberar o app com role fallback e mostrar alerta “modo degradado”
+- Isso impede que qualquer falha externa deixe o app preso para sempre.
 
-| Categoria | Quantidade | Impacto |
-|-----------|------------|---------|
-| Hooks não utilizados | 8+ arquivos | Código morto, confusão |
-| Edge functions obsoletas | 15+ funções | Deploy desnecessário, custos |
-| Polling excessivo | 29 hooks com refetchInterval | Sobrecarga do banco de dados |
+3) Não bloquear onAuthStateChange com fetch pesado
+- Manter o callback do `onAuthStateChange` “leve”:
+  - Atualizar estado de sessão (`setSession`, `setUser`) e encerrar `authLoading`
+  - Disparar `fetchUserRoles` e `fetchProfileAccessStatus` de forma assíncrona e cancelável (ou com timeout).
+- Importante: isso segue a boa prática de evitar “deadlocks” por chamadas Supabase dentro do fluxo crítico de auth.
 
----
+4) Timeouts reais nas queries “críticas”
+- Envolver chamadas `profiles` e `user_roles` em `Promise.race([... , timeoutPromise])`
+- Se estourar timeout:
+  - aplicar fallback seguro (ex.: role = viewer)
+  - registrar log (console.warn)
+  - mostrar toast “Servidor lento — carregamos com acesso básico, tentando sincronizar…”
+  - disparar retry com backoff (ex.: 3 tentativas: 2s, 5s, 10s)
 
-## 1. Hooks Órfãos (Não Utilizados)
+5) Melhorar UX do “Carregando…”
+- Em `ProtectedRoute`, trocar spinner “mudo” por:
+  - Texto: “Carregando sua sessão…”
+  - Após 8s: mostrar bloco com botões:
+    - “Tentar novamente” (recarrega o app)
+    - “Ir para login” (navigate /auth e opcionalmente limpar sessão local)
+    - “Limpar sessão” (supabase.auth.signOut + limpar localStorage específico do supabase, com cuidado)
+- Isso reduz suporte/manual quando algo externo falha.
 
-Hooks criados mas **nunca importados** em nenhum componente:
+6) Instrumentação mínima para diagnóstico (sem expor dados sensíveis)
+- Adicionar logs controlados (somente console, sem tokens):
+  - Tempo do `getSession`
+  - Tempo da query `profiles`
+  - Tempo da query `user_roles`
+  - Se caiu em timeout e quantas tentativas
+- (Opcional) Criar um “Health Badge” no canto (somente admin) indicando: Auth OK / Roles delayed / DB slow.
 
-| Arquivo | Última referência | Ação |
-|---------|-------------------|------|
-| `useDirectorKPIsFromMetrics.ts` | Nenhuma | REMOVER |
-| `useSyncSdrKpis.ts` | Nenhuma | REMOVER |
-| `useAgendamentosCreatedToday.ts` | Nenhuma | REMOVER |
-| `useFunnelData.ts` | Apenas auto-referência | REMOVER |
-| `useUpdateBookedAt.ts` | Nenhuma | REMOVER |
+Arquivos envolvidos (mudanças previstas)
+- `src/contexts/AuthContext.tsx`
+  - Introduzir `authLoading` e `roleLoading` (ou manter `loading` como authLoading e adicionar `roleLoading`)
+  - Refatorar `handleSession` para:
+    - atualizar `user/session` e encerrar `authLoading` cedo
+    - buscar profile/roles em background com timeout, retry e fallback
+  - Implementar watchdog global de inicialização
+- `src/components/auth/ProtectedRoute.tsx`
+  - Usar `authLoading` (ou o `loading` re-semantizado para authLoading)
+  - UX de timeout: botões de ação e mensagem clara
+- (Opcional) `src/components/ErrorBoundary.tsx`
+  - Manter, mas adicionar orientação quando o problema for “backend lento” (não exceção)
+- (Opcional) `src/App.tsx`
+  - Verificar se existe algum initializer que deveria depender de `user`/auth (ex.: PriceCacheInitializer), garantindo que ele não reintroduza travas.
 
-**Total: 5 hooks órfãos identificados**
+Critérios de aceite (o que vamos validar)
+1) Sem sessão:
+- Abrir “/” deve ir para “/auth” rapidamente (sem spinner infinito).
+2) Com sessão válida:
+- Abrir “/” deve entrar no app em poucos segundos mesmo se roles/profiles estiverem lentos.
+3) Banco instável:
+- App não fica preso; entra em modo degradado, exibe aviso e tenta recuperar roles em background.
+4) Regressão zero:
+- Login/Logout continuam funcionando.
+- Guardas de rota (RoleGuard/ResourceGuard) continuam funcionando quando roles carregarem; enquanto não carregarem, usar fallback conservador (viewer) sem travar.
 
----
+Riscos e mitigação
+- Risco: liberar app antes de carregar roles pode mostrar menu/rotas que depois devem ser bloqueadas.
+  - Mitigação: enquanto `roleLoading=true`, tratar `role` como ‘viewer’ (conservador) e/ou esconder itens sensíveis até roles carregarem.
+- Risco: loops de retry gerando carga.
+  - Mitigação: backoff + limite de tentativas + cancelar se usuário deslogar/trocar sessão.
 
-## 2. Edge Functions de Correção One-Time
+Sequência de implementação
+1) Refatorar AuthContext: separar loading, aplicar timeouts e watchdog.
+2) Ajustar ProtectedRoute para novo estado e UX de timeout.
+3) Testes manuais:
+   - Aba anônima (sem sessão)
+   - Login normal
+   - Recarregar F5 com sessão
+   - Simular lentidão (reduzir rede no DevTools) e validar que não trava
+4) (Opcional) adicionar pequena telemetria de tempo (somente console).
 
-Functions criadas para correções pontuais que **não são mais necessárias**:
-
-| Função | Propósito | Ação |
-|--------|-----------|------|
-| `fix-ads-cost` | Corrigir custo de ads específico | REMOVER |
-| `fix-csv-orderbumps` | Processar order bumps de CSV | REMOVER |
-| `fix-hubla-values` | Reprocessar valores Hubla | REMOVER |
-| `fix-hubla-discrepancies` | Corrigir discrepâncias | REMOVER |
-| `fix-reprocessed-activities` | Corrigir atividades | REMOVER |
-| `backfill-deal-activities` | Preenchimento inicial | MANTER (pode ser útil) |
-| `backfill-deal-owners` | Preenchimento inicial | MANTER (pode ser útil) |
-| `backfill-deal-tasks` | Preenchimento inicial | MANTER (pode ser útil) |
-| `backfill-orphan-owners` | Preenchimento inicial | MANTER (pode ser útil) |
-| `reprocess-hubla-events` | Reprocessar eventos | AVALIAR (usado ocasionalmente?) |
-| `reprocess-hubla-webhooks` | Reprocessar webhooks | AVALIAR (usado ocasionalmente?) |
-| `reprocess-failed-webhooks` | Reprocessar falhas | MANTER (útil para erros) |
-| `reprocess-failed-webhooks-cron` | Cron de reprocessamento | MANTER (automação) |
-| `reprocess-missing-activities` | Reprocessar atividades | AVALIAR |
-| `reprocess-contract-payments` | Reprocessar pagamentos | MANTER (usado recentemente) |
-
-**Total: 5 functions para remover imediatamente, 4 para avaliar**
-
----
-
-## 3. Otimização de Polling (refetchInterval)
-
-### Problema Atual
-29 hooks com `refetchInterval: 30000` (30 segundos) criando **~60 queries/minuto** por usuário.
-
-### Classificação por Criticidade
-
-| Nível | Intervalo Recomendado | Hooks |
-|-------|----------------------|-------|
-| **Alta** | 30s (manter) | `useWebhookLogs`, `useMeetingsPendentesHoje` |
-| **Média** | 60s | `useR2MetricsData`, `useSdrMetricsV2`, `useCloserR2Metrics` |
-| **Baixa** | 120s | `useWeeklyMetrics`, `useDirectorKPIs`, `useEvolutionData` |
-| **Muito Baixa** | 300s | `useChairmanMetrics` (já está correto), `useCourseCRM` |
-
-### Hooks para Ajustar
-
-```text
-30s → 60s:
-- useR2MetricsData
-- useSdrMetricsV2
-- useSdrMetricsFromAgenda
-- useCloserR2Metrics
-- useSDRR2Metrics
-- useCloserCarrinhoMetrics
-- useSDRCarrinhoMetrics
-
-30s → 120s:
-- useWeeklyMetrics (2 lugares)
-- useEvolutionData (remove refetch - dados históricos)
-- useA010Sales
-- useHublaTransactions (3 lugares)
-- useUnlinkedTransactions
-- useUnlinkedContracts
-- useIncorporadorTransactions
-- useR2CarrinhoVendas
-- useAutomationLogs
-- useCoursesSales
-```
-
-**Impacto estimado**: Redução de ~60% nas queries de polling
-
----
-
-## 4. Resumo das Ações
-
-### Fase 1: Remoção Imediata (Baixo Risco)
-
-| Tipo | Arquivos | Ação |
-|------|----------|------|
-| Hooks órfãos | 5 arquivos | Deletar |
-| Edge functions fix-* | 5 funções | Deletar e undeploy |
-
-### Fase 2: Otimização de Performance
-
-| Ação | Arquivos afetados |
-|------|-------------------|
-| Aumentar refetchInterval | ~20 hooks |
-| Adicionar staleTime | Hooks que não têm |
-
-### Fase 3: Avaliação Posterior
-
-| Item | Decisão necessária |
-|------|-------------------|
-| Edge functions reprocess-* | Confirmar se ainda são usadas |
-| Edge functions backfill-* | Manter para casos especiais |
-
----
-
-## Arquivos a Remover
-
-### Hooks (src/hooks/)
-```text
-useDirectorKPIsFromMetrics.ts
-useSyncSdrKpis.ts
-useAgendamentosCreatedToday.ts
-useFunnelData.ts
-useUpdateBookedAt.ts
-```
-
-### Edge Functions (supabase/functions/)
-```text
-fix-ads-cost/
-fix-csv-orderbumps/
-fix-hubla-values/
-fix-hubla-discrepancies/
-fix-reprocessed-activities/
-```
-
----
-
-## Arquivos a Modificar (Polling)
-
-| Arquivo | Mudança |
-|---------|---------|
-| `useWeeklyMetrics.ts` | 30s → 120s |
-| `useR2MetricsData.ts` | 60s → 90s |
-| `useHublaTransactions.ts` | 30s → 60s |
-| `useA010Sales.ts` | 30s → 60s |
-| `useEvolutionData.ts` | Remover refetchInterval (dados históricos) |
-| `useCoursesSales.ts` | 30s → 60s |
-| `useIncorporadorTransactions.ts` | 30s → 60s |
-| `useUnlinkedTransactions.ts` | 30s → 60s |
-| `useUnlinkedContracts.ts` | 30s → 60s |
-| `useR2CarrinhoVendas.ts` | 30s → 60s |
-| `useCloserCarrinhoMetrics.ts` | 30s → 60s |
-| `useSDRCarrinhoMetrics.ts` | 30s → 60s |
-| `useCloserR2Metrics.ts` | 30s → 60s |
-| `useSDRR2Metrics.ts` | 30s → 60s |
-| `useSdrMetricsV2.ts` | 60s (já está) |
-| `useSdrMetricsFromAgenda.ts` | 60s (já está) |
-| `useAutomationLogs.ts` | 30s → 60s |
-
----
-
-## Resultado Esperado
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Hooks órfãos | 5+ | 0 |
-| Edge functions obsoletas | 5+ | 0 |
-| Queries de polling/min | ~60 | ~25 |
-| Tempo de carregamento | Lento | Mais rápido |
-| Timeouts do banco | Frequentes | Raros |
-
----
-
-## Observações Técnicas
-
-1. **Não remover** edge functions de backfill - podem ser úteis para migrações futuras
-2. **Manter** functions de reprocess-failed - são automações importantes
-3. **Testar** após cada fase para garantir que nada quebrou
-4. A limpeza de hooks órfãos é segura pois não há imports
+Observação importante
+- Como você relatou que é “sempre” e “nos dois ambientes”, isso é forte indício de deadlock/espera indefinida no fluxo de auth (não somente “peso de dados”). A mudança acima é o padrão mais seguro para nunca mais travar no spinner, mesmo com o Supabase lento.
 
