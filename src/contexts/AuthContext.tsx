@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 
 type AppRole = 'admin' | 'manager' | 'viewer' | 'sdr' | 'closer' | 'coordenador' | 'closer_sombra' | 'financeiro' | 'rh';
 
-// Prioridade de roles: menor número = maior prioridade
 const ROLE_PRIORITY: Record<string, number> = {
   admin: 1,
   manager: 2,
@@ -19,12 +18,18 @@ const ROLE_PRIORITY: Record<string, number> = {
   viewer: 9,
 };
 
+// Timeout constants
+const AUTH_TIMEOUT_MS = 5000; // 5s for session check
+const ROLE_TIMEOUT_MS = 8000; // 8s for role fetching
+const WATCHDOG_TIMEOUT_MS = 10000; // 10s absolute max
+
 interface AuthState {
   user: User | null;
   session: Session | null;
   role: AppRole | null;
   allRoles: AppRole[];
-  loading: boolean;
+  loading: boolean; // This is now authLoading (session only)
+  roleLoading: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -38,105 +43,127 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper: Promise with timeout
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+  ]);
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [allRoles, setAllRoles] = useState<AppRole[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // authLoading - only session
+  const [roleLoading, setRoleLoading] = useState(false);
   const navigate = useNavigate();
   
-  // Anti-race: versão incremental para evitar respostas stale
   const roleLoadVersion = useRef(0);
-  // Flag para evitar processamento duplo
   const initialSessionHandled = useRef(false);
+  const initStartTime = useRef(Date.now());
 
+  // Fetch roles with timeout
   const fetchUserRoles = async (userId: string): Promise<{ primaryRole: AppRole | null; roles: AppRole[] }> => {
-    // Buscar TODAS as roles do usuário (sem .single())
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
+    const startTime = Date.now();
+    console.log('[Auth] Fetching roles for user:', userId);
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
 
-    if (error) {
-      console.error('Error fetching user roles:', error);
+      console.log(`[Auth] Roles query took ${Date.now() - startTime}ms`);
+
+      if (error) {
+        console.error('[Auth] Error fetching user roles:', error);
+        return { primaryRole: null, roles: [] };
+      }
+
+      if (!data || data.length === 0) {
+        return { primaryRole: null, roles: [] };
+      }
+
+      const roles = data.map(r => r.role as AppRole);
+      const sortedRoles = [...roles].sort((a, b) => 
+        (ROLE_PRIORITY[a] || 99) - (ROLE_PRIORITY[b] || 99)
+      );
+      
+      return { primaryRole: sortedRoles[0], roles };
+    } catch (err) {
+      console.error('[Auth] Exception fetching roles:', err);
       return { primaryRole: null, roles: [] };
     }
-
-    if (!data || data.length === 0) {
-      return { primaryRole: null, roles: [] };
-    }
-
-    // Mapear todas as roles
-    const roles = data.map(r => r.role as AppRole);
-    
-    // Ordenar por prioridade (menor = maior prioridade)
-    const sortedRoles = [...roles].sort((a, b) => 
-      (ROLE_PRIORITY[a] || 99) - (ROLE_PRIORITY[b] || 99)
-    );
-    
-    // Role principal = maior prioridade
-    return { primaryRole: sortedRoles[0], roles };
   };
 
-  // Função unificada para processar sessão - evita corrida
-  const handleSession = async (newSession: Session | null) => {
-    // Incrementa versão para invalidar chamadas anteriores
-    const myVersion = ++roleLoadVersion.current;
+  // Check if user is blocked - with timeout
+  const checkUserBlocked = async (userId: string): Promise<boolean> => {
+    const startTime = Date.now();
+    console.log('[Auth] Checking blocked status for:', userId);
     
-    if (!newSession?.user) {
-      // Usuário deslogado
-      setSession(null);
-      setUser(null);
-      setRole(null);
-      setAllRoles([]);
-      setLoading(false);
-      return;
-    }
-
-    // Atualiza sessão e usuário imediatamente
-    setSession(newSession);
-    setUser(newSession.user);
-
     try {
-      // Verificar status de acesso
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('access_status, blocked_until')
-        .eq('id', newSession.user.id)
-        .single();
+        .eq('id', userId)
+        .maybeSingle();
 
-      // Verifica se ainda é a versão mais recente antes de continuar
-      if (myVersion !== roleLoadVersion.current) {
-        return; // Outra chamada mais recente já está processando
+      console.log(`[Auth] Profile query took ${Date.now() - startTime}ms`);
+
+      if (error) {
+        console.warn('[Auth] Error checking profile:', error);
+        return false; // Allow access on error (fail-open for UX, security handled by RLS)
       }
 
-      if (profile) {
-        const isBlocked = profile.access_status === 'bloqueado' || 
-                         profile.access_status === 'desativado' ||
-                         (profile.blocked_until && new Date(profile.blocked_until) > new Date());
-        
-        if (isBlocked) {
-          await supabase.auth.signOut();
-          setUser(null);
-          setSession(null);
-          setRole(null);
-          setAllRoles([]);
-          setLoading(false);
-          toast.error('Sua conta foi bloqueada ou desativada.');
-          return;
-        }
-      }
+      if (!profile) return false;
 
-      // Buscar roles
-      const { primaryRole, roles } = await fetchUserRoles(newSession.user.id);
+      const isBlocked = profile.access_status === 'bloqueado' || 
+                       profile.access_status === 'desativado' ||
+                       (profile.blocked_until && new Date(profile.blocked_until) > new Date());
       
-      // Verifica novamente se ainda é a versão mais recente
-      if (myVersion !== roleLoadVersion.current) {
-        return; // Outra chamada mais recente já está processando
+      return isBlocked;
+    } catch (err) {
+      console.warn('[Auth] Exception checking blocked:', err);
+      return false;
+    }
+  };
+
+  // Load roles in background (non-blocking)
+  const loadRolesInBackground = async (userId: string, version: number) => {
+    setRoleLoading(true);
+    
+    try {
+      // Check blocked status with timeout
+      const isBlocked = await withTimeout(
+        checkUserBlocked(userId),
+        ROLE_TIMEOUT_MS,
+        false
+      );
+
+      if (version !== roleLoadVersion.current) return;
+
+      if (isBlocked) {
+        console.log('[Auth] User is blocked, signing out');
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setRole(null);
+        setAllRoles([]);
+        toast.error('Sua conta foi bloqueada ou desativada.');
+        return;
       }
 
-      // Aplica o estado com fallback para viewer se não houver roles
+      // Fetch roles with timeout
+      const { primaryRole, roles } = await withTimeout(
+        fetchUserRoles(userId),
+        ROLE_TIMEOUT_MS,
+        { primaryRole: 'viewer' as AppRole, roles: ['viewer' as AppRole] }
+      );
+
+      if (version !== roleLoadVersion.current) return;
+
       if (roles.length === 0) {
         setRole('viewer');
         setAllRoles(['viewer']);
@@ -144,49 +171,112 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setRole(primaryRole);
         setAllRoles(roles);
       }
+      
+      console.log('[Auth] Roles loaded:', { primaryRole, roles });
     } catch (error) {
-      console.error('Error handling session:', error);
-      // Em caso de erro, verifica versão e aplica fallback
-      if (myVersion === roleLoadVersion.current) {
+      console.error('[Auth] Error in loadRolesInBackground:', error);
+      if (version === roleLoadVersion.current) {
         setRole('viewer');
         setAllRoles(['viewer']);
+        toast.warning('Servidor lento — carregamos com acesso básico.');
       }
     } finally {
-      // Só atualiza loading se ainda for a versão correta
-      if (myVersion === roleLoadVersion.current) {
-        setLoading(false);
+      if (version === roleLoadVersion.current) {
+        setRoleLoading(false);
       }
     }
   };
 
+  // Handle session - FAST path (no blocking DB calls)
+  const handleSession = (newSession: Session | null) => {
+    const myVersion = ++roleLoadVersion.current;
+    const elapsed = Date.now() - initStartTime.current;
+    console.log(`[Auth] handleSession called after ${elapsed}ms, session:`, !!newSession);
+    
+    if (!newSession?.user) {
+      setSession(null);
+      setUser(null);
+      setRole(null);
+      setAllRoles([]);
+      setLoading(false);
+      setRoleLoading(false);
+      console.log('[Auth] No session, auth complete');
+      return;
+    }
+
+    // IMMEDIATELY update session and user - this unblocks ProtectedRoute
+    setSession(newSession);
+    setUser(newSession.user);
+    setLoading(false); // Auth is done! User has valid session
+    console.log('[Auth] Session set, authLoading=false');
+
+    // Apply default role while loading real roles
+    setRole('viewer');
+    setAllRoles(['viewer']);
+
+    // Load roles in background (non-blocking) using setTimeout(0)
+    setTimeout(() => {
+      loadRolesInBackground(newSession.user.id, myVersion);
+    }, 0);
+  };
+
   useEffect(() => {
-    // Setup auth state listener - ÚNICA FONTE DE VERDADE
+    initStartTime.current = Date.now();
+    console.log('[Auth] Initializing auth...');
+
+    // WATCHDOG: Force loading=false after absolute max time
+    const watchdogTimer = setTimeout(() => {
+      if (loading) {
+        console.warn('[Auth] Watchdog triggered! Forcing loading=false');
+        setLoading(false);
+        // If we have no user by now, they'll be redirected to /auth
+      }
+    }, WATCHDOG_TIMEOUT_MS);
+
+    // Setup auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
-        // Para INITIAL_SESSION, só processa se ainda não foi tratado
+        console.log(`[Auth] onAuthStateChange: ${event}`);
+        
         if (event === 'INITIAL_SESSION') {
           if (initialSessionHandled.current) {
-            return; // Já foi tratado pelo getSession
+            return;
           }
           initialSessionHandled.current = true;
         }
         
-        // Para outros eventos (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED),
-        // sempre processa
         handleSession(newSession);
       }
     );
 
-    // Busca sessão inicial - caso onAuthStateChange demore
-    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      // Só processa se INITIAL_SESSION ainda não foi tratado
-      if (!initialSessionHandled.current) {
-        initialSessionHandled.current = true;
-        handleSession(existingSession);
+    // Also try getSession (with timeout) as backup
+    const getSessionWithTimeout = async () => {
+      try {
+        const result = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_TIMEOUT_MS,
+          { data: { session: null }, error: null }
+        );
+        
+        if (!initialSessionHandled.current) {
+          initialSessionHandled.current = true;
+          handleSession(result.data.session);
+        }
+      } catch (err) {
+        console.error('[Auth] getSession error:', err);
+        if (!initialSessionHandled.current) {
+          initialSessionHandled.current = true;
+          setLoading(false);
+        }
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    getSessionWithTimeout();
+
+    return () => {
+      clearTimeout(watchdogTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -199,47 +289,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) throw error;
       
-      // Verificar access_status e blocked_until antes de permitir acesso
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('access_status, blocked_until')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileError && profile) {
-        // Verificar se conta está bloqueada
-        if (profile.access_status === 'bloqueado') {
-          await supabase.auth.signOut();
-          throw new Error('Sua conta está bloqueada. Entre em contato com o administrador.');
-        }
-        
-        // Verificar se conta está desativada
-        if (profile.access_status === 'desativado') {
-          await supabase.auth.signOut();
-          throw new Error('Sua conta foi desativada.');
-        }
-        
-        // Verificar bloqueio temporário
-        if (profile.blocked_until && new Date(profile.blocked_until) > new Date()) {
-          await supabase.auth.signOut();
-          const blockedDate = new Date(profile.blocked_until).toLocaleString('pt-BR');
-          throw new Error(`Sua conta está temporariamente bloqueada até ${blockedDate}.`);
-        }
+      // Check blocked status
+      const isBlocked = await checkUserBlocked(authData.user.id);
+      
+      if (isBlocked) {
+        await supabase.auth.signOut();
+        throw new Error('Sua conta está bloqueada. Entre em contato com o administrador.');
       }
 
-      // Atualizar last_login_at
+      // Update last_login_at
       await supabase
         .from('profiles')
         .update({ last_login_at: new Date().toISOString() })
         .eq('id', authData.user.id);
       
-      // Buscar role do usuário para redirect condicional
+      // Fetch role for redirect
       const { primaryRole: userRole, roles } = await fetchUserRoles(authData.user.id);
       setAllRoles(roles.length > 0 ? roles : ['viewer']);
       
       toast.success('Login realizado com sucesso!');
       
-      // SDR redireciona para Minhas Reuniões
       if (userRole === 'sdr') {
         navigate('/sdr/minhas-reunioes');
       } else {
@@ -284,7 +353,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     try {
       const { error } = await supabase.auth.signOut();
-      // Ignora erro de sessão não encontrada - significa que já está deslogado
       if (error && !error.message.includes('session missing') && 
           !error.message.includes('session_not_found')) {
         console.warn('Logout warning:', error.message);
@@ -292,7 +360,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       console.warn('Logout error (ignored):', error.message);
     } finally {
-      // SEMPRE limpa estado local e redireciona
       setUser(null);
       setSession(null);
       setRole(null);
@@ -303,16 +370,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const hasRole = (requiredRole: AppRole): boolean => {
-    // Verificar em TODAS as roles do usuário
     if (allRoles.length === 0) return false;
-    
-    // Admin has access to everything
     if (allRoles.includes('admin')) return true;
-    
-    // Manager can access viewer permissions too
     if (allRoles.includes('manager') && requiredRole === 'viewer') return true;
-    
-    // Verificar se o usuário tem a role requerida em qualquer uma das suas roles
     return allRoles.includes(requiredRole);
   };
 
@@ -345,6 +405,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role,
         allRoles,
         loading,
+        roleLoading,
         signIn,
         signUp,
         signOut,
