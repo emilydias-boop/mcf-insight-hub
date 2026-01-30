@@ -1,73 +1,84 @@
 
-# Plano: Corrigir Filtro de Transações do Incorporador
+## Objetivo
+Eliminar o erro do Supabase/PostgREST:
 
-## Problema
-A migração anterior filtrou por `product_category = 'incorporador'`, mas isso está errado. O filtro correto deve usar a tabela `product_configurations` que vocês criaram em `/admin/produtos`, onde cada produto tem um `target_bu` definindo a qual Business Unit ele pertence.
+> “Could not choose the best candidate function between … get_all_hubla_transactions(…) …”
 
-## Números Corretos
+e garantir que **/bu-incorporador/transacoes** volte a carregar normalmente, usando como “fonte da verdade” os produtos configurados em **/admin/produtos** (tabela `product_configurations`).
 
-| Filtro | Total de Transações |
-|--------|---------------------|
-| Filtro errado (`product_category`) | 433 |
-| Filtro correto (`product_configurations`) | ~2.005 (janeiro/2026) |
-| Histórico completo | 19.937 |
+---
 
-## Produtos Cadastrados para Incorporador (19 produtos ativos)
+## O que está acontecendo (causa raiz)
+Hoje existem **duas funções diferentes no banco com o mesmo nome** `public.get_all_hubla_transactions`, com **os mesmos tipos de parâmetros**, só que em **ordens diferentes**:
 
-Conforme a tabela `product_configurations` com `target_bu = 'incorporador'`:
+1) `get_all_hubla_transactions(p_start_date timestamptz, p_end_date timestamptz, p_search text, p_limit int)`  
+2) `get_all_hubla_transactions(p_search text, p_start_date timestamptz, p_end_date timestamptz, p_limit int)`
 
-- 000 - Contrato
-- A000 - Contrato
-- A000 - Pré-Reserva Plano Anticrise
-- A001 - MCF INCORPORADOR COMPLETO
-- A001 - MCF INCORPORADOR COMPLETO + THE CLUB
-- A002 - MCF INCORPORADOR BÁSICO
-- A003 - MCF Plano Anticrise Completo
-- A004 - MCF Plano Anticrise Básico
-- A005 - MCF P2
-- A006 - Renovação Parceiro MCF
-- A008 - The CLUB
-- A009 - MCF INCORPORADOR + THE CLUB
-- A009 - MCF INCORPORADOR COMPLETO + THE CLUB
-- A009 - MCF INCORPORADOR COMPLETO + THE CLUB - 1 de 12
-- A009 - Renovação Parceiro MCF
-- A010 - Construa para Vender sem Dinheiro
-- A010 - Consultoria Construa para Vender sem Dinheiro + Treinamento
-- A010 - MCF Fundamentos
-- ACESSO VITALICÍO
+Quando o frontend chama `supabase.rpc('get_all_hubla_transactions', { p_search, p_start_date, ... })`, o PostgREST tenta resolver qual “overload” usar e **falha por ambiguidade** (erro PGRST203).
 
-## Solução
+Observação importante: eu confirmei via consulta no `pg_proc` que as 2 assinaturas existem ao mesmo tempo — uma delas ainda contém o filtro antigo por `product_category='incorporador'`.
 
-Modificar a função `get_all_hubla_transactions` para:
+---
 
-1. Fazer JOIN com `product_configurations`
-2. Filtrar por `target_bu = 'incorporador'`
-3. Manter exclusão de `newsale-` (duplicados)
+## Resultado esperado após o ajuste
+- A tela **/bu-incorporador/transacoes** deixa de dar erro e volta a listar transações.
+- O filtro de “quais produtos entram” fica **100% alinhado** ao cadastro da página **/admin/produtos**:
+  - só entra se existir `product_configurations.is_active = true` e `target_bu='incorporador'` e o nome do produto bater com `hubla_transactions.product_name`.
+- Mantém a remoção dos duplicados `newsale-%`.
 
-## Detalhes Técnicos
+---
 
-### Nova Lógica SQL
+## Estratégia de correção (simples e definitiva)
+### 1) Padronizar para UMA única assinatura
+Vamos manter **apenas uma** versão da função, com uma assinatura “canônica” (e daí em diante, nunca mais criar outra com mesma lista de tipos).
 
-```sql
-FROM hubla_transactions ht
-WHERE ht.sale_status IN ('completed', 'refunded')
-  AND ht.source IN ('hubla', 'manual')
-  AND ht.hubla_id NOT LIKE 'newsale-%'
-  AND EXISTS (
-    SELECT 1 FROM product_configurations pc 
-    WHERE pc.target_bu = 'incorporador' 
-      AND pc.is_active = true 
-      AND ht.product_name = pc.product_name
-  )
-  -- filtros de data e busca...
-```
+Sugestão (compatível com o frontend atual que já usa `p_search` etc.):
+- `public.get_all_hubla_transactions(p_search text default null, p_start_date timestamptz default null, p_end_date timestamptz default null, p_limit integer default 5000)`
 
-### Vantagens desta abordagem
+### 2) Remover as versões antigas (dropar overloads)
+Na migração SQL vamos:
+- `DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(timestamp with time zone, timestamp with time zone, text, integer);`
+- `DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamp with time zone, timestamp with time zone, integer);`
 
-1. **Dinâmico**: Quando você adicionar um novo produto em `/admin/produtos` com `target_bu = 'incorporador'`, ele aparece automaticamente
-2. **Centralizado**: A configuração fica em um só lugar (tabela `product_configurations`)
-3. **Consistente**: Usa a mesma fonte de verdade que outras partes do sistema
+E então recriar **apenas** a versão canônica.
 
-## Implementação
+### 3) Recriar a função com a lógica correta (product_configurations)
+A função final deve:
+- Filtrar `sale_status IN ('completed','refunded')`
+- Filtrar `source IN ('hubla','manual')` (mantendo a regra atual)
+- Excluir `hubla_id LIKE 'newsale-%'`
+- Filtrar produtos com `EXISTS (select 1 from product_configurations …)`
+- Respeitar `p_start_date`, `p_end_date`, `p_search`
+- `ORDER BY sale_date desc LIMIT p_limit`
+- Manter `SECURITY DEFINER` e `SET search_path TO 'public'` (para consistência e evitar problemas de permissões/resolução)
 
-1. Executar migração SQL para recriar a função `get_all_hubla_transactions` com JOIN na tabela `product_configurations`
+---
+
+## Passos de implementação (o que eu vou fazer quando você aprovar esta etapa no modo de execução)
+1) Criar uma nova migration em `supabase/migrations/` que:
+   - Drope as duas assinaturas da função.
+   - Recrie a função com a assinatura única e a lógica baseada em `product_configurations`.
+2) (Opcional, mas recomendado) Conferir se existe algum `GRANT EXECUTE` necessário para o papel `anon/authenticated` — normalmente Postgres mantém grants ao recriar? Nem sempre. Se necessário, incluir explicitamente `GRANT EXECUTE ON FUNCTION ... TO anon, authenticated;` na migration.
+3) Validar no preview:
+   - Abrir **/bu-incorporador/transacoes**
+   - Confirmar que o toast de erro sumiu
+   - Confirmar que há transações no período (ex: 01/01/2026 a 30/01/2026)
+4) Se ainda aparecer “0” transações:
+   - Verificar rapidamente se `hubla_transactions.product_name` está batendo exatamente com `product_configurations.product_name` (diferença de espaços/acentos/case).
+   - Se houver divergência real de nomes, a correção seguinte (segunda etapa) seria implementar um match mais robusto (ex: normalização) ou mapear por `product_code`, mas só faremos isso se ficar comprovado que o “nome exato” não é confiável.
+
+---
+
+## Riscos e como vamos evitar
+- **Risco:** Voltar a criar overload por acidente no futuro e quebrar de novo.
+  - **Mitigação:** deixar apenas 1 assinatura e seguir a regra do projeto “sem overloading ambíguo”.
+- **Risco:** Alguns produtos podem não aparecer se o nome não bater 100%.
+  - **Mitigação:** primeiro confirmar se o cadastro de produtos em admin está usando exatamente o mesmo `product_name` vindo da Hubla/manual. Se não estiver, evoluir para estratégia por `product_code`/normalização.
+
+---
+
+## Checklist de aceitação (para você validar)
+- [ ] Não aparece mais o erro “Could not choose the best candidate function…”
+- [ ] A lista mostra transações para o período selecionado
+- [ ] Produtos exibidos batem com os produtos ativos em **/admin/produtos** (target_bu incorporador)
+- [ ] Duplicados `newsale-%` não aparecem
