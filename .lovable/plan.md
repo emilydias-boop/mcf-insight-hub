@@ -1,52 +1,81 @@
 
-# Plano: Corrigir Conflito de Sobrecarga de Função
+# Plano: Simplificar Função para Mostrar Apenas Hubla e Manual
 
 ## Problema Identificado
 
-O banco de dados possui **duas versões** da função `get_all_hubla_transactions` com assinaturas diferentes:
+A chamada RPC `get_all_hubla_transactions` está retornando **HTTP 500** com erro de **timeout**:
 
-| Versão | p_start_date | p_end_date | id retorno |
-|--------|--------------|------------|------------|
-| Antiga | `text` | `text` | `text` |
-| Nova | `timestamptz` | `timestamptz` | `uuid` |
+```
+code: 57014
+message: canceling statement due to statement timeout
+```
 
-Quando o hook chama a função passando strings de data (ex: `"2026-01-01T00:00:00-03:00"`), o PostgreSQL não consegue decidir qual função usar - ambas aceitam o valor como válido.
+**Causa Raiz**: A lógica de exclusão de transações `make` duplicadas utiliza um `NOT EXISTS` com subconsulta complexa que verifica cada registro, tornando a query extremamente lenta.
+
+### Requisito do Usuário
+
+Mostrar apenas transações de fonte **`hubla`** e **`manual`** - sem incluir `make`.
 
 ---
 
 ## Solução
 
-Executar uma migração SQL para:
+Simplificar a função `get_all_hubla_transactions` para:
 
-1. **Remover a versão antiga** da função (com parâmetros `text`)
-2. **Manter apenas a versão nova** (com parâmetros `timestamptz`)
+1. Filtrar apenas `source IN ('hubla', 'manual')` 
+2. Remover toda a lógica de exclusão de `make` duplicados (não será mais necessária)
+3. Manter os filtros de busca e data existentes
 
-### SQL a Executar
+### Impacto
 
-```sql
--- Remover a versão antiga com assinatura text
-DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, text, text, integer);
-```
+| Antes | Depois |
+|-------|--------|
+| 3 fontes (hubla, manual, make) | 2 fontes (hubla, manual) |
+| Query complexa com NOT EXISTS | Query simples e rápida |
+| Timeout frequente | Resposta em ~200ms |
 
 ---
 
 ## Detalhes Técnicos
 
-A versão antiga foi criada em migrações anteriores com tipo `text` para as datas. A migração mais recente criou uma nova versão com `timestamptz`, mas não removeu a antiga.
+### Nova Definição da Função
 
-O hook `useAllHublaTransactions` passa datas como strings ISO, que podem ser interpretadas tanto como `text` quanto como `timestamptz`, causando a ambiguidade.
+A função será recriada com a seguinte lógica simplificada:
 
----
+```sql
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(...)
+RETURNS TABLE(...)
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT ...
+  FROM hubla_transactions ht
+  WHERE ht.sale_status IN ('completed', 'refunded')
+    AND ht.source IN ('hubla', 'manual')  -- Apenas hubla e manual
+    -- Filtros de busca e data...
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$$;
+```
 
-## Impacto Esperado
+### Resultado Esperado
 
-- A página de transações voltará a funcionar
-- Apenas uma função existirá no banco
-- Bruto Total mostrará o valor correto (~R$ 1.78M)
-- Transações make duplicadas serão filtradas automaticamente
+- Janeiro/2026: ~4.795 transações hubla + 16 manual = **~4.811 transações**
+- Bruto Total estimado: **~R$ 2.88M** (hubla R$ 2.76M + manual R$ 117K)
+- Query executará em menos de 1 segundo
 
 ---
 
 ## Arquivos a Modificar
 
-1. **Nova migração SQL** - DROP da função antiga com assinatura text
+1. **Nova migração SQL** - Recriar função `get_all_hubla_transactions` simplificada
+
+---
+
+## Próximos Passos
+
+Após aprovação, executarei a migração SQL que irá:
+1. Dropar a versão atual da função
+2. Criar nova versão com filtro simplificado (apenas hubla + manual)
+3. A página carregará instantaneamente as transações
