@@ -1,50 +1,82 @@
 
-Objetivo
-- Resolver definitivamente o erro “Could not choose the best candidate function…” que está impedindo a tela /bu-incorporador/transacoes de carregar e (segundo você) está bloqueando o fluxo de venda.
-- Garantir que a lista traga apenas transações com source = “hubla” e “manual”.
 
-O que eu verifiquei (logs + banco)
-1) Logs de rede do navegador mostram que o frontend está chamando:
-   POST /rest/v1/rpc/get_all_hubla_transactions
-   Body: {"p_search":null,"p_start_date":"2026-01-01T00:00:00-03:00","p_end_date":"2026-01-30T23:59:59-03:00","p_limit":5000}
-   Resposta: PGRST203 com a mensagem de ambiguidade entre duas funções.
+# Plano: Corrigir Listagem de Transações do Incorporador
 
-2) No Postgres existem duas funções públicas com o mesmo nome e mesmos tipos, porém com a ordem de parâmetros diferente:
-- public.get_all_hubla_transactions(p_search text, p_start_date timestamptz, p_end_date timestamptz, p_limit integer)
-  • Esta é a versão “pesada” (inclui source ‘make’ e lógica de deduplicação/NOT EXISTS).
-- public.get_all_hubla_transactions(p_start_date timestamptz, p_end_date timestamptz, p_search text, p_limit integer)
-  • Esta é a versão “leve” e já filtrando apenas ‘hubla’ e ‘manual’.
+## Problemas Identificados
 
-Por que o erro acontece
-- O PostgREST/Supabase RPC não consegue decidir qual versão chamar quando existem funções sobrecarregadas (mesmo nome) e o payload pode ser mapeado para ambas (apenas com ordem de parâmetros diferente). Isso gera o PGRST203 e a chamada falha.
+### Problema 1: Duplicação de linhas `newsale-`
+Na imagem você pode ver que cada venda aparece **duas vezes**:
+- Uma com bruto normal (ex: R$ 14.500,00) → Marcada como "Novo"
+- Uma com R$ 0,00 (dup) → Marcada como "Recorrente"
 
-Estratégia de correção (sem mexer no frontend)
-- Manter apenas 1 função com o nome get_all_hubla_transactions.
-- Como você quer apenas “hubla” e “manual”, vamos manter a versão leve e remover a versão pesada.
-- Resultado: acaba a ambiguidade e a RPC volta a responder.
+**Causa**: Os registros `newsale-` são pré-vendas que a Hubla envia antes do pagamento ser confirmado. Depois, chega a transação real com outro `hubla_id`. Ambos estão sendo listados.
 
-Mudança necessária no banco (migração SQL)
-1) Dropar somente a assinatura “pesada” (a que começa com p_search):
-   DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamp with time zone, timestamp with time zone, integer);
+**Dados**: De 4.911 transações no período, **1.736 são `newsale-`** e 1.734 deles são duplicados da transação real.
 
-2) Validar que sobrou apenas 1 função:
-   - Conferir em pg_proc que existe somente:
-     get_all_hubla_transactions(timestamp with time zone, timestamp with time zone, text, integer)
+### Problema 2: Produtos que não são do Incorporador
+Aparecem produtos como:
+- `Imersão: Do Zero ao Milhão na Construção` (categoria: `imersao`)
+- `A010 - Consultoria Construa para Vender` (categoria: `a010`)
+- Outros de categorias: `efeito_alavanca`, `clube_arremate`, etc.
 
-Validação pós-correção (checklist)
-1) Recarregar a rota /bu-incorporador/transacoes.
-2) Confirmar que:
-   - Não aparece mais o toast “Erro ao carregar transações”.
-   - A lista carrega transações (quando existirem no período) e a coluna “Fonte” mostra apenas “hubla” e “manual”.
-3) Confirmar no Network do browser que:
-   - A chamada /rpc/get_all_hubla_transactions retorna HTTP 200 e um array de resultados.
-4) (Opcional) Rodar um teste rápido no SQL Editor:
-   select count(*) from public.get_all_hubla_transactions(null, '2026-01-01T00:00:00-03:00'::timestamptz, '2026-01-30T23:59:59-03:00'::timestamptz, 10);
+**Causa**: A função `get_all_hubla_transactions` não filtra por `product_category = 'incorporador'`.
 
-Riscos / Observações
-- Essa correção não altera dados; apenas remove uma versão duplicada da função.
-- Se alguma outra parte do sistema dependia de “make”, ela deixará de ver esses registros via essa RPC (mas isso está alinhado ao seu pedido atual: mostrar só hubla e manual).
-- O arquivo src/integrations/supabase/types.ts provavelmente continuará mostrando “overload/union” até uma futura regeneração de tipos; isso não impede o funcionamento em runtime, mas pode confundir o TypeScript (não é a causa do erro atual).
+---
 
-Próximo passo
-- Executar a migração acima (DROP da assinatura com p_search primeiro) para eliminar a sobrecarga e destravar a chamada RPC.
+## Solução
+
+Modificar a função `get_all_hubla_transactions` para:
+
+1. **Excluir registros `newsale-`** (duplicados)
+2. **Filtrar apenas `product_category = 'incorporador'`**
+
+### Resultado Esperado
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Total transações | 4.868 | ~822 |
+| Duplicações | Sim | Não |
+| Produtos estranhos | Sim | Não |
+
+---
+
+## Detalhes Técnicos
+
+### Nova Lógica SQL
+
+```sql
+WHERE ht.sale_status IN ('completed', 'refunded')
+  AND ht.source IN ('hubla', 'manual')
+  AND ht.product_category = 'incorporador'      -- Apenas incorporador
+  AND ht.hubla_id NOT LIKE 'newsale-%'          -- Exclui newsale duplicados
+  AND (p_start_date IS NULL OR ht.sale_date >= p_start_date)
+  AND (p_end_date IS NULL OR ht.sale_date <= p_end_date)
+  -- filtros de busca...
+ORDER BY ht.sale_date DESC
+LIMIT p_limit;
+```
+
+### Produtos que serão incluídos (categoria `incorporador`)
+- A000 - Contrato (497 vendas)
+- A000 - Contrato MCF (86 vendas)
+- A001 - MCF INCORPORADOR COMPLETO (67 vendas)
+- A003 - MCF Plano Anticrise Completo (3 vendas)
+- A004 - MCF Plano Anticrise Básico (7 vendas)
+- A005 - MCF P2 (33 vendas)
+- A008 - The CLUB (1 venda)
+- A009 - MCF INCORPORADOR COMPLETO + THE CLUB (117 vendas)
+- Contrato - Sócio MCF (9 vendas)
+
+### Produtos que serão EXCLUÍDOS
+- A010 - Consultoria (categoria: `a010`)
+- Imersão: Do Zero ao Milhão (categoria: `imersao`)
+- Imersão Presencial Alphaville (categoria: `imersao`)
+- Efeito Alavanca (categoria: `efeito_alavanca`)
+- Clube do Arremate (categoria: `clube_arremate`)
+
+---
+
+## Implementação
+
+1. Executar migração SQL para recriar a função `get_all_hubla_transactions` com os novos filtros
+
