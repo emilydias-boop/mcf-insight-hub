@@ -59,10 +59,37 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
     return Array.from(uniqueDates).sort();
   }, [attendees]);
 
-  // Filter attendees: exclude those who bought (show in Vendas), apply search and filters
+  // Create set of emails/phones that already purchased (from real transactions)
+  const soldIdentifiers = useMemo(() => {
+    const set = new Set<string>();
+    vendasData.forEach(venda => {
+      if (venda.customer_email) {
+        set.add(venda.customer_email.toLowerCase());
+      }
+      if (venda.customer_phone) {
+        const normalized = venda.customer_phone.replace(/\D/g, '').slice(-11);
+        if (normalized.length >= 10) set.add(normalized);
+      }
+    });
+    return set;
+  }, [vendasData]);
+
+  // Filter attendees: exclude those who bought (manual OR real transaction), apply search and filters
   const displayedAttendees = useMemo(() => {
     return attendees
-      .filter(att => att.carrinho_status !== 'comprou') // Hide sold ones (they go to Vendas tab)
+      .filter(att => {
+        // Exclude manual status "comprou"
+        if (att.carrinho_status === 'comprou') return false;
+        
+        // Exclude if has real sale (match by email or phone)
+        const email = att.contact_email?.toLowerCase();
+        const phone = (att.attendee_phone || att.contact_phone)?.replace(/\D/g, '').slice(-11);
+        
+        if (email && soldIdentifiers.has(email)) return false;
+        if (phone && phone.length >= 10 && soldIdentifiers.has(phone)) return false;
+        
+        return true;
+      })
       .filter(att => {
         // Search filter
         if (searchTerm) {
@@ -96,7 +123,7 @@ export function R2AprovadosList({ attendees, isLoading, weekEnd }: R2AprovadosLi
         
         return true;
       });
-  }, [attendees, searchTerm, closerFilter, dateFilter]);
+  }, [attendees, soldIdentifiers, searchTerm, closerFilter, dateFilter]);
 
   const handleSetStatus = (attendeeId: string, status: 'vai_comprar' | 'comprou' | 'nao_comprou' | 'negociando' | 'quer_desistir' | null) => {
     updateStatus.mutate({ attendeeId, status });
