@@ -189,6 +189,35 @@ export function useR2CarrinhoData(weekDate: Date, filter?: 'agendadas' | 'no_sho
         }
       }
 
+      // Para aprovados, deduplicar por deal_id (manter reunião mais recente)
+      if (filter === 'aprovados') {
+        const dealMap = new Map<string, R2CarrinhoAttendee>();
+        
+        for (const att of attendees) {
+          const key = att.deal_id || att.id;
+          const existing = dealMap.get(key);
+          
+          if (!existing) {
+            dealMap.set(key, att);
+          } else {
+            const attPriority = att.meeting_status === 'completed' ? 2 : 
+                                att.meeting_status === 'rescheduled' ? 1 : 0;
+            const existingPriority = existing.meeting_status === 'completed' ? 2 :
+                                     existing.meeting_status === 'rescheduled' ? 1 : 0;
+            
+            if (attPriority > existingPriority) {
+              dealMap.set(key, att);
+            } else if (attPriority === existingPriority) {
+              if (new Date(att.scheduled_at) > new Date(existing.scheduled_at)) {
+                dealMap.set(key, att);
+              }
+            }
+          }
+        }
+        
+        return Array.from(dealMap.values());
+      }
+
       return attendees;
     },
   });
