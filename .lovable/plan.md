@@ -1,84 +1,130 @@
 
-## Objetivo
-Eliminar o erro do Supabase/PostgREST:
 
-> “Could not choose the best candidate function between … get_all_hubla_transactions(…) …”
+# Plano: Corrigir Popup de Nova Transação na Aba Vendas do Carrinho R2
 
-e garantir que **/bu-incorporador/transacoes** volte a carregar normalmente, usando como “fonte da verdade” os produtos configurados em **/admin/produtos** (tabela `product_configurations`).
+## Problema Identificado
 
----
+Você adicionou a transação do **Maurício Felipe Bezerra de Sousa** pela aba "Vendas" do Carrinho R2, mas ela não apareceu na lista. Consultei o banco e encontrei:
 
-## O que está acontecendo (causa raiz)
-Hoje existem **duas funções diferentes no banco com o mesmo nome** `public.get_all_hubla_transactions`, com **os mesmos tipos de parâmetros**, só que em **ordens diferentes**:
+| Campo | Valor Atual | Valor Necessário |
+|-------|-------------|------------------|
+| `product_category` | `NULL` | `parceria` |
+| `linked_attendee_id` | `NULL` | UUID do lead aprovado |
 
-1) `get_all_hubla_transactions(p_start_date timestamptz, p_end_date timestamptz, p_search text, p_limit int)`  
-2) `get_all_hubla_transactions(p_search text, p_start_date timestamptz, p_end_date timestamptz, p_limit int)`
+O hook `useR2CarrinhoVendas` filtra por `product_category = 'parceria'` (linha 142), por isso a transação não aparece.
 
-Quando o frontend chama `supabase.rpc('get_all_hubla_transactions', { p_search, p_start_date, ... })`, o PostgREST tenta resolver qual “overload” usar e **falha por ambiguidade** (erro PGRST203).
+## Causa Raiz
 
-Observação importante: eu confirmei via consulta no `pg_proc` que as 2 assinaturas existem ao mesmo tempo — uma delas ainda contém o filtro antigo por `product_category='incorporador'`.
+O popup "Nova Transação" na aba Vendas usa o componente genérico `TransactionFormDialog` do módulo Incorporador, que:
 
----
+1. **Não define** `product_category = 'parceria'` ao criar a transação
+2. **Não oferece** opção de selecionar um lead aprovado para vincular a venda
+3. Lista produtos do Incorporador (A001, A009, etc.) em vez de produtos específicos de parceria
 
-## Resultado esperado após o ajuste
-- A tela **/bu-incorporador/transacoes** deixa de dar erro e volta a listar transações.
-- O filtro de “quais produtos entram” fica **100% alinhado** ao cadastro da página **/admin/produtos**:
-  - só entra se existir `product_configurations.is_active = true` e `target_bu='incorporador'` e o nome do produto bater com `hubla_transactions.product_name`.
-- Mantém a remoção dos duplicados `newsale-%`.
+## Solução Proposta
 
----
+Criar um novo componente `R2CarrinhoTransactionFormDialog` específico para a aba Vendas do Carrinho R2 que:
 
-## Estratégia de correção (simples e definitiva)
-### 1) Padronizar para UMA única assinatura
-Vamos manter **apenas uma** versão da função, com uma assinatura “canônica” (e daí em diante, nunca mais criar outra com mesma lista de tipos).
+### 1. Seleção de Lead Aprovado (nova funcionalidade)
 
-Sugestão (compatível com o frontend atual que já usa `p_search` etc.):
-- `public.get_all_hubla_transactions(p_search text default null, p_start_date timestamptz default null, p_end_date timestamptz default null, p_limit integer default 5000)`
+- Campo select/dropdown listando leads aprovados da semana atual
+- Opção "Buscar em outras semanas" (toggle para expandir busca)
+- Campo de busca para filtrar por nome/email/telefone
+- Ao selecionar um lead, preenche automaticamente:
+  - Nome do cliente
+  - Email do cliente  
+  - Telefone do cliente
 
-### 2) Remover as versões antigas (dropar overloads)
-Na migração SQL vamos:
-- `DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(timestamp with time zone, timestamp with time zone, text, integer);`
-- `DROP FUNCTION IF EXISTS public.get_all_hubla_transactions(text, timestamp with time zone, timestamp with time zone, integer);`
+### 2. Campos do Formulário
 
-E então recriar **apenas** a versão canônica.
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    Nova Venda de Parceria                   │
+├─────────────────────────────────────────────────────────────┤
+│  Lead Aprovado *                                            │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ Buscar lead aprovado...                            ▼ │  │
+│  └───────────────────────────────────────────────────────┘  │
+│  [ ] Buscar em outras semanas                               │
+│                                                             │
+│  Produto *                                                  │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │ A009 - MCF INCORPORADOR COMPLETO + THE CLUB        ▼ │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌──────────────────────┐  ┌──────────────────────────────┐ │
+│  │ Nome do Cliente *    │  │ Email *                      │ │
+│  │ [auto-preenchido]    │  │ [auto-preenchido]            │ │
+│  └──────────────────────┘  └──────────────────────────────┘ │
+│                                                             │
+│  ┌──────────────────────┐  ┌──────────────────────────────┐ │
+│  │ Telefone             │  │ Data da Venda *              │ │
+│  │ [auto-preenchido]    │  │ [📅 30/01/2026]              │ │
+│  └──────────────────────┘  └──────────────────────────────┘ │
+│                                                             │
+│  ┌──────────────────────┐  ┌──────────────────────────────┐ │
+│  │ Valor Bruto (R$)     │  │ Valor Líquido (R$) *         │ │
+│  │ [R$ 19.500,00]       │  │ [R$ 13.089,70]               │ │
+│  └──────────────────────┘  └──────────────────────────────┘ │
+│                                                             │
+│                        [Cancelar]  [Criar Venda]            │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### 3) Recriar a função com a lógica correta (product_configurations)
-A função final deve:
-- Filtrar `sale_status IN ('completed','refunded')`
-- Filtrar `source IN ('hubla','manual')` (mantendo a regra atual)
-- Excluir `hubla_id LIKE 'newsale-%'`
-- Filtrar produtos com `EXISTS (select 1 from product_configurations …)`
-- Respeitar `p_start_date`, `p_end_date`, `p_search`
-- `ORDER BY sale_date desc LIMIT p_limit`
-- Manter `SECURITY DEFINER` e `SET search_path TO 'public'` (para consistência e evitar problemas de permissões/resolução)
+### 3. Lógica de Criação
 
----
+Ao criar a transação:
 
-## Passos de implementação (o que eu vou fazer quando você aprovar esta etapa no modo de execução)
-1) Criar uma nova migration em `supabase/migrations/` que:
-   - Drope as duas assinaturas da função.
-   - Recrie a função com a assinatura única e a lógica baseada em `product_configurations`.
-2) (Opcional, mas recomendado) Conferir se existe algum `GRANT EXECUTE` necessário para o papel `anon/authenticated` — normalmente Postgres mantém grants ao recriar? Nem sempre. Se necessário, incluir explicitamente `GRANT EXECUTE ON FUNCTION ... TO anon, authenticated;` na migration.
-3) Validar no preview:
-   - Abrir **/bu-incorporador/transacoes**
-   - Confirmar que o toast de erro sumiu
-   - Confirmar que há transações no período (ex: 01/01/2026 a 30/01/2026)
-4) Se ainda aparecer “0” transações:
-   - Verificar rapidamente se `hubla_transactions.product_name` está batendo exatamente com `product_configurations.product_name` (diferença de espaços/acentos/case).
-   - Se houver divergência real de nomes, a correção seguinte (segunda etapa) seria implementar um match mais robusto (ex: normalização) ou mapear por `product_code`, mas só faremos isso se ficar comprovado que o “nome exato” não é confiável.
+```text
+{
+  hubla_id: `manual-${Date.now()}`,
+  product_name: <produto selecionado>,
+  product_category: 'parceria',           // ← CHAVE para aparecer na lista
+  linked_attendee_id: <id do lead>,       // ← Vincula ao lead aprovado
+  customer_name: <do lead ou editado>,
+  customer_email: <do lead ou editado>,
+  customer_phone: <do lead ou editado>,
+  sale_date: <data selecionada>,
+  product_price: <preço de referência>,
+  net_value: <valor líquido>,
+  source: 'manual',
+  sale_status: 'completed',
+  count_in_dashboard: true
+}
+```
 
----
+## Arquivos a Modificar/Criar
 
-## Riscos e como vamos evitar
-- **Risco:** Voltar a criar overload por acidente no futuro e quebrar de novo.
-  - **Mitigação:** deixar apenas 1 assinatura e seguir a regra do projeto “sem overloading ambíguo”.
-- **Risco:** Alguns produtos podem não aparecer se o nome não bater 100%.
-  - **Mitigação:** primeiro confirmar se o cadastro de produtos em admin está usando exatamente o mesmo `product_name` vindo da Hubla/manual. Se não estiver, evoluir para estratégia por `product_code`/normalização.
+### Novos Arquivos
 
----
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/crm/R2CarrinhoTransactionFormDialog.tsx` | Novo dialog específico para vendas do carrinho |
+| `src/hooks/useCreateCarrinhoTransaction.ts` | Hook para criar transação com `product_category = 'parceria'` e vinculação |
 
-## Checklist de aceitação (para você validar)
-- [ ] Não aparece mais o erro “Could not choose the best candidate function…”
-- [ ] A lista mostra transações para o período selecionado
-- [ ] Produtos exibidos batem com os produtos ativos em **/admin/produtos** (target_bu incorporador)
-- [ ] Duplicados `newsale-%` não aparecem
+### Arquivos a Modificar
+
+| Arquivo | Modificação |
+|---------|-------------|
+| `src/components/crm/R2VendasList.tsx` | Trocar `TransactionFormDialog` por `R2CarrinhoTransactionFormDialog` |
+
+## Correção Imediata da Transação Existente
+
+Executar SQL para corrigir a transação do Maurício que já foi criada:
+
+```sql
+UPDATE hubla_transactions 
+SET product_category = 'parceria'
+WHERE id = 'f4876eaf-66b2-4a14-8dd5-e529aab0ce38';
+```
+
+Nota: A vinculação com o lead aprovado (`linked_attendee_id`) pode ser feita manualmente via UI depois, usando o botão "Vincular" que já existe.
+
+## Benefícios
+
+1. **Transações aparecem na lista** - `product_category = 'parceria'` garante o filtro
+2. **Vinculação automática** - Lead selecionado já é vinculado (`linked_attendee_id`)
+3. **Preenchimento automático** - Dados do lead preenchem o formulário
+4. **Atribuição correta** - Closer do lead é usado nas métricas
+5. **UX melhorada** - Fluxo mais intuitivo para adicionar vendas manuais
+
