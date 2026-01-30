@@ -150,7 +150,7 @@ export const useCoursesSales = ({
       // Apply limit
       return allSales.slice(0, limit);
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1 minuto
   });
 };
 
@@ -333,6 +333,6 @@ export const useCoursesSummary = ({
         chartData,
       };
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1 minuto
   });
 };

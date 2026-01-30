@@ -188,6 +188,6 @@ export function useSDRCarrinhoMetrics(weekDate: Date) {
 
       return result;
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1 minuto
   });
 }
