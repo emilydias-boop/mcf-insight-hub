@@ -1,36 +1,53 @@
 
 
-# Plano: Deduplicar Total Leads e Criar Métrica de Leads Ativos
+# Plano: Sincronizar Métricas do Carrinho R2
 
 ## Problema Identificado
 
-| Situação Atual | Problema |
-|----------------|----------|
-| **Total Leads = 80** | Conta cada registro de attendee, incluindo duplicatas de reagendamentos |
-| **Mesmo lead** | Pode aparecer 2-3x se foi reagendado ou tem múltiplas reuniões |
-| **Resultado** | Números inflados que não refletem a realidade |
+As métricas do Carrinho R2 estão inconsistentes entre diferentes componentes:
 
-### Exemplo do Problema
+| Métrica | Valor | Esperado | Problema |
+|---------|-------|----------|----------|
+| **Aprovados (KPI)** | 50 | ✅ Correto | - |
+| **Aprovados (Tab)** | 50 | ✅ Correto | - |
+| **Selecionados** | 49 | 50 | Falta 1 lead |
+| **No Carrinho** | 57 | 50 | +7 leads extras |
 
-```text
-Lead: Igor Willian
-- R2 em 24/01 → No-show ⚠️
-- R2 em 27/01 → Reagendado (Aprovado) ✅
+### Diagnóstico Técnico
 
-Contagem atual: 2 leads
-Contagem correta: 1 lead único
-```
+1. **"Selecionados" = 49** (deveria ser 50):
+   - Em `useR2MetricsData`, a lógica `else if` só conta "aprovados" se o lead NÃO for classificado antes como no-show, desistente, etc.
+   - Se um lead estava como no-show e depois foi reagendado e aprovado, a lógica de prioridade pode manter `is_no_show = true` se o critério de substituição não for atendido
+
+2. **"No Carrinho" = 57** (deveria ser 50):
+   - O cálculo atual: `leadsAtivos = totalLeads - leadsPerdidosCount`
+   - Isso inclui TODOS os leads que não são "perdidos", não apenas aprovados
+   - Inclui: Aprovados + Leads sem status + Leads "Em Análise"
+
+### A Confusão
+
+| Métrica | Significado Atual | Significado Esperado |
+|---------|-------------------|----------------------|
+| **No Carrinho** | Total de leads menos perdidos (inclui pendentes) | Leads aprovados ativos |
+| **Selecionados** | Aprovados (contagem com bug) | Aprovados |
 
 ---
 
 ## Solução Proposta
 
-Criar **deduplicação por deal_id** e adicionar 2 métricas claras:
+### Opção 1: Renomear para Clareza (Recomendada)
 
-| Métrica | Descrição |
-|---------|-----------|
-| **Total Leads** | Leads únicos que passaram pelo R2 (deduplicados por deal_id) |
-| **No Carrinho** | Leads únicos ativos = Total - Reembolsos - No-Show - Próx. Semana - Desistentes - Reprovados |
+Manter as duas métricas com nomes mais claros:
+
+| Métrica | Nome Atual | Nome Novo | Descrição |
+|---------|------------|-----------|-----------|
+| `leadsAtivos` | No Carrinho | **Em Avaliação** | Total - Perdidos (inclui pendentes + aprovados) |
+| `selecionados` | Selecionados | **Aprovados** | Apenas leads com status "Aprovado" |
+
+### Opção 2: Corrigir "No Carrinho" para = Aprovados
+
+Se "No Carrinho" deve significar **apenas aprovados**, então:
+- `leadsAtivos = aprovados` (não `totalLeads - perdidos`)
 
 ---
 
@@ -38,77 +55,52 @@ Criar **deduplicação por deal_id** e adicionar 2 métricas claras:
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/hooks/useR2MetricsData.ts` | Adicionar deduplicação por deal_id e nova métrica `leadsAtivos` |
-| `src/components/crm/R2MetricsPanel.tsx` | Exibir "No Carrinho" ao lado de "Total Leads" |
+| `src/hooks/useR2MetricsData.ts` | Corrigir lógica de contagem de aprovados |
+| `src/components/crm/R2MetricsPanel.tsx` | Ajustar exibição das métricas |
 
 ---
 
 ## Implementação Técnica
 
-### useR2MetricsData.ts - Deduplicação
+### 1. Corrigir contagem de "Aprovados/Selecionados"
+
+O problema está na priorização do status. Quando um lead tem múltiplas reuniões:
+- R2 #1: No-show
+- R2 #2: Aprovado
+
+A lógica atual pode manter `is_no_show = true` se a priorização não funcionar corretamente.
 
 ```typescript
-// Interface atualizada
-export interface R2MetricsData {
-  totalLeads: number;      // Leads ÚNICOS que passaram pelo R2
-  leadsAtivos: number;     // Leads únicos realmente no carrinho
-  // ... resto das métricas
-}
+// Ajustar prioridade: Aprovado deve sempre sobrescrever no-show
+const statusPriority = (status: string): number => {
+  if (status.includes('aprovado')) return 100;  // Maior prioridade
+  if (status.includes('reprovado')) return 90;
+  if (status.includes('desistente')) return 80;
+  if (status.includes('reembolso')) return 70;
+  if (status.includes('próxima semana')) return 60;
+  return 0;
+};
 
-// Lógica de deduplicação
-// Criar Map para agrupar attendees por deal_id
-const leadsByDeal = new Map<string, {
-  deal_id: string;
-  status: string;
-  r2_status: string;
-  scheduled_at: string;
-}>();
-
-meetings?.forEach(meeting => {
-  attendees.forEach(att => {
-    const key = att.deal_id || att.id; // Usar ID se não tiver deal
-    const existing = leadsByDeal.get(key);
-    
-    // Manter o registro mais recente ou o mais relevante
-    if (!existing || new Date(meeting.scheduled_at) > new Date(existing.scheduled_at)) {
-      leadsByDeal.set(key, {
-        deal_id: key,
-        status: att.status,
-        r2_status: statusMap.get(att.r2_status_id) || '',
-        scheduled_at: meeting.scheduled_at
-      });
-    }
-  });
-});
-
-// Total = leads únicos
-const totalLeads = leadsByDeal.size;
-
-// Contar por status (usando leads únicos)
-let desistentes = 0, reembolsos = 0, reprovados = 0, proximaSemana = 0, noShow = 0, aprovados = 0;
-
-leadsByDeal.forEach(lead => {
-  if (lead.r2_status.includes('desistente')) desistentes++;
-  else if (lead.r2_status.includes('reembolso')) reembolsos++;
-  // ... etc
-});
-
-// Leads ativos = total - perdidos
-const leadsPerdidos = desistentes + reembolsos + reprovados + proximaSemana + noShow;
-const leadsAtivos = totalLeads - leadsPerdidos;
+// Na comparação de leads:
+const shouldReplace = !existing || 
+  statusPriority(statusName) > statusPriority(existing.r2_status) ||
+  (statusPriority(statusName) === statusPriority(existing.r2_status) && 
+   new Date(meeting.scheduled_at) > new Date(existing.scheduled_at));
 ```
 
-### R2MetricsPanel.tsx - Nova Exibição
+### 2. Ajustar métrica "No Carrinho"
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ LEADS DO CARRINHO                                                           │
-├─────────────┬─────────────┬───────────┬───────────┬───────────┬─────────────┤
-│ Total Leads │ No Carrinho │ Desist.   │ Reemb.    │ Reprov.   │ ...         │
-│     54      │     42      │     0     │     6     │     0     │             │
-│  (únicos)   │  (ativos)   │           │           │           │             │
-└─────────────┴─────────────┴───────────┴───────────┴───────────┴─────────────┘
+Mudar para igualar aos aprovados (se esse for o objetivo):
+
+```typescript
+// ANTES
+const leadsAtivos = totalLeads - leadsPerdidosCount;
+
+// DEPOIS
+const leadsAtivos = aprovados; // "No Carrinho" = Aprovados
 ```
+
+**OU** renomear para "Em Avaliação" se quiser manter o conceito atual.
 
 ---
 
@@ -116,28 +108,21 @@ const leadsAtivos = totalLeads - leadsPerdidos;
 
 | Métrica | Antes | Depois |
 |---------|-------|--------|
-| Total Leads | 80 (inflado) | ~54 (únicos) |
-| No Carrinho | Não existia | ~42 (ativos) |
-| Perdidos % | Calculado sobre 80 | Calculado sobre 54 |
+| Aprovados (KPI) | 50 | 50 |
+| Aprovados (Tab) | 50 | 50 |
+| Selecionados | 49 | 50 |
+| No Carrinho | 57 | 50 |
 
-### Lógica de Deduplicação
-
-```text
-Para cada lead (deal_id):
-1. Se tem múltiplas reuniões → manter a mais recente
-2. Se foi reagendado → contar como 1 lead com o status atual
-3. Se fez no-show e depois participou → contar como 1 lead (status atual)
-```
+Todas as métricas sincronizadas = **50 aprovados únicos**.
 
 ---
 
-## Impacto nas Outras Métricas
+## Impacto
 
-| Métrica | Impacto |
-|---------|---------|
-| Desistentes | Agora conta leads únicos |
-| Reembolsos | Agora conta leads únicos |
-| No-Show | Exclui reagendados corretamente |
-| Aprovados | Já estava deduplicado (confirmado) |
-| % Perdidos | Agora usa base correta (total único) |
+| Componente | Impacto |
+|------------|---------|
+| KPIs do Carrinho R2 | Sem mudança (já correto) |
+| Tab "Aprovados" | Sem mudança (já correto) |
+| Métricas Panel | ✅ Corrigido |
+| Cálculo de Conversão | ✅ Usará base correta |
 
