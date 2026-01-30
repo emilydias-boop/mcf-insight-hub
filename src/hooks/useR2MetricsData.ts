@@ -13,8 +13,9 @@ export interface CloserConversion {
 }
 
 export interface R2MetricsData {
-  // Seção 1 - Leads do Carrinho
-  totalLeads: number;
+  // Seção 1 - Leads do Carrinho (deduplicados por deal_id)
+  totalLeads: number;       // Leads ÚNICOS que passaram pelo R2
+  leadsAtivos: number;      // Leads únicos realmente no carrinho (excluindo perdidos)
   desistentes: number;
   reprovados: number;
   reembolsos: number;
@@ -168,48 +169,32 @@ export function useR2MetricsData(weekDate: Date) {
         );
       }
 
-      // 7. Count metrics with proper no-show filtering
-      let totalLeads = 0;
-      let desistentes = 0;
-      let reprovados = 0;
-      let proximaSemana = 0;
+      // 7. DEDUPLICAÇÃO POR DEAL_ID - Agrupar attendees por deal_id mantendo o mais recente
+      interface LeadRecord {
+        deal_id: string;
+        attendee_id: string;
+        status: string;
+        r2_status: string;
+        r2_status_id: string | null;
+        scheduled_at: string;
+        closer_id: string;
+        closer_name: string;
+        closer_color: string;
+        attendee_name: string | null;
+        attendee_phone: string | null;
+        contact_email: string | null;
+        contact_phone: string | null;
+        is_no_show: boolean;
+      }
       
-      // Clean no-show list (excluding rescheduled and refunded)
-      const noShowAttendeesClean = noShowAttendeesRaw.filter(ns => 
-        !rescheduledIds.has(ns.id) && 
-        !(ns.deal_id && refundedDealIds.has(ns.deal_id))
-      );
-      const noShow = noShowAttendeesClean.length;
-      const noShowAttendees: R2MetricsData['noShowAttendees'] = noShowAttendeesClean;
-
-      let aprovados = 0;
-      let reembolsosCount = 0;
-      const approvedEmails: string[] = [];
-      const approvedPhones: string[] = [];
+      const leadsByDeal = new Map<string, LeadRecord>();
       
-      // Track per-closer stats
-      const closerStats = new Map<string, {
-        name: string;
-        color: string;
-        aprovados: number;
-        vendas: number;
-      }>();
-
       meetings?.forEach(meeting => {
         const closerData = meeting.closer as { id: string; name: string; color: string } | null;
         const closerId = closerData?.id || 'unknown';
         const closerName = closerData?.name || 'Sem closer';
         const closerColor = closerData?.color || '#6B7280';
-
-        if (!closerStats.has(closerId)) {
-          closerStats.set(closerId, {
-            name: closerName,
-            color: closerColor,
-            aprovados: 0,
-            vendas: 0,
-          });
-        }
-
+        
         const attendees = meeting.attendees as Array<{
           id: string;
           attendee_name: string | null;
@@ -220,37 +205,103 @@ export function useR2MetricsData(weekDate: Date) {
           deal_id: string | null;
           deal: { id: string; contact: { email: string | null; phone: string | null } | null } | null;
         }> || [];
-
+        
         attendees.forEach(att => {
-          totalLeads++;
-          
+          const key = att.deal_id || att.id; // Usar attendee ID se não tiver deal_id
+          const existing = leadsByDeal.get(key);
           const statusName = att.r2_status_id ? statusMap.get(att.r2_status_id) || '' : '';
           
-          // Count by R2 status (these are exclusive categories)
-          if (statusName.includes('desistente')) {
-            desistentes++;
-          } else if (statusName.includes('reembolso')) {
-            reembolsosCount++;
-          } else if (statusName.includes('reprovado')) {
-            reprovados++;
-          } else if (statusName.includes('próxima semana') || statusName.includes('proxima semana')) {
-            proximaSemana++;
-          } else if (statusName.includes('aprovado') || statusName.includes('approved')) {
-            aprovados++;
-            closerStats.get(closerId)!.aprovados++;
-            
-            // Collect contact info for matching
-            const contactEmail = att.deal?.contact?.email;
-            const contactPhone = att.deal?.contact?.phone || att.attendee_phone;
-            
-            if (contactEmail) approvedEmails.push(contactEmail.toLowerCase());
-            if (contactPhone) {
-              const normalized = normalizePhone(contactPhone);
-              if (normalized) approvedPhones.push(normalized);
-            }
+          const isNoShow = att.status === 'no_show' && 
+            !rescheduledIds.has(att.id) && 
+            !(att.deal_id && refundedDealIds.has(att.deal_id));
+          
+          // Prioridade: manter registro mais recente, preferindo status não-no-show
+          const shouldReplace = !existing || 
+            new Date(meeting.scheduled_at) > new Date(existing.scheduled_at) ||
+            (existing.is_no_show && !isNoShow);
+          
+          if (shouldReplace) {
+            leadsByDeal.set(key, {
+              deal_id: key,
+              attendee_id: att.id,
+              status: att.status,
+              r2_status: statusName,
+              r2_status_id: att.r2_status_id,
+              scheduled_at: meeting.scheduled_at,
+              closer_id: closerId,
+              closer_name: closerName,
+              closer_color: closerColor,
+              attendee_name: att.attendee_name,
+              attendee_phone: att.attendee_phone,
+              contact_email: att.deal?.contact?.email || null,
+              contact_phone: att.deal?.contact?.phone || att.attendee_phone,
+              is_no_show: isNoShow,
+            });
           }
-          // Note: no-show is already counted separately with proper filtering above
         });
+      });
+      
+      // Contar métricas usando leads únicos
+      const totalLeads = leadsByDeal.size;
+      let desistentes = 0;
+      let reprovados = 0;
+      let proximaSemana = 0;
+      let noShow = 0;
+      let aprovados = 0;
+      let reembolsosCount = 0;
+      
+      const approvedEmails: string[] = [];
+      const approvedPhones: string[] = [];
+      const noShowAttendees: R2MetricsData['noShowAttendees'] = [];
+      
+      // Track per-closer stats
+      const closerStats = new Map<string, {
+        name: string;
+        color: string;
+        aprovados: number;
+        vendas: number;
+      }>();
+      
+      leadsByDeal.forEach((lead) => {
+        const closerId = lead.closer_id;
+        
+        if (!closerStats.has(closerId)) {
+          closerStats.set(closerId, {
+            name: lead.closer_name,
+            color: lead.closer_color,
+            aprovados: 0,
+            vendas: 0,
+          });
+        }
+        
+        // Contar por status (usando leads únicos - cada lead em uma categoria)
+        if (lead.r2_status.includes('desistente')) {
+          desistentes++;
+        } else if (lead.r2_status.includes('reembolso')) {
+          reembolsosCount++;
+        } else if (lead.r2_status.includes('reprovado')) {
+          reprovados++;
+        } else if (lead.r2_status.includes('próxima semana') || lead.r2_status.includes('proxima semana')) {
+          proximaSemana++;
+        } else if (lead.is_no_show) {
+          noShow++;
+          noShowAttendees.push({
+            id: lead.attendee_id,
+            name: lead.attendee_name || 'Sem nome',
+            phone: lead.attendee_phone,
+            meetingId: lead.deal_id,
+          });
+        } else if (lead.r2_status.includes('aprovado') || lead.r2_status.includes('approved')) {
+          aprovados++;
+          closerStats.get(closerId)!.aprovados++;
+          
+          // Collect contact info for matching
+          if (lead.contact_email) approvedEmails.push(lead.contact_email.toLowerCase());
+          if (lead.contact_phone) {
+            const normalized = normalizePhone(lead.contact_phone);
+            if (normalized) approvedPhones.push(normalized);
+          }
+        }
       });
 
       // 5. Match with Hubla transactions (parceria category) - include linked_attendee_id
@@ -401,6 +452,9 @@ export function useR2MetricsData(weekDate: Date) {
       const leadsPerdidosCount = desistentes + reprovados + reembolsosCount + proximaSemana + noShow;
       const leadsPerdidosPercent = totalLeads > 0 ? (leadsPerdidosCount / totalLeads) * 100 : 0;
       
+      // Leads ativos = total único - perdidos (leads realmente no carrinho)
+      const leadsAtivos = totalLeads - leadsPerdidosCount;
+      
       const selecionados = aprovados;
       // Vendas extras = vendas de semanas anteriores + vendas extras manuais
       const totalVendasExtras = vendasExtrasDeSemanaAnterior + (vendasExtras?.length || 0);
@@ -422,6 +476,7 @@ export function useR2MetricsData(weekDate: Date) {
 
       return {
         totalLeads,
+        leadsAtivos,
         desistentes,
         reprovados,
         reembolsos,

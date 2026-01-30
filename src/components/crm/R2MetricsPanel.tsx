@@ -111,12 +111,20 @@ export function R2MetricsPanel({ weekDate }: R2MetricsPanelProps) {
         <h3 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
           Leads do Carrinho
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
           <MetricCard
             icon={<Users className="h-5 w-5" />}
             label="Total Leads"
             value={metrics.totalLeads}
             color="#3B82F6"
+            badge={<span className="text-[10px] text-muted-foreground">(únicos)</span>}
+          />
+          <MetricCard
+            icon={<CheckCircle className="h-5 w-5" />}
+            label="No Carrinho"
+            value={metrics.leadsAtivos}
+            color="#10B981"
+            badge={<span className="text-[10px] text-muted-foreground">(ativos)</span>}
           />
           <MetricCard
             icon={<UserX className="h-5 w-5" />}
