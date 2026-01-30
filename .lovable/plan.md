@@ -1,160 +1,122 @@
 
-# Plano: Vincular Contrato Manualmente a Lead R1
+# Plano: Corrigir Timeout na Página de Vendas MCF Incorporador
 
-## Cenário do Problema
+## Problema Identificado
 
-| Situação | Descrição |
-|----------|-----------|
-| **Lead R1** | Igor Willian Silveira Pinto - R1 concluída em 27/01 com Julio |
-| **Pagamento** | Claudia Frigeri Caggiani (esposa) pagou o contrato R$ 497 em 29/01 |
-| **Resultado** | Sistema não consegue vincular automaticamente (email/telefone diferentes) |
-| **Impacto** | Lead não aparece como "Contrato Pago", não pode ter R2 agendada |
+A página de Vendas `/bu-incorporador/transacoes` está retornando **zero transações** após um timeout da RPC.
+
+### Diagnóstico
+
+| Aspecto | Valor |
+|---------|-------|
+| **Erro** | `canceling statement due to statement timeout` (HTTP 500) |
+| **Causa Raiz** | Subconsulta correlacionada de `deal_tags` na função `get_all_hubla_transactions` |
+| **Tempo por subconsulta** | ~132ms (usa `LOWER()` sem índice em 113k contatos) |
+| **Transações no período** | ~2000 |
+| **Tempo total estimado** | 2000 × 132ms = ~264 segundos (muito acima do timeout de 30s) |
+
+### O Problema na Query
+
+```sql
+-- Esta subconsulta é executada para CADA transação (2000x)
+COALESCE(
+  (SELECT d.tags 
+   FROM crm_contacts c
+   INNER JOIN crm_deals d ON d.contact_id = c.id
+   WHERE LOWER(c.email) = LOWER(ht.customer_email)
+   LIMIT 1),
+  ARRAY[]::text[]
+) as deal_tags
+```
+
+O `LOWER()` impede o uso do índice `idx_crm_contacts_email`, forçando um scan completo.
 
 ---
 
 ## Solução Proposta
 
-Criar uma funcionalidade para **vincular manualmente** transações de contrato (R$ 497) a attendees R1, similar ao que já existe para vendas de parcerias no R2 Carrinho.
+Remover a subconsulta de `deal_tags` da RPC e buscar as tags via LEFT JOIN com pré-agregação, ou remover completamente se não forem essenciais para a listagem.
 
-### Duas opções de implementação:
+### Opção Recomendada: Remover `deal_tags` da RPC
 
-**Opção A: Dialog no Painel de Contratos Pendentes**
-- Adicionar botão "Vincular a Lead" nas linhas de contratos pendentes
-- Abrir dialog para buscar leads R1 (similar ao `LinkAttendeeDialog`)
-- Ao vincular, atualizar `hubla_transactions.linked_attendee_id` E marcar o attendee como `contract_paid`
+A coluna `deal_tags` é usada principalmente para:
+1. Exibição visual (badge de canal)
+2. Relatórios de vendas
 
-**Opção B: Dialog no drawer do Lead R1** (Recomendado)
-- Adicionar botão "Vincular Contrato" no drawer de reunião R1 para leads sem contrato pago
-- Abrir dialog mostrando contratos pendentes que podem ser vinculados
-- Permite ao closer vincular diretamente do contexto do lead
+Na tela de listagem de transações, as tags podem ser carregadas sob demanda (quando o drawer abre) em vez de para todas as 2000 linhas.
 
 ---
-
-## Implementação Recomendada (Opção B)
-
-### Componentes Necessários
-
-| Componente | Descrição |
-|------------|-----------|
-| `LinkContractDialog` | Novo dialog para buscar e vincular contratos pendentes a um attendee R1 |
-| Hook `useUnlinkedContracts` | Novo hook para buscar contratos (categoria 'contrato') sem vinculação |
-| Hook `useLinkContractToAttendee` | Novo hook para vincular contrato + marcar attendee como contract_paid |
-
-### Fluxo de Uso
-
-```text
-1. Closer abre o drawer de reunião R1 do Igor Willian
-2. Status ainda é "Realizada" (não Contrato Pago)
-3. Closer clica em "Vincular Contrato" 
-4. Dialog abre com lista de contratos pendentes (últimos 14 dias)
-5. Closer busca "Claudia" ou pelo telefone
-6. Encontra a transação de R$ 497 da Claudia Frigeri
-7. Clica em "Vincular"
-8. Sistema:
-   a) Atualiza hubla_transactions.linked_attendee_id → Igor
-   b) Atualiza meeting_slot_attendees.status → 'contract_paid'
-   c) Atualiza meeting_slot_attendees.contract_paid_at → agora
-   d) Move deal para estágio "Contrato Pago"
-9. Lead agora aparece no painel "R2 Pendentes"
-```
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Propósito |
-|---------|-----------|
-| `src/hooks/useUnlinkedContracts.ts` | Buscar contratos pendentes (product_category = 'contrato', linked_attendee_id IS NULL) |
-| `src/hooks/useLinkContractToAttendee.ts` | Vincular contrato + marcar contract_paid |
-| `src/components/crm/LinkContractDialog.tsx` | Dialog para buscar e vincular contratos |
 
 ## Arquivos a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/components/crm/AgendaMeetingDrawer.tsx` | Adicionar botão "Vincular Contrato" para leads completed sem contract_paid |
+| **Migração SQL** | Atualizar a função `get_all_hubla_transactions` para remover subconsulta de `deal_tags` |
 
 ---
 
-## Detalhes Técnicos
+## Implementação Técnica
 
-### useUnlinkedContracts.ts
+### Nova versão da função RPC
 
-```typescript
-// Buscar contratos pendentes (sem vinculação) dos últimos 14 dias
-const { data, error } = await supabase
-  .from('hubla_transactions')
-  .select('id, hubla_id, customer_name, customer_email, customer_phone, sale_date, net_value')
-  .eq('product_category', 'contrato')
-  .is('linked_attendee_id', null)
-  .gte('sale_date', twoWeeksAgo.toISOString())
-  .order('sale_date', { ascending: false });
+```sql
+CREATE OR REPLACE FUNCTION public.get_all_hubla_transactions(
+  p_search text DEFAULT NULL,
+  p_start_date text DEFAULT NULL,
+  p_end_date text DEFAULT NULL,
+  p_limit integer DEFAULT 5000
+)
+RETURNS TABLE(
+  id uuid, hubla_id text, product_name text, product_category text,
+  product_price numeric, net_value numeric, customer_name text,
+  customer_email text, customer_phone text, sale_date timestamptz,
+  sale_status text, installment_number integer, total_installments integer,
+  source text, gross_override numeric, deal_tags text[]
+)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ht.id, ht.hubla_id::text, ht.product_name::text, ht.product_category::text,
+    ht.product_price, ht.net_value, ht.customer_name::text, ht.customer_email::text,
+    ht.customer_phone::text, ht.sale_date, ht.sale_status::text,
+    ht.installment_number, ht.total_installments, ht.source::text, ht.gross_override,
+    ARRAY[]::text[] as deal_tags  -- Retorna array vazio por padrão
+  FROM hubla_transactions ht
+  INNER JOIN product_configurations pc ON ht.product_name = pc.product_name
+  WHERE pc.target_bu = 'incorporador'
+    AND ht.sale_status IN ('completed', 'refunded')
+    AND ht.source IN ('hubla', 'manual')
+    AND ht.hubla_id NOT LIKE 'newsale-%'
+    AND (p_search IS NULL OR (
+      ht.customer_name ILIKE '%' || p_search || '%' OR
+      ht.customer_email ILIKE '%' || p_search || '%' OR
+      ht.product_name ILIKE '%' || p_search || '%'
+    ))
+    AND (p_start_date IS NULL OR ht.sale_date >= p_start_date::timestamptz)
+    AND (p_end_date IS NULL OR ht.sale_date <= p_end_date::timestamptz)
+  ORDER BY ht.sale_date DESC
+  LIMIT p_limit;
+END;
+$function$;
 ```
 
-### useLinkContractToAttendee.ts
+---
 
-```typescript
-async function linkContract({ transactionId, attendeeId }: LinkParams) {
-  // 1. Vincular transação ao attendee
-  await supabase
-    .from('hubla_transactions')
-    .update({ linked_attendee_id: attendeeId })
-    .eq('id', transactionId);
+## Impacto
 
-  // 2. Atualizar attendee para contract_paid
-  await supabase
-    .from('meeting_slot_attendees')
-    .update({ 
-      status: 'contract_paid',
-      contract_paid_at: new Date().toISOString()
-    })
-    .eq('id', attendeeId);
-
-  // 3. Atualizar slot para completed (se necessário)
-  // 4. Mover deal para estágio "Contrato Pago"
-}
-```
-
-### LinkContractDialog.tsx
-
-- Input de busca por nome, email ou telefone
-- Lista de contratos pendentes filtráveis
-- Cada item mostra: Nome do pagador, valor, data, telefone
-- Botão "Vincular" em cada item
-
-### Modificação no AgendaMeetingDrawer
-
-Adicionar botão quando:
-- `meeting.status === 'completed'` ou `attendee.status === 'completed'`
-- `attendee.status !== 'contract_paid'`
-
-```tsx
-{attendee.status === 'completed' && attendee.status !== 'contract_paid' && (
-  <Button variant="outline" onClick={() => setLinkContractOpen(true)}>
-    <Link2 className="h-4 w-4 mr-2" />
-    Vincular Contrato
-  </Button>
-)}
-```
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| **Tempo de execução** | Timeout (>30s) | ~25ms |
+| **Transações retornadas** | 0 (erro) | ~2000 |
+| **Coluna deal_tags** | Populada | Array vazio (pode ser buscada sob demanda) |
 
 ---
 
 ## Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Igor Willian aparece como "Realizada" | Igor aparece como "Contrato Pago" |
-| Não aparece no painel "R2 Pendentes" | Aparece no painel "R2 Pendentes" |
-| Contrato da Claudia fica "Pendente" | Contrato vinculado ao Igor |
-| Não pode agendar R2 | Pode agendar R2 normalmente |
-
----
-
-## Observação
-
-Esta solução também pode ser usada para:
-- Pagamentos feitos por sócios
-- Pagamentos em nome de empresas
-- Pagamentos com email/telefone errado
-- Qualquer situação onde o matching automático falha
-
+1. A página de Vendas carrega em menos de 1 segundo
+2. Todas as 2000 transações de janeiro aparecem corretamente
+3. Os totais (Bruto/Líquido) são calculados corretamente
+4. Se as tags forem necessárias no futuro, podem ser buscadas no drawer de detalhes
