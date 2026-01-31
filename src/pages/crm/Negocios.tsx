@@ -34,6 +34,7 @@ import { useBulkTransfer } from '@/hooks/useBulkTransfer';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { differenceInDays } from 'date-fns';
 import { useDealOwnerOptions } from '@/hooks/useDealOwnerOptions';
+import { useUniqueDealTags } from '@/hooks/useUniqueDealTags';
 
 const Negocios = () => {
   // Ativar notificações em tempo real para novos leads
@@ -53,6 +54,7 @@ const Negocios = () => {
     inactivityDays: null,
     salesChannel: 'all',
     attemptsRange: null,
+    selectedTags: [],
   });
   
   // Estado para modo de seleção e transferência em massa
@@ -185,6 +187,12 @@ const Negocios = () => {
   
   // Derivar opções de owners a partir dos deals carregados
   const { ownerOptions } = useDealOwnerOptions(dealsData);
+  
+  // Buscar tags únicas para o filtro
+  const { data: availableTags, isLoading: isLoadingTags } = useUniqueDealTags({
+    originId: effectiveOriginId,
+    enabled: !!effectiveOriginId,
+  });
   
   // Extrair deal IDs e stage IDs para buscar atividades em batch
   const dealIds = useMemo(() => (dealsData || []).map((d: any) => d.id), [dealsData]);
@@ -389,6 +397,15 @@ const Negocios = () => {
         }
       }
       
+      // Filtro por tags selecionadas
+      if (filters.selectedTags.length > 0) {
+        const dealTags = deal.tags || [];
+        const hasMatchingTag = filters.selectedTags.some(tag => 
+          dealTags.includes(tag)
+        );
+        if (!hasMatchingTag) return false;
+      }
+      
       return true;
     });
   }, [dealsData, isRestrictedRole, userProfile?.email, filters, activitySummaries, a010StatusMap]);
@@ -402,6 +419,7 @@ const Negocios = () => {
       inactivityDays: null,
       salesChannel: 'all',
       attemptsRange: null,
+      selectedTags: [],
     });
   };
   
@@ -470,13 +488,15 @@ const Negocios = () => {
           </div>
         </div>
         
-        <DealFilters
-          filters={filters}
-          onChange={setFilters}
+        <DealFilters 
+          filters={filters} 
+          onChange={setFilters} 
           onClear={clearFilters}
           selectionMode={selectionMode}
           onToggleSelectionMode={handleToggleSelectionMode}
           ownerOptions={ownerOptions}
+          availableTags={availableTags || []}
+          isLoadingTags={isLoadingTags}
         />
         
         <div className="flex-1 overflow-hidden p-2 sm:p-4">

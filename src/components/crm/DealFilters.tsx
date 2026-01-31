@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import type { OwnerOption } from '@/hooks/useDealOwnerOptions';
+import { TagFilterPopover } from './TagFilterPopover';
 
 export type SalesChannelFilter = 'all' | 'a010' | 'bio' | 'live';
 
@@ -33,6 +34,7 @@ export interface DealFiltersState {
   inactivityDays: number | null;
   salesChannel: SalesChannelFilter;
   attemptsRange: { min: number; max: number } | null;
+  selectedTags: string[];
 }
 
 interface DealFiltersProps {
@@ -43,6 +45,10 @@ interface DealFiltersProps {
   onToggleSelectionMode?: () => void;
   /** Lista de owners derivada dos deals (quando fornecida, substitui a query interna) */
   ownerOptions?: OwnerOption[];
+  /** Tags únicas disponíveis para filtro */
+  availableTags?: string[];
+  /** Loading state para tags */
+  isLoadingTags?: boolean;
 }
 
 export const DealFilters = ({ 
@@ -52,6 +58,8 @@ export const DealFilters = ({
   selectionMode = false,
   onToggleSelectionMode,
   ownerOptions,
+  availableTags = [],
+  isLoadingTags = false,
 }: DealFiltersProps) => {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isAttemptsPopoverOpen, setIsAttemptsPopoverOpen] = useState(false);
@@ -125,6 +133,7 @@ export const DealFilters = ({
     filters.inactivityDays !== null,
     filters.salesChannel !== 'all',
     filters.attemptsRange !== null,
+    filters.selectedTags.length > 0,
   ].filter(Boolean).length;
   
   return (
@@ -351,6 +360,14 @@ export const DealFilters = ({
           </div>
         </PopoverContent>
       </Popover>
+      
+      {/* Filtro de Tags */}
+      <TagFilterPopover
+        availableTags={availableTags}
+        selectedTags={filters.selectedTags}
+        onChange={(tags) => onChange({ ...filters, selectedTags: tags })}
+        isLoading={isLoadingTags}
+      />
       
       {/* Filtro de Data */}
       <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
