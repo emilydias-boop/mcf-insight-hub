@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from 'lucide-react';
+import { RefreshCw, Download, Search, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, Filter } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -21,6 +21,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DatePickerCustom } from '@/components/ui/DatePickerCustom';
 import { TransactionFormDialog } from '@/components/incorporador/TransactionFormDialog';
 import { IncorporadorTransactionDrawer } from '@/components/incorporador/IncorporadorTransactionDrawer';
+import { ProductFilterSheet } from '@/components/incorporador/ProductFilterSheet';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +54,8 @@ export default function TransacoesIncorp() {
   const [selectedTransaction, setSelectedTransaction] = useState<HublaTransaction | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [productFilterOpen, setProductFilterOpen] = useState(false);
 
   const deleteMutation = useDeleteTransaction();
 
@@ -60,6 +64,7 @@ export default function TransacoesIncorp() {
     search: searchTerm || undefined,
     startDate,
     endDate,
+    selectedProducts: selectedProducts.length > 0 ? selectedProducts : undefined,
   };
 
   const { data: allTransactions = [], isLoading, refetch, isFetching } = useAllHublaTransactions(filters);
@@ -114,6 +119,7 @@ export default function TransacoesIncorp() {
     setSearchTerm('');
     setStartDate(undefined);
     setEndDate(undefined);
+    setSelectedProducts([]);
     setCurrentPage(1);
   };
 
@@ -258,6 +264,21 @@ export default function TransacoesIncorp() {
                   onSelect={handleEndDateChange}
                   placeholder="Selecione..."
                 />
+              </div>
+              <div className="flex items-end">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setProductFilterOpen(true)}
+                  className="relative"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Produtos
+                  {selectedProducts.length > 0 && (
+                    <Badge variant="default" className="ml-2 h-5 px-1.5 text-xs">
+                      {selectedProducts.length}
+                    </Badge>
+                  )}
+                </Button>
               </div>
               <Button variant="ghost" size="icon" onClick={handleClearFilters} title="Limpar filtros">
                 <X className="h-4 w-4" />
@@ -454,6 +475,16 @@ export default function TransacoesIncorp() {
           transaction={selectedTransaction}
           open={detailsDrawerOpen}
           onOpenChange={setDetailsDrawerOpen}
+        />
+
+        <ProductFilterSheet
+          open={productFilterOpen}
+          onOpenChange={setProductFilterOpen}
+          selectedProducts={selectedProducts}
+          onApply={(products) => {
+            setSelectedProducts(products);
+            setCurrentPage(1);
+          }}
         />
     </div>
   );

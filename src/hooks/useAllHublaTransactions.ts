@@ -26,6 +26,7 @@ export interface TransactionFilters {
   search?: string;
   startDate?: Date;
   endDate?: Date;
+  selectedProducts?: string[];
 }
 
 // Ajusta para timezone de Brasília (UTC-3)
@@ -36,13 +37,14 @@ const formatDateWithBrazilTimezone = (date: Date, endOfDay = false): string => {
 
 export const useAllHublaTransactions = (filters: TransactionFilters) => {
   const query = useQuery({
-    queryKey: ['all-hubla-transactions', filters.search, filters.startDate?.toISOString(), filters.endDate?.toISOString()],
+    queryKey: ['all-hubla-transactions', filters.search, filters.startDate?.toISOString(), filters.endDate?.toISOString(), filters.selectedProducts],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_all_hubla_transactions', {
         p_search: filters.search || null,
         p_start_date: filters.startDate ? formatDateWithBrazilTimezone(filters.startDate) : null,
         p_end_date: filters.endDate ? formatDateWithBrazilTimezone(filters.endDate, true) : null,
-        p_limit: 5000
+        p_limit: 5000,
+        p_products: filters.selectedProducts?.length ? filters.selectedProducts : null
       });
       
       if (error) throw error;
