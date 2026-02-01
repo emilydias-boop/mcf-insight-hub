@@ -19,12 +19,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function PremiacoesIndex() {
   const { isAdmin } = useMyPermissions();
   const activeBU = useActiveBU();
-  const [selectedBU, setSelectedBU] = useState<string>(activeBU || '');
-  const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedBU, setSelectedBU] = useState<string>(activeBU || 'all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   
   const { data: premiacoes, isLoading } = usePremiacoes(
-    selectedBU || undefined,
-    selectedStatus || undefined
+    selectedBU !== 'all' ? selectedBU : undefined,
+    selectedStatus !== 'all' ? selectedStatus : undefined
   );
 
   const canCreate = isAdmin;
@@ -91,7 +91,7 @@ export default function PremiacoesIndex() {
                 <SelectValue placeholder="Todas as BUs" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas as BUs</SelectItem>
+                <SelectItem value="all">Todas as BUs</SelectItem>
                 {BU_OPTIONS.filter(bu => bu.value).map(bu => (
                   <SelectItem key={bu.value} value={bu.value}>
                     {bu.label}
@@ -105,7 +105,7 @@ export default function PremiacoesIndex() {
                 <SelectValue placeholder="Todos os status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos os status</SelectItem>
+                <SelectItem value="all">Todos os status</SelectItem>
                 <SelectItem value="rascunho">Rascunho</SelectItem>
                 <SelectItem value="ativa">Ativa</SelectItem>
                 <SelectItem value="encerrada">Encerrada</SelectItem>
