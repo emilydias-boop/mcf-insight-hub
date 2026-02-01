@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Trophy, Medal, Award, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Trophy, Medal, Award } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -9,6 +9,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Premiacao, ParticipanteRanking, METRICAS_OPTIONS } from '@/types/premiacoes';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { 
+  getAnoMesFromPeriodo, 
+  useRankingPayouts, 
+  useRankingKpis, 
+  useRankingCompPlans,
+  getMetricaValor,
+  formatMetricaValor,
+  extractPayoutData
+} from '@/hooks/premiacoes/useRankingMetrics';
 
 interface RankingLeaderboardProps {
   premiacao: Premiacao;
@@ -83,32 +92,87 @@ export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderbo
     enabled: squadNames.length > 0 || !!departamentoNome,
   });
 
-  // Buscar métricas de fechamento para o período
-  const { data: metricas, isLoading: loadingMetricas } = useQuery({
-    queryKey: ['ranking-metricas', premiacao.id, premiacao.metrica_ranking, premiacao.data_inicio, premiacao.data_fim],
-    queryFn: async () => {
-      // Por enquanto, retornar dados simulados
-      // TODO: Integrar com fechamento_metricas_mes ou outra fonte de dados real
-      return {};
-    },
-  });
-  // Calcular ranking
+  // Get ano_mes list from premio period
+  const anoMesList = useMemo(() => 
+    getAnoMesFromPeriodo(premiacao.data_inicio, premiacao.data_fim),
+    [premiacao.data_inicio, premiacao.data_fim]
+  );
+
+  // Fetch real payout data
+  const { data: payouts, isLoading: loadingPayouts } = useRankingPayouts(
+    anoMesList, 
+    (employees?.length || 0) > 0
+  );
+
+  // Fetch real KPI data
+  const { data: kpis, isLoading: loadingKpis } = useRankingKpis(
+    anoMesList,
+    (employees?.length || 0) > 0
+  );
+
+  // Get unique SDR IDs from payouts
+  const sdrIds = useMemo(() => {
+    if (!payouts) return [];
+    return [...new Set(payouts.map(p => p.sdr_id))];
+  }, [payouts]);
+
+  // Fetch comp plans for OTE calculation
+  const { data: compPlans, isLoading: loadingCompPlans } = useRankingCompPlans(
+    sdrIds,
+    premiacao.metrica_ranking === 'ote_pct' && sdrIds.length > 0
+  );
+
+  // Calcular ranking com dados reais
   const ranking = useMemo(() => {
     if (!employees) return [];
 
     const metricaConfig = premiacao.metrica_config || {};
     const isInverso = metricaConfig.inverso;
+    
+    // Transform raw payouts to typed data
+    const typedPayouts = extractPayoutData(payouts || []);
 
-    // Mapear colaboradores com suas métricas
-    const participantes: ParticipanteRanking[] = employees.map((emp: any) => ({
-      id: emp.id,
-      nome: emp.nome_completo || 'Sem nome',
-      cargo: emp.cargo || '',
-      squad: emp.squad || undefined,
-      valor: Math.floor(Math.random() * 100), // TODO: Usar dados reais
-      posicao: 0,
-      avatarUrl: undefined,
-    }));
+    // Mapear colaboradores com suas métricas reais
+    const participantes: ParticipanteRanking[] = employees.map((emp: any) => {
+      // Find SDR by email match
+      const empEmail = emp.email?.toLowerCase();
+      
+      // Get all payouts for this employee
+      const empPayouts = typedPayouts.filter(p => 
+        p.sdr?.email?.toLowerCase() === empEmail
+      );
+      
+      // Get SDR ID from payouts
+      const sdrId = empPayouts[0]?.sdr_id;
+      
+      // Get KPIs for this SDR
+      const empKpis = sdrId 
+        ? (kpis?.filter(k => k.sdr_id === sdrId) || [])
+        : [];
+      
+      // Get comp plan for OTE calculation
+      const compPlan = sdrId 
+        ? compPlans?.find(cp => cp.sdr_id === sdrId) || null
+        : null;
+      
+      // Calculate metric value
+      const valor = getMetricaValor(
+        premiacao.metrica_ranking,
+        empPayouts,
+        empKpis as any,
+        compPlan as any
+      );
+
+      return {
+        id: emp.id,
+        nome: emp.nome_completo || 'Sem nome',
+        cargo: emp.cargo || '',
+        squad: emp.squad || undefined,
+        valor,
+        posicao: 0,
+        avatarUrl: undefined,
+      };
+    });
 
     // Ordenar por valor
     participantes.sort((a, b) => {
@@ -123,11 +187,13 @@ export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderbo
       ...p,
       posicao: index + 1,
     }));
-  }, [employees, premiacao.metrica_config]);
+  }, [employees, payouts, kpis, compPlans, premiacao.metrica_config, premiacao.metrica_ranking]);
 
   const metricaLabel = METRICAS_OPTIONS.find(m => m.value === premiacao.metrica_ranking)?.label || premiacao.metrica_ranking;
 
-  if (loadingEmployees || loadingMetricas) {
+  const isLoading = loadingEmployees || loadingPayouts || loadingKpis || (premiacao.metrica_ranking === 'ote_pct' && loadingCompPlans);
+
+  if (isLoading) {
     return (
       <div className="space-y-4">
         {[1, 2, 3, 4, 5].map(i => (
@@ -203,7 +269,7 @@ export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderbo
                 </TableCell>
                 <TableCell className="text-muted-foreground">{participante.cargo}</TableCell>
                 <TableCell className="text-right font-mono font-medium">
-                  {participante.valor}
+                  {formatMetricaValor(premiacao.metrica_ranking, participante.valor)}
                 </TableCell>
                 <TableCell className="text-center">
                   {participante.posicao <= qtdGanhadores ? (
