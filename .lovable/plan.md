@@ -1,98 +1,84 @@
 
-# Correção: Ranking não encontra participantes elegíveis
+# Correção: Premiações não aparecem na listagem
 
 ## Problema Identificado
 
-Ao criar uma premiação com:
-- **BU**: incorporador
-- **Cargo**: SDR
+As 2 premiações criadas estão no banco de dados:
 
-O ranking mostra "Nenhum participante elegível encontrado" porque a query atual está incorreta.
+| Nome | Status | Período | Problema |
+|------|--------|---------|----------|
+| Carro!! | rascunho | 01/01 - 31/01/2026 | Data já passou (hoje é 01/02/2026) |
+| Carro!! | rascunho | 01/01 - 31/01/2026 | Data já passou (hoje é 01/02/2026) |
 
----
+A lógica de categorização atual não inclui **rascunhos cujo período já terminou**:
 
-## Diagnóstico Técnico
-
-A query atual em `RankingLeaderboard.tsx`:
-
-```typescript
-const { data, error } = await supabase
-  .from('employees')
-  .select('id, nome_completo, cargo, squad')
-  .eq('squad', premiacao.bu)        // ❌ Compara 'incorporador' com 'Comercial'
-  .in('cargo', premiacao.cargos_elegiveis);  // ❌ Compara 'sdr' com 'SDR'
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    LÓGICA ATUAL                             │
+├─────────────────┬───────────────────────────────────────────┤
+│ Ativas          │ status='ativa' AND dentro do período     │
+│ Próximas        │ (ativa OR rascunho) AND data futura      │
+│ Encerradas      │ status='encerrada' OR (ativa + expirada) │
+└─────────────────┴───────────────────────────────────────────┘
+         ⚠️ Rascunhos com data passada ficam ÓRFÃOS
 ```
-
-### Problema 1: Mapeamento Squad → BU incorreto
-
-| Esperado | Valor no banco |
-|----------|----------------|
-| `squad = 'incorporador'` | `squad = 'Comercial'`, `'Inside Sales Produto'`, etc. |
-
-A estrutura correta é:
-- **departamentos.codigo** = `'incorporador'` (valor da BU)
-- **squads.departamento_id** → departamentos.id
-- **employees.squad** = nome do squad (ex: `'Comercial'`)
-
-### Problema 2: Case sensitivity no cargo
-
-| Premiação | Banco de dados |
-|-----------|----------------|
-| `'sdr'` (minúsculo) | `'SDR'` (maiúsculo) |
 
 ---
 
 ## Solução Proposta
 
-Modificar a query para:
+Adicionar uma nova aba **"Rascunhos"** para mostrar todas as premiações em rascunho, independente da data. Alternativamente, corrigir a lógica para incluir rascunhos expirados em uma categoria visível.
 
-1. Fazer JOIN com `squads` e `departamentos` para filtrar pela BU
-2. Usar comparação case-insensitive para cargos
+### Opção Escolhida: Adicionar aba "Rascunhos"
 
-### Nova Query
+Isso dará visibilidade clara a todas as premiações não publicadas.
+
+---
+
+## Alterações no Index.tsx
+
+### 1. Adicionar categoria `rascunhos` na função `categorizePremiacoes`
 
 ```typescript
-const { data, error } = await supabase
-  .from('employees')
-  .select(`
-    id, 
-    nome_completo, 
-    cargo, 
-    squad
-  `)
-  .eq('status', 'ativo')
-  .filter('squad', 'in', `(
-    SELECT s.nome FROM squads s 
-    JOIN departamentos d ON s.departamento_id = d.id 
-    WHERE d.codigo = '${premiacao.bu}'
-  )`)
-  .ilike('cargo', premiacao.cargos_elegiveis[0]); // Para múltiplos, usar OR
+return {
+  ativas: items.filter(p => 
+    p.status === 'ativa' && 
+    isWithinInterval(now, { start: parseISO(p.data_inicio), end: parseISO(p.data_fim) })
+  ),
+  proximas: items.filter(p => 
+    p.status === 'ativa' && isFuture(parseISO(p.data_inicio))
+  ),
+  rascunhos: items.filter(p => 
+    p.status === 'rascunho'
+  ),
+  encerradas: items.filter(p => 
+    p.status === 'encerrada' || 
+    (p.status === 'ativa' && isPast(parseISO(p.data_fim)))
+  ),
+};
 ```
 
-**Alternativa mais simples** (recomendada):
-Buscar os nomes dos squads primeiro, depois filtrar employees:
+### 2. Adicionar nova aba no JSX
 
 ```typescript
-// 1. Buscar squads da BU
-const { data: buSquads } = await supabase
-  .from('squads')
-  .select('nome, departamentos!inner(codigo)')
-  .eq('departamentos.codigo', premiacao.bu);
+<TabsTrigger value="rascunhos" className="gap-2">
+  Rascunhos
+  {categorized.rascunhos.length > 0 && (
+    <Badge variant="secondary">{categorized.rascunhos.length}</Badge>
+  )}
+</TabsTrigger>
 
-const squadNames = buSquads?.map(s => s.nome) || [];
-
-// 2. Buscar employees nesses squads com cargo case-insensitive
-const cargosLower = premiacao.cargos_elegiveis.map(c => c.toLowerCase());
-const { data, error } = await supabase
-  .from('employees')
-  .select('id, nome_completo, cargo, squad')
-  .eq('status', 'ativo')
-  .in('squad', squadNames);
-
-// Filtrar cargos no JavaScript (case-insensitive)
-const filtered = data?.filter(e => 
-  cargosLower.includes(e.cargo?.toLowerCase())
-);
+<TabsContent value="rascunhos">
+  {categorized.rascunhos.length === 0 ? (
+    <EmptyState message="Nenhum rascunho" />
+  ) : (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {categorized.rascunhos.map(premiacao => (
+        <PremiacaoCard key={premiacao.id} premiacao={premiacao} />
+      ))}
+    </div>
+  )}
+</TabsContent>
 ```
 
 ---
@@ -101,25 +87,34 @@ const filtered = data?.filter(e =>
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/premiacoes/RankingLeaderboard.tsx` | Corrigir query para buscar employees por BU via join com squads/departamentos e usar comparação case-insensitive para cargos |
+| `src/pages/premiacoes/Index.tsx` | Adicionar categoria "rascunhos" e nova aba no TabsList |
 
 ---
 
 ## Resultado Esperado
 
-Após a correção, a premiação "Carro!!" com:
-- **BU**: Incorporador MCF
-- **Cargo**: SDR
+Após a correção:
 
-Irá encontrar pelo menos 2 participantes elegíveis:
-- Emily Segundario (squad: Inside Sales Produto)
-- Antony Elias Monteiro da silva (squad: Comercial)
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Em Andamento  │  Próximas  │  Rascunhos (2)  │  Encerradas │
+└─────────────────────────────────────────────────────────────┘
+                              ↑
+                    Suas 2 premiações aparecerão aqui
+```
 
 ---
 
-## Validação
+## Fluxo Corrigido
 
-Testar criando uma nova premiação e verificando se:
-1. Os SDRs aparecem no ranking
-2. Os dados de métrica são exibidos (atualmente simulados)
-3. O Top 3 visual funciona corretamente
+```text
+Premiação criada → Status: rascunho → Aparece em "Rascunhos"
+                          ↓
+                   Ativar premiação
+                          ↓
+                   Status: ativa → Aparece em "Em Andamento" ou "Próximas"
+                          ↓
+                   Período termina
+                          ↓
+                   Aparece em "Encerradas"
+```
