@@ -117,6 +117,11 @@ import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import Chairman from "./pages/Chairman";
 import Home from "./pages/Home";
 
+// Premiações
+import PremiacoesIndex from "./pages/premiacoes/Index";
+import PremiacaoDetail from "./pages/premiacoes/Detail";
+import NovaPremiacao from "./pages/premiacoes/NovaPremiacao";
+
 // BU CRM Layout
 import BUCRMLayout from "./pages/crm/BUCRMLayout";
 
@@ -199,6 +204,11 @@ const App = () => (
               
               <Route path="projetos" element={<ResourceGuard resource="projetos"><Projetos /></ResourceGuard>} />
               <Route path="credito" element={<ResourceGuard resource="credito"><Credito /></ResourceGuard>} />
+              
+              {/* Premiações Routes */}
+              <Route path="premiacoes" element={<PremiacoesIndex />} />
+              <Route path="premiacoes/nova" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><NovaPremiacao /></RoleGuard>} />
+              <Route path="premiacoes/:id" element={<PremiacaoDetail />} />
               
               {/* BU Crédito Routes */}
               <Route path="bu-credito" element={<BUCreditoIndex />}>
