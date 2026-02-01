@@ -77,7 +77,7 @@ export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderbo
 
       const { data, error } = await supabase
         .from('employees')
-        .select('id, nome_completo, cargo, squad, departamento')
+        .select('id, nome_completo, cargo, squad, departamento, sdr_id')
         .eq('status', 'ativo')
         .or(orFilter);
 
@@ -134,16 +134,11 @@ export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderbo
 
     // Mapear colaboradores com suas métricas reais
     const participantes: ParticipanteRanking[] = employees.map((emp: any) => {
-      // Find SDR by email match
-      const empEmail = emp.email?.toLowerCase();
+      // Get SDR ID directly from employee
+      const sdrId = emp.sdr_id;
       
-      // Get all payouts for this employee
-      const empPayouts = typedPayouts.filter(p => 
-        p.sdr?.email?.toLowerCase() === empEmail
-      );
-      
-      // Get SDR ID from payouts
-      const sdrId = empPayouts[0]?.sdr_id;
+      // Get all payouts for this employee using sdr_id
+      const empPayouts = typedPayouts.filter(p => p.sdr_id === sdrId);
       
       // Get KPIs for this SDR
       const empKpis = sdrId 

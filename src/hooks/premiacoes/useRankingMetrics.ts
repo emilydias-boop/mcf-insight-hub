@@ -80,6 +80,7 @@ interface PayoutData {
   pct_reunioes_realizadas: number | null;
   pct_tentativas: number | null;
   pct_no_show: number | null;
+  pct_organizacao: number | null;
   sdr?: { id: string; email: string | null; name: string } | null;
 }
 
@@ -106,6 +107,7 @@ export function extractPayoutData(rawPayouts: any[]): PayoutData[] {
     pct_reunioes_realizadas: p.pct_reunioes_realizadas,
     pct_tentativas: p.pct_tentativas,
     pct_no_show: p.pct_no_show,
+    pct_organizacao: p.pct_organizacao,
     sdr: p.sdr,
   }));
 }
@@ -155,9 +157,22 @@ export function getMetricaValor(
       return realizadas > 0 ? (contratos / realizadas) * 100 : 0;
       
     case 'ote_pct':
-      if (!compPlan?.ote_total || compPlan.ote_total === 0) return 0;
+      // Se não tem OTE target configurado, usar % Meta Global (média dos percentuais)
+      if (!compPlan?.ote_total || compPlan.ote_total === 0) {
+        const pcts = [
+          avgPayout('pct_reunioes_agendadas'),
+          avgPayout('pct_reunioes_realizadas'),
+          avgPayout('pct_tentativas'),
+          avgPayout('pct_organizacao'),
+        ].filter(p => p > 0);
+        
+        return pcts.length > 0 
+          ? pcts.reduce((a, b) => a + b, 0) / pcts.length 
+          : 0;
+      }
+      
+      // Cálculo normal com OTE target
       const totalConta = sumPayout('total_conta');
-      // OTE is monthly, so divide by number of months
       const monthlyOte = compPlan.ote_total;
       const avgMonthlyConta = payouts.length > 0 ? totalConta / payouts.length : 0;
       return (avgMonthlyConta / monthlyOte) * 100;
