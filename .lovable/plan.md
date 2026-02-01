@@ -1,56 +1,67 @@
 
-# Correção: Home como Página Padrão Após Login
+
+# Correção: Painel do Diretor Acessível
 
 ## Problema Identificado
 
-Após o login, usuários estão sendo redirecionados para o **Dashboard** ao invés da **Home** (página das 4 luas).
-
-**Causa raiz:**
-1. Na página `Auth.tsx`, quando detecta usuário logado, redireciona para `/` (que é o Dashboard)
-2. A rota raiz `/` no `App.tsx` aponta para o Dashboard, não para a Home
+O **Painel do Diretor** (página `Dashboard.tsx` com título "Painel do Diretor") ficou **inacessível** porque:
+1. O link no sidebar "Dashboard > Visão Geral" aponta para `/`
+2. A rota `/` agora redireciona para `/home` (página das 4 luas)
+3. Não existe uma rota dedicada `/dashboard` para acessar o Painel do Diretor
 
 ## Solução
 
-Fazer a rota raiz `/` redirecionar automaticamente para `/home`, tornando a Home a página de entrada após login.
+Criar uma rota `/dashboard` para o Painel do Diretor e atualizar o sidebar.
 
 ### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/App.tsx` | Mudar rota index para redirecionar para `/home` |
-| `src/pages/Auth.tsx` | Manter redirecionamento para `/` (que agora vai para Home) |
+| `src/App.tsx` | Adicionar rota `/dashboard` para o componente Dashboard |
+| `src/components/layout/AppSidebar.tsx` | Mudar URL "Visão Geral" de `/` para `/dashboard` |
 
-## Mudança Técnica
+---
 
-### App.tsx - Rota Raiz
+## Mudanças Técnicas
+
+### 1. App.tsx - Nova Rota
+
+Adicionar rota explícita para `/dashboard`:
+
+```text
+<Route path="dashboard" element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
+```
+
+### 2. AppSidebar.tsx - Corrigir URL
+
+Mudar no menu "Dashboard":
 
 **Antes:**
 ```text
-<Route index element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
+{ title: "Visão Geral", url: "/" }
 ```
 
 **Depois:**
 ```text
-<Route index element={<Navigate to="/home" replace />} />
+{ title: "Visão Geral", url: "/dashboard" }
 ```
 
-Isso significa:
-- Acessar `/` → redireciona automaticamente para `/home`
-- O Dashboard continua acessível em `/dashboard` (se existir) ou através do menu
+---
 
-## Fluxo Após a Correção
+## Resultado Final
 
-```text
-Usuário faz login → AuthContext.signIn() → navega para /home
-                 → Auth.tsx detecta user → navega para / → redireciona para /home
-                                                          (resultado: Home)
-```
+| URL | Página |
+|-----|--------|
+| `/` | Redireciona para `/home` |
+| `/home` | Home (4 luas - Ultrameta por BU) |
+| `/dashboard` | Painel do Diretor (métricas consolidadas) |
+| `/dashboard/semanas` | Dashboard por Semanas |
+| `/chairman` | Visão Chairman (executivo) |
 
-## Resultado Esperado
+---
 
-| Ação | Destino |
-|------|---------|
-| Login bem-sucedido | `/home` (4 luas) |
-| Acesso à URL `/` | Redireciona para `/home` |
-| Clique no logo MCF | `/home` |
-| Dashboard | Acessível via sidebar |
+## Como Acessar o Painel do Diretor
+
+1. **Sidebar** → Dashboard → Visão Geral
+2. **URL direta**: `/dashboard`
+
