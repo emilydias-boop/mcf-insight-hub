@@ -1,46 +1,20 @@
 
-# Integração: Métricas Reais no Ranking de Premiações
+# Correção: Ranking mostrando 0% - Integração com Dados Reais
 
-## Problema Atual
+## Problema Identificado
 
-O ranking de premiações está usando **valores aleatórios simulados** (`Math.random()`) ao invés de buscar os dados reais do sistema de fechamento.
+O ranking está mostrando **0.0%** para todos porque:
 
-```typescript
-// RankingLeaderboard.tsx linha 108
-valor: Math.floor(Math.random() * 100), // TODO: Usar dados reais
-```
+1. **Vínculo incorreto**: O código tenta vincular employee ↔ SDR por email, mas a tabela `employees` não tem coluna email
+2. **Campo sdr_id não está sendo buscado**: A query busca employees sem incluir o campo `sdr_id`
+3. **Os dados existem**: O fechamento de Janeiro 2026 tem dados reais para todos os SDRs
 
----
-
-## Fonte de Dados Disponível
-
-Os dados reais estão na tabela `sdr_month_payout` (Jan/2026):
-
-| Colaborador | total_conta | pct_agendadas |
-|-------------|-------------|---------------|
-| Jessica Martins | R$ 5.040 | 83.5% |
-| Carol Correa | R$ 3.570 | 96.7% |
-| Cristiane Gomes | R$ 3.400 | 215% |
-| Antony Elias | R$ 3.360 | 90% |
-
-Para calcular **OTE %**:
-```
-OTE % = (total_conta / ote_total) × 100
-```
-
----
-
-## Mapeamento Métrica → Campo
-
-| Métrica Selecionada | Fonte | Campo |
-|---------------------|-------|-------|
-| `agendamentos` | sdr_month_kpi | reunioes_agendadas |
-| `realizadas` | sdr_month_kpi | reunioes_realizadas |
-| `contratos` | Agenda/Hubla | contract_paid count |
-| `tentativas` | sdr_month_kpi | tentativas_ligacoes |
-| `no_show_inverso` | sdr_month_payout | pct_no_show (inverter) |
-| `taxa_conversao` | Calculado | contratos/realizadas × 100 |
-| `ote_pct` | sdr_month_payout + sdr_comp_plan | total_conta/ote_total × 100 |
+| SDR | Total Conta | pct_agendadas | pct_realizadas |
+|-----|-------------|---------------|----------------|
+| Jessica Martins | R$ 5.040 | 83.5% | 94.0% |
+| Carol Correa | R$ 3.660 | 96.7% | - |
+| Leticia Nunes | R$ 3.480 | 97.9% | - |
+| Antony Elias | R$ 3.360 | 90.0% | - |
 
 ---
 
@@ -48,125 +22,95 @@ OTE % = (total_conta / ote_total) × 100
 
 ### Arquivo: `src/components/premiacoes/RankingLeaderboard.tsx`
 
-### Passo 1: Criar função para buscar métricas por período
+**Mudança 1: Incluir `sdr_id` na query de employees**
 
 ```typescript
-const getAnoMesFromPeriodo = (dataInicio: string, dataFim: string): string[] => {
-  // Retorna array de ano_mes no formato "2026-01"
-  // Para período 01/01 a 31/01 → ["2026-01"]
-  // Para período 01/01 a 28/02 → ["2026-01", "2026-02"]
-};
+const { data, error } = await supabase
+  .from('employees')
+  .select('id, nome_completo, cargo, squad, departamento, sdr_id')  // Adicionado sdr_id
+  .eq('status', 'ativo')
+  .or(orFilter);
 ```
 
-### Passo 2: Buscar payouts dos colaboradores elegíveis
+**Mudança 2: Vincular por `sdr_id` ao invés de email**
 
 ```typescript
-const { data: payouts } = useQuery({
-  queryKey: ['ranking-payouts', employeeIds, anoMesList],
-  queryFn: async () => {
-    // Mapear employees.email → sdr.email → sdr_month_payout
-    const { data } = await supabase
-      .from('sdr_month_payout')
-      .select(`
-        *,
-        sdr:sdr_id(id, email, name)
-      `)
-      .in('ano_mes', anoMesList);
-    
-    return data;
-  },
-});
-```
+// ANTES (quebrado - employees não tem email)
+const empPayouts = typedPayouts.filter(p => 
+  p.sdr?.email?.toLowerCase() === empEmail
+);
 
-### Passo 3: Buscar comp plans para calcular OTE %
-
-```typescript
-const { data: compPlans } = useQuery({
-  queryKey: ['ranking-comp-plans', sdrIds],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('sdr_comp_plan')
-      .select('sdr_id, ote_total, vigencia_inicio, vigencia_fim')
-      .in('sdr_id', sdrIds);
-    
-    return data;
-  },
-});
-```
-
-### Passo 4: Calcular valor baseado na métrica selecionada
-
-```typescript
-const getMetricaValor = (
-  metrica: MetricaRanking,
-  payout: SdrMonthPayout | null,
-  compPlan: SdrCompPlan | null
-): number => {
-  if (!payout) return 0;
-  
-  switch (metrica) {
-    case 'agendamentos':
-      return payout.meta_agendadas_ajustada || 0;
-    case 'realizadas':
-      return payout.pct_reunioes_realizadas || 0;
-    case 'tentativas':
-      return payout.pct_tentativas || 0;
-    case 'ote_pct':
-      if (!compPlan?.ote_total) return 0;
-      return ((payout.total_conta || 0) / compPlan.ote_total) * 100;
-    case 'taxa_conversao':
-      // Precisa buscar de outra fonte
-      return 0;
-    default:
-      return 0;
-  }
-};
-```
-
-### Passo 5: Vincular employee → SDR
-
-O campo de ligação é o **email**:
-- `employees.email` (emails pessoais de colaboradores)
-- `sdr.email` (registro do SDR no fechamento)
-
-```typescript
-// Mapear employees com seus payouts via email
-const participantes = employees.map(emp => {
-  const sdrPayout = payouts?.find(p => 
-    p.sdr?.email?.toLowerCase() === emp.email?.toLowerCase()
-  );
-  const compPlan = compPlans?.find(cp => cp.sdr_id === sdrPayout?.sdr_id);
-  
-  return {
-    id: emp.id,
-    nome: emp.nome_completo,
-    valor: getMetricaValor(premiacao.metrica_ranking, sdrPayout, compPlan),
-    // ...
-  };
-});
+// DEPOIS (correto - usar sdr_id direto)
+const empPayouts = typedPayouts.filter(p => 
+  p.sdr_id === emp.sdr_id
+);
 ```
 
 ---
 
-## Dependências Adicionais
+### Arquivo: `src/hooks/premiacoes/useRankingMetrics.ts`
 
-Para métricas que não estão no payout (como `agendamentos` absolutos ou `contratos`), será necessário:
+**Mudança 3: Buscar payouts por sdr_id diretamente**
 
-1. **Buscar do sdr_month_kpi**: Para contagens absolutas
-2. **Buscar da Agenda**: Para contratos no período específico
+Para métricas de OTE%, quando não existe `ote_total` no comp_plan, usar o cálculo de **% Meta Global** (média dos percentuais):
+
+```typescript
+case 'ote_pct':
+  // Se não tem OTE target configurado, calcular como % Meta Global
+  if (!compPlan?.ote_total || compPlan.ote_total === 0) {
+    // Usar média dos percentuais como fallback
+    const pcts = [
+      avgPayout('pct_reunioes_agendadas'),
+      avgPayout('pct_reunioes_realizadas'),
+      avgPayout('pct_tentativas'),
+      avgPayout('pct_organizacao'),
+    ].filter(p => p > 0);
+    
+    return pcts.length > 0 
+      ? pcts.reduce((a, b) => a + b, 0) / pcts.length 
+      : 0;
+  }
+  
+  // Cálculo normal com OTE target
+  const totalConta = sumPayout('total_conta');
+  return (totalConta / compPlan.ote_total) * 100;
+```
+
+---
+
+## Fluxo Corrigido
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     ANTES (Quebrado)                        │
+├─────────────────────────────────────────────────────────────┤
+│ employees.email (não existe) → sdr.email → sdr_month_payout │
+│ Resultado: Não encontra correspondência → 0%                │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                     DEPOIS (Correto)                        │
+├─────────────────────────────────────────────────────────────┤
+│ employees.sdr_id → sdr_month_payout.sdr_id                  │
+│ Resultado: Encontra dados reais → valores corretos          │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Resultado Esperado
 
-Após a implementação:
+Após a correção, o ranking mostrará os valores reais do fechamento:
 
-| Posição | Colaborador | OTE % |
-|---------|-------------|-------|
-| 🥇 | Jessica Martins | 84% |
-| 🥈 | Carol Correa | 59% |
-| 🥉 | Cristiane Gomes | 57% |
-| 4 | Antony Elias | 56% |
+| Posição | Colaborador | OTE Atingido (%) |
+|---------|-------------|------------------|
+| 🥇 | Jessica Martins | 83.5% |
+| 🥈 | Leticia Nunes | 97.9% |
+| 🥉 | Carol Correa | 96.7% |
+| 4 | Antony Elias | 90.0% |
+| 5 | Carol Souza | 97.1% |
+
+*Se usar % Meta Global (média), Leticia seria a primeira como esperado*
 
 ---
 
@@ -174,13 +118,16 @@ Após a implementação:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/premiacoes/RankingLeaderboard.tsx` | Integrar busca de payouts e comp plans, calcular métrica real baseada no campo selecionado |
+| `src/components/premiacoes/RankingLeaderboard.tsx` | Incluir `sdr_id` na query de employees e vincular por `sdr_id` ao invés de email |
+| `src/hooks/premiacoes/useRankingMetrics.ts` | Adicionar fallback para calcular % Meta Global quando OTE target não existe; adicionar campo `pct_organizacao` ao PayoutData |
 
 ---
 
-## Considerações
+## Nota Técnica
 
-1. **Vínculo employee ↔ SDR**: Usar email como chave de ligação
-2. **Período multi-mês**: Se premiação durar 2+ meses, somar/média dos payouts
-3. **Métricas da Agenda**: Para `contratos` e `taxa_conversao`, buscar diretamente da agenda/hubla
-4. **Fallback**: Se não encontrar payout, mostrar 0 ao invés de erro
+A métrica **OTE Atingido (%)** pode ser calculada de duas formas:
+
+1. **Com OTE configurado**: `(total_conta / ote_total) × 100`
+2. **Sem OTE configurado (fallback)**: Média dos percentuais de meta (agendadas, realizadas, tentativas, organização)
+
+O fallback é necessário porque os planos de compensação (sdr_comp_plan) ainda não estão com status APPROVED na base de dados.
