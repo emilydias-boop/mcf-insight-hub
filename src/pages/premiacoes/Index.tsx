@@ -41,8 +41,10 @@ export default function PremiacoesIndex() {
         })
       ),
       proximas: items.filter(p => 
-        (p.status === 'ativa' || p.status === 'rascunho') && 
-        isFuture(parseISO(p.data_inicio))
+        p.status === 'ativa' && isFuture(parseISO(p.data_inicio))
+      ),
+      rascunhos: items.filter(p => 
+        p.status === 'rascunho'
       ),
       encerradas: items.filter(p => 
         p.status === 'encerrada' || 
@@ -146,6 +148,12 @@ export default function PremiacoesIndex() {
                 <Badge variant="outline">{categorized.proximas.length}</Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="rascunhos" className="gap-2">
+              Rascunhos
+              {categorized.rascunhos.length > 0 && (
+                <Badge variant="secondary">{categorized.rascunhos.length}</Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="encerradas" className="gap-2">
               Encerradas
               {categorized.encerradas.length > 0 && (
@@ -172,6 +180,18 @@ export default function PremiacoesIndex() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {categorized.proximas.map(premiacao => (
+                  <PremiacaoCard key={premiacao.id} premiacao={premiacao} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="rascunhos">
+            {categorized.rascunhos.length === 0 ? (
+              <EmptyState message="Nenhum rascunho" />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {categorized.rascunhos.map(premiacao => (
                   <PremiacaoCard key={premiacao.id} premiacao={premiacao} />
                 ))}
               </div>
