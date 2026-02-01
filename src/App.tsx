@@ -115,6 +115,7 @@ import ConsorcioRelatorio from "./pages/bu-consorcio/Relatorio";
 import ConsorcioPainelEquipe from "./pages/bu-consorcio/PainelEquipe";
 import ConsorcioVendas from "./pages/bu-consorcio/Vendas";
 import Chairman from "./pages/Chairman";
+import Home from "./pages/Home";
 
 // BU CRM Layout
 import BUCRMLayout from "./pages/crm/BUCRMLayout";
@@ -146,6 +147,9 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
+              {/* Home - Main page after login with 4 Moons */}
+              <Route path="home" element={<Home />} />
+              
               {/* Chairman Dashboard - Executive View */}
               <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} />
               
