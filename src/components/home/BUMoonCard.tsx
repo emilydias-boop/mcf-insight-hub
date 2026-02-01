@@ -1,4 +1,3 @@
-import { ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { MoonProgress } from './MoonProgress';
 import { cn } from '@/lib/utils';
@@ -13,6 +12,7 @@ interface BUMoonCardProps {
   color: string;
   href: string;
   isLoading?: boolean;
+  canNavigate?: boolean;
 }
 
 const formatCurrency = (value: number) => {
@@ -33,68 +33,69 @@ export function BUMoonCard({
   color,
   href,
   isLoading = false,
+  canNavigate = true,
 }: BUMoonCardProps) {
   const percentage = target > 0 ? Math.min((value / target) * 100, 100) : 0;
 
-  return (
-    <Link to={href} className="block group">
-      <Card className={cn(
-        "relative overflow-hidden transition-all duration-300",
-        "hover:shadow-lg hover:shadow-primary/10 hover:scale-[1.02]",
-        "bg-card border-border/50"
-      )}>
-        <CardContent className="p-6 flex flex-col items-center gap-4">
-          {/* Moon Progress with Icon */}
-          <div className="relative">
-            <MoonProgress
-              value={isLoading ? 0 : value}
-              max={target}
-              color={color}
-              size={160}
-              strokeWidth={10}
-              animate={!isLoading}
-            />
-            
-            {/* Icon in center */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div 
-                className={cn(
-                  "p-4 rounded-full transition-all duration-300",
-                  "bg-background/80 backdrop-blur-sm",
-                  "group-hover:scale-110"
-                )}
-                style={{ color }}
-              >
-                <Icon className="w-8 h-8" />
-              </div>
+  const cardContent = (
+    <Card className={cn(
+      "relative overflow-hidden transition-all duration-300",
+      canNavigate && "hover:shadow-lg hover:shadow-primary/10 hover:scale-[1.02] cursor-pointer",
+      "bg-card border-border/50"
+    )}>
+      <CardContent className="p-6 flex flex-col items-center gap-4">
+        {/* Moon Progress with Icon */}
+        <div className="relative">
+          <MoonProgress
+            value={isLoading ? 0 : value}
+            max={target}
+            color={color}
+            size={160}
+            strokeWidth={10}
+            animate={!isLoading}
+          />
+          
+          {/* Icon in center */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div 
+              className={cn(
+                "p-4 rounded-full transition-all duration-300",
+                "bg-background/80 backdrop-blur-sm",
+                canNavigate && "group-hover:scale-110"
+              )}
+              style={{ color }}
+            >
+              <Icon className="w-8 h-8" />
             </div>
           </div>
+        </div>
 
-          {/* BU Name */}
-          <h3 className="text-lg font-semibold text-foreground">{name}</h3>
+        {/* BU Name */}
+        <h3 className="text-lg font-semibold text-foreground">{name}</h3>
 
-          {/* Values */}
-          <div className="text-center space-y-1">
-            <p className="text-2xl font-bold" style={{ color }}>
-              {isLoading ? '...' : formatCurrency(value)}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Meta: {formatCurrency(target)}
-            </p>
-          </div>
+        {/* Values */}
+        <div className="text-center space-y-1">
+          <p className="text-2xl font-bold" style={{ color }}>
+            {isLoading ? '...' : formatCurrency(value)}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Meta: {formatCurrency(target)}
+          </p>
+        </div>
 
-          {/* Progress percentage */}
-          <div className={cn(
-            "px-3 py-1 rounded-full text-sm font-medium",
-            percentage >= 100 
-              ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
-              : "bg-muted text-muted-foreground"
-          )}>
-            {isLoading ? '...' : `${percentage.toFixed(0)}%`}
-          </div>
-        </CardContent>
+        {/* Progress percentage */}
+        <div className={cn(
+          "px-3 py-1 rounded-full text-sm font-medium",
+          percentage >= 100 
+            ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
+            : "bg-muted text-muted-foreground"
+        )}>
+          {isLoading ? '...' : `${percentage.toFixed(0)}%`}
+        </div>
+      </CardContent>
 
-        {/* Decorative gradient on hover */}
+      {/* Decorative gradient on hover */}
+      {canNavigate && (
         <div 
           className={cn(
             "absolute inset-0 opacity-0 transition-opacity duration-300",
@@ -104,7 +105,17 @@ export function BUMoonCard({
             background: `radial-gradient(circle at center, ${color} 0%, transparent 70%)`,
           }}
         />
-      </Card>
-    </Link>
+      )}
+    </Card>
   );
+
+  if (canNavigate) {
+    return (
+      <Link to={href} className="block group">
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return <div className="block">{cardContent}</div>;
 }
