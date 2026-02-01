@@ -459,7 +459,12 @@ export function AppSidebar() {
             </Button>
           ) : (
             <div className="flex items-center justify-between w-full">
-              <span className="text-xl font-bold text-primary">MCF</span>
+              <button 
+                onClick={() => navigate('/home')} 
+                className="text-xl font-bold text-primary hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                MCF
+              </button>
               <Button
                 variant="ghost"
                 size="icon"
