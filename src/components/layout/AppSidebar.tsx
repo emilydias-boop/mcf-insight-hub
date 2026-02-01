@@ -28,6 +28,7 @@ import {
   ShoppingCart,
   Crown,
   CheckSquare,
+  Trophy,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -239,6 +240,14 @@ const menuItems: MenuItem[] = [
     url: "/tarefas",
     icon: CheckSquare,
     requiredRoles: ["admin", "manager", "coordenador"],
+  },
+
+  // PREMIAÇÕES
+  {
+    title: "Premiações",
+    url: "/premiacoes",
+    icon: Trophy,
+    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "closer_sombra"],
   },
 
   // ===== ITENS AVULSOS PARA SDR/CLOSER =====
