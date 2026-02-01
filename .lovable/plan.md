@@ -1,85 +1,111 @@
 
-# Correção: Premiações não aparecem na listagem
+# Correção: Ranking não encontra SDRs da BU Incorporador
 
 ## Problema Identificado
 
-As 2 premiações criadas estão no banco de dados:
+O ranking mostra apenas **Emily Segundario** porque a query atual filtra por `squad`, mas a maioria dos SDRs tem `squad = NULL`:
 
-| Nome | Status | Período | Problema |
-|------|--------|---------|----------|
-| Carro!! | rascunho | 01/01 - 31/01/2026 | Data já passou (hoje é 01/02/2026) |
-| Carro!! | rascunho | 01/01 - 31/01/2026 | Data já passou (hoje é 01/02/2026) |
+| SDR | Departamento | Squad |
+|-----|-------------|-------|
+| Alexsandro Dias | BU - Incorporador 50K | NULL |
+| Antony Elias | BU - Incorporador 50K | NULL |
+| Carol Correa | BU - Incorporador 50K | NULL |
+| Carol Souza | BU - Incorporador 50K | NULL |
+| Jessica Martins | BU - Incorporador 50K | NULL |
+| Julia Caroline | BU - Incorporador 50K | NULL |
+| Juliana Rodrigues | BU - Incorporador 50K | NULL |
+| Leticia Nunes | BU - Incorporador 50K | NULL |
+| Vinicius Rangel | BU - Incorporador 50K | NULL |
+| Vitor Costta | BU - Incorporador 50K | NULL |
+| Yanca Oliveira | BU - Incorporador 50K | NULL |
+| **Emily Segundario** | TI | Inside Sales Produto |
 
-A lógica de categorização atual não inclui **rascunhos cujo período já terminou**:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    LÓGICA ATUAL                             │
-├─────────────────┬───────────────────────────────────────────┤
-│ Ativas          │ status='ativa' AND dentro do período     │
-│ Próximas        │ (ativa OR rascunho) AND data futura      │
-│ Encerradas      │ status='encerrada' OR (ativa + expirada) │
-└─────────────────┴───────────────────────────────────────────┘
-         ⚠️ Rascunhos com data passada ficam ÓRFÃOS
-```
+A query atual busca employees onde `squad IN ('Comercial', 'Inside Sales Produto', 'Closer')`, mas ignora o campo `departamento`.
 
 ---
 
 ## Solução Proposta
 
-Adicionar uma nova aba **"Rascunhos"** para mostrar todas as premiações em rascunho, independente da data. Alternativamente, corrigir a lógica para incluir rascunhos expirados em uma categoria visível.
-
-### Opção Escolhida: Adicionar aba "Rascunhos"
-
-Isso dará visibilidade clara a todas as premiações não publicadas.
+Modificar a lógica para buscar colaboradores de duas formas:
+1. **Por squad**: employees cujo `squad` pertence à BU
+2. **Por departamento (fallback)**: employees cujo `departamento` = nome do departamento da BU
 
 ---
 
-## Alterações no Index.tsx
+## Alterações Técnicas
 
-### 1. Adicionar categoria `rascunhos` na função `categorizePremiacoes`
+### Arquivo: `src/components/premiacoes/RankingLeaderboard.tsx`
 
-```typescript
-return {
-  ativas: items.filter(p => 
-    p.status === 'ativa' && 
-    isWithinInterval(now, { start: parseISO(p.data_inicio), end: parseISO(p.data_fim) })
-  ),
-  proximas: items.filter(p => 
-    p.status === 'ativa' && isFuture(parseISO(p.data_inicio))
-  ),
-  rascunhos: items.filter(p => 
-    p.status === 'rascunho'
-  ),
-  encerradas: items.filter(p => 
-    p.status === 'encerrada' || 
-    (p.status === 'ativa' && isPast(parseISO(p.data_fim)))
-  ),
-};
-```
-
-### 2. Adicionar nova aba no JSX
+### Passo 1: Buscar também o nome do departamento da BU
 
 ```typescript
-<TabsTrigger value="rascunhos" className="gap-2">
-  Rascunhos
-  {categorized.rascunhos.length > 0 && (
-    <Badge variant="secondary">{categorized.rascunhos.length}</Badge>
-  )}
-</TabsTrigger>
-
-<TabsContent value="rascunhos">
-  {categorized.rascunhos.length === 0 ? (
-    <EmptyState message="Nenhum rascunho" />
-  ) : (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {categorized.rascunhos.map(premiacao => (
-        <PremiacaoCard key={premiacao.id} premiacao={premiacao} />
-      ))}
-    </div>
-  )}
-</TabsContent>
+// Buscar squads e nome do departamento da BU
+const { data: buData } = useQuery({
+  queryKey: ['bu-data', premiacao.bu],
+  queryFn: async () => {
+    // 1. Buscar nome do departamento pelo código
+    const { data: depto, error: deptoError } = await supabase
+      .from('departamentos')
+      .select('nome, codigo')
+      .eq('codigo', premiacao.bu)
+      .single();
+    
+    if (deptoError) throw deptoError;
+    
+    // 2. Buscar squads do departamento
+    const { data: squads, error: squadsError } = await supabase
+      .from('squads')
+      .select('nome')
+      .eq('departamento_id', depto.id);
+    
+    return {
+      departamentoNome: depto.nome,
+      squadNames: squads?.map(s => s.nome) || []
+    };
+  },
+});
 ```
+
+### Passo 2: Modificar query de employees para usar OR com departamento
+
+```typescript
+const { data: employees } = useQuery({
+  queryFn: async () => {
+    // Buscar employees que:
+    // 1. Têm squad em squadNames OU
+    // 2. Têm departamento = departamentoNome (fallback para squad null)
+    const { data, error } = await supabase
+      .from('employees')
+      .select('id, nome_completo, cargo, squad, departamento')
+      .eq('status', 'ativo')
+      .or(`squad.in.(${squadNames.join(',')}),departamento.eq.${departamentoNome}`);
+    
+    // Filtrar cargos case-insensitive
+    const cargosLower = premiacao.cargos_elegiveis.map(c => c.toLowerCase());
+    return data?.filter(e => 
+      cargosLower.includes(e.cargo?.toLowerCase())
+    ) || [];
+  },
+});
+```
+
+---
+
+## Resultado Esperado
+
+Após a correção, o ranking exibirá **12+ SDRs** da BU Incorporador:
+- Alexsandro Dias dos Santos
+- Antony Elias Monteiro da silva
+- Carol Correa
+- Carol Souza
+- Emily Segundario
+- Jessica Martins
+- Julia Caroline
+- Juliana Rodrigues
+- Leticia Nunes
+- Vinicius Rangel
+- Vitor Costta
+- Yanca Oliveira
 
 ---
 
@@ -87,34 +113,4 @@ return {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/premiacoes/Index.tsx` | Adicionar categoria "rascunhos" e nova aba no TabsList |
-
----
-
-## Resultado Esperado
-
-Após a correção:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  Em Andamento  │  Próximas  │  Rascunhos (2)  │  Encerradas │
-└─────────────────────────────────────────────────────────────┘
-                              ↑
-                    Suas 2 premiações aparecerão aqui
-```
-
----
-
-## Fluxo Corrigido
-
-```text
-Premiação criada → Status: rascunho → Aparece em "Rascunhos"
-                          ↓
-                   Ativar premiação
-                          ↓
-                   Status: ativa → Aparece em "Em Andamento" ou "Próximas"
-                          ↓
-                   Período termina
-                          ↓
-                   Aparece em "Encerradas"
-```
+| `src/components/premiacoes/RankingLeaderboard.tsx` | Buscar departamento.nome além dos squads e usar OR na query de employees para incluir colaboradores sem squad mas com departamento correto |
