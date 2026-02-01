@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfWeek, endOfWeek } from 'date-fns';
+import { startOfMonth, endOfMonth } from 'date-fns';
+import { getDeduplicatedGross } from '@/lib/incorporadorPricing';
 
 export interface BUMetrics {
   bu: 'incorporador' | 'consorcio' | 'credito' | 'leilao';
@@ -8,12 +9,21 @@ export interface BUMetrics {
   target: number;
 }
 
-// Default targets (used if not configured in team_targets)
+// Default targets (monthly values)
 const DEFAULT_TARGETS: Record<string, number> = {
-  ultrameta_incorporador: 500000,
-  ultrameta_consorcio: 150000,
-  ultrameta_credito: 100000,
-  ultrameta_leilao: 50000,
+  ultrameta_incorporador: 2500000,  // 2.5M
+  ultrameta_consorcio: 15000000,    // 15M em cartas
+  ultrameta_credito: 500000,
+  ultrameta_leilao: 200000,
+};
+
+// Format date for RPC query with timezone
+const formatDateForQuery = (date: Date, isEndOfDay = false): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const time = isEndOfDay ? '23:59:59' : '00:00:00';
+  return `${year}-${month}-${day}T${time}-03:00`;
 };
 
 export function useUltrametaByBU() {
@@ -21,40 +31,44 @@ export function useUltrametaByBU() {
     queryKey: ['ultrameta-by-bu'],
     queryFn: async (): Promise<BUMetrics[]> => {
       const now = new Date();
-      const weekStart = startOfWeek(now, { weekStartsOn: 6 }); // Saturday
-      const weekEnd = endOfWeek(now, { weekStartsOn: 6 }); // Friday
+      const monthStart = startOfMonth(now);
+      const monthEnd = endOfMonth(now);
 
-      // Fetch all data in parallel
+      // 1. Fetch first transaction IDs for deduplication
+      const { data: firstIdsData } = await supabase.rpc('get_first_transaction_ids');
+      const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
+
+      // 2. Fetch all data in parallel
       const [
         incorporadorResult,
         consorcioResult,
         leilaoResult,
         targetsResult,
       ] = await Promise.all([
-        // Incorporador: hubla_transactions with product_category = 'incorporador'
-        // Use gross_override if available, otherwise product_price
-        supabase
-          .from('hubla_transactions')
-          .select('net_value, product_price, gross_override')
-          .eq('product_category', 'incorporador')
-          .gte('sale_date', weekStart.toISOString())
-          .lte('sale_date', weekEnd.toISOString()),
+        // Incorporador: use RPC with monthly period
+        supabase.rpc('get_all_hubla_transactions', {
+          p_start_date: formatDateForQuery(monthStart),
+          p_end_date: formatDateForQuery(monthEnd, true),
+          p_limit: 10000,
+          p_search: null,
+          p_products: null,
+        }),
 
-        // Consórcio: consortium_cards valor_comissao
+        // Consórcio: consortium_cards valor_credito (NOT valor_comissao)
         supabase
           .from('consortium_cards')
-          .select('valor_comissao')
-          .gte('data_contratacao', weekStart.toISOString().split('T')[0])
-          .lte('data_contratacao', weekEnd.toISOString().split('T')[0])
-          .not('valor_comissao', 'is', null),
+          .select('valor_credito')
+          .gte('data_contratacao', monthStart.toISOString().split('T')[0])
+          .lte('data_contratacao', monthEnd.toISOString().split('T')[0])
+          .not('valor_credito', 'is', null),
 
         // Leilão: hubla_transactions with product_category = 'clube_arremate'
         supabase
           .from('hubla_transactions')
           .select('net_value, product_price, gross_override')
           .eq('product_category', 'clube_arremate')
-          .gte('sale_date', weekStart.toISOString())
-          .lte('sale_date', weekEnd.toISOString()),
+          .gte('sale_date', monthStart.toISOString())
+          .lte('sale_date', monthEnd.toISOString()),
 
         // Targets from team_targets
         supabase
@@ -68,29 +82,32 @@ export function useUltrametaByBU() {
           ]),
       ]);
 
-      // Helper to calculate gross value from hubla transactions
-      const calcGrossValue = (data: { net_value: number | null; product_price: number | null; gross_override: number | null }[] | null) => {
-        if (!data) return 0;
-        return data.reduce((sum, row) => {
-          // Priority: gross_override > product_price > net_value
-          const value = row.gross_override ?? row.product_price ?? row.net_value ?? 0;
-          return sum + value;
-        }, 0);
-      };
+      // 3. Calculate Incorporador with deduplication
+      const incorporadorValue = (incorporadorResult.data || []).reduce((sum: number, t: any) => {
+        const isFirst = firstIdSet.has(t.id);
+        const transaction = {
+          product_name: t.product_name,
+          product_price: t.product_price,
+          installment_number: t.installment_number,
+          gross_override: t.gross_override,
+        };
+        return sum + getDeduplicatedGross(transaction, isFirst);
+      }, 0);
 
-      // Calculate totals
-      const incorporadorValue = calcGrossValue(incorporadorResult.data);
-
+      // 4. Calculate Consórcio using valor_credito
       const consorcioValue = consorcioResult.data?.reduce(
-        (sum, row) => sum + (row.valor_comissao || 0),
+        (sum, row) => sum + (row.valor_credito || 0),
         0
       ) || 0;
 
-      // For Crédito, we'll use a placeholder since credit_operations may not exist
-      // TODO: Replace with actual credit metrics when table is confirmed
-      const creditoValue = 0;
+      // 5. Calculate Leilão
+      const leilaoValue = (leilaoResult.data || []).reduce((sum: number, row: any) => {
+        const value = row.gross_override ?? row.product_price ?? row.net_value ?? 0;
+        return sum + value;
+      }, 0);
 
-      const leilaoValue = calcGrossValue(leilaoResult.data);
+      // Crédito placeholder (no data source yet)
+      const creditoValue = 0;
 
       // Build targets map
       const targetsMap: Record<string, number> = {};

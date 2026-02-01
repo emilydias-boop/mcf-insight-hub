@@ -48,13 +48,16 @@ const ROLE_DESTINATIONS: Record<string, string> = {
 };
 
 export default function Home() {
-  const { user, role, allRoles } = useAuth();
+  const { user, role } = useAuth();
   const { data: myBU } = useMyBU();
   const { data: metrics, isLoading } = useUltrametaByBU();
   const navigate = useNavigate();
 
   // Get user's first name for greeting
   const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'Usuário';
+
+  // Only admin and manager can navigate to BU dashboards
+  const canNavigateToBU = role === 'admin' || role === 'manager';
 
   // Determine where to navigate based on role and BU
   const getMyAreaDestination = () => {
@@ -101,6 +104,7 @@ export default function Home() {
                 value={buMetrics?.value || 0}
                 target={buMetrics?.target || 0}
                 isLoading={isLoading}
+                canNavigate={canNavigateToBU}
               />
             );
           })}
@@ -118,9 +122,9 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* Week info */}
+        {/* Month info */}
         <p className="text-center text-sm text-muted-foreground">
-          Semana atual (Sábado a Sexta)
+          Mês atual
         </p>
       </div>
     </div>
