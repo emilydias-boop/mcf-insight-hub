@@ -1,62 +1,61 @@
 
-# Correção: Visibilidade do Menu Premiações
+# Correção: Erro de Select.Item com value vazio
 
-## Diagnóstico
+## Problema Identificado
 
-O item "Premiações" foi adicionado corretamente ao sidebar (linha 246-251) com as seguintes configurações:
+O erro ocorre porque o componente Radix Select não permite que `SelectItem` tenha `value=""`. Na página `/premiacoes/Index.tsx`, há dois locais com este problema:
 
-```typescript
-{
-  title: "Premiações",
-  url: "/premiacoes",
-  icon: Trophy,
-  requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "closer_sombra"],
-}
-```
-
-### Por que não está aparecendo?
-
-**Possibilidade 1**: Sua role atual não está na lista
-- Roles que **NÃO** veem Premiações: `viewer`, `financeiro`, `rh`
-- Se você está logado como uma dessas roles, não verá o menu
-
-**Possibilidade 2**: Posição no menu dificulta encontrar
-- O item está no meio da lista, entre "Tarefas" e "Minhas Reuniões"
-- Pode parecer "perdido" para usuários que não scrollam
+| Linha | Código Problemático |
+|-------|---------------------|
+| 94 | `<SelectItem value="">Todas as BUs</SelectItem>` |
+| 108 | `<SelectItem value="">Todos os status</SelectItem>` |
 
 ---
 
-## Correções Propostas
+## Solução
 
-### 1. Adicionar todas as roles que deveriam ver Premiações
+Substituir os valores vazios por um valor especial (ex: `"all"`) e ajustar a lógica de filtragem.
 
-Incluir `rh` e `financeiro` na lista de roles, pois eles também podem participar de premiações:
+### Alterações no Index.tsx
 
-```typescript
-requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "closer_sombra", "rh", "financeiro", "viewer"],
-```
-
-### 2. Reposicionar o item no menu
-
-Mover para uma posição mais visível - próximo ao final, antes de Configurações, para que seja facilmente encontrado por todos os usuários.
-
-### 3. Confirmar que não há filtro de BU
-
-O item **não** possui `requiredBU`, então está correto - todas as BUs podem ver.
+1. Mudar o estado inicial de `selectedBU` e `selectedStatus` de `''` para `'all'`
+2. Mudar os `value` dos SelectItem de `""` para `"all"`
+3. Ajustar a chamada do hook `usePremiacoes` para tratar `"all"` como undefined
 
 ---
 
-## Arquivos a Modificar
+## Detalhes Técnicos
+
+### Antes (com erro)
+```typescript
+const [selectedBU, setSelectedBU] = useState<string>(activeBU || '');
+const [selectedStatus, setSelectedStatus] = useState<string>('');
+
+// ... no JSX
+<SelectItem value="">Todas as BUs</SelectItem>
+<SelectItem value="">Todos os status</SelectItem>
+```
+
+### Depois (corrigido)
+```typescript
+const [selectedBU, setSelectedBU] = useState<string>(activeBU || 'all');
+const [selectedStatus, setSelectedStatus] = useState<string>('all');
+
+// ... no JSX
+<SelectItem value="all">Todas as BUs</SelectItem>
+<SelectItem value="all">Todos os status</SelectItem>
+
+// Ajuste na chamada do hook
+const { data: premiacoes, isLoading } = usePremiacoes(
+  selectedBU !== 'all' ? selectedBU : undefined,
+  selectedStatus !== 'all' ? selectedStatus : undefined
+);
+```
+
+---
+
+## Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/layout/AppSidebar.tsx` | Adicionar mais roles ao item Premiações e reposicionar no menu |
-
----
-
-## Verificação
-
-Após a correção:
-1. Logar com diferentes roles (SDR, Closer, Manager, RH)
-2. Verificar se o menu "Premiações" aparece para todas
-3. Clicar e confirmar acesso à página `/premiacoes`
+| `src/pages/premiacoes/Index.tsx` | Trocar valores vazios por "all" e ajustar lógica |
