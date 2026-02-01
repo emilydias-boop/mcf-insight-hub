@@ -1,109 +1,217 @@
 
-
-# Distribuição de Leads da Lista com Tag "Lead-Lançamento"
+# Sistema de Premiações por BU
 
 ## Resumo
 
-| Métrica | Valor |
-|---------|-------|
-| Leads da lista para distribuir | ~503 |
-| SDRs para distribuição | 8 |
-| Leads por SDR | ~63 cada |
-| Tag a ser adicionada | `Lead-Lançamento` |
+Sistema completo para criação e acompanhamento de campanhas de premiação por Business Unit, onde gestores podem definir metas competitivas, métricas de ranking e prazos, enquanto colaboradores visualizam seu progresso em tempo real.
 
-## 8 SDRs que Receberão os Leads
+---
 
-| SDR | Email | Profile ID |
-|-----|-------|------------|
-| Julia Caroline | julia.caroline@minhacasafinanciada.com | 794a2257-422c-4b38-9014-3135d9e26361 |
-| Caroline Souza | caroline.souza@minhacasafinanciada.com | 4c947a4c-80c1-4439-bd31-2b38e3a3f1d0 |
-| Caroline Corrêa | carol.correa@minhacasafinanciada.com | c7005c87-76fc-43a9-8bfa-e1b41f48a9b7 |
-| Juliana Rodrigues | juliana.rodrigues@minhacasafinanciada.com | baa6047c-6b41-42ef-bfd0-248eef9b560a |
-| Leticia Nunes | leticia.nunes@minhacasafinanciada.com | c1ede6ed-e3ae-465f-91dd-a708200a85fc |
-| Antony Elias | antony.elias@minhacasafinanciada.com | 70113bef-a779-414c-8ab4-ce8b13229d3a |
-| Jessica Martins | jessica.martins@minhacasafinanciada.com | b0ea004d-ca72-4190-ab69-a9685b34bd06 |
-| Alex Dias | alex.dias@minhacasafinanciada.com | 16c5d025-9cda-45fa-ae2f-7170bfb8dee8 |
+## Funcionalidades
 
-## O que será feito em cada Deal
+### Para Gestores de BU
+- Criar novas premiações com nome, descrição e prêmio
+- Selecionar BU e cargos elegíveis (SDR, Closer, Coordenador, etc.)
+- Definir prazo de início e fim da campanha
+- Escolher métricas de ranking (agendamentos, realizadas, contratos, tentativas, OTE)
+- Configurar número de ganhadores (Top 1, Top 3, ou quantidade específica)
+- Definir se é competição individual ou por equipe
 
-| Campo | Valor |
-|-------|-------|
-| `owner_id` | Email do SDR atribuído |
-| `owner_profile_id` | UUID do perfil do SDR |
-| `tags` | Adiciona `Lead-Lançamento` às tags existentes |
-| `updated_at` | Timestamp atual |
+### Para Colaboradores
+- Visualizar premiações ativas da sua BU e cargo
+- Ver ranking em tempo real com posição atual
+- Acompanhar progresso vs meta
+- Ver quem está na frente e atrás no ranking
+- Histórico de premiações encerradas
 
-## Resultado Esperado
+---
 
-Após a execução:
-- ~503 leads distribuídos igualmente entre 8 SDRs
-- Todos os leads terão a tag **"Lead-Lançamento"** para fácil identificação
-- Cada deal terá registro de atividade para auditoria
+## Estrutura de Telas
+
+### 1. Página Principal de Premiações (`/premiacoes`)
+- Lista de campanhas ativas separadas por status (Em andamento, Próximas, Encerradas)
+- Cards com: nome, prêmio, prazo, participantes, sua posição no ranking
+- Filtros por BU e status
+- Botão "Nova Premiação" (visível para gestores)
+
+### 2. Detalhes da Premiação (`/premiacoes/:id`)
+- Header com informações da campanha e countdown para término
+- Ranking completo em formato de tabela/leaderboard
+- Destaque para Top 3 com indicadores visuais
+- Gráfico de evolução do ranking ao longo do tempo
+- Regras e critérios da premiação
+
+### 3. Formulário de Nova Premiação (`/premiacoes/nova`)
+- Campos organizados em steps ou accordion:
+  - **Básico**: Nome, descrição, prêmio (texto ou valor)
+  - **Participantes**: BU, cargos elegíveis, tipo (individual/equipe)
+  - **Período**: Data início, data fim
+  - **Métricas**: Seleção da métrica de ranking com opções:
+    - R1 Agendadas
+    - R1 Realizadas
+    - Contratos Pagos
+    - Tentativas de Ligação
+    - Taxa de Conversão (%)
+    - OTE Atingido (%)
+    - Customizado (soma ponderada)
+  - **Ganhadores**: Quantidade e descrição de prêmios por posição
+
+---
+
+## Métricas Disponíveis para Ranking
+
+| Métrica | Fonte | Descrição |
+|---------|-------|-----------|
+| `agendamentos` | Agenda R1 | Total de reuniões agendadas |
+| `realizadas` | Agenda R1 | Reuniões efetivamente realizadas |
+| `contratos` | Agenda R1 | Contratos pagos atribuídos |
+| `tentativas` | Twilio/CRM | Tentativas de ligação |
+| `no_show_inverso` | Agenda R1 | Menor taxa de no-show = melhor |
+| `taxa_conversao` | Calculado | contratos/realizadas × 100 |
+| `ote_pct` | Fechamento | % de OTE atingido no mês |
 
 ---
 
 ## Seção Técnica
 
-### Arquivo a Criar
+### Novas Tabelas no Supabase
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/distribute-leads-list/index.ts` | Criar nova Edge Function |
+#### `premiacoes`
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `id` | uuid | PK |
+| `nome` | text | Nome da premiação |
+| `descricao` | text | Descrição/regras |
+| `premio_descricao` | text | Descrição do prêmio |
+| `premio_valor` | numeric | Valor do prêmio (opcional) |
+| `bu` | text | Business Unit alvo |
+| `cargos_elegiveis` | text[] | Array de cargos participantes |
+| `tipo_competicao` | text | 'individual' ou 'equipe' |
+| `metrica_ranking` | text | Métrica usada para ordenar |
+| `metrica_config` | jsonb | Configurações extras (peso, inversão) |
+| `data_inicio` | date | Início da campanha |
+| `data_fim` | date | Fim da campanha |
+| `qtd_ganhadores` | int | Número de premiados |
+| `status` | text | 'rascunho', 'ativa', 'encerrada', 'cancelada' |
+| `created_by` | uuid | FK profiles |
+| `created_at` | timestamptz | |
+| `updated_at` | timestamptz | |
 
-### Estrutura da Edge Function
+#### `premiacao_ganhadores`
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `id` | uuid | PK |
+| `premiacao_id` | uuid | FK premiacoes |
+| `posicao` | int | 1º, 2º, 3º... |
+| `employee_id` | uuid | FK employees (individual) |
+| `squad` | text | Squad vencedor (equipe) |
+| `valor_final` | numeric | Valor da métrica |
+| `premio_recebido` | text | Descrição do prêmio |
+| `created_at` | timestamptz | |
+
+### Novos Arquivos
 
 ```text
-1. Lista fixa dos ~500 emails fornecidos
-2. Buscar contatos por email (LOWER para case insensitive)
-3. Buscar deals desses contatos que ainda não têm owner
-4. Embaralhar deals aleatoriamente
-5. Distribuir em round-robin entre os 8 SDRs
-6. Para cada deal:
-   - Atualizar owner_id e owner_profile_id
-   - Adicionar tag "Lead-Lançamento" ao array de tags
-   - Registrar activity_type: 'owner_change'
+src/
+├── pages/
+│   └── premiacoes/
+│       ├── Index.tsx           # Lista de premiações
+│       ├── Detail.tsx          # Detalhes e ranking
+│       └── NovaPremiacao.tsx   # Formulário de criação
+├── components/
+│   └── premiacoes/
+│       ├── PremiacaoCard.tsx           # Card resumo
+│       ├── RankingLeaderboard.tsx      # Tabela de ranking
+│       ├── RankingPosition.tsx         # Posição do usuário
+│       ├── PremiacaoFormFields.tsx     # Campos do formulário
+│       └── MetricaSelector.tsx         # Seletor de métrica
+├── hooks/
+│   └── usePremiacoes.ts        # Queries e mutations
+└── types/
+    └── premiacoes.ts           # Interfaces TypeScript
 ```
 
-### Lógica de Adição da Tag
+### Lógica de Cálculo do Ranking
+
+O ranking será calculado em tempo real no frontend usando dados já disponíveis:
 
 ```typescript
-// Manter tags existentes + adicionar "Lead-Lançamento"
-const newTags = deal.tags 
-  ? (deal.tags.includes('Lead-Lançamento') ? deal.tags : [...deal.tags, 'Lead-Lançamento'])
-  : ['Lead-Lançamento'];
+// Exemplo de cálculo para métrica "agendamentos"
+const calcularRanking = (premiacao, participantes, metricas) => {
+  return participantes
+    .map(p => ({
+      ...p,
+      valor: metricas[p.id]?.[premiacao.metrica_ranking] || 0
+    }))
+    .sort((a, b) => {
+      // Métricas inversas (menor = melhor)
+      if (premiacao.metrica_config?.inverso) {
+        return a.valor - b.valor;
+      }
+      return b.valor - a.valor;
+    })
+    .map((p, index) => ({ ...p, posicao: index + 1 }));
+};
 ```
 
-### Activity Log
+### RLS Policies
 
-```json
-{
-  "deal_id": "uuid",
-  "activity_type": "owner_change",
-  "description": "Atribuído para [Nome SDR] via distribuição de lista específica",
-  "metadata": {
-    "new_owner": "email@...",
-    "new_owner_name": "Nome SDR",
-    "new_owner_profile_id": "uuid",
-    "tag_added": "Lead-Lançamento",
-    "batch_operation": "specific-list-distribution",
-    "distributed_at": "2026-02-01T..."
-  }
-}
+```sql
+-- Visualização: todos autenticados veem premiações da sua BU
+CREATE POLICY "premiacoes_select" ON premiacoes
+FOR SELECT TO authenticated
+USING (
+  bu IN (SELECT squad FROM profiles WHERE id = auth.uid())
+  OR EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'manager'))
+);
+
+-- Criação/Edição: gestores da BU ou admins
+CREATE POLICY "premiacoes_insert" ON premiacoes
+FOR INSERT TO authenticated
+WITH CHECK (
+  EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'manager', 'coordenador'))
+);
 ```
 
-### Retorno da Função
+### Rotas a Adicionar
 
-```json
-{
-  "success": true,
-  "message": "Distributed 503 deals to 8 SDRs equally",
-  "updated": 503,
-  "activities_created": 503,
-  "distribution": [
-    { "name": "Julia Caroline", "email": "julia.caroline@...", "assigned": 63 },
-    { "name": "Caroline Souza", "email": "caroline.souza@...", "assigned": 63 },
-    ...
-  ]
-}
+```typescript
+// Em App.tsx
+<Route path="premiacoes" element={<PremiacoesIndex />} />
+<Route path="premiacoes/:id" element={<PremiacaoDetail />} />
+<Route path="premiacoes/nova" element={<NovaPremiacao />} />
 ```
 
+### Integração com Métricas Existentes
+
+O sistema reutilizará hooks existentes para buscar dados:
+- `useSdrPayouts` - para métricas de fechamento
+- `useAgendaMetrics` - para métricas de agenda
+- `useEmployees` - para lista de colaboradores por BU/cargo
+
+---
+
+## Fluxo de Uso
+
+```text
+1. Gestor acessa /premiacoes
+2. Clica em "Nova Premiação"
+3. Preenche dados: nome, BU, cargos, métrica, período, ganhadores
+4. Publica a premiação (status: ativa)
+5. Colaboradores elegíveis visualizam na lista
+6. Ranking atualiza em tempo real conforme métricas mudam
+7. Ao encerrar, sistema registra ganhadores automaticamente
+```
+
+---
+
+## Próximos Passos da Implementação
+
+1. Criar migração SQL com tabelas `premiacoes` e `premiacao_ganhadores`
+2. Criar types TypeScript em `src/types/premiacoes.ts`
+3. Criar hook `usePremiacoes.ts` com queries e mutations
+4. Implementar página de listagem (`Index.tsx`)
+5. Implementar página de detalhes com ranking (`Detail.tsx`)
+6. Implementar formulário de criação (`NovaPremiacao.tsx`)
+7. Adicionar rotas no `App.tsx`
+8. Adicionar link no menu lateral
