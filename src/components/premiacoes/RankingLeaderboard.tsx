@@ -18,33 +18,59 @@ interface RankingLeaderboardProps {
 export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderboardProps) {
   const { user } = useAuth();
 
-  // Buscar squads da BU
-  const { data: buSquads } = useQuery({
-    queryKey: ['bu-squads', premiacao.bu],
+  // Buscar squads e nome do departamento da BU
+  const { data: buData } = useQuery({
+    queryKey: ['bu-data', premiacao.bu],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('squads')
-        .select('nome, departamentos!inner(codigo)')
-        .eq('departamentos.codigo', premiacao.bu);
+      // 1. Buscar departamento pelo código
+      const { data: depto, error: deptoError } = await supabase
+        .from('departamentos')
+        .select('id, nome, codigo')
+        .eq('codigo', premiacao.bu)
+        .single();
 
-      if (error) throw error;
-      return data;
+      if (deptoError) throw deptoError;
+
+      // 2. Buscar squads do departamento
+      const { data: squads, error: squadsError } = await supabase
+        .from('squads')
+        .select('nome')
+        .eq('departamento_id', depto.id);
+
+      if (squadsError) throw squadsError;
+
+      return {
+        departamentoNome: depto.nome,
+        squadNames: squads?.map((s: any) => s.nome) || []
+      };
     },
   });
 
-  const squadNames = useMemo(() => buSquads?.map((s: any) => s.nome) || [], [buSquads]);
+  const squadNames = useMemo(() => buData?.squadNames || [], [buData]);
+  const departamentoNome = buData?.departamentoNome;
 
-  // Buscar colaboradores elegíveis
+  // Buscar colaboradores elegíveis (por squad OU por departamento)
   const { data: employees, isLoading: loadingEmployees } = useQuery({
-    queryKey: ['ranking-employees', squadNames, premiacao.cargos_elegiveis],
+    queryKey: ['ranking-employees', squadNames, departamentoNome, premiacao.cargos_elegiveis],
     queryFn: async () => {
-      if (squadNames.length === 0) return [];
+      if (squadNames.length === 0 && !departamentoNome) return [];
+
+      // Construir filtro OR: squad em squadNames OU departamento = departamentoNome
+      let orFilter = '';
+      if (squadNames.length > 0) {
+        orFilter = `squad.in.(${squadNames.join(',')})`;
+      }
+      if (departamentoNome) {
+        orFilter = orFilter 
+          ? `${orFilter},departamento.eq.${departamentoNome}`
+          : `departamento.eq.${departamentoNome}`;
+      }
 
       const { data, error } = await supabase
         .from('employees')
-        .select('id, nome_completo, cargo, squad')
+        .select('id, nome_completo, cargo, squad, departamento')
         .eq('status', 'ativo')
-        .in('squad', squadNames);
+        .or(orFilter);
 
       if (error) throw error;
 
@@ -54,7 +80,7 @@ export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderbo
         cargosLower.includes(e.cargo?.toLowerCase())
       ) || [];
     },
-    enabled: squadNames.length > 0,
+    enabled: squadNames.length > 0 || !!departamentoNome,
   });
 
   // Buscar métricas de fechamento para o período
@@ -66,7 +92,6 @@ export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderbo
       return {};
     },
   });
-
   // Calcular ranking
   const ranking = useMemo(() => {
     if (!employees) return [];
