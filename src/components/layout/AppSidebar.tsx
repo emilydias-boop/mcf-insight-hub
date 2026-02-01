@@ -242,12 +242,11 @@ const menuItems: MenuItem[] = [
     requiredRoles: ["admin", "manager", "coordenador"],
   },
 
-  // PREMIAÇÕES
+  // PREMIAÇÕES - Visível para todas as roles
   {
     title: "Premiações",
     url: "/premiacoes",
     icon: Trophy,
-    requiredRoles: ["admin", "manager", "coordenador", "sdr", "closer", "closer_sombra"],
   },
 
   // ===== ITENS AVULSOS PARA SDR/CLOSER =====
