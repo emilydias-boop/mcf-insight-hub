@@ -4,7 +4,7 @@ import Tarefas from "./pages/Tarefas";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { TwilioProvider } from "./contexts/TwilioContext";
 import { AppearanceProvider } from "./contexts/AppearanceContext";
@@ -153,7 +153,7 @@ const App = () => (
               {/* Chairman Dashboard - Executive View */}
               <Route path="chairman" element={<RoleGuard allowedRoles={['admin', 'manager']}><Chairman /></RoleGuard>} />
               
-              <Route index element={<ResourceGuard resource="dashboard"><Dashboard /></ResourceGuard>} />
+              <Route index element={<Navigate to="/home" replace />} />
               <Route path="dashboard/semanas" element={<RoleGuard allowedRoles={['admin', 'manager', 'coordenador']}><DashboardSemanas /></RoleGuard>} />
               <Route path="receita" element={<ResourceGuard resource="receita"><Receita /></ResourceGuard>}>
                 <Route index element={<ReceitaOverview />} />
