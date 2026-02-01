@@ -1,111 +1,172 @@
 
-# Correção: Ranking não encontra SDRs da BU Incorporador
+# Integração: Métricas Reais no Ranking de Premiações
 
-## Problema Identificado
+## Problema Atual
 
-O ranking mostra apenas **Emily Segundario** porque a query atual filtra por `squad`, mas a maioria dos SDRs tem `squad = NULL`:
+O ranking de premiações está usando **valores aleatórios simulados** (`Math.random()`) ao invés de buscar os dados reais do sistema de fechamento.
 
-| SDR | Departamento | Squad |
-|-----|-------------|-------|
-| Alexsandro Dias | BU - Incorporador 50K | NULL |
-| Antony Elias | BU - Incorporador 50K | NULL |
-| Carol Correa | BU - Incorporador 50K | NULL |
-| Carol Souza | BU - Incorporador 50K | NULL |
-| Jessica Martins | BU - Incorporador 50K | NULL |
-| Julia Caroline | BU - Incorporador 50K | NULL |
-| Juliana Rodrigues | BU - Incorporador 50K | NULL |
-| Leticia Nunes | BU - Incorporador 50K | NULL |
-| Vinicius Rangel | BU - Incorporador 50K | NULL |
-| Vitor Costta | BU - Incorporador 50K | NULL |
-| Yanca Oliveira | BU - Incorporador 50K | NULL |
-| **Emily Segundario** | TI | Inside Sales Produto |
+```typescript
+// RankingLeaderboard.tsx linha 108
+valor: Math.floor(Math.random() * 100), // TODO: Usar dados reais
+```
 
-A query atual busca employees onde `squad IN ('Comercial', 'Inside Sales Produto', 'Closer')`, mas ignora o campo `departamento`.
+---
+
+## Fonte de Dados Disponível
+
+Os dados reais estão na tabela `sdr_month_payout` (Jan/2026):
+
+| Colaborador | total_conta | pct_agendadas |
+|-------------|-------------|---------------|
+| Jessica Martins | R$ 5.040 | 83.5% |
+| Carol Correa | R$ 3.570 | 96.7% |
+| Cristiane Gomes | R$ 3.400 | 215% |
+| Antony Elias | R$ 3.360 | 90% |
+
+Para calcular **OTE %**:
+```
+OTE % = (total_conta / ote_total) × 100
+```
+
+---
+
+## Mapeamento Métrica → Campo
+
+| Métrica Selecionada | Fonte | Campo |
+|---------------------|-------|-------|
+| `agendamentos` | sdr_month_kpi | reunioes_agendadas |
+| `realizadas` | sdr_month_kpi | reunioes_realizadas |
+| `contratos` | Agenda/Hubla | contract_paid count |
+| `tentativas` | sdr_month_kpi | tentativas_ligacoes |
+| `no_show_inverso` | sdr_month_payout | pct_no_show (inverter) |
+| `taxa_conversao` | Calculado | contratos/realizadas × 100 |
+| `ote_pct` | sdr_month_payout + sdr_comp_plan | total_conta/ote_total × 100 |
 
 ---
 
 ## Solução Proposta
 
-Modificar a lógica para buscar colaboradores de duas formas:
-1. **Por squad**: employees cujo `squad` pertence à BU
-2. **Por departamento (fallback)**: employees cujo `departamento` = nome do departamento da BU
+### Arquivo: `src/components/premiacoes/RankingLeaderboard.tsx`
+
+### Passo 1: Criar função para buscar métricas por período
+
+```typescript
+const getAnoMesFromPeriodo = (dataInicio: string, dataFim: string): string[] => {
+  // Retorna array de ano_mes no formato "2026-01"
+  // Para período 01/01 a 31/01 → ["2026-01"]
+  // Para período 01/01 a 28/02 → ["2026-01", "2026-02"]
+};
+```
+
+### Passo 2: Buscar payouts dos colaboradores elegíveis
+
+```typescript
+const { data: payouts } = useQuery({
+  queryKey: ['ranking-payouts', employeeIds, anoMesList],
+  queryFn: async () => {
+    // Mapear employees.email → sdr.email → sdr_month_payout
+    const { data } = await supabase
+      .from('sdr_month_payout')
+      .select(`
+        *,
+        sdr:sdr_id(id, email, name)
+      `)
+      .in('ano_mes', anoMesList);
+    
+    return data;
+  },
+});
+```
+
+### Passo 3: Buscar comp plans para calcular OTE %
+
+```typescript
+const { data: compPlans } = useQuery({
+  queryKey: ['ranking-comp-plans', sdrIds],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('sdr_comp_plan')
+      .select('sdr_id, ote_total, vigencia_inicio, vigencia_fim')
+      .in('sdr_id', sdrIds);
+    
+    return data;
+  },
+});
+```
+
+### Passo 4: Calcular valor baseado na métrica selecionada
+
+```typescript
+const getMetricaValor = (
+  metrica: MetricaRanking,
+  payout: SdrMonthPayout | null,
+  compPlan: SdrCompPlan | null
+): number => {
+  if (!payout) return 0;
+  
+  switch (metrica) {
+    case 'agendamentos':
+      return payout.meta_agendadas_ajustada || 0;
+    case 'realizadas':
+      return payout.pct_reunioes_realizadas || 0;
+    case 'tentativas':
+      return payout.pct_tentativas || 0;
+    case 'ote_pct':
+      if (!compPlan?.ote_total) return 0;
+      return ((payout.total_conta || 0) / compPlan.ote_total) * 100;
+    case 'taxa_conversao':
+      // Precisa buscar de outra fonte
+      return 0;
+    default:
+      return 0;
+  }
+};
+```
+
+### Passo 5: Vincular employee → SDR
+
+O campo de ligação é o **email**:
+- `employees.email` (emails pessoais de colaboradores)
+- `sdr.email` (registro do SDR no fechamento)
+
+```typescript
+// Mapear employees com seus payouts via email
+const participantes = employees.map(emp => {
+  const sdrPayout = payouts?.find(p => 
+    p.sdr?.email?.toLowerCase() === emp.email?.toLowerCase()
+  );
+  const compPlan = compPlans?.find(cp => cp.sdr_id === sdrPayout?.sdr_id);
+  
+  return {
+    id: emp.id,
+    nome: emp.nome_completo,
+    valor: getMetricaValor(premiacao.metrica_ranking, sdrPayout, compPlan),
+    // ...
+  };
+});
+```
 
 ---
 
-## Alterações Técnicas
+## Dependências Adicionais
 
-### Arquivo: `src/components/premiacoes/RankingLeaderboard.tsx`
+Para métricas que não estão no payout (como `agendamentos` absolutos ou `contratos`), será necessário:
 
-### Passo 1: Buscar também o nome do departamento da BU
-
-```typescript
-// Buscar squads e nome do departamento da BU
-const { data: buData } = useQuery({
-  queryKey: ['bu-data', premiacao.bu],
-  queryFn: async () => {
-    // 1. Buscar nome do departamento pelo código
-    const { data: depto, error: deptoError } = await supabase
-      .from('departamentos')
-      .select('nome, codigo')
-      .eq('codigo', premiacao.bu)
-      .single();
-    
-    if (deptoError) throw deptoError;
-    
-    // 2. Buscar squads do departamento
-    const { data: squads, error: squadsError } = await supabase
-      .from('squads')
-      .select('nome')
-      .eq('departamento_id', depto.id);
-    
-    return {
-      departamentoNome: depto.nome,
-      squadNames: squads?.map(s => s.nome) || []
-    };
-  },
-});
-```
-
-### Passo 2: Modificar query de employees para usar OR com departamento
-
-```typescript
-const { data: employees } = useQuery({
-  queryFn: async () => {
-    // Buscar employees que:
-    // 1. Têm squad em squadNames OU
-    // 2. Têm departamento = departamentoNome (fallback para squad null)
-    const { data, error } = await supabase
-      .from('employees')
-      .select('id, nome_completo, cargo, squad, departamento')
-      .eq('status', 'ativo')
-      .or(`squad.in.(${squadNames.join(',')}),departamento.eq.${departamentoNome}`);
-    
-    // Filtrar cargos case-insensitive
-    const cargosLower = premiacao.cargos_elegiveis.map(c => c.toLowerCase());
-    return data?.filter(e => 
-      cargosLower.includes(e.cargo?.toLowerCase())
-    ) || [];
-  },
-});
-```
+1. **Buscar do sdr_month_kpi**: Para contagens absolutas
+2. **Buscar da Agenda**: Para contratos no período específico
 
 ---
 
 ## Resultado Esperado
 
-Após a correção, o ranking exibirá **12+ SDRs** da BU Incorporador:
-- Alexsandro Dias dos Santos
-- Antony Elias Monteiro da silva
-- Carol Correa
-- Carol Souza
-- Emily Segundario
-- Jessica Martins
-- Julia Caroline
-- Juliana Rodrigues
-- Leticia Nunes
-- Vinicius Rangel
-- Vitor Costta
-- Yanca Oliveira
+Após a implementação:
+
+| Posição | Colaborador | OTE % |
+|---------|-------------|-------|
+| 🥇 | Jessica Martins | 84% |
+| 🥈 | Carol Correa | 59% |
+| 🥉 | Cristiane Gomes | 57% |
+| 4 | Antony Elias | 56% |
 
 ---
 
@@ -113,4 +174,13 @@ Após a correção, o ranking exibirá **12+ SDRs** da BU Incorporador:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/premiacoes/RankingLeaderboard.tsx` | Buscar departamento.nome além dos squads e usar OR na query de employees para incluir colaboradores sem squad mas com departamento correto |
+| `src/components/premiacoes/RankingLeaderboard.tsx` | Integrar busca de payouts e comp plans, calcular métrica real baseada no campo selecionado |
+
+---
+
+## Considerações
+
+1. **Vínculo employee ↔ SDR**: Usar email como chave de ligação
+2. **Período multi-mês**: Se premiação durar 2+ meses, somar/média dos payouts
+3. **Métricas da Agenda**: Para `contratos` e `taxa_conversao`, buscar diretamente da agenda/hubla
+4. **Fallback**: Se não encontrar payout, mostrar 0 ao invés de erro
