@@ -18,19 +18,43 @@ interface RankingLeaderboardProps {
 export function RankingLeaderboard({ premiacao, qtdGanhadores }: RankingLeaderboardProps) {
   const { user } = useAuth();
 
-  // Buscar colaboradores elegíveis
-  const { data: employees, isLoading: loadingEmployees } = useQuery({
-    queryKey: ['ranking-employees', premiacao.bu, premiacao.cargos_elegiveis],
+  // Buscar squads da BU
+  const { data: buSquads } = useQuery({
+    queryKey: ['bu-squads', premiacao.bu],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('employees')
-        .select('id, nome_completo, cargo, squad')
-        .eq('squad', premiacao.bu)
-        .in('cargo', premiacao.cargos_elegiveis);
+        .from('squads')
+        .select('nome, departamentos!inner(codigo)')
+        .eq('departamentos.codigo', premiacao.bu);
 
       if (error) throw error;
       return data;
     },
+  });
+
+  const squadNames = useMemo(() => buSquads?.map((s: any) => s.nome) || [], [buSquads]);
+
+  // Buscar colaboradores elegíveis
+  const { data: employees, isLoading: loadingEmployees } = useQuery({
+    queryKey: ['ranking-employees', squadNames, premiacao.cargos_elegiveis],
+    queryFn: async () => {
+      if (squadNames.length === 0) return [];
+
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, nome_completo, cargo, squad')
+        .eq('status', 'ativo')
+        .in('squad', squadNames);
+
+      if (error) throw error;
+
+      // Filtrar cargos case-insensitive
+      const cargosLower = premiacao.cargos_elegiveis.map(c => c.toLowerCase());
+      return data?.filter(e => 
+        cargosLower.includes(e.cargo?.toLowerCase())
+      ) || [];
+    },
+    enabled: squadNames.length > 0,
   });
 
   // Buscar métricas de fechamento para o período
