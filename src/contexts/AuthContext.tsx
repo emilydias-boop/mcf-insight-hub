@@ -334,11 +334,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       );
       setAllRoles(roles.length > 0 ? roles : ['viewer']);
       
-      // Navigate based on role
+      // Navigate based on role - SDRs go to their meetings, everyone else to /home
       if (userRole === 'sdr') {
         navigate('/sdr/minhas-reunioes');
       } else {
-        navigate('/');
+        navigate('/home');
       }
 
       // Background: update last_login_at (non-blocking)
