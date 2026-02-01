@@ -112,7 +112,7 @@ const menuItems: MenuItem[] = [
     icon: LayoutDashboard,
     resource: "dashboard",
     items: [
-      { title: "Visão Geral", url: "/" },
+      { title: "Visão Geral", url: "/dashboard" },
       { title: "Semanas", url: "/dashboard/semanas", requiredRoles: ["admin", "manager", "coordenador"] },
     ],
   },
