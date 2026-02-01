@@ -5087,6 +5087,129 @@ export type Database = {
           },
         ]
       }
+      premiacao_ganhadores: {
+        Row: {
+          created_at: string
+          employee_id: string | null
+          id: string
+          posicao: number
+          premiacao_id: string
+          premio_recebido: string | null
+          squad: string | null
+          valor_final: number | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          posicao: number
+          premiacao_id: string
+          premio_recebido?: string | null
+          squad?: string | null
+          valor_final?: number | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          posicao?: number
+          premiacao_id?: string
+          premio_recebido?: string | null
+          squad?: string | null
+          valor_final?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premiacao_ganhadores_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "premiacao_ganhadores_premiacao_id_fkey"
+            columns: ["premiacao_id"]
+            isOneToOne: false
+            referencedRelation: "premiacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      premiacoes: {
+        Row: {
+          bu: string
+          cargos_elegiveis: string[]
+          created_at: string
+          created_by: string | null
+          data_fim: string
+          data_inicio: string
+          descricao: string | null
+          id: string
+          metrica_config: Json | null
+          metrica_ranking: string
+          nome: string
+          premio_descricao: string
+          premio_valor: number | null
+          qtd_ganhadores: number
+          status: string
+          tipo_competicao: string
+          updated_at: string
+        }
+        Insert: {
+          bu: string
+          cargos_elegiveis?: string[]
+          created_at?: string
+          created_by?: string | null
+          data_fim: string
+          data_inicio: string
+          descricao?: string | null
+          id?: string
+          metrica_config?: Json | null
+          metrica_ranking: string
+          nome: string
+          premio_descricao: string
+          premio_valor?: number | null
+          qtd_ganhadores?: number
+          status?: string
+          tipo_competicao?: string
+          updated_at?: string
+        }
+        Update: {
+          bu?: string
+          cargos_elegiveis?: string[]
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string
+          data_inicio?: string
+          descricao?: string | null
+          id?: string
+          metrica_config?: Json | null
+          metrica_ranking?: string
+          nome?: string
+          premio_descricao?: string
+          premio_valor?: number | null
+          qtd_ganhadores?: number
+          status?: string
+          tipo_competicao?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premiacoes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "premiacoes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_performance_summary"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       product_configurations: {
         Row: {
           count_in_dashboard: boolean | null
@@ -8017,6 +8140,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_bu_manager: { Args: { _user_id: string }; Returns: boolean }
       is_own_sdr: { Args: { _sdr_id: string }; Returns: boolean }
       link_contacts_to_origins_via_deals: { Args: never; Returns: number }
       reconcile_hubla_clint_ids: { Args: never; Returns: Json }
