@@ -1,61 +1,125 @@
 
-# Correção: Erro de Select.Item com value vazio
+# Correção: Ranking não encontra participantes elegíveis
 
 ## Problema Identificado
 
-O erro ocorre porque o componente Radix Select não permite que `SelectItem` tenha `value=""`. Na página `/premiacoes/Index.tsx`, há dois locais com este problema:
+Ao criar uma premiação com:
+- **BU**: incorporador
+- **Cargo**: SDR
 
-| Linha | Código Problemático |
-|-------|---------------------|
-| 94 | `<SelectItem value="">Todas as BUs</SelectItem>` |
-| 108 | `<SelectItem value="">Todos os status</SelectItem>` |
-
----
-
-## Solução
-
-Substituir os valores vazios por um valor especial (ex: `"all"`) e ajustar a lógica de filtragem.
-
-### Alterações no Index.tsx
-
-1. Mudar o estado inicial de `selectedBU` e `selectedStatus` de `''` para `'all'`
-2. Mudar os `value` dos SelectItem de `""` para `"all"`
-3. Ajustar a chamada do hook `usePremiacoes` para tratar `"all"` como undefined
+O ranking mostra "Nenhum participante elegível encontrado" porque a query atual está incorreta.
 
 ---
 
-## Detalhes Técnicos
+## Diagnóstico Técnico
 
-### Antes (com erro)
+A query atual em `RankingLeaderboard.tsx`:
+
 ```typescript
-const [selectedBU, setSelectedBU] = useState<string>(activeBU || '');
-const [selectedStatus, setSelectedStatus] = useState<string>('');
-
-// ... no JSX
-<SelectItem value="">Todas as BUs</SelectItem>
-<SelectItem value="">Todos os status</SelectItem>
+const { data, error } = await supabase
+  .from('employees')
+  .select('id, nome_completo, cargo, squad')
+  .eq('squad', premiacao.bu)        // ❌ Compara 'incorporador' com 'Comercial'
+  .in('cargo', premiacao.cargos_elegiveis);  // ❌ Compara 'sdr' com 'SDR'
 ```
 
-### Depois (corrigido)
+### Problema 1: Mapeamento Squad → BU incorreto
+
+| Esperado | Valor no banco |
+|----------|----------------|
+| `squad = 'incorporador'` | `squad = 'Comercial'`, `'Inside Sales Produto'`, etc. |
+
+A estrutura correta é:
+- **departamentos.codigo** = `'incorporador'` (valor da BU)
+- **squads.departamento_id** → departamentos.id
+- **employees.squad** = nome do squad (ex: `'Comercial'`)
+
+### Problema 2: Case sensitivity no cargo
+
+| Premiação | Banco de dados |
+|-----------|----------------|
+| `'sdr'` (minúsculo) | `'SDR'` (maiúsculo) |
+
+---
+
+## Solução Proposta
+
+Modificar a query para:
+
+1. Fazer JOIN com `squads` e `departamentos` para filtrar pela BU
+2. Usar comparação case-insensitive para cargos
+
+### Nova Query
+
 ```typescript
-const [selectedBU, setSelectedBU] = useState<string>(activeBU || 'all');
-const [selectedStatus, setSelectedStatus] = useState<string>('all');
+const { data, error } = await supabase
+  .from('employees')
+  .select(`
+    id, 
+    nome_completo, 
+    cargo, 
+    squad
+  `)
+  .eq('status', 'ativo')
+  .filter('squad', 'in', `(
+    SELECT s.nome FROM squads s 
+    JOIN departamentos d ON s.departamento_id = d.id 
+    WHERE d.codigo = '${premiacao.bu}'
+  )`)
+  .ilike('cargo', premiacao.cargos_elegiveis[0]); // Para múltiplos, usar OR
+```
 
-// ... no JSX
-<SelectItem value="all">Todas as BUs</SelectItem>
-<SelectItem value="all">Todos os status</SelectItem>
+**Alternativa mais simples** (recomendada):
+Buscar os nomes dos squads primeiro, depois filtrar employees:
 
-// Ajuste na chamada do hook
-const { data: premiacoes, isLoading } = usePremiacoes(
-  selectedBU !== 'all' ? selectedBU : undefined,
-  selectedStatus !== 'all' ? selectedStatus : undefined
+```typescript
+// 1. Buscar squads da BU
+const { data: buSquads } = await supabase
+  .from('squads')
+  .select('nome, departamentos!inner(codigo)')
+  .eq('departamentos.codigo', premiacao.bu);
+
+const squadNames = buSquads?.map(s => s.nome) || [];
+
+// 2. Buscar employees nesses squads com cargo case-insensitive
+const cargosLower = premiacao.cargos_elegiveis.map(c => c.toLowerCase());
+const { data, error } = await supabase
+  .from('employees')
+  .select('id, nome_completo, cargo, squad')
+  .eq('status', 'ativo')
+  .in('squad', squadNames);
+
+// Filtrar cargos no JavaScript (case-insensitive)
+const filtered = data?.filter(e => 
+  cargosLower.includes(e.cargo?.toLowerCase())
 );
 ```
 
 ---
 
-## Arquivo a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/premiacoes/Index.tsx` | Trocar valores vazios por "all" e ajustar lógica |
+| `src/components/premiacoes/RankingLeaderboard.tsx` | Corrigir query para buscar employees por BU via join com squads/departamentos e usar comparação case-insensitive para cargos |
+
+---
+
+## Resultado Esperado
+
+Após a correção, a premiação "Carro!!" com:
+- **BU**: Incorporador MCF
+- **Cargo**: SDR
+
+Irá encontrar pelo menos 2 participantes elegíveis:
+- Emily Segundario (squad: Inside Sales Produto)
+- Antony Elias Monteiro da silva (squad: Comercial)
+
+---
+
+## Validação
+
+Testar criando uma nova premiação e verificando se:
+1. Os SDRs aparecem no ranking
+2. Os dados de métrica são exibidos (atualmente simulados)
+3. O Top 3 visual funciona corretamente
