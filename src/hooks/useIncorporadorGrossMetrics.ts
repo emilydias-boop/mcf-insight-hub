@@ -50,18 +50,21 @@ export function useIncorporadorGrossMetrics(): IncorporadorGrossMetrics {
           p_start_date: formatDateForQuery(weekStart),
           p_end_date: formatDateForQuery(weekEnd, true),
           p_limit: 5000,
+          p_products: null,
         }),
         supabase.rpc('get_all_hubla_transactions', {
           p_search: null,
           p_start_date: formatDateForQuery(monthStart),
           p_end_date: formatDateForQuery(monthEnd, true),
           p_limit: 5000,
+          p_products: null,
         }),
         supabase.rpc('get_all_hubla_transactions', {
           p_search: null,
           p_start_date: formatDateForQuery(yearStart),
           p_end_date: formatDateForQuery(yearEnd, true),
           p_limit: 10000,
+          p_products: null,
         }),
       ]);
 
