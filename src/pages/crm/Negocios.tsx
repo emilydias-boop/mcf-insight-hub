@@ -22,6 +22,7 @@ import {
   isSdrRole, 
   getAuthorizedOriginsForRole,
   SDR_AUTHORIZED_ORIGIN_ID,
+  SDR_ORIGIN_BY_BU,
   BU_DEFAULT_ORIGIN_MAP,
 } from '@/components/auth/NegociosAccessGuard';
 import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
@@ -97,8 +98,12 @@ const Negocios = () => {
   
   // Calcular o originId correto para usar nas queries
   const effectiveOriginId = useMemo(() => {
-    // Para SDRs, SEMPRE usar a origem autorizada (PIPELINE INSIDE SALES)
+    // Para SDRs, usar a origem da BU ativa (respeitando a rota/perfil)
     if (isSdr) {
+      if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
+        return SDR_ORIGIN_BY_BU[activeBU];
+      }
+      // Fallback para Incorporador se não tem BU definida
       return SDR_AUTHORIZED_ORIGIN_ID;
     }
     
@@ -135,9 +140,13 @@ const Negocios = () => {
     if (pipelines && pipelines.length > 0 && !hasSetDefault.current && !isLoadingBU) {
       hasSetDefault.current = true;
       
-      // Se for SDR, pré-selecionar a origem autorizada (PIPELINE INSIDE SALES)
+      // Se for SDR, pré-selecionar a origem da BU ativa
       if (isSdr) {
-        setSelectedPipelineId(SDR_AUTHORIZED_ORIGIN_ID);
+        if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
+          setSelectedPipelineId(SDR_ORIGIN_BY_BU[activeBU]);
+        } else {
+          setSelectedPipelineId(SDR_AUTHORIZED_ORIGIN_ID);
+        }
         return;
       }
       
