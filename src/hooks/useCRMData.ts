@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 export const useCRMStages = (originOrGroupId?: string) => {
   return useQuery({
     queryKey: ['crm-stages', originOrGroupId],
+    staleTime: 30000, // 30 segundos - forçar refetch após esse tempo
     queryFn: async () => {
       if (!originOrGroupId) {
         // Sem filtro: buscar todas as stages do Clint
@@ -68,6 +69,12 @@ export const useCRMStages = (originOrGroupId?: string) => {
           .eq('origin_id', originOrGroupId)
           .eq('is_active', true)
           .order('stage_order');
+        
+        console.log('[useCRMStages] local_pipeline_stages query:', {
+          originId: originOrGroupId,
+          count: result.data?.length || 0,
+          error: result.error,
+        });
         
         localStages = result.data;
         localError = result.error;
