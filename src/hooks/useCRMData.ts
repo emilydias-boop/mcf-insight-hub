@@ -4,164 +4,176 @@ import { toast } from 'sonner';
 
 // ==================== STAGES ====================
 
-export const useCRMStages = (originOrGroupId?: string) => {
-  return useQuery({
-    queryKey: ['crm-stages', originOrGroupId],
-    staleTime: 30000, // 30 segundos
-    refetchOnMount: 'always', // Sempre refetch ao montar para garantir dados atualizados
-    refetchOnWindowFocus: true, // Refetch ao voltar para a aba
-    queryFn: async () => {
-      console.log('[useCRMStages] Starting query for originOrGroupId:', originOrGroupId);
-      
-      if (!originOrGroupId) {
-        // Sem filtro: buscar todas as stages do Clint
-        const { data, error } = await supabase
-          .from('crm_stages')
-          .select('*')
-          .eq('is_active', true)
-          .order('stage_order');
-        
-        if (error) throw error;
-        console.log('[useCRMStages] No originId - returning crm_stages:', data?.length || 0);
-        return data;
+// Options for useCRMStages hook
+interface UseCRMStagesOptions {
+  enabled?: boolean;
+  staleTime?: number;
+}
+
+// Fetch logic extracted for reuse
+const fetchCRMStages = async (originOrGroupId?: string) => {
+  console.log('[useCRMStages] Starting query for originOrGroupId:', originOrGroupId);
+  
+  if (!originOrGroupId) {
+    // Sem filtro: buscar todas as stages do Clint
+    const { data, error } = await supabase
+      .from('crm_stages')
+      .select('*')
+      .eq('is_active', true)
+      .order('stage_order');
+    
+    if (error) throw error;
+    console.log('[useCRMStages] No originId - returning crm_stages:', data?.length || 0);
+    return data;
+  }
+  
+  // 1. Verificar se é um grupo
+  const { data: groupCheck } = await supabase
+    .from('crm_groups')
+    .select('id')
+    .eq('id', originOrGroupId)
+    .maybeSingle();
+  
+  const isGroup = !!groupCheck;
+  
+  // 2. Buscar stages locais primeiro (prioridade sobre Clint)
+  let localStages: any[] | null = null;
+  let localError: any = null;
+  
+  if (isGroup) {
+    // Para grupos: buscar origens filhas primeiro
+    const { data: childOrigins } = await supabase
+      .from('crm_origins')
+      .select('id')
+      .eq('group_id', originOrGroupId);
+    
+    const originIds = childOrigins?.map(o => o.id) || [];
+    
+    // Buscar local_pipeline_stages em qualquer origem filha OU diretamente no grupo
+    let query = supabase
+      .from('local_pipeline_stages')
+      .select('*')
+      .eq('is_active', true);
+    
+    if (originIds.length > 0) {
+      // Buscar por origin_id nas origens filhas OU por group_id diretamente
+      query = query.or(
+        `origin_id.in.(${originIds.join(',')}),group_id.eq.${originOrGroupId}`
+      );
+    } else {
+      query = query.eq('group_id', originOrGroupId);
+    }
+    
+    const result = await query.order('stage_order');
+    localStages = result.data;
+    localError = result.error;
+  } else {
+    // Para origens: buscar diretamente por origin_id
+    const result = await supabase
+      .from('local_pipeline_stages')
+      .select('*')
+      .eq('origin_id', originOrGroupId)
+      .eq('is_active', true)
+      .order('stage_order');
+    
+    console.log('[useCRMStages] local_pipeline_stages query:', {
+      originId: originOrGroupId,
+      count: result.data?.length || 0,
+      error: result.error,
+    });
+    
+    localStages = result.data;
+    localError = result.error;
+  }
+  
+  if (localError) {
+    console.error('Erro ao buscar stages locais:', localError);
+  }
+  
+  // Se tem stages locais, converter para formato compatível com crm_stages
+  if (localStages && localStages.length > 0) {
+    console.log('[useCRMStages] Found local_pipeline_stages:', localStages.length, 'for', originOrGroupId);
+    
+    // Deduplicar por nome mantendo o primeiro (menor stage_order)
+    const uniqueStages = localStages.reduce((acc: any[], stage) => {
+      if (!acc.find(s => s.name === stage.name)) {
+        acc.push(stage);
       }
-      
-      // 1. Verificar se é um grupo
-      const { data: groupCheck } = await supabase
-        .from('crm_groups')
-        .select('id')
-        .eq('id', originOrGroupId)
-        .maybeSingle();
-      
-      const isGroup = !!groupCheck;
-      
-      // 2. Buscar stages locais primeiro (prioridade sobre Clint)
-      let localStages: any[] | null = null;
-      let localError: any = null;
-      
-      if (isGroup) {
-        // Para grupos: buscar origens filhas primeiro
-        const { data: childOrigins } = await supabase
-          .from('crm_origins')
-          .select('id')
-          .eq('group_id', originOrGroupId);
-        
-        const originIds = childOrigins?.map(o => o.id) || [];
-        
-        // Buscar local_pipeline_stages em qualquer origem filha OU diretamente no grupo
-        let query = supabase
-          .from('local_pipeline_stages')
-          .select('*')
-          .eq('is_active', true);
-        
-        if (originIds.length > 0) {
-          // Buscar por origin_id nas origens filhas OU por group_id diretamente
-          query = query.or(
-            `origin_id.in.(${originIds.join(',')}),group_id.eq.${originOrGroupId}`
-          );
-        } else {
-          query = query.eq('group_id', originOrGroupId);
-        }
-        
-        const result = await query.order('stage_order');
-        localStages = result.data;
-        localError = result.error;
-      } else {
-        // Para origens: buscar diretamente por origin_id
-        const result = await supabase
-          .from('local_pipeline_stages')
-          .select('*')
-          .eq('origin_id', originOrGroupId)
-          .eq('is_active', true)
-          .order('stage_order');
-        
-        console.log('[useCRMStages] local_pipeline_stages query:', {
-          originId: originOrGroupId,
-          count: result.data?.length || 0,
-          error: result.error,
-        });
-        
-        localStages = result.data;
-        localError = result.error;
-      }
-      
-      if (localError) {
-        console.error('Erro ao buscar stages locais:', localError);
-      }
-      
-      // Se tem stages locais, converter para formato compatível com crm_stages
-      if (localStages && localStages.length > 0) {
-        console.log('[useCRMStages] Found local_pipeline_stages:', localStages.length, 'for', originOrGroupId);
-        
-        // Deduplicar por nome mantendo o primeiro (menor stage_order)
-        const uniqueStages = localStages.reduce((acc: any[], stage) => {
-          if (!acc.find(s => s.name === stage.name)) {
-            acc.push(stage);
-          }
-          return acc;
-        }, []);
-        
-        return uniqueStages.map(s => ({
-          id: s.id,
-          stage_name: s.name,
-          color: s.color,
-          stage_order: s.stage_order,
-          stage_type: s.stage_type,
-          is_active: s.is_active,
-          origin_id: s.origin_id || s.group_id,
-          clint_id: `local-${s.id}`,
-          created_at: s.created_at,
-          updated_at: s.updated_at,
-        }));
-      }
-      
-      console.log('[useCRMStages] No local stages found, falling back to crm_stages for', originOrGroupId);
-      
-      // 3. Fallback: buscar stages do Clint (crm_stages)
-      if (isGroup) {
-        // Se é grupo, buscar todas origens filhas
-        const { data: childOrigins } = await supabase
-          .from('crm_origins')
-          .select('id')
-          .eq('group_id', originOrGroupId);
-        
-        const originIds = childOrigins?.map(o => o.id) || [];
-        
-        if (originIds.length > 0) {
-          const { data, error } = await supabase
-            .from('crm_stages')
-            .select('*')
-            .in('origin_id', originIds)
-            .eq('is_active', true)
-            .order('stage_order');
-          
-          if (error) throw error;
-          
-          // Remover duplicatas por nome (manter primeiro por stage_order)
-          const uniqueStages = data?.reduce((acc, stage) => {
-            if (!acc.find(s => s.stage_name === stage.stage_name)) {
-              acc.push(stage);
-            }
-            return acc;
-          }, [] as typeof data) || [];
-          
-          return uniqueStages;
-        }
-        
-        return [];
-      }
-      
-      // Origem normal
+      return acc;
+    }, []);
+    
+    return uniqueStages.map(s => ({
+      id: s.id,
+      stage_name: s.name,
+      color: s.color,
+      stage_order: s.stage_order,
+      stage_type: s.stage_type,
+      is_active: s.is_active,
+      origin_id: s.origin_id || s.group_id,
+      clint_id: `local-${s.id}`,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+    }));
+  }
+  
+  console.log('[useCRMStages] No local stages found, falling back to crm_stages for', originOrGroupId);
+  
+  // 3. Fallback: buscar stages do Clint (crm_stages)
+  if (isGroup) {
+    // Se é grupo, buscar todas origens filhas
+    const { data: childOrigins } = await supabase
+      .from('crm_origins')
+      .select('id')
+      .eq('group_id', originOrGroupId);
+    
+    const originIds = childOrigins?.map(o => o.id) || [];
+    
+    if (originIds.length > 0) {
       const { data, error } = await supabase
         .from('crm_stages')
         .select('*')
-        .eq('origin_id', originOrGroupId)
+        .in('origin_id', originIds)
         .eq('is_active', true)
         .order('stage_order');
       
       if (error) throw error;
-      return data;
-    },
+      
+      // Remover duplicatas por nome (manter primeiro por stage_order)
+      const uniqueStages = data?.reduce((acc, stage) => {
+        if (!acc.find(s => s.stage_name === stage.stage_name)) {
+          acc.push(stage);
+        }
+        return acc;
+      }, [] as typeof data) || [];
+      
+      return uniqueStages;
+    }
+    
+    return [];
+  }
+  
+  // Origem normal
+  const { data, error } = await supabase
+    .from('crm_stages')
+    .select('*')
+    .eq('origin_id', originOrGroupId)
+    .eq('is_active', true)
+    .order('stage_order');
+  
+  if (error) throw error;
+  return data;
+};
+
+export const useCRMStages = (originOrGroupId?: string, options?: UseCRMStagesOptions) => {
+  const { enabled = true, staleTime = 30000 } = options || {};
+  
+  return useQuery({
+    queryKey: ['crm-stages', originOrGroupId],
+    enabled: enabled && (originOrGroupId !== undefined || true), // Always enabled if no originId, or based on options
+    staleTime,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    queryFn: () => fetchCRMStages(originOrGroupId),
   });
 };
 
