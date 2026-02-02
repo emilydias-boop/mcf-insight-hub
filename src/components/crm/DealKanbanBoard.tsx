@@ -54,7 +54,7 @@ export const DealKanbanBoard = ({
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
   const updateDealMutation = useUpdateCRMDeal();
   const createActivity = useCreateDealActivity();
-  const { data: stages } = useCRMStages(originId);
+  const { data: stages, isLoading: isLoadingStages } = useCRMStages(originId);
   const { user, role } = useAuth();
   
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
@@ -138,6 +138,15 @@ export const DealKanbanBoard = ({
     setSelectedDealId(dealId);
     setDrawerOpen(true);
   };
+
+  // Loading state enquanto etapas carregam
+  if (isLoadingStages) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   if (!stages || stages.length === 0) {
     return (

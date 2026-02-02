@@ -117,11 +117,12 @@ const Negocios = () => {
       }
     }
     
-    // Fallback: se selectedPipelineId parece ser um UUID válido e não temos origens,
-    // pode ser que selectedPipelineId seja diretamente um originId (caso BU_DEFAULT_ORIGIN_MAP)
-    // Retornar ele diretamente para permitir a query funcionar
+    // CORREÇÃO: Se pipelineOrigins ainda está carregando (undefined ou array vazio),
+    // NÃO usar selectedPipelineId como fallback pois pode ser um Group ID
+    // que não possui estágios diretamente vinculados. Retornar undefined para aguardar.
     if (selectedPipelineId && (!pipelineOrigins || (Array.isArray(pipelineOrigins) && pipelineOrigins.length === 0))) {
-      return selectedPipelineId;
+      // Não retornar selectedPipelineId aqui - pode ser um grupo sem etapas
+      return undefined;
     }
     
     return undefined;
