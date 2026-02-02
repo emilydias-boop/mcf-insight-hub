@@ -10,8 +10,32 @@ import {
   SdrPayoutWithDetails,
   PayoutStatus,
   PayoutAdjustment,
-  getMultiplier 
+  getMultiplier,
+  calculateNoShowPerformance 
 } from '@/types/sdr-fechamento';
+
+// Tipo para métricas ativas vindas do banco
+interface ActiveMetric {
+  nome_metrica: string;
+  peso_percentual: number;
+  meta_valor: number | null;
+  label_exibicao: string;
+}
+
+// Métricas padrão para SDR (caso não haja configuração)
+const DEFAULT_SDR_METRICS: ActiveMetric[] = [
+  { nome_metrica: 'agendamentos', peso_percentual: 33.33, meta_valor: null, label_exibicao: 'R1 Agendadas' },
+  { nome_metrica: 'realizadas', peso_percentual: 33.33, meta_valor: null, label_exibicao: 'R1 Realizadas' },
+  { nome_metrica: 'tentativas', peso_percentual: 16.67, meta_valor: null, label_exibicao: 'Tentativas' },
+  { nome_metrica: 'organizacao', peso_percentual: 16.67, meta_valor: null, label_exibicao: 'Organização' },
+];
+
+// Métricas padrão para Closer (caso não haja configuração)
+const DEFAULT_CLOSER_METRICS: ActiveMetric[] = [
+  { nome_metrica: 'realizadas', peso_percentual: 40, meta_valor: null, label_exibicao: 'R1 Realizadas' },
+  { nome_metrica: 'contratos', peso_percentual: 40, meta_valor: null, label_exibicao: 'Contratos Pagos' },
+  { nome_metrica: 'organizacao', peso_percentual: 20, meta_valor: null, label_exibicao: 'Organização' },
+];
 
 // Fetch all active SDRs
 export const useSdrs = () => {
@@ -334,81 +358,233 @@ export const useOwnPayout = (anoMes: string) => {
 const META_TENTATIVAS_DIARIA = 84; // Meta fixa de 84 tentativas por dia
 const META_ORGANIZACAO = 100; // Meta fixa de 100%
 
-// Calculate payout values
+// Helper para calcular performance de cada métrica
+const calculateMetricPerformance = (
+  metricName: string,
+  kpi: SdrMonthKpi,
+  compPlan: SdrCompPlan,
+  diasUteis: number,
+  metaDiaria?: number,
+  metaPersonalizada?: number | null
+): { meta: number; realizado: number; pct: number } => {
+  switch (metricName) {
+    case 'agendamentos':
+      const metaAgendadas = metaPersonalizada || (metaDiaria || 0) * diasUteis;
+      return {
+        meta: metaAgendadas,
+        realizado: kpi.reunioes_agendadas,
+        pct: metaAgendadas > 0 
+          ? (kpi.reunioes_agendadas / metaAgendadas) * 100 
+          : 0,
+      };
+    
+    case 'realizadas':
+      // Meta = 70% do que foi REALMENTE agendado (ou meta personalizada)
+      const metaRealizadas = metaPersonalizada || Math.round(kpi.reunioes_agendadas * 0.7);
+      return {
+        meta: metaRealizadas,
+        realizado: kpi.reunioes_realizadas,
+        pct: metaRealizadas > 0 
+          ? (kpi.reunioes_realizadas / metaRealizadas) * 100 
+          : 0,
+      };
+    
+    case 'tentativas':
+      const metaTentativas = metaPersonalizada || META_TENTATIVAS_DIARIA * diasUteis;
+      return {
+        meta: metaTentativas,
+        realizado: kpi.tentativas_ligacoes,
+        pct: metaTentativas > 0 
+          ? (kpi.tentativas_ligacoes / metaTentativas) * 100 
+          : 0,
+      };
+    
+    case 'organizacao':
+      return {
+        meta: metaPersonalizada || META_ORGANIZACAO,
+        realizado: kpi.score_organizacao,
+        pct: kpi.score_organizacao, // já é percentual
+      };
+    
+    case 'no_show':
+      return {
+        meta: metaPersonalizada || 30, // Meta de no-show = 30% máximo
+        realizado: kpi.no_shows,
+        pct: calculateNoShowPerformance(kpi.no_shows, kpi.reunioes_agendadas),
+      };
+    
+    case 'contratos':
+      const metaContratos = metaPersonalizada || compPlan.meta_reunioes_realizadas || 10;
+      return {
+        meta: metaContratos,
+        realizado: kpi.intermediacoes_contrato,
+        pct: metaContratos > 0 
+          ? (kpi.intermediacoes_contrato / metaContratos) * 100 
+          : 0,
+      };
+    
+    case 'r2_agendadas':
+      const metaR2 = metaPersonalizada || 10;
+      // Usamos intermediacoes_contrato como proxy para R2 agendadas por enquanto
+      return {
+        meta: metaR2,
+        realizado: 0, // TODO: adicionar campo específico quando disponível
+        pct: 0,
+      };
+    
+    case 'outside_sales':
+      return {
+        meta: metaPersonalizada || 100,
+        realizado: 0, // TODO: campo manual
+        pct: 0,
+      };
+    
+    default:
+      return { meta: 0, realizado: 0, pct: 0 };
+  }
+};
+
+// Cálculo dinâmico usando métricas ativas
+const calculatePayoutValuesDynamic = (
+  compPlan: SdrCompPlan,
+  kpi: SdrMonthKpi,
+  activeMetrics: ActiveMetric[],
+  sdrMetaDiaria?: number,
+  diasUteisMes?: number
+) => {
+  const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
+  const variavelTotal = compPlan.variavel_total;
+
+  // Resultados por métrica
+  const metricsResults: Record<string, {
+    meta: number;
+    realizado: number;
+    pct: number;
+    mult: number;
+    valorBase: number;
+    valorFinal: number;
+    peso: number;
+  }> = {};
+
+  // Para cada métrica ativa, calcular: valor_base = variavel × peso%
+  // e aplicar multiplicador baseado na performance
+  activeMetrics.forEach(metric => {
+    const valorBase = variavelTotal * (metric.peso_percentual / 100);
+    const { meta, realizado, pct } = calculateMetricPerformance(
+      metric.nome_metrica, 
+      kpi, 
+      compPlan, 
+      diasUteisReal, 
+      sdrMetaDiaria,
+      metric.meta_valor
+    );
+    const mult = getMultiplier(pct);
+    const valorFinal = valorBase * mult;
+
+    metricsResults[metric.nome_metrica] = {
+      meta,
+      realizado,
+      pct,
+      mult,
+      valorBase,
+      valorFinal,
+      peso: metric.peso_percentual,
+    };
+  });
+
+  // Soma todos os valores finais
+  const valorVariavelTotal = Object.values(metricsResults)
+    .reduce((sum, r) => sum + r.valorFinal, 0);
+
+  const valorFixo = compPlan.fixo_valor;
+  const totalConta = valorFixo + valorVariavelTotal;
+
+  // Mapear resultados para campos legado (compatibilidade)
+  const agendamentos = metricsResults['agendamentos'] || { pct: 0, mult: 0, valorFinal: 0, meta: 0 };
+  const realizadas = metricsResults['realizadas'] || { pct: 0, mult: 0, valorFinal: 0, meta: 0 };
+  const tentativas = metricsResults['tentativas'] || { pct: 0, mult: 0, valorFinal: 0, meta: 0 };
+  const organizacao = metricsResults['organizacao'] || { pct: 0, mult: 0, valorFinal: 0, meta: 0 };
+  const noShow = metricsResults['no_show'] || { pct: 0, mult: 0, valorFinal: 0, meta: 0 };
+
+  // Média global para iFood (apenas métricas que existem)
+  const metricsWithValues = Object.values(metricsResults).filter(m => m.pct > 0 || m.realizado > 0);
+  const pctMediaGlobal = metricsWithValues.length > 0
+    ? metricsWithValues.reduce((sum, m) => sum + m.pct, 0) / metricsWithValues.length
+    : 0;
+
+  const ifoodMensal = compPlan.ifood_mensal;
+  const ifoodUltrameta = pctMediaGlobal >= 100 ? compPlan.ifood_ultrameta : 0;
+  const totalIfood = ifoodMensal + ifoodUltrameta;
+
+  return {
+    // Campos legado para compatibilidade com UI existente
+    pct_reunioes_agendadas: agendamentos.pct,
+    pct_reunioes_realizadas: realizadas.pct,
+    pct_tentativas: tentativas.pct,
+    pct_organizacao: organizacao.pct,
+    pct_no_show: noShow.pct,
+    mult_reunioes_agendadas: agendamentos.mult,
+    mult_reunioes_realizadas: realizadas.mult,
+    mult_tentativas: tentativas.mult,
+    mult_organizacao: organizacao.mult,
+    mult_no_show: noShow.mult,
+    valor_reunioes_agendadas: agendamentos.valorFinal,
+    valor_reunioes_realizadas: realizadas.valorFinal,
+    valor_tentativas: tentativas.valorFinal,
+    valor_organizacao: organizacao.valorFinal,
+    valor_no_show: noShow.valorFinal,
+    // Metas ajustadas
+    meta_agendadas_ajustada: agendamentos.meta,
+    meta_realizadas_ajustada: realizadas.meta,
+    meta_tentativas_ajustada: tentativas.meta,
+    dias_uteis_mes: diasUteisReal,
+    // Totais
+    valor_variavel_total: valorVariavelTotal,
+    valor_fixo: valorFixo,
+    total_conta: totalConta,
+    // iFood
+    ifood_mensal: ifoodMensal,
+    ifood_ultrameta: ifoodUltrameta,
+    total_ifood: totalIfood,
+  };
+};
+
+// Legacy calculate - mantido para compatibilidade mas não mais usado
 const calculatePayoutValues = (
   compPlan: SdrCompPlan,
   kpi: SdrMonthKpi,
   sdrMetaDiaria?: number,
   diasUteisMes?: number
 ) => {
-  // Dias úteis do mês (do calendário ou padrão)
-  const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
+  // Usa métricas padrão SDR
+  return calculatePayoutValuesDynamic(compPlan, kpi, DEFAULT_SDR_METRICS, sdrMetaDiaria, diasUteisMes);
+};
 
-  // Meta de agendadas = meta_diaria do SDR × dias úteis do mês
-  const metaAgendadasAjustada = Math.round((sdrMetaDiaria || 0) * diasUteisReal);
-  
-  // Meta de Realizadas = 70% do que foi REALMENTE agendado
-  const metaRealizadasAjustada = Math.round(kpi.reunioes_agendadas * 0.7);
-  
-  // Meta de Tentativas = 84/dia × dias úteis (meta fixa para todos)
-  const metaTentativasAjustada = Math.round(META_TENTATIVAS_DIARIA * diasUteisReal);
+// Helper para buscar métricas ativas do cargo
+const fetchActiveMetricsForCargo = async (
+  cargoId: string | null,
+  anoMes: string,
+  isCloser: boolean
+): Promise<ActiveMetric[]> => {
+  if (!cargoId) {
+    return isCloser ? DEFAULT_CLOSER_METRICS : DEFAULT_SDR_METRICS;
+  }
 
-  // Calculate percentages
-  const pct_reunioes_agendadas = metaAgendadasAjustada > 0 
-    ? (kpi.reunioes_agendadas / metaAgendadasAjustada) * 100 
-    : 0;
-  const pct_reunioes_realizadas = metaRealizadasAjustada > 0
-    ? (kpi.reunioes_realizadas / metaRealizadasAjustada) * 100
-    : 0;
-  const pct_tentativas = metaTentativasAjustada > 0
-    ? (kpi.tentativas_ligacoes / metaTentativasAjustada) * 100
-    : 0;
-  // Organização = meta fixa de 100%
-  const pct_organizacao = (kpi.score_organizacao / META_ORGANIZACAO) * 100;
+  // Buscar métricas configuradas para o cargo/mês (sem squad = genérico)
+  const { data: metrics } = await supabase
+    .from('fechamento_metricas_mes')
+    .select('nome_metrica, peso_percentual, meta_valor, label_exibicao')
+    .eq('ano_mes', anoMes)
+    .eq('cargo_catalogo_id', cargoId)
+    .is('squad', null)
+    .eq('ativo', true);
 
-  // Get multipliers
-  const mult_reunioes_agendadas = getMultiplier(pct_reunioes_agendadas);
-  const mult_reunioes_realizadas = getMultiplier(pct_reunioes_realizadas);
-  const mult_tentativas = getMultiplier(pct_tentativas);
-  const mult_organizacao = getMultiplier(pct_organizacao);
+  if (metrics && metrics.length > 0) {
+    return metrics;
+  }
 
-  // Calculate values
-  const valor_reunioes_agendadas = compPlan.valor_meta_rpg * mult_reunioes_agendadas;
-  const valor_reunioes_realizadas = compPlan.valor_docs_reuniao * mult_reunioes_realizadas;
-  const valor_tentativas = compPlan.valor_tentativas * mult_tentativas;
-  const valor_organizacao = compPlan.valor_organizacao * mult_organizacao;
-
-  // Totals
-  const valor_variavel_total = valor_reunioes_agendadas + valor_reunioes_realizadas + valor_tentativas + valor_organizacao;
-  const valor_fixo = compPlan.fixo_valor;
-  const total_conta = valor_fixo + valor_variavel_total;
-
-  // iFood logic
-  const pct_media_global = (pct_reunioes_agendadas + pct_reunioes_realizadas + pct_tentativas + pct_organizacao) / 4;
-  const ifood_mensal = compPlan.ifood_mensal;
-  const ifood_ultrameta = pct_media_global >= 100 ? compPlan.ifood_ultrameta : 0;
-  const total_ifood = ifood_mensal + ifood_ultrameta;
-
-  return {
-    pct_reunioes_agendadas,
-    pct_reunioes_realizadas,
-    pct_tentativas,
-    pct_organizacao,
-    mult_reunioes_agendadas,
-    mult_reunioes_realizadas,
-    mult_tentativas,
-    mult_organizacao,
-    valor_reunioes_agendadas,
-    valor_reunioes_realizadas,
-    valor_tentativas,
-    valor_organizacao,
-    valor_variavel_total,
-    valor_fixo,
-    total_conta,
-    ifood_mensal,
-    ifood_ultrameta,
-    total_ifood,
-  };
+  // Fallback: métricas padrão baseado no tipo
+  return isCloser ? DEFAULT_CLOSER_METRICS : DEFAULT_SDR_METRICS;
 };
 
 // Recalculate a single payout
@@ -433,6 +609,13 @@ export const useRecalculatePayout = () => {
 
       if (compError) throw new Error('Plano de compensação não encontrado');
 
+      // Get SDR record for meta_diaria
+      const { data: sdrRecord } = await supabase
+        .from('sdr')
+        .select('meta_diaria, role_type')
+        .eq('id', sdrId)
+        .single();
+
       // Get or create KPI
       let { data: kpi, error: kpiError } = await supabase
         .from('sdr_month_kpi')
@@ -455,15 +638,43 @@ export const useRecalculatePayout = () => {
         throw kpiError;
       }
 
-      // Calculate values
-      const calculatedValues = calculatePayoutValues(compPlan as SdrCompPlan, kpi as SdrMonthKpi);
-
-      // Get employee linked to SDR to capture current department
+      // Get employee linked to SDR to get cargo_catalogo_id and department
       const { data: employeeData } = await supabase
         .from('employees')
-        .select('departamento')
+        .select(`
+          departamento, 
+          cargo_catalogo_id,
+          cargo_catalogo:cargo_catalogo_id (
+            nome_exibicao,
+            cargo_base
+          )
+        `)
         .eq('sdr_id', sdrId)
+        .eq('status', 'ativo')
         .maybeSingle();
+
+      // Determinar se é Closer baseado no cargo ou role_type
+      const cargoNome = (employeeData?.cargo_catalogo as any)?.nome_exibicao || '';
+      const cargoBase = (employeeData?.cargo_catalogo as any)?.cargo_base || '';
+      const isCloser = 
+        cargoNome.toLowerCase().includes('closer') ||
+        cargoBase.toLowerCase().includes('closer') ||
+        sdrRecord?.role_type === 'closer';
+
+      // Buscar métricas ativas para o cargo
+      const activeMetrics = await fetchActiveMetricsForCargo(
+        employeeData?.cargo_catalogo_id || null,
+        anoMes,
+        isCloser
+      );
+
+      // Calculate values using dynamic metrics
+      const calculatedValues = calculatePayoutValuesDynamic(
+        compPlan as SdrCompPlan, 
+        kpi as SdrMonthKpi,
+        activeMetrics,
+        sdrRecord?.meta_diaria
+      );
 
       // Upsert payout with departamento_vigente
       const { data, error } = await supabase
@@ -500,13 +711,36 @@ export const useRecalculateAllPayouts = () => {
 
   return useMutation({
     mutationFn: async (anoMes: string) => {
-      // Get all active SDRs
+      // Get all active SDRs with role_type
       const { data: sdrs, error: sdrsError } = await supabase
         .from('sdr')
-        .select('id')
+        .select('id, meta_diaria, role_type')
         .eq('active', true);
 
       if (sdrsError) throw sdrsError;
+
+      // Pre-fetch all employees with cargo info for efficiency
+      const { data: allEmployees } = await supabase
+        .from('employees')
+        .select(`
+          sdr_id, 
+          departamento, 
+          cargo_catalogo_id,
+          cargo_catalogo:cargo_catalogo_id (
+            nome_exibicao,
+            cargo_base
+          )
+        `)
+        .eq('status', 'ativo')
+        .not('sdr_id', 'is', null);
+
+      // Create map of sdr_id -> employee for quick lookup
+      const employeeMap = new Map<string, any>();
+      allEmployees?.forEach(emp => {
+        if (emp.sdr_id && !employeeMap.has(emp.sdr_id)) {
+          employeeMap.set(emp.sdr_id, emp);
+        }
+      });
 
       const results = [];
       for (const sdr of sdrs || []) {
@@ -546,14 +780,31 @@ export const useRecalculateAllPayouts = () => {
 
           if (!kpi) continue;
 
-          const calculatedValues = calculatePayoutValues(compPlan as SdrCompPlan, kpi as SdrMonthKpi);
+          // Get employee data from pre-fetched map
+          const employeeData = employeeMap.get(sdr.id);
 
-          // Get employee linked to SDR to capture current department
-          const { data: employeeData } = await supabase
-            .from('employees')
-            .select('departamento')
-            .eq('sdr_id', sdr.id)
-            .maybeSingle();
+          // Determinar se é Closer baseado no cargo ou role_type
+          const cargoNome = employeeData?.cargo_catalogo?.nome_exibicao || '';
+          const cargoBase = employeeData?.cargo_catalogo?.cargo_base || '';
+          const isCloser = 
+            cargoNome.toLowerCase().includes('closer') ||
+            cargoBase.toLowerCase().includes('closer') ||
+            sdr.role_type === 'closer';
+
+          // Buscar métricas ativas para o cargo
+          const activeMetrics = await fetchActiveMetricsForCargo(
+            employeeData?.cargo_catalogo_id || null,
+            anoMes,
+            isCloser
+          );
+
+          // Calculate values using dynamic metrics
+          const calculatedValues = calculatePayoutValuesDynamic(
+            compPlan as SdrCompPlan, 
+            kpi as SdrMonthKpi,
+            activeMetrics,
+            sdr.meta_diaria
+          );
 
           const { data } = await supabase
             .from('sdr_month_payout')
