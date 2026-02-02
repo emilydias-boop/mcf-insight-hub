@@ -1,48 +1,48 @@
 
-# Plano: Mostrar Todos Usuários no Dropdown + Adicionar Meeting Type
+# Plano: Corrigir Query de Usuários que Retorna Vazia
 
-## Problemas Identificados
+## Problema Identificado
 
-1. **Dropdown vazio**: A query filtra apenas `role IN ('closer', 'closer_sombra')`, mas:
-   - Luis Felipe é `manager` → não aparece
-   - Outros usuários com funções diferentes não aparecem
-   
-2. **Sem distinção R1/R2**: O formulário não permite selecionar se o closer faz R1 ou R2 (relevante para Incorporador)
+A query no `CloserFormDialog` está retornando **Status 400** porque a sintaxe de foreign key hint não está funcionando:
 
-## Alterações Necessárias
-
-### 1. Modificar Query de Usuários para Buscar TODOS
-
-**Arquivo:** `src/components/crm/CloserFormDialog.tsx`
-
-Atual (linhas 87-108):
-```typescript
-// Buscar usuários com role 'closer' ou 'closer_sombra'
-const { data: closerUsers = [] } = useQuery({
-  queryKey: ['users-with-closer-role'],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`...`)
-      .in('user_roles.role', ['closer', 'closer_sombra'])  // ← FILTRO RESTRITIVO
+```
+employees!employees_user_id_fkey(id)
 ```
 
-Novo:
+Erro retornado:
+```
+"Could not find a relationship between 'profiles' and 'employees' in the schema cache"
+```
+
+Isso faz com que **nenhum usuário apareça no dropdown**, pois a query falha silenciosamente.
+
+---
+
+## Causa Raiz
+
+- A tabela `employees` existe, mas não há uma **foreign key formal** entre `employees.user_id` e `profiles.id` reconhecida pelo PostgREST
+- Sem essa FK, a sintaxe `employees!fk_name(...)` não funciona
+- A query do Supabase client retorna erro 400 e o React Query armazena array vazio
+
+---
+
+## Solução: Simplificar a Query
+
+Em vez de tentar fazer join via FK que não existe, vamos:
+
+1. **Remover a parte de `employees` da query principal** - buscar apenas os perfis
+2. **Se necessário**, buscar `employee_id` separadamente quando o usuário for selecionado
+
+### Query Simplificada:
+
 ```typescript
-// Buscar TODOS os usuários do sistema
-const { data: allUsers = [] } = useQuery({
+const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
   queryKey: ['all-users-for-closer'],
   queryFn: async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select(`
-        id,
-        full_name,
-        email,
-        squad,
-        user_roles(role),
-        employees!employees_user_id_fkey(id)
-      `)
+      .select('id, full_name, email, squad')
+      .not('full_name', 'is', null)
       .order('full_name');
     
     if (error) throw error;
@@ -52,117 +52,61 @@ const { data: allUsers = [] } = useQuery({
 });
 ```
 
-### 2. Adicionar Campo Meeting Type (R1/R2)
+### Buscar Employee ID ao Selecionar Usuário:
 
-**Arquivo:** `src/components/crm/CloserFormDialog.tsx`
-
-Adicionar ao estado e formulário:
 ```typescript
-interface CloserFormDataExtended extends CloserFormData {
-  // ... existentes
-  meeting_type?: 'r1' | 'r2';
-}
-
-// Opções de Meeting Type
-const MEETING_TYPE_OPTIONS = [
-  { value: 'r1', label: 'R1 - Reunião Inicial' },
-  { value: 'r2', label: 'R2 - Reunião de Fechamento' },
-];
+const handleUserSelect = async (userId: string) => {
+  setSelectedUserId(userId);
+  const user = closerUsers.find(u => u.id === userId);
+  if (user) {
+    // Buscar employee_id separadamente se necessário
+    const { data: emp } = await supabase
+      .from('employees')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    setFormData({
+      ...formData,
+      name: user.full_name || '',
+      email: user.email || '',
+      employee_id: emp?.id || undefined,
+      bu: user.squad || 'incorporador',
+    });
+  }
+};
 ```
 
-No JSX (após Business Unit):
-```tsx
-{/* Meeting Type - Mostrar apenas para Incorporador */}
-{formData.bu === 'incorporador' && (
-  <div className="space-y-2">
-    <Label htmlFor="meeting_type">Tipo de Reunião *</Label>
-    <Select
-      value={formData.meeting_type || 'r1'}
-      onValueChange={(v) => setFormData({ ...formData, meeting_type: v as 'r1' | 'r2' })}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Selecione o tipo" />
-      </SelectTrigger>
-      <SelectContent>
-        {MEETING_TYPE_OPTIONS.map((type) => (
-          <SelectItem key={type.value} value={type.value}>
-            {type.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-    <p className="text-xs text-muted-foreground">
-      R1 para reuniões iniciais, R2 para fechamento
-    </p>
-  </div>
-)}
-```
+---
 
-### 3. Atualizar useCreateCloser para Salvar meeting_type
-
-**Arquivo:** `src/hooks/useClosers.ts`
-
-Adicionar `meeting_type` à interface e mutação:
-```typescript
-export interface CloserFormData {
-  // ... existentes
-  meeting_type?: 'r1' | 'r2';
-}
-
-// No insert:
-.insert({
-  // ... outros campos
-  meeting_type: data.meeting_type || null,
-})
-```
-
-### 4. Atualizar Texto de Ajuda no Dropdown
-
-Mudar de:
-```
-"Apenas usuários com cargo 'Closer' ou 'Closer Sombra' aparecem aqui"
-```
-
-Para:
-```
-"Todos os usuários do sistema podem ser configurados como Closer"
-```
-
-## Resultado Esperado
-
-| Cenário | Comportamento |
-|---------|---------------|
-| Dropdown de Usuários | Mostra TODOS (Luis Felipe, Thobson, Jessica, etc.) |
-| BU = Incorporador | Mostra select de Meeting Type (R1/R2) |
-| BU = Consórcio/Outros | Não mostra Meeting Type (não aplicável) |
-| Cadastrar Luis Felipe no Consórcio | Aparece no dropdown, cadastra normalmente |
-
-## Resumo Técnico
+## Alterações
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/CloserFormDialog.tsx` | Remover filtro de roles, adicionar campo meeting_type condicional |
-| `src/hooks/useClosers.ts` | Adicionar `meeting_type` à interface e operações CRUD |
+| `src/components/crm/CloserFormDialog.tsx` | Remover join com employees na query, buscar employee_id on-demand |
 
-## Fluxo de Uso
+---
+
+## Resultado Esperado
+
+| Estado Atual | Após Correção |
+|-------------|---------------|
+| Query retorna erro 400 | Query retorna todos os perfis |
+| Dropdown vazio | Dropdown com todos os usuários (Thobson, Luis, etc.) |
+| Não consegue cadastrar closer | Consegue cadastrar qualquer usuário como closer |
+
+---
+
+## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Admin abre "Adicionar Closer"                                      │
-│  1. Dropdown mostra TODOS os usuários do sistema                    │
-│  2. Seleciona: Luis Felipe                                          │
-│  3. Seleciona BU: Consórcio                                         │
-│  4. (Meeting Type não aparece - apenas para Incorporador)           │
-│  5. Clica "Adicionar"                                               │
-│  6. Luis Felipe aparece na agenda do Consórcio                      │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│  Admin abre "Adicionar Closer"                                      │
-│  1. Seleciona: Thobson Motta                                        │
-│  2. Seleciona BU: Incorporador                                      │
-│  3. Meeting Type aparece → Seleciona "R2"                           │
-│  4. Clica "Adicionar"                                               │
-│  5. Thobson aparece na agenda R2 do Incorporador                    │
+│  1. Query busca profiles (sem join): SELECT id, full_name, email    │
+│  2. Retorna 35+ usuários (todos do sistema)                         │
+│  3. Dropdown mostra: Thobson, Luis Felipe, Jessica, etc.            │
+│  4. Admin seleciona "Thobson"                                       │
+│  5. Sistema busca employee_id via query separada (se existir)       │
+│  6. Formulário preenchido, pronto para salvar                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
