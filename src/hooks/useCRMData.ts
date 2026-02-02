@@ -7,8 +7,12 @@ import { toast } from 'sonner';
 export const useCRMStages = (originOrGroupId?: string) => {
   return useQuery({
     queryKey: ['crm-stages', originOrGroupId],
-    staleTime: 30000, // 30 segundos - forçar refetch após esse tempo
+    staleTime: 30000, // 30 segundos
+    refetchOnMount: 'always', // Sempre refetch ao montar para garantir dados atualizados
+    refetchOnWindowFocus: true, // Refetch ao voltar para a aba
     queryFn: async () => {
+      console.log('[useCRMStages] Starting query for originOrGroupId:', originOrGroupId);
+      
       if (!originOrGroupId) {
         // Sem filtro: buscar todas as stages do Clint
         const { data, error } = await supabase
@@ -18,6 +22,7 @@ export const useCRMStages = (originOrGroupId?: string) => {
           .order('stage_order');
         
         if (error) throw error;
+        console.log('[useCRMStages] No originId - returning crm_stages:', data?.length || 0);
         return data;
       }
       
@@ -86,6 +91,8 @@ export const useCRMStages = (originOrGroupId?: string) => {
       
       // Se tem stages locais, converter para formato compatível com crm_stages
       if (localStages && localStages.length > 0) {
+        console.log('[useCRMStages] Found local_pipeline_stages:', localStages.length, 'for', originOrGroupId);
+        
         // Deduplicar por nome mantendo o primeiro (menor stage_order)
         const uniqueStages = localStages.reduce((acc: any[], stage) => {
           if (!acc.find(s => s.name === stage.name)) {
@@ -107,6 +114,8 @@ export const useCRMStages = (originOrGroupId?: string) => {
           updated_at: s.updated_at,
         }));
       }
+      
+      console.log('[useCRMStages] No local stages found, falling back to crm_stages for', originOrGroupId);
       
       // 3. Fallback: buscar stages do Clint (crm_stages)
       if (isGroup) {
