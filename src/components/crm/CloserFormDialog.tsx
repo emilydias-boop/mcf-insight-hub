@@ -6,10 +6,18 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Info, RefreshCw, CheckCircle2, Video } from 'lucide-react';
+import { Loader2, Info, RefreshCw, CheckCircle2, Video, UserCheck } from 'lucide-react';
 import { Closer, CloserFormData, useCreateCloser, useUpdateCloser } from '@/hooks/useClosers';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+
+interface CloserUser {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  squad: string | null;
+}
 
 interface CloserFormDialogProps {
   open: boolean;
@@ -30,6 +38,7 @@ interface CloserFormDataExtended extends CloserFormData {
   google_calendar_id?: string;
   google_calendar_enabled?: boolean;
   bu?: string;
+  employee_id?: string;
 }
 
 const BU_OPTIONS = [
@@ -62,6 +71,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     google_calendar_id: '',
     google_calendar_enabled: false,
     bu: 'incorporador',
+    employee_id: '',
   });
   const [eventTypes, setEventTypes] = useState<CalendlyEventType[]>([]);
   const [loadingEventTypes, setLoadingEventTypes] = useState(false);
@@ -70,6 +80,41 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
   const updateCloser = useUpdateCloser();
   const isLoading = createCloser.isPending || updateCloser.isPending;
   const isEditing = !!closer;
+
+  // Buscar usuários com role 'closer' ou 'closer_sombra'
+  const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
+    queryKey: ['users-with-closer-role'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          email,
+          squad,
+          user_roles!inner(role)
+        `)
+        .in('user_roles.role', ['closer', 'closer_sombra'])
+        .order('full_name');
+      
+      if (error) throw error;
+      return (data || []) as CloserUser[];
+    },
+    enabled: open && !isEditing,
+  });
+
+  const handleUserSelect = (userId: string) => {
+    const user = closerUsers.find(u => u.id === userId);
+    if (user) {
+      setFormData({
+        ...formData,
+        name: user.full_name || '',
+        email: user.email || '',
+        employee_id: user.id,
+        bu: user.squad || 'incorporador',
+      });
+    }
+  };
 
   useEffect(() => {
     if (closer) {
@@ -83,6 +128,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         google_calendar_id: closer.google_calendar_id || '',
         google_calendar_enabled: closer.google_calendar_enabled || false,
         bu: closer.bu || 'incorporador',
+        employee_id: closer.employee_id || '',
       });
     } else {
       setFormData({
@@ -95,6 +141,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         google_calendar_id: '',
         google_calendar_enabled: false,
         bu: 'incorporador',
+        employee_id: '',
       });
     }
   }, [closer, open]);
@@ -159,6 +206,35 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Seleção de Usuário - Apenas no modo criação */}
+          {!isEditing && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <UserCheck className="h-4 w-4" />
+                Selecionar Usuário *
+              </Label>
+              <Select
+                value={formData.employee_id || ''}
+                onValueChange={handleUserSelect}
+                disabled={loadingUsers}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingUsers ? "Carregando usuários..." : "Selecione um usuário com cargo Closer..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {closerUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.full_name} ({user.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Apenas usuários com cargo "Closer" ou "Closer Sombra" aparecem aqui
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="name">Nome *</Label>
             <Input
@@ -167,6 +243,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Nome do closer"
               required
+              disabled={!isEditing && !!formData.employee_id}
+              className={!isEditing && !!formData.employee_id ? "bg-muted" : ""}
             />
           </div>
           
@@ -179,6 +257,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="email@exemplo.com"
               required
+              disabled={!isEditing && !!formData.employee_id}
+              className={!isEditing && !!formData.employee_id ? "bg-muted" : ""}
             />
           </div>
 
