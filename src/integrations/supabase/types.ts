@@ -6140,6 +6140,7 @@ export type Database = {
           aprovado_em: string | null
           aprovado_por: string | null
           created_at: string | null
+          departamento_vigente: string | null
           dias_uteis_mes: number | null
           id: string
           ifood_mensal: number | null
@@ -6177,6 +6178,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           created_at?: string | null
+          departamento_vigente?: string | null
           dias_uteis_mes?: number | null
           id?: string
           ifood_mensal?: number | null
@@ -6214,6 +6216,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           created_at?: string | null
+          departamento_vigente?: string | null
           dias_uteis_mes?: number | null
           id?: string
           ifood_mensal?: number | null
