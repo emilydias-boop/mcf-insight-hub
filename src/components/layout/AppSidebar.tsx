@@ -311,6 +311,7 @@ const menuItems: MenuItem[] = [
       { title: "Permissões", url: "/admin/permissoes", requiredRoles: ["admin"] },
       { title: "Produtos", url: "/admin/produtos", requiredRoles: ["admin"] },
       { title: "Distribuição Leads", url: "/admin/distribuicao-leads" },
+      { title: "Configuração BU", url: "/admin/configuracao-bu", requiredRoles: ["admin", "manager"] },
     ],
   },
 ];
