@@ -1,108 +1,135 @@
 
-# Plano: Corrigir Filtro de Sub-Origens na Sidebar do CRM
+# Plano: Configurar Abas do CRM por Business Unit
 
-## Problema Identificado
+## Objetivo
 
-Quando um grupo (funil) é selecionado no dropdown, as sub-origens não aparecem na lista porque:
+Configurar o CRM do Consórcio para exibir apenas as abas relevantes:
 
-1. **`buAuthorizedOrigins`** contém IDs de **grupos** (não origens):
-   ```
-   buAuthorizedOrigins = ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'] // ID do grupo BU-LEILÃO
-   ```
+**Manter:**
+- Visão Geral
+- Contatos
+- Negócios
+- Atendimentos
+- Agenda R1
+- Configurações
 
-2. **`useCRMOriginsByPipeline`** retorna as **origens filhas** do grupo:
-   ```
-   pipelineOrigins = [
-     { id: '7d7b1cb5-...', name: 'Efeito Alavanca + Clube', group_id: 'f8a2b3c4-...' },
-     { id: 'a1b2c3d4-...', name: 'Pipeline Leilão', group_id: 'f8a2b3c4-...' }
-   ]
-   ```
-
-3. **Filtro em `OriginsSidebar`** compara os IDs das origens com os IDs dos grupos:
-   ```typescript
-   // Atual - não funciona porque compara origem com grupo
-   (originData as Origin[]).filter(origin => 
-     allowedOriginIds!.includes(origin.id) // '7d7b1cb5-...' não está em ['f8a2b3c4-...']
-   );
-   ```
+**Remover:**
+- Agenda R2
+- Carrinho R2
+- Órfãos
+- Duplicados
+- Auditoria
 
 ---
 
 ## Solução
 
-Modificar o filtro `filteredByBU` no `OriginsSidebar.tsx` para aceitar origens cujo `group_id` esteja na lista de IDs permitidos.
+Adicionar um mapeamento de **abas permitidas por BU** no `BUCRMLayout.tsx`.
 
-### Alteração no arquivo `src/components/crm/OriginsSidebar.tsx`
+---
+
+## Alteração no Arquivo
+
+**Arquivo:** `src/pages/crm/BUCRMLayout.tsx`
+
+### Adicionar configuração de abas por BU
 
 ```typescript
-const filteredByBU = useMemo(() => {
-  if (!originData || !hasBUFilter) return originData;
+// Configuração de abas visíveis por BU
+const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
+  incorporador: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'agenda-r2', 'r2-carrinho', 'deals-orfaos', 
+    'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
+  ],
+  consorcio: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+  credito: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+  projetos: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+  leilao: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+};
+```
+
+### Adicionar `key` aos itens de navegação
+
+```typescript
+const allNavItems = [
+  { key: 'visao-geral', to: basePath, label: 'Visão Geral', icon: LayoutDashboard, end: true },
+  { key: 'contatos', to: `${basePath}/contatos`, label: 'Contatos', icon: Users },
+  { key: 'negocios', to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
+  { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle },
+  { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
+  { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
+  { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
+  { key: 'deals-orfaos', to: `${basePath}/deals-orfaos`, label: 'Órfãos', icon: UserX },
+  { key: 'contatos-duplicados', to: `${basePath}/contatos-duplicados`, label: 'Duplicados', icon: Copy },
+  { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
+  { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
+];
+```
+
+### Filtrar abas com base na BU
+
+```typescript
+// Primeiro filtrar por BU
+const buVisibleTabs = BU_VISIBLE_TABS[bu] || [];
+let navItems = allNavItems.filter(item => buVisibleTabs.includes(item.key));
+
+// Depois aplicar filtro de roles (sdr/closer)
+if (isAgendaOnly) {
+  const allowedTabs: string[] = ['agenda'];
   
-  // Verificar se é uma lista flat ou árvore
-  if (Array.isArray(originData) && originData.length > 0 && 'children' in originData[0]) {
-    // É árvore (grupos com children)
-    return (originData as Group[])
-      .map(group => {
-        // Verificar se o grupo inteiro está permitido
-        if (allowedOriginIds!.includes(group.id)) {
-          return group;
-        }
-        // Filtrar apenas origens permitidas dentro do grupo
-        const filteredChildren = group.children.filter(child => 
-          allowedOriginIds!.includes(child.id) ||
-          (child.group_id && allowedOriginIds!.includes(child.group_id)) // NOVO: verificar group_id
-        );
-        if (filteredChildren.length === 0) return null;
-        return { ...group, children: filteredChildren };
-      })
-      .filter(Boolean) as Group[];
-  } else {
-    // É lista flat - CORREÇÃO PRINCIPAL
-    return (originData as Origin[]).filter(origin => 
-      allowedOriginIds!.includes(origin.id) ||
-      // NOVO: Se origin.group_id está na lista de permitidos, a origem também é permitida
-      (origin.group_id && allowedOriginIds!.includes(origin.group_id))
-    );
+  if (canViewR2 && buVisibleTabs.includes('agenda-r2')) {
+    allowedTabs.push('agenda-r2');
   }
-}, [originData, allowedOriginIds, hasBUFilter]);
+  
+  allowedTabs.push('negocios');
+  
+  navItems = navItems.filter(item => allowedTabs.includes(item.key));
+}
 ```
 
 ---
 
-## Fluxo Corrigido
+## Resultado Esperado
 
+### CRM Consórcio (`/consorcio/crm`)
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Dropdown de Funil: "BU - LEILÃO" selecionado                       │
-│  selectedPipelineId = 'f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'        │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  useCRMOriginsByPipeline('f8a2b3c4-...')                            │
-│  Retorna lista flat das origens filhas:                             │
-│  [                                                                  │
-│    { id: '7d7b1cb5-...', name: 'Efeito Alavanca', group_id: 'f8a2b3c4-...' }  │
-│    { id: 'a1b2c3d4-...', name: 'Pipeline Leilão', group_id: 'f8a2b3c4-...' }  │
-│  ]                                                                  │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  allowedOriginIds = ['f8a2b3c4-...']  (ID do grupo)                 │
-│                                                                     │
-│  Filtro CORRIGIDO:                                                  │
-│  origin.id === 'f8a2b3c4-...' ? false                               │
-│  origin.group_id === 'f8a2b3c4-...' ? TRUE ✓                        │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Resultado: Ambas origens aparecem na lista                        │
-│  ☑ Efeito Alavanca + Clube                                          │
-│  ☑ Pipeline Leilão                                                  │
+│ CRM - Consórcio                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│ Visão Geral │ Contatos │ Negócios │ Atendimentos │ Agenda R1 │ Config│
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### CRM Incorporador (`/crm`)
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ CRM - Incorporador                                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│ Visão Geral │ Contatos │ Negócios │ Atendimentos │ Agenda R1 │       │
+│ Agenda R2 │ Carrinho R2 │ Órfãos │ Duplicados │ Auditoria │ Config  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Extensibilidade
+
+Esta abordagem permite configurar facilmente as abas de cada BU futuramente:
+- Se Leilão precisar de Agenda R2, basta adicionar `'agenda-r2'` ao array
+- Se Crédito não precisar de Atendimentos, basta remover `'atendimentos'`
 
 ---
 
@@ -110,16 +137,4 @@ const filteredByBU = useMemo(() => {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/OriginsSidebar.tsx` | Adicionar verificação de `group_id` no filtro `filteredByBU` |
-
----
-
-## Resultado Esperado
-
-1. Ao selecionar "BU - LEILÃO" no dropdown de funil, as origens filhas aparecerão na lista:
-   - Efeito Alavanca + Clube
-   - Pipeline Leilão
-
-2. O mesmo funcionará para todas as outras BUs que têm grupos configurados
-
-3. O filtro permanece funcionando para origens diretas (sem grupo)
+| `src/pages/crm/BUCRMLayout.tsx` | Adicionar mapeamento `BU_VISIBLE_TABS` e filtrar abas por BU |
