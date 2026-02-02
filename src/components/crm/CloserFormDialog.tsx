@@ -17,6 +17,7 @@ interface CloserUser {
   full_name: string | null;
   email: string | null;
   squad: string | null;
+  employees?: { id: string }[];
 }
 
 interface CloserFormDialogProps {
@@ -81,7 +82,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
   const isLoading = createCloser.isPending || updateCloser.isPending;
   const isEditing = !!closer;
 
-  // Buscar usuários com role 'closer' ou 'closer_sombra'
+  // Buscar usuários com role 'closer' ou 'closer_sombra' E seu employee_id
   const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
     queryKey: ['users-with-closer-role'],
     queryFn: async () => {
@@ -92,7 +93,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
           full_name,
           email,
           squad,
-          user_roles!inner(role)
+          user_roles!inner(role),
+          employees!employees_user_id_fkey(id)
         `)
         .in('user_roles.role', ['closer', 'closer_sombra'])
         .order('full_name');
@@ -106,11 +108,14 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
   const handleUserSelect = (userId: string) => {
     const user = closerUsers.find(u => u.id === userId);
     if (user) {
+      // Pegar o employee_id do primeiro registro de employees
+      const employeeId = user.employees?.[0]?.id || null;
+      
       setFormData({
         ...formData,
         name: user.full_name || '',
         email: user.email || '',
-        employee_id: user.id,
+        employee_id: employeeId || undefined,
         bu: user.squad || 'incorporador',
       });
     }
