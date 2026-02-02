@@ -11,6 +11,9 @@ export interface Closer {
   calendly_event_type_uri: string | null;
   calendly_default_link: string | null;
   employee_id: string | null;
+  bu: string | null;
+  google_calendar_id: string | null;
+  google_calendar_enabled: boolean | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -23,6 +26,7 @@ export interface CloserFormData {
   calendly_event_type_uri?: string;
   calendly_default_link?: string;
   employee_id?: string;
+  bu?: string;
   google_calendar_id?: string;
   google_calendar_enabled?: boolean;
 }
@@ -74,6 +78,7 @@ export function useCreateCloser() {
           calendly_event_type_uri: data.calendly_event_type_uri || null,
           calendly_default_link: data.calendly_default_link || null,
           employee_id: data.employee_id || null,
+          bu: data.bu || 'incorporador',
           google_calendar_id: data.google_calendar_id || null,
           google_calendar_enabled: data.google_calendar_enabled ?? false,
         })

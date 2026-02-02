@@ -29,7 +29,16 @@ interface CalendlyEventType {
 interface CloserFormDataExtended extends CloserFormData {
   google_calendar_id?: string;
   google_calendar_enabled?: boolean;
+  bu?: string;
 }
+
+const BU_OPTIONS = [
+  { value: 'incorporador', label: 'BU - Incorporador MCF' },
+  { value: 'consorcio', label: 'BU - Consórcio' },
+  { value: 'credito', label: 'BU - Crédito' },
+  { value: 'projetos', label: 'BU - Projetos' },
+  { value: 'leilao', label: 'BU - Leilão' },
+];
 
 const COLOR_OPTIONS = [
   { value: '#3b82f6', label: 'Azul' },
@@ -52,6 +61,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     calendly_default_link: '',
     google_calendar_id: '',
     google_calendar_enabled: false,
+    bu: 'incorporador',
   });
   const [eventTypes, setEventTypes] = useState<CalendlyEventType[]>([]);
   const [loadingEventTypes, setLoadingEventTypes] = useState(false);
@@ -70,8 +80,9 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         is_active: closer.is_active ?? true,
         calendly_event_type_uri: closer.calendly_event_type_uri || '',
         calendly_default_link: closer.calendly_default_link || '',
-        google_calendar_id: (closer as any).google_calendar_id || '',
-        google_calendar_enabled: (closer as any).google_calendar_enabled || false,
+        google_calendar_id: closer.google_calendar_id || '',
+        google_calendar_enabled: closer.google_calendar_enabled || false,
+        bu: closer.bu || 'incorporador',
       });
     } else {
       setFormData({
@@ -83,6 +94,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         calendly_default_link: '',
         google_calendar_id: '',
         google_calendar_enabled: false,
+        bu: 'incorporador',
       });
     }
   }, [closer, open]);
@@ -168,6 +180,25 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               placeholder="email@exemplo.com"
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bu">Business Unit *</Label>
+            <Select
+              value={formData.bu || 'incorporador'}
+              onValueChange={(v) => setFormData({ ...formData, bu: v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a BU" />
+              </SelectTrigger>
+              <SelectContent>
+                {BU_OPTIONS.map((bu) => (
+                  <SelectItem key={bu.value} value={bu.value}>
+                    {bu.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="space-y-2">

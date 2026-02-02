@@ -771,18 +771,24 @@ export function useSearchDealsByEmail(emailQuery: string) {
   });
 }
 
-export function useSearchDealsForSchedule(query: string) {
+export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
   return useQuery({
-    queryKey: ['schedule-search', query],
+    queryKey: ['schedule-search', query, originIds],
     queryFn: async () => {
       if (!query || query.length < 2) return [];
 
       // 1. Buscar deals pelo nome do deal (case-insensitive)
-      const { data: dealsByName } = await supabase
+      let dealsQuery = supabase
         .from('crm_deals')
         .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
-        .ilike('name', `%${query}%`)
-        .limit(10);
+        .ilike('name', `%${query}%`);
+      
+      // Filtrar por origin_id se especificado
+      if (originIds && originIds.length > 0) {
+        dealsQuery = dealsQuery.in('origin_id', originIds);
+      }
+      
+      const { data: dealsByName } = await dealsQuery.limit(10);
 
       // 2. Buscar contatos pelo nome ou telefone (case-insensitive)
       const normalizedQuery = query.replace(/\D/g, ''); // Remove non-digits for phone search
@@ -798,11 +804,17 @@ export function useSearchDealsForSchedule(query: string) {
       let dealsByContact: typeof dealsByName = [];
       if (contacts && contacts.length > 0) {
         const contactIds = contacts.map(c => c.id);
-        const { data } = await supabase
+        let contactDealsQuery = supabase
           .from('crm_deals')
           .select(`id, name, tags, contact:crm_contacts(id, name, phone, email), stage:crm_stages(id, stage_name)`)
-          .in('contact_id', contactIds)
-          .limit(10);
+          .in('contact_id', contactIds);
+        
+        // Filtrar por origin_id se especificado
+        if (originIds && originIds.length > 0) {
+          contactDealsQuery = contactDealsQuery.in('origin_id', originIds);
+        }
+        
+        const { data } = await contactDealsQuery.limit(10);
         dealsByContact = data || [];
       }
 
