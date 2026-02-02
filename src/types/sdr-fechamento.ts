@@ -109,6 +109,8 @@ export interface SdrMonthPayout {
   meta_realizadas_ajustada: number | null;
   meta_tentativas_ajustada: number | null;
   dias_uteis_mes: number | null;
+  // Departamento vigente no momento do fechamento (congelado)
+  departamento_vigente: string | null;
   status: PayoutStatus;
   aprovado_por: string | null;
   aprovado_em: string | null;

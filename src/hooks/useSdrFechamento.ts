@@ -130,7 +130,7 @@ export const useSdrPayouts = (anoMes: string, filters?: {
   return useQuery({
     queryKey: ['sdr-payouts', anoMes, filters],
     queryFn: async () => {
-      // Step 1: Fetch payouts with SDR data
+      // Step 1: Fetch payouts with SDR data (including departamento_vigente)
       const { data: payoutsData, error: payoutsError } = await supabase
         .from('sdr_month_payout')
         .select(`
@@ -178,21 +178,37 @@ export const useSdrPayouts = (anoMes: string, filters?: {
         // Only show active SDRs
         result = result.filter(p => p.sdr?.active !== false);
         
+        // Exclude R2 Partners (sócios) from closing
+        result = result.filter(p => {
+          const employee = (p as any).employee;
+          if (employee?.cargo === 'Closer R2') {
+            return false;
+          }
+          return true;
+        });
+        
         // Filter by role type
         if (filters.roleType && filters.roleType !== 'all') {
           result = result.filter(p => (p.sdr as any)?.role_type === filters.roleType);
         }
         
-        // Filter by squad/BU - Use HR department as primary, fallback to sdr.squad
+        // Filter by squad/BU - Use cascaded priority: departamento_vigente > employees.departamento > sdr.squad
         if (filters.squad && filters.squad !== 'all') {
           const expectedDept = SQUAD_TO_DEPT[filters.squad];
           result = result.filter(p => {
+            // 1. Priority: Frozen department from payout (departamento_vigente)
+            const frozenDept = (p as any).departamento_vigente;
+            if (frozenDept) {
+              return frozenDept === expectedDept;
+            }
+            
+            // 2. Fallback: Current HR department
             const employee = (p as any).employee;
-            // If employee has HR department, use that
             if (employee?.departamento) {
               return employee.departamento === expectedDept;
             }
-            // Fallback to sdr.squad for orphans
+            
+            // 3. Final fallback: sdr.squad for orphans
             return (p.sdr as any)?.squad === filters.squad;
           });
         }
@@ -403,12 +419,20 @@ export const useRecalculatePayout = () => {
       // Calculate values
       const calculatedValues = calculatePayoutValues(compPlan as SdrCompPlan, kpi as SdrMonthKpi);
 
-      // Upsert payout
+      // Get employee linked to SDR to capture current department
+      const { data: employeeData } = await supabase
+        .from('employees')
+        .select('departamento')
+        .eq('sdr_id', sdrId)
+        .maybeSingle();
+
+      // Upsert payout with departamento_vigente
       const { data, error } = await supabase
         .from('sdr_month_payout')
         .upsert({
           sdr_id: sdrId,
           ano_mes: anoMes,
+          departamento_vigente: employeeData?.departamento || null,
           ...calculatedValues,
           status: 'DRAFT',
         }, {
@@ -485,11 +509,19 @@ export const useRecalculateAllPayouts = () => {
 
           const calculatedValues = calculatePayoutValues(compPlan as SdrCompPlan, kpi as SdrMonthKpi);
 
+          // Get employee linked to SDR to capture current department
+          const { data: employeeData } = await supabase
+            .from('employees')
+            .select('departamento')
+            .eq('sdr_id', sdr.id)
+            .maybeSingle();
+
           const { data } = await supabase
             .from('sdr_month_payout')
             .upsert({
               sdr_id: sdr.id,
               ano_mes: anoMes,
+              departamento_vigente: employeeData?.departamento || null,
               ...calculatedValues,
               status: 'DRAFT',
             }, {

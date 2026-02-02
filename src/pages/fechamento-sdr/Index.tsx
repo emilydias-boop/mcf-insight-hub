@@ -162,14 +162,23 @@ const FechamentoSDRList = () => {
     }
   };
 
-  // Extract BU from HR department or fallback to sdr.squad
+  // Extract BU from frozen departamento_vigente, fallback to employee.departamento or sdr.squad
   const getBuFromPayout = (payout: NonNullable<typeof payouts>[0]) => {
     const employee = (payout as any).employee;
     const sdrData = payout.sdr as any;
+    const frozenDept = (payout as any).departamento_vigente;
     
-    // Priority 1: Use HR department
+    // Priority 1: Use frozen department from payout (departamento_vigente)
+    if (frozenDept) {
+      return {
+        label: frozenDept.replace('BU - ', '').replace(' 50K', ''),
+        isFromHR: true,
+        hasWarning: false,
+      };
+    }
+    
+    // Priority 2: Use current HR department
     if (employee?.departamento) {
-      // Remove "BU - " prefix for display
       return {
         label: employee.departamento.replace('BU - ', '').replace(' 50K', ''),
         isFromHR: true,
@@ -177,7 +186,7 @@ const FechamentoSDRList = () => {
       };
     }
     
-    // Priority 2: Fallback to sdr.squad (orphan)
+    // Priority 3: Fallback to sdr.squad (orphan)
     if (sdrData?.squad) {
       return {
         label: getSquadLabel(sdrData.squad),
