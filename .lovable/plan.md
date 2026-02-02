@@ -1,103 +1,121 @@
 
-# Plano: Corrigir Reset de Sessão ao Trocar de Aba
+# Plano: Diagnóstico e Correções para CRM Consórcio
 
-## Diagnóstico
+## Problemas Identificados
 
-Quando você está em `mcfgestao.com` e troca para outra aba do navegador, ao voltar a aplicação mostra "Acesso Negado" momentaneamente. Isso acontece porque:
+### Problema 1: Webhook Consórcio Insere em Tabela Errada
 
-### Fluxo Problemático Atual
+**Situação Atual:**
+O webhook `webhook-consorcio` que você mencionou (`https://...supabase.co/functions/v1/webhook-consorcio`) **existe e funciona**, mas ele insere dados na tabela **`consortium_cards`** (gestão de cartas de consórcio), **NÃO** no CRM (`crm_deals`).
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  1. Usuário está logado com role "admin" ou "sdr"                           │
-│  2. Troca para outra aba do navegador                                       │
-│  3. Volta para a aba do mcfgestao.com                                       │
-│  4. Supabase dispara evento SIGNED_IN ou TOKEN_REFRESHED                    │
-│  5. handleSession() é chamado e RESETA role para "viewer" temporariamente   │
-│  6. RoleGuard/ResourceGuard verificam role = "viewer"                       │
-│  7. → MOSTRA "ACESSO NEGADO" enquanto loadRolesInBackground() roda          │
-│  8. Após 2-3 segundos, role real é carregada e acesso é liberado            │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Por que isso acontece:**
+- Este webhook foi criado especificamente para o módulo de Cartas de Consórcio
+- Ele espera um payload específico com campos como `grupo`, `cota`, `valor_credito`, `tipo_pessoa`, etc.
+- O destino são as cartas (`consortium_cards`), não os negócios do CRM
 
-### Evidência nos Logs
-
-```
-[Auth] onAuthStateChange: SIGNED_IN
-[Auth] handleSession called after 20966ms, session: true
-[Auth] Session set, authLoading=false
-```
-
-O evento `SIGNED_IN` é disparado mesmo após 20 segundos (quando o token é renovado ou a aba volta ao foco), e o `handleSession` reseta todo o estado de roles.
+**Solução:**
+Se você quer que leads externos entrem no **CRM**, deve usar o sistema de **Webhooks de Entrada** (como mostrado na sua imagem). Esse sistema já foi configurado na pipeline "Efeito Alavanca + Clube" e usa o `webhook-lead-receiver`, que insere na tabela `crm_deals`.
 
 ---
 
-## Solução
+### Problema 2: "Nenhum Estágio Configurado" no Kanban
 
-Modificar o `AuthContext.tsx` para:
+**Diagnóstico:**
+As etapas estão **corretamente salvas** no banco de dados:
+- "Efeito Alavanca + Clube" tem 13 etapas
+- "Pipeline Leilão" tem 8 etapas
 
-1. **Não resetar roles em eventos de renovação de token** (`SIGNED_IN`, `TOKEN_REFRESHED`)
-2. **Preservar roles existentes** quando o usuário já está logado
-3. **Apenas recarregar roles se mudou de usuário** ou no login inicial
-
-### Código Corrigido
-
-```typescript
-// src/contexts/AuthContext.tsx
-
-// Adicionar ref para rastrear se já temos roles carregadas
-const hasLoadedRoles = useRef(false);
-
-// No onAuthStateChange:
-const { data: { subscription } } = supabase.auth.onAuthStateChange(
-  (event, newSession) => {
-    console.log(`[Auth] onAuthStateChange: ${event}`);
-    
-    // Ignorar INITIAL_SESSION duplicado
-    if (event === 'INITIAL_SESSION') {
-      if (initialSessionHandled.current) {
-        return;
-      }
-      initialSessionHandled.current = true;
-    }
-    
-    // NOVA LÓGICA: Se é renovação de token e já temos sessão válida, 
-    // apenas atualizar tokens sem resetar roles
-    if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && 
-        user && 
-        newSession?.user?.id === user.id && 
-        hasLoadedRoles.current) {
-      console.log('[Auth] Token refreshed, keeping existing roles');
-      setSession(newSession);
-      return; // Não resetar roles!
-    }
-    
-    handleSession(newSession);
-  }
-);
-
-// No handleSession, marcar que roles foram carregadas:
-const loadRolesInBackground = async (userId: string, version: number) => {
-  // ... código existente ...
-  
-  if (roles.length === 0) {
-    setRole('viewer');
-    setAllRoles(['viewer']);
-  } else {
-    setRole(primaryRole);
-    setAllRoles(roles);
-  }
-  
-  hasLoadedRoles.current = true; // Marcar que roles foram carregadas
-  console.log('[Auth] Roles loaded:', { primaryRole, roles });
-};
-
-// No signOut, resetar a flag:
-const signOut = async () => {
-  hasLoadedRoles.current = false;
-  // ... resto do código ...
-};
+**Evidências do banco:**
 ```
+origin_id: 7d7b1cb5-2a44-4552-9eff-c3b798646b78 (Efeito Alavanca + Clube)
+stages_count: 13 etapas ativas
+```
+
+**Causa Raiz:**
+O problema ocorre quando você:
+1. Seleciona o **Funil "BU - LEILÃO"** no dropdown
+2. **NÃO seleciona** uma origem específica na sidebar
+
+Neste caso, o `effectiveOriginId` tenta pegar a primeira origem do grupo. Porém, há um **problema de timing/race condition** entre:
+- O hook `useCRMOriginsByPipeline` que busca as origens do grupo
+- O cálculo do `effectiveOriginId` que depende dessas origens
+- O hook `useCRMStages` que busca as etapas
+
+Quando `pipelineOrigins` ainda está `undefined` ou vazio no primeiro render, o `effectiveOriginId` retorna o próprio `selectedPipelineId` (que é o ID do grupo), mas não há etapas diretamente vinculadas ao grupo - elas estão nas origens filhas.
+
+---
+
+## Correções Propostas
+
+### Correção 1: Melhorar lógica do `effectiveOriginId`
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/crm/Negocios.tsx` | Adicionar espera pelo carregamento de `pipelineOrigins` antes de definir `effectiveOriginId` |
+
+**Lógica:**
+```typescript
+const effectiveOriginId = useMemo(() => {
+  if (isSdr) return SDR_AUTHORIZED_ORIGIN_ID;
+  if (selectedOriginId) return selectedOriginId;
+  
+  // Se tem pipeline selecionado, verificar se é grupo
+  if (selectedPipelineId) {
+    // Se pipelineOrigins ainda está carregando, retornar undefined
+    // para evitar buscar etapas do grupo (que não existem)
+    if (!pipelineOrigins || (Array.isArray(pipelineOrigins) && pipelineOrigins.length === 0)) {
+      return undefined; // Aguardar carregamento
+    }
+    
+    // Se tem origens, pegar a primeira
+    if (Array.isArray(pipelineOrigins) && pipelineOrigins.length > 0) {
+      return (pipelineOrigins[0] as any).id;
+    }
+  }
+  
+  return undefined;
+}, [selectedOriginId, selectedPipelineId, pipelineOrigins, isSdr]);
+```
+
+### Correção 2: Adicionar loading state enquanto etapas carregam
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/crm/DealKanbanBoard.tsx` | Adicionar verificação de `isLoading` do hook de stages |
+
+**Lógica:**
+```typescript
+const { data: stages, isLoading: isLoadingStages } = useCRMStages(originId);
+
+// No render:
+if (isLoadingStages) {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
+}
+
+if (!stages || stages.length === 0) {
+  return /* mensagem atual de "Nenhum estágio configurado" */;
+}
+```
+
+---
+
+## Sobre o Webhook do Consórcio
+
+Se você precisa de um webhook que:
+1. Receba leads externos
+2. Crie negócios no CRM (`crm_deals`)
+3. Atribua ao pipeline do Consórcio
+
+**Use o sistema de Webhooks de Entrada** já configurado:
+- URL: `https://rehcfgqvigfcekiipqkc.supabase.co/functions/v1/webhook-lead-receiver?slug=efeito-alavanca-clube`
+- Este já está conectado à origem "Efeito Alavanca + Clube"
+- Cria negócios diretamente no CRM
+
+**O webhook `webhook-consorcio` deve continuar** para cadastrar **cartas de consórcio** (consortium_cards) - é outro propósito.
 
 ---
 
@@ -105,43 +123,15 @@ const signOut = async () => {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/contexts/AuthContext.tsx` | Adicionar lógica para preservar roles em renovação de token |
+| `src/pages/crm/Negocios.tsx` | Melhorar lógica do `effectiveOriginId` para evitar retornar ID de grupo |
+| `src/components/crm/DealKanbanBoard.tsx` | Adicionar loading state para etapas |
 
 ---
 
-## Fluxo Corrigido
+## Resultado Esperado
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  1. Usuário está logado com role "admin"                                    │
-│  2. Troca para outra aba do navegador                                       │
-│  3. Volta para a aba do mcfgestao.com                                       │
-│  4. Supabase dispara evento TOKEN_REFRESHED ou SIGNED_IN                    │
-│  5. AuthContext DETECTA que é renovação de token (mesmo user.id)            │
-│  6. Apenas atualiza tokens na sessão, MANTÉM role "admin"                   │
-│  7. → Usuário continua com acesso normal, sem "Acesso Negado"               │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Benefícios
-
-| Antes | Depois |
-|-------|--------|
-| "Acesso Negado" ao voltar de outra aba | Sessão mantida normalmente |
-| Role resetada para "viewer" temporariamente | Role preservada |
-| UX ruim com flash de tela de erro | Experiência fluida |
-| Problemas para SDRs e Closers em abas específicas | Navegação estável |
-
----
-
-## Detalhes Técnicos
-
-A correção adiciona três verificações antes de resetar roles:
-
-1. **`event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN'`** - É renovação de token?
-2. **`user && newSession?.user?.id === user.id`** - Mesmo usuário?
-3. **`hasLoadedRoles.current`** - Já carregamos as roles reais?
-
-Se todas são verdadeiras, apenas atualizamos os tokens sem chamar `handleSession()`.
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Funil BU-LEILÃO selecionado, sem origem | "Nenhum estágio configurado" | Loading → Primeira origem selecionada automaticamente |
+| Origem específica selecionada | Funciona (já estava OK) | Continua funcionando |
+| Carregamento de etapas | Flash de "sem estágio" | Spinner de loading |
