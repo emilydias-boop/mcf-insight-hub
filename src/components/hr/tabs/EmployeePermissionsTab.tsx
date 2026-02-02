@@ -1,74 +1,84 @@
-import { useState, useEffect } from 'react';
-import { Employee } from '@/types/hr';
-import { useEmployeeMutations } from '@/hooks/useEmployees';
-import { useUsers, useUserPermissions, useUserIntegrations } from '@/hooks/useUsers';
-import { ResourceType, PermissionLevel, AppRole } from '@/types/user-management';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Link2, Shield, Plug, Save, Loader2, Search, Unlink, Check } from 'lucide-react';
-import { toast } from 'sonner';
+import { useState, useEffect } from "react";
+import { Employee } from "@/types/hr";
+import { useEmployeeMutations } from "@/hooks/useEmployees";
+import { useUsers, useUserPermissions, useUserIntegrations } from "@/hooks/useUsers";
+import { ResourceType, PermissionLevel, AppRole } from "@/types/user-management";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Link2, Shield, Plug, Save, Loader2, Search, Unlink, Check } from "lucide-react";
+import { toast } from "sonner";
 
 interface EmployeePermissionsTabProps {
   employee: Employee;
 }
 
 const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
-  { value: 'sdr', label: 'SDR' },
-  { value: 'closer', label: 'Closer' },
-  { value: 'closer_sombra', label: 'Closer Sombra' },
-  { value: 'coordenador', label: 'Coordenador' },
-  { value: 'manager', label: 'Gestor' },
-  { value: 'rh', label: 'RH' },
-  { value: 'financeiro', label: 'Financeiro' },
-  { value: 'admin', label: 'Admin' },
+  { value: "sdr", label: "SDR" },
+  { value: "closer", label: "Closer" },
+  { value: "closer_sombra", label: "Closer Sombra" },
+  { value: "coordenador", label: "Coordenador" },
+  { value: "manager", label: "Gestor" },
+  { value: "rh", label: "RH" },
+  { value: "financeiro", label: "Financeiro" },
+  { value: "admin", label: "Admin" },
 ];
 
 const RESOURCE_OPTIONS: { value: ResourceType; label: string }[] = [
-  { value: 'crm', label: 'CRM' },
-  { value: 'dashboard', label: 'Dashboard Master' },
-  { value: 'fechamento_sdr', label: 'Fechamento SDR' },
-  { value: 'tv_sdr', label: 'TV SDR' },
-  { value: 'financeiro', label: 'Módulo Financeiro' },
-  { value: 'relatorios', label: 'Relatórios' },
+  { value: "crm", label: "CRM" },
+  { value: "dashboard", label: "Dashboard Master" },
+  { value: "fechamento_sdr", label: "Fechamento Equipe" },
+  { value: "tv_sdr", label: "TV SDR" },
+  { value: "financeiro", label: "Módulo Financeiro" },
+  { value: "relatorios", label: "Relatórios" },
 ];
 
 const PERMISSION_LEVELS: { value: PermissionLevel; label: string }[] = [
-  { value: 'none', label: 'Nenhum' },
-  { value: 'view', label: 'Visualizar' },
-  { value: 'full', label: 'Completo' },
+  { value: "none", label: "Nenhum" },
+  { value: "view", label: "Visualizar" },
+  { value: "full", label: "Completo" },
 ];
 
 export default function EmployeePermissionsTab({ employee }: EmployeePermissionsTabProps) {
   const { data: users, isLoading: usersLoading } = useUsers();
   const { updateEmployee } = useEmployeeMutations();
-  
+
   const linkedUserId = employee.user_id || employee.profile_id;
-  const { data: permissions, isLoading: permissionsLoading, refetch: refetchPermissions } = useUserPermissions(linkedUserId);
-  const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = useUserIntegrations(linkedUserId);
-  
+  const {
+    data: permissions,
+    isLoading: permissionsLoading,
+    refetch: refetchPermissions,
+  } = useUserPermissions(linkedUserId);
+  const {
+    data: integrations,
+    isLoading: integrationsLoading,
+    refetch: refetchIntegrations,
+  } = useUserIntegrations(linkedUserId);
+
   const [selectedUserId, setSelectedUserId] = useState<string | null>(linkedUserId);
-  const [userRole, setUserRole] = useState<AppRole | ''>('');
-  const [resourcePermissions, setResourcePermissions] = useState<Record<ResourceType, PermissionLevel>>({} as Record<ResourceType, PermissionLevel>);
-  const [clintUserId, setClintUserId] = useState('');
-  const [twilioAgentId, setTwilioAgentId] = useState('');
+  const [userRole, setUserRole] = useState<AppRole | "">("");
+  const [resourcePermissions, setResourcePermissions] = useState<Record<ResourceType, PermissionLevel>>(
+    {} as Record<ResourceType, PermissionLevel>,
+  );
+  const [clintUserId, setClintUserId] = useState("");
+  const [twilioAgentId, setTwilioAgentId] = useState("");
   const [saving, setSaving] = useState(false);
   const [searchingClint, setSearchingClint] = useState(false);
 
   // Find linked user email
-  const linkedUser = users?.find(u => u.user_id === linkedUserId);
+  const linkedUser = users?.find((u) => u.user_id === linkedUserId);
 
   // Load current role
   useEffect(() => {
     if (linkedUserId) {
       supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', linkedUserId)
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", linkedUserId)
         .maybeSingle()
         .then(({ data }) => {
           if (data) setUserRole(data.role as AppRole);
@@ -90,25 +100,25 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
   // Load integrations
   useEffect(() => {
     if (integrations) {
-      setClintUserId(integrations.clint_user_id || '');
-      setTwilioAgentId(integrations.twilio_agent_id || '');
+      setClintUserId(integrations.clint_user_id || "");
+      setTwilioAgentId(integrations.twilio_agent_id || "");
     }
   }, [integrations]);
 
   const handleLinkUser = async () => {
     if (!selectedUserId) return;
-    
+
     setSaving(true);
     try {
       await updateEmployee.mutateAsync({
         id: employee.id,
-        data: { user_id: selectedUserId, profile_id: selectedUserId }
+        data: { user_id: selectedUserId, profile_id: selectedUserId },
       });
-      toast.success('Usuário vinculado com sucesso');
+      toast.success("Usuário vinculado com sucesso");
       refetchPermissions();
       refetchIntegrations();
     } catch (error: any) {
-      toast.error('Erro ao vincular usuário: ' + error.message);
+      toast.error("Erro ao vincular usuário: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -119,14 +129,14 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
     try {
       await updateEmployee.mutateAsync({
         id: employee.id,
-        data: { user_id: null, profile_id: null }
+        data: { user_id: null, profile_id: null },
       });
       setSelectedUserId(null);
-      setUserRole('');
+      setUserRole("");
       setResourcePermissions({} as Record<ResourceType, PermissionLevel>);
-      toast.success('Usuário desvinculado');
+      toast.success("Usuário desvinculado");
     } catch (error: any) {
-      toast.error('Erro: ' + error.message);
+      toast.error("Erro: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -134,34 +144,29 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
 
   const handleSaveRole = async () => {
     if (!linkedUserId || !userRole) return;
-    
+
     setSaving(true);
     try {
       // First check if role exists
       const { data: existingRole } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('user_id', linkedUserId)
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", linkedUserId)
         .maybeSingle();
-      
+
       if (existingRole) {
         // Update
-        const { error } = await supabase
-          .from('user_roles')
-          .update({ role: userRole })
-          .eq('user_id', linkedUserId);
+        const { error } = await supabase.from("user_roles").update({ role: userRole }).eq("user_id", linkedUserId);
         if (error) throw error;
       } else {
         // Insert
-        const { error } = await supabase
-          .from('user_roles')
-          .insert({ user_id: linkedUserId, role: userRole });
+        const { error } = await supabase.from("user_roles").insert({ user_id: linkedUserId, role: userRole });
         if (error) throw error;
       }
-      
-      toast.success('Perfil atualizado');
+
+      toast.success("Perfil atualizado");
     } catch (error: any) {
-      toast.error('Erro: ' + error.message);
+      toast.error("Erro: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -169,18 +174,15 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
 
   const handleSavePermissions = async () => {
     if (!linkedUserId) return;
-    
+
     setSaving(true);
     try {
       // Delete existing permissions
-      await supabase
-        .from('user_permissions')
-        .delete()
-        .eq('user_id', linkedUserId);
+      await supabase.from("user_permissions").delete().eq("user_id", linkedUserId);
 
       // Insert new permissions
       const permissionsToInsert = Object.entries(resourcePermissions)
-        .filter(([_, level]) => level !== 'none')
+        .filter(([_, level]) => level !== "none")
         .map(([resource, level]) => ({
           user_id: linkedUserId,
           resource: resource as ResourceType,
@@ -188,17 +190,15 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
         }));
 
       if (permissionsToInsert.length > 0) {
-        const { error } = await supabase
-          .from('user_permissions')
-          .insert(permissionsToInsert);
-        
+        const { error } = await supabase.from("user_permissions").insert(permissionsToInsert);
+
         if (error) throw error;
       }
-      
-      toast.success('Permissões salvas');
+
+      toast.success("Permissões salvas");
       refetchPermissions();
     } catch (error: any) {
-      toast.error('Erro: ' + error.message);
+      toast.error("Erro: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -206,40 +206,38 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
 
   const handleSaveIntegrations = async () => {
     if (!linkedUserId) return;
-    
+
     setSaving(true);
     try {
       // Check if exists
       const { data: existing } = await supabase
-        .from('user_integrations')
-        .select('id')
-        .eq('user_id', linkedUserId)
+        .from("user_integrations")
+        .select("id")
+        .eq("user_id", linkedUserId)
         .maybeSingle();
-      
+
       if (existing) {
         const { error } = await supabase
-          .from('user_integrations')
+          .from("user_integrations")
           .update({
             clint_user_id: clintUserId || null,
             twilio_agent_id: twilioAgentId || null,
           })
-          .eq('user_id', linkedUserId);
+          .eq("user_id", linkedUserId);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('user_integrations')
-          .insert({
-            user_id: linkedUserId,
-            clint_user_id: clintUserId || null,
-            twilio_agent_id: twilioAgentId || null,
-          });
+        const { error } = await supabase.from("user_integrations").insert({
+          user_id: linkedUserId,
+          clint_user_id: clintUserId || null,
+          twilio_agent_id: twilioAgentId || null,
+        });
         if (error) throw error;
       }
-      
-      toast.success('Integrações salvas');
+
+      toast.success("Integrações salvas");
       refetchIntegrations();
     } catch (error: any) {
-      toast.error('Erro: ' + error.message);
+      toast.error("Erro: " + error.message);
     } finally {
       setSaving(false);
     }
@@ -247,34 +245,38 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
 
   const handleSearchClint = async () => {
     if (!linkedUser?.email) return;
-    
+
     setSearchingClint(true);
     try {
-      const { data, error } = await supabase.functions.invoke('clint-api', {
-        body: { resource: 'users' }
+      const { data, error } = await supabase.functions.invoke("clint-api", {
+        body: { resource: "users" },
       });
-      
+
       if (error) throw error;
-      
-      const clintUser = data?.data?.find((u: any) => 
-        u.email?.toLowerCase() === linkedUser.email?.toLowerCase()
-      );
-      
+
+      const clintUser = data?.data?.find((u: any) => u.email?.toLowerCase() === linkedUser.email?.toLowerCase());
+
       if (clintUser) {
         setClintUserId(clintUser.id);
-        toast.success('Usuário encontrado no Clint');
+        toast.success("Usuário encontrado no Clint");
       } else {
-        toast.info('Nenhum usuário encontrado com este email no Clint');
+        toast.info("Nenhum usuário encontrado com este email no Clint");
       }
     } catch (error: any) {
-      toast.error('Erro ao buscar no Clint: ' + error.message);
+      toast.error("Erro ao buscar no Clint: " + error.message);
     } finally {
       setSearchingClint(false);
     }
   };
 
   if (usersLoading) {
-    return <div className="space-y-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full" />)}</div>;
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-32 w-full" />
+        ))}
+      </div>
+    );
   }
 
   return (
@@ -293,9 +295,7 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
               <div>
                 <p className="text-sm text-muted-foreground">Usuário vinculado:</p>
                 <p className="font-medium">{linkedUser?.email || linkedUserId}</p>
-                {linkedUser?.full_name && (
-                  <p className="text-sm text-muted-foreground">{linkedUser.full_name}</p>
-                )}
+                {linkedUser?.full_name && <p className="text-sm text-muted-foreground">{linkedUser.full_name}</p>}
               </div>
               <Button variant="outline" size="sm" onClick={handleUnlinkUser} disabled={saving}>
                 <Unlink className="h-4 w-4 mr-1" />
@@ -306,7 +306,7 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
             <div className="space-y-3">
               <Label>Selecionar usuário para vincular</Label>
               <div className="flex gap-2">
-                <Select value={selectedUserId || ''} onValueChange={setSelectedUserId}>
+                <Select value={selectedUserId || ""} onValueChange={setSelectedUserId}>
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder="Selecione um usuário..." />
                   </SelectTrigger>
@@ -344,7 +344,9 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
                 </SelectTrigger>
                 <SelectContent>
                   {ROLE_OPTIONS.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -371,22 +373,30 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
           </CardHeader>
           <CardContent>
             {permissionsLoading ? (
-              <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
             ) : (
               <div className="space-y-3">
                 {RESOURCE_OPTIONS.map((resource) => (
                   <div key={resource.value} className="flex items-center justify-between">
                     <Label className="font-normal">{resource.label}</Label>
-                    <Select 
-                      value={resourcePermissions[resource.value] || 'none'} 
-                      onValueChange={(v) => setResourcePermissions({ ...resourcePermissions, [resource.value]: v as PermissionLevel })}
+                    <Select
+                      value={resourcePermissions[resource.value] || "none"}
+                      onValueChange={(v) =>
+                        setResourcePermissions({ ...resourcePermissions, [resource.value]: v as PermissionLevel })
+                      }
                     >
                       <SelectTrigger className="w-[140px]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {PERMISSION_LEVELS.map((level) => (
-                          <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
+                          <SelectItem key={level.value} value={level.value}>
+                            {level.label}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -413,19 +423,23 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
           </CardHeader>
           <CardContent>
             {integrationsLoading ? (
-              <div className="space-y-2">{[1, 2].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+              <div className="space-y-2">
+                {[1, 2].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
             ) : (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Clint User ID</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      value={clintUserId} 
+                    <Input
+                      value={clintUserId}
                       onChange={(e) => setClintUserId(e.target.value)}
                       placeholder="ID do usuário no Clint"
                     />
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={handleSearchClint}
                       disabled={searchingClint || !linkedUser?.email}
                     >
@@ -435,8 +449,8 @@ export default function EmployeePermissionsTab({ employee }: EmployeePermissions
                 </div>
                 <div className="space-y-2">
                   <Label>Twilio Agent ID</Label>
-                  <Input 
-                    value={twilioAgentId} 
+                  <Input
+                    value={twilioAgentId}
                     onChange={(e) => setTwilioAgentId(e.target.value)}
                     placeholder="ID do agente no Twilio"
                   />

@@ -1,45 +1,45 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { format, subMonths } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { format, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { SdrStatusBadge } from "@/components/sdr-fechamento/SdrStatusBadge";
+import { useSdrPayouts, useRecalculateAllPayouts } from "@/hooks/useSdrFechamento";
+import { formatCurrency } from "@/lib/formatters";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
-import { useSdrPayouts, useRecalculateAllPayouts } from '@/hooks/useSdrFechamento';
-import { formatCurrency } from '@/lib/formatters';
-import { Calculator, Download, Eye, RefreshCw, AlertTriangle, DollarSign, Wallet, CreditCard, UtensilsCrossed, Search, Users, Settings } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+  Calculator,
+  Download,
+  Eye,
+  RefreshCw,
+  AlertTriangle,
+  DollarSign,
+  Wallet,
+  CreditCard,
+  UtensilsCrossed,
+  Search,
+  Users,
+  Settings,
+} from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const FechamentoSDRList = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const currentMonth = format(new Date(), 'yyyy-MM');
+  const currentMonth = format(new Date(), "yyyy-MM");
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-  
+
   // Filter states
-  const [roleFilter, setRoleFilter] = useState<'sdr' | 'closer' | 'all'>('all');
-  const [squadFilter, setSquadFilter] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  
+  const [roleFilter, setRoleFilter] = useState<"sdr" | "closer" | "all">("all");
+  const [squadFilter, setSquadFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+
   const { data: payouts, isLoading } = useSdrPayouts(selectedMonth, {
     roleType: roleFilter,
     squad: squadFilter,
@@ -50,7 +50,7 @@ const FechamentoSDRList = () => {
   // Mutation to call edge function for recalculation with correct iFood from calendar
   const recalculateViaEdge = useMutation({
     mutationFn: async (anoMes: string) => {
-      const { data, error } = await supabase.functions.invoke('recalculate-sdr-payout', {
+      const { data, error } = await supabase.functions.invoke("recalculate-sdr-payout", {
         body: { ano_mes: anoMes },
       });
       if (error) throw error;
@@ -58,7 +58,7 @@ const FechamentoSDRList = () => {
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['sdr-payouts', selectedMonth] });
+      queryClient.invalidateQueries({ queryKey: ["sdr-payouts", selectedMonth] });
       toast.success(`Fechamentos recalculados: ${data.processed || 0} SDRs processados`);
     },
     onError: (error: Error) => {
@@ -70,18 +70,18 @@ const FechamentoSDRList = () => {
   // Note: status uses SdrStatus type = 'PENDING' | 'APPROVED' | 'REJECTED'
   // We include PENDING and APPROVED plans, exclude REJECTED
   const { data: compPlans } = useQuery({
-    queryKey: ['sdr-comp-plans', selectedMonth],
+    queryKey: ["sdr-comp-plans", selectedMonth],
     queryFn: async () => {
-      const [year, month] = selectedMonth.split('-').map(Number);
-      const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
-      
+      const [year, month] = selectedMonth.split("-").map(Number);
+      const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+
       const { data, error } = await supabase
-        .from('sdr_comp_plan')
-        .select('*')
-        .lte('vigencia_inicio', monthStart)
+        .from("sdr_comp_plan")
+        .select("*")
+        .lte("vigencia_inicio", monthStart)
         .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
-        .neq('status', 'REJECTED');
-      
+        .neq("status", "REJECTED");
+
       if (error) throw error;
       return data;
     },
@@ -92,12 +92,12 @@ const FechamentoSDRList = () => {
     const options = [];
     const startDate = new Date(2025, 0, 1); // January 2025
     const endDate = new Date();
-    
+
     let current = endDate;
     while (current >= startDate) {
       options.push({
-        value: format(current, 'yyyy-MM'),
-        label: format(current, 'MMMM yyyy', { locale: ptBR }),
+        value: format(current, "yyyy-MM"),
+        label: format(current, "MMMM yyyy", { locale: ptBR }),
       });
       current = subMonths(current, 1);
     }
@@ -107,7 +107,7 @@ const FechamentoSDRList = () => {
   const monthOptions = generateMonthOptions();
 
   const getCompPlanForSdr = (sdrId: string) => {
-    return compPlans?.find(cp => cp.sdr_id === sdrId);
+    return compPlans?.find((cp) => cp.sdr_id === sdrId);
   };
 
   const calculateGlobalPct = (payout: NonNullable<typeof payouts>[0]) => {
@@ -117,30 +117,34 @@ const FechamentoSDRList = () => {
       payout.pct_tentativas,
       payout.pct_organizacao,
     ].filter((p) => p !== null) as number[];
-    
+
     if (pcts.length === 0) return 0;
     return pcts.reduce((a, b) => a + b, 0) / pcts.length;
   };
 
   // Calculate financial summary
-  const financialSummary = payouts?.reduce((acc, p) => ({
-    totalFixo: acc.totalFixo + (p.valor_fixo || 0),
-    totalVariavel: acc.totalVariavel + (p.valor_variavel_total || 0),
-    totalConta: acc.totalConta + (p.total_conta || 0),
-    totalIfood: acc.totalIfood + (p.total_ifood || 0),
-  }), { totalFixo: 0, totalVariavel: 0, totalConta: 0, totalIfood: 0 });
+  const financialSummary = payouts?.reduce(
+    (acc, p) => ({
+      totalFixo: acc.totalFixo + (p.valor_fixo || 0),
+      totalVariavel: acc.totalVariavel + (p.valor_variavel_total || 0),
+      totalConta: acc.totalConta + (p.total_conta || 0),
+      totalIfood: acc.totalIfood + (p.total_ifood || 0),
+    }),
+    { totalFixo: 0, totalVariavel: 0, totalConta: 0, totalIfood: 0 },
+  );
 
   // Count critical alerts
-  const criticalCount = payouts?.filter(p => calculateGlobalPct(p) < 70).length || 0;
-  const warningCount = payouts?.filter(p => {
-    const pct = calculateGlobalPct(p);
-    return pct >= 70 && pct < 100;
-  }).length || 0;
+  const criticalCount = payouts?.filter((p) => calculateGlobalPct(p) < 70).length || 0;
+  const warningCount =
+    payouts?.filter((p) => {
+      const pct = calculateGlobalPct(p);
+      return pct >= 70 && pct < 100;
+    }).length || 0;
 
   const escapeCSV = (value: string | number | null | undefined): string => {
-    if (value === null || value === undefined) return '';
+    if (value === null || value === undefined) return "";
     const str = String(value);
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
       return `"${str.replace(/"/g, '""')}"`;
     }
     return str;
@@ -148,19 +152,27 @@ const FechamentoSDRList = () => {
 
   const getRoleLabel = (roleType: string | null | undefined) => {
     switch (roleType) {
-      case 'closer': return 'Closer';
-      case 'sdr': return 'SDR';
-      default: return 'SDR';
+      case "closer":
+        return "Closer";
+      case "sdr":
+        return "SDR";
+      default:
+        return "SDR";
     }
   };
 
   const getSquadLabel = (squad: string | null | undefined) => {
     switch (squad) {
-      case 'incorporador': return 'Incorporador';
-      case 'consorcio': return 'Consórcio';
-      case 'credito': return 'Crédito';
-      case 'projetos': return 'Projetos';
-      default: return squad || '-';
+      case "incorporador":
+        return "Incorporador";
+      case "consorcio":
+        return "Consórcio";
+      case "credito":
+        return "Crédito";
+      case "projetos":
+        return "Projetos";
+      default:
+        return squad || "-";
     }
   };
 
@@ -169,25 +181,25 @@ const FechamentoSDRList = () => {
     const employee = (payout as any).employee;
     const sdrData = payout.sdr as any;
     const frozenDept = (payout as any).departamento_vigente;
-    
+
     // Priority 1: Use frozen department from payout (departamento_vigente)
     if (frozenDept) {
       return {
-        label: frozenDept.replace('BU - ', '').replace(' 50K', ''),
+        label: frozenDept.replace("BU - ", "").replace(" 50K", ""),
         isFromHR: true,
         hasWarning: false,
       };
     }
-    
+
     // Priority 2: Use current HR department
     if (employee?.departamento) {
       return {
-        label: employee.departamento.replace('BU - ', '').replace(' 50K', ''),
+        label: employee.departamento.replace("BU - ", "").replace(" 50K", ""),
         isFromHR: true,
         hasWarning: false,
       };
     }
-    
+
     // Priority 3: Fallback to sdr.squad (orphan)
     if (sdrData?.squad) {
       return {
@@ -196,36 +208,36 @@ const FechamentoSDRList = () => {
         hasWarning: true, // Show warning for orphan SDRs
       };
     }
-    
-    return { label: '-', isFromHR: false, hasWarning: false };
+
+    return { label: "-", isFromHR: false, hasWarning: false };
   };
 
   const handleExportCSV = () => {
     if (!payouts || payouts.length === 0) return;
 
     const headers = [
-      'Nome',
-      'Cargo',
-      'BU',
-      'Nível',
-      'OTE',
-      '% Meta Global',
-      '% Reuniões Agendadas',
-      '% Reuniões Realizadas',
-      '% Tentativas',
-      '% Organização',
-      'Valor Fixo',
-      'Valor Variável',
-      'Valor Reuniões Agendadas',
-      'Valor Reuniões Realizadas',
-      'Valor Tentativas',
-      'Valor Organização',
-      'Total Conta',
-      'iFood Mensal',
-      'iFood Ultrameta',
-      'iFood Ultrameta Autorizado',
-      'Total iFood',
-      'Status',
+      "Nome",
+      "Cargo",
+      "BU",
+      "Nível",
+      "OTE",
+      "% Meta Global",
+      "% Reuniões Agendadas",
+      "% Reuniões Realizadas",
+      "% Tentativas",
+      "% Organização",
+      "Valor Fixo",
+      "Valor Variável",
+      "Valor Reuniões Agendadas",
+      "Valor Reuniões Realizadas",
+      "Valor Tentativas",
+      "Valor Organização",
+      "Total Conta",
+      "iFood Mensal",
+      "iFood Ultrameta",
+      "iFood Ultrameta Autorizado",
+      "Total iFood",
+      "Status",
     ];
 
     const rows = payouts.map((p) => {
@@ -233,13 +245,13 @@ const FechamentoSDRList = () => {
       const globalPct = calculateGlobalPct(p);
       const sdrData = p.sdr as any;
       const employee = (p as any).employee;
-      
+
       // Use HR data as source of truth for export too
       const nivel = employee?.cargo_catalogo?.nivel || p.sdr?.nivel || 1;
       const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
-      
+
       return [
-        escapeCSV(p.sdr?.name || ''),
+        escapeCSV(p.sdr?.name || ""),
         escapeCSV(getRoleLabel(sdrData?.role_type)),
         escapeCSV(getSquadLabel(sdrData?.squad)),
         escapeCSV(nivel),
@@ -258,20 +270,17 @@ const FechamentoSDRList = () => {
         escapeCSV(p.total_conta || 0),
         escapeCSV(p.ifood_mensal || 0),
         escapeCSV(p.ifood_ultrameta || 0),
-        escapeCSV(p.ifood_ultrameta_autorizado ? 'Sim' : 'Não'),
+        escapeCSV(p.ifood_ultrameta_autorizado ? "Sim" : "Não"),
         escapeCSV(p.total_ifood || 0),
         escapeCSV(p.status),
       ];
     });
 
-    const csvContent = [
-      headers.join(';'),
-      ...rows.map((row) => row.join(';')),
-    ].join('\n');
+    const csvContent = [headers.join(";"), ...rows.map((row) => row.join(";"))].join("\n");
 
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `fechamento-sdr-${selectedMonth}.csv`;
     link.click();
@@ -282,12 +291,10 @@ const FechamentoSDRList = () => {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Fechamento SDR</h1>
-            <p className="text-muted-foreground">
-              Gerencie o fechamento mensal dos SDRs e Closers
-            </p>
+            <h1 className="text-3xl font-bold">Fechamento Equipe</h1>
+            <p className="text-muted-foreground">Gerencie o fechamento mensal dos SDRs e Closers</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
               <SelectTrigger className="w-[200px]">
@@ -307,7 +314,7 @@ const FechamentoSDRList = () => {
               onClick={() => recalculateViaEdge.mutate(selectedMonth)}
               disabled={recalculateViaEdge.isPending}
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${recalculateViaEdge.isPending ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 mr-2 ${recalculateViaEdge.isPending ? "animate-spin" : ""}`} />
               Recalcular Todos
             </Button>
 
@@ -316,10 +323,7 @@ const FechamentoSDRList = () => {
               Exportar CSV
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={() => navigate('/fechamento-sdr/configuracoes')}
-            >
+            <Button variant="outline" onClick={() => navigate("/fechamento-sdr/configuracoes")}>
               <Settings className="h-4 w-4 mr-2" />
               Configurações
             </Button>
@@ -338,7 +342,7 @@ const FechamentoSDRList = () => {
             />
           </div>
 
-          <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as 'sdr' | 'closer' | 'all')}>
+          <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as "sdr" | "closer" | "all")}>
             <SelectTrigger className="w-[140px]">
               <Users className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Cargo" />
@@ -363,14 +367,14 @@ const FechamentoSDRList = () => {
             </SelectContent>
           </Select>
 
-          {(searchTerm || roleFilter !== 'all' || squadFilter !== 'all') && (
-            <Button 
-              variant="ghost" 
+          {(searchTerm || roleFilter !== "all" || squadFilter !== "all") && (
+            <Button
+              variant="ghost"
               size="sm"
               onClick={() => {
-                setSearchTerm('');
-                setRoleFilter('all');
-                setSquadFilter('all');
+                setSearchTerm("");
+                setRoleFilter("all");
+                setSquadFilter("all");
               }}
             >
               Limpar filtros
@@ -453,7 +457,10 @@ const FechamentoSDRList = () => {
             </Badge>
           )}
           {warningCount > 0 && (
-            <Badge variant="outline" className="flex items-center gap-1 px-3 py-1 bg-yellow-500/10 text-yellow-400 border-yellow-500/30">
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1 px-3 py-1 bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+            >
               <AlertTriangle className="h-3 w-3" />
               {warningCount} SDR(s) abaixo da meta (70-99%)
             </Badge>
@@ -507,22 +514,25 @@ const FechamentoSDRList = () => {
                   const globalPct = calculateGlobalPct(payout);
                   const compPlan = getCompPlanForSdr(payout.sdr_id);
                   const employee = (payout as any).employee;
-                  
+
                   // Priority: 1) RH cargo_catalogo.nivel, 2) legacy sdr.nivel, 3) fallback 1
                   const nivel = employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
-                  
+
                   // Priority: 1) compPlan vigente, 2) RH cargo_catalogo.ote_total, 3) fallback 4000
                   const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
-                  
+
                   const isCritical = globalPct < 70;
                   const isWarning = globalPct >= 70 && globalPct < 100;
                   const sdrData = payout.sdr as any;
-                  
+
                   return (
-                    <TableRow key={payout.id} className={isCritical ? 'bg-red-500/5' : isWarning ? 'bg-yellow-500/5' : ''}>
+                    <TableRow
+                      key={payout.id}
+                      className={isCritical ? "bg-red-500/5" : isWarning ? "bg-yellow-500/5" : ""}
+                    >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          {payout.sdr?.name || 'SDR'}
+                          {payout.sdr?.name || "SDR"}
                           {isCritical && (
                             <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
                               CRÍTICO
@@ -531,7 +541,10 @@ const FechamentoSDRList = () => {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant={sdrData?.role_type === 'closer' ? 'secondary' : 'outline'} className="font-normal">
+                        <Badge
+                          variant={sdrData?.role_type === "closer" ? "secondary" : "outline"}
+                          className="font-normal"
+                        >
                           {getRoleLabel(sdrData?.role_type)}
                         </Badge>
                       </TableCell>
@@ -539,13 +552,16 @@ const FechamentoSDRList = () => {
                         {(() => {
                           const buInfo = getBuFromPayout(payout);
                           return (
-                            <div className="flex items-center justify-center gap-1" title={buInfo.hasWarning ? 'SDR sem vínculo RH' : undefined}>
-                              <span className={`text-sm ${buInfo.isFromHR ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            <div
+                              className="flex items-center justify-center gap-1"
+                              title={buInfo.hasWarning ? "SDR sem vínculo RH" : undefined}
+                            >
+                              <span
+                                className={`text-sm ${buInfo.isFromHR ? "text-foreground" : "text-muted-foreground"}`}
+                              >
                                 {buInfo.label}
                               </span>
-                              {buInfo.hasWarning && (
-                                <AlertTriangle className="h-3 w-3 text-yellow-500" />
-                              )}
+                              {buInfo.hasWarning && <AlertTriangle className="h-3 w-3 text-yellow-500" />}
                             </div>
                           );
                         })()}
@@ -555,40 +571,26 @@ const FechamentoSDRList = () => {
                           N{nivel}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(ote)}
-                      </TableCell>
+                      <TableCell className="text-right">{formatCurrency(ote)}</TableCell>
                       <TableCell className="text-right">
                         <span
                           className={
-                            globalPct >= 100
-                              ? 'text-green-400'
-                              : globalPct >= 70
-                              ? 'text-yellow-400'
-                              : 'text-red-400'
+                            globalPct >= 100 ? "text-green-400" : globalPct >= 70 ? "text-yellow-400" : "text-red-400"
                           }
                         >
                           {globalPct.toFixed(1)}%
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(payout.valor_variavel_total || 0)}
-                      </TableCell>
+                      <TableCell className="text-right">{formatCurrency(payout.valor_variavel_total || 0)}</TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatCurrency(payout.total_conta || 0)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(payout.total_ifood || 0)}
-                      </TableCell>
+                      <TableCell className="text-right">{formatCurrency(payout.total_ifood || 0)}</TableCell>
                       <TableCell className="text-center">
                         <SdrStatusBadge status={payout.status} />
                       </TableCell>
                       <TableCell className="text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/fechamento-sdr/${payout.id}`)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => navigate(`/fechamento-sdr/${payout.id}`)}>
                           <Eye className="h-4 w-4 mr-1" />
                           Ver
                         </Button>
