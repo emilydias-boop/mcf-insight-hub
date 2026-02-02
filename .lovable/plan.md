@@ -1,297 +1,153 @@
 
+# Plano: Corrigir Sistema de Fechamento para Closers e Metas Individuais
 
-# Plano Completo: Unificar Fechamento SDR com RH + Histórico de Departamento
+## Resumo dos Problemas
 
-## Visão Geral
+O sistema de fechamento apresenta inconsistências para colaboradores do tipo Closer:
 
-Este plano resolve dois problemas relacionados de uma vez:
-
-1. **Colaboradores na BU errada**: Filtrar corretamente por departamento do RH e excluir sócios R2
-2. **Histórico de transferências**: Manter registro do departamento vigente em cada mês para colaboradores que mudam de área
+1. **Julio (Closer Inside)** está sendo exibido com métricas de SDR (Agendadas, Tentativas, Organização)
+2. **Aba "Planos OTE"** mostra apenas valores do catálogo de cargos (zerados para Closers), ignorando planos individuais
+3. **Não existe forma de editar metas individuais** por colaborador
+4. **Métricas Ativas configuradas** não são consumidas pelo sistema de cálculo
 
 ---
 
-## Alterações no Banco de Dados
+## Solução em 3 Partes
 
-### Migration: Nova Coluna
+### Parte 1: Adaptar Tela de Detalhe para Closers
 
-```sql
--- Adicionar coluna para congelar departamento no momento do fechamento
-ALTER TABLE sdr_month_payout 
-ADD COLUMN departamento_vigente TEXT;
+Modificar `src/pages/fechamento-sdr/Detail.tsx` para exibir indicadores diferentes baseado no `role_type`:
 
-COMMENT ON COLUMN sdr_month_payout.departamento_vigente IS 
-  'Departamento do colaborador no momento do fechamento (fonte: employees.departamento)';
-```
+| SDR | Closer |
+|-----|--------|
+| Reuniões Agendadas | R1 Realizadas |
+| Reuniões Realizadas | Contratos Pagos |
+| Tentativas de Ligação | Taxa de Conversão |
+| Organização | No-Show (inverso) |
+| No-Show | R2 Agendadas |
+| - | Outside Sales |
 
-### Scripts de Correção de Dados
+**Lógica:**
+```typescript
+const isCloser = (payout.sdr as any)?.role_type === 'closer';
 
-```sql
--- 1. Vincular Thaynar Tavares ao SDR correspondente
-UPDATE employees 
-SET sdr_id = '66a5a9ea-6d48-4831-b91c-7d79cf00aac2'
-WHERE id = 'fbd5ed07-c45c-41af-9e55-37c2d7faf613';
-
--- 2. Vincular Julio Caetano ao SDR correspondente
-UPDATE employees 
-SET sdr_id = '21393c7b-faa7-42e2-b1d8-920e3a808b33'
-WHERE id = '74d4da35-2f43-43f0-a0b0-29bd6d51c04a';
-
--- 3. Vincular Jéssica Bellini ao SDR correspondente
-UPDATE employees 
-SET sdr_id = '566e3075-5903-4b9b-941b-ef95b9fa09d8'
-WHERE id = '93d0e6ac-2e66-4372-8974-2af228f07628';
-
--- 4. Desativar SDR de Claudia Carielo (sócia R2)
-UPDATE sdr 
-SET active = false 
-WHERE id = '4eb4991d-e753-49e5-955b-c3ebceafe6e4';
-
--- 5. Desativar SDR de Thobson Motta (sócio R2)
-UPDATE sdr 
-SET active = false 
-WHERE id = '761a3f5b-d854-46e3-8b0d-05c1b7680216';
-
--- 6. Preencher departamento_vigente para payouts existentes (baseado no RH atual)
-UPDATE sdr_month_payout p
-SET departamento_vigente = e.departamento
-FROM employees e
-WHERE e.sdr_id = p.sdr_id
-AND p.departamento_vigente IS NULL;
-
--- 7. Corrigir manualmente o Vinicius em Janeiro (transferido em Fevereiro)
-UPDATE sdr_month_payout 
-SET departamento_vigente = 'BU - Incorporador 50K'
-WHERE sdr_id = '11111111-0001-0001-0001-000000000010'
-AND ano_mes = '2026-01';
+// Exibir indicadores diferentes
+{isCloser ? (
+  <CloserIndicators kpi={kpi} payout={payout} compPlan={compPlan} />
+) : (
+  <SdrIndicators kpi={kpi} payout={payout} compPlan={compPlan} />
+)}
 ```
 
 ---
 
-## Alterações no Código
+### Parte 2: Aba "Planos OTE" com Edição Individual
 
-### 1. Arquivo: `src/types/sdr-fechamento.ts`
+Transformar a aba "Planos OTE" para:
 
-Adicionar campo ao tipo SdrMonthPayout:
+1. **Exibir valores do plano individual** (`sdr_comp_plan`) quando existir, com fallback para catálogo
+2. **Permitir edição inline** dos valores OTE por colaborador
+3. **Indicar visualmente** se o valor vem do catálogo ou foi personalizado
 
-```typescript
-export interface SdrMonthPayout {
-  // ... campos existentes ...
-  departamento_vigente: string | null;  // NOVO
-}
-```
+**Estrutura da Tabela:**
+| Colaborador | Cargo | OTE Total | Fixo | Variável | Meta Diária | Ações |
+|-------------|-------|-----------|------|----------|-------------|-------|
+| Julio Caetano | Closer Inside | R$ 4.000 ✏️ | R$ 2.800 | R$ 1.200 | 6 | Editar |
 
-### 2. Arquivo: `src/hooks/useSdrFechamento.ts`
-
-**Mudança A: Excluir sócios R2 do fechamento**
-
-```typescript
-// Após enriquecer payouts com employee data
-result = result.filter(p => {
-  const employee = (p as any).employee;
-  // Excluir sócios R2 do fechamento
-  if (employee?.cargo === 'Closer R2') {
-    return false;
-  }
-  return true;
-});
-```
-
-**Mudança B: Filtrar usando departamento_vigente com fallbacks**
-
-```typescript
-if (filters.squad && filters.squad !== 'all') {
-  const expectedDept = SQUAD_TO_DEPT[filters.squad];
-  result = result.filter(p => {
-    // 1. Priorizar departamento congelado no payout
-    const frozenDept = (p as any).departamento_vigente;
-    if (frozenDept) {
-      return frozenDept === expectedDept;
-    }
-    // 2. Fallback para employees.departamento (payouts sem vigente)
-    const employee = (p as any).employee;
-    if (employee?.departamento) {
-      return employee.departamento === expectedDept;
-    }
-    // 3. Fallback final: sdr.squad (SDRs órfãos)
-    return (p.sdr as any)?.squad === filters.squad;
-  });
-}
-```
-
-**Mudança C: Gravar departamento_vigente ao recalcular payout**
-
-Na função `useRecalculatePayout`:
-
-```typescript
-// Buscar employee vinculado ao SDR para obter departamento
-const { data: employee } = await supabase
-  .from('employees')
-  .select('departamento')
-  .eq('sdr_id', sdrId)
-  .maybeSingle();
-
-// Incluir no upsert do payout
-const { error } = await supabase
-  .from('sdr_month_payout')
-  .upsert({
-    sdr_id: sdrId,
-    ano_mes: anoMes,
-    departamento_vigente: employee?.departamento || null,
-    // ... outros campos calculados
-  }, {
-    onConflict: 'sdr_id,ano_mes',
-  });
-```
-
-### 3. Arquivo: `src/hooks/useEmployees.ts`
-
-**Registrar evento de transferência automaticamente ao mudar departamento**
-
-```typescript
-const updateEmployee = useMutation({
-  mutationFn: async ({ id, data, previousData }: { 
-    id: string; 
-    data: Partial<Employee>;
-    previousData?: { departamento?: string };
-  }) => {
-    const { data: result, error } = await supabase
-      .from('employees')
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) throw error;
-
-    // Se departamento mudou, registrar evento de transferência
-    if (previousData?.departamento && 
-        data.departamento && 
-        previousData.departamento !== data.departamento) {
-      await supabase.from('employee_events').insert({
-        employee_id: id,
-        tipo_evento: 'transferencia',
-        titulo: 'Transferência de Departamento',
-        descricao: `Transferido de ${previousData.departamento} para ${data.departamento}`,
-        data_evento: new Date().toISOString().split('T')[0],
-      });
-    }
-
-    return result;
-  },
-  onSuccess: (_, variables) => {
-    queryClient.invalidateQueries({ queryKey: ['employees'] });
-    queryClient.invalidateQueries({ queryKey: ['employee', variables.id] });
-    toast.success('Colaborador atualizado com sucesso');
-  },
-  onError: (error) => {
-    toast.error('Erro ao atualizar colaborador: ' + error.message);
-  },
-});
-```
-
-### 4. Arquivo: `src/pages/fechamento-sdr/Index.tsx`
-
-**Exibir departamento vigente na tabela**
-
-```typescript
-const getBuFromPayout = (payout: any) => {
-  // 1. Priorizar departamento congelado
-  if (payout.departamento_vigente) {
-    return {
-      label: payout.departamento_vigente.replace('BU - ', '').replace(' 50K', ''),
-      isFromHR: true,
-      hasWarning: false,
-    };
-  }
-  // 2. Fallback para employee.departamento
-  if (payout.employee?.departamento) {
-    return {
-      label: payout.employee.departamento.replace('BU - ', '').replace(' 50K', ''),
-      isFromHR: true,
-      hasWarning: false,
-    };
-  }
-  // 3. Fallback para sdr.squad (sem vínculo RH)
-  const squad = payout.sdr?.squad;
-  return {
-    label: getSquadLabel(squad),
-    isFromHR: false,
-    hasWarning: true,
-  };
-};
-```
+**Arquivos:**
+- `src/components/fechamento/PlansOteTab.tsx` - Adicionar integração com `sdr_comp_plan`
+- Criar dialog de edição inline
 
 ---
 
-## Fluxo Visual
+### Parte 3: Conectar Métricas Ativas ao Cálculo
+
+Atualizar a edge function para consumir as métricas configuradas em `fechamento_metricas_mes`:
+
+```typescript
+// Buscar métricas ativas para o cargo/BU
+const { data: metricasAtivas } = await supabase
+  .from('fechamento_metricas_mes')
+  .select('*')
+  .eq('ano_mes', anoMes)
+  .eq('cargo_catalogo_id', employee.cargo_catalogo_id)
+  .eq('squad', sdr.squad)
+  .eq('ativo', true);
+
+// Calcular payout baseado nas métricas ativas
+// em vez de usar lógica fixa SDR vs Closer
+```
+
+**Impacto:** O sistema usará as métricas que você configurou na aba "Métricas Ativas" para determinar o cálculo do variável.
+
+---
+
+## Fluxo Visual Proposto
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                    FILTRO POR BU - CASCATA                      │
+│                    FLUXO DE CONFIGURAÇÃO                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Passo 1: departamento_vigente existe?                          │
-│     SIM → Usar (departamento congelado no fechamento)           │
-│     NÃO → Continuar                                             │
+│  1. Aba "Métricas Ativas"                                       │
+│     ├── Selecionar Cargo: Closer Inside                         │
+│     ├── Selecionar BU: Incorporador                             │
+│     └── Ativar: R1 Realizadas, Contratos, R2 Agendadas...      │
 │                                                                 │
-│  Passo 2: employee.departamento existe?                         │
-│     SIM → Usar (departamento atual do RH)                       │
-│     NÃO → Continuar                                             │
+│  2. Aba "Planos OTE"                                            │
+│     ├── Ver colaboradores com cargo Closer Inside               │
+│     ├── Editar OTE individual de cada um                        │
+│     └── Definir meta diária individual                          │
 │                                                                 │
-│  Passo 3: sdr.squad (fallback para SDRs sem vínculo RH)         │
-│     → Mostra com ícone de alerta ⚠️                             │
+│  3. Fechamento (recálculo)                                      │
+│     ├── Buscar métricas ativas do cargo/BU                      │
+│     ├── Aplicar pesos configurados                              │
+│     └── Calcular variável proporcionalmente                     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Resultado Esperado
+## Alterações Técnicas
 
-### BU Incorporador (Janeiro 2026)
-
-| Nome | Cargo | BU (vigente) |
-|------|-------|--------------|
-| Jessica Martins | SDR | Incorporador |
-| Carol Correa | SDR | Incorporador |
-| Leticia Nunes | SDR | Incorporador |
-| Antony Elias | SDR | Incorporador |
-| Vinicius Rangel | SDR | Incorporador |
-| Jéssica Bellini | Closer | Incorporador |
-| Julio Caetano | Closer | Incorporador |
-| Thaynar Tavares | Closer | Incorporador |
-
-### BU Crédito (Fevereiro 2026 em diante)
-
-| Nome | Cargo | BU (vigente) |
-|------|-------|--------------|
-| Vinicius Rangel | SDR | Crédito |
-
-### Não aparecerão mais
-
-- Claudia Carielo (sócia R2 - desativada)
-- Thobson Motta (sócio R2 - desativado)
-- Cleiton Lima (aparece apenas em Consórcio)
-
----
-
-## Arquivos a Modificar
+### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/types/sdr-fechamento.ts` | Adicionar `departamento_vigente` ao tipo |
-| `src/hooks/useSdrFechamento.ts` | Excluir R2, filtrar por vigente, gravar ao recalcular |
-| `src/hooks/useEmployees.ts` | Registrar evento de transferência |
-| `src/pages/fechamento-sdr/Index.tsx` | Exibir BU do departamento_vigente |
+| `src/pages/fechamento-sdr/Detail.tsx` | Exibir indicadores diferentes para Closer vs SDR |
+| `src/components/fechamento/PlansOteTab.tsx` | Integrar com `sdr_comp_plan`, permitir edição inline |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Consumir `fechamento_metricas_mes` no cálculo |
+| `src/types/sdr-fechamento.ts` | Adicionar tipos para métricas dinâmicas |
 
-## Alterações no Banco
+### Novos Componentes
 
-| Tipo | Descrição |
-|------|-----------|
-| ALTER TABLE | Adicionar coluna `departamento_vigente` |
-| UPDATE | Vincular 3 employees aos SDRs |
-| UPDATE | Desativar 2 SDRs de sócios R2 |
-| UPDATE | Preencher departamento_vigente existentes |
-| UPDATE | Corrigir Vinicius Janeiro como Incorporador |
+| Componente | Propósito |
+|------------|-----------|
+| `CloserKpiEditForm.tsx` | Form de edição de KPIs específico para Closers |
+| `EditIndividualPlanDialog.tsx` | Dialog para editar plano OTE individual |
 
+---
+
+## Dados a Corrigir
+
+Para o Julio e outros Closers funcionarem corretamente agora:
+
+1. **Atualizar `cargos_catalogo`** com valores padrão para Closers:
+   ```sql
+   UPDATE cargos_catalogo 
+   SET ote_total = 4000, fixo_valor = 2800, variavel_valor = 1200
+   WHERE nome_exibicao = 'Closer Inside';
+   ```
+
+2. Ou manter os valores individuais em `sdr_comp_plan` e adaptar a aba para lê-los
+
+---
+
+## Priorização Sugerida
+
+**Fase 1 (Crítico):** Adaptar tela de detalhe para mostrar métricas corretas de Closer
+**Fase 2 (Importante):** Permitir edição individual na aba Planos OTE
+**Fase 3 (Melhoria):** Conectar Métricas Ativas ao cálculo do payout
+
+Deseja que eu implemente todas as fases ou prefere começar pela Fase 1?
