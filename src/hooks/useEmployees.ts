@@ -156,7 +156,11 @@ export function useEmployeeMutations() {
   });
 
   const updateEmployee = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Employee> }) => {
+    mutationFn: async ({ id, data, previousData }: { 
+      id: string; 
+      data: Partial<Employee>;
+      previousData?: { departamento?: string };
+    }) => {
       const { data: result, error } = await supabase
         .from('employees')
         .update(data)
@@ -165,6 +169,20 @@ export function useEmployeeMutations() {
         .single();
       
       if (error) throw error;
+
+      // If department changed, register a transfer event
+      if (previousData?.departamento && 
+          data.departamento && 
+          previousData.departamento !== data.departamento) {
+        await supabase.from('employee_events').insert({
+          employee_id: id,
+          tipo_evento: 'transferencia',
+          titulo: 'Transferência de Departamento',
+          descricao: `Transferido de ${previousData.departamento} para ${data.departamento}`,
+          data_evento: new Date().toISOString().split('T')[0],
+        });
+      }
+
       return result;
     },
     onSuccess: (_, variables) => {
