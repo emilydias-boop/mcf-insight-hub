@@ -7,6 +7,7 @@ export interface SdrAgendaMetricsById {
   r1_realizada: number;
   no_shows: number;
   contratos: number;
+  vendas_parceria: number;
 }
 
 export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: string | undefined) => {
@@ -14,7 +15,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
     queryKey: ['sdr-agenda-metrics-by-id', sdrId, anoMes],
     queryFn: async (): Promise<SdrAgendaMetricsById> => {
       if (!sdrId || !anoMes) {
-        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0 };
+        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
       }
 
       // 1. Buscar email do SDR
@@ -26,7 +27,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
 
       if (sdrError || !sdr?.email) {
         console.error('[useSdrAgendaMetricsBySdrId] Error fetching SDR:', sdrError);
-        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0 };
+        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
       }
 
       // 2. Calcular período do mês
@@ -44,7 +45,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
 
       if (error) {
         console.error('[useSdrAgendaMetricsBySdrId] RPC error:', error);
-        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0 };
+        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
       }
 
       // Handle response - extract first metric from array
@@ -53,6 +54,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
         r1_realizada: number;
         no_shows: number;
         contratos: number;
+        vendas_parceria?: number;
       }> };
 
       const metrics = response?.metrics?.[0];
@@ -62,6 +64,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
         r1_realizada: metrics?.r1_realizada || 0,
         no_shows: metrics?.no_shows || 0,
         contratos: metrics?.contratos || 0,
+        vendas_parceria: metrics?.vendas_parceria || 0,
       };
     },
     enabled: !!sdrId && !!anoMes,
