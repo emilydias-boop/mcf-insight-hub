@@ -165,6 +165,7 @@ export const useCreatePipeline = () => {
       queryClient.invalidateQueries({ queryKey: ['crm-origins'] });
       queryClient.invalidateQueries({ queryKey: ['crm-groups-for-collapsed-sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['crm-origins-by-pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['crm-stages'] }); // Invalidar cache de stages
     },
     onError: (error: Error) => {
       toast({
