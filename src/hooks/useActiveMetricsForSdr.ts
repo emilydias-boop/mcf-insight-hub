@@ -151,6 +151,7 @@ export const useActiveMetricsForCargo = (cargoId: string | undefined, anoMes: st
       const isCloserRole = cargoData?.nome_exibicao?.toLowerCase().includes('closer') || false;
 
       // Step 2: Query metrics for this cargo
+      // First try to find squad-specific metrics, then fallback to generic (squad=null)
       let query = supabase
         .from('fechamento_metricas_mes')
         .select('*')
@@ -161,9 +162,28 @@ export const useActiveMetricsForCargo = (cargoId: string | undefined, anoMes: st
 
       if (squad) {
         query = query.eq('squad', squad);
+      } else {
+        // When no squad specified, look for generic metrics (squad=null)
+        query = query.is('squad', null);
       }
 
-      const { data, error } = await query;
+      let { data, error } = await query;
+      
+      // If no squad-specific metrics found and squad was specified, try fallback to generic
+      if (squad && (!data || data.length === 0)) {
+        const { data: genericData, error: genericError } = await supabase
+          .from('fechamento_metricas_mes')
+          .select('*')
+          .eq('ano_mes', anoMes)
+          .eq('cargo_catalogo_id', cargoId)
+          .eq('ativo', true)
+          .is('squad', null)
+          .order('created_at', { ascending: true });
+        
+        if (!genericError && genericData && genericData.length > 0) {
+          data = genericData;
+        }
+      }
 
       if (error) {
         console.error('Error fetching metrics for cargo:', error);

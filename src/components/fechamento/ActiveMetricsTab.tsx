@@ -116,21 +116,12 @@ export const ActiveMetricsTab = () => {
   };
 
   const handleSave = async () => {
-    const metricasToSave = localMetrics
-      .filter(m => m.ativo)
-      .map(m => ({
-        ano_mes: anoMes,
-        cargo_catalogo_id: selectedCargoId === '__all__' ? null : selectedCargoId,
-        squad: selectedSquad === '__all__' ? null : selectedSquad,
-        nome_metrica: m.nome_metrica,
-        label_exibicao: m.label_exibicao,
-        peso_percentual: m.peso_percentual,
-        meta_valor: m.meta_valor,
-        fonte_dados: m.fonte_dados,
-        ativo: true,
-      }));
-
-    if (metricasToSave.length === 0) {
+    const cargoId = selectedCargoId === '__all__' ? null : selectedCargoId;
+    const squad = selectedSquad === '__all__' ? null : selectedSquad;
+    
+    const activeMetrics = localMetrics.filter(m => m.ativo);
+    
+    if (activeMetrics.length === 0) {
       toast.warning('Selecione pelo menos uma métrica');
       return;
     }
@@ -139,6 +130,23 @@ export const ActiveMetricsTab = () => {
       toast.warning(`O total de pesos deve ser 100%. Atual: ${totalPeso.toFixed(0)}%`);
       return;
     }
+
+    // Build metrics with delete config on first item
+    const metricasToSave = activeMetrics.map((m, index) => ({
+      ano_mes: anoMes,
+      cargo_catalogo_id: cargoId,
+      squad: squad,
+      nome_metrica: m.nome_metrica,
+      label_exibicao: m.label_exibicao,
+      peso_percentual: m.peso_percentual,
+      meta_valor: m.meta_valor,
+      fonte_dados: m.fonte_dados,
+      ativo: true,
+      // Include delete config only on first item to trigger delete+insert
+      ...(index === 0 ? {
+        _deleteConfig: { anoMes, cargoId, squad }
+      } : {})
+    }));
 
     await bulkUpsert.mutateAsync(metricasToSave);
     setHasChanges(false);
