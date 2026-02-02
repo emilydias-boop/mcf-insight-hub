@@ -9,7 +9,7 @@ export interface WebhookEndpoint {
   description: string | null;
   origin_id: string | null;
   stage_id: string | null;
-  auto_tags: string[];
+  auto_tags: string[] | null;
   field_mapping: Record<string, string>;
   required_fields: string[];
   auth_header_name: string | null;
