@@ -77,6 +77,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
   });
   const [eventTypes, setEventTypes] = useState<CalendlyEventType[]>([]);
   const [loadingEventTypes, setLoadingEventTypes] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
 
   const createCloser = useCreateCloser();
   const updateCloser = useUpdateCloser();
@@ -113,6 +114,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
   );
 
   const handleUserSelect = (userId: string) => {
+    setSelectedUserId(userId);
     const user = closerUsers.find(u => u.id === userId);
     if (user) {
       // Pegar o employee_id do primeiro registro de employees
@@ -142,6 +144,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         bu: closer.bu || 'incorporador',
         employee_id: closer.employee_id || '',
       });
+      setSelectedUserId('');
     } else {
       setFormData({
         name: '',
@@ -155,6 +158,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         bu: 'incorporador',
         employee_id: '',
       });
+      setSelectedUserId('');
     }
   }, [closer, open]);
 
@@ -226,7 +230,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
                 Selecionar Usuário *
               </Label>
               <Select
-                value={formData.employee_id || ''}
+                value={selectedUserId}
                 onValueChange={handleUserSelect}
                 disabled={loadingUsers}
               >
@@ -255,8 +259,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Nome do closer"
               required
-              disabled={!isEditing && !!formData.employee_id}
-              className={!isEditing && !!formData.employee_id ? "bg-muted" : ""}
+              disabled={!isEditing && !!selectedUserId}
+              className={!isEditing && !!selectedUserId ? "bg-muted" : ""}
             />
           </div>
           
@@ -269,8 +273,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="email@exemplo.com"
               required
-              disabled={!isEditing && !!formData.employee_id}
-              className={!isEditing && !!formData.employee_id ? "bg-muted" : ""}
+              disabled={!isEditing && !!selectedUserId}
+              className={!isEditing && !!selectedUserId ? "bg-muted" : ""}
             />
           </div>
 
