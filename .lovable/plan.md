@@ -1,153 +1,107 @@
 
-# Plano: Corrigir Sistema de Fechamento para Closers e Metas Individuais
+# Plano: Corrigir Exibição de Métricas de Closer na Página de Detalhe
 
-## Resumo dos Problemas
+## Problema Identificado
 
-O sistema de fechamento apresenta inconsistências para colaboradores do tipo Closer:
+Quando você configura as métricas do **Closer Inside** na aba "Métricas Ativas", a página de detalhe individual ainda mostra métricas de SDR (Tentativas, Organização) porque:
 
-1. **Julio (Closer Inside)** está sendo exibido com métricas de SDR (Agendadas, Tentativas, Organização)
-2. **Aba "Planos OTE"** mostra apenas valores do catálogo de cargos (zerados para Closers), ignorando planos individuais
-3. **Não existe forma de editar metas individuais** por colaborador
-4. **Métricas Ativas configuradas** não são consumidas pelo sistema de cálculo
+**Causa raiz**: A consulta SQL `useSdrPayoutDetail` não está buscando o campo `role_type` da tabela `sdr`, então a verificação `isCloser = (payout.sdr)?.role_type === 'closer'` sempre retorna `false`.
+
+**Código atual (linha 246):**
+```
+sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, ...)
+```
+**Faltando:** `squad, role_type`
 
 ---
 
-## Solução em 3 Partes
+## Solução
 
-### Parte 1: Adaptar Tela de Detalhe para Closers
+Adicionar os campos `squad` e `role_type` nas consultas SQL que buscam dados do SDR para a página de detalhe.
 
-Modificar `src/pages/fechamento-sdr/Detail.tsx` para exibir indicadores diferentes baseado no `role_type`:
+### Arquivos a Modificar
 
-| SDR | Closer |
-|-----|--------|
-| Reuniões Agendadas | R1 Realizadas |
-| Reuniões Realizadas | Contratos Pagos |
-| Tentativas de Ligação | Taxa de Conversão |
-| Organização | No-Show (inverso) |
-| No-Show | R2 Agendadas |
-| - | Outside Sales |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useSdrFechamento.ts` | Adicionar `squad, role_type` nas funções `useSdrPayoutDetail` e `useOwnPayout` |
 
-**Lógica:**
+---
+
+## Alterações Técnicas
+
+### Função `useSdrPayoutDetail` (linha 244-252)
+
+**Antes:**
 ```typescript
-const isCloser = (payout.sdr as any)?.role_type === 'closer';
+sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at)
+```
 
-// Exibir indicadores diferentes
-{isCloser ? (
-  <CloserIndicators kpi={kpi} payout={payout} compPlan={compPlan} />
-) : (
-  <SdrIndicators kpi={kpi} payout={payout} compPlan={compPlan} />
-)}
+**Depois:**
+```typescript
+sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at, squad, role_type)
+```
+
+### Função `useOwnPayout` (linha 280-283)
+
+**Antes:**
+```typescript
+sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at)
+```
+
+**Depois:**
+```typescript
+sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at, squad, role_type)
 ```
 
 ---
 
-### Parte 2: Aba "Planos OTE" com Edição Individual
-
-Transformar a aba "Planos OTE" para:
-
-1. **Exibir valores do plano individual** (`sdr_comp_plan`) quando existir, com fallback para catálogo
-2. **Permitir edição inline** dos valores OTE por colaborador
-3. **Indicar visualmente** se o valor vem do catálogo ou foi personalizado
-
-**Estrutura da Tabela:**
-| Colaborador | Cargo | OTE Total | Fixo | Variável | Meta Diária | Ações |
-|-------------|-------|-----------|------|----------|-------------|-------|
-| Julio Caetano | Closer Inside | R$ 4.000 ✏️ | R$ 2.800 | R$ 1.200 | 6 | Editar |
-
-**Arquivos:**
-- `src/components/fechamento/PlansOteTab.tsx` - Adicionar integração com `sdr_comp_plan`
-- Criar dialog de edição inline
-
----
-
-### Parte 3: Conectar Métricas Ativas ao Cálculo
-
-Atualizar a edge function para consumir as métricas configuradas em `fechamento_metricas_mes`:
-
-```typescript
-// Buscar métricas ativas para o cargo/BU
-const { data: metricasAtivas } = await supabase
-  .from('fechamento_metricas_mes')
-  .select('*')
-  .eq('ano_mes', anoMes)
-  .eq('cargo_catalogo_id', employee.cargo_catalogo_id)
-  .eq('squad', sdr.squad)
-  .eq('ativo', true);
-
-// Calcular payout baseado nas métricas ativas
-// em vez de usar lógica fixa SDR vs Closer
-```
-
-**Impacto:** O sistema usará as métricas que você configurou na aba "Métricas Ativas" para determinar o cálculo do variável.
-
----
-
-## Fluxo Visual Proposto
+## Fluxo da Correção
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                    FLUXO DE CONFIGURAÇÃO                        │
+│                    ANTES DA CORREÇÃO                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  1. Aba "Métricas Ativas"                                       │
-│     ├── Selecionar Cargo: Closer Inside                         │
-│     ├── Selecionar BU: Incorporador                             │
-│     └── Ativar: R1 Realizadas, Contratos, R2 Agendadas...      │
+│  1. Usuário abre detalhe do Julio (Closer Inside)               │
+│  2. useSdrPayoutDetail busca dados SEM role_type                │
+│  3. payout.sdr.role_type = undefined                            │
+│  4. isCloser = false                                            │
+│  5. Exibe indicadores de SDR (errado!)                          │
 │                                                                 │
-│  2. Aba "Planos OTE"                                            │
-│     ├── Ver colaboradores com cargo Closer Inside               │
-│     ├── Editar OTE individual de cada um                        │
-│     └── Definir meta diária individual                          │
+├─────────────────────────────────────────────────────────────────┤
+│                    DEPOIS DA CORREÇÃO                           │
+├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  3. Fechamento (recálculo)                                      │
-│     ├── Buscar métricas ativas do cargo/BU                      │
-│     ├── Aplicar pesos configurados                              │
-│     └── Calcular variável proporcionalmente                     │
+│  1. Usuário abre detalhe do Julio (Closer Inside)               │
+│  2. useSdrPayoutDetail busca dados COM role_type                │
+│  3. payout.sdr.role_type = "closer"                             │
+│  4. isCloser = true                                             │
+│  5. Exibe CloserIndicators (correto!)                           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Alterações Técnicas
+## Resultado Esperado
 
-### Arquivos a Modificar
+Após a correção, quando você abrir o fechamento do **Julio Caetano (Closer Inside)**:
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/fechamento-sdr/Detail.tsx` | Exibir indicadores diferentes para Closer vs SDR |
-| `src/components/fechamento/PlansOteTab.tsx` | Integrar com `sdr_comp_plan`, permitir edição inline |
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Consumir `fechamento_metricas_mes` no cálculo |
-| `src/types/sdr-fechamento.ts` | Adicionar tipos para métricas dinâmicas |
+| Antes (Errado) | Depois (Correto) |
+|----------------|------------------|
+| Reuniões Agendadas | Reuniões Alocadas |
+| Reuniões Realizadas | R1 Realizadas |
+| Tentativas de Ligação | Contratos Pagos |
+| Organização Clint | Taxa de Conversão |
+| No-Show | No-Show |
+| - | R2 Agendadas |
 
-### Novos Componentes
-
-| Componente | Propósito |
-|------------|-----------|
-| `CloserKpiEditForm.tsx` | Form de edição de KPIs específico para Closers |
-| `EditIndividualPlanDialog.tsx` | Dialog para editar plano OTE individual |
+O formulário de KPI também já oculta os campos de Tentativas e Organização para Closers (isso já está funcionando, só faltava o `role_type` ser carregado).
 
 ---
 
-## Dados a Corrigir
+## Impacto
 
-Para o Julio e outros Closers funcionarem corretamente agora:
-
-1. **Atualizar `cargos_catalogo`** com valores padrão para Closers:
-   ```sql
-   UPDATE cargos_catalogo 
-   SET ote_total = 4000, fixo_valor = 2800, variavel_valor = 1200
-   WHERE nome_exibicao = 'Closer Inside';
-   ```
-
-2. Ou manter os valores individuais em `sdr_comp_plan` e adaptar a aba para lê-los
-
----
-
-## Priorização Sugerida
-
-**Fase 1 (Crítico):** Adaptar tela de detalhe para mostrar métricas corretas de Closer
-**Fase 2 (Importante):** Permitir edição individual na aba Planos OTE
-**Fase 3 (Melhoria):** Conectar Métricas Ativas ao cálculo do payout
-
-Deseja que eu implemente todas as fases ou prefere começar pela Fase 1?
+- **Baixo risco**: Apenas adiciona campos à consulta SQL
+- **Sem breaking changes**: O código que usa esses dados já existe e espera esses campos
+- **Benefício imediato**: Julio e outros Closers passarão a ver métricas corretas
