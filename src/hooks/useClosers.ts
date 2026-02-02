@@ -29,6 +29,7 @@ export interface CloserFormData {
   bu?: string;
   google_calendar_id?: string;
   google_calendar_enabled?: boolean;
+  meeting_type?: 'r1' | 'r2';
 }
 
 export function useClosersList() {
@@ -81,6 +82,7 @@ export function useCreateCloser() {
           bu: data.bu || 'incorporador',
           google_calendar_id: data.google_calendar_id || null,
           google_calendar_enabled: data.google_calendar_enabled ?? false,
+          meeting_type: data.meeting_type || null,
         })
         .select()
         .single();
