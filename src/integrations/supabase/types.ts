@@ -955,6 +955,36 @@ export type Database = {
         }
         Relationships: []
       }
+      bu_origin_mapping: {
+        Row: {
+          bu: string
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          is_default: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          bu: string
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          is_default?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          bu?: string
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          is_default?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       bu_webhook_logs: {
         Row: {
           bu_type: string
