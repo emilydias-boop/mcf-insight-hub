@@ -1,122 +1,125 @@
 
-# Plano: Conectar Configuração de BU aos Componentes do CRM
+# Plano: Corrigir Filtro de Sub-Origens na Sidebar do CRM
 
 ## Problema Identificado
 
-Os dados estão sendo salvos corretamente na tabela `bu_origin_mapping`:
+Quando um grupo (funil) é selecionado no dropdown, as sub-origens não aparecem na lista porque:
 
-| BU | Grupos Configurados |
-|----|---------------------|
-| consorcio | 5 grupos |
-| incorporador | 1 grupo |
+1. **`buAuthorizedOrigins`** contém IDs de **grupos** (não origens):
+   ```
+   buAuthorizedOrigins = ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'] // ID do grupo BU-LEILÃO
+   ```
 
-Porém, os componentes do CRM ainda usam as constantes **hardcoded** em vez do hook dinâmico que busca do banco.
+2. **`useCRMOriginsByPipeline`** retorna as **origens filhas** do grupo:
+   ```
+   pipelineOrigins = [
+     { id: '7d7b1cb5-...', name: 'Efeito Alavanca + Clube', group_id: 'f8a2b3c4-...' },
+     { id: 'a1b2c3d4-...', name: 'Pipeline Leilão', group_id: 'f8a2b3c4-...' }
+   ]
+   ```
 
----
-
-## Arquivos que Precisam de Atualização
-
-### 1) `src/components/crm/QuickScheduleModal.tsx`
-
-**Problema atual (linha 115)**:
-```typescript
-const originIds = activeBU ? BU_PIPELINE_MAP[activeBU] : undefined;
-```
-
-**Solução**:
-```typescript
-import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
-
-// Dentro do componente
-const { data: buMapping } = useBUPipelineMap(activeBU);
-const originIds = buMapping?.groups && buMapping.groups.length > 0 
-  ? buMapping.groups 
-  : undefined;
-```
+3. **Filtro em `OriginsSidebar`** compara os IDs das origens com os IDs dos grupos:
+   ```typescript
+   // Atual - não funciona porque compara origem com grupo
+   (originData as Origin[]).filter(origin => 
+     allowedOriginIds!.includes(origin.id) // '7d7b1cb5-...' não está em ['f8a2b3c4-...']
+   );
+   ```
 
 ---
 
-### 2) `src/pages/crm/Negocios.tsx`
+## Solução
 
-**Problema atual (linhas 76-85)**:
+Modificar o filtro `filteredByBU` no `OriginsSidebar.tsx` para aceitar origens cujo `group_id` esteja na lista de IDs permitidos.
+
+### Alteração no arquivo `src/components/crm/OriginsSidebar.tsx`
+
 ```typescript
-const buAuthorizedOrigins = useMemo(() => {
-  if (!activeBU) return [];
-  return BU_PIPELINE_MAP[activeBU] || [];
-}, [activeBU]);
-
-const buAllowedGroups = useMemo(() => {
-  if (!activeBU) return [];
-  return BU_GROUP_MAP[activeBU] || [];
-}, [activeBU]);
-```
-
-**Solução**:
-```typescript
-import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
-
-// Dentro do componente
-const { data: buMapping, isLoading: isBuMappingLoading } = useBUPipelineMap(activeBU);
-
-const buAuthorizedOrigins = useMemo(() => {
-  if (!activeBU || !buMapping) return [];
-  return buMapping.origins.length > 0 ? buMapping.origins : buMapping.groups;
-}, [activeBU, buMapping]);
-
-const buAllowedGroups = useMemo(() => {
-  if (!activeBU || !buMapping) return [];
-  return buMapping.groups;
-}, [activeBU, buMapping]);
+const filteredByBU = useMemo(() => {
+  if (!originData || !hasBUFilter) return originData;
+  
+  // Verificar se é uma lista flat ou árvore
+  if (Array.isArray(originData) && originData.length > 0 && 'children' in originData[0]) {
+    // É árvore (grupos com children)
+    return (originData as Group[])
+      .map(group => {
+        // Verificar se o grupo inteiro está permitido
+        if (allowedOriginIds!.includes(group.id)) {
+          return group;
+        }
+        // Filtrar apenas origens permitidas dentro do grupo
+        const filteredChildren = group.children.filter(child => 
+          allowedOriginIds!.includes(child.id) ||
+          (child.group_id && allowedOriginIds!.includes(child.group_id)) // NOVO: verificar group_id
+        );
+        if (filteredChildren.length === 0) return null;
+        return { ...group, children: filteredChildren };
+      })
+      .filter(Boolean) as Group[];
+  } else {
+    // É lista flat - CORREÇÃO PRINCIPAL
+    return (originData as Origin[]).filter(origin => 
+      allowedOriginIds!.includes(origin.id) ||
+      // NOVO: Se origin.group_id está na lista de permitidos, a origem também é permitida
+      (origin.group_id && allowedOriginIds!.includes(origin.group_id))
+    );
+  }
+}, [originData, allowedOriginIds, hasBUFilter]);
 ```
 
 ---
 
-## Fluxo de Dados Corrigido
+## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│          /admin/configuracao-bu                                     │
-│  Usuário seleciona BU → marca grupos → Salva                        │
+│  Dropdown de Funil: "BU - LEILÃO" selecionado                       │
+│  selectedPipelineId = 'f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'        │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│          Tabela: bu_origin_mapping                                  │
-│  [consorcio, group, b98e3746-d727-...]                              │
-│  [consorcio, group, 267905ec-8fcf-...]                              │
-│  [incorporador, group, a6f3cbfc-...]                                │
+│  useCRMOriginsByPipeline('f8a2b3c4-...')                            │
+│  Retorna lista flat das origens filhas:                             │
+│  [                                                                  │
+│    { id: '7d7b1cb5-...', name: 'Efeito Alavanca', group_id: 'f8a2b3c4-...' }  │
+│    { id: 'a1b2c3d4-...', name: 'Pipeline Leilão', group_id: 'f8a2b3c4-...' }  │
+│  ]                                                                  │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│          Hook: useBUPipelineMap('consorcio')                        │
-│  Retorna: { groups: ['b98e3746-...', '267905ec-...'], origins: [] } │
+│  allowedOriginIds = ['f8a2b3c4-...']  (ID do grupo)                 │
+│                                                                     │
+│  Filtro CORRIGIDO:                                                  │
+│  origin.id === 'f8a2b3c4-...' ? false                               │
+│  origin.group_id === 'f8a2b3c4-...' ? TRUE ✓                        │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
-              ┌─────────────┴─────────────┐
-              ▼                           ▼
-┌──────────────────────────┐  ┌──────────────────────────┐
-│  QuickScheduleModal      │  │  Negocios.tsx            │
-│  → Filtra deals por      │  │  → Filtra kanban por     │
-│    grupos da BU          │  │    grupos da BU          │
-└──────────────────────────┘  └──────────────────────────┘
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Resultado: Ambas origens aparecem na lista                        │
+│  ☑ Efeito Alavanca + Clube                                          │
+│  ☑ Pipeline Leilão                                                  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Alterações Necessárias
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/QuickScheduleModal.tsx` | Substituir `BU_PIPELINE_MAP` por `useBUPipelineMap` |
-| `src/pages/crm/Negocios.tsx` | Substituir `BU_PIPELINE_MAP` e `BU_GROUP_MAP` por `useBUPipelineMap` |
+| `src/components/crm/OriginsSidebar.tsx` | Adicionar verificação de `group_id` no filtro `filteredByBU` |
 
 ---
 
 ## Resultado Esperado
 
-Após a correção:
-1. Configurações salvas em `/admin/configuracao-bu` serão refletidas imediatamente no CRM
-2. Cada BU verá apenas os funis/grupos configurados para ela
-3. Novas BUs (Leilão, etc.) funcionarão automaticamente após configuração
-4. Fallback para hardcoded mantido caso a tabela esteja vazia
+1. Ao selecionar "BU - LEILÃO" no dropdown de funil, as origens filhas aparecerão na lista:
+   - Efeito Alavanca + Clube
+   - Pipeline Leilão
+
+2. O mesmo funcionará para todas as outras BUs que têm grupos configurados
+
+3. O filtro permanece funcionando para origens diretas (sem grupo)
