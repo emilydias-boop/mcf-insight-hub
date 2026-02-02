@@ -174,19 +174,28 @@ export const useStagePermissions = () => {
   };
   
   const canViewStage = (stageId: string) => {
-    return findPermission(stageId)?.can_view ?? false;
+    const permission = findPermission(stageId);
+    // Se não existe permissão explícita, permitir por padrão
+    if (!permission) return true;
+    return permission.can_view;
   };
   
   const canEditStage = (stageId: string) => {
-    return findPermission(stageId)?.can_edit ?? false;
+    const permission = findPermission(stageId);
+    if (!permission) return true;
+    return permission.can_edit;
   };
   
   const canMoveFromStage = (stageId: string) => {
-    return findPermission(stageId)?.can_move_from ?? false;
+    const permission = findPermission(stageId);
+    if (!permission) return true;
+    return permission.can_move_from;
   };
   
   const canMoveToStage = (stageId: string) => {
-    return findPermission(stageId)?.can_move_to ?? false;
+    const permission = findPermission(stageId);
+    if (!permission) return true;
+    return permission.can_move_to;
   };
   
   return {
