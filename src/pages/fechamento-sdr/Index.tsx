@@ -67,6 +67,8 @@ const FechamentoSDRList = () => {
   });
 
   // Fetch comp_plans for all SDRs to get OTE
+  // Note: status uses SdrStatus type = 'PENDING' | 'APPROVED' | 'REJECTED'
+  // We include PENDING and APPROVED plans, exclude REJECTED
   const { data: compPlans } = useQuery({
     queryKey: ['sdr-comp-plans', selectedMonth],
     queryFn: async () => {
@@ -78,7 +80,7 @@ const FechamentoSDRList = () => {
         .select('*')
         .lte('vigencia_inicio', monthStart)
         .or(`vigencia_fim.is.null,vigencia_fim.gte.${monthStart}`)
-        .eq('status', 'active');
+        .neq('status', 'REJECTED');
       
       if (error) throw error;
       return data;
@@ -230,12 +232,18 @@ const FechamentoSDRList = () => {
       const compPlan = getCompPlanForSdr(p.sdr_id);
       const globalPct = calculateGlobalPct(p);
       const sdrData = p.sdr as any;
+      const employee = (p as any).employee;
+      
+      // Use HR data as source of truth for export too
+      const nivel = employee?.cargo_catalogo?.nivel || p.sdr?.nivel || 1;
+      const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
+      
       return [
         escapeCSV(p.sdr?.name || ''),
         escapeCSV(getRoleLabel(sdrData?.role_type)),
         escapeCSV(getSquadLabel(sdrData?.squad)),
-        escapeCSV(p.sdr?.nivel || 1),
-        escapeCSV(compPlan?.ote_total || 4000),
+        escapeCSV(nivel),
+        escapeCSV(ote),
         escapeCSV(globalPct.toFixed(1)),
         escapeCSV((p.pct_reunioes_agendadas || 0).toFixed(1)),
         escapeCSV((p.pct_reunioes_realizadas || 0).toFixed(1)),
@@ -498,8 +506,14 @@ const FechamentoSDRList = () => {
                 {payouts.map((payout) => {
                   const globalPct = calculateGlobalPct(payout);
                   const compPlan = getCompPlanForSdr(payout.sdr_id);
-                  const nivel = payout.sdr?.nivel || 1;
-                  const ote = compPlan?.ote_total || 4000;
+                  const employee = (payout as any).employee;
+                  
+                  // Priority: 1) RH cargo_catalogo.nivel, 2) legacy sdr.nivel, 3) fallback 1
+                  const nivel = employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
+                  
+                  // Priority: 1) compPlan vigente, 2) RH cargo_catalogo.ote_total, 3) fallback 4000
+                  const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
+                  
                   const isCritical = globalPct < 70;
                   const isWarning = globalPct >= 70 && globalPct < 100;
                   const sdrData = payout.sdr as any;

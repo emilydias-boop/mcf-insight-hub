@@ -182,8 +182,15 @@ const FechamentoSDRDetail = () => {
 
   const handleExportIndividual = () => {
     const sdrName = payout.sdr?.name || 'SDR';
-    const nivel = payout.sdr?.nivel || 1;
-    const ote = compPlan?.ote_total || 4000;
+    
+    // Get employee data from payout (attached by useSdrPayouts hook)
+    const employee = (payout as any).employee;
+    
+    // Priority: 1) RH cargo_catalogo.nivel, 2) legacy sdr.nivel, 3) fallback 1
+    const nivel = employee?.cargo_catalogo?.nivel || payout.sdr?.nivel || 1;
+    
+    // Priority: 1) compPlan vigente, 2) RH cargo_catalogo.ote_total, 3) fallback 4000
+    const ote = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
     
     const adjustments = payout.ajustes_json || [];
     const totalAjustes = adjustments.reduce((sum: number, adj: PayoutAdjustment) => sum + (adj.valor || 0), 0);
