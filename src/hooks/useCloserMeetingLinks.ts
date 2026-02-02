@@ -82,22 +82,34 @@ export function useCloserDaySlots(dayOfWeek: number, meetingType: 'r1' | 'r2' = 
 }
 
 // Retorna horários únicos para um conjunto de dias da semana
-export function useUniqueSlotsForDays(daysOfWeek: number[], meetingType: 'r1' | 'r2' = 'r1') {
+// closerIdsFilter: quando fornecido, filtra apenas pelos closers especificados (usado para isolamento por BU)
+export function useUniqueSlotsForDays(
+  daysOfWeek: number[], 
+  meetingType: 'r1' | 'r2' = 'r1',
+  closerIdsFilter?: string[]
+) {
   return useQuery({
-    queryKey: ['unique-slots-for-days', daysOfWeek, meetingType],
+    queryKey: ['unique-slots-for-days', daysOfWeek, meetingType, closerIdsFilter],
     queryFn: async () => {
-      // First get closer IDs of the correct meeting_type
-      const { data: closerIds, error: closersError } = await supabase
-        .from('closers')
-        .select('id')
-        .eq('is_active', true)
-        .or(meetingType === 'r1' 
-          ? 'meeting_type.is.null,meeting_type.eq.r1' 
-          : 'meeting_type.eq.r2');
-
-      if (closersError) throw closersError;
+      let ids: string[];
       
-      const ids = closerIds?.map(c => c.id) || [];
+      // Se closerIdsFilter foi fornecido, usar esses IDs diretamente
+      if (closerIdsFilter && closerIdsFilter.length > 0) {
+        ids = closerIdsFilter;
+      } else {
+        // Fallback: buscar todos os closers do tipo (comportamento legado)
+        const { data: closerIds, error: closersError } = await supabase
+          .from('closers')
+          .select('id')
+          .eq('is_active', true)
+          .or(meetingType === 'r1' 
+            ? 'meeting_type.is.null,meeting_type.eq.r1' 
+            : 'meeting_type.eq.r2');
+
+        if (closersError) throw closersError;
+        ids = closerIds?.map(c => c.id) || [];
+      }
+      
       if (ids.length === 0) return {};
 
       const { data, error } = await supabase
