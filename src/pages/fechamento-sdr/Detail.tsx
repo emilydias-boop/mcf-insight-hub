@@ -21,6 +21,7 @@ import {
   useAuthorizeUltrameta,
   useSdrIntermediacoes,
 } from '@/hooks/useSdrKpiMutations';
+import { useSdrAgendaMetricsBySdrId } from '@/hooks/useSdrAgendaMetricsBySdrId';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency, formatDateTime } from '@/lib/formatters';
 import { PayoutAdjustment, SdrMonthKpi, SdrCompPlan, SdrMonthPayout, getMultiplierRange } from '@/types/sdr-fechamento';
@@ -103,6 +104,12 @@ const FechamentoSDRDetail = () => {
   const { data: compPlan } = useSdrCompPlan(payout?.sdr_id, payout?.ano_mes || '');
   const { data: kpi } = useSdrMonthKpi(payout?.sdr_id, payout?.ano_mes || '');
   const { data: intermediacoes } = useSdrIntermediacoes(payout?.sdr_id, payout?.ano_mes || '');
+  
+  // Buscar métricas ativas para obter meta de contratos
+  const { metricas: activeMetrics } = useActiveMetricsForSdr(payout?.sdr_id, payout?.ano_mes || '');
+  
+  // Buscar métricas da Agenda (contratos pagos e vendas parceria)
+  const agendaMetrics = useSdrAgendaMetricsBySdrId(payout?.sdr_id, payout?.ano_mes);
 
   const updateStatus = useUpdatePayoutStatus();
   const recalculateWithKpi = useRecalculateWithKpi();
@@ -246,7 +253,16 @@ const FechamentoSDRDetail = () => {
   };
 
   const adjustments = payout.ajustes_json || [];
-  const intermediacaoCount = intermediacoes?.length || 0;
+  
+  // Para Closers, usar contratos da Agenda. Para SDRs, usar intermediacoes
+  const isCloser = (payout.sdr as any)?.role_type === 'closer';
+  const contratosFromAgenda = agendaMetrics.data?.contratos || 0;
+  const vendasParceriaFromAgenda = agendaMetrics.data?.vendas_parceria || 0;
+  const intermediacaoCount = isCloser ? contratosFromAgenda : (intermediacoes?.length || 0);
+  
+  // Buscar meta de contratos das métricas ativas
+  const metricaContratos = activeMetrics.find(m => m.nome_metrica === 'contratos');
+  const metaContratosDiaria = metricaContratos?.meta_valor || 1;
 
   // Check if SDR met ultrameta criteria (avg >= 100%)
   const avgPerformance = (
@@ -257,7 +273,6 @@ const FechamentoSDRDetail = () => {
   ) / 4;
   const metUltrameta = avgPerformance >= 100;
 
-  const isCloser = (payout.sdr as any)?.role_type === 'closer';
   const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
   const diasUteisMes = payout.dias_uteis_mes || 19;
 
@@ -456,6 +471,8 @@ const FechamentoSDRDetail = () => {
           sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
           diasUteisMes={payout.dias_uteis_mes || 19}
           roleType={(payout.sdr as any)?.role_type || 'sdr'}
+          metaContratosDiaria={metaContratosDiaria}
+          vendasParceria={vendasParceriaFromAgenda}
         />
       )}
 
