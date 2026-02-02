@@ -17,6 +17,31 @@ import { BUProvider } from '@/contexts/BUContext';
 import { BusinessUnit } from '@/hooks/useMyBU';
 import { canUserAccessR2 } from '@/components/auth/R2AccessGuard';
 
+// Configuração de abas visíveis por BU
+const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
+  incorporador: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'agenda-r2', 'r2-carrinho', 'deals-orfaos', 
+    'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
+  ],
+  consorcio: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+  credito: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+  projetos: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+  leilao: [
+    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
+    'agenda', 'configuracoes'
+  ],
+};
+
 interface BUCRMLayoutProps {
   bu: BusinessUnit;
   basePath: string;
@@ -51,35 +76,36 @@ export function BUCRMLayout({ bu, basePath }: BUCRMLayoutProps) {
     return <Navigate to={`${basePath}/agenda`} replace />;
   }
   
-  // Navigation items - ajustados para o basePath da BU
+  // Navigation items - com keys para filtro por BU
   const allNavItems = [
-    { to: basePath, label: 'Visão Geral', icon: LayoutDashboard, end: true },
-    { to: `${basePath}/contatos`, label: 'Contatos', icon: Users },
-    { to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
-    { to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle },
-    { to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
-    { to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
-    { to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
-    { to: `${basePath}/deals-orfaos`, label: 'Órfãos', icon: UserX },
-    { to: `${basePath}/contatos-duplicados`, label: 'Duplicados', icon: Copy },
-    { to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
-    { to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
+    { key: 'visao-geral', to: basePath, label: 'Visão Geral', icon: LayoutDashboard, end: true },
+    { key: 'contatos', to: `${basePath}/contatos`, label: 'Contatos', icon: Users },
+    { key: 'negocios', to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
+    { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle },
+    { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
+    { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
+    { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
+    { key: 'deals-orfaos', to: `${basePath}/deals-orfaos`, label: 'Órfãos', icon: UserX },
+    { key: 'contatos-duplicados', to: `${basePath}/contatos-duplicados`, label: 'Duplicados', icon: Copy },
+    { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
+    { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
   ];
   
-  // Filtrar navegação baseado nas permissões
-  let navItems = allNavItems;
+  // Primeiro filtrar por BU
+  const buVisibleTabs = BU_VISIBLE_TABS[bu] || [];
+  let navItems = allNavItems.filter(item => buVisibleTabs.includes(item.key));
   
+  // Depois aplicar filtro de roles (sdr/closer)
   if (isAgendaOnly) {
-    const allowedTabs: string[] = [`${basePath}/agenda`];
+    const allowedTabs: string[] = ['agenda'];
     
-    if (canViewR2) {
-      allowedTabs.push(`${basePath}/agenda-r2`);
+    if (canViewR2 && buVisibleTabs.includes('agenda-r2')) {
+      allowedTabs.push('agenda-r2');
     }
     
-    // Negócios sempre permitido (filtrado por BU)
-    allowedTabs.push(`${basePath}/negocios`);
+    allowedTabs.push('negocios');
     
-    navItems = allNavItems.filter(item => allowedTabs.includes(item.to));
+    navItems = navItems.filter(item => allowedTabs.includes(item.key));
   }
 
   return (
