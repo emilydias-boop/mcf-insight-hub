@@ -1,45 +1,29 @@
 
-# Plano: Corrigir Race Condition no R2AccessGuard para Thobson
+# Plano: Corrigir Bug de Roles Ficando Permanentemente como "Viewer"
 
 ## Problema Identificado
 
-Thobson (thobson.motta@minhacasafinanciada.com) tem role `coordenador` que **deveria** permitir acesso à Agenda R2, mas está sendo negado devido a uma race condition:
+O usuário Thobson está com role `coordenador` no banco, mas a interface mostra "Viewer". Isso acontece porque:
 
-### Dados do Usuário:
-| Campo | Valor |
-|-------|-------|
-| ID | `a15cb111-8831-4146-892a-d61ca674628a` |
-| Email | thobson.motta@minhacasafinanciada.com |
-| Role | coordenador |
-| R2_ALLOWED_ROLES | ['admin', 'manager', **'coordenador'**] |
+1. O `loadRolesInBackground` tem timeout de 8s com fallback para `viewer`
+2. Se ocorrer timeout, ele ainda marca `hasLoadedRoles.current = true`
+3. Em eventos subsequentes (TOKEN_REFRESHED, navegação), o sistema pula a recarga porque pensa que já tem os roles corretos
+4. O usuário fica permanentemente preso como "Viewer"
 
-### Sequência do Bug:
+### Fluxo do Bug:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  1. Thobson faz login ou navega para /crm/agenda-r2                 │
-│  2. handleSession() executa:                                        │
-│     - setSession(session)                                           │
-│     - setUser(user)                                                 │
-│     - setLoading(false) ← authLoading = false                       │
-│     - setRole('viewer')  ← DEFAULT temporário                       │
-│     - setRoleLoading(false) ← AINDA false (estado inicial!)         │
-│     - setTimeout(() => loadRolesInBackground(...), 0)               │
+│  1. Login/navegação inicial                                         │
+│  2. handleSession → define roleLoading=true                         │
+│  3. loadRolesInBackground inicia                                    │
+│  4. Query demora > 8s (rede lenta/servidor ocupado)                 │
+│  5. Timeout! Fallback: role='viewer'                                │
+│  6. hasLoadedRoles.current = true ← ERRO! Marca como carregado      │
 │                                                                     │
-│  3. RACE CONDITION: React renderiza ANTES do setTimeout executar    │
-│     - authLoading = false                                           │
-│     - roleLoading = false (nunca foi true!)                         │
-│     - role = 'viewer' (não 'coordenador')                           │
-│                                                                     │
-│  4. R2AccessGuard avalia:                                           │
-│     - hasRoleAccess = R2_ALLOWED_ROLES.includes('viewer') = FALSE   │
-│     - Resultado: "Acesso Negado" ❌                                 │
-│                                                                     │
-│  5. setTimeout finalmente executa loadRolesInBackground:            │
-│     - setRoleLoading(true) ← muito tarde                            │
-│     - Busca role real: 'coordenador'                                │
-│     - setRoleLoading(false)                                         │
-│     - Mas dano já foi feito (tela de erro já apareceu)              │
+│  7. Usuário navega ou tab focus → TOKEN_REFRESHED                   │
+│  8. Código verifica: hasLoadedRoles.current = true                  │
+│  9. Pula handleSession → mantém role='viewer' permanentemente ❌    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -47,77 +31,120 @@ Thobson (thobson.motta@minhacasafinanciada.com) tem role `coordenador` que **dev
 
 ## Solução
 
-Garantir que `roleLoading = true` ANTES de agendar a busca em background, eliminando a janela de race condition.
-
-### Alteração no AuthContext
+### 1. Não marcar como carregado se usou fallback do timeout
 
 **Arquivo:** `src/contexts/AuthContext.tsx`
 
-**Linha ~219-222** - Modificar handleSession para definir roleLoading=true ANTES do setTimeout:
+**Modificar linhas 159-177:**
 
 ```typescript
-// ANTES (linha 219-222):
-// Background: update last_login_at (non-blocking)
-setTimeout(() => {
-  loadRolesInBackground(newSession.user.id, myVersion);
-}, 0);
+// Fetch roles with timeout
+const roleResult = await withTimeout(
+  fetchUserRoles(userId),
+  ROLE_TIMEOUT_MS,
+  null // fallback: null indica timeout
+);
 
-// DEPOIS:
-// Set roleLoading=true BEFORE scheduling background load to prevent race condition
-setRoleLoading(true);
+if (version !== roleLoadVersion.current) return;
 
-// Load roles in background (non-blocking)
-setTimeout(() => {
-  loadRolesInBackground(newSession.user.id, myVersion);
-}, 0);
+// Se timeout ocorreu, usar viewer MAS não marcar como carregado
+if (roleResult === null) {
+  console.warn('[Auth] Role fetch timed out, using viewer temporarily');
+  setRole('viewer');
+  setAllRoles(['viewer']);
+  // NÃO definir hasLoadedRoles.current = true aqui!
+  // Isso permite que roles sejam recarregadas em próximo evento
+  return;
+}
+
+const { primaryRole, roles } = roleResult;
+
+if (roles.length === 0) {
+  setRole('viewer');
+  setAllRoles(['viewer']);
+} else {
+  setRole(primaryRole);
+  setAllRoles(roles);
+}
+
+// Só marcar como carregado se realmente buscou do banco
+hasLoadedRoles.current = true;
+console.log('[Auth] Roles loaded:', { primaryRole, roles });
 ```
 
-### Fluxo Corrigido
+### 2. Forçar recarga se role atual é 'viewer' mas há sessão válida
+
+**Arquivo:** `src/contexts/AuthContext.tsx`
+
+**Modificar lógica de TOKEN_REFRESHED (linhas 254-262):**
+
+```typescript
+// Preserve roles during token refresh - don't reset if same user
+// BUT: if roles weren't properly loaded (still viewer), try again
+if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && 
+    user && 
+    newSession?.user?.id === user.id) {
+  
+  // Se hasLoadedRoles é false, significa que houve timeout anterior
+  // Tentar carregar novamente
+  if (!hasLoadedRoles.current) {
+    console.log('[Auth] Token refreshed but roles not loaded, reloading...');
+    const myVersion = ++roleLoadVersion.current;
+    setRoleLoading(true);
+    setTimeout(() => {
+      loadRolesInBackground(newSession.user.id, myVersion);
+    }, 0);
+  } else {
+    console.log('[Auth] Token refreshed, keeping existing roles');
+  }
+  setSession(newSession);
+  return;
+}
+```
+
+---
+
+## Resumo de Alterações
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/contexts/AuthContext.tsx` | 1. Usar `null` como fallback em vez de viewer object |
+| | 2. Não definir `hasLoadedRoles.current = true` em caso de timeout |
+| | 3. Re-tentar carregar roles em TOKEN_REFRESHED se `hasLoadedRoles = false` |
+
+---
+
+## Resultado Esperado
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Timeout na primeira carga | Fica viewer permanentemente | Viewer temporário, recarrega depois |
+| TOKEN_REFRESHED com timeout anterior | Mantém viewer errado | Re-tenta carregar roles |
+| Carga normal (sem timeout) | OK | Mantém igual |
+
+---
+
+## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  1. Thobson navega para /crm/agenda-r2                              │
-│  2. handleSession() executa:                                        │
-│     - setLoading(false)                                             │
-│     - setRole('viewer')                                             │
-│     - setRoleLoading(true) ← NOVO! Antes do setTimeout              │
-│     - setTimeout(() => loadRolesInBackground(...), 0)               │
+│  1. Login inicial                                                   │
+│  2. Query demora > 8s → timeout                                     │
+│  3. role='viewer' (temporário), hasLoadedRoles=false                │
 │                                                                     │
-│  3. React renderiza:                                                │
-│     - authLoading = false                                           │
-│     - roleLoading = TRUE ← Guard espera                             │
-│                                                                     │
-│  4. R2AccessGuard avalia:                                           │
-│     - if (authLoading || roleLoading) return null; ← ESPERA         │
-│                                                                     │
-│  5. loadRolesInBackground executa:                                  │
-│     - Busca role real: 'coordenador'                                │
-│     - setRole('coordenador')                                        │
-│     - setRoleLoading(false)                                         │
-│                                                                     │
-│  6. R2AccessGuard reavalia:                                         │
-│     - hasRoleAccess = R2_ALLOWED_ROLES.includes('coordenador') ✓    │
-│     - Resultado: Acesso permitido ✓                                 │
+│  4. Usuário muda de tab → TOKEN_REFRESHED                           │
+│  5. Código verifica: hasLoadedRoles = false                         │
+│  6. Re-inicia loadRolesInBackground                                 │
+│  7. Desta vez query retorna: 'coordenador'                          │
+│  8. hasLoadedRoles = true                                           │
+│  9. UI atualiza: "Coordenador" ✓                                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Resumo Técnico
+## Nota Importante
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/contexts/AuthContext.tsx` | Adicionar `setRoleLoading(true)` antes do `setTimeout` na função `handleSession` |
+**Thobson com role `coordenador` não deveria acessar `/usuarios` mesmo após correção** - a tabela `role_permissions` mostra que `coordenador` tem `permission_level: none` para o recurso `usuarios`. Isso é comportamento esperado.
 
----
-
-## Impacto
-
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Thobson (coordenador) acessa R2 | Acesso negado (race condition) | Acesso permitido |
-| Outros coordenadores | Mesmo bug potencial | Corrigido |
-| Admin/Manager | Funcionava (roles carregam rápido) | Mantém |
-| Tempo de loading | Instantâneo (mas errado) | +0.5s (correto) |
-
-A correção adiciona um breve delay visual (mostra loading enquanto busca roles) mas garante que a avaliação de permissão aconteça com os dados corretos.
+Após a correção, a sidebar vai mostrar "Coordenador" (não "Viewer"), mas ele ainda verá "Acesso Negado" na página `/usuarios` porque não tem permissão.
