@@ -90,19 +90,14 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
   const isLoading = createCloser.isPending || updateCloser.isPending;
   const isEditing = !!closer;
 
-  // Buscar TODOS os usuários do sistema (permite managers, closers, qualquer role)
+  // Buscar TODOS os usuários do sistema (query simplificada sem join problemático)
   const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
     queryKey: ['all-users-for-closer'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select(`
-          id,
-          full_name,
-          email,
-          squad,
-          employees!employees_user_id_fkey(id)
-        `)
+        .select('id, full_name, email, squad')
+        .not('full_name', 'is', null)
         .order('full_name');
       
       if (error) throw error;
@@ -117,18 +112,22 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     formData.bu
   );
 
-  const handleUserSelect = (userId: string) => {
+  const handleUserSelect = async (userId: string) => {
     setSelectedUserId(userId);
     const user = closerUsers.find(u => u.id === userId);
     if (user) {
-      // Pegar o employee_id do primeiro registro de employees
-      const employeeId = user.employees?.[0]?.id || null;
+      // Buscar employee_id separadamente (query on-demand)
+      const { data: emp } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
       
       setFormData({
         ...formData,
         name: user.full_name || '',
         email: user.email || '',
-        employee_id: employeeId || undefined,
+        employee_id: emp?.id || undefined,
         bu: user.squad || 'incorporador',
       });
     }
