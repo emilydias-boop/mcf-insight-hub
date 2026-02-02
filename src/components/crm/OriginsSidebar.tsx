@@ -120,17 +120,20 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
             return group;
           }
           // Filtrar apenas origens permitidas dentro do grupo
+          // CORREÇÃO: verificar também se o group_id da origem está na lista permitida
           const filteredChildren = group.children.filter(child => 
-            allowedOriginIds!.includes(child.id)
+            allowedOriginIds!.includes(child.id) ||
+            (child.group_id && allowedOriginIds!.includes(child.group_id))
           );
           if (filteredChildren.length === 0) return null;
           return { ...group, children: filteredChildren };
         })
         .filter(Boolean) as Group[];
     } else {
-      // É lista flat
+      // É lista flat - CORREÇÃO: verificar também se o group_id está na lista permitida
       return (originData as Origin[]).filter(origin => 
-        allowedOriginIds!.includes(origin.id)
+        allowedOriginIds!.includes(origin.id) ||
+        (origin.group_id && allowedOriginIds!.includes(origin.group_id))
       );
     }
   }, [originData, allowedOriginIds, hasBUFilter]);
