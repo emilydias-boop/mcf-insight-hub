@@ -1,140 +1,111 @@
 
 
-# Plano: Selecionar Closers de Usuários Existentes
+# Plano: Corrigir Vinculação do Employee ID
 
-## Problema Atual
+## Problema Identificado
 
-O formulário de Closer atual usa inputs manuais para nome e email, o que permite criar closers que não existem como usuários no sistema. Isso pode gerar inconsistências.
+O erro **"violates foreign key constraint closers_employee_id_fkey"** ocorre porque:
 
-## Solução
+| Campo | Esperado | Estava Passando |
+|-------|----------|-----------------|
+| `closers.employee_id` | ID da tabela `employees` | ID da tabela `profiles` |
 
-Modificar o `CloserFormDialog` para exibir um **dropdown de usuários existentes** com role "closer" (e opcionalmente "closer_sombra"), pré-preenchendo automaticamente nome, email e vinculando o `employee_id`.
+A relação correta é:
+```text
+closers.employee_id → employees.id
+employees.user_id → profiles.id (auth.users)
+```
 
 ---
 
-## Alterações no Arquivo
+## Solução
+
+Modificar a query que busca usuários para também trazer o `employees.id` correspondente, e usar esse ID ao invés do `profiles.id`.
+
+---
+
+## Alteração no Arquivo
 
 **Arquivo:** `src/components/crm/CloserFormDialog.tsx`
 
-### 1. Adicionar Query para Buscar Usuários com Role Closer
+### Modificar Query para Incluir Employee ID
 
 ```typescript
-// Buscar usuários com role 'closer' ou 'closer_sombra'
+// Buscar usuários com role 'closer' ou 'closer_sombra' E seu employee_id
 const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
   queryKey: ['users-with-closer-role'],
   queryFn: async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select(`
         id,
         full_name,
         email,
         squad,
-        user_roles!inner(role)
+        user_roles!inner(role),
+        employees!employees_user_id_fkey(id)
       `)
       .in('user_roles.role', ['closer', 'closer_sombra'])
       .order('full_name');
-    return data || [];
+    
+    if (error) throw error;
+    return (data || []);
   },
-  enabled: open && !isEditing, // Só buscar ao criar novo
+  enabled: open && !isEditing,
 });
 ```
 
-### 2. Adicionar Dropdown de Seleção de Usuário (modo criação)
+### Modificar Função handleUserSelect
 
 ```typescript
-{/* Seleção de Usuário - Apenas no modo criação */}
-{!isEditing && (
-  <div className="space-y-2">
-    <Label>Selecionar Usuário *</Label>
-    <Select
-      value={formData.employee_id || ''}
-      onValueChange={(userId) => {
-        const user = closerUsers.find(u => u.id === userId);
-        if (user) {
-          setFormData({
-            ...formData,
-            name: user.full_name || '',
-            email: user.email || '',
-            employee_id: user.id,
-            bu: user.squad || 'incorporador',
-          });
-        }
-      }}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Selecione um usuário com cargo Closer..." />
-      </SelectTrigger>
-      <SelectContent>
-        {closerUsers.map((user) => (
-          <SelectItem key={user.id} value={user.id}>
-            {user.full_name} ({user.email})
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-    <p className="text-xs text-muted-foreground">
-      Apenas usuários com cargo "Closer" ou "Closer Sombra" aparecem aqui
-    </p>
-  </div>
-)}
+const handleUserSelect = (userId: string) => {
+  const user = closerUsers.find(u => u.id === userId);
+  if (user) {
+    // Pegar o employee_id do primeiro registro de employees
+    const employeeId = user.employees?.[0]?.id || null;
+    
+    setFormData({
+      ...formData,
+      name: user.full_name || '',
+      email: user.email || '',
+      employee_id: employeeId, // Usar employees.id, não profiles.id
+      bu: user.squad || 'incorporador',
+    });
+  }
+};
 ```
 
-### 3. Campos de Nome/Email em Read-Only (modo criação)
-
-No modo criação, após selecionar um usuário, os campos nome/email ficam em modo leitura:
+### Atualizar Interface
 
 ```typescript
-<Input
-  id="name"
-  value={formData.name}
-  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-  placeholder="Nome do closer"
-  required
-  disabled={!isEditing && !!formData.employee_id} // Read-only se selecionou usuário
-/>
+interface CloserUser {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  squad: string | null;
+  employees?: { id: string }[];
+}
 ```
 
 ---
 
-## Fluxo de Uso
+## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Botão "Adicionar Closer"                                           │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Modal abre                                                         │
-│  Dropdown: "Selecione um usuário com cargo Closer..."              │
+│  profiles.id          employees.id          closers.employee_id     │
+│  (auth.users)         (funcionário)         (vinculação)            │
 │                                                                     │
-│  [ João Pedro Martins Vieira (joao.pedro@minhacasa...) ]           │
-│  [ Jessica Martins (jessica.martins@minhacasa...) ]                │
-│  [ Cristiane Gomes (cristiane.gomes@minhacasa...) ]                │
-│  [ ... ]                                                           │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Usuário selecionado: João Pedro                                   │
-│                                                                     │
-│  Nome: [João Pedro Martins Vieira] (readonly)                      │
-│  Email: [joao.pedro@minhacasa...] (readonly)                       │
-│  BU: [Consórcio] (auto-preenchido com squad do usuário)           │
-│  Cor: [●] Selecionável                                             │
-│  Calendly: [...] Configurável                                       │
+│  João Pedro  ───────►  abc-123-def  ───────►  abc-123-def          │
+│  (profile_id)          (employee_id)         (saved!)              │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Benefícios
+## Consideração
 
-1. **Evita duplicatas**: Não é possível criar closers que não existem como usuários
-2. **Vincula automaticamente**: `employee_id` é preenchido com o ID do perfil
-3. **BU auto-detectada**: Usa o `squad` do usuário como BU padrão
-4. **Consistência**: Nome e email vêm diretamente do cadastro do usuário
+Se um usuário **não tiver registro na tabela `employees`**, o `employee_id` será `null`, permitindo criar o closer mesmo assim. Isso é compatível com a estrutura atual onde `employee_id` é nullable.
 
 ---
 
@@ -142,21 +113,5 @@ No modo criação, após selecionar um usuário, os campos nome/email ficam em m
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/CloserFormDialog.tsx` | Adicionar query de usuários com role closer, dropdown de seleção, vincular employee_id |
-| `src/hooks/useClosers.ts` | Adicionar `employee_id` ao insert se fornecido |
-
----
-
-## Consideração Importante
-
-Os 4 closers mencionados para o Consórcio têm as seguintes roles no sistema:
-
-| Nome | Role Atual | Squad |
-|------|------------|-------|
-| João Pedro | closer ✓ | consorcio |
-| Luis Felipe | manager | consorcio |
-| Thobson | coordenador | consorcio |
-| Victoria Paz | closer_sombra | incorporador |
-
-Se quiser que Luis Felipe e Thobson apareçam no dropdown, será necessário atribuir a eles o cargo "closer" ou "closer_sombra" no Admin → Usuários.
+| `src/components/crm/CloserFormDialog.tsx` | Buscar `employees.id` via join e usar no `employee_id` |
 
