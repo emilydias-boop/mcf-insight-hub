@@ -1,120 +1,140 @@
 
 
-# Plano: Filtrar Agenda R1 por Business Unit
+# Plano: Selecionar Closers de Usuários Existentes
 
 ## Problema Atual
 
-A Agenda R1 do Consórcio está exibindo reuniões de todas as BUs (Incorporador, etc.) porque:
+O formulário de Closer atual usa inputs manuais para nome e email, o que permite criar closers que não existem como usuários no sistema. Isso pode gerar inconsistências.
 
-1. O hook `useAgendaMeetings` **não filtra por BU** - busca todas as reuniões de R1 do período
-2. Os closers já são filtrados por BU via `useClosersWithAvailability(activeBU)`, mas as reuniões não
-3. Não existem closers cadastrados com `bu = 'consorcio'` na tabela `closers`
+## Solução
+
+Modificar o `CloserFormDialog` para exibir um **dropdown de usuários existentes** com role "closer" (e opcionalmente "closer_sombra"), pré-preenchendo automaticamente nome, email e vinculando o `employee_id`.
 
 ---
 
-## Solução em Duas Partes
+## Alterações no Arquivo
 
-### Parte 1: Modificar o Hook para Filtrar Reuniões por BU
+**Arquivo:** `src/components/crm/CloserFormDialog.tsx`
 
-Modificar `useAgendaMeetings` para aceitar um parâmetro opcional `closerIds` e filtrar as reuniões apenas para esses closers.
-
-**Arquivo:** `src/hooks/useAgendaData.ts`
+### 1. Adicionar Query para Buscar Usuários com Role Closer
 
 ```typescript
-export function useAgendaMeetings(
-  startDate: Date, 
-  endDate: Date, 
-  meetingType: 'r1' | 'r2' | 'all' = 'r1',
-  closerIds?: string[] // NOVO: IDs dos closers da BU
-) {
-  return useQuery({
-    queryKey: ['agenda-meetings', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), meetingType, closerIds],
-    queryFn: async () => {
-      let query = supabase
-        .from('meeting_slots')
-        .select(`...`)
-        .gte('scheduled_at', startDate.toISOString())
-        .lte('scheduled_at', endDate.toISOString());
-      
-      if (meetingType !== 'all') {
-        query = query.eq('meeting_type', meetingType);
-      }
-      
-      // NOVO: Filtrar por closers específicos (da BU)
-      if (closerIds && closerIds.length > 0) {
-        query = query.in('closer_id', closerIds);
-      }
-      
-      // ... resto do código
-    },
-  });
-}
+// Buscar usuários com role 'closer' ou 'closer_sombra'
+const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
+  queryKey: ['users-with-closer-role'],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select(`
+        id,
+        full_name,
+        email,
+        squad,
+        user_roles!inner(role)
+      `)
+      .in('user_roles.role', ['closer', 'closer_sombra'])
+      .order('full_name');
+    return data || [];
+  },
+  enabled: open && !isEditing, // Só buscar ao criar novo
+});
 ```
 
-### Parte 2: Passar os IDs dos Closers da BU na Agenda
-
-**Arquivo:** `src/pages/crm/Agenda.tsx`
+### 2. Adicionar Dropdown de Seleção de Usuário (modo criação)
 
 ```typescript
-// Buscar closers da BU primeiro
-const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(activeBU);
+{/* Seleção de Usuário - Apenas no modo criação */}
+{!isEditing && (
+  <div className="space-y-2">
+    <Label>Selecionar Usuário *</Label>
+    <Select
+      value={formData.employee_id || ''}
+      onValueChange={(userId) => {
+        const user = closerUsers.find(u => u.id === userId);
+        if (user) {
+          setFormData({
+            ...formData,
+            name: user.full_name || '',
+            email: user.email || '',
+            employee_id: user.id,
+            bu: user.squad || 'incorporador',
+          });
+        }
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecione um usuário com cargo Closer..." />
+      </SelectTrigger>
+      <SelectContent>
+        {closerUsers.map((user) => (
+          <SelectItem key={user.id} value={user.id}>
+            {user.full_name} ({user.email})
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    <p className="text-xs text-muted-foreground">
+      Apenas usuários com cargo "Closer" ou "Closer Sombra" aparecem aqui
+    </p>
+  </div>
+)}
+```
 
-// Extrair IDs dos closers para filtrar reuniões
-const closerIds = useMemo(() => closers.map(c => c.id), [closers]);
+### 3. Campos de Nome/Email em Read-Only (modo criação)
 
-// Passar os IDs para filtrar apenas reuniões desses closers
-const { data: meetings = [], isLoading: meetingsLoading, refetch } = useAgendaMeetings(
-  rangeStart, 
-  rangeEnd, 
-  'r1', 
-  closerIds.length > 0 ? closerIds : undefined
-);
+No modo criação, após selecionar um usuário, os campos nome/email ficam em modo leitura:
+
+```typescript
+<Input
+  id="name"
+  value={formData.name}
+  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+  placeholder="Nome do closer"
+  required
+  disabled={!isEditing && !!formData.employee_id} // Read-only se selecionou usuário
+/>
 ```
 
 ---
 
-## Configuração de Dados (Manual via UI)
-
-Você precisará cadastrar os closers do Consórcio em **CRM → Configurações → Closers R1**:
-
-| Nome | Email | BU |
-|------|-------|----|
-| João Pedro | joao.pedro@minhacasafinanciada.com | consorcio |
-| Luis Felipe | luis.felipe@minhacasafinanciada.com | consorcio |
-| Thobson | thobson.motta@minhacasafinanciada.com | consorcio |
-| Victoria Paz | victoria.paz@minhacasafinanciada.com | consorcio |
-
-Os SDRs (Ithaline, Cleiton, Igor) não precisam estar na tabela `closers` - eles agendam via a interface, não recebem leads.
-
----
-
-## Fluxo de Dados Corrigido
+## Fluxo de Uso
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  /consorcio/crm/agenda                                              │
-│  activeBU = 'consorcio'                                             │
+│  Botão "Adicionar Closer"                                           │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  useClosersWithAvailability('consorcio')                            │
-│  Retorna: [João Pedro, Luis, Thobson, Victoria]                     │
-│  IDs: ['abc123', 'def456', 'ghi789', 'jkl012']                     │
+│  Modal abre                                                         │
+│  Dropdown: "Selecione um usuário com cargo Closer..."              │
+│                                                                     │
+│  [ João Pedro Martins Vieira (joao.pedro@minhacasa...) ]           │
+│  [ Jessica Martins (jessica.martins@minhacasa...) ]                │
+│  [ Cristiane Gomes (cristiane.gomes@minhacasa...) ]                │
+│  [ ... ]                                                           │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  useAgendaMeetings(start, end, 'r1', ['abc123','def456',...])       │
-│  SQL: WHERE meeting_type = 'r1'                                     │
-│        AND closer_id IN ('abc123', 'def456', 'ghi789', 'jkl012')   │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Resultado: Apenas reuniões dos closers do Consórcio                │
+│  Usuário selecionado: João Pedro                                   │
+│                                                                     │
+│  Nome: [João Pedro Martins Vieira] (readonly)                      │
+│  Email: [joao.pedro@minhacasa...] (readonly)                       │
+│  BU: [Consórcio] (auto-preenchido com squad do usuário)           │
+│  Cor: [●] Selecionável                                             │
+│  Calendly: [...] Configurável                                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Benefícios
+
+1. **Evita duplicatas**: Não é possível criar closers que não existem como usuários
+2. **Vincula automaticamente**: `employee_id` é preenchido com o ID do perfil
+3. **BU auto-detectada**: Usa o `squad` do usuário como BU padrão
+4. **Consistência**: Nome e email vêm diretamente do cadastro do usuário
 
 ---
 
@@ -122,27 +142,21 @@ Os SDRs (Ithaline, Cleiton, Igor) não precisam estar na tabela `closers` - eles
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useAgendaData.ts` | Adicionar parâmetro `closerIds` ao `useAgendaMeetings` e filtrar query |
-| `src/pages/crm/Agenda.tsx` | Passar `closerIds` extraídos dos closers da BU para o hook |
-| `src/pages/crm/AgendaMetricas.tsx` | Atualizar chamada para passar `closerIds` (manter consistência) |
+| `src/components/crm/CloserFormDialog.tsx` | Adicionar query de usuários com role closer, dropdown de seleção, vincular employee_id |
+| `src/hooks/useClosers.ts` | Adicionar `employee_id` ao insert se fornecido |
 
 ---
 
-## Resultado Esperado
+## Consideração Importante
 
-Após a implementação:
+Os 4 closers mencionados para o Consórcio têm as seguintes roles no sistema:
 
-| CRM | Closers Visíveis | Reuniões Visíveis |
-|-----|-----------------|-------------------|
-| `/consorcio/crm/agenda` | João Pedro, Luis, Thobson, Victoria | Apenas reuniões com esses closers |
-| `/crm/agenda` (Incorporador) | Julio, Cristiane, Thayna, etc. | Apenas reuniões com closers do Incorporador |
-| `/leilao/crm/agenda` | Closers cadastrados com bu='leilao' | Apenas reuniões com closers do Leilão |
+| Nome | Role Atual | Squad |
+|------|------------|-------|
+| João Pedro | closer ✓ | consorcio |
+| Luis Felipe | manager | consorcio |
+| Thobson | coordenador | consorcio |
+| Victoria Paz | closer_sombra | incorporador |
 
----
-
-## Próximos Passos Após Implementação
-
-1. **Cadastrar Closers**: Ir em `/consorcio/crm/configuracoes` → Closers e adicionar João Pedro, Luis, Thobson, Victoria com `bu = 'consorcio'`
-
-2. **Verificar SDRs**: Os SDRs Ithaline e Cleiton já estão no sistema com `squad = 'consorcio'`. O Igor precisará ser criado via Admin → Usuários
+Se quiser que Luis Felipe e Thobson apareçam no dropdown, será necessário atribuir a eles o cargo "closer" ou "closer_sombra" no Admin → Usuários.
 
