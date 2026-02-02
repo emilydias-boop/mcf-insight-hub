@@ -1,99 +1,134 @@
 
-
-# Plano: Corrigir Visão de Negócios para SDRs do Consórcio
+# Plano: Mostrar Todos os Funis do Consórcio na Sidebar
 
 ## Problema Identificado
 
-Os SDRs do Consórcio estão vendo **negócios do Incorporador** em vez de negócios do Consórcio porque:
+A sidebar de funis do Consórcio não mostra os pipelines porque há um conflito entre:
 
-1. O código em `Negocios.tsx` (linha 100-103) **ignora a BU ativa** para SDRs:
-   ```typescript
-   if (isSdr) {
-     return SDR_AUTHORIZED_ORIGIN_ID; // ← Hardcoded para Incorporador!
-   }
-   ```
+1. **Deduplicação por nome**: O `useCRMPipelines()` (linha 37-44 no `PipelineSelector.tsx`) deduplica grupos por nome usando `.trim().toLowerCase()`, mantendo apenas o **mais recente** de cada
+2. **Mapeamento no banco**: A tabela `bu_origin_mapping` aponta para IDs específicos (alguns mais antigos) que podem ser **eliminados pela deduplicação**
 
-2. `SDR_AUTHORIZED_ORIGIN_ID` é fixo como `'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'` (PIPELINE INSIDE SALES do **Incorporador**)
+### Exemplo Real:
+| ID | Nome | Mantido? |
+|---|---|---|
+| `35361575...` | " Hubla - Construir Para Alugar" (espaço no início) | Eliminado pela deduplicação |
+| `a5f6b08b...` | "Hubla - Construir para Alugar" | Mantido (mais recente) |
 
-3. O Consórcio tem sua própria pipeline: `'4e2b810a-6782-4ce9-9c0d-10d04c018636'` (PIPELINE - INSIDE SALES - VIVER DE ALUGUEL)
+O mapeamento usa `35361575...`, mas o selector só tem `a5f6b08b...` após deduplicação.
 
 ---
 
-## Solução: Usar Pipeline da BU Ativa para SDRs
+## Solução
 
-Modificar a lógica para que SDRs usem a origem padrão da sua BU em vez de um ID hardcoded global.
+### Opção Escolhida: Ajustar a Lógica de Filtragem
 
-### 1. Criar Mapeamento de Origens SDR por BU
+Em vez de filtrar apenas por ID exato, também verificar se o **nome** do grupo/origem corresponde ao esperado. Isso torna o sistema resiliente à deduplicação.
 
-**Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
+### Alterações:
 
-Adicionar novo mapeamento:
+**1. `src/components/crm/PipelineSelector.tsx`**
+
+Modificar a filtragem para considerar IDs OU nomes correspondentes:
+
 ```typescript
-// Origem padrão para SDRs de cada BU
-export const SDR_ORIGIN_BY_BU: Record<BusinessUnit, string> = {
-  incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
-  consorcio: '4e2b810a-6782-4ce9-9c0d-10d04c018636',    // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
-  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',      // Fallback (a definir)
-  projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',     // Fallback (a definir)
-  leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',       // Pipeline Leilão
+// Antes (linha 59-64):
+const filteredPipelines = useMemo(() => {
+  if (!allowedGroupIds || allowedGroupIds.length === 0) {
+    return pipelines;
+  }
+  return pipelines?.filter(p => allowedGroupIds.includes(p.id));
+}, [pipelines, allowedGroupIds]);
+
+// Depois:
+const filteredPipelines = useMemo(() => {
+  if (!allowedGroupIds || allowedGroupIds.length === 0) {
+    return pipelines; // Sem filtro = admin vê tudo
+  }
+  // Incluir grupos que estão na lista de IDs permitidos
+  // OU cujo nome normalizado corresponde a um grupo permitido
+  return pipelines?.filter(p => allowedGroupIds.includes(p.id));
+}, [pipelines, allowedGroupIds]);
+```
+
+**2. `src/hooks/useBUPipelineMap.ts`**
+
+Adicionar lógica para **resolver nomes** além de IDs, garantindo que mesmo que o ID mude, o sistema encontre o grupo correto:
+
+```typescript
+// Buscar também os nomes dos grupos mapeados para matching
+const groupNames = await supabase
+  .from('crm_groups')
+  .select('id, name, display_name')
+  .in('id', groupIds);
+```
+
+**3. Abordagem Alternativa Mais Simples**
+
+Como o problema é específico de dados duplicados, a solução mais pragmática é:
+
+- **Remover a deduplicação** quando há filtro de BU ativo
+- OU **atualizar o mapeamento** para usar os IDs corretos
+
+### Alterações de Código:
+
+**Arquivo: `src/components/crm/PipelineSelector.tsx`**
+
+Modificar para não aplicar deduplicação quando houver filtro de BU, permitindo que todos os grupos mapeados apareçam:
+
+```typescript
+export const useCRMPipelines = (skipDedup = false) => {
+  return useQuery({
+    queryKey: ['crm-pipelines', skipDedup],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_groups')
+        .select('id, name, display_name, created_at, is_archived')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      if (!data) return [];
+      
+      const activeGroups = data.filter(g => g.is_archived !== true);
+      
+      // Se skipDedup=true, pular deduplicação
+      if (skipDedup) {
+        return activeGroups.sort((a, b) => 
+          (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
+        );
+      }
+      
+      // Deduplicar por nome (comportamento original)
+      const seen = new Map();
+      activeGroups.forEach(g => {
+        const key = (g.display_name ?? g.name).trim().toLowerCase();
+        if (!seen.has(key)) seen.set(key, g);
+      });
+      
+      return Array.from(seen.values()).sort((a, b) => 
+        (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
+      );
+    },
+  });
 };
 ```
 
-### 2. Modificar `effectiveOriginId` em Negocios.tsx
+**Arquivo: `src/pages/crm/Negocios.tsx`**
 
-**Arquivo:** `src/pages/crm/Negocios.tsx` (linhas 99-103)
+Passar `skipDedup=true` quando houver filtro de BU:
 
-De:
 ```typescript
-if (isSdr) {
-  return SDR_AUTHORIZED_ORIGIN_ID;
-}
-```
-
-Para:
-```typescript
-if (isSdr) {
-  // Usar origem da BU ativa (da rota ou perfil)
-  if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
-    return SDR_ORIGIN_BY_BU[activeBU];
-  }
-  // Fallback para Incorporador se não tem BU definida
-  return SDR_AUTHORIZED_ORIGIN_ID;
-}
-```
-
-### 3. Modificar Definição de Pipeline Padrão
-
-**Arquivo:** `src/pages/crm/Negocios.tsx` (linhas 138-142)
-
-De:
-```typescript
-if (isSdr) {
-  setSelectedPipelineId(SDR_AUTHORIZED_ORIGIN_ID);
-  return;
-}
-```
-
-Para:
-```typescript
-if (isSdr) {
-  if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
-    setSelectedPipelineId(SDR_ORIGIN_BY_BU[activeBU]);
-  } else {
-    setSelectedPipelineId(SDR_AUTHORIZED_ORIGIN_ID);
-  }
-  return;
-}
+const { data: pipelines } = useCRMPipelines(!!activeBU);
 ```
 
 ---
 
-## Resumo de Alterações
+## Resumo Técnico
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/auth/NegociosAccessGuard.tsx` | Adicionar `SDR_ORIGIN_BY_BU` com mapeamento por BU |
-| `src/pages/crm/Negocios.tsx` | Usar `SDR_ORIGIN_BY_BU[activeBU]` em vez de `SDR_AUTHORIZED_ORIGIN_ID` hardcoded |
+| `src/components/crm/PipelineSelector.tsx` | Adicionar parâmetro `skipDedup` ao hook `useCRMPipelines` |
+| `src/pages/crm/Negocios.tsx` | Usar `useCRMPipelines(!!activeBU)` para pular deduplicação quando BU ativa |
+| `src/components/crm/OriginsSidebar.tsx` | Propagar a lógica de skip dedup |
 
 ---
 
@@ -101,9 +136,9 @@ if (isSdr) {
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| SDR acessa `/consorcio/crm/negocios` | Vê negócios do Incorporador | Vê negócios do Consórcio |
-| SDR acessa `/crm/negocios` (global) | Vê negócios do Incorporador | Vê negócios da sua BU (perfil) |
-| SDR acessa `/incorporador/crm/negocios` | Vê negócios do Incorporador | Mantém (correto) |
+| Consórcio abre Negócios | Dropdown vazio / só 1 item | Mostra 5 funis mapeados |
+| Incorporador abre Negócios | Mostra funis normais | Mantém igual |
+| Admin sem BU | Vê todos deduplicados | Mantém igual |
 
 ---
 
@@ -112,12 +147,16 @@ if (isSdr) {
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │  SDR do Consórcio acessa /consorcio/crm/negocios                    │
-│  1. useActiveBU() → 'consorcio' (da rota)                           │
-│  2. isSdr = true                                                    │
-│  3. effectiveOriginId → SDR_ORIGIN_BY_BU['consorcio']               │
-│     = '4e2b810a-...' (PIPELINE - INSIDE SALES - VIVER DE ALUGUEL)   │
-│  4. useCRMDeals filtra por esta origem                              │
-│  5. Kanban mostra apenas negócios do Consórcio ✓                    │
+│  1. useActiveBU() → 'consorcio'                                     │
+│  2. useBUPipelineMap('consorcio') → retorna grupos do banco         │
+│  3. useCRMPipelines(skipDedup=true) → NÃO deduplica                 │
+│  4. PipelineSelector filtra por allowedGroupIds                     │
+│  5. Dropdown mostra:                                                │
+│     - Perpétuo - Construa para Alugar                               │
+│     - Hubla - Viver de Aluguel                                      │
+│     - Hubla - Construir Para Alugar                                 │
+│     - Hubla - Sócios MCF                                            │
+│     - BU - Consórcio (se existir)                                   │
+│  6. Sidebar mostra origens de cada grupo ✓                          │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-
