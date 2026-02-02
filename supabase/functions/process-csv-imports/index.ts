@@ -375,16 +375,32 @@ async function loadContactsCache(supabase: any): Promise<Map<string, string>> {
 async function loadStagesCache(supabase: any): Promise<Map<string, string>> {
   const cache = new Map<string, string>()
   
-  const { data: stages } = await supabase
-    .from('crm_stages')
-    .select('id, stage_name')
+  // 1. Buscar de local_pipeline_stages primeiro (prioridade para pipelines customizadas)
+  const { data: localStages } = await supabase
+    .from('local_pipeline_stages')
+    .select('id, name')
+    .eq('is_active', true)
   
-  if (stages) {
-    for (const stage of stages) {
-      cache.set(stage.stage_name.toLowerCase(), stage.id)
+  if (localStages) {
+    for (const stage of localStages) {
+      cache.set(stage.name.toLowerCase().trim(), stage.id)
     }
   }
   
-  console.log(`✅ Cache de estágios: ${cache.size} entradas`)
+  // 2. Fallback para crm_stages (stages legadas)
+  const { data: crmStages } = await supabase
+    .from('crm_stages')
+    .select('id, stage_name')
+  
+  if (crmStages) {
+    for (const stage of crmStages) {
+      // Só adiciona se não existir no cache (local tem prioridade)
+      if (!cache.has(stage.stage_name.toLowerCase().trim())) {
+        cache.set(stage.stage_name.toLowerCase().trim(), stage.id)
+      }
+    }
+  }
+  
+  console.log(`✅ Cache de estágios: ${cache.size} entradas (local + legado)`)
   return cache
 }

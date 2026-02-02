@@ -114,21 +114,37 @@ serve(async (req) => {
       }
     }
     
-    // If no valid stage_id, try to find one in crm_stages for this origin
+    // If no valid stage_id, try to find one in local_pipeline_stages first, then crm_stages
     if (!stageId) {
-      const { data: firstStage } = await supabase
-        .from('crm_stages')
+      // 1. Tentar local_pipeline_stages primeiro (pipelines customizadas)
+      const { data: localStage } = await supabase
+        .from('local_pipeline_stages')
         .select('id')
         .eq('origin_id', endpoint.origin_id)
-        .order('order_index', { ascending: true })
+        .eq('is_active', true)
+        .order('stage_order', { ascending: true })
         .limit(1)
         .maybeSingle();
       
-      if (firstStage) {
-        stageId = firstStage.id;
-        console.log('[WEBHOOK-RECEIVER] Usando primeira stage de crm_stages:', stageId);
+      if (localStage) {
+        stageId = localStage.id;
+        console.log('[WEBHOOK-RECEIVER] Usando primeira stage de local_pipeline_stages:', stageId);
       } else {
-        console.log('[WEBHOOK-RECEIVER] Nenhuma stage encontrada em crm_stages, deal será criado sem stage_id');
+        // 2. Fallback para crm_stages (pipelines legadas)
+        const { data: legacyStage } = await supabase
+          .from('crm_stages')
+          .select('id')
+          .eq('origin_id', endpoint.origin_id)
+          .order('stage_order', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        
+        if (legacyStage) {
+          stageId = legacyStage.id;
+          console.log('[WEBHOOK-RECEIVER] Usando primeira stage de crm_stages:', stageId);
+        } else {
+          console.log('[WEBHOOK-RECEIVER] Nenhuma stage encontrada, deal será criado sem stage_id');
+        }
       }
     }
 
