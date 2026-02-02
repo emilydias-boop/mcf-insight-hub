@@ -1,122 +1,168 @@
 
-
-# Plano: Corrigir Lista de Closers e Horários no Consórcio
+# Plano: Mostrar Todos Usuários no Dropdown + Adicionar Meeting Type
 
 ## Problemas Identificados
 
-### Problema 1: Dropdown de Usuários Vazio/Inconsistente
+1. **Dropdown vazio**: A query filtra apenas `role IN ('closer', 'closer_sombra')`, mas:
+   - Luis Felipe é `manager` → não aparece
+   - Outros usuários com funções diferentes não aparecem
+   
+2. **Sem distinção R1/R2**: O formulário não permite selecionar se o closer faz R1 ou R2 (relevante para Incorporador)
 
-O Select de usuários no `CloserFormDialog` está usando `formData.employee_id` como valor, mas:
-- `handleUserSelect` recebe `userId` (que é o `profiles.id`, não o `employee_id`)
-- A query busca usuários onde `employees.id` seria o valor correto, mas nenhum usuário tem registro na tabela `employees` (todos retornam `employee_id: null`)
-- O Select não consegue selecionar o usuário porque o `value` do SelectItem é `user.id` (profile ID), mas o Select espera `formData.employee_id` que não corresponde
+## Alterações Necessárias
 
-**Solução**: Usar `user.id` (profile ID) como identificador interno para a seleção E guardar separadamente o `employee_id` real quando existir.
+### 1. Modificar Query de Usuários para Buscar TODOS
 
-### Problema 2: Horários Não Aparecem na Agenda
+**Arquivo:** `src/components/crm/CloserFormDialog.tsx`
 
-O hook `useUniqueSlotsForDays` recebe `closerIdsForSlots` como filtro. Os closers do Consórcio são:
-- João Pedro: tem 1 horário configurado (Segunda às 09:00)
-- Victoria Paz: não tem horários configurados
-
-Porém, se a lista de closers está vazia ou os IDs não batem, nenhum slot aparece.
-
-**Verificação feita**: O banco confirma que João Pedro TEM horário na Segunda-feira às 09:00. O problema pode estar na forma como o componente passa os IDs.
-
----
-
-## Correções Necessárias
-
-### 1. Corrigir CloserFormDialog - Select de Usuários
-
-O problema está no mismatch de valores:
-- SelectItem usa `user.id` (profile ID) como value
-- Select compara com `formData.employee_id` (que é diferente ou null)
-
-**Solução**: Criar um estado separado `selectedUserId` para controlar a seleção, e manter `employee_id` apenas para o submit.
-
+Atual (linhas 87-108):
 ```typescript
-// Adicionar estado para o usuário selecionado
-const [selectedUserId, setSelectedUserId] = useState<string>('');
-
-const handleUserSelect = (userId: string) => {
-  setSelectedUserId(userId);
-  const user = closerUsers.find(u => u.id === userId);
-  if (user) {
-    const employeeId = user.employees?.[0]?.id || null;
-    setFormData({
-      ...formData,
-      name: user.full_name || '',
-      email: user.email || '',
-      employee_id: employeeId || undefined,
-      bu: user.squad || 'incorporador',
-    });
-  }
-};
-
-// No Select, usar selectedUserId ao invés de formData.employee_id
-<Select
-  value={selectedUserId}
-  onValueChange={handleUserSelect}
->
+// Buscar usuários com role 'closer' ou 'closer_sombra'
+const { data: closerUsers = [] } = useQuery({
+  queryKey: ['users-with-closer-role'],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(`...`)
+      .in('user_roles.role', ['closer', 'closer_sombra'])  // ← FILTRO RESTRITIVO
 ```
 
-### 2. Verificar/Corrigir Query de useCloserCrossBUConflicts
+Novo:
+```typescript
+// Buscar TODOS os usuários do sistema
+const { data: allUsers = [] } = useQuery({
+  queryKey: ['all-users-for-closer'],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(`
+        id,
+        full_name,
+        email,
+        squad,
+        user_roles(role),
+        employees!employees_user_id_fkey(id)
+      `)
+      .order('full_name');
+    
+    if (error) throw error;
+    return data || [];
+  },
+  enabled: open && !isEditing,
+});
+```
 
-O hook `useCloserCrossBUConflicts` pode estar causando problemas se os closers não tiverem `employee_id` configurado.
+### 2. Adicionar Campo Meeting Type (R1/R2)
 
-Quando `employee_id` é null para todos os closers, a query retorna conjunto vazio corretamente, mas precisamos garantir que isso não afete outros hooks.
+**Arquivo:** `src/components/crm/CloserFormDialog.tsx`
 
-### 3. Garantir Invalidação de Cache
+Adicionar ao estado e formulário:
+```typescript
+interface CloserFormDataExtended extends CloserFormData {
+  // ... existentes
+  meeting_type?: 'r1' | 'r2';
+}
 
-Após adicionar horários no modal "Configurar Closers", garantir que o cache seja invalidado corretamente para que os slots apareçam imediatamente.
+// Opções de Meeting Type
+const MEETING_TYPE_OPTIONS = [
+  { value: 'r1', label: 'R1 - Reunião Inicial' },
+  { value: 'r2', label: 'R2 - Reunião de Fechamento' },
+];
+```
 
----
+No JSX (após Business Unit):
+```tsx
+{/* Meeting Type - Mostrar apenas para Incorporador */}
+{formData.bu === 'incorporador' && (
+  <div className="space-y-2">
+    <Label htmlFor="meeting_type">Tipo de Reunião *</Label>
+    <Select
+      value={formData.meeting_type || 'r1'}
+      onValueChange={(v) => setFormData({ ...formData, meeting_type: v as 'r1' | 'r2' })}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecione o tipo" />
+      </SelectTrigger>
+      <SelectContent>
+        {MEETING_TYPE_OPTIONS.map((type) => (
+          <SelectItem key={type.value} value={type.value}>
+            {type.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+    <p className="text-xs text-muted-foreground">
+      R1 para reuniões iniciais, R2 para fechamento
+    </p>
+  </div>
+)}
+```
 
-## Alterações por Arquivo
+### 3. Atualizar useCreateCloser para Salvar meeting_type
+
+**Arquivo:** `src/hooks/useClosers.ts`
+
+Adicionar `meeting_type` à interface e mutação:
+```typescript
+export interface CloserFormData {
+  // ... existentes
+  meeting_type?: 'r1' | 'r2';
+}
+
+// No insert:
+.insert({
+  // ... outros campos
+  meeting_type: data.meeting_type || null,
+})
+```
+
+### 4. Atualizar Texto de Ajuda no Dropdown
+
+Mudar de:
+```
+"Apenas usuários com cargo 'Closer' ou 'Closer Sombra' aparecem aqui"
+```
+
+Para:
+```
+"Todos os usuários do sistema podem ser configurados como Closer"
+```
+
+## Resultado Esperado
+
+| Cenário | Comportamento |
+|---------|---------------|
+| Dropdown de Usuários | Mostra TODOS (Luis Felipe, Thobson, Jessica, etc.) |
+| BU = Incorporador | Mostra select de Meeting Type (R1/R2) |
+| BU = Consórcio/Outros | Não mostra Meeting Type (não aplicável) |
+| Cadastrar Luis Felipe no Consórcio | Aparece no dropdown, cadastra normalmente |
+
+## Resumo Técnico
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/CloserFormDialog.tsx` | Adicionar `selectedUserId` estado para controlar o Select corretamente |
-| `src/hooks/useCloserConflicts.ts` | Verificar tratamento de closers sem `employee_id` |
+| `src/components/crm/CloserFormDialog.tsx` | Remover filtro de roles, adicionar campo meeting_type condicional |
+| `src/hooks/useClosers.ts` | Adicionar `meeting_type` à interface e operações CRUD |
 
----
-
-## Fluxo Esperado Após Correção
+## Fluxo de Uso
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Abrir Modal "Adicionar Closer"                                     │
-│  1. Query busca usuários com role closer/closer_sombra              │
-│  2. Lista aparece com: João Pedro, Victoria Paz, etc.               │
-│  3. Usuário seleciona "João Pedro"                                  │
-│  4. selectedUserId = "8e66266d-..." (profile ID)                    │
-│  5. employee_id = null (porque não tem registro em employees)       │
-│  6. Nome/Email preenchidos automaticamente                          │
-│  7. Ao salvar: closer criado com employee_id = null (OK)            │
+│  Admin abre "Adicionar Closer"                                      │
+│  1. Dropdown mostra TODOS os usuários do sistema                    │
+│  2. Seleciona: Luis Felipe                                          │
+│  3. Seleciona BU: Consórcio                                         │
+│  4. (Meeting Type não aparece - apenas para Incorporador)           │
+│  5. Clica "Adicionar"                                               │
+│  6. Luis Felipe aparece na agenda do Consórcio                      │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Agenda Consórcio                                                   │
-│  1. useClosersWithAvailability('consorcio') retorna 2 closers       │
-│  2. closerIdsForSlots = ['4e3eabf5-...', '412f87de-...']            │
-│  3. useUniqueSlotsForDays filtra por esses IDs                      │
-│  4. João Pedro tem Segunda 09:00 → aparece no calendário           │
+│  Admin abre "Adicionar Closer"                                      │
+│  1. Seleciona: Thobson Motta                                        │
+│  2. Seleciona BU: Incorporador                                      │
+│  3. Meeting Type aparece → Seleciona "R2"                           │
+│  4. Clica "Adicionar"                                               │
+│  5. Thobson aparece na agenda R2 do Incorporador                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Observação: Cadastro Multi-BU
-
-Para cadastrar usuários que atuam em múltiplas BUs (como Luis ou Thobson):
-
-1. **Cadastrar normalmente** no CRM de cada BU através de Configurações → Closers
-2. Se o usuário tiver registro na tabela `employees`, o sistema vai vincular automaticamente via `employee_id`
-3. Se não tiver registro em `employees`, os registros serão independentes (sem sincronização de agenda entre BUs)
-
-Para habilitar a sincronização cross-BU:
-- O usuário precisa ter um registro na tabela `employees`
-- Todos os registros de closer desse usuário em diferentes BUs devem ter o mesmo `employee_id`
-- Atualmente, como nenhum closer tem `employee_id` preenchido, a funcionalidade de sincronização está inativa
-
