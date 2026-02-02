@@ -243,7 +243,7 @@ export const useSdrPayoutDetail = (payoutId: string | undefined) => {
         .from('sdr_month_payout')
         .select(`
           *,
-          sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at)
+          sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at, squad, role_type)
         `)
         .eq('id', payoutId)
         .single();
@@ -279,7 +279,7 @@ export const useOwnPayout = (anoMes: string) => {
         .from('sdr_month_payout')
         .select(`
           *,
-          sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at)
+          sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at, squad, role_type)
         `)
         .eq('sdr_id', sdrData.id)
         .eq('ano_mes', anoMes)
