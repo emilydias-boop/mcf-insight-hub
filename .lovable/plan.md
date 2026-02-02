@@ -1,90 +1,101 @@
 
 
-# Plano: Corrigir Vinculação do Employee ID
+# Plano: Filtrar Slots de Disponibilidade por BU
 
 ## Problema Identificado
 
-O erro **"violates foreign key constraint closers_employee_id_fkey"** ocorre porque:
+A Agenda R1 do Consórcio está mostrando os **horários de disponibilidade** (slots "+Closer", "+C") de closers de **todas as BUs** porque o hook `useUniqueSlotsForDays` não filtra por Business Unit.
 
-| Campo | Esperado | Estava Passando |
-|-------|----------|-----------------|
-| `closers.employee_id` | ID da tabela `employees` | ID da tabela `profiles` |
+Na imagem, os slots mostrados (como às 10:15, 09:00) pertencem a closers do Incorporador, não do Consórcio.
 
-A relação correta é:
-```text
-closers.employee_id → employees.id
-employees.user_id → profiles.id (auth.users)
+## Causa Raiz
+
+O hook `useUniqueSlotsForDays` em `src/hooks/useCloserMeetingLinks.ts`:
+- Busca closers ativos apenas por `meeting_type`
+- **Não filtra por BU**
+- Retorna slots de `closer_meeting_links` de todos os closers R1
+
+```typescript
+// Código atual (sem filtro de BU)
+const { data: closerIds } = await supabase
+  .from('closers')
+  .select('id')
+  .eq('is_active', true)
+  .or('meeting_type.is.null,meeting_type.eq.r1');  // ← Sem filtro de BU!
 ```
 
 ---
 
 ## Solução
 
-Modificar a query que busca usuários para também trazer o `employees.id` correspondente, e usar esse ID ao invés do `profiles.id`.
+Modificar o sistema para que apenas os slots dos closers da BU ativa sejam exibidos.
 
----
+### Alteração 1: Hook `useUniqueSlotsForDays`
 
-## Alteração no Arquivo
-
-**Arquivo:** `src/components/crm/CloserFormDialog.tsx`
-
-### Modificar Query para Incluir Employee ID
+Adicionar parâmetro opcional `closerIds` para permitir que o componente passe os IDs dos closers da BU:
 
 ```typescript
-// Buscar usuários com role 'closer' ou 'closer_sombra' E seu employee_id
-const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
-  queryKey: ['users-with-closer-role'],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`
-        id,
-        full_name,
-        email,
-        squad,
-        user_roles!inner(role),
-        employees!employees_user_id_fkey(id)
-      `)
-      .in('user_roles.role', ['closer', 'closer_sombra'])
-      .order('full_name');
-    
-    if (error) throw error;
-    return (data || []);
-  },
-  enabled: open && !isEditing,
-});
-```
+// Arquivo: src/hooks/useCloserMeetingLinks.ts
 
-### Modificar Função handleUserSelect
+export function useUniqueSlotsForDays(
+  daysOfWeek: number[], 
+  meetingType: 'r1' | 'r2' = 'r1',
+  closerIdsFilter?: string[] // NOVO: IDs dos closers da BU
+) {
+  return useQuery({
+    queryKey: ['unique-slots-for-days', daysOfWeek, meetingType, closerIdsFilter],
+    queryFn: async () => {
+      let ids: string[];
+      
+      // Se closerIdsFilter foi fornecido, usar esses IDs
+      if (closerIdsFilter && closerIdsFilter.length > 0) {
+        ids = closerIdsFilter;
+      } else {
+        // Fallback: buscar todos os closers do tipo (comportamento atual)
+        const { data: closerIds, error } = await supabase
+          .from('closers')
+          .select('id')
+          .eq('is_active', true)
+          .or(meetingType === 'r1' 
+            ? 'meeting_type.is.null,meeting_type.eq.r1' 
+            : 'meeting_type.eq.r2');
 
-```typescript
-const handleUserSelect = (userId: string) => {
-  const user = closerUsers.find(u => u.id === userId);
-  if (user) {
-    // Pegar o employee_id do primeiro registro de employees
-    const employeeId = user.employees?.[0]?.id || null;
-    
-    setFormData({
-      ...formData,
-      name: user.full_name || '',
-      email: user.email || '',
-      employee_id: employeeId, // Usar employees.id, não profiles.id
-      bu: user.squad || 'incorporador',
-    });
-  }
-};
-```
+        if (error) throw error;
+        ids = closerIds?.map(c => c.id) || [];
+      }
+      
+      if (ids.length === 0) return {};
 
-### Atualizar Interface
+      // Buscar slots apenas desses closers
+      const { data, error } = await supabase
+        .from('closer_meeting_links')
+        .select('day_of_week, start_time, closer_id')
+        .in('day_of_week', daysOfWeek)
+        .in('closer_id', ids)  // ← Agora filtra por closers específicos
+        .order('start_time');
 
-```typescript
-interface CloserUser {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  squad: string | null;
-  employees?: { id: string }[];
+      // ... resto do código igual
+    },
+  });
 }
+```
+
+### Alteração 2: Componente `AgendaCalendar`
+
+Passar os IDs dos closers da BU para o hook:
+
+```typescript
+// Arquivo: src/components/crm/AgendaCalendar.tsx
+
+// Extrair IDs dos closers recebidos (já filtrados por BU)
+const closerIdsForSlots = useMemo(() => closers.map(c => c.id), [closers]);
+
+// Passar para o hook de slots
+const { data: meetingLinkSlots } = useUniqueSlotsForDays(
+  daysOfWeekInView, 
+  'r1',
+  closerIdsForSlots  // NOVO: passa IDs dos closers da BU
+);
 ```
 
 ---
@@ -93,19 +104,35 @@ interface CloserUser {
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  profiles.id          employees.id          closers.employee_id     │
-│  (auth.users)         (funcionário)         (vinculação)            │
-│                                                                     │
-│  João Pedro  ───────►  abc-123-def  ───────►  abc-123-def          │
-│  (profile_id)          (employee_id)         (saved!)              │
+│  /consorcio/crm/agenda                                              │
+│  activeBU = 'consorcio'                                             │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  useClosersWithAvailability('consorcio')                            │
+│  Retorna: [João Pedro, Victoria Paz]                                │
+│  IDs: ['abc123', 'def456']                                          │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  AgendaCalendar recebe closers = [João Pedro, Victoria Paz]         │
+│  Extrai: closerIds = ['abc123', 'def456']                          │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  useUniqueSlotsForDays(daysOfWeek, 'r1', ['abc123', 'def456'])     │
+│  SQL: WHERE closer_id IN ('abc123', 'def456')                       │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Resultado: Apenas slots de João Pedro e Victoria Paz               │
+│  (Closers do Consórcio)                                             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## Consideração
-
-Se um usuário **não tiver registro na tabela `employees`**, o `employee_id` será `null`, permitindo criar o closer mesmo assim. Isso é compatível com a estrutura atual onde `employee_id` é nullable.
 
 ---
 
@@ -113,5 +140,22 @@ Se um usuário **não tiver registro na tabela `employees`**, o `employee_id` se
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/CloserFormDialog.tsx` | Buscar `employees.id` via join e usar no `employee_id` |
+| `src/hooks/useCloserMeetingLinks.ts` | Adicionar parâmetro `closerIdsFilter` ao `useUniqueSlotsForDays` |
+| `src/components/crm/AgendaCalendar.tsx` | Passar IDs dos closers recebidos para o hook |
+
+---
+
+## Resultado Esperado
+
+| CRM | Slots Visíveis |
+|-----|----------------|
+| `/consorcio/crm/agenda` | Apenas slots de closers com `bu = 'consorcio'` |
+| `/crm/agenda` (Incorporador) | Apenas slots de closers com `bu = 'incorporador'` |
+| `/leilao/crm/agenda` | Apenas slots de closers com `bu = 'leilao'` |
+
+---
+
+## Nota sobre Dependência
+
+Para que essa filtragem funcione corretamente, é necessário que os closers tenham sido cadastrados com a **BU correta**. Se João Pedro e Victoria aparecem na legenda do Consórcio (como mostrado na imagem), significa que estão corretamente configurados.
 
