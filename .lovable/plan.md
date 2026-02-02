@@ -1,189 +1,202 @@
 
-# Plano: Corrigir Multiplicador e Fonte de Contratos para Closers
+# Plano: Corrigir Métricas de Fechamento para Closers
 
-## Problemas Identificados
+## Diagnóstico Completo
 
-### Problema 1: Card de "Contratos Pagos" não mostra multiplicador
-No `METRIC_CONFIG`, a métrica "contratos" não tem configuração de payout:
-```typescript
-contratos: {
-  icon: 'FileCheck',
-  color: 'green',
-  kpiField: 'intermediacoes_contrato',
-  isAuto: true,
-  autoSource: 'Hubla',  // ← Deveria ser 'Agenda'
-  // ⚠️ FALTAM: payoutPctField, payoutMultField, payoutValueField, compPlanValueField
-}
-```
+Analisando a tela de Thayna (Janeiro 2026), identifiquei **5 problemas** que causam o não funcionamento:
 
-Como resultado, o `DynamicIndicatorCard` renderiza um card simples sem multiplicador.
+| Problema | Causa Raiz | Impacto |
+|----------|------------|---------|
+| **1. Contratos Pagos = 0** | O campo `kpi.intermediacoes_contrato` não está sendo preenchido com dados da Agenda | Card mostra "Realizado: 0" quando deveria mostrar **72** |
+| **2. Multiplicador = 0x** | Com "Realizado: 0", o cálculo `pct = 0/meta × 100 = 0%` → multiplicador 0x | Valor final sempre R$ 0,00 |
+| **3. No-Show não aparece** | Métricas fallback de Closer não incluem `no_show` | Indicador de No-Show não é renderizado |
+| **4. Vendas Parceria = 0** | `vendasParceria` não é passado do Detail para os indicadores | Card mostra 0 em vez de dados reais |
+| **5. iFood Ultrameta = R$ 0,00** | Sem `compPlan` vigente, o sistema não calcula iFood | Closer não vê o valor disponível |
 
-### Problema 2: Contratos mostram 0 mesmo com dados na Agenda
-- O `KpiEditForm` mostra "Agenda: 5" (dados vindos de `useSdrAgendaMetricsBySdrId`)
-- Mas o campo `intermediacoes_contrato: 0` no `sdr_month_kpi` não está sendo atualizado
-- O valor da Agenda não está sendo usado no cálculo
+## Dados Reais (Janeiro 2026)
 
-### Problema 3: Valores zerados no Payout
-O banco mostra:
-- `valor_variavel_total: 0`
-- `valor_organizacao: 0` (apesar de `mult_organizacao: 1` e `pct_organizacao: 100`)
+Consulta direta no banco mostra para **Thayna**:
+- **Contratos Pagos na Agenda:** 72 (via `meeting_slot_attendees` com status `contract_paid`)
+- **R1 Realizadas:** 83
+- **No-Shows:** 12
 
-O cálculo dinâmico não está usando o `variavel_total` correto do `cargo_catalogo` (R$ 2.400) quando não há `sdr_comp_plan` vigente para janeiro.
+A informação existe mas não está chegando ao componente de indicadores!
 
 ---
 
-## Solução
+## Solução Técnica
 
-### A) Adicionar configuração completa para métrica "contratos"
+### A) Criar hook para métricas de Closer baseadas na Agenda
+
+**Novo arquivo:** `src/hooks/useCloserAgendaMetrics.ts`
+
+O closer é identificado pelo email na tabela `sdr` → busca `closer_id` na tabela `closers` → conta attendees.
+
+```typescript
+// Lógica:
+// 1. Busca closer_id pelo email do SDR
+// 2. Conta reuniões em meeting_slots com esse closer_id no período
+// 3. Conta contract_paid, no_show, completed
+// 4. Conta vendas_parceria de hubla_transactions com linked_attendee vinculado
+
+export interface CloserAgendaMetrics {
+  r1_alocadas: number;        // Total de slots alocados ao closer
+  r1_realizadas: number;      // completed + contract_paid + refunded
+  contratos_pagos: number;    // contract_paid + refunded
+  no_shows: number;           // status = no_show
+  vendas_parceria: number;    // hubla_transactions com product_category='parceria' linkadas
+}
+```
+
+### B) Modificar Detail.tsx para buscar métricas de Closer corretamente
+
+**Arquivo:** `src/pages/fechamento-sdr/Detail.tsx`
+
+Adicionar chamada ao novo hook quando `isCloser === true`:
+
+```typescript
+// Buscar métricas específicas de Closer
+const closerMetrics = useCloserAgendaMetrics(
+  isCloser ? payout?.sdr_id : undefined, 
+  payout?.ano_mes
+);
+
+// Criar um KPI "virtual" que combina dados existentes com métricas do Closer
+const effectiveKpi = isCloser && closerMetrics.data 
+  ? {
+      ...kpi,
+      reunioes_realizadas: closerMetrics.data.r1_realizadas,
+      no_shows: closerMetrics.data.no_shows,
+      intermediacoes_contrato: closerMetrics.data.contratos_pagos,
+    }
+  : kpi;
+```
+
+### C) Adicionar `no_show` às métricas default de Closer
 
 **Arquivo:** `src/hooks/useActiveMetricsForSdr.ts`
 
-Adicionar campos de payout para "contratos":
+O `DEFAULT_CLOSER_METRICS` atual não inclui `no_show`. Corrigir:
 
 ```typescript
-contratos: {
-  icon: 'FileCheck',
-  color: 'green',
-  kpiField: 'intermediacoes_contrato',
-  payoutPctField: 'pct_contratos',        // Novo
-  payoutMultField: 'mult_contratos',      // Novo
-  payoutValueField: 'valor_contratos',    // Novo
-  compPlanValueField: 'valor_contratos',  // Novo (usar peso dinâmico)
-  isAuto: true,
-  autoSource: 'Agenda',  // Corrigir de 'Hubla' para 'Agenda'
-}
+const DEFAULT_CLOSER_METRICS: Partial<ActiveMetric>[] = [
+  { nome_metrica: 'realizadas', label_exibicao: 'R1 Realizadas', peso_percentual: 35, fonte_dados: 'agenda' },
+  { nome_metrica: 'contratos', label_exibicao: 'Contratos Pagos', peso_percentual: 35, fonte_dados: 'agenda' },
+  { nome_metrica: 'no_show', label_exibicao: 'Taxa No-Show', peso_percentual: 0, fonte_dados: 'agenda' }, // ← ADICIONAR
+  { nome_metrica: 'organizacao', label_exibicao: 'Organização', peso_percentual: 20, fonte_dados: 'manual' },
+  { nome_metrica: 'vendas_parceria', label_exibicao: 'Vendas Parceria', peso_percentual: 10, fonte_dados: 'hubla' },
+];
 ```
 
-### B) Atualizar DynamicIndicatorCard para suportar contratos
+### D) Passar métricas de Closer ao DynamicIndicatorsSection
 
-**Arquivo:** `src/components/fechamento/DynamicIndicatorCard.tsx`
+**Arquivo:** `src/pages/fechamento-sdr/Detail.tsx`
 
-Adicionar tratamento especial para métricas sem campos legacy de payout (como "contratos"):
+O `DynamicIndicatorsSection` recebe `kpi` mas para Closers precisa de dados diferentes:
 
 ```typescript
-// Para métricas dinâmicas sem campos legacy, calcular valores manualmente
-if (metrica.nome_metrica === 'contratos' || metrica.nome_metrica === 'vendas_parceria') {
-  const variavelTotal = compPlan?.variavel_total || 1200;
-  const valorBase = variavelTotal * (metrica.peso_percentual / 100);
-  const meta = metrica.meta_valor ? (metrica.meta_valor * diasUteisMes) : 20;
-  const realizado = kpiValue;
-  const pct = meta > 0 ? (realizado / meta) * 100 : 0;
-  const mult = getMultiplier(pct);
-  const valorFinal = valorBase * mult;
-
-  return (
-    <SdrIndicatorCard
-      title={metrica.label_exibicao}
-      meta={metrica.meta_valor || 1}
-      metaAjustada={meta}
-      realizado={realizado}
-      pct={pct}
-      multiplicador={mult}
-      valorBase={valorBase}
-      valorFinal={valorFinal}
-      isPercentage={false}
-      isManual={false}
-    />
-  );
-}
+<DynamicIndicatorsSection
+  sdrId={payout.sdr_id}
+  anoMes={payout.ano_mes}
+  kpi={effectiveKpi}  // ← KPI com dados de Closer
+  payout={payout}
+  compPlan={compPlan}
+  diasUteisMes={diasUteisMes}
+  sdrMetaDiaria={sdrMetaDiaria}
+  isCloser={isCloser}
+  variavelTotal={effectiveVariavel}
+/>
 ```
 
-### C) Sincronizar dados da Agenda com KPI ao salvar
+### E) Corrigir cálculo de iFood quando não há compPlan
 
-**Arquivo:** `src/hooks/useSdrKpiMutations.ts`
+**Arquivo:** `src/pages/fechamento-sdr/Detail.tsx`
 
-Modificar `useRecalculateWithKpi` para incluir `intermediacoes_contrato` dos dados da Agenda:
+Usar `cargo_catalogo.ifood_mensal` como fallback:
 
 ```typescript
-// Ao salvar KPI para Closer, buscar contratos da Agenda
-if (isCloser && agendaMetrics) {
-  kpiData.intermediacoes_contrato = agendaMetrics.contratos;
-}
+// iFood com fallback
+const effectiveIfoodMensal = payout.ifood_mensal || compPlan?.ifood_mensal || employee?.cargo_catalogo?.ifood_mensal || 600;
+const effectiveIfoodUltrameta = payout.ifood_ultrameta || compPlan?.ifood_ultrameta || employee?.cargo_catalogo?.ifood_ultrameta || 0;
 ```
 
-### D) Corrigir cálculo quando não há sdr_comp_plan
+### F) Atualizar KpiEditForm para usar dados reais do Closer
 
-**Arquivo:** `src/hooks/useSdrFechamento.ts`
+**Arquivo:** `src/components/sdr-fechamento/KpiEditForm.tsx`
 
-No `useRecalculatePayout`, quando não encontra `sdr_comp_plan` vigente, usar dados do `cargo_catalogo`:
+O campo de "Contratos Pagos" atualmente mostra `intermediacoes` que vem do prop, mas não usa os dados da Agenda:
 
 ```typescript
-// Se não encontrar compPlan, usar valores do cargo_catalogo
-if (!compPlan) {
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('cargo_catalogo:cargo_catalogo_id(ote_total, fixo_valor, variavel_valor)')
-    .eq('sdr_id', sdrId)
-    .eq('status', 'ativo')
-    .maybeSingle();
-  
-  if (employee?.cargo_catalogo) {
-    // Criar um compPlan sintético a partir do cargo_catalogo
-    compPlan = {
-      ote_total: employee.cargo_catalogo.ote_total,
-      fixo_valor: employee.cargo_catalogo.fixo_valor,
-      variavel_total: employee.cargo_catalogo.variavel_valor,
-      // ... outros campos com defaults
-    };
-  }
-}
+// Para Closers, usar dados da Agenda diretamente
+const contratosRealizados = isCloser && agendaMetrics.data 
+  ? agendaMetrics.data.contratos 
+  : intermediacoes;
 ```
 
 ---
 
-## Arquivos a Modificar
+## Arquivos a Modificar/Criar
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useActiveMetricsForSdr.ts` | Adicionar payoutPctField, payoutMultField, etc para "contratos" |
-| `src/components/fechamento/DynamicIndicatorCard.tsx` | Calcular valores dinamicamente para métricas sem campos legacy |
-| `src/hooks/useSdrFechamento.ts` | Usar cargo_catalogo como fallback quando não há sdr_comp_plan |
-| `src/hooks/useSdrKpiMutations.ts` | Sincronizar `intermediacoes_contrato` com dados da Agenda ao salvar |
-| `src/components/sdr-fechamento/KpiEditForm.tsx` | Passar `contratos` da Agenda para o saveKpi |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/hooks/useCloserAgendaMetrics.ts` | **CRIAR** | Hook para buscar contratos, realizadas e no-shows via meeting_slots |
+| `src/hooks/useActiveMetricsForSdr.ts` | Modificar | Adicionar `no_show` ao `DEFAULT_CLOSER_METRICS` |
+| `src/pages/fechamento-sdr/Detail.tsx` | Modificar | Integrar `useCloserAgendaMetrics` e criar `effectiveKpi` |
+| `src/components/sdr-fechamento/KpiEditForm.tsx` | Modificar | Usar dados da Agenda para mostrar contratos em vez do prop `intermediacoes` |
+| `src/components/fechamento/DynamicIndicatorCard.tsx` | Verificar | Confirmar que lê `kpi.intermediacoes_contrato` corretamente |
 
 ---
 
-## Fluxo Corrigido
+## Fluxo de Dados Corrigido
 
 ```text
-ANTES (com problemas):
-┌──────────────────────────────────────────────────────────────────────┐
-│  DynamicIndicatorCard(contratos)                                     │
-│    → config.payoutPctField? ❌ (undefined)                           │
-│    → Renderiza Card SIMPLES (sem multiplicador)                      │
-│    → kpiValue = kpi.intermediacoes_contrato = 0                      │
-│    → Mostra apenas "0" e "Peso: 50%"                                 │
-└──────────────────────────────────────────────────────────────────────┘
-
-DEPOIS (corrigido):
-┌──────────────────────────────────────────────────────────────────────┐
-│  DynamicIndicatorCard(contratos)                                     │
-│    → metrica.nome_metrica === 'contratos'? ✅                        │
-│    → Calcula dinamicamente:                                          │
-│        valorBase = 2400 × 50% = R$ 1.200                             │
-│        realizado = kpi.intermediacoes_contrato (sincronizado)        │
-│        pct = realizado / meta × 100                                  │
-│        mult = getMultiplier(pct)                                     │
-│        valorFinal = valorBase × mult                                 │
-│    → Renderiza SdrIndicatorCard COM multiplicador                    │
-└──────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    TELA DE FECHAMENTO - CLOSER (Thayna)                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Detail.tsx detecta isCloser = true                                      │
+│                                                                             │
+│  2. Chama useCloserAgendaMetrics(sdrId, '2026-01')                          │
+│     ↳ Busca closer_id pelo email de Thayna                                  │
+│     ↳ Conta meeting_slot_attendees com status contract_paid: 72             │
+│     ↳ Conta no_show: 12                                                     │
+│     ↳ Conta realizadas (completed+contract_paid+refunded): 83               │
+│     ↳ Conta vendas_parceria de hubla_transactions: X                        │
+│                                                                             │
+│  3. Cria effectiveKpi = { ...kpi, intermediacoes_contrato: 72, ... }        │
+│                                                                             │
+│  4. DynamicIndicatorCard recebe effectiveKpi                                │
+│     ↳ kpiValue = kpi.intermediacoes_contrato = 72                           │
+│     ↳ meta = 1/dia × 20 dias = 20                                           │
+│     ↳ pct = 72/20 × 100 = 360%                                              │
+│     ↳ mult = 1.5x (> 120%)                                                  │
+│     ↳ valorBase = R$ 2.400 × 35% = R$ 840                                   │
+│     ↳ valorFinal = R$ 840 × 1.5 = R$ 1.260                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Regra de iFood Ultrameta para Closers (Incorporador)
+
+Conforme esclarecido: o iFood Ultrameta fica **disponível para colaboradores de Incorporador** quando batem a ultrameta (média >= 100% nas métricas ativas).
+
+O cálculo atual já suporta isso via `avgPerformance >= 100`. A correção é garantir que:
+1. O compPlan/cargo_catalogo tenha os valores de iFood configurados
+2. O cálculo use os valores corretos do variável
 
 ---
 
 ## Resultado Esperado
 
-**Para Thayna (Closer Inside N2) - Janeiro 2026:**
+Para **Thayna (Closer N2)** após a correção:
 
 | Métrica | Antes | Depois |
 |---------|-------|--------|
-| Contratos Pagos | Card simples, sem multiplicador, "0" | Card completo com Meta, Realizado, %, Mult, Valor |
-| Multiplicador | Não mostrado | Calculado baseado no % de atingimento |
-| Valor Final | Não calculado | `R$ 1.200 × multiplicador` |
-| Fonte | "Hubla" | "Agenda" |
-
-**Organização:**
-| Campo | Antes | Depois |
-|-------|-------|--------|
-| Valor Final | R$ 0,00 | R$ 1.200,00 (50% de R$ 2.400 × 1x) |
-| Cálculo | Usando compPlan inexistente | Usando cargo_catalogo como fallback |
+| **Contratos Pagos** | Realizado: 0 | Realizado: **72** |
+| **Multiplicador** | 0x | **1.5x** (360% da meta) |
+| **Valor Contratos** | R$ 0,00 | **R$ 1.260,00** |
+| **No-Shows** | Não aparece | Aparece com **12** |
+| **Vendas Parceria** | 0 | Dados reais da Hubla |
+| **iFood Ultrameta** | R$ 0,00 | Calculado se elegível |
