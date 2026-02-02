@@ -1,53 +1,87 @@
 
-# Plano: Corrigir Métricas de Fechamento para Closers
+# Plano: Mostrar Todas as Pipelines no CRM Consórcio
 
-## ✅ Status: IMPLEMENTADO
+## Problema Identificado
 
----
+No CRM do Consórcio (`/consorcio/crm/negocios`), apenas **UMA pipeline** aparece no dropdown de funis. Isso acontece porque:
 
-## Correções Aplicadas
+1. O `BU_GROUP_MAP` define que Consórcio só pode ver o grupo `b98e3746-d727-445b-b878-fc5742b6e6b8` ("Perpétuo - Construa para Alugar")
+2. Esse grupo tem apenas 1 origem cadastrada: "PIPE LINE - INSIDE SALES"
+3. Existem vários outros grupos relacionados ao Consórcio no banco que não estão sendo mostrados
 
-### A) ✅ Hook useCloserAgendaMetrics.ts criado
-Busca métricas específicas do Closer via meeting_slots:
-- `r1_realizadas`: completed + contract_paid + refunded
-- `contratos_pagos`: contract_paid + refunded  
-- `no_shows`: status = no_show
-- `vendas_parceria`: hubla_transactions com product_category='parceria'
+## Solução Proposta
 
-### B) ✅ no_show adicionado ao DEFAULT_CLOSER_METRICS
-Arquivo `src/hooks/useActiveMetricsForSdr.ts` atualizado para incluir `no_show` com peso 0%.
-
-### C) ✅ Detail.tsx integrado com métricas de Closer
-- Importa `useCloserAgendaMetrics`
-- Cria `effectiveKpi` combinando KPI do banco com dados da Agenda para Closers
-- Passa `vendasParceria` ao KpiEditForm
-- `DynamicIndicatorsSection` recebe `effectiveKpi`
-
-### D) ✅ isDynamicCalc para contratos e vendas_parceria
-O `DynamicIndicatorCard` calcula dinamicamente valorBase, meta, pct, multiplicador e valorFinal usando `variavelTotal` do cargo.
+Remover temporariamente a restrição de pipelines para a BU Consórcio, permitindo que **todos os funis** sejam visualizados. A restrição para SDRs/Closers será implementada em uma fase posterior.
 
 ---
 
-## Fluxo Corrigido
+## Alterações Técnicas
 
-```text
-Detail.tsx detecta isCloser = true
-        ↓
-useCloserAgendaMetrics(sdrId, anoMes)
-  ↳ Busca closer_id pelo email
-  ↳ Conta contratos_pagos: N
-  ↳ Conta no_shows: M
-  ↳ Conta r1_realizadas: X
-        ↓
-effectiveKpi = { ...kpi, intermediacoes_contrato: N, no_shows: M, reunioes_realizadas: X }
-        ↓
-DynamicIndicatorCard recebe effectiveKpi
-  ↳ kpiValue = N
-  ↳ meta = meta_valor × diasUteis
-  ↳ pct = N / meta × 100
-  ↳ mult = getMultiplier(pct)
-  ↳ valorFinal = valorBase × mult
+### Arquivo: `src/components/auth/NegociosAccessGuard.tsx`
+
+| Alteração | Antes | Depois |
+|-----------|-------|--------|
+| `BU_GROUP_MAP.consorcio` | `['b98e3746-d727-445b-b878-fc5742b6e6b8']` | `[]` (array vazio = sem filtro) |
+| `BU_PIPELINE_MAP.consorcio` | `[...IDs restritos]` | `[]` (array vazio = sem filtro) |
+
+**Lógica:** Arrays vazios significam "sem restrição" — a sidebar e o dropdown mostrarão todas as pipelines disponíveis.
+
+---
+
+## Código a Modificar
+
+```typescript
+// NegociosAccessGuard.tsx
+
+// ANTES:
+export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
+  // ...
+  consorcio: [
+    'b98e3746-d727-445b-b878-fc5742b6e6b8',
+    '4e2b810a-6782-4ce9-9c0d-10d04c018636',
+  ],
+  // ...
+};
+
+export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
+  // ...
+  consorcio: ['b98e3746-d727-445b-b878-fc5742b6e6b8'],
+  // ...
+};
+
+// DEPOIS:
+export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
+  // ...
+  consorcio: [], // Sem restrição = mostra todas as pipelines
+  // ...
+};
+
+export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
+  // ...
+  consorcio: [], // Sem restrição = mostra todos os funis
+  // ...
+};
 ```
+
+---
+
+## Comportamento Após a Mudança
+
+| Elemento | Antes | Depois |
+|----------|-------|--------|
+| **Dropdown "Funil"** | Mostra apenas 1 grupo | Mostra todos os grupos disponíveis |
+| **Sidebar "Origens"** | Mostra apenas origens do grupo restrito | Mostra todas as origens |
+| **Negócios Kanban** | Carrega apenas deals do grupo restrito | Carrega deals da pipeline selecionada |
+
+---
+
+## Próximos Passos (Fase Futura)
+
+Para restringir SDRs e Closers do Consórcio a pipelines específicas:
+
+1. Criar uma constante `CONSORCIO_SDR_AUTHORIZED_ORIGINS` com os IDs permitidos
+2. No `Negocios.tsx`, verificar se `activeBU === 'consorcio' && isSdr` para aplicar o filtro
+3. Manter admins e managers do Consórcio com visão completa
 
 ---
 
@@ -55,21 +89,4 @@ DynamicIndicatorCard recebe effectiveKpi
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useCloserAgendaMetrics.ts` | **CRIADO** - Hook para buscar métricas do Closer |
-| `src/hooks/useActiveMetricsForSdr.ts` | Adicionado `no_show` ao DEFAULT_CLOSER_METRICS |
-| `src/pages/fechamento-sdr/Detail.tsx` | Integrado useCloserAgendaMetrics, effectiveKpi, vendasParceria |
-| `src/components/fechamento/DynamicIndicatorCard.tsx` | Já suporta isDynamicCalc para contratos |
-
----
-
-## Resultado Esperado
-
-Para **Closers** após a correção:
-
-| Métrica | Comportamento |
-|---------|---------------|
-| **Contratos Pagos** | Mostra dados da Agenda (status contract_paid + refunded) |
-| **Multiplicador** | Calculado dinamicamente baseado no % de atingimento |
-| **No-Shows** | Aparece como indicador separado |
-| **Vendas Parceria** | Mostra quantidade de hubla_transactions parceria |
-| **R1 Realizadas** | Dados do Closer (completed + contract_paid + refunded) |
+| `src/components/auth/NegociosAccessGuard.tsx` | Alterar `BU_GROUP_MAP.consorcio` e `BU_PIPELINE_MAP.consorcio` para arrays vazios |
