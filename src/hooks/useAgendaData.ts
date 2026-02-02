@@ -130,9 +130,14 @@ export interface CloserMetrics {
 
 // ============ Meetings Hooks ============
 
-export function useAgendaMeetings(startDate: Date, endDate: Date, meetingType: 'r1' | 'r2' | 'all' = 'r1') {
+export function useAgendaMeetings(
+  startDate: Date, 
+  endDate: Date, 
+  meetingType: 'r1' | 'r2' | 'all' = 'r1',
+  closerIds?: string[]
+) {
   return useQuery({
-    queryKey: ['agenda-meetings', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), meetingType],
+    queryKey: ['agenda-meetings', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), meetingType, closerIds],
     queryFn: async () => {
       // Fetch meetings
       let query = supabase
@@ -178,6 +183,11 @@ export function useAgendaMeetings(startDate: Date, endDate: Date, meetingType: '
       // Filter by meeting type (default r1 to avoid R2 meetings showing in R1 agenda)
       if (meetingType !== 'all') {
         query = query.eq('meeting_type', meetingType);
+      }
+      
+      // Filter by specific closers (BU isolation)
+      if (closerIds && closerIds.length > 0) {
+        query = query.in('closer_id', closerIds);
       }
       
       const { data: meetings, error } = await query.order('scheduled_at', { ascending: true });

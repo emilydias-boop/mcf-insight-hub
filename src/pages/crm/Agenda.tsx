@@ -65,10 +65,20 @@ export default function Agenda() {
     return { rangeStart: weekStart, rangeEnd: weekEnd };
   }, [selectedDate, viewMode]);
 
-  const { data: meetings = [], isLoading: meetingsLoading, refetch } = useAgendaMeetings(rangeStart, rangeEnd);
   // Passar filtro de BU para buscar apenas closers da BU ativa
   const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(activeBU);
   const { data: blockedDates = [] } = useBlockedDates();
+  
+  // Extrair IDs dos closers da BU para filtrar reuniões
+  const closerIds = useMemo(() => closers.map(c => c.id), [closers]);
+  
+  // Passar closerIds para filtrar apenas reuniões dos closers desta BU
+  const { data: meetings = [], isLoading: meetingsLoading, refetch } = useAgendaMeetings(
+    rangeStart, 
+    rangeEnd, 
+    'r1',
+    closerIds.length > 0 ? closerIds : undefined
+  );
 
   // Fail-closed: se é closer mas não tem vínculo, não mostra nada
   const closerHasNoLink = isCloser && !myCloser?.id;

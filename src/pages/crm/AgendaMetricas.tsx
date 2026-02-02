@@ -12,20 +12,32 @@ import { useNavigate } from 'react-router-dom';
 import { useAgendaMeetings, useAgendaStats, useClosersWithAvailability, useCloserMetrics } from '@/hooks/useAgendaData';
 import { useMeetingStats } from '@/hooks/useMeetingStats';
 import { UpcomingMeetingsSidebar } from '@/components/crm/UpcomingMeetingsSidebar';
+import { useActiveBU } from '@/hooks/useActiveBU';
 
 export default function AgendaMetricas() {
   const navigate = useNavigate();
   const [selectedDate] = useState(new Date());
+  const activeBU = useActiveBU();
   
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const weekEnd = endOfWeek(selectedDate, { weekStartsOn: WEEK_STARTS_ON });
   const monthStart = startOfMonth(selectedDate);
   const monthEnd = endOfMonth(selectedDate);
 
-  const { data: weekMeetings = [], isLoading: meetingsLoading } = useAgendaMeetings(weekStart, weekEnd);
-  const { data: monthMeetings = [] } = useAgendaMeetings(monthStart, monthEnd);
+  // Buscar closers da BU primeiro
+  const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(activeBU);
+  
+  // Extrair IDs dos closers para filtrar reuniões por BU
+  const closerIds = useMemo(() => closers.map(c => c.id), [closers]);
+  
+  // Passar closerIds para filtrar apenas reuniões dos closers desta BU
+  const { data: weekMeetings = [], isLoading: meetingsLoading } = useAgendaMeetings(
+    weekStart, weekEnd, 'r1', closerIds.length > 0 ? closerIds : undefined
+  );
+  const { data: monthMeetings = [] } = useAgendaMeetings(
+    monthStart, monthEnd, 'r1', closerIds.length > 0 ? closerIds : undefined
+  );
   const { data: stats, isLoading: statsLoading } = useAgendaStats(selectedDate);
-  const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability();
   const { data: closerMetrics = [], isLoading: metricsLoading } = useCloserMetrics(selectedDate);
   const { data: sourceStats } = useMeetingStats(monthStart, monthEnd);
 
