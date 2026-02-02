@@ -142,22 +142,61 @@ export const useSdrPayouts = (anoMes: string, filters?: {
       
       if (payoutsError) throw payoutsError;
 
-      // Step 2: Fetch employees linked to SDRs to get HR department
+      // Step 2: Fetch ACTIVE employees linked to SDRs to get HR department + cargo_catalogo (source of truth)
       const { data: employees, error: empError } = await supabase
         .from('employees')
-        .select('id, nome_completo, departamento, cargo, sdr_id, status')
-        .not('sdr_id', 'is', null);
+        .select(`
+          id, 
+          nome_completo, 
+          departamento, 
+          cargo, 
+          sdr_id, 
+          status,
+          cargo_catalogo_id,
+          cargo_catalogo:cargo_catalogo_id (
+            id,
+            nome_exibicao,
+            nivel,
+            ote_total,
+            fixo_valor,
+            variavel_valor,
+            area,
+            cargo_base
+          )
+        `)
+        .not('sdr_id', 'is', null)
+        .eq('status', 'ativo')
+        .order('updated_at', { ascending: false });
       
       if (empError) throw empError;
 
-      // Create a map of sdr_id → employee for quick lookup
-      const sdrToEmployee = new Map<string, { departamento: string | null; cargo: string | null; nome_completo: string }>();
+      // Create a map of sdr_id → employee for quick lookup (use first match = most recently updated)
+      interface EmployeeWithCargo {
+        departamento: string | null;
+        cargo: string | null;
+        nome_completo: string;
+        cargo_catalogo_id: string | null;
+        cargo_catalogo: {
+          id: string;
+          nome_exibicao: string;
+          nivel: number | null;
+          ote_total: number;
+          fixo_valor: number;
+          variavel_valor: number;
+          area: string;
+          cargo_base: string;
+        } | null;
+      }
+      const sdrToEmployee = new Map<string, EmployeeWithCargo>();
       employees?.forEach(emp => {
-        if (emp.sdr_id) {
+        // Only set if not already set (first match = most recent)
+        if (emp.sdr_id && !sdrToEmployee.has(emp.sdr_id)) {
           sdrToEmployee.set(emp.sdr_id, {
             departamento: emp.departamento,
             cargo: emp.cargo,
             nome_completo: emp.nome_completo,
+            cargo_catalogo_id: emp.cargo_catalogo_id,
+            cargo_catalogo: emp.cargo_catalogo as EmployeeWithCargo['cargo_catalogo'],
           });
         }
       });
