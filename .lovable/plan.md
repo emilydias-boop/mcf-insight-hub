@@ -1,70 +1,202 @@
 
+# Plano: Implementar Agenda R1 para BU Consórcio com Filtros por Origin
 
-# Plano: Adicionar Seleção de Pipeline na Importação de Negócios
+## Visão Geral
 
-## Problema Identificado
+A Agenda de R1 do Consórcio precisa:
+1. **Mostrar apenas closers** cadastrados com `bu = 'consorcio'`
+2. **Filtrar leads na busca** para mostrar apenas deals das pipelines de Consórcio
+3. **Permitir cadastrar closers** com a BU correta
 
-O sistema de importação CSV atual não define o `origin_id` dos deals. O CSV enviado tem a coluna `origin` vazia, então os deals seriam importados sem associação a nenhuma pipeline.
+Atualmente:
+- Todos os closers têm `bu = 'incorporador'`
+- A busca de deals (`useSearchDealsForSchedule`) não filtra por origin
+- O formulário de closers não tem campo para selecionar BU
 
-## Solução
+---
 
-Adicionar um seletor de Pipeline/Origin na interface de importação, permitindo que o usuário escolha para qual pipeline os deals serão importados.
+## Mapeamento de Origens para Consórcio
+
+Baseado na análise do banco de dados, estas são as origens/grupos do Consórcio:
+
+| Grupo | ID | Origens Incluídas |
+|-------|----|--------------------|
+| Perpétuo - Construa para Alugar | `b98e3746-d727-445b-b878-fc5742b6e6b8` | PIPE LINE - INSIDE SALES |
+| Hubla - Viver de Aluguel | `267905ec-8fcf-4373-8d62-273bb6c6f8ca` | Lista Geral, Compras em aberto, Reembolso |
+| Hubla - Construir Para Alugar | `35361575-d8a9-4ea0-8703-372a2988d2be` | Assinaturas ativas/atraso, Compras |
+| PIPELINE INSIDE SALES - VIVER DE ALUGUEL | `4e2b810a-6782-4ce9-9c0d-10d04c018636` | (origin direta no grupo Perpétuo X1) |
 
 ---
 
 ## Alterações Necessárias
 
-### 1) Frontend - Adicionar seletor de origin
+### 1) Atualizar Mapeamento BU_PIPELINE_MAP
 
-**Arquivo:** `src/pages/crm/ImportarNegocios.tsx`
+**Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
 
-Adicionar:
-- Estado para `selectedOriginId`
-- Componente `Select` com lista de origens disponíveis
-- Passar o `origin_id` selecionado na requisição de importação
+Definir as origens e grupos do Consórcio:
 
 ```typescript
-// Novo estado
-const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
-
-// Buscar origens disponíveis
-const { data: origins } = useQuery({
-  queryKey: ['import-origins'],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('crm_origins')
-      .select('id, name, display_name')
-      .order('name');
-    return data || [];
-  }
-});
-
-// Na requisição de importação
-formData.append('origin_id', selectedOriginId);
+consorcio: [
+  'b98e3746-d727-445b-b878-fc5742b6e6b8', // Grupo: Perpétuo - Construa para Alugar
+  '267905ec-8fcf-4373-8d62-273bb6c6f8ca', // Grupo: Hubla - Viver de Aluguel
+  '35361575-d8a9-4ea0-8703-372a2988d2be', // Grupo: Hubla - Construir Para Alugar
+  '4e2b810a-6782-4ce9-9c0d-10d04c018636', // Origin: PIPELINE INSIDE SALES - VIVER DE ALUGUEL
+],
 ```
 
-### 2) Edge Function - Receber e aplicar origin_id
+---
 
-**Arquivo:** `supabase/functions/import-deals-csv/index.ts`
+### 2) Adicionar Campo de BU no Formulário de Closers
 
-Modificar para:
-- Receber `origin_id` do FormData
-- Salvar no metadata do job
+**Arquivo:** `src/components/crm/CloserFormDialog.tsx`
 
-### 3) Edge Function - Aplicar origin_id aos deals
-
-**Arquivo:** `supabase/functions/process-csv-imports/index.ts`
-
-Modificar `convertToDBFormat` para usar o `origin_id` do job:
+Adicionar um `Select` para escolher a Business Unit:
 
 ```typescript
-// Dentro do loop de processamento
-const originId = job.metadata.origin_id;
+<div className="space-y-2">
+  <Label htmlFor="bu">Business Unit *</Label>
+  <Select
+    value={formData.bu || 'incorporador'}
+    onValueChange={(v) => setFormData({ ...formData, bu: v })}
+  >
+    <SelectTrigger>
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="incorporador">BU - Incorporador MCF</SelectItem>
+      <SelectItem value="consorcio">BU - Consórcio</SelectItem>
+      <SelectItem value="credito">BU - Crédito</SelectItem>
+      <SelectItem value="projetos">BU - Projetos</SelectItem>
+      <SelectItem value="leilao">BU - Leilão</SelectItem>
+    </SelectContent>
+  </Select>
+</div>
+```
 
-// Na conversão
-if (originId) {
-  dbDeal.origin_id = originId;
+**Arquivo:** `src/hooks/useClosers.ts`
+
+Adicionar campo `bu` nas interfaces:
+
+```typescript
+export interface Closer {
+  // ... campos existentes
+  bu: string | null;
 }
+
+export interface CloserFormData {
+  // ... campos existentes
+  bu?: string;
+}
+```
+
+---
+
+### 3) Filtrar Deals por Origin na Busca de Agendamento
+
+**Arquivo:** `src/hooks/useAgendaData.ts`
+
+Modificar `useSearchDealsForSchedule` para aceitar `originIds`:
+
+```typescript
+export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
+  return useQuery({
+    queryKey: ['schedule-search', query, originIds],
+    queryFn: async () => {
+      if (!query || query.length < 2) return [];
+
+      let dealsQuery = supabase
+        .from('crm_deals')
+        .select(`id, name, tags, contact:crm_contacts(...), stage:crm_stages(...)`)
+        .ilike('name', `%${query}%`);
+      
+      // Filtrar por origin_id se especificado
+      if (originIds && originIds.length > 0) {
+        dealsQuery = dealsQuery.in('origin_id', originIds);
+      }
+      
+      const { data: dealsByName } = await dealsQuery.limit(10);
+      // ... resto da lógica
+    },
+  });
+}
+```
+
+---
+
+### 4) Passar Origin Filter no QuickScheduleModal
+
+**Arquivo:** `src/components/crm/QuickScheduleModal.tsx`
+
+Usar `useActiveBU()` e buscar origens corretas:
+
+```typescript
+import { useActiveBU } from '@/hooks/useActiveBU';
+import { BU_PIPELINE_MAP } from '@/components/auth/NegociosAccessGuard';
+
+// Dentro do componente
+const activeBU = useActiveBU();
+const originIds = activeBU ? BU_PIPELINE_MAP[activeBU] : undefined;
+
+// Passar para a busca
+const { data: searchResults } = useSearchDealsForSchedule(nameQuery, originIds);
+```
+
+---
+
+### 5) Exibir Coluna BU na Lista de Closers
+
+**Arquivo:** `src/pages/crm/ConfigurarClosers.tsx`
+
+Adicionar coluna "BU" na tabela e filtro por BU:
+
+```typescript
+// Coluna na tabela
+<TableHead>BU</TableHead>
+
+// Célula
+<TableCell>
+  <Badge variant="outline">
+    {closer.bu === 'consorcio' ? 'Consórcio' : 
+     closer.bu === 'incorporador' ? 'Incorporador' : 
+     closer.bu || 'N/A'}
+  </Badge>
+</TableCell>
+
+// Filtro baseado na rota ativa
+const activeBU = useActiveBU();
+const filteredClosers = closers?.filter(c => 
+  !activeBU || c.bu === activeBU
+);
+```
+
+---
+
+## Fluxo de Dados
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                    /consorcio/crm/agenda                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  BUCRMLayout (bu='consorcio')                                       │
+│    └── Agenda.tsx                                                   │
+│          ├── useActiveBU() → 'consorcio'                            │
+│          ├── useClosersWithAvailability('consorcio')                │
+│          │     └── SELECT * FROM closers WHERE bu = 'consorcio'     │
+│          │                                                          │
+│          └── QuickScheduleModal                                     │
+│                ├── useActiveBU() → 'consorcio'                      │
+│                ├── BU_PIPELINE_MAP['consorcio'] → originIds         │
+│                │     [                                              │
+│                │       'b98e3746-...',  // Perpétuo Construa        │
+│                │       '267905ec-...',  // Hubla Viver              │
+│                │       '35361575-...',  // Hubla Construir          │
+│                │       '4e2b810a-...',  // Pipeline INSIDE SALES    │
+│                │     ]                                              │
+│                └── useSearchDealsForSchedule(query, originIds)      │
+│                      └── WHERE origin_id IN (...)                   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -73,25 +205,26 @@ if (originId) {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/crm/ImportarNegocios.tsx` | Adicionar Select de pipeline e enviar origin_id |
-| `supabase/functions/import-deals-csv/index.ts` | Receber origin_id e salvar no metadata |
-| `supabase/functions/process-csv-imports/index.ts` | Aplicar origin_id do job a cada deal |
+| `src/components/auth/NegociosAccessGuard.tsx` | Definir originIds para `consorcio` em BU_PIPELINE_MAP |
+| `src/hooks/useClosers.ts` | Adicionar campo `bu` nas interfaces |
+| `src/components/crm/CloserFormDialog.tsx` | Adicionar Select de BU |
+| `src/hooks/useAgendaData.ts` | Adicionar parâmetro `originIds` em `useSearchDealsForSchedule` |
+| `src/components/crm/QuickScheduleModal.tsx` | Passar `originIds` baseado na BU ativa |
+| `src/pages/crm/ConfigurarClosers.tsx` | Exibir coluna BU e filtrar por BU ativa |
 
 ---
 
-## Interface Atualizada
+## Próximos Passos Após Implementação
 
-O formulário de importação terá:
-1. **Seletor de Pipeline** (obrigatório) - Ex: "Efeito Alavanca + Clube"
-2. **Upload do CSV** (já existe)
-3. **Botão Importar** (já existe)
+1. **Cadastrar Closers de Consórcio**: Acessar `/consorcio/crm/configuracoes` e criar closers com `bu = 'consorcio'`
+2. **Configurar Disponibilidade**: Definir horários de atendimento para cada closer
+3. **Testar Agendamento**: Verificar que apenas leads de Consórcio aparecem na busca
 
 ---
 
 ## Resultado Esperado
 
-1. Usuário seleciona "Efeito Alavanca + Clube" no dropdown
-2. Faz upload do CSV com 3.693 deals
-3. Todos os deals são criados com `origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78'`
-4. Deals aparecem corretamente no Kanban da pipeline
-
+1. Agenda em `/consorcio/crm/agenda` mostra apenas closers com `bu = 'consorcio'`
+2. Busca de leads filtra apenas deals das pipelines de Consórcio
+3. SDRs de Consórcio não veem leads de Incorporador na busca
+4. Cada BU trabalha de forma isolada com seus próprios closers e leads
