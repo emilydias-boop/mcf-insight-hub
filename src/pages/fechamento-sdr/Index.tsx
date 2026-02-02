@@ -162,6 +162,33 @@ const FechamentoSDRList = () => {
     }
   };
 
+  // Extract BU from HR department or fallback to sdr.squad
+  const getBuFromPayout = (payout: NonNullable<typeof payouts>[0]) => {
+    const employee = (payout as any).employee;
+    const sdrData = payout.sdr as any;
+    
+    // Priority 1: Use HR department
+    if (employee?.departamento) {
+      // Remove "BU - " prefix for display
+      return {
+        label: employee.departamento.replace('BU - ', '').replace(' 50K', ''),
+        isFromHR: true,
+        hasWarning: false,
+      };
+    }
+    
+    // Priority 2: Fallback to sdr.squad (orphan)
+    if (sdrData?.squad) {
+      return {
+        label: getSquadLabel(sdrData.squad),
+        isFromHR: false,
+        hasWarning: true, // Show warning for orphan SDRs
+      };
+    }
+    
+    return { label: '-', isFromHR: false, hasWarning: false };
+  };
+
   const handleExportCSV = () => {
     if (!payouts || payouts.length === 0) return;
 
@@ -486,9 +513,19 @@ const FechamentoSDRList = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className="text-sm text-muted-foreground">
-                          {getSquadLabel(sdrData?.squad)}
-                        </span>
+                        {(() => {
+                          const buInfo = getBuFromPayout(payout);
+                          return (
+                            <div className="flex items-center justify-center gap-1" title={buInfo.hasWarning ? 'SDR sem vínculo RH' : undefined}>
+                              <span className={`text-sm ${buInfo.isFromHR ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                {buInfo.label}
+                              </span>
+                              {buInfo.hasWarning && (
+                                <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                              )}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className="font-mono">

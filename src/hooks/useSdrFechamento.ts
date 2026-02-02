@@ -106,7 +106,22 @@ const transformPayout = (data: any): SdrPayoutWithDetails => ({
   status: data.status as PayoutStatus,
 });
 
-// Fetch all payouts for a month with filters
+// Mapeamento de squad para departamento RH
+const SQUAD_TO_DEPT: Record<string, string> = {
+  'incorporador': 'BU - Incorporador 50K',
+  'consorcio': 'BU - Consórcio',
+  'credito': 'BU - Crédito',
+  'projetos': 'BU - Projetos',
+};
+
+const DEPT_TO_SQUAD: Record<string, string> = {
+  'BU - Incorporador 50K': 'incorporador',
+  'BU - Consórcio': 'consorcio',
+  'BU - Crédito': 'credito',
+  'BU - Projetos': 'projetos',
+};
+
+// Fetch all payouts for a month with filters (using HR department as source of truth)
 export const useSdrPayouts = (anoMes: string, filters?: {
   roleType?: 'sdr' | 'closer' | 'all';
   squad?: string;
@@ -115,7 +130,8 @@ export const useSdrPayouts = (anoMes: string, filters?: {
   return useQuery({
     queryKey: ['sdr-payouts', anoMes, filters],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Step 1: Fetch payouts with SDR data
+      const { data: payoutsData, error: payoutsError } = await supabase
         .from('sdr_month_payout')
         .select(`
           *,
@@ -124,9 +140,38 @@ export const useSdrPayouts = (anoMes: string, filters?: {
         .eq('ano_mes', anoMes)
         .order('created_at');
       
-      if (error) throw error;
+      if (payoutsError) throw payoutsError;
+
+      // Step 2: Fetch employees linked to SDRs to get HR department
+      const { data: employees, error: empError } = await supabase
+        .from('employees')
+        .select('id, nome_completo, departamento, cargo, sdr_id, status')
+        .not('sdr_id', 'is', null);
       
-      let result = (data || []).map(transformPayout);
+      if (empError) throw empError;
+
+      // Create a map of sdr_id → employee for quick lookup
+      const sdrToEmployee = new Map<string, { departamento: string | null; cargo: string | null; nome_completo: string }>();
+      employees?.forEach(emp => {
+        if (emp.sdr_id) {
+          sdrToEmployee.set(emp.sdr_id, {
+            departamento: emp.departamento,
+            cargo: emp.cargo,
+            nome_completo: emp.nome_completo,
+          });
+        }
+      });
+      
+      // Step 3: Enrich payouts with HR data
+      let result = (payoutsData || []).map(data => {
+        const payout = transformPayout(data);
+        const employee = sdrToEmployee.get(payout.sdr_id);
+        
+        // Attach employee data to payout for display
+        (payout as any).employee = employee || null;
+        
+        return payout;
+      });
       
       // Apply filters
       if (filters) {
@@ -138,18 +183,31 @@ export const useSdrPayouts = (anoMes: string, filters?: {
           result = result.filter(p => (p.sdr as any)?.role_type === filters.roleType);
         }
         
-        // Filter by squad/BU
+        // Filter by squad/BU - Use HR department as primary, fallback to sdr.squad
         if (filters.squad && filters.squad !== 'all') {
-          result = result.filter(p => (p.sdr as any)?.squad === filters.squad);
+          const expectedDept = SQUAD_TO_DEPT[filters.squad];
+          result = result.filter(p => {
+            const employee = (p as any).employee;
+            // If employee has HR department, use that
+            if (employee?.departamento) {
+              return employee.departamento === expectedDept;
+            }
+            // Fallback to sdr.squad for orphans
+            return (p.sdr as any)?.squad === filters.squad;
+          });
         }
         
         // Filter by search
         if (filters.search) {
           const searchLower = filters.search.toLowerCase();
-          result = result.filter(p => 
-            p.sdr?.name?.toLowerCase().includes(searchLower) ||
-            p.sdr?.email?.toLowerCase().includes(searchLower)
-          );
+          result = result.filter(p => {
+            const employee = (p as any).employee;
+            return (
+              p.sdr?.name?.toLowerCase().includes(searchLower) ||
+              p.sdr?.email?.toLowerCase().includes(searchLower) ||
+              employee?.nome_completo?.toLowerCase().includes(searchLower)
+            );
+          });
         }
       }
       
