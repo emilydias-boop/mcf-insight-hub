@@ -6,6 +6,15 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 interface JobMetadata {
   file_name: string;
@@ -32,6 +41,20 @@ const ImportarNegocios = () => {
   const [progress, setProgress] = useState(0);
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+
+  // Buscar origens disponíveis
+  const { data: origins, isLoading: originsLoading } = useQuery({
+    queryKey: ['import-origins'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('crm_origins')
+        .select('id, name, display_name')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -56,12 +79,18 @@ const ImportarNegocios = () => {
       return;
     }
 
+    if (!selectedOriginId) {
+      toast.error('Selecione uma pipeline de destino');
+      return;
+    }
+
     setIsImporting(true);
     setProgress(0);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('origin_id', selectedOriginId);
 
       const { data, error } = await supabase.functions.invoke('import-deals-csv', {
         body: formData,
@@ -199,6 +228,32 @@ const ImportarNegocios = () => {
             </AlertDescription>
           </Alert>
 
+          {/* Seletor de Pipeline */}
+          <div className="space-y-2">
+            <Label htmlFor="pipeline-select" className="text-sm font-medium">
+              Pipeline de Destino <span className="text-destructive">*</span>
+            </Label>
+            <Select 
+              value={selectedOriginId || ''} 
+              onValueChange={(value) => setSelectedOriginId(value || null)}
+              disabled={isImporting}
+            >
+              <SelectTrigger id="pipeline-select" className="w-full">
+                <SelectValue placeholder={originsLoading ? "Carregando..." : "Selecione uma pipeline"} />
+              </SelectTrigger>
+              <SelectContent>
+                {origins?.map(origin => (
+                  <SelectItem key={origin.id} value={origin.id}>
+                    {origin.display_name || origin.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Todos os deals importados serão associados a esta pipeline
+            </p>
+          </div>
+
           <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
             <input
               type="file"
@@ -268,7 +323,7 @@ const ImportarNegocios = () => {
           <div className="flex gap-2">
             <Button
               onClick={handleImport}
-              disabled={!file || isImporting}
+              disabled={!file || isImporting || !selectedOriginId}
               className="flex-1"
             >
               {isImporting ? (
