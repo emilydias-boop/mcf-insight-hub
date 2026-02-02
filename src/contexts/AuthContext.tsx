@@ -216,6 +216,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setRole('viewer');
     setAllRoles(['viewer']);
 
+    // Set roleLoading=true BEFORE scheduling background load to prevent race condition
+    // This ensures guards wait for roles instead of evaluating with default 'viewer'
+    setRoleLoading(true);
+
     // Load roles in background (non-blocking) using setTimeout(0)
     setTimeout(() => {
       loadRolesInBackground(newSession.user.id, myVersion);
