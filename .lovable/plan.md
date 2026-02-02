@@ -1,90 +1,123 @@
 
 
-# Plano: Permitir Closers Multi-BU (Corrigir Constraint de Email)
+# Plano: Corrigir Visão de Negócios para SDRs do Consórcio
 
 ## Problema Identificado
 
-A tabela `closers` possui uma constraint **`UNIQUE (email)`** que impede cadastrar o mesmo usuário em múltiplas Business Units ou tipos de reunião.
+Os SDRs do Consórcio estão vendo **negócios do Incorporador** em vez de negócios do Consórcio porque:
 
-**Situação atual de Thobson:**
-- Email: `thobson.motta@minhacasafinanciada.com`
-- BU: `incorporador`
-- Meeting Type: `r2`
+1. O código em `Negocios.tsx` (linha 100-103) **ignora a BU ativa** para SDRs:
+   ```typescript
+   if (isSdr) {
+     return SDR_AUTHORIZED_ORIGIN_ID; // ← Hardcoded para Incorporador!
+   }
+   ```
 
-**O que você quer fazer:**
-- Adicionar Thobson também no **Consórcio** para R1
+2. `SDR_AUTHORIZED_ORIGIN_ID` é fixo como `'e3c04f21-ba2c-4c66-84f8-b4341c826b1c'` (PIPELINE INSIDE SALES do **Incorporador**)
 
-Isso falha porque o email precisa ser único globalmente.
-
----
-
-## Solução Proposta
-
-Alterar a constraint de `UNIQUE (email)` para `UNIQUE (email, bu)`, permitindo:
-- O mesmo closer em BUs diferentes
-- Cada combinação email+bu é única
-
-### Cenários Permitidos Após Correção:
-
-| Email | BU | Meeting Type | Permitido |
-|-------|-----|--------------|-----------|
-| thobson@... | incorporador | r2 | Sim |
-| thobson@... | consorcio | r1 | Sim (NOVO!) |
-| luis@... | consorcio | r1 | Sim |
-| luis@... | incorporador | r1 | Sim |
-| thobson@... | consorcio | r1 | Erro (duplicado) |
+3. O Consórcio tem sua própria pipeline: `'4e2b810a-6782-4ce9-9c0d-10d04c018636'` (PIPELINE - INSIDE SALES - VIVER DE ALUGUEL)
 
 ---
 
-## Alterações Necessárias
+## Solução: Usar Pipeline da BU Ativa para SDRs
 
-### 1. Migração de Banco de Dados
+Modificar a lógica para que SDRs usem a origem padrão da sua BU em vez de um ID hardcoded global.
 
-```sql
--- Remover constraint antiga
-ALTER TABLE closers DROP CONSTRAINT closers_email_key;
+### 1. Criar Mapeamento de Origens SDR por BU
 
--- Criar nova constraint composta (email + bu)
-ALTER TABLE closers ADD CONSTRAINT closers_email_bu_unique UNIQUE (email, bu);
+**Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
+
+Adicionar novo mapeamento:
+```typescript
+// Origem padrão para SDRs de cada BU
+export const SDR_ORIGIN_BY_BU: Record<BusinessUnit, string> = {
+  incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
+  consorcio: '4e2b810a-6782-4ce9-9c0d-10d04c018636',    // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
+  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',      // Fallback (a definir)
+  projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',     // Fallback (a definir)
+  leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',       // Pipeline Leilão
+};
 ```
 
-### 2. Validação no Frontend (Opcional)
+### 2. Modificar `effectiveOriginId` em Negocios.tsx
 
-Adicionar verificação no `CloserFormDialog` para mostrar mensagem mais amigável caso já exista um closer com mesmo email+bu.
+**Arquivo:** `src/pages/crm/Negocios.tsx` (linhas 99-103)
+
+De:
+```typescript
+if (isSdr) {
+  return SDR_AUTHORIZED_ORIGIN_ID;
+}
+```
+
+Para:
+```typescript
+if (isSdr) {
+  // Usar origem da BU ativa (da rota ou perfil)
+  if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
+    return SDR_ORIGIN_BY_BU[activeBU];
+  }
+  // Fallback para Incorporador se não tem BU definida
+  return SDR_AUTHORIZED_ORIGIN_ID;
+}
+```
+
+### 3. Modificar Definição de Pipeline Padrão
+
+**Arquivo:** `src/pages/crm/Negocios.tsx` (linhas 138-142)
+
+De:
+```typescript
+if (isSdr) {
+  setSelectedPipelineId(SDR_AUTHORIZED_ORIGIN_ID);
+  return;
+}
+```
+
+Para:
+```typescript
+if (isSdr) {
+  if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
+    setSelectedPipelineId(SDR_ORIGIN_BY_BU[activeBU]);
+  } else {
+    setSelectedPipelineId(SDR_AUTHORIZED_ORIGIN_ID);
+  }
+  return;
+}
+```
 
 ---
 
-## Impacto
+## Resumo de Alterações
 
-| Aspecto | Antes | Depois |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/auth/NegociosAccessGuard.tsx` | Adicionar `SDR_ORIGIN_BY_BU` com mapeamento por BU |
+| `src/pages/crm/Negocios.tsx` | Usar `SDR_ORIGIN_BY_BU[activeBU]` em vez de `SDR_AUTHORIZED_ORIGIN_ID` hardcoded |
+
+---
+
+## Resultado Esperado
+
+| Cenário | Antes | Depois |
 |---------|-------|--------|
-| Mesmo closer em BUs diferentes | Não permitido | Permitido |
-| Sincronização cross-BU | Via employee_id | Mantém via employee_id |
-| Dados existentes | Não afetados | Não afetados |
+| SDR acessa `/consorcio/crm/negocios` | Vê negócios do Incorporador | Vê negócios do Consórcio |
+| SDR acessa `/crm/negocios` (global) | Vê negócios do Incorporador | Vê negócios da sua BU (perfil) |
+| SDR acessa `/incorporador/crm/negocios` | Vê negócios do Incorporador | Mantém (correto) |
 
 ---
 
-## Resumo Técnico
-
-| Tipo | Alteração |
-|------|-----------|
-| **Migração SQL** | Trocar `UNIQUE(email)` por `UNIQUE(email, bu)` |
-| **Frontend** | Melhorar mensagem de erro (opcional) |
-
----
-
-## Fluxo Após Correção
+## Fluxo Corrigido
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Admin cadastra Thobson no Consórcio                                │
-│  1. Seleciona: Thobson Motta                                        │
-│  2. BU: Consórcio                                                   │
-│  3. Sistema verifica: existe (thobson@..., consorcio)? NÃO          │
-│  4. INSERT bem-sucedido                                             │
-│  5. Thobson agora aparece em AMBAS as agendas:                      │
-│     - Incorporador R2 (registro existente)                          │
-│     - Consórcio R1 (novo registro)                                  │
+│  SDR do Consórcio acessa /consorcio/crm/negocios                    │
+│  1. useActiveBU() → 'consorcio' (da rota)                           │
+│  2. isSdr = true                                                    │
+│  3. effectiveOriginId → SDR_ORIGIN_BY_BU['consorcio']               │
+│     = '4e2b810a-...' (PIPELINE - INSIDE SALES - VIVER DE ALUGUEL)   │
+│  4. useCRMDeals filtra por esta origem                              │
+│  5. Kanban mostra apenas negócios do Consórcio ✓                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
