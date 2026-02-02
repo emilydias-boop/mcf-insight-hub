@@ -141,10 +141,11 @@ Deno.serve(async (req) => {
     const dbDeals: CRMDeal[] = []
     const errors: any[] = job.metadata.errors || []
     let chunkSkipped = 0
+    const originId = job.metadata.origin_id // origin_id do job
 
     for (const csvDeal of chunkDeals) {
       try {
-        const dbDeal = convertToDBFormat(csvDeal, contactsCache, stagesCache)
+        const dbDeal = convertToDBFormat(csvDeal, contactsCache, stagesCache, originId)
         if (dbDeal) {
           dbDeals.push(dbDeal)
         } else {
@@ -287,7 +288,8 @@ function parseLine(line: string, delimiter: string): string[] {
 function convertToDBFormat(
   csvDeal: CSVDeal,
   contactsCache: Map<string, string>,
-  stagesCache: Map<string, string>
+  stagesCache: Map<string, string>,
+  originId?: string
 ): CRMDeal | null {
   const clintId = csvDeal.id?.trim()
   const name = csvDeal.name?.trim()
@@ -300,6 +302,11 @@ function convertToDBFormat(
     clint_id: clintId,
     name: name,
     updated_at: new Date().toISOString()
+  }
+
+  // Aplicar origin_id do job (prioridade sobre CSV)
+  if (originId) {
+    dbDeal.origin_id = originId
   }
 
   if (csvDeal.value) {

@@ -19,12 +19,18 @@ Deno.serve(async (req) => {
 
     const formData = await req.formData()
     const file = formData.get('file') as File
+    const originId = formData.get('origin_id') as string
     
     if (!file) {
       throw new Error('Nenhum arquivo fornecido')
     }
 
+    if (!originId) {
+      throw new Error('origin_id é obrigatório')
+    }
+
     console.log(`📄 Arquivo recebido: ${file.name} (${file.size} bytes)`)
+    console.log(`🎯 Origin ID: ${originId}`)
 
     // Ler conteúdo do arquivo
     const csvText = await file.text()
@@ -68,6 +74,7 @@ Deno.serve(async (req) => {
           file_name: fileName,
           file_path: filePath,
           total_deals: totalDeals,
+          origin_id: originId,
           uploaded_at: new Date().toISOString()
         }
       })
