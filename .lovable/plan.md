@@ -1,107 +1,268 @@
 
-# Plano: Corrigir Exibição de Métricas de Closer na Página de Detalhe
+# Plano: Sistema de Indicadores 100% Dinâmico Baseado em Métricas Ativas
 
-## Problema Identificado
+## Resumo do Problema
 
-Quando você configura as métricas do **Closer Inside** na aba "Métricas Ativas", a página de detalhe individual ainda mostra métricas de SDR (Tentativas, Organização) porque:
+1. **Popup "Editar Plano Individual"** exibe campos fixos de SDR (Agendadas, Realizadas, Tentativas, Organização) mesmo para Closers
+2. **Tela de detalhe do fechamento** não consome as métricas ativas configuradas - usa lógica hardcoded
+3. **Cálculo do payout (edge function)** já busca métricas ativas, mas UI não está sincronizada
+4. **Julio (Closer Inside)** está com `role_type = 'closer'` no banco, mas a UI não adapta os campos corretamente
 
-**Causa raiz**: A consulta SQL `useSdrPayoutDetail` não está buscando o campo `role_type` da tabela `sdr`, então a verificação `isCloser = (payout.sdr)?.role_type === 'closer'` sempre retorna `false`.
+## Solução: Sistema 100% Dinâmico
 
-**Código atual (linha 246):**
-```
-sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, ...)
-```
-**Faltando:** `squad, role_type`
-
----
-
-## Solução
-
-Adicionar os campos `squad` e `role_type` nas consultas SQL que buscam dados do SDR para a página de detalhe.
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useSdrFechamento.ts` | Adicionar `squad, role_type` nas funções `useSdrPayoutDetail` e `useOwnPayout` |
+O sistema passará a consumir integralmente as métricas configuradas em `fechamento_metricas_mes` para:
+- Exibir inputs corretos no formulário KPI
+- Mostrar indicadores corretos na página de detalhe
+- Exibir campos corretos no popup de edição de plano
+- Calcular payout proporcionalmente aos pesos configurados
 
 ---
 
 ## Alterações Técnicas
 
-### Função `useSdrPayoutDetail` (linha 244-252)
+### 1. Novo Hook: `useActiveMetricsForSdr`
 
-**Antes:**
+Criar hook que busca métricas ativas para um colaborador específico baseado no `cargo_catalogo_id` do employee vinculado.
+
+**Arquivo:** `src/hooks/useActiveMetricsForSdr.ts`
+
 ```typescript
-sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at)
-```
-
-**Depois:**
-```typescript
-sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at, squad, role_type)
-```
-
-### Função `useOwnPayout` (linha 280-283)
-
-**Antes:**
-```typescript
-sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at)
-```
-
-**Depois:**
-```typescript
-sdr:sdr_id(id, user_id, name, email, active, nivel, meta_diaria, observacao, status, criado_por, aprovado_por, aprovado_em, created_at, updated_at, squad, role_type)
+// Busca métricas ativas para um SDR/Closer específico
+// Usa: sdr_id → employees.cargo_catalogo_id → fechamento_metricas_mes
+export const useActiveMetricsForSdr = (sdrId: string, anoMes: string) => {
+  // 1. Buscar employee vinculado ao SDR
+  // 2. Obter cargo_catalogo_id e squad
+  // 3. Buscar métricas ativas para cargo/squad/mês
+  return { metricas, isLoading, fonte: 'configuradas' | 'fallback' };
+};
 ```
 
 ---
 
-## Fluxo da Correção
+### 2. Adaptar `KpiEditForm.tsx`
+
+Modificar para renderizar dinamicamente os campos baseado nas métricas ativas.
+
+**Mudanças:**
+- Adicionar prop `sdrId` para buscar métricas ativas
+- Substituir campos hardcoded por mapeamento dinâmico:
+  - `realizadas` → Campo R1 Realizadas (agenda)
+  - `contratos` → Campo Contratos Pagos (hubla)
+  - `r2_agendadas` → Campo R2 Agendadas (agenda)
+  - `organizacao` → Campo Organização (manual)
+  - `tentativas` → Campo Tentativas (twilio)
+  - `agendamentos` → Campo Agendadas R1 (agenda)
+  - `no_show` → Campo No-Shows (agenda)
+
+**Lógica:**
+```typescript
+const { metricas } = useActiveMetricsForSdr(sdrId, anoMes);
+
+// Renderizar apenas campos das métricas ativas
+{metricas.map(m => (
+  <DynamicKpiField 
+    key={m.nome_metrica}
+    metrica={m}
+    value={getKpiValue(m.nome_metrica)}
+    onChange={handleChange}
+  />
+))}
+```
+
+---
+
+### 3. Adaptar `EditIndividualPlanDialog.tsx`
+
+Modificar para exibir campos de valor por métrica baseado nas métricas ativas do cargo.
+
+**Mudanças:**
+- Adicionar prop `cargoId` e `anoMes`
+- Buscar métricas ativas para o cargo
+- Renderizar campos "Valores por Métrica" dinamicamente
+
+**Antes (hardcoded):**
+```
+Agendadas (R$) | Realizadas (R$) | Tentativas (R$) | Organização (R$)
+```
+
+**Depois (dinâmico):**
+```
+// Para Closer Inside com métricas: realizadas, contratos, r2_agendadas, organizacao
+R1 Realizadas (R$) | Contratos Pagos (R$) | R2 Agendadas (R$) | Organização (R$)
+```
+
+---
+
+### 4. Adaptar `Detail.tsx` (Indicadores)
+
+Modificar para renderizar indicadores baseado nas métricas ativas.
+
+**Mudanças:**
+- Buscar métricas ativas do colaborador
+- Renderizar `<DynamicIndicatorCard>` para cada métrica ativa
+- Remover lógica `isCloser ? <CloserIndicators> : <SdrIndicators>`
+
+**Nova lógica:**
+```typescript
+const { metricas } = useActiveMetricsForSdr(payout.sdr_id, payout.ano_mes);
+
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+  {metricas.map(m => (
+    <DynamicIndicatorCard
+      key={m.nome_metrica}
+      metrica={m}
+      kpi={kpi}
+      payout={payout}
+      compPlan={compPlan}
+    />
+  ))}
+</div>
+```
+
+---
+
+### 5. Novo Componente: `DynamicIndicatorCard`
+
+Criar componente que renderiza o indicador correto baseado no tipo de métrica.
+
+**Arquivo:** `src/components/fechamento/DynamicIndicatorCard.tsx`
+
+| nome_metrica | Componente/Exibição |
+|--------------|---------------------|
+| agendamentos | SdrIndicatorCard (reunioes_agendadas) |
+| realizadas | SdrIndicatorCard (reunioes_realizadas) |
+| tentativas | SdrIndicatorCard (tentativas_ligacoes) |
+| organizacao | SdrIndicatorCard (score_organizacao) |
+| no_show | NoShowIndicator (inverso) |
+| contratos | Card simples (intermediacoes_contrato) |
+| r2_agendadas | Card simples (r2_agendadas) |
+| outside_sales | Card simples (outside_sales) |
+
+---
+
+### 6. Expandir `sdr_month_kpi` (se necessário)
+
+Verificar se a tabela já possui campos para R2 Agendadas e Outside Sales.
+
+**Campos potenciais a adicionar:**
+- `r2_agendadas: number` (se não existir)
+- `outside_sales: number` (se não existir)
+
+---
+
+### 7. Atualizar Edge Function (ajuste fino)
+
+A edge function já busca métricas ativas. Ajustar para:
+- Incluir `r2_agendadas` e `outside_sales` no cálculo quando configurados
+- Garantir que métricas não configuradas não zerem o variável
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Propósito |
+|---------|-----------|
+| `src/hooks/useActiveMetricsForSdr.ts` | Hook para buscar métricas ativas de um colaborador |
+| `src/components/fechamento/DynamicIndicatorCard.tsx` | Renderiza indicador baseado na métrica |
+| `src/components/fechamento/DynamicKpiField.tsx` | Campo de input baseado na métrica |
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/sdr-fechamento/KpiEditForm.tsx` | Usar métricas ativas para renderizar campos |
+| `src/components/fechamento/EditIndividualPlanDialog.tsx` | Campos de valor dinâmicos |
+| `src/pages/fechamento-sdr/Detail.tsx` | Indicadores dinâmicos |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Incluir r2_agendadas e outside_sales |
+
+---
+
+## Fluxo Visual
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    ANTES DA CORREÇÃO                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Usuário abre detalhe do Julio (Closer Inside)               │
-│  2. useSdrPayoutDetail busca dados SEM role_type                │
-│  3. payout.sdr.role_type = undefined                            │
-│  4. isCloser = false                                            │
-│  5. Exibe indicadores de SDR (errado!)                          │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│                    DEPOIS DA CORREÇÃO                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. Usuário abre detalhe do Julio (Closer Inside)               │
-│  2. useSdrPayoutDetail busca dados COM role_type                │
-│  3. payout.sdr.role_type = "closer"                             │
-│  4. isCloser = true                                             │
-│  5. Exibe CloserIndicators (correto!)                           │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│              CONFIGURAÇÃO (Aba Métricas Ativas)              │
+├──────────────────────────────────────────────────────────────┤
+│ Cargo: Closer Inside │ BU: Incorporador │ Mês: 2026-01       │
+│                                                              │
+│ ☑ R1 Realizadas (25%) - fonte: agenda                        │
+│ ☑ Contratos Pagos (25%) - fonte: hubla                       │
+│ ☑ R2 Agendadas (25%) - fonte: agenda                         │
+│ ☑ Organização (25%) - fonte: manual                          │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│              POPUP EDITAR PLANO INDIVIDUAL                   │
+├──────────────────────────────────────────────────────────────┤
+│ Julio Caetano • Closer Inside                                │
+│                                                              │
+│ OTE: R$ 4.000  │  Fixo: R$ 2.800  │  Variável: R$ 1.200     │
+│                                                              │
+│ Valores por Métrica (dinâmico):                              │
+│ ┌─────────────────┬─────────────────┐                        │
+│ │ R1 Realizadas   │ Contratos Pagos │                        │
+│ │ R$ 300          │ R$ 300          │                        │
+│ ├─────────────────┼─────────────────┤                        │
+│ │ R2 Agendadas    │ Organização     │                        │
+│ │ R$ 300          │ R$ 300          │                        │
+│ └─────────────────┴─────────────────┘                        │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│              TELA DE DETALHE DO FECHAMENTO                   │
+├──────────────────────────────────────────────────────────────┤
+│ Julio • Closer • Fechamento 2026-01                          │
+│                                                              │
+│ Editar KPIs (campos dinâmicos):                              │
+│ ┌─────────────────┬─────────────────┐                        │
+│ │ R1 Realizadas   │ Contratos Pagos │                        │
+│ │ [63]            │ [0] (Hubla)     │                        │
+│ ├─────────────────┼─────────────────┤                        │
+│ │ R2 Agendadas    │ Organização     │                        │
+│ │ [12]            │ [85] (Manual)   │                        │
+│ └─────────────────┴─────────────────┘                        │
+│                                                              │
+│ Indicadores de Meta (dinâmicos):                             │
+│ ┌────────────┬────────────┬────────────┬────────────┐        │
+│ │ R1 Realiz. │ Contratos  │ R2 Agend.  │ Organiz.   │        │
+│ │ 74.0%      │ 0          │ 12         │ 85.0%      │        │
+│ │ 0.5x       │ (Hubla)    │ (Agenda)   │ 0.5x       │        │
+│ │ R$ 150     │            │            │ R$ 150     │        │
+│ └────────────┴────────────┴────────────┴────────────┘        │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Normalização de Nomes (Banco)
+
+Os nomes de métricas já estão consistentes no banco:
+- `agendamentos` → Agendamentos R1
+- `realizadas` → R1 Realizadas
+- `contratos` → Contratos Pagos
+- `tentativas` → Tentativas de Ligação
+- `organizacao` → Organização
+- `no_show` → No-Show (inverso)
+- `r2_agendadas` → R2 Agendadas
+
+Não é necessária migração de dados.
 
 ---
 
 ## Resultado Esperado
 
-Após a correção, quando você abrir o fechamento do **Julio Caetano (Closer Inside)**:
+Após implementação:
 
-| Antes (Errado) | Depois (Correto) |
-|----------------|------------------|
-| Reuniões Agendadas | Reuniões Alocadas |
-| Reuniões Realizadas | R1 Realizadas |
-| Tentativas de Ligação | Contratos Pagos |
-| Organização Clint | Taxa de Conversão |
-| No-Show | No-Show |
-| - | R2 Agendadas |
+1. **Julio (Closer Inside)** verá:
+   - No popup: campos R1 Realizadas, Contratos, R2 Agendadas, Organização
+   - Na edição de KPIs: mesmos campos dinâmicos
+   - Nos indicadores: cards correspondentes às 4 métricas configuradas
 
-O formulário de KPI também já oculta os campos de Tentativas e Organização para Closers (isso já está funcionando, só faltava o `role_type` ser carregado).
+2. **SDR Inside N1** verá:
+   - No popup: campos Agendadas, Realizadas, Tentativas, Organização
+   - Na edição de KPIs: campos padrão SDR
+   - Nos indicadores: cards correspondentes
 
----
-
-## Impacto
-
-- **Baixo risco**: Apenas adiciona campos à consulta SQL
-- **Sem breaking changes**: O código que usa esses dados já existe e espera esses campos
-- **Benefício imediato**: Julio e outros Closers passarão a ver métricas corretas
+3. **Qualquer novo cargo**: basta configurar as métricas na aba "Métricas Ativas" e o sistema se adapta automaticamente
