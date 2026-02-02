@@ -529,6 +529,9 @@ export const PlansOteTab = () => {
           employeeId={editDialog.employee.id}
           sdrId={editDialog.employee.sdr_id}
           cargoName={editDialog.employee.cargo_catalogo?.nome_exibicao || '-'}
+          cargoId={editDialog.employee.cargo_catalogo_id}
+          squad={editDialog.employee.departamento}
+          anoMes={format(selectedDate, 'yyyy-MM')}
           currentValues={{
             ote_total: getDisplayValues(editDialog.employee).ote,
             fixo_valor: getDisplayValues(editDialog.employee).fixo,
