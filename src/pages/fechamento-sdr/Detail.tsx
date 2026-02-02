@@ -10,6 +10,7 @@ import { IntermediacoesList } from "@/components/sdr-fechamento/IntermediacoesLi
 import { NoShowIndicator } from "@/components/sdr-fechamento/NoShowIndicator";
 import { DynamicIndicatorsGrid } from "@/components/fechamento/DynamicIndicatorCard";
 import { useActiveMetricsForSdr } from "@/hooks/useActiveMetricsForSdr";
+import { useCloserAgendaMetrics } from "@/hooks/useCloserAgendaMetrics";
 import { useSdrPayoutDetail, useSdrCompPlan, useSdrMonthKpi, useUpdatePayoutStatus } from "@/hooks/useSdrFechamento";
 import { useRecalculateWithKpi, useAuthorizeUltrameta, useSdrIntermediacoes } from "@/hooks/useSdrKpiMutations";
 import { useAuth } from "@/contexts/AuthContext";
@@ -100,6 +101,15 @@ const FechamentoSDRDetail = () => {
   const { data: compPlan } = useSdrCompPlan(payout?.sdr_id, payout?.ano_mes || "");
   const { data: kpi } = useSdrMonthKpi(payout?.sdr_id, payout?.ano_mes || "");
   const { data: intermediacoes } = useSdrIntermediacoes(payout?.sdr_id, payout?.ano_mes || "");
+
+  // Determine if Closer before hooks that need it
+  const isCloser = (payout?.sdr as any)?.role_type === "closer";
+  
+  // Fetch Closer-specific metrics from Agenda (only for Closers)
+  const closerMetrics = useCloserAgendaMetrics(
+    isCloser ? payout?.sdr_id : undefined,
+    payout?.ano_mes
+  );
 
   const updateStatus = useUpdatePayoutStatus();
   const recalculateWithKpi = useRecalculateWithKpi();
@@ -250,7 +260,7 @@ const FechamentoSDRDetail = () => {
     4;
   const metUltrameta = avgPerformance >= 100;
 
-  const isCloser = (payout.sdr as any)?.role_type === "closer";
+  // isCloser is already defined above for hooks
   const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
   const diasUteisMes = payout.dias_uteis_mes || 19;
   
@@ -260,6 +270,28 @@ const FechamentoSDRDetail = () => {
   const effectiveFixo = compPlan?.fixo_valor || employee?.cargo_catalogo?.fixo_valor || 2800;
   const effectiveVariavel = compPlan?.variavel_total || employee?.cargo_catalogo?.variavel_valor || 1200;
   const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
+
+  // Create effective KPI with Closer-specific metrics from Agenda
+  const effectiveKpi: SdrMonthKpi | null = kpi 
+    ? isCloser && closerMetrics.data
+      ? {
+          ...kpi,
+          reunioes_realizadas: closerMetrics.data.r1_realizadas,
+          no_shows: closerMetrics.data.no_shows,
+          intermediacoes_contrato: closerMetrics.data.contratos_pagos,
+        }
+      : kpi
+    : null;
+
+  // Closer-specific intermediações count (use agenda data for Closers)
+  const effectiveIntermediacao = isCloser && closerMetrics.data 
+    ? closerMetrics.data.contratos_pagos 
+    : intermediacaoCount;
+
+  // Vendas parceria for Closers
+  const vendasParceria = isCloser && closerMetrics.data 
+    ? closerMetrics.data.vendas_parceria 
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -429,17 +461,18 @@ const FechamentoSDRDetail = () => {
       {/* KPI Edit Form (for admin/manager) */}
       {canEdit && (
         <KpiEditForm
-          kpi={kpi || null}
+          kpi={effectiveKpi}
           compPlan={compPlan || null}
           sdrId={payout.sdr_id}
           anoMes={payout.ano_mes}
           disabled={!canEdit}
           onSave={handleSaveKpi}
           isSaving={recalculateWithKpi.isPending}
-          intermediacoes={intermediacaoCount}
+          intermediacoes={effectiveIntermediacao}
           sdrMetaDiaria={(payout.sdr as any)?.meta_diaria || 10}
           diasUteisMes={payout.dias_uteis_mes || 19}
           roleType={(payout.sdr as any)?.role_type || "sdr"}
+          vendasParceria={vendasParceria}
         />
       )}
 
@@ -447,7 +480,7 @@ const FechamentoSDRDetail = () => {
       <DynamicIndicatorsSection
         sdrId={payout.sdr_id}
         anoMes={payout.ano_mes}
-        kpi={kpi || null}
+        kpi={effectiveKpi}
         payout={payout}
         compPlan={compPlan || null}
         diasUteisMes={diasUteisMes}

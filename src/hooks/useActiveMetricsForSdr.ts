@@ -24,7 +24,8 @@ const DEFAULT_SDR_METRICS: Partial<ActiveMetric>[] = [
 // Default Closer metrics as fallback
 const DEFAULT_CLOSER_METRICS: Partial<ActiveMetric>[] = [
   { nome_metrica: 'realizadas', label_exibicao: 'R1 Realizadas', peso_percentual: 35, fonte_dados: 'agenda' },
-  { nome_metrica: 'contratos', label_exibicao: 'Contratos Pagos', peso_percentual: 35, fonte_dados: 'hubla' },
+  { nome_metrica: 'contratos', label_exibicao: 'Contratos Pagos', peso_percentual: 35, fonte_dados: 'agenda' },
+  { nome_metrica: 'no_show', label_exibicao: 'Taxa No-Show', peso_percentual: 0, fonte_dados: 'agenda' },
   { nome_metrica: 'organizacao', label_exibicao: 'Organização', peso_percentual: 20, fonte_dados: 'manual' },
   { nome_metrica: 'vendas_parceria', label_exibicao: 'Vendas Parceria', peso_percentual: 10, fonte_dados: 'hubla' },
 ];
