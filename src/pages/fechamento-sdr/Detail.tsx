@@ -1,12 +1,14 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { SdrStatusBadge } from '@/components/sdr-fechamento/SdrStatusBadge';
 import { SdrIndicatorCard } from '@/components/sdr-fechamento/SdrIndicatorCard';
 import { SdrAdjustmentForm } from '@/components/sdr-fechamento/SdrAdjustmentForm';
 import { KpiEditForm } from '@/components/sdr-fechamento/KpiEditForm';
 import { IntermediacoesList } from '@/components/sdr-fechamento/IntermediacoesList';
 import { NoShowIndicator } from '@/components/sdr-fechamento/NoShowIndicator';
+import { CloserIndicators } from '@/components/fechamento/CloserIndicators';
 import {
   useSdrPayoutDetail,
   useSdrCompPlan,
@@ -34,12 +36,14 @@ import {
   Gift,
   CheckCircle,
   Download,
+  User,
 } from 'lucide-react';
 
 const FechamentoSDRDetail = () => {
   const { payoutId } = useParams<{ payoutId: string }>();
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  
 
   const { data: payout, isLoading } = useSdrPayoutDetail(payoutId);
   const { data: compPlan } = useSdrCompPlan(payout?.sdr_id, payout?.ano_mes || '');
@@ -192,6 +196,10 @@ const FechamentoSDRDetail = () => {
   ) / 4;
   const metUltrameta = avgPerformance >= 100;
 
+  const isCloser = (payout.sdr as any)?.role_type === 'closer';
+  const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
+  const diasUteisMes = payout.dias_uteis_mes || 19;
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -204,6 +212,12 @@ const FechamentoSDRDetail = () => {
             <h1 className="text-lg font-semibold flex items-center gap-2">
               {payout.sdr?.name || 'SDR'}
               <SdrStatusBadge status={payout.status} />
+              {isCloser && (
+                <Badge variant="secondary" className="text-xs">
+                  <User className="h-3 w-3 mr-1" />
+                  Closer
+                </Badge>
+              )}
             </h1>
             <p className="text-sm text-muted-foreground">
               Fechamento de {payout.ano_mes}
@@ -366,50 +380,57 @@ const FechamentoSDRDetail = () => {
 
       {/* Indicators Grid */}
       <div>
-        <h2 className="text-sm font-semibold mb-3">Indicadores de Meta</h2>
-        {(() => {
-          // Usar meta_diaria do SDR multiplicada pelos dias úteis do mês
-          const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
-          const diasUteisMes = payout.dias_uteis_mes || 19;
-          const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
-          // Meta de Realizadas = 70% do que foi REALMENTE agendado
-          const agendadasRealizado = kpi?.reunioes_agendadas || 0;
-          const metaRealizadasCalculada = Math.round(agendadasRealizado * 0.7);
-          const isCloser = (payout.sdr as any)?.role_type === 'closer';
-          
-          return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              <SdrIndicatorCard
-                title={isCloser ? "Reuniões Alocadas" : "Reuniões Agendadas"}
-                meta={sdrMetaDiaria}
-                metaAjustada={payout.meta_agendadas_ajustada ?? metaAgendadasCalculada}
-                realizado={kpi?.reunioes_agendadas || 0}
-                pct={payout.pct_reunioes_agendadas || 0}
-                multiplicador={payout.mult_reunioes_agendadas || 0}
-                valorBase={compPlan?.valor_meta_rpg || 0}
-                valorFinal={payout.valor_reunioes_agendadas || 0}
-                isManual={false}
-              />
+        <h2 className="text-sm font-semibold mb-3">
+          Indicadores de Meta {isCloser && <span className="text-muted-foreground font-normal">(Closer)</span>}
+        </h2>
+        
+        {isCloser ? (
+          // Indicadores específicos para Closer
+          <CloserIndicators
+            kpi={kpi || null}
+            payout={payout}
+            compPlan={compPlan || null}
+            diasUteisMes={diasUteisMes}
+            sdrMetaDiaria={sdrMetaDiaria}
+          />
+        ) : (
+          // Indicadores padrão para SDR
+          (() => {
+            const metaAgendadasCalculada = sdrMetaDiaria * diasUteisMes;
+            const agendadasRealizado = kpi?.reunioes_agendadas || 0;
+            const metaRealizadasCalculada = Math.round(agendadasRealizado * 0.7);
+            
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <SdrIndicatorCard
+                  title="Reuniões Agendadas"
+                  meta={sdrMetaDiaria}
+                  metaAjustada={payout.meta_agendadas_ajustada ?? metaAgendadasCalculada}
+                  realizado={kpi?.reunioes_agendadas || 0}
+                  pct={payout.pct_reunioes_agendadas || 0}
+                  multiplicador={payout.mult_reunioes_agendadas || 0}
+                  valorBase={compPlan?.valor_meta_rpg || 0}
+                  valorFinal={payout.valor_reunioes_agendadas || 0}
+                  isManual={false}
+                />
 
-              <SdrIndicatorCard
-                title="Reuniões Realizadas"
-                meta={agendadasRealizado}
-                metaAjustada={metaRealizadasCalculada}
-                realizado={kpi?.reunioes_realizadas || 0}
-                pct={metaRealizadasCalculada > 0 ? Math.round((kpi?.reunioes_realizadas || 0) / metaRealizadasCalculada * 100) : 0}
-                multiplicador={payout.mult_reunioes_realizadas || 0}
-                valorBase={compPlan?.valor_docs_reuniao || 0}
-                valorFinal={payout.valor_reunioes_realizadas || 0}
-                isManual={false}
-              />
+                <SdrIndicatorCard
+                  title="Reuniões Realizadas"
+                  meta={agendadasRealizado}
+                  metaAjustada={metaRealizadasCalculada}
+                  realizado={kpi?.reunioes_realizadas || 0}
+                  pct={metaRealizadasCalculada > 0 ? Math.round((kpi?.reunioes_realizadas || 0) / metaRealizadasCalculada * 100) : 0}
+                  multiplicador={payout.mult_reunioes_realizadas || 0}
+                  valorBase={compPlan?.valor_docs_reuniao || 0}
+                  valorFinal={payout.valor_reunioes_realizadas || 0}
+                  isManual={false}
+                />
 
-              <NoShowIndicator
-                agendadas={kpi?.reunioes_agendadas || 0}
-                noShows={kpi?.no_shows || 0}
-              />
+                <NoShowIndicator
+                  agendadas={kpi?.reunioes_agendadas || 0}
+                  noShows={kpi?.no_shows || 0}
+                />
 
-              {/* Indicadores específicos de SDR - ocultos para Closers */}
-              {!isCloser && (
                 <SdrIndicatorCard
                   title="Tentativas de Ligações"
                   meta={84}
@@ -421,9 +442,7 @@ const FechamentoSDRDetail = () => {
                   valorFinal={payout.valor_tentativas || 0}
                   isManual={true}
                 />
-              )}
 
-              {!isCloser && (
                 <SdrIndicatorCard
                   title="Organização Clint"
                   meta={100}
@@ -435,10 +454,10 @@ const FechamentoSDRDetail = () => {
                   isPercentage
                   isManual={true}
                 />
-              )}
-            </div>
-          );
-        })()}
+              </div>
+            );
+          })()
+        )}
       </div>
 
       {/* Intermediações */}
