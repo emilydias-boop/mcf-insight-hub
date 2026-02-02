@@ -1,123 +1,104 @@
 
-# Plano: Mostrar Todos os Funis do Consórcio na Sidebar
+# Plano: Corrigir Race Condition no R2AccessGuard para Thobson
 
 ## Problema Identificado
 
-A sidebar de funis do Consórcio não mostra os pipelines porque há um conflito entre:
+Thobson (thobson.motta@minhacasafinanciada.com) tem role `coordenador` que **deveria** permitir acesso à Agenda R2, mas está sendo negado devido a uma race condition:
 
-1. **Deduplicação por nome**: O `useCRMPipelines()` (linha 37-44 no `PipelineSelector.tsx`) deduplica grupos por nome usando `.trim().toLowerCase()`, mantendo apenas o **mais recente** de cada
-2. **Mapeamento no banco**: A tabela `bu_origin_mapping` aponta para IDs específicos (alguns mais antigos) que podem ser **eliminados pela deduplicação**
+### Dados do Usuário:
+| Campo | Valor |
+|-------|-------|
+| ID | `a15cb111-8831-4146-892a-d61ca674628a` |
+| Email | thobson.motta@minhacasafinanciada.com |
+| Role | coordenador |
+| R2_ALLOWED_ROLES | ['admin', 'manager', **'coordenador'**] |
 
-### Exemplo Real:
-| ID | Nome | Mantido? |
-|---|---|---|
-| `35361575...` | " Hubla - Construir Para Alugar" (espaço no início) | Eliminado pela deduplicação |
-| `a5f6b08b...` | "Hubla - Construir para Alugar" | Mantido (mais recente) |
+### Sequência do Bug:
 
-O mapeamento usa `35361575...`, mas o selector só tem `a5f6b08b...` após deduplicação.
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. Thobson faz login ou navega para /crm/agenda-r2                 │
+│  2. handleSession() executa:                                        │
+│     - setSession(session)                                           │
+│     - setUser(user)                                                 │
+│     - setLoading(false) ← authLoading = false                       │
+│     - setRole('viewer')  ← DEFAULT temporário                       │
+│     - setRoleLoading(false) ← AINDA false (estado inicial!)         │
+│     - setTimeout(() => loadRolesInBackground(...), 0)               │
+│                                                                     │
+│  3. RACE CONDITION: React renderiza ANTES do setTimeout executar    │
+│     - authLoading = false                                           │
+│     - roleLoading = false (nunca foi true!)                         │
+│     - role = 'viewer' (não 'coordenador')                           │
+│                                                                     │
+│  4. R2AccessGuard avalia:                                           │
+│     - hasRoleAccess = R2_ALLOWED_ROLES.includes('viewer') = FALSE   │
+│     - Resultado: "Acesso Negado" ❌                                 │
+│                                                                     │
+│  5. setTimeout finalmente executa loadRolesInBackground:            │
+│     - setRoleLoading(true) ← muito tarde                            │
+│     - Busca role real: 'coordenador'                                │
+│     - setRoleLoading(false)                                         │
+│     - Mas dano já foi feito (tela de erro já apareceu)              │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Solução
 
-### Opção Escolhida: Ajustar a Lógica de Filtragem
+Garantir que `roleLoading = true` ANTES de agendar a busca em background, eliminando a janela de race condition.
 
-Em vez de filtrar apenas por ID exato, também verificar se o **nome** do grupo/origem corresponde ao esperado. Isso torna o sistema resiliente à deduplicação.
+### Alteração no AuthContext
 
-### Alterações:
+**Arquivo:** `src/contexts/AuthContext.tsx`
 
-**1. `src/components/crm/PipelineSelector.tsx`**
-
-Modificar a filtragem para considerar IDs OU nomes correspondentes:
+**Linha ~219-222** - Modificar handleSession para definir roleLoading=true ANTES do setTimeout:
 
 ```typescript
-// Antes (linha 59-64):
-const filteredPipelines = useMemo(() => {
-  if (!allowedGroupIds || allowedGroupIds.length === 0) {
-    return pipelines;
-  }
-  return pipelines?.filter(p => allowedGroupIds.includes(p.id));
-}, [pipelines, allowedGroupIds]);
+// ANTES (linha 219-222):
+// Background: update last_login_at (non-blocking)
+setTimeout(() => {
+  loadRolesInBackground(newSession.user.id, myVersion);
+}, 0);
 
-// Depois:
-const filteredPipelines = useMemo(() => {
-  if (!allowedGroupIds || allowedGroupIds.length === 0) {
-    return pipelines; // Sem filtro = admin vê tudo
-  }
-  // Incluir grupos que estão na lista de IDs permitidos
-  // OU cujo nome normalizado corresponde a um grupo permitido
-  return pipelines?.filter(p => allowedGroupIds.includes(p.id));
-}, [pipelines, allowedGroupIds]);
+// DEPOIS:
+// Set roleLoading=true BEFORE scheduling background load to prevent race condition
+setRoleLoading(true);
+
+// Load roles in background (non-blocking)
+setTimeout(() => {
+  loadRolesInBackground(newSession.user.id, myVersion);
+}, 0);
 ```
 
-**2. `src/hooks/useBUPipelineMap.ts`**
+### Fluxo Corrigido
 
-Adicionar lógica para **resolver nomes** além de IDs, garantindo que mesmo que o ID mude, o sistema encontre o grupo correto:
-
-```typescript
-// Buscar também os nomes dos grupos mapeados para matching
-const groupNames = await supabase
-  .from('crm_groups')
-  .select('id, name, display_name')
-  .in('id', groupIds);
-```
-
-**3. Abordagem Alternativa Mais Simples**
-
-Como o problema é específico de dados duplicados, a solução mais pragmática é:
-
-- **Remover a deduplicação** quando há filtro de BU ativo
-- OU **atualizar o mapeamento** para usar os IDs corretos
-
-### Alterações de Código:
-
-**Arquivo: `src/components/crm/PipelineSelector.tsx`**
-
-Modificar para não aplicar deduplicação quando houver filtro de BU, permitindo que todos os grupos mapeados apareçam:
-
-```typescript
-export const useCRMPipelines = (skipDedup = false) => {
-  return useQuery({
-    queryKey: ['crm-pipelines', skipDedup],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('crm_groups')
-        .select('id, name, display_name, created_at, is_archived')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      if (!data) return [];
-      
-      const activeGroups = data.filter(g => g.is_archived !== true);
-      
-      // Se skipDedup=true, pular deduplicação
-      if (skipDedup) {
-        return activeGroups.sort((a, b) => 
-          (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
-        );
-      }
-      
-      // Deduplicar por nome (comportamento original)
-      const seen = new Map();
-      activeGroups.forEach(g => {
-        const key = (g.display_name ?? g.name).trim().toLowerCase();
-        if (!seen.has(key)) seen.set(key, g);
-      });
-      
-      return Array.from(seen.values()).sort((a, b) => 
-        (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
-      );
-    },
-  });
-};
-```
-
-**Arquivo: `src/pages/crm/Negocios.tsx`**
-
-Passar `skipDedup=true` quando houver filtro de BU:
-
-```typescript
-const { data: pipelines } = useCRMPipelines(!!activeBU);
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  1. Thobson navega para /crm/agenda-r2                              │
+│  2. handleSession() executa:                                        │
+│     - setLoading(false)                                             │
+│     - setRole('viewer')                                             │
+│     - setRoleLoading(true) ← NOVO! Antes do setTimeout              │
+│     - setTimeout(() => loadRolesInBackground(...), 0)               │
+│                                                                     │
+│  3. React renderiza:                                                │
+│     - authLoading = false                                           │
+│     - roleLoading = TRUE ← Guard espera                             │
+│                                                                     │
+│  4. R2AccessGuard avalia:                                           │
+│     - if (authLoading || roleLoading) return null; ← ESPERA         │
+│                                                                     │
+│  5. loadRolesInBackground executa:                                  │
+│     - Busca role real: 'coordenador'                                │
+│     - setRole('coordenador')                                        │
+│     - setRoleLoading(false)                                         │
+│                                                                     │
+│  6. R2AccessGuard reavalia:                                         │
+│     - hasRoleAccess = R2_ALLOWED_ROLES.includes('coordenador') ✓    │
+│     - Resultado: Acesso permitido ✓                                 │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -126,37 +107,17 @@ const { data: pipelines } = useCRMPipelines(!!activeBU);
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/crm/PipelineSelector.tsx` | Adicionar parâmetro `skipDedup` ao hook `useCRMPipelines` |
-| `src/pages/crm/Negocios.tsx` | Usar `useCRMPipelines(!!activeBU)` para pular deduplicação quando BU ativa |
-| `src/components/crm/OriginsSidebar.tsx` | Propagar a lógica de skip dedup |
+| `src/contexts/AuthContext.tsx` | Adicionar `setRoleLoading(true)` antes do `setTimeout` na função `handleSession` |
 
 ---
 
-## Resultado Esperado
+## Impacto
 
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Consórcio abre Negócios | Dropdown vazio / só 1 item | Mostra 5 funis mapeados |
-| Incorporador abre Negócios | Mostra funis normais | Mantém igual |
-| Admin sem BU | Vê todos deduplicados | Mantém igual |
+| Thobson (coordenador) acessa R2 | Acesso negado (race condition) | Acesso permitido |
+| Outros coordenadores | Mesmo bug potencial | Corrigido |
+| Admin/Manager | Funcionava (roles carregam rápido) | Mantém |
+| Tempo de loading | Instantâneo (mas errado) | +0.5s (correto) |
 
----
-
-## Fluxo Corrigido
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  SDR do Consórcio acessa /consorcio/crm/negocios                    │
-│  1. useActiveBU() → 'consorcio'                                     │
-│  2. useBUPipelineMap('consorcio') → retorna grupos do banco         │
-│  3. useCRMPipelines(skipDedup=true) → NÃO deduplica                 │
-│  4. PipelineSelector filtra por allowedGroupIds                     │
-│  5. Dropdown mostra:                                                │
-│     - Perpétuo - Construa para Alugar                               │
-│     - Hubla - Viver de Aluguel                                      │
-│     - Hubla - Construir Para Alugar                                 │
-│     - Hubla - Sócios MCF                                            │
-│     - BU - Consórcio (se existir)                                   │
-│  6. Sidebar mostra origens de cada grupo ✓                          │
-└─────────────────────────────────────────────────────────────────────┘
-```
+A correção adiciona um breve delay visual (mostra loading enquanto busca roles) mas garante que a avaliação de permissão aconteça com os dados corretos.
