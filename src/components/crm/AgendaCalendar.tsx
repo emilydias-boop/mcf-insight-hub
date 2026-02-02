@@ -100,8 +100,12 @@ export function AgendaCalendar({
     return days;
   }, [selectedDate, viewMode]);
 
+  // Extrair IDs dos closers recebidos (já filtrados por BU no componente pai)
+  const closerIdsForSlots = useMemo(() => closers.map(c => c.id), [closers]);
+
   // Fetch actual meeting link slots from closer_meeting_links table (R1 only)
-  const { data: meetingLinkSlots } = useUniqueSlotsForDays(daysOfWeekInView, 'r1');
+  // Passa os IDs dos closers da BU para filtrar apenas slots relevantes
+  const { data: meetingLinkSlots } = useUniqueSlotsForDays(daysOfWeekInView, 'r1', closerIdsForSlots);
 
   // Calculate view date range for R2 daily slots
   const viewDateRange = useMemo(() => {
