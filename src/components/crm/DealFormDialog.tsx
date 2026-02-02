@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useCreateCRMDeal } from '@/hooks/useCRMData';
+import { useCreateCRMDeal, useCRMStages } from '@/hooks/useCRMData';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { toast } from 'sonner';
 
@@ -67,35 +67,29 @@ export function DealFormDialog({
   const createDealMutation = useCreateCRMDeal();
   const createActivityMutation = useCreateDealActivity();
 
-  // Fetch stages for the origin
-  const { data: stages = [] } = useQuery({
-    queryKey: ['crm-stages', defaultOriginId],
+  // Use the unified useCRMStages hook - only enabled when dialog is open
+  // This prevents cache pollution with the Kanban's stages query
+  const { data: pipelineStages = [] } = useCRMStages(defaultOriginId, {
+    enabled: open && !!defaultOriginId,
+  });
+
+  // Fallback to global stages if pipeline has none (for legacy origins)
+  const { data: globalStages = [] } = useQuery({
+    queryKey: ['deal-form-global-stages'],
     queryFn: async () => {
-      if (!defaultOriginId) return [];
-      
-      // First try to get stages for the specific origin
-      let { data: localStages } = await supabase
+      const { data } = await supabase
         .from('crm_stages')
         .select('*')
-        .eq('origin_id', defaultOriginId)
+        .is('origin_id', null)
         .eq('is_active', true)
         .order('stage_order');
-      
-      // If no local stages, get global stages
-      if (!localStages || localStages.length === 0) {
-        const { data: globalStages } = await supabase
-          .from('crm_stages')
-          .select('*')
-          .is('origin_id', null)
-          .eq('is_active', true)
-          .order('stage_order');
-        return globalStages || [];
-      }
-      
-      return localStages;
+      return data || [];
     },
-    enabled: !!defaultOriginId,
+    enabled: open && pipelineStages.length === 0,
   });
+
+  // Use pipeline stages if available, otherwise fall back to global
+  const stages = pipelineStages.length > 0 ? pipelineStages : globalStages;
 
   // Fetch SDRs for this origin/pipeline (two-step query to avoid join issues)
   const { data: dealOwners = [] } = useQuery({
