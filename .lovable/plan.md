@@ -1,110 +1,91 @@
 
-# Plano: Corrigir Webhook "efeito-alavanca-clube"
+# Plano: Resolver Problemas da Pipeline "Efeito Alavanca + Clube"
 
 ## Diagnóstico Confirmado
 
-### Erro Principal
-O webhook está falhando com:
-```
-Could not find the 'data_source' column of 'crm_contacts' in the schema cache
-```
+### Problema 1: Deal criado via webhook não aparece no Kanban
+- O deal `907e22e8-d704-46c3-94b8-847000cec6d7` foi criado com `stage_id: null`
+- Isso acontece porque existe uma **FK constraint** em `crm_deals.stage_id` que referencia `crm_stages`
+- As stages de "Efeito Alavanca + Clube" existem apenas em `local_pipeline_stages`
+- O Kanban filtra deals por `deal.stage_id === stage.id`, então deals sem stage_id não aparecem
 
-### Causa Raiz
-O código da Edge Function `webhook-lead-receiver` (linha 153) tenta inserir:
-```typescript
-.insert({
-  // ...
-  data_source: 'webhook'  // ❌ Esta coluna NÃO existe em crm_contacts
-})
-```
+### Problema 2: Importação dos 3.693 negócios do CSV
+- A função `process-csv-imports` só busca stages em `crm_stages` (linhas 375-389)
+- Não consulta `local_pipeline_stages`, então não conseguirá mapear stages como "VENDA REALIZADA 50K"
 
-Verificação do schema:
-| Tabela | Coluna `data_source` |
-|--------|---------------------|
-| `crm_contacts` | ❌ Não existe |
-| `crm_deals` | ✅ Existe |
+### Stages do CSV (coluna "stage")
+Identificadas no CSV:
+- `VENDA REALIZADA 50K` (maioria dos registros)
+- `RESGATE CARRINHO 50K`
+- Outros que serão identificados na migração
 
-### Problema Secundário
-O webhook busca a etapa inicial em `crm_stages` (linha 99-108), mas as etapas de "Efeito Alavanca + Clube" estão em `local_pipeline_stages`.
+### Stages configuradas em local_pipeline_stages
+13 stages criadas para origin_id `7d7b1cb5-2a44-4552-9eff-c3b798646b78`:
+1. NOVO LEAD ( FORM )
+2. CLUBE DO ARREMATE
+3. RENOVAÇÃO HUBLA
+4. RESGATE CARRINHO 50K
+5. VENDA REALIZADA 50K
+6. EVENTOS
+7. R1 Agendada
+8. NO-SHOW
+9. R1 Realizada
+10. AGUARDANDO DOC
+11. CARTA SOCIOS FECHADA
+12. APORTE HOLDING
+13. CARTA + APORTE
 
 ---
 
-## Solução
+## Solução em 3 Partes
 
-### 1) Remover `data_source` do insert de contatos
-A coluna `data_source` existe apenas em `crm_deals`, não em `crm_contacts`.
+### Parte 1: Migração de Schema - Permitir stages de local_pipeline_stages
+Criar uma migração SQL que:
+1. Espelhe as stages de `local_pipeline_stages` para `crm_stages` (com mesmo ID)
+2. Isso permite que a FK continue válida enquanto usamos stages customizadas
 
-**Arquivo:** `supabase/functions/webhook-lead-receiver/index.ts`
-
-Alterar linhas 142-156:
-```typescript
-// Antes (com erro)
-.insert({
-  clint_id: `${slug}-${Date.now()}-...`,
-  name: payload.name,
-  email: ...,
-  phone: normalizedPhone,
-  origin_id: endpoint.origin_id,
-  tags: autoTags,
-  data_source: 'webhook'  // ❌ REMOVER
-})
-
-// Depois (corrigido)
-.insert({
-  clint_id: `${slug}-${Date.now()}-...`,
-  name: payload.name,
-  email: ...,
-  phone: normalizedPhone,
-  origin_id: endpoint.origin_id,
-  tags: autoTags
-  // data_source removido - só existe em crm_deals
-})
+**Nova migration SQL:**
+```sql
+-- Espelhar stages de "Efeito Alavanca + Clube" para crm_stages
+INSERT INTO crm_stages (id, clint_id, stage_name, color, origin_id, stage_order, is_active)
+SELECT 
+  id,
+  'local-' || id::text as clint_id,
+  name as stage_name,
+  color,
+  origin_id,
+  stage_order,
+  is_active
+FROM local_pipeline_stages
+WHERE origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78'
+ON CONFLICT (id) DO UPDATE SET
+  stage_name = EXCLUDED.stage_name,
+  color = EXCLUDED.color,
+  stage_order = EXCLUDED.stage_order,
+  is_active = EXCLUDED.is_active;
 ```
 
-### 2) Buscar etapa inicial em `local_pipeline_stages` primeiro
-Alterar a lógica de fallback de stage (linhas 97-108):
-
-```typescript
-// Antes: busca apenas em crm_stages
-if (!stageId) {
-  const { data: firstStage } = await supabase
-    .from('crm_stages')
-    .select('id')
-    .eq('origin_id', endpoint.origin_id)
-    .order('order_index', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  stageId = firstStage?.id || null;
-}
-
-// Depois: busca primeiro em local_pipeline_stages, depois em crm_stages
-if (!stageId) {
-  // Tentar local_pipeline_stages primeiro (novas pipelines)
-  const { data: localStage } = await supabase
-    .from('local_pipeline_stages')
-    .select('id')
-    .eq('origin_id', endpoint.origin_id)
-    .eq('is_active', true)
-    .order('position', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  
-  if (localStage) {
-    stageId = localStage.id;
-    console.log('[WEBHOOK-RECEIVER] Usando etapa de local_pipeline_stages:', stageId);
-  } else {
-    // Fallback para crm_stages (pipelines legadas)
-    const { data: legacyStage } = await supabase
-      .from('crm_stages')
-      .select('id')
-      .eq('origin_id', endpoint.origin_id)
-      .order('order_index', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    stageId = legacyStage?.id || null;
-  }
-}
+### Parte 2: Corrigir o deal existente
+Atualizar o deal criado via webhook para apontar para a primeira stage:
+```sql
+UPDATE crm_deals
+SET stage_id = 'b5af7d28-7a0f-4da5-a115-094489fbc07d'  -- ID de "NOVO LEAD ( FORM )"
+WHERE id = '907e22e8-d704-46c3-94b8-847000cec6d7';
 ```
+
+### Parte 3: Importação do CSV
+Duas abordagens possíveis:
+
+**Opção A (Recomendada): Edge Function dedicada**
+Criar/atualizar a função `process-csv-imports` para:
+1. Buscar stages em `local_pipeline_stages` primeiro, depois `crm_stages` como fallback
+2. Mapear nome da stage para ID correto
+3. Criar contatos automaticamente se não existirem
+
+**Opção B: Importação via SQL direto**
+Rodar script SQL que:
+1. Lê o CSV da tabela de upload
+2. Cria contatos e deals com stage_id mapeado
 
 ---
 
@@ -112,37 +93,63 @@ if (!stageId) {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/webhook-lead-receiver/index.ts` | Remover `data_source` do insert de contatos (linha 153) e buscar stage em `local_pipeline_stages` primeiro (linhas 97-108) |
+| Nova migration SQL | Espelhar stages de local_pipeline_stages para crm_stages |
+| `supabase/functions/webhook-lead-receiver/index.ts` | Buscar stage em local_pipeline_stages e usar o ID espelhado em crm_stages |
+| `supabase/functions/process-csv-imports/index.ts` | Adicionar busca em local_pipeline_stages no loadStagesCache |
+
+---
+
+## Mudanças na Edge Function process-csv-imports
+
+### Função `loadStagesCache` atualizada:
+```typescript
+async function loadStagesCache(supabase: any): Promise<Map<string, string>> {
+  const cache = new Map<string, string>()
+  
+  // 1. Buscar de local_pipeline_stages primeiro (prioridade)
+  const { data: localStages } = await supabase
+    .from('local_pipeline_stages')
+    .select('id, name')
+    .eq('is_active', true)
+  
+  if (localStages) {
+    for (const stage of localStages) {
+      cache.set(stage.name.toLowerCase().trim(), stage.id)
+    }
+  }
+  
+  // 2. Fallback para crm_stages (stages legadas)
+  const { data: crmStages } = await supabase
+    .from('crm_stages')
+    .select('id, stage_name')
+  
+  if (crmStages) {
+    for (const stage of crmStages) {
+      // Só adiciona se não existir no cache (local tem prioridade)
+      if (!cache.has(stage.stage_name.toLowerCase().trim())) {
+        cache.set(stage.stage_name.toLowerCase().trim(), stage.id)
+      }
+    }
+  }
+  
+  console.log(`✅ Cache de estágios: ${cache.size} entradas`)
+  return cache
+}
+```
 
 ---
 
 ## Resultado Esperado
 
-1. O webhook deixará de retornar erro 500
-2. Leads enviados para `/webhook-lead-receiver/efeito-alavanca-clube` serão criados corretamente
-3. Os deals serão atribuídos à primeira etapa configurada em `local_pipeline_stages` (ex: "NOVO LEAD (FORM)")
-4. O contador `leads_received` do endpoint será incrementado
+1. O deal criado via webhook aparecerá na coluna "NOVO LEAD ( FORM )"
+2. A importação do CSV conseguirá mapear as 3.693 linhas para as stages corretas
+3. Futuros leads via webhook serão atribuídos à stage correta
 
 ---
 
-## Teste de Validação
-Após a correção, faremos um POST de teste:
-```bash
-POST /webhook-lead-receiver/efeito-alavanca-clube
-{
-  "name": "Teste Webhook",
-  "email": "teste@exemplo.com",
-  "phone": "11999999999"
-}
-```
+## Validação
 
-Resposta esperada:
-```json
-{
-  "success": true,
-  "action": "created",
-  "deal_id": "...",
-  "contact_id": "...",
-  "endpoint": "Efeito Alavanca + Clube"
-}
-```
+Após implementação:
+1. Verificar que o deal `907e22e8...` aparece no Kanban
+2. Testar novo envio via webhook e confirmar que aparece na coluna correta
+3. Executar importação do CSV e verificar contagem de deals por stage
