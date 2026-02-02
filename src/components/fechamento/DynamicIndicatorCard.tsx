@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { SdrIndicatorCard } from '@/components/sdr-fechamento/SdrIndicatorCard';
 import { NoShowIndicator } from '@/components/sdr-fechamento/NoShowIndicator';
 import { ActiveMetric, METRIC_CONFIG } from '@/hooks/useActiveMetricsForSdr';
-import { SdrMonthKpi, SdrCompPlan, SdrMonthPayout } from '@/types/sdr-fechamento';
+import { SdrMonthKpi, SdrCompPlan, SdrMonthPayout, getMultiplier } from '@/types/sdr-fechamento';
 import { 
   Calendar, 
   Users, 
@@ -23,6 +23,7 @@ interface DynamicIndicatorCardProps {
   compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
+  variavelTotal?: number; // Total variável do cargo (fallback do cargo_catalogo)
 }
 
 const iconMap: Record<string, React.ElementType> = {
@@ -53,6 +54,7 @@ export const DynamicIndicatorCard = ({
   compPlan,
   diasUteisMes,
   sdrMetaDiaria,
+  variavelTotal = 0,
 }: DynamicIndicatorCardProps) => {
   const config = METRIC_CONFIG[metrica.nome_metrica];
   
@@ -83,6 +85,38 @@ export const DynamicIndicatorCard = ({
 
   // Get values from KPI
   const kpiValue = kpi ? (kpi as any)[config.kpiField] || 0 : 0;
+
+  // For metrics with isDynamicCalc (contratos, vendas_parceria), calculate values dynamically
+  if (config.isDynamicCalc) {
+    // Use variável total do cargo_catalogo ou compPlan
+    const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+    const pesoPercent = metrica.peso_percentual || 25;
+    const valorBase = baseVariavel * (pesoPercent / 100);
+    
+    // Meta = meta_valor (diária) × dias úteis
+    const metaDiaria = metrica.meta_valor || 1;
+    const metaAjustada = metaDiaria * diasUteisMes;
+    
+    // Calcular percentual e multiplicador
+    const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
+    const mult = getMultiplier(pct);
+    const valorFinal = valorBase * mult;
+
+    return (
+      <SdrIndicatorCard
+        title={metrica.label_exibicao}
+        meta={metaDiaria}
+        metaAjustada={metaAjustada}
+        realizado={kpiValue}
+        pct={pct}
+        multiplicador={mult}
+        valorBase={valorBase}
+        valorFinal={valorFinal}
+        isPercentage={false}
+        isManual={false}
+      />
+    );
+  }
   
   // For metrics that use SdrIndicatorCard (have payout percentage fields)
   if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
@@ -164,6 +198,7 @@ interface DynamicIndicatorsGridProps {
   compPlan: SdrCompPlan | null;
   diasUteisMes: number;
   sdrMetaDiaria: number;
+  variavelTotal?: number;
 }
 
 export const DynamicIndicatorsGrid = ({
@@ -173,6 +208,7 @@ export const DynamicIndicatorsGrid = ({
   compPlan,
   diasUteisMes,
   sdrMetaDiaria,
+  variavelTotal,
 }: DynamicIndicatorsGridProps) => {
   if (!metricas || metricas.length === 0) {
     return (
@@ -193,6 +229,7 @@ export const DynamicIndicatorsGrid = ({
           compPlan={compPlan}
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
+          variavelTotal={variavelTotal}
         />
       ))}
     </div>
