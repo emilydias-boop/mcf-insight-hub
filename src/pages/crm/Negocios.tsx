@@ -21,12 +21,10 @@ import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 import { 
   isSdrRole, 
   getAuthorizedOriginsForRole,
-  getAuthorizedOriginsForBU,
   SDR_AUTHORIZED_ORIGIN_ID,
-  BU_PIPELINE_MAP,
   BU_DEFAULT_ORIGIN_MAP,
-  BU_GROUP_MAP,
 } from '@/components/auth/NegociosAccessGuard';
+import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
 import { useBulkA010Check, detectSalesChannel, SalesChannel } from '@/hooks/useBulkA010Check';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
@@ -72,17 +70,21 @@ const Negocios = () => {
   const isSdr = isSdrRole(role, allRoles);
   const authorizedOrigins = getAuthorizedOriginsForRole(role);
   
+  // Buscar mapeamento dinâmico da BU do banco de dados
+  const { data: buMapping, isLoading: isBuMappingLoading } = useBUPipelineMap(activeBU);
+  
   // Origens autorizadas baseadas na BU ativa (rota ou perfil)
   const buAuthorizedOrigins = useMemo(() => {
-    if (!activeBU) return []; // Sem BU = vê tudo (admin)
-    return BU_PIPELINE_MAP[activeBU] || [];
-  }, [activeBU]);
+    if (!activeBU || !buMapping) return []; // Sem BU ou carregando = vê tudo (admin)
+    // Se tem origens configuradas, usar elas; senão, usar grupos
+    return buMapping.origins.length > 0 ? buMapping.origins : buMapping.groups;
+  }, [activeBU, buMapping]);
   
   // Grupos permitidos no dropdown de funis baseados na BU ativa
   const buAllowedGroups = useMemo(() => {
-    if (!activeBU) return []; // Sem BU = vê tudo (admin)
-    return BU_GROUP_MAP[activeBU] || [];
-  }, [activeBU]);
+    if (!activeBU || !buMapping) return []; // Sem BU ou carregando = vê tudo (admin)
+    return buMapping.groups;
+  }, [activeBU, buMapping]);
   
   // Ref para garantir que só define o default UMA VEZ
   const hasSetDefault = useRef(false);
