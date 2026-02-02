@@ -156,14 +156,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Fetch roles with timeout
-      const { primaryRole, roles } = await withTimeout(
+      // Fetch roles with timeout - null indicates timeout occurred
+      const roleResult = await withTimeout(
         fetchUserRoles(userId),
         ROLE_TIMEOUT_MS,
-        { primaryRole: 'viewer' as AppRole, roles: ['viewer' as AppRole] }
+        null // fallback: null means timeout
       );
 
       if (version !== roleLoadVersion.current) return;
+
+      // If timeout occurred, use viewer BUT don't mark as loaded
+      // This allows roles to be reloaded on next event (TOKEN_REFRESHED, etc.)
+      if (roleResult === null) {
+        console.warn('[Auth] Role fetch timed out, using viewer temporarily');
+        setRole('viewer');
+        setAllRoles(['viewer']);
+        // Do NOT set hasLoadedRoles.current = true here!
+        return;
+      }
+
+      const { primaryRole, roles } = roleResult;
 
       if (roles.length === 0) {
         setRole('viewer');
@@ -173,6 +185,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAllRoles(roles);
       }
       
+      // Only mark as loaded if we actually fetched from database
       hasLoadedRoles.current = true;
       console.log('[Auth] Roles loaded:', { primaryRole, roles });
     } catch (error) {
@@ -180,7 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (version === roleLoadVersion.current) {
         setRole('viewer');
         setAllRoles(['viewer']);
-        toast.warning('Servidor lento — carregamos com acesso básico.');
+        // Don't mark as loaded on error - allow retry
       }
     } finally {
       if (version === roleLoadVersion.current) {
@@ -252,11 +265,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         // Preserve roles during token refresh - don't reset if same user
+        // BUT: if roles weren't properly loaded (timeout occurred), try again
         if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && 
             user && 
-            newSession?.user?.id === user.id && 
-            hasLoadedRoles.current) {
-          console.log('[Auth] Token refreshed, keeping existing roles');
+            newSession?.user?.id === user.id) {
+          
+          if (!hasLoadedRoles.current) {
+            // Previous load timed out - retry now
+            console.log('[Auth] Token refreshed but roles not loaded, reloading...');
+            const myVersion = ++roleLoadVersion.current;
+            setRoleLoading(true);
+            setTimeout(() => {
+              loadRolesInBackground(newSession.user.id, myVersion);
+            }, 0);
+          } else {
+            console.log('[Auth] Token refreshed, keeping existing roles');
+          }
           setSession(newSession);
           return;
         }
