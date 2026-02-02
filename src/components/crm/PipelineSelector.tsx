@@ -18,9 +18,10 @@ interface PipelineSelectorProps {
 }
 
 // Hook para buscar grupos principais (funis) - com deduplicação por nome
-export const useCRMPipelines = () => {
+// skipDedup=true pula a deduplicação, útil quando temos filtro de BU (IDs específicos mapeados)
+export const useCRMPipelines = (skipDedup = false) => {
   return useQuery({
-    queryKey: ['crm-pipelines'],
+    queryKey: ['crm-pipelines', skipDedup],
     queryFn: async () => {
       // Buscar grupos (que são os funis principais)
       const { data, error } = await supabase
@@ -33,6 +34,13 @@ export const useCRMPipelines = () => {
       
       // Filtrar arquivados (se coluna existir, senão ignora)
       const activeGroups = data.filter(g => g.is_archived !== true);
+      
+      // Se skipDedup=true, pular deduplicação (retorna todos com IDs originais)
+      if (skipDedup) {
+        return activeGroups.sort((a, b) => 
+          (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
+        );
+      }
       
       // Deduplicar por nome (manter o mais recente de cada)
       const seen = new Map<string, typeof activeGroups[0]>();

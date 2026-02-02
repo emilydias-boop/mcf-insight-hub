@@ -138,9 +138,12 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
     }
   }, [originData, allowedOriginIds, hasBUFilter]);
   
-  // Query separada para buscar grupos (para o modo collapsed) - com deduplicação
+  // Se tem filtro de BU, não deduplicar (para manter IDs mapeados)
+  const skipDedup = hasBUFilter;
+  
+  // Query separada para buscar grupos (para o modo collapsed)
   const { data: allGroups } = useQuery({
-    queryKey: ['crm-groups-for-collapsed-sidebar'],
+    queryKey: ['crm-groups-for-collapsed-sidebar', skipDedup],
     queryFn: async () => {
       const { data } = await supabase
         .from('crm_groups')
@@ -151,6 +154,13 @@ export const OriginsSidebar = ({ pipelineId, selectedOriginId, onSelectOrigin, o
       
       // Filtrar arquivados
       const activeGroups = data.filter(g => g.is_archived !== true);
+      
+      // Se tem filtro de BU, pular deduplicação
+      if (skipDedup) {
+        return activeGroups.sort((a, b) => 
+          (a.display_name ?? a.name).localeCompare(b.display_name ?? b.name)
+        );
+      }
       
       // Deduplicar por nome (manter o mais recente de cada)
       const seen = new Map<string, typeof activeGroups[0]>();

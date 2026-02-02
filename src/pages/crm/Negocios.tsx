@@ -91,7 +91,8 @@ const Negocios = () => {
   const hasSetDefault = useRef(false);
   
   // Buscar pipelines para definir o default
-  const { data: pipelines } = useCRMPipelines();
+  // Se tem BU ativa, pula deduplicação para garantir que os IDs mapeados apareçam
+  const { data: pipelines } = useCRMPipelines(!!activeBU);
   
   // Buscar origens do pipeline selecionado
   const { data: pipelineOrigins } = useCRMOriginsByPipeline(selectedPipelineId);
