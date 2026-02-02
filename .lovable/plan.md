@@ -1,100 +1,148 @@
 
-# Plano: Corrigir Stages Customizadas não Aparecendo no Kanban
+# Plano: Corrigir Webhook "efeito-alavanca-clube"
 
 ## Diagnóstico Confirmado
 
-### O Problema
-As stages criadas para "Efeito Alavanca + Clube" não aparecem porque o sistema de permissões as bloqueia por padrão.
-
-| Stage | ID | Normalizado | Tem Permissão? | Aparece? |
-|-------|-----|-------------|----------------|----------|
-| R1 Agendada | bedef4ec-... | r1_agendada → reuniao_1_agendada | Sim | Sim |
-| NO-SHOW | bb69af6a-... | no_show | Sim | Sim |
-| R1 Realizada | f7c48a43-... | r1_realizada | Sim | Sim |
-| NOVO LEAD ( FORM ) | b5af7d28-... | novo_lead_(_form_) | Nao | Nao |
-| CLUBE DO ARREMATE | bf370a4f-... | clube_do_arremate | Nao | Nao |
-| RENOVACAO HUBLA | 3e545cd2-... | renovacao_hubla | Nao | Nao |
-| ... (outras 6) | ... | ... | Nao | Nao |
+### Erro Principal
+O webhook está falhando com:
+```
+Could not find the 'data_source' column of 'crm_contacts' in the schema cache
+```
 
 ### Causa Raiz
-No `useStagePermissions.ts`, linha 177:
+O código da Edge Function `webhook-lead-receiver` (linha 153) tenta inserir:
 ```typescript
-const canViewStage = (stageId: string) => {
-  return findPermission(stageId)?.can_view ?? false;  // Retorna FALSE quando nao encontra
-};
+.insert({
+  // ...
+  data_source: 'webhook'  // ❌ Esta coluna NÃO existe em crm_contacts
+})
 ```
 
-O padrão `false` bloqueia qualquer stage que nao tenha permissao explicita.
+Verificação do schema:
+| Tabela | Coluna `data_source` |
+|--------|---------------------|
+| `crm_contacts` | ❌ Não existe |
+| `crm_deals` | ✅ Existe |
+
+### Problema Secundário
+O webhook busca a etapa inicial em `crm_stages` (linha 99-108), mas as etapas de "Efeito Alavanca + Clube" estão em `local_pipeline_stages`.
 
 ---
 
-## Solucao
+## Solução
 
-### Mudanca de Comportamento
-Inverter o padrao: **stages sem permissao explicita devem ser visiveis por padrao**.
+### 1) Remover `data_source` do insert de contatos
+A coluna `data_source` existe apenas em `crm_deals`, não em `crm_contacts`.
 
-A logica de restricao existe para:
-1. Esconder stages especificas de roles especificas (ex: SDRs nao veem "Contrato Pago")
-2. Nao para bloquear todo o sistema
+**Arquivo:** `supabase/functions/webhook-lead-receiver/index.ts`
 
-### Implementacao
-
-**Arquivo:** `src/hooks/useStagePermissions.ts`
-
-Alterar as 4 funcoes de verificacao de permissao para retornar `true` por padrao:
-
+Alterar linhas 142-156:
 ```typescript
-const canViewStage = (stageId: string) => {
-  const permission = findPermission(stageId);
-  // Se nao existe permissao explicita, permitir por padrao
-  if (!permission) return true;
-  return permission.can_view;
-};
+// Antes (com erro)
+.insert({
+  clint_id: `${slug}-${Date.now()}-...`,
+  name: payload.name,
+  email: ...,
+  phone: normalizedPhone,
+  origin_id: endpoint.origin_id,
+  tags: autoTags,
+  data_source: 'webhook'  // ❌ REMOVER
+})
 
-const canEditStage = (stageId: string) => {
-  const permission = findPermission(stageId);
-  if (!permission) return true;
-  return permission.can_edit;
-};
-
-const canMoveFromStage = (stageId: string) => {
-  const permission = findPermission(stageId);
-  if (!permission) return true;
-  return permission.can_move_from;
-};
-
-const canMoveToStage = (stageId: string) => {
-  const permission = findPermission(stageId);
-  if (!permission) return true;
-  return permission.can_move_to;
-};
+// Depois (corrigido)
+.insert({
+  clint_id: `${slug}-${Date.now()}-...`,
+  name: payload.name,
+  email: ...,
+  phone: normalizedPhone,
+  origin_id: endpoint.origin_id,
+  tags: autoTags
+  // data_source removido - só existe em crm_deals
+})
 ```
 
----
+### 2) Buscar etapa inicial em `local_pipeline_stages` primeiro
+Alterar a lógica de fallback de stage (linhas 97-108):
 
-## Alternativa Considerada (Nao Recomendada)
+```typescript
+// Antes: busca apenas em crm_stages
+if (!stageId) {
+  const { data: firstStage } = await supabase
+    .from('crm_stages')
+    .select('id')
+    .eq('origin_id', endpoint.origin_id)
+    .order('order_index', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  stageId = firstStage?.id || null;
+}
 
-Criar permissoes automaticamente quando novas stages sao criadas:
-- Mais complexo
-- Requer migrar todas as stages existentes
-- Aumenta dados no banco
-
-A solucao de "permitir por padrao" e mais simples e segura.
-
----
-
-## Resultado Esperado
-
-| Cenario | Antes | Depois |
-|---------|-------|--------|
-| "Efeito Alavanca + Clube" | 3 stages (R1, NO-SHOW, R1 Realizada) | 13 stages (todas) |
-| Stages customizadas sem permissao | Bloqueadas | Visiveis por padrao |
-| Restricoes explicitas (ex: SDR nao ve "Contrato Pago") | Funcionam | Continuam funcionando |
+// Depois: busca primeiro em local_pipeline_stages, depois em crm_stages
+if (!stageId) {
+  // Tentar local_pipeline_stages primeiro (novas pipelines)
+  const { data: localStage } = await supabase
+    .from('local_pipeline_stages')
+    .select('id')
+    .eq('origin_id', endpoint.origin_id)
+    .eq('is_active', true)
+    .order('position', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  
+  if (localStage) {
+    stageId = localStage.id;
+    console.log('[WEBHOOK-RECEIVER] Usando etapa de local_pipeline_stages:', stageId);
+  } else {
+    // Fallback para crm_stages (pipelines legadas)
+    const { data: legacyStage } = await supabase
+      .from('crm_stages')
+      .select('id')
+      .eq('origin_id', endpoint.origin_id)
+      .order('order_index', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    stageId = legacyStage?.id || null;
+  }
+}
+```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useStagePermissions.ts` | Alterar padrao de `false` para `true` nas 4 funcoes de permissao |
+| `supabase/functions/webhook-lead-receiver/index.ts` | Remover `data_source` do insert de contatos (linha 153) e buscar stage em `local_pipeline_stages` primeiro (linhas 97-108) |
+
+---
+
+## Resultado Esperado
+
+1. O webhook deixará de retornar erro 500
+2. Leads enviados para `/webhook-lead-receiver/efeito-alavanca-clube` serão criados corretamente
+3. Os deals serão atribuídos à primeira etapa configurada em `local_pipeline_stages` (ex: "NOVO LEAD (FORM)")
+4. O contador `leads_received` do endpoint será incrementado
+
+---
+
+## Teste de Validação
+Após a correção, faremos um POST de teste:
+```bash
+POST /webhook-lead-receiver/efeito-alavanca-clube
+{
+  "name": "Teste Webhook",
+  "email": "teste@exemplo.com",
+  "phone": "11999999999"
+}
+```
+
+Resposta esperada:
+```json
+{
+  "success": true,
+  "action": "created",
+  "deal_id": "...",
+  "contact_id": "...",
+  "endpoint": "Efeito Alavanca + Clube"
+}
+```
