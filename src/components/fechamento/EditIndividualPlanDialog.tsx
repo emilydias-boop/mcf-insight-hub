@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Save, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
+import { useActiveMetricsForCargo, getMetricValueLabel } from '@/hooks/useActiveMetricsForSdr';
 
 interface PlanValues {
   ote_total: number;
@@ -32,6 +33,9 @@ interface EditIndividualPlanDialogProps {
   employeeId: string;
   sdrId: string | null;
   cargoName: string;
+  cargoId?: string;
+  squad?: string;
+  anoMes: string;
   // Valores atuais (do sdr_comp_plan ou cargos_catalogo)
   currentValues: PlanValues;
   // Valores do catálogo (para referência)
@@ -48,6 +52,9 @@ export const EditIndividualPlanDialog = ({
   employeeId,
   sdrId,
   cargoName,
+  cargoId,
+  squad,
+  anoMes,
   currentValues,
   catalogValues,
   isPersonalized,
@@ -56,6 +63,9 @@ export const EditIndividualPlanDialog = ({
 }: EditIndividualPlanDialogProps) => {
   const [formData, setFormData] = useState<PlanValues>(currentValues);
   const [autoCalculateVariavel, setAutoCalculateVariavel] = useState(true);
+
+  // Fetch active metrics for this cargo
+  const { data: activeMetrics, isLoading: loadingMetrics } = useActiveMetricsForCargo(cargoId, anoMes, squad);
 
   useEffect(() => {
     setFormData(currentValues);
@@ -198,60 +208,104 @@ export const EditIndividualPlanDialog = ({
             </span>
           </div>
 
-          {/* Valores por Métrica */}
+          {/* Valores por Métrica - Dynamic based on active metrics */}
           <div className="border-t pt-3">
-            <Label className="text-xs text-muted-foreground mb-2 block">
+            <Label className="text-xs text-muted-foreground mb-2 block flex items-center gap-2">
               Valores por Métrica (componentes do variável)
+              {loadingMetrics && <RefreshCw className="h-3 w-3 animate-spin" />}
+              {activeMetrics && activeMetrics.length > 0 && (
+                <Badge variant="outline" className="text-[10px]">
+                  {activeMetrics.length} métricas configuradas
+                </Badge>
+              )}
             </Label>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="valor_meta_rpg" className="text-[10px]">Agendadas (R$)</Label>
-                <Input
-                  id="valor_meta_rpg"
-                  type="number"
-                  min="0"
-                  step="10"
-                  value={formData.valor_meta_rpg}
-                  onChange={(e) => handleChange('valor_meta_rpg', e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="valor_docs_reuniao" className="text-[10px]">Realizadas (R$)</Label>
-                <Input
-                  id="valor_docs_reuniao"
-                  type="number"
-                  min="0"
-                  step="10"
-                  value={formData.valor_docs_reuniao}
-                  onChange={(e) => handleChange('valor_docs_reuniao', e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="valor_tentativas" className="text-[10px]">Tentativas (R$)</Label>
-                <Input
-                  id="valor_tentativas"
-                  type="number"
-                  min="0"
-                  step="10"
-                  value={formData.valor_tentativas}
-                  onChange={(e) => handleChange('valor_tentativas', e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="valor_organizacao" className="text-[10px]">Organização (R$)</Label>
-                <Input
-                  id="valor_organizacao"
-                  type="number"
-                  min="0"
-                  step="10"
-                  value={formData.valor_organizacao}
-                  onChange={(e) => handleChange('valor_organizacao', e.target.value)}
-                  className="h-8 text-sm"
-                />
-              </div>
+              {/* Show dynamic metrics if configured, otherwise show defaults */}
+              {activeMetrics && activeMetrics.length > 0 ? (
+                <>
+                  {activeMetrics.map((metric) => {
+                    const fieldMap: Record<string, keyof PlanValues> = {
+                      agendamentos: 'valor_meta_rpg',
+                      realizadas: 'valor_docs_reuniao',
+                      tentativas: 'valor_tentativas',
+                      organizacao: 'valor_organizacao',
+                      contratos: 'valor_docs_reuniao', // reuse for contracts
+                      r2_agendadas: 'valor_meta_rpg', // reuse for R2
+                    };
+                    const field = fieldMap[metric.nome_metrica];
+                    if (!field) return null;
+                    
+                    return (
+                      <div key={metric.nome_metrica} className="space-y-1">
+                        <Label htmlFor={field} className="text-[10px]">
+                          {metric.label_exibicao} (R$)
+                        </Label>
+                        <Input
+                          id={field}
+                          type="number"
+                          min="0"
+                          step="10"
+                          value={formData[field]}
+                          onChange={(e) => handleChange(field, e.target.value)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  {/* Default fields when no metrics configured */}
+                  <div className="space-y-1">
+                    <Label htmlFor="valor_meta_rpg" className="text-[10px]">Agendadas (R$)</Label>
+                    <Input
+                      id="valor_meta_rpg"
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={formData.valor_meta_rpg}
+                      onChange={(e) => handleChange('valor_meta_rpg', e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="valor_docs_reuniao" className="text-[10px]">Realizadas (R$)</Label>
+                    <Input
+                      id="valor_docs_reuniao"
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={formData.valor_docs_reuniao}
+                      onChange={(e) => handleChange('valor_docs_reuniao', e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="valor_tentativas" className="text-[10px]">Tentativas (R$)</Label>
+                    <Input
+                      id="valor_tentativas"
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={formData.valor_tentativas}
+                      onChange={(e) => handleChange('valor_tentativas', e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="valor_organizacao" className="text-[10px]">Organização (R$)</Label>
+                    <Input
+                      id="valor_organizacao"
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={formData.valor_organizacao}
+                      onChange={(e) => handleChange('valor_organizacao', e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
