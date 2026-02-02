@@ -1,111 +1,214 @@
 
-Objetivo
-- Fazer o /fechamento-sdr “acompanhar tudo interligado”: RH (employees/cargos_catalogo), Métricas Ativas (fechamento_metricas_mes) e o próprio fechamento (sdr_month_payout / sdr_comp_plan).
-- Corrigir especificamente o caso “Thayna é N2, mas aparece N1 com valores errados”.
+# Plano: Corrigir Salvamento e Exibição de Métricas Ativas
 
-Causa raiz (o que está quebrando hoje)
-1) Nível (N1/N2) no /fechamento-sdr/Index está vindo de `payout.sdr.nivel` (legado) e não do RH:
-   - `Index.tsx` usa: `const nivel = payout.sdr?.nivel || 1;`
-   - Para closers/SDRs, o nível correto deveria vir de `employees.cargo_catalogo.nivel` (RH é fonte de verdade).
+## Problemas Identificados
 
-2) O hook `useSdrPayouts` (em `useSdrFechamento.ts`) faz lookup de employee sem filtrar “ativo”:
-   - Query atual: `.from('employees').select('... sdr_id, status').not('sdr_id','is',null)`
-   - Se existir mais de um registro de employee para o mesmo `sdr_id` (ex.: transferência / histórico / desligado), o Map pode pegar um employee antigo e gerar cargo/BU/nível errados.
+### 1. Métricas não salvam corretamente (voltam ao anterior)
+**Causa raiz:** O sistema usa `upsert` com a constraint `(ano_mes, cargo_catalogo_id, squad, nome_metrica)`, mas no PostgreSQL, **NULL != NULL** em unique constraints. Então cada save cria NOVOS registros em vez de atualizar os existentes quando `squad=null`.
 
-3) O /fechamento-sdr/Index não encontra os planos individuais porque filtra status errado:
-   - Index.tsx busca compPlans com: `.eq('status','active')`
-   - Mas `SdrCompPlan.status` no projeto é `SdrStatus = 'PENDING' | 'APPROVED' | 'REJECTED'`.
-   - Ou seja: o Index ignora todos os planos salvos no sistema (por isso OTE e valores ficam no fallback 4000 e parecem “N1 com valores errados”).
+Evidência no banco:
+```
+cargo_catalogo_id: c2909e20... (Closer Inside N1)
+Métricas com squad=null:
+- contratos: 3 registros duplicados!
+- organizacao: 3 registros duplicados!
+```
 
-O que vamos mudar (implementação)
-A) Corrigir integração RH dentro do hook `useSdrPayouts`
-Arquivo: src/hooks/useSdrFechamento.ts
+### 2. Métricas desativadas não são removidas
+O `handleSave` só faz upsert das métricas ativas, mas **não deleta as antigas** que foram desligadas. Quando a página recarrega, as antigas ainda aparecem.
 
-1) Ajustar query de employees para usar RH como fonte de verdade:
-   - Filtrar somente colaboradores ativos (e evitar pegar histórico):
-     - adicionar `.eq('status', 'ativo')`
-   - Trazer `cargo_catalogo_id` e join do cargo (nível/valores):
-     - select incluindo:
-       - `departamento, cargo_catalogo_id, nome_completo, cargo`
-       - `cargo_catalogo:cargo_catalogo_id ( id, nome_exibicao, nivel, ote_total, fixo_valor, variavel_valor, area, cargo_base )`
+### 3. Conflito entre squad=null e squad específico
+Quando salva com "BU: Todas" (`squad=null`), cria registros com `squad=null`. Quando muda para "BU: Incorporador", cria novos registros com `squad='incorporador'`. Ambos coexistem e causam confusão.
 
-2) Ajustar o Map `sdrToEmployee` para armazenar também:
-   - cargo_catalogo_id
-   - cargo_catalogo (objeto com nivel/ote/fixo/variavel)
-   - (mantém departamento e cargo string)
+### 4. Métricas não aparecem corretamente no popup
+O `useActiveMetricsForCargo` não encontra métricas porque consulta com `squad=undefined` mas no banco existem com `squad=null` ou `squad='incorporador'`.
 
-3) Garantir que filtros e display continuem funcionando:
-   - Filtro BU já usa `departamento_vigente > employee.departamento > sdr.squad` (ok)
-   - Excluir “Closer R2” continua usando `employee.cargo` (ok)
+---
 
-B) Corrigir a exibição de Nível e OTE no /fechamento-sdr (tela de lista)
-Arquivo: src/pages/fechamento-sdr/Index.tsx
+## Solução: Delete + Insert ao Salvar
 
-1) Nível:
-   - Trocar a fonte do nível exibido:
-     - prioridade 1: `payout.employee.cargo_catalogo.nivel` (RH)
-     - fallback: `payout.sdr.nivel` (legado)
-   - Resultado: Thayna N2 aparece como N2 (mesmo que sdr.nivel esteja 1).
+Modificar o fluxo de salvamento para:
+1. **DELETAR todas as métricas existentes** para o cargo/squad/mês
+2. **INSERIR as novas métricas** ativas selecionadas
 
-2) OTE:
-   - Corrigir busca de compPlans (status errado):
-     - Remover `.eq('status', 'active')`
-     - Substituir por filtro coerente com o tipo atual, por exemplo:
-       - incluir PENDING e APPROVED (e excluir REJECTED), ou simplesmente não filtrar por status e pegar o vigente.
-   - Definir OTE exibido:
-     - prioridade 1: compPlan vigente do `sdr_comp_plan` (se existir e não for REJECTED)
-     - fallback: `payout.employee.cargo_catalogo.ote_total` (RH/cargos_catalogo)
-     - fallback final: 4000
-   - Resultado: OTE e valores “padrão” passam a refletir o cargo real do RH (N2), mesmo quando não existe plano individual.
+Isso garante que:
+- Métricas desativadas sejam removidas
+- Não haja duplicatas por causa de NULL
+- O estado final reflita exatamente o que foi configurado
 
-3) (Opcional, mas recomendado) Mostrar tooltip/indicador “Fonte do nível/OTE”:
-   - Ex: “RH” vs “Legado”
-   - Isso ajuda a enxergar rapidamente quando existe SDR “órfão” sem vínculo de RH.
+---
 
-C) Corrigir a exibição do nível também no detalhe/export (consistência)
-Arquivo: src/pages/fechamento-sdr/Detail.tsx
+## Alterações Técnicas
 
-1) Hoje o export imprime:
-   - `const nivel = payout.sdr?.nivel || 1;`
-2) Vamos padronizar para usar o mesmo “nível efetivo”:
-   - tentar ler o employee/cargo do RH (se o Detail tiver o employee disponível; se não tiver, faremos o Detail buscar o employee ativo pelo `payout.sdr_id`).
-3) Resultado: o CSV e o detalhe ficam coerentes com a lista.
+### 1. Modificar `useBulkUpsertMetricas` em `useFechamentoMetricas.ts`
 
-D) Validação ponta-a-ponta (para garantir que “tudo está interligado”)
-1) Caso Thayna:
-   - Confirmar que employees.status = ‘ativo’ para o registro dela e cargo_catalogo_id = Closer Inside N2.
-   - Verificar no /fechamento-sdr:
-     - Cargo = Closer
-     - Nível = N2
-     - OTE = ote_total do cargo N2 (ou o plano individual vigente, se existir)
-2) Caso Julio (Closer N1):
-   - Confirmar que segue N1 e OTE do N1.
-3) Caso SDR N2:
-   - Confirmar que também passa a usar `cargo_catalogo.nivel` se existir, e mantém fallback para sdr.nivel se não existir vínculo RH.
-4) Verificar popup e indicadores:
-   - O popup/indicadores já estão dinâmicos por Métricas Ativas; a checagem aqui é garantir que o cargo/nível/valores base (OTE/fixo/variável) estejam coerentes com RH.
+Trocar a lógica de "upsert simples" para "delete + insert":
 
-Arquivos que serão alterados
-- src/hooks/useSdrFechamento.ts
-  - Ajustar `useSdrPayouts`: filtrar employees ativos + trazer cargo_catalogo join + enriquecer payout.employee
-- src/pages/fechamento-sdr/Index.tsx
-  - Corrigir fonte do “Nível”
-  - Corrigir query de compPlans (status)
-  - Ajustar fallback de OTE para usar RH quando não houver plano
-- src/pages/fechamento-sdr/Detail.tsx
-  - Padronizar nível/OTE no export/detalhe usando RH quando disponível
+```typescript
+export const useBulkUpsertMetricas = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (metricas: Array<...> & { 
+      // Adicionar parâmetro para delete
+      _deleteConfig?: { 
+        anoMes: string; 
+        cargoId: string | null; 
+        squad: string | null; 
+      } 
+    }) => {
+      const deleteConfig = metricas[0]?._deleteConfig;
+      
+      // Step 1: DELETE existing metrics for this cargo/squad/month
+      if (deleteConfig) {
+        let deleteQuery = supabase
+          .from('fechamento_metricas_mes')
+          .delete()
+          .eq('ano_mes', deleteConfig.anoMes);
+        
+        if (deleteConfig.cargoId) {
+          deleteQuery = deleteQuery.eq('cargo_catalogo_id', deleteConfig.cargoId);
+        } else {
+          deleteQuery = deleteQuery.is('cargo_catalogo_id', null);
+        }
+        
+        if (deleteConfig.squad) {
+          deleteQuery = deleteQuery.eq('squad', deleteConfig.squad);
+        } else {
+          deleteQuery = deleteQuery.is('squad', null);
+        }
+        
+        await deleteQuery;
+      }
+      
+      // Step 2: INSERT new active metrics
+      const { data, error } = await supabase
+        .from('fechamento_metricas_mes')
+        .insert(metricas.map(m => ({
+          ...m,
+          _deleteConfig: undefined // Remove meta field
+        })))
+        .select();
+      
+      if (error) throw error;
+      return data;
+    },
+    // ... rest
+  });
+};
+```
 
-Riscos e cuidados
-- Se existir colaborador sem vínculo RH (employees.sdr_id vazio), o sistema deve continuar funcionando:
-  - Nível cai para `sdr.nivel`
-  - OTE cai para 4000 (ou valor padrão) e sinaliza warning (já existe warning de “orphan” na BU; podemos reaproveitar padrão)
-- Se houver mais de um employee “ativo” apontando para o mesmo sdr_id (anômalo), ainda pode haver ambiguidade:
-  - Vamos manter `.eq('status','ativo')` e, se necessário, ordenar por updated_at/created_at e pegar o mais recente (podemos adicionar isso se identificarmos no código que a query retorna mais de um).
+### 2. Modificar `handleSave` em `ActiveMetricsTab.tsx`
 
-Critério de pronto (o que você vai ver na tela)
-- Thayna aparece como:
-  - Cargo: Closer
-  - Nível: N2 (vindo do RH/cargos_catalogo)
-  - OTE/Fixo/Variável coerentes com o cargo N2 (ou com o plano individual vigente)
-- O mesmo padrão vale para todos: “tudo interligado” RH + configuração do fechamento.
+Passar o contexto de delete junto com as métricas:
 
+```typescript
+const handleSave = async () => {
+  const cargoId = selectedCargoId === '__all__' ? null : selectedCargoId;
+  const squad = selectedSquad === '__all__' ? null : selectedSquad;
+  
+  const metricasToSave = localMetrics
+    .filter(m => m.ativo)
+    .map((m, index) => ({
+      ano_mes: anoMes,
+      cargo_catalogo_id: cargoId,
+      squad: squad,
+      nome_metrica: m.nome_metrica,
+      label_exibicao: m.label_exibicao,
+      peso_percentual: m.peso_percentual,
+      meta_valor: m.meta_valor,
+      fonte_dados: m.fonte_dados,
+      ativo: true,
+      // Include delete config only on first item
+      ...(index === 0 ? {
+        _deleteConfig: { anoMes, cargoId, squad }
+      } : {})
+    }));
+
+  // ... validations and save
+};
+```
+
+### 3. Corrigir consulta em `useActiveMetricsForCargo`
+
+Tratar `squad=undefined` como "buscar sem filtro de squad":
+
+```typescript
+// Quando não tem squad especificado, buscar métricas sem squad OU qualquer squad
+if (squad) {
+  query = query.eq('squad', squad);
+} else {
+  // Buscar métricas sem squad definido (genéricas para o cargo)
+  query = query.is('squad', null);
+}
+```
+
+### 4. Corrigir consulta no `useFechamentoMetricas` (ActiveMetricsTab)
+
+Similar ao acima, garantir que quando `squad=undefined`:
+- Se queremos métricas "genéricas" do cargo: filtrar `.is('squad', null)`
+- Se queremos TODAS as métricas (incluindo por BU): não filtrar por squad
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useFechamentoMetricas.ts` | Trocar upsert por delete+insert no `useBulkUpsertMetricas` |
+| `src/components/fechamento/ActiveMetricsTab.tsx` | Ajustar `handleSave` para passar contexto de delete |
+| `src/hooks/useActiveMetricsForSdr.ts` | Corrigir `useActiveMetricsForCargo` para usar `.is('squad', null)` |
+
+---
+
+## Limpeza de Dados (SQL)
+
+Para corrigir os duplicados existentes, executar SQL:
+
+```sql
+-- Remove duplicados mantendo apenas o registro mais recente
+DELETE FROM fechamento_metricas_mes a
+USING fechamento_metricas_mes b
+WHERE a.id < b.id
+  AND a.ano_mes = b.ano_mes
+  AND a.cargo_catalogo_id IS NOT DISTINCT FROM b.cargo_catalogo_id
+  AND a.squad IS NOT DISTINCT FROM b.squad
+  AND a.nome_metrica = b.nome_metrica;
+```
+
+---
+
+## Fluxo Corrigido
+
+```text
+ANTES (problema):
+┌───────────────────────────────────────────────────┐
+│ Save: contratos (50%) + organização (50%)         │
+├───────────────────────────────────────────────────┤
+│ Banco: UPSERT → NULL não combina → INSERT NOVO   │
+│                                                   │
+│ Resultado: 3x contratos, 3x organização, etc.    │
+│ Reload: Mostra as antigas (4 métricas 25%)       │
+└───────────────────────────────────────────────────┘
+
+DEPOIS (corrigido):
+┌───────────────────────────────────────────────────┐
+│ Save: contratos (50%) + organização (50%)         │
+├───────────────────────────────────────────────────┤
+│ Banco:                                            │
+│ 1. DELETE WHERE cargo=X AND squad=Y AND mes=Z    │
+│ 2. INSERT contratos (50%), organizacao (50%)     │
+│                                                   │
+│ Resultado: Apenas 2 métricas (50% + 50%)         │
+│ Reload: Mostra exatamente o que foi salvo        │
+└───────────────────────────────────────────────────┘
+```
+
+---
+
+## Resultado Esperado
+
+1. **Salvar métricas funciona corretamente**: Toggle off remove, toggle on adiciona
+2. **Peso percentual persiste**: 50% + 50% = 100% salva e recarrega certo
+3. **Popup mostra métricas corretas**: Closer N1 com métricas configuradas aparece corretamente
+4. **Sem duplicatas**: Cada combinação cargo/squad/mes/metrica tem apenas 1 registro
