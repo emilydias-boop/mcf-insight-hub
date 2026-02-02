@@ -41,6 +41,7 @@ const DynamicIndicatorsSection = ({
   diasUteisMes,
   sdrMetaDiaria,
   isCloser,
+  variavelTotal,
 }: {
   sdrId: string;
   anoMes: string;
@@ -50,6 +51,7 @@ const DynamicIndicatorsSection = ({
   diasUteisMes: number;
   sdrMetaDiaria: number;
   isCloser: boolean;
+  variavelTotal: number;
 }) => {
   const { metricas, isLoading, fonte } = useActiveMetricsForSdr(sdrId, anoMes);
 
@@ -82,6 +84,7 @@ const DynamicIndicatorsSection = ({
           compPlan={compPlan}
           diasUteisMes={diasUteisMes}
           sdrMetaDiaria={sdrMetaDiaria}
+          variavelTotal={variavelTotal}
         />
       )}
     </div>
@@ -250,6 +253,13 @@ const FechamentoSDRDetail = () => {
   const isCloser = (payout.sdr as any)?.role_type === "closer";
   const sdrMetaDiaria = (payout.sdr as any)?.meta_diaria || 10;
   const diasUteisMes = payout.dias_uteis_mes || 19;
+  
+  // Calculate effective values with cascade: compPlan -> cargo_catalogo -> fallback
+  const employee = (payout as any)?.employee;
+  const effectiveOTE = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
+  const effectiveFixo = compPlan?.fixo_valor || employee?.cargo_catalogo?.fixo_valor || 2800;
+  const effectiveVariavel = compPlan?.variavel_total || employee?.cargo_catalogo?.variavel_valor || 1200;
+  const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
 
   return (
     <div className="space-y-5">
@@ -312,16 +322,8 @@ const FechamentoSDRDetail = () => {
       </div>
 
       {/* Summary Cards */}
-      {/* Calculate effective OTE values with cascade: compPlan -> cargo_catalogo -> fallback */}
-      {(() => {
-        const employee = (payout as any)?.employee;
-        const effectiveOTE = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
-        const effectiveFixo = compPlan?.fixo_valor || employee?.cargo_catalogo?.fixo_valor || 2800;
-        const effectiveVariavel = compPlan?.variavel_total || employee?.cargo_catalogo?.variavel_valor || 1200;
-        const oteSource = compPlan?.ote_total ? "plano" : employee?.cargo_catalogo?.ote_total ? "RH" : "fallback";
-
-        return (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      {/* Using pre-calculated effectiveOTE/effectiveFixo/effectiveVariavel/oteSource from above */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
@@ -423,8 +425,6 @@ const FechamentoSDRDetail = () => {
               </CardContent>
             </Card>
           </div>
-        );
-      })()}
 
       {/* KPI Edit Form (for admin/manager) */}
       {canEdit && (
@@ -453,6 +453,7 @@ const FechamentoSDRDetail = () => {
         diasUteisMes={diasUteisMes}
         sdrMetaDiaria={sdrMetaDiaria}
         isCloser={isCloser}
+        variavelTotal={effectiveVariavel}
       />
 
       {/* Intermediações / Vendas Parceria */}

@@ -215,6 +215,7 @@ export const METRIC_CONFIG: Record<string, {
   isPercentage?: boolean;
   isAuto?: boolean;
   autoSource?: string;
+  isDynamicCalc?: boolean; // For metrics that use dynamic peso/meta calculation
 }> = {
   agendamentos: {
     icon: 'Calendar',
@@ -265,8 +266,10 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'FileCheck',
     color: 'green',
     kpiField: 'intermediacoes_contrato',
+    // Contratos usa cálculo dinâmico baseado em peso/meta configurados
+    isDynamicCalc: true,
     isAuto: true,
-    autoSource: 'Hubla',
+    autoSource: 'Agenda',
   },
   r2_agendadas: {
     icon: 'CalendarPlus',
@@ -293,8 +296,10 @@ export const METRIC_CONFIG: Record<string, {
     icon: 'Sparkles',
     color: 'purple',
     kpiField: 'vendas_parceria',
+    // Vendas parceria usa cálculo dinâmico baseado em peso/meta configurados
+    isDynamicCalc: true,
     isAuto: true,
-    autoSource: 'Hubla',
+    autoSource: 'Agenda',
   },
 };
 
