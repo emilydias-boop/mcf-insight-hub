@@ -41,7 +41,13 @@ interface CloserFormDataExtended extends CloserFormData {
   google_calendar_enabled?: boolean;
   bu?: string;
   employee_id?: string;
+  meeting_type?: 'r1' | 'r2';
 }
+
+const MEETING_TYPE_OPTIONS = [
+  { value: 'r1', label: 'R1 - Reunião Inicial' },
+  { value: 'r2', label: 'R2 - Reunião de Fechamento' },
+];
 
 const BU_OPTIONS = [
   { value: 'incorporador', label: 'BU - Incorporador MCF' },
@@ -84,9 +90,9 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
   const isLoading = createCloser.isPending || updateCloser.isPending;
   const isEditing = !!closer;
 
-  // Buscar usuários com role 'closer' ou 'closer_sombra' E seu employee_id
+  // Buscar TODOS os usuários do sistema (permite managers, closers, qualquer role)
   const { data: closerUsers = [], isLoading: loadingUsers } = useQuery({
-    queryKey: ['users-with-closer-role'],
+    queryKey: ['all-users-for-closer'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
@@ -95,10 +101,8 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
           full_name,
           email,
           squad,
-          user_roles!inner(role),
           employees!employees_user_id_fkey(id)
         `)
-        .in('user_roles.role', ['closer', 'closer_sombra'])
         .order('full_name');
       
       if (error) throw error;
@@ -246,7 +250,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Apenas usuários com cargo "Closer" ou "Closer Sombra" aparecem aqui
+                Todos os usuários do sistema podem ser configurados como Closer
               </p>
             </div>
           )}
@@ -296,6 +300,31 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               </SelectContent>
             </Select>
           </div>
+
+          {/* Meeting Type - Apenas para Incorporador */}
+          {formData.bu === 'incorporador' && (
+            <div className="space-y-2">
+              <Label htmlFor="meeting_type">Tipo de Reunião *</Label>
+              <Select
+                value={formData.meeting_type || 'r1'}
+                onValueChange={(v) => setFormData({ ...formData, meeting_type: v as 'r1' | 'r2' })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo de reunião" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MEETING_TYPE_OPTIONS.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                R1 para reuniões iniciais, R2 para reuniões de fechamento
+              </p>
+            </div>
+          )}
 
           {/* Alert when employee already has closer records in other BUs */}
           {existingClosersInOtherBus.length > 0 && (
