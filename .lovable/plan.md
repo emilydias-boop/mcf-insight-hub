@@ -1,135 +1,120 @@
 
-# Plano: Configurar Abas do CRM por Business Unit
 
-## Objetivo
+# Plano: Filtrar Agenda R1 por Business Unit
 
-Configurar o CRM do Consórcio para exibir apenas as abas relevantes:
+## Problema Atual
 
-**Manter:**
-- Visão Geral
-- Contatos
-- Negócios
-- Atendimentos
-- Agenda R1
-- Configurações
+A Agenda R1 do Consórcio está exibindo reuniões de todas as BUs (Incorporador, etc.) porque:
 
-**Remover:**
-- Agenda R2
-- Carrinho R2
-- Órfãos
-- Duplicados
-- Auditoria
+1. O hook `useAgendaMeetings` **não filtra por BU** - busca todas as reuniões de R1 do período
+2. Os closers já são filtrados por BU via `useClosersWithAvailability(activeBU)`, mas as reuniões não
+3. Não existem closers cadastrados com `bu = 'consorcio'` na tabela `closers`
 
 ---
 
-## Solução
+## Solução em Duas Partes
 
-Adicionar um mapeamento de **abas permitidas por BU** no `BUCRMLayout.tsx`.
+### Parte 1: Modificar o Hook para Filtrar Reuniões por BU
 
----
+Modificar `useAgendaMeetings` para aceitar um parâmetro opcional `closerIds` e filtrar as reuniões apenas para esses closers.
 
-## Alteração no Arquivo
-
-**Arquivo:** `src/pages/crm/BUCRMLayout.tsx`
-
-### Adicionar configuração de abas por BU
+**Arquivo:** `src/hooks/useAgendaData.ts`
 
 ```typescript
-// Configuração de abas visíveis por BU
-const BU_VISIBLE_TABS: Record<BusinessUnit, string[]> = {
-  incorporador: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
-    'agenda', 'agenda-r2', 'r2-carrinho', 'deals-orfaos', 
-    'contatos-duplicados', 'auditoria-agendamentos', 'configuracoes'
-  ],
-  consorcio: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
-    'agenda', 'configuracoes'
-  ],
-  credito: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
-    'agenda', 'configuracoes'
-  ],
-  projetos: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
-    'agenda', 'configuracoes'
-  ],
-  leilao: [
-    'visao-geral', 'contatos', 'negocios', 'atendimentos', 
-    'agenda', 'configuracoes'
-  ],
-};
-```
-
-### Adicionar `key` aos itens de navegação
-
-```typescript
-const allNavItems = [
-  { key: 'visao-geral', to: basePath, label: 'Visão Geral', icon: LayoutDashboard, end: true },
-  { key: 'contatos', to: `${basePath}/contatos`, label: 'Contatos', icon: Users },
-  { key: 'negocios', to: `${basePath}/negocios`, label: 'Negócios', icon: Briefcase },
-  { key: 'atendimentos', to: `${basePath}/atendimentos`, label: 'Atendimentos', icon: MessageCircle },
-  { key: 'agenda', to: `${basePath}/agenda`, label: 'Agenda R1', icon: CalendarDays },
-  { key: 'agenda-r2', to: `${basePath}/agenda-r2`, label: 'Agenda R2', icon: CalendarDays },
-  { key: 'r2-carrinho', to: `${basePath}/r2-carrinho`, label: 'Carrinho R2', icon: ShoppingCart },
-  { key: 'deals-orfaos', to: `${basePath}/deals-orfaos`, label: 'Órfãos', icon: UserX },
-  { key: 'contatos-duplicados', to: `${basePath}/contatos-duplicados`, label: 'Duplicados', icon: Copy },
-  { key: 'auditoria-agendamentos', to: `${basePath}/auditoria-agendamentos`, label: 'Auditoria', icon: Shield },
-  { key: 'configuracoes', to: `${basePath}/configuracoes`, label: 'Configurações', icon: Settings },
-];
-```
-
-### Filtrar abas com base na BU
-
-```typescript
-// Primeiro filtrar por BU
-const buVisibleTabs = BU_VISIBLE_TABS[bu] || [];
-let navItems = allNavItems.filter(item => buVisibleTabs.includes(item.key));
-
-// Depois aplicar filtro de roles (sdr/closer)
-if (isAgendaOnly) {
-  const allowedTabs: string[] = ['agenda'];
-  
-  if (canViewR2 && buVisibleTabs.includes('agenda-r2')) {
-    allowedTabs.push('agenda-r2');
-  }
-  
-  allowedTabs.push('negocios');
-  
-  navItems = navItems.filter(item => allowedTabs.includes(item.key));
+export function useAgendaMeetings(
+  startDate: Date, 
+  endDate: Date, 
+  meetingType: 'r1' | 'r2' | 'all' = 'r1',
+  closerIds?: string[] // NOVO: IDs dos closers da BU
+) {
+  return useQuery({
+    queryKey: ['agenda-meetings', format(startDate, 'yyyy-MM-dd'), format(endDate, 'yyyy-MM-dd'), meetingType, closerIds],
+    queryFn: async () => {
+      let query = supabase
+        .from('meeting_slots')
+        .select(`...`)
+        .gte('scheduled_at', startDate.toISOString())
+        .lte('scheduled_at', endDate.toISOString());
+      
+      if (meetingType !== 'all') {
+        query = query.eq('meeting_type', meetingType);
+      }
+      
+      // NOVO: Filtrar por closers específicos (da BU)
+      if (closerIds && closerIds.length > 0) {
+        query = query.in('closer_id', closerIds);
+      }
+      
+      // ... resto do código
+    },
+  });
 }
 ```
 
----
+### Parte 2: Passar os IDs dos Closers da BU na Agenda
 
-## Resultado Esperado
+**Arquivo:** `src/pages/crm/Agenda.tsx`
 
-### CRM Consórcio (`/consorcio/crm`)
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ CRM - Consórcio                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│ Visão Geral │ Contatos │ Negócios │ Atendimentos │ Agenda R1 │ Config│
-└─────────────────────────────────────────────────────────────────────┘
-```
+```typescript
+// Buscar closers da BU primeiro
+const { data: closers = [], isLoading: closersLoading } = useClosersWithAvailability(activeBU);
 
-### CRM Incorporador (`/crm`)
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ CRM - Incorporador                                                  │
-├─────────────────────────────────────────────────────────────────────┤
-│ Visão Geral │ Contatos │ Negócios │ Atendimentos │ Agenda R1 │       │
-│ Agenda R2 │ Carrinho R2 │ Órfãos │ Duplicados │ Auditoria │ Config  │
-└─────────────────────────────────────────────────────────────────────┘
+// Extrair IDs dos closers para filtrar reuniões
+const closerIds = useMemo(() => closers.map(c => c.id), [closers]);
+
+// Passar os IDs para filtrar apenas reuniões desses closers
+const { data: meetings = [], isLoading: meetingsLoading, refetch } = useAgendaMeetings(
+  rangeStart, 
+  rangeEnd, 
+  'r1', 
+  closerIds.length > 0 ? closerIds : undefined
+);
 ```
 
 ---
 
-## Extensibilidade
+## Configuração de Dados (Manual via UI)
 
-Esta abordagem permite configurar facilmente as abas de cada BU futuramente:
-- Se Leilão precisar de Agenda R2, basta adicionar `'agenda-r2'` ao array
-- Se Crédito não precisar de Atendimentos, basta remover `'atendimentos'`
+Você precisará cadastrar os closers do Consórcio em **CRM → Configurações → Closers R1**:
+
+| Nome | Email | BU |
+|------|-------|----|
+| João Pedro | joao.pedro@minhacasafinanciada.com | consorcio |
+| Luis Felipe | luis.felipe@minhacasafinanciada.com | consorcio |
+| Thobson | thobson.motta@minhacasafinanciada.com | consorcio |
+| Victoria Paz | victoria.paz@minhacasafinanciada.com | consorcio |
+
+Os SDRs (Ithaline, Cleiton, Igor) não precisam estar na tabela `closers` - eles agendam via a interface, não recebem leads.
+
+---
+
+## Fluxo de Dados Corrigido
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  /consorcio/crm/agenda                                              │
+│  activeBU = 'consorcio'                                             │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  useClosersWithAvailability('consorcio')                            │
+│  Retorna: [João Pedro, Luis, Thobson, Victoria]                     │
+│  IDs: ['abc123', 'def456', 'ghi789', 'jkl012']                     │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  useAgendaMeetings(start, end, 'r1', ['abc123','def456',...])       │
+│  SQL: WHERE meeting_type = 'r1'                                     │
+│        AND closer_id IN ('abc123', 'def456', 'ghi789', 'jkl012')   │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Resultado: Apenas reuniões dos closers do Consórcio                │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -137,4 +122,27 @@ Esta abordagem permite configurar facilmente as abas de cada BU futuramente:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/crm/BUCRMLayout.tsx` | Adicionar mapeamento `BU_VISIBLE_TABS` e filtrar abas por BU |
+| `src/hooks/useAgendaData.ts` | Adicionar parâmetro `closerIds` ao `useAgendaMeetings` e filtrar query |
+| `src/pages/crm/Agenda.tsx` | Passar `closerIds` extraídos dos closers da BU para o hook |
+| `src/pages/crm/AgendaMetricas.tsx` | Atualizar chamada para passar `closerIds` (manter consistência) |
+
+---
+
+## Resultado Esperado
+
+Após a implementação:
+
+| CRM | Closers Visíveis | Reuniões Visíveis |
+|-----|-----------------|-------------------|
+| `/consorcio/crm/agenda` | João Pedro, Luis, Thobson, Victoria | Apenas reuniões com esses closers |
+| `/crm/agenda` (Incorporador) | Julio, Cristiane, Thayna, etc. | Apenas reuniões com closers do Incorporador |
+| `/leilao/crm/agenda` | Closers cadastrados com bu='leilao' | Apenas reuniões com closers do Leilão |
+
+---
+
+## Próximos Passos Após Implementação
+
+1. **Cadastrar Closers**: Ir em `/consorcio/crm/configuracoes` → Closers e adicionar João Pedro, Luis, Thobson, Victoria com `bu = 'consorcio'`
+
+2. **Verificar SDRs**: Os SDRs Ithaline e Cleiton já estão no sistema com `squad = 'consorcio'`. O Igor precisará ser criado via Admin → Usuários
+
