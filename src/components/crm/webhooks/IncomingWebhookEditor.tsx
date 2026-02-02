@@ -157,7 +157,7 @@ export const IncomingWebhookEditor = ({ originId }: IncomingWebhookEditorProps) 
                 </div>
 
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  {endpoint.auto_tags.length > 0 && (
+                  {endpoint.auto_tags?.length > 0 && (
                     <span>
                       Tags: {endpoint.auto_tags.join(', ')}
                     </span>
