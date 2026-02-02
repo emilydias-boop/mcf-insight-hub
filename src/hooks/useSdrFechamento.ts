@@ -296,6 +296,23 @@ export const useSdrPayouts = (anoMes: string, filters?: {
 };
 
 // Fetch single payout detail
+// Tipo para employee com cargo_catalogo
+interface EmployeeWithCargoCatalogo {
+  cargo_catalogo_id: string | null;
+  departamento: string | null;
+  cargo: string | null;
+  cargo_catalogo: {
+    id: string;
+    nome_exibicao: string;
+    nivel: number | null;
+    ote_total: number;
+    fixo_valor: number;
+    variavel_valor: number;
+    area: string;
+    cargo_base: string;
+  } | null;
+}
+
 export const useSdrPayoutDetail = (payoutId: string | undefined) => {
   return useQuery({
     queryKey: ['sdr-payout-detail', payoutId],
@@ -312,7 +329,26 @@ export const useSdrPayoutDetail = (payoutId: string | undefined) => {
         .single();
       
       if (error) throw error;
-      return transformPayout(data);
+      
+      // Fetch employee data for cargo_catalogo (OTE source of truth)
+      const { data: employeeData } = await supabase
+        .from('employees')
+        .select(`
+          cargo_catalogo_id,
+          departamento,
+          cargo,
+          cargo_catalogo:cargo_catalogo_id (
+            id, nome_exibicao, nivel, ote_total, fixo_valor, variavel_valor, area, cargo_base
+          )
+        `)
+        .eq('sdr_id', data.sdr_id)
+        .eq('status', 'ativo')
+        .maybeSingle();
+      
+      const payout = transformPayout(data);
+      (payout as any).employee = employeeData as EmployeeWithCargoCatalogo | null;
+      
+      return payout;
     },
     enabled: !!payoutId,
   });

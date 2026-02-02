@@ -23,10 +23,10 @@ const DEFAULT_SDR_METRICS: Partial<ActiveMetric>[] = [
 
 // Default Closer metrics as fallback
 const DEFAULT_CLOSER_METRICS: Partial<ActiveMetric>[] = [
-  { nome_metrica: 'realizadas', label_exibicao: 'R1 Realizadas', peso_percentual: 25, fonte_dados: 'agenda' },
-  { nome_metrica: 'contratos', label_exibicao: 'Contratos Pagos', peso_percentual: 25, fonte_dados: 'hubla' },
-  { nome_metrica: 'r2_agendadas', label_exibicao: 'R2 Agendadas', peso_percentual: 25, fonte_dados: 'agenda' },
-  { nome_metrica: 'organizacao', label_exibicao: 'Organização', peso_percentual: 25, fonte_dados: 'manual' },
+  { nome_metrica: 'realizadas', label_exibicao: 'R1 Realizadas', peso_percentual: 35, fonte_dados: 'agenda' },
+  { nome_metrica: 'contratos', label_exibicao: 'Contratos Pagos', peso_percentual: 35, fonte_dados: 'hubla' },
+  { nome_metrica: 'organizacao', label_exibicao: 'Organização', peso_percentual: 20, fonte_dados: 'manual' },
+  { nome_metrica: 'vendas_parceria', label_exibicao: 'Vendas Parceria', peso_percentual: 10, fonte_dados: 'hubla' },
 ];
 
 /**
@@ -288,6 +288,13 @@ export const METRIC_CONFIG: Record<string, {
     kpiField: 'outside_sales',
     isAuto: true,
     autoSource: 'Agenda',
+  },
+  vendas_parceria: {
+    icon: 'Sparkles',
+    color: 'purple',
+    kpiField: 'vendas_parceria',
+    isAuto: true,
+    autoSource: 'Hubla',
   },
 };
 

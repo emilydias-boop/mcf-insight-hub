@@ -29,12 +29,14 @@ interface IntermediacoesListProps {
   sdrId: string;
   anoMes: string;
   disabled?: boolean;
+  isCloser?: boolean;
 }
 
 export const IntermediacoesList = ({
   sdrId,
   anoMes,
   disabled = false,
+  isCloser = false,
 }: IntermediacoesListProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<string>('');
@@ -125,7 +127,9 @@ export const IntermediacoesList = ({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">Intermediações de Contrato</CardTitle>
+        <CardTitle className="text-lg">
+          {isCloser ? 'Vendas Parceria' : 'Intermediações de Contrato'}
+        </CardTitle>
         {!disabled && (
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
