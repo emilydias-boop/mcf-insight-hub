@@ -11,7 +11,12 @@ export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
     'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Grupo: Perpétuo - X1
     'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // Origem: PIPELINE INSIDE SALES
   ],
-  consorcio: [], // Sem restrição = mostra todas as pipelines
+  consorcio: [
+    'b98e3746-d727-445b-b878-fc5742b6e6b8', // Grupo: Perpétuo - Construa para Alugar
+    '267905ec-8fcf-4373-8d62-273bb6c6f8ca', // Grupo: Hubla - Viver de Aluguel
+    '35361575-d8a9-4ea0-8703-372a2988d2be', // Grupo: Hubla - Construir Para Alugar
+    '4e2b810a-6782-4ce9-9c0d-10d04c018636', // Origin: PIPELINE INSIDE SALES - VIVER DE ALUGUEL
+  ],
   credito: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão (a definir)
   projetos: ['e3c04f21-ba2c-4c66-84f8-b4341c826b1c'], // Padrão (a definir)
   leilao: [
@@ -23,7 +28,11 @@ export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
 // ============ MAPEAMENTO BU → GRUPOS (para filtrar dropdown de funis) ============
 export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
   incorporador: ['a6f3cbfc-0567-427f-a405-5a869aaa6010'], // Perpétuo - X1
-  consorcio: [],    // Sem restrição = mostra todos os funis
+  consorcio: [
+    'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar
+    '267905ec-8fcf-4373-8d62-273bb6c6f8ca', // Hubla - Viver de Aluguel
+    '35361575-d8a9-4ea0-8703-372a2988d2be', // Hubla - Construir Para Alugar
+  ],
   credito: [],    // A definir
   projetos: [],   // A definir
   leilao: ['f8a2b3c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c'],       // BU - LEILÃO

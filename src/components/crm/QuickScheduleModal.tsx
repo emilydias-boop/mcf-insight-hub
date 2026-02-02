@@ -40,6 +40,8 @@ import {
   useAvailableSlotsCountByDate,
 } from '@/hooks/useAgendaData';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
+import { useActiveBU } from '@/hooks/useActiveBU';
+import { BU_PIPELINE_MAP } from '@/components/auth/NegociosAccessGuard';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { SDR_LIST } from '@/constants/team';
@@ -109,6 +111,8 @@ export function QuickScheduleModal({
   prefilledNotes,
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
+  const activeBU = useActiveBU();
+  const originIds = activeBU ? BU_PIPELINE_MAP[activeBU] : undefined;
   const isCoordinatorOrAbove = ['admin', 'manager', 'coordenador'].includes(role || '');
   
   // Search mode state
@@ -210,7 +214,7 @@ export function QuickScheduleModal({
     closerName?: string;
   } | null>(null);
 
-  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery);
+  const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, originIds && originIds.length > 0 ? originIds : undefined);
   const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
   const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
   const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter);

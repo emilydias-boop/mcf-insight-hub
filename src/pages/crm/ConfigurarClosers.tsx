@@ -28,13 +28,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle, Calendar, Info } from 'lucide-react';
+import { Plus, MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle, Calendar, Info, Building2 } from 'lucide-react';
 import { useClosersList, useDeleteCloser, Closer } from '@/hooks/useClosers';
 import { CloserFormDialog } from '@/components/crm/CloserFormDialog';
+import { useActiveBU } from '@/hooks/useActiveBU';
+
+const BU_LABELS: Record<string, string> = {
+  incorporador: 'Incorporador',
+  consorcio: 'Consórcio',
+  credito: 'Crédito',
+  projetos: 'Projetos',
+  leilao: 'Leilão',
+};
 
 export default function ConfigurarClosers() {
   const { data: closers, isLoading, error } = useClosersList();
   const deleteCloser = useDeleteCloser();
+  const activeBU = useActiveBU();
   
   const [formOpen, setFormOpen] = useState(false);
   const [selectedCloser, setSelectedCloser] = useState<Closer | null>(null);
@@ -59,8 +69,10 @@ export default function ConfigurarClosers() {
     }
   };
 
-  const activeClosers = closers?.filter(c => c.is_active) || [];
-  const configuredClosers = closers?.filter(c => c.calendly_event_type_uri) || [];
+  // Filtrar closers pela BU ativa (se houver)
+  const filteredClosers = closers?.filter(c => !activeBU || c.bu === activeBU) || [];
+  const activeClosers = filteredClosers.filter(c => c.is_active);
+  const configuredClosers = filteredClosers.filter(c => c.calendly_event_type_uri);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -79,10 +91,12 @@ export default function ConfigurarClosers() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Closers</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total de Closers {activeBU ? `(${BU_LABELS[activeBU] || activeBU})` : ''}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{closers?.length || 0}</div>
+            <div className="text-2xl font-bold">{filteredClosers.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -131,10 +145,10 @@ export default function ConfigurarClosers() {
             <div className="text-destructive text-center py-8">
               Erro ao carregar closers: {error.message}
             </div>
-          ) : closers?.length === 0 ? (
+          ) : filteredClosers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Nenhum closer cadastrado ainda.</p>
+              <p>Nenhum closer cadastrado {activeBU ? `para ${BU_LABELS[activeBU] || activeBU}` : ''}.</p>
               <Button onClick={handleAdd} variant="outline" className="mt-4">
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar primeiro closer
@@ -146,13 +160,14 @@ export default function ConfigurarClosers() {
                 <TableRow>
                   <TableHead>Closer</TableHead>
                   <TableHead>Email</TableHead>
+                  {!activeBU && <TableHead>BU</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead>Calendly</TableHead>
                   <TableHead className="w-[70px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {closers?.map((closer) => (
+                {filteredClosers.map((closer) => (
                   <TableRow key={closer.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -164,6 +179,14 @@ export default function ConfigurarClosers() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{closer.email}</TableCell>
+                    {!activeBU && (
+                      <TableCell>
+                        <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                          <Building2 className="h-3 w-3" />
+                          {BU_LABELS[closer.bu || 'incorporador'] || closer.bu}
+                        </Badge>
+                      </TableCell>
+                    )}
                     <TableCell>
                       {closer.is_active ? (
                         <Badge variant="default" className="bg-green-500/20 text-green-700 hover:bg-green-500/30">
