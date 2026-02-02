@@ -63,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const roleLoadVersion = useRef(0);
   const initialSessionHandled = useRef(false);
   const initStartTime = useRef(Date.now());
+  const hasLoadedRoles = useRef(false);
 
   // Fetch roles with timeout
   const fetchUserRoles = async (userId: string): Promise<{ primaryRole: AppRole | null; roles: AppRole[] }> => {
@@ -172,6 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAllRoles(roles);
       }
       
+      hasLoadedRoles.current = true;
       console.log('[Auth] Roles loaded:', { primaryRole, roles });
     } catch (error) {
       console.error('[Auth] Error in loadRolesInBackground:', error);
@@ -243,6 +245,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return;
           }
           initialSessionHandled.current = true;
+        }
+        
+        // Preserve roles during token refresh - don't reset if same user
+        if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && 
+            user && 
+            newSession?.user?.id === user.id && 
+            hasLoadedRoles.current) {
+          console.log('[Auth] Token refreshed, keeping existing roles');
+          setSession(newSession);
+          return;
         }
         
         handleSession(newSession);
@@ -397,6 +409,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
+    hasLoadedRoles.current = false;
     try {
       const { error } = await supabase.auth.signOut();
       if (error && !error.message.includes('session missing') && 
