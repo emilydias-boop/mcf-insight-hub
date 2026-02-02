@@ -94,7 +94,27 @@ serve(async (req) => {
     }
 
     // Get the initial stage if not configured
-    let stageId = endpoint.stage_id;
+    // IMPORTANT: crm_deals.stage_id has a FK to crm_stages, NOT local_pipeline_stages
+    // So we can only use stage_id if it exists in crm_stages
+    let stageId: string | null = null;
+    
+    if (endpoint.stage_id) {
+      // Verify if the configured stage_id exists in crm_stages (FK constraint)
+      const { data: validStage } = await supabase
+        .from('crm_stages')
+        .select('id')
+        .eq('id', endpoint.stage_id)
+        .maybeSingle();
+      
+      if (validStage) {
+        stageId = validStage.id;
+        console.log('[WEBHOOK-RECEIVER] Usando stage de crm_stages:', stageId);
+      } else {
+        console.log('[WEBHOOK-RECEIVER] stage_id configurado está em local_pipeline_stages, usando null para FK');
+      }
+    }
+    
+    // If no valid stage_id, try to find one in crm_stages for this origin
     if (!stageId) {
       const { data: firstStage } = await supabase
         .from('crm_stages')
@@ -104,7 +124,12 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
       
-      stageId = firstStage?.id || null;
+      if (firstStage) {
+        stageId = firstStage.id;
+        console.log('[WEBHOOK-RECEIVER] Usando primeira stage de crm_stages:', stageId);
+      } else {
+        console.log('[WEBHOOK-RECEIVER] Nenhuma stage encontrada em crm_stages, deal será criado sem stage_id');
+      }
     }
 
     // 6. Normalize phone
@@ -149,8 +174,7 @@ serve(async (req) => {
           email: (payload.email || '').trim().toLowerCase(),
           phone: normalizedPhone,
           origin_id: endpoint.origin_id,
-          tags: autoTags,
-          data_source: 'webhook'
+          tags: autoTags
         })
         .select('id')
         .single();
