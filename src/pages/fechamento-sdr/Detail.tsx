@@ -324,42 +324,60 @@ const FechamentoSDRDetail = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-              <Target className="h-3.5 w-3.5" />
-              OTE Total
-            </div>
-            <div className="text-xl font-bold mt-1">
-              {formatCurrency(compPlan?.ote_total || 4000)}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Calculate effective OTE values with cascade: compPlan -> cargo_catalogo -> fallback */}
+      {(() => {
+        const employee = (payout as any)?.employee;
+        const effectiveOTE = compPlan?.ote_total || employee?.cargo_catalogo?.ote_total || 4000;
+        const effectiveFixo = compPlan?.fixo_valor || employee?.cargo_catalogo?.fixo_valor || 2800;
+        const effectiveVariavel = compPlan?.variavel_total || employee?.cargo_catalogo?.variavel_valor || 1200;
+        const oteSource = compPlan?.ote_total ? 'plano' : (employee?.cargo_catalogo?.ote_total ? 'RH' : 'fallback');
+        
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+                  <Target className="h-3.5 w-3.5" />
+                  OTE Total
+                  {oteSource === 'RH' && (
+                    <Badge variant="outline" className="text-[9px] h-4 ml-1">RH</Badge>
+                  )}
+                </div>
+                <div className="text-xl font-bold mt-1">
+                  {formatCurrency(effectiveOTE)}
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-              <Wallet className="h-3.5 w-3.5" />
-              Fixo
-            </div>
-            <div className="text-xl font-bold mt-1">
-              {formatCurrency(payout.valor_fixo || 0)}
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+                  <Wallet className="h-3.5 w-3.5" />
+                  Fixo
+                  {oteSource === 'RH' && (
+                    <Badge variant="outline" className="text-[9px] h-4 ml-1">RH</Badge>
+                  )}
+                </div>
+                <div className="text-xl font-bold mt-1">
+                  {formatCurrency(effectiveFixo)}
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
-              <DollarSign className="h-3.5 w-3.5" />
-              Variável
-            </div>
-            <div className="text-xl font-bold mt-1 text-primary">
-              {formatCurrency(payout.valor_variavel_total || 0)}
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+                  <DollarSign className="h-3.5 w-3.5" />
+                  Variável
+                  {oteSource === 'RH' && (
+                    <Badge variant="outline" className="text-[9px] h-4 ml-1">RH</Badge>
+                  )}
+                </div>
+                <div className="text-xl font-bold mt-1 text-primary">
+                  {formatCurrency(payout.valor_variavel_total || effectiveVariavel)}
+                </div>
+              </CardContent>
+            </Card>
 
         <Card className="bg-primary/10 border-primary/20">
           <CardContent className="pt-4 pb-3">
@@ -382,45 +400,47 @@ const FechamentoSDRDetail = () => {
           </CardContent>
         </Card>
 
-        <Card className={payout.ifood_ultrameta_autorizado ? 'bg-green-500/10 border-green-500/20' : ''}>
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-1.5 text-xs">
-              <Gift className="h-3.5 w-3.5" />
-              <span className={payout.ifood_ultrameta_autorizado ? 'text-green-500' : 'text-muted-foreground/70'}>
-                iFood Ultrameta
-              </span>
-              {payout.ifood_ultrameta_autorizado && (
-                <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-              )}
-            </div>
-            <div className={`text-xl font-bold mt-1 ${payout.ifood_ultrameta_autorizado ? 'text-green-500' : ''}`}>
-              {formatCurrency(payout.ifood_ultrameta || 0)}
-            </div>
-            {metUltrameta && isAdmin && !payout.ifood_ultrameta_autorizado && payout.status !== 'LOCKED' && (
-              <Button 
-                size="sm" 
-                variant="outline" 
-                className="mt-1.5 w-full text-[10px] h-6"
-                onClick={handleAuthorizeUltrameta}
-                disabled={authorizeUltrameta.isPending}
-              >
-                Autorizar
-              </Button>
-            )}
-            {payout.ifood_ultrameta_autorizado && isAdmin && payout.status !== 'LOCKED' && (
-              <Button 
-                size="sm" 
-                variant="ghost" 
-                className="mt-1.5 w-full text-[10px] h-6 text-muted-foreground"
-                onClick={handleAuthorizeUltrameta}
-                disabled={authorizeUltrameta.isPending}
-              >
-                Remover autorização
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            <Card className={payout.ifood_ultrameta_autorizado ? 'bg-green-500/10 border-green-500/20' : ''}>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-1.5 text-xs">
+                  <Gift className="h-3.5 w-3.5" />
+                  <span className={payout.ifood_ultrameta_autorizado ? 'text-green-500' : 'text-muted-foreground/70'}>
+                    iFood Ultrameta
+                  </span>
+                  {payout.ifood_ultrameta_autorizado && (
+                    <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                  )}
+                </div>
+                <div className={`text-xl font-bold mt-1 ${payout.ifood_ultrameta_autorizado ? 'text-green-500' : ''}`}>
+                  {formatCurrency(payout.ifood_ultrameta || 0)}
+                </div>
+                {metUltrameta && isAdmin && !payout.ifood_ultrameta_autorizado && payout.status !== 'LOCKED' && (
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="mt-1.5 w-full text-[10px] h-6"
+                    onClick={handleAuthorizeUltrameta}
+                    disabled={authorizeUltrameta.isPending}
+                  >
+                    Autorizar
+                  </Button>
+                )}
+                {payout.ifood_ultrameta_autorizado && isAdmin && payout.status !== 'LOCKED' && (
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="mt-1.5 w-full text-[10px] h-6 text-muted-foreground"
+                    onClick={handleAuthorizeUltrameta}
+                    disabled={authorizeUltrameta.isPending}
+                  >
+                    Remover autorização
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* KPI Edit Form (for admin/manager) */}
       {canEdit && (
@@ -451,11 +471,12 @@ const FechamentoSDRDetail = () => {
         isCloser={isCloser}
       />
 
-      {/* Intermediações */}
+      {/* Intermediações / Vendas Parceria */}
       <IntermediacoesList
         sdrId={payout.sdr_id}
         anoMes={payout.ano_mes}
         disabled={!canEdit}
+        isCloser={isCloser}
       />
 
       {/* Adjustments (only for admin/manager) */}
