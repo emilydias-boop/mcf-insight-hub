@@ -1,92 +1,80 @@
 
-# Plano: Mostrar Todas as Pipelines no CRM Consórcio
+# Plano: Corrigir Erro "Cannot read properties of null (reading 'length')"
 
-## Problema Identificado
+## Diagnóstico
 
-No CRM do Consórcio (`/consorcio/crm/negocios`), apenas **UMA pipeline** aparece no dropdown de funis. Isso acontece porque:
-
-1. O `BU_GROUP_MAP` define que Consórcio só pode ver o grupo `b98e3746-d727-445b-b878-fc5742b6e6b8` ("Perpétuo - Construa para Alugar")
-2. Esse grupo tem apenas 1 origem cadastrada: "PIPE LINE - INSIDE SALES"
-3. Existem vários outros grupos relacionados ao Consórcio no banco que não estão sendo mostrados
-
-## Solução Proposta
-
-Remover temporariamente a restrição de pipelines para a BU Consórcio, permitindo que **todos os funis** sejam visualizados. A restrição para SDRs/Closers será implementada em uma fase posterior.
-
----
-
-## Alterações Técnicas
-
-### Arquivo: `src/components/auth/NegociosAccessGuard.tsx`
-
-| Alteração | Antes | Depois |
-|-----------|-------|--------|
-| `BU_GROUP_MAP.consorcio` | `['b98e3746-d727-445b-b878-fc5742b6e6b8']` | `[]` (array vazio = sem filtro) |
-| `BU_PIPELINE_MAP.consorcio` | `[...IDs restritos]` | `[]` (array vazio = sem filtro) |
-
-**Lógica:** Arrays vazios significam "sem restrição" — a sidebar e o dropdown mostrarão todas as pipelines disponíveis.
-
----
-
-## Código a Modificar
+O erro ocorre no arquivo `src/components/crm/webhooks/IncomingWebhookEditor.tsx` na linha **160**:
 
 ```typescript
-// NegociosAccessGuard.tsx
+{endpoint.auto_tags.length > 0 && (
+```
 
+### Causa Raiz
+O campo `auto_tags` no banco de dados pode ser `null` quando não há tags configuradas. O código assume que sempre será um array (mesmo que vazio), mas dados existentes no banco podem ter `null`.
+
+---
+
+## Solução
+
+Adicionar verificação de nulidade antes de acessar `.length`:
+
+```typescript
 // ANTES:
-export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
-  // ...
-  consorcio: [
-    'b98e3746-d727-445b-b878-fc5742b6e6b8',
-    '4e2b810a-6782-4ce9-9c0d-10d04c018636',
-  ],
-  // ...
-};
-
-export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
-  // ...
-  consorcio: ['b98e3746-d727-445b-b878-fc5742b6e6b8'],
-  // ...
-};
+{endpoint.auto_tags.length > 0 && (
 
 // DEPOIS:
-export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
-  // ...
-  consorcio: [], // Sem restrição = mostra todas as pipelines
-  // ...
-};
+{endpoint.auto_tags && endpoint.auto_tags.length > 0 && (
 
-export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
-  // ...
-  consorcio: [], // Sem restrição = mostra todos os funis
-  // ...
-};
+// OU (mais conciso):
+{(endpoint.auto_tags?.length ?? 0) > 0 && (
 ```
 
 ---
 
-## Comportamento Após a Mudança
+## Arquivo a Modificar
 
-| Elemento | Antes | Depois |
+| Arquivo | Linha | Alteração |
+|---------|-------|-----------|
+| `src/components/crm/webhooks/IncomingWebhookEditor.tsx` | 160 | Usar optional chaining para verificar nulidade |
+
+---
+
+## Código Corrigido
+
+```typescript
+// Linha 160
+<div className="flex items-center gap-4 text-xs text-muted-foreground">
+  {endpoint.auto_tags?.length > 0 && (
+    <span>
+      Tags: {endpoint.auto_tags.join(', ')}
+    </span>
+  )}
+  <span>{endpoint.leads_received} leads recebidos</span>
+```
+
+---
+
+## Impacto da Correção
+
+| Situação | Antes | Depois |
 |----------|-------|--------|
-| **Dropdown "Funil"** | Mostra apenas 1 grupo | Mostra todos os grupos disponíveis |
-| **Sidebar "Origens"** | Mostra apenas origens do grupo restrito | Mostra todas as origens |
-| **Negócios Kanban** | Carrega apenas deals do grupo restrito | Carrega deals da pipeline selecionada |
+| `auto_tags = null` | ❌ Erro: Cannot read 'length' of null | ✅ Tags não são exibidas |
+| `auto_tags = []` | ✅ Tags não são exibidas | ✅ Tags não são exibidas |
+| `auto_tags = ['tag1']` | ✅ Tags são exibidas | ✅ Tags são exibidas |
 
 ---
 
-## Próximos Passos (Fase Futura)
+## Correção Adicional Recomendada
 
-Para restringir SDRs e Closers do Consórcio a pipelines específicas:
+Também atualizar a interface no hook para refletir que `auto_tags` pode ser `null`:
 
-1. Criar uma constante `CONSORCIO_SDR_AUTHORIZED_ORIGINS` com os IDs permitidos
-2. No `Negocios.tsx`, verificar se `activeBU === 'consorcio' && isSdr` para aplicar o filtro
-3. Manter admins e managers do Consórcio com visão completa
+```typescript
+// src/hooks/useWebhookEndpoints.ts
+export interface WebhookEndpoint {
+  // ...
+  auto_tags: string[] | null;  // Corrigir tipo
+  // ...
+}
+```
 
----
-
-## Arquivos Modificados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/auth/NegociosAccessGuard.tsx` | Alterar `BU_GROUP_MAP.consorcio` e `BU_PIPELINE_MAP.consorcio` para arrays vazios |
+Isso evitará erros semelhantes no futuro.
