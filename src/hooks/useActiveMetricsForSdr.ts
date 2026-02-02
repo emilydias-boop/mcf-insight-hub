@@ -141,6 +141,16 @@ export const useActiveMetricsForCargo = (cargoId: string | undefined, anoMes: st
         return [];
       }
 
+      // Step 1: Fetch cargo info to determine if it's a Closer role
+      const { data: cargoData } = await supabase
+        .from('cargos_catalogo')
+        .select('nome_exibicao, area')
+        .eq('id', cargoId)
+        .single();
+
+      const isCloserRole = cargoData?.nome_exibicao?.toLowerCase().includes('closer') || false;
+
+      // Step 2: Query metrics for this cargo
       let query = supabase
         .from('fechamento_metricas_mes')
         .select('*')
@@ -157,10 +167,16 @@ export const useActiveMetricsForCargo = (cargoId: string | undefined, anoMes: st
 
       if (error) {
         console.error('Error fetching metrics for cargo:', error);
-        return [];
       }
 
-      return (data || []) as ActiveMetric[];
+      // Step 3: Return configured metrics OR fallback based on role type
+      if (data && data.length > 0) {
+        return data as ActiveMetric[];
+      }
+
+      // Return fallback metrics based on cargo type
+      const fallbackMetrics = isCloserRole ? DEFAULT_CLOSER_METRICS : DEFAULT_SDR_METRICS;
+      return fallbackMetrics as ActiveMetric[];
     },
     enabled: !!cargoId && !!anoMes,
     staleTime: 5 * 60 * 1000,
