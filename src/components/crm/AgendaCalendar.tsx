@@ -11,6 +11,7 @@ import { MeetingSlot, CloserWithAvailability, useUpdateMeetingSchedule } from '@
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useUniqueSlotsForDays } from '@/hooks/useCloserMeetingLinks';
 import { useR2DailySlotsForView, getConfiguredSlotsForDate } from '@/hooks/useR2DailySlotsForView';
+import { useCloserCrossBUConflicts } from '@/hooks/useCloserConflicts';
 
 export type ViewMode = 'day' | 'week' | 'month';
 
@@ -124,6 +125,12 @@ export function AgendaCalendar({
     meetingType === 'r2' ? viewDateRange.start : undefined,
     meetingType === 'r2' ? viewDateRange.end : undefined,
     closers.map(c => c.id)
+  );
+
+  // Fetch cross-BU conflicts for all closers in view (based on employee_id)
+  const { data: crossBuConflictsData } = useCloserCrossBUConflicts(
+    closerIdsForSlots,
+    selectedDate
   );
 
   // Calculate dynamic time slots based on configured slots
@@ -424,6 +431,7 @@ export function AgendaCalendar({
     }
     
     // Filter out closers that already have a meeting at this exact time
+    // Also check for cross-BU conflicts (meetings from related closers with same employee_id)
     return configuredCloserIds.filter(closerId => {
       const slotTime = setMinutes(setHours(new Date(day), hour), minute);
       
@@ -440,9 +448,20 @@ export function AgendaCalendar({
         return slotTime >= meetingStart && slotTime < meetingEnd;
       });
       
-      return !hasMeeting;
+      if (hasMeeting) return false;
+      
+      // Check for cross-BU conflicts via employee_id
+      // Only check if we're looking at the selected date (conflicts are date-specific)
+      if (crossBuConflictsData?.conflictingTimes && isSameDay(day, selectedDate)) {
+        const hasCrossBuConflict = crossBuConflictsData.conflictingTimes.some(
+          conflict => conflict.closerId === closerId && conflict.time === timeStr
+        );
+        if (hasCrossBuConflict) return false;
+      }
+      
+      return true;
     });
-  }, [meetingLinkSlots, r2DailySlotsMap, meetingType, filteredMeetings]);
+  }, [meetingLinkSlots, r2DailySlotsMap, meetingType, filteredMeetings, crossBuConflictsData, selectedDate]);
 
   const getMeetingsForDay = (day: Date) => {
     return filteredMeetings.filter(meeting => {

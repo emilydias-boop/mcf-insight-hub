@@ -55,31 +55,45 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
         source = 'weekday';
       }
 
-      // 3. Fetch max leads per slot from closer settings
+      // 3. Fetch max leads per slot AND employee_id from closer settings
       const { data: closerData, error: closerError } = await supabase
         .from('closers')
-        .select('max_leads_per_slot')
+        .select('max_leads_per_slot, employee_id')
         .eq('id', closerId)
         .single();
 
       if (closerError) throw closerError;
       const maxLeadsPerSlot = closerData?.max_leads_per_slot || 4;
 
-      // 4. Fetch already booked meetings for this closer on this specific date
+      // 4. Find all related closers with the same employee_id (cross-BU integration)
+      let allCloserIdsToCheck = [closerId];
+      
+      if (closerData?.employee_id) {
+        const { data: relatedClosers, error: relatedError } = await supabase
+          .from('closers')
+          .select('id')
+          .eq('employee_id', closerData.employee_id);
+
+        if (!relatedError && relatedClosers) {
+          allCloserIdsToCheck = relatedClosers.map(c => c.id);
+        }
+      }
+
+      // 5. Fetch already booked meetings for ALL related closers on this specific date
       const startOfDayStr = `${dateStr}T00:00:00`;
       const endOfDayStr = `${dateStr}T23:59:59`;
 
       const { data: bookedMeetings, error: meetingsError } = await supabase
         .from('meeting_slots')
-        .select('scheduled_at')
-        .eq('closer_id', closerId)
-        .eq('meeting_type', 'r2')
+        .select('scheduled_at, closer_id')
+        .in('closer_id', allCloserIdsToCheck)
         .gte('scheduled_at', startOfDayStr)
-        .lte('scheduled_at', endOfDayStr);
+        .lte('scheduled_at', endOfDayStr)
+        .in('status', ['scheduled', 'rescheduled']);
 
       if (meetingsError) throw meetingsError;
 
-      // Count bookings per time slot
+      // Count bookings per time slot (from any related closer = cross-BU conflict)
       const bookedCounts: Record<string, number> = {};
       (bookedMeetings || []).forEach(m => {
         const d = new Date(m.scheduled_at);
