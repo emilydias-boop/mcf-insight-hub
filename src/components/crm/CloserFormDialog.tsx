@@ -6,11 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Info, RefreshCw, CheckCircle2, Video, UserCheck } from 'lucide-react';
+import { Loader2, Info, RefreshCw, CheckCircle2, Video, UserCheck, AlertTriangle } from 'lucide-react';
 import { Closer, CloserFormData, useCreateCloser, useUpdateCloser } from '@/hooks/useClosers';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+import { useExistingClosersForEmployee } from '@/hooks/useCloserConflicts';
 
 interface CloserUser {
   id: string;
@@ -104,6 +105,12 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
     },
     enabled: open && !isEditing,
   });
+
+  // Check if the selected employee already has closer records in other BUs
+  const { data: existingClosersInOtherBus = [] } = useExistingClosersForEmployee(
+    formData.employee_id,
+    formData.bu
+  );
 
   const handleUserSelect = (userId: string) => {
     const user = closerUsers.find(u => u.id === userId);
@@ -285,6 +292,24 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
               </SelectContent>
             </Select>
           </div>
+
+          {/* Alert when employee already has closer records in other BUs */}
+          {existingClosersInOtherBus.length > 0 && (
+            <Alert className="bg-blue-500/10 border-blue-500/30">
+              <AlertTriangle className="h-4 w-4 text-blue-500" />
+              <AlertDescription className="text-sm">
+                <strong>Integração de Agenda:</strong> Este usuário já é closer em{' '}
+                {existingClosersInOtherBus.map(c => {
+                  const buLabel = BU_OPTIONS.find(b => b.value === c.bu)?.label || c.bu;
+                  return buLabel;
+                }).join(', ')}.
+                <br />
+                <span className="text-xs text-muted-foreground">
+                  Os horários ocupados em qualquer BU aparecerão automaticamente como indisponíveis nas outras.
+                </span>
+              </AlertDescription>
+            </Alert>
+          )}
           
           <div className="space-y-2">
             <Label>Cor de Identificação</Label>
