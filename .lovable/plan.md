@@ -1,183 +1,231 @@
 
-# Plano: Suporte a Múltiplas BUs por Usuário
+# Plano: Roles Automáticas no JWT Token
 
-## Problema Atual
+## Objetivo
+Eliminar completamente o "Acesso Negado" indevido incluindo as roles do usuário diretamente no token JWT. Isso torna o acesso **instantâneo** sem necessidade de queries adicionais.
 
-O campo `squad` na tabela `profiles` é do tipo TEXT, permitindo apenas **uma BU por usuário**. Thobson está configurado como "consorcio", então:
+## Arquitetura Atual vs Nova
 
-- Ele não vê os menus de "BU - Incorporador MCF" na sidebar
-- Ele não consegue acessar `/crm/agenda-r2` (CRM do Incorporador)
+```text
+ATUAL (Com Race Condition):
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Login     │ ──► │   Token     │ ──► │ Query Roles │ ──► Acesso
+│             │     │ (sem roles) │     │ (delay/timeout)│
+└─────────────┘     └─────────────┘     └─────────────┘
+                                              │
+                                              ▼
+                                     "Acesso Negado" se timeout
 
-## Solução Proposta
+NOVA (Sem Race Condition):
+┌─────────────┐     ┌─────────────────────┐
+│   Login     │ ──► │ Token (COM roles!)  │ ──► Acesso Instantâneo
+│             │     │ {user_roles: [...]} │
+└─────────────┘     └─────────────────────┘
+```
 
-Alterar o sistema para suportar múltiplas BUs por usuário através de um campo array.
+## Etapas de Implementação
 
----
+### Etapa 1: Criar a Função de Hook no Banco
 
-## Alterações no Banco de Dados
+Criar uma função `custom_access_token_hook` que será executada automaticamente pelo Supabase Auth toda vez que um token é gerado. Esta função:
 
-### 1. Migração do campo `squad`
+1. Busca as roles do usuário na tabela `user_roles`
+2. Injeta as roles nas claims do JWT
+3. Retorna o token modificado
 
-Executar SQL no Supabase para converter o campo de TEXT para TEXT[]:
-
+**SQL a executar:**
 ```sql
--- Backup do valor atual
-ALTER TABLE profiles ADD COLUMN squad_backup TEXT;
-UPDATE profiles SET squad_backup = squad;
+-- Função que injeta roles no JWT
+CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  claims jsonb;
+  user_roles text[];
+BEGIN
+  -- Busca todas as roles do usuário
+  SELECT array_agg(role::text) INTO user_roles
+  FROM public.user_roles
+  WHERE user_id = (event->>'user_id')::uuid;
 
--- Converter para array
-ALTER TABLE profiles 
-  ALTER COLUMN squad TYPE TEXT[] 
-  USING CASE 
-    WHEN squad IS NOT NULL THEN ARRAY[squad]
-    ELSE NULL
-  END;
+  -- Pega as claims existentes
+  claims := event->'claims';
+  
+  -- Adiciona roles ao token (array vazio se não tiver roles)
+  claims := jsonb_set(claims, '{user_roles}', to_jsonb(COALESCE(user_roles, ARRAY[]::text[])));
+  
+  -- Retorna o evento com as claims modificadas
+  RETURN jsonb_set(event, '{claims}', claims);
+END;
+$$;
+
+-- Permissões necessárias para o serviço de auth
+GRANT USAGE ON SCHEMA public TO supabase_auth_admin;
+GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+
+-- Revogar acesso do public e anon (segurança)
+REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook FROM anon;
+REVOKE EXECUTE ON FUNCTION public.custom_access_token_hook FROM authenticated;
 ```
 
----
+### Etapa 2: Habilitar o Hook no Dashboard do Supabase
 
-## Alterações no Código
+Após criar a função, será necessário habilitá-la manualmente no painel do Supabase:
 
-### 2. Hook useMyBU
+1. Acessar: Authentication → Hooks
+2. Encontrar "Customize Access Token (JWT)"
+3. Habilitar e selecionar a função `custom_access_token_hook`
+4. Salvar
 
-**Arquivo:** `src/hooks/useMyBU.ts`
+### Etapa 3: Criar Função Helper para Decodificar JWT
 
-Atualizar para retornar array de BUs:
+Criar um utilitário para extrair as roles do token de forma segura:
 
-```typescript
-export function useMyBU() {
-  const { user } = useAuth();
-
-  return useQuery({
-    queryKey: ["my-bu", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("squad")
-        .eq("id", user.id)
-        .single();
-
-      if (error) throw error;
-      // Retorna array de BUs ou array vazio
-      return (data?.squad as BusinessUnit[]) || [];
-    },
-    enabled: !!user?.id,
-  });
-}
-
-// Helper para verificar se usuário tem acesso a uma BU específica
-export function useHasBUAccess(bu: BusinessUnit): boolean {
-  const { data: myBUs = [] } = useMyBU();
-  return myBUs.includes(bu);
-}
-```
-
-### 3. Hook useActiveBU
-
-**Arquivo:** `src/hooks/useActiveBU.ts`
-
-Ajustar para funcionar com array:
+**Arquivo:** `src/utils/jwt.ts`
 
 ```typescript
-export function useActiveBU(): BusinessUnit | null {
-  const buContext = useContext(BUContext);
-  const { data: userBUs = [] } = useMyBU();
+export interface JWTPayload {
+  user_roles?: string[];
+  sub?: string;
+  exp?: number;
+  iat?: number;
+}
 
-  return useMemo(() => {
-    // Se temos BU no contexto (da rota), usa ela
-    if (buContext.activeBU) {
-      return buContext.activeBU;
-    }
+export const decodeJWTPayload = (token: string): JWTPayload | null => {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
     
-    // Retorna a primeira BU do usuário (ou null)
-    return userBUs[0] || null;
-  }, [buContext.activeBU, userBUs]);
+    const payload = parts[1];
+    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(decoded);
+  } catch (error) {
+    console.error('[JWT] Failed to decode token:', error);
+    return null;
+  }
+};
+
+export const getRolesFromToken = (accessToken: string | undefined): string[] => {
+  if (!accessToken) return [];
+  
+  const payload = decodeJWTPayload(accessToken);
+  return payload?.user_roles || [];
+};
+```
+
+### Etapa 4: Simplificar AuthContext
+
+Modificar `AuthContext.tsx` para:
+
+1. Ler roles diretamente do token (sem query)
+2. Remover `roleLoading` (não é mais necessário)
+3. Manter `checkUserBlocked` para segurança (bloqueio é diferente de permissão)
+
+**Principais mudanças:**
+
+```typescript
+// Remover:
+- fetchUserRoles()
+- loadRolesInBackground()
+- roleLoading state
+- hasLoadedRoles ref
+- ROLE_TIMEOUT_MS constant
+
+// Adicionar:
++ import { getRolesFromToken } from '@/utils/jwt';
+
+// Novo handleSession (simplificado):
+const handleSession = (newSession: Session | null) => {
+  if (!newSession?.user) {
+    setSession(null);
+    setUser(null);
+    setRole(null);
+    setAllRoles([]);
+    setLoading(false);
+    return;
+  }
+
+  // Roles vêm direto do token - INSTANTÂNEO!
+  const roles = getRolesFromToken(newSession.access_token) as AppRole[];
+  const sortedRoles = roles.length > 0 
+    ? [...roles].sort((a, b) => (ROLE_PRIORITY[a] || 99) - (ROLE_PRIORITY[b] || 99))
+    : ['viewer' as AppRole];
+  
+  setSession(newSession);
+  setUser(newSession.user);
+  setRole(sortedRoles[0]);
+  setAllRoles(sortedRoles.length > 0 ? sortedRoles : ['viewer']);
+  setLoading(false);
+  
+  // Verificar bloqueio em background (não bloqueia UI)
+  checkUserBlockedInBackground(newSession.user.id);
+};
+```
+
+### Etapa 5: Atualizar Guards e Hooks
+
+Remover referências a `roleLoading` nos componentes:
+
+**Arquivos a modificar:**
+- `src/components/auth/ResourceGuard.tsx` - remover `roleLoading` do check
+- `src/components/auth/RoleGuard.tsx` - remover `roleLoading` do check
+- Outros guards que usam `roleLoading`
+
+### Etapa 6: Atualizar Interface AuthContextType
+
+```typescript
+interface AuthState {
+  user: User | null;
+  session: Session | null;
+  role: AppRole | null;
+  allRoles: AppRole[];
+  loading: boolean; // Apenas session loading
+  // REMOVIDO: roleLoading
 }
 ```
 
-### 4. AppSidebar - Filtro de BU
+## Considerações Importantes
 
-**Arquivo:** `src/components/layout/AppSidebar.tsx`
+### Quando as roles são atualizadas no token?
 
-Atualizar lógica de filtragem para verificar se **qualquer** BU do usuário está na lista:
+| Evento | Token Atualizado? |
+|--------|-------------------|
+| Login | Sim, token novo |
+| Token Refresh (automático ~1h) | Sim |
+| Mudança de role no banco | Não, precisa re-login ou refresh |
 
+### Forçar atualização de roles (opcional)
+
+Se precisar atualizar roles sem logout, pode-se chamar:
 ```typescript
-// Linha ~377-382
-// Verificação de BU para SDRs - ATUALIZADO PARA ARRAY
-if (item.requiredBU && item.requiredBU.length > 0) {
-  // Se o usuário não tem BUs ou nenhuma BU do usuário está na lista permitida
-  if (!myBUs || myBUs.length === 0) {
-    return false;
-  }
-  // Verifica se alguma BU do usuário está na lista requerida
-  const hasMatchingBU = myBUs.some(bu => item.requiredBU!.includes(bu));
-  if (!hasMatchingBU) {
-    return false;
-  }
-}
+await supabase.auth.refreshSession();
 ```
 
-### 5. Página de Gerenciamento de Usuários
+### Segurança mantida
 
-**Arquivo:** `src/pages/GerenciamentoUsuarios.tsx` (ou componente de edição)
+- `checkUserBlocked` continua funcionando em background
+- Se usuário for bloqueado, ainda será deslogado
+- RLS no banco continua validando permissões
 
-Atualizar UI para permitir seleção múltipla de BUs com checkboxes:
+## Resumo das Mudanças
 
-```typescript
-// Trocar Select por CheckboxGroup
-<div className="space-y-2">
-  <Label>Business Units</Label>
-  {BU_OPTIONS.filter(bu => bu.value).map((bu) => (
-    <div key={bu.value} className="flex items-center space-x-2">
-      <Checkbox
-        checked={selectedBUs.includes(bu.value as BusinessUnit)}
-        onCheckedChange={(checked) => {
-          if (checked) {
-            setSelectedBUs([...selectedBUs, bu.value as BusinessUnit]);
-          } else {
-            setSelectedBUs(selectedBUs.filter(b => b !== bu.value));
-          }
-        }}
-      />
-      <Label>{bu.label}</Label>
-    </div>
-  ))}
-</div>
-```
-
----
-
-## Resumo das Alterações
-
-| Componente | Alteração |
-|------------|-----------|
-| **Banco de dados** | Migrar `squad` de TEXT para TEXT[] |
-| `useMyBU` | Retornar `BusinessUnit[]` em vez de `BusinessUnit \| null` |
-| `useActiveBU` | Trabalhar com array de BUs |
-| `AppSidebar` | Verificar `myBUs.some()` em vez de `myBU === ` |
-| UI de Usuários | Checkboxes para múltiplas BUs |
-
----
+| Arquivo | Ação |
+|---------|------|
+| Migration SQL | Criar função `custom_access_token_hook` |
+| Dashboard Supabase | Habilitar hook manualmente |
+| `src/utils/jwt.ts` | Criar (novo arquivo) |
+| `src/contexts/AuthContext.tsx` | Simplificar removendo roleLoading |
+| `src/components/auth/ResourceGuard.tsx` | Remover check de roleLoading |
+| `src/components/auth/RoleGuard.tsx` | Remover check de roleLoading |
 
 ## Resultado Esperado
 
-Após as alterações, Thobson poderá:
-
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Ver menu "BU - Incorporador MCF" | Não vê | Vê |
-| Ver menu "BU - Consórcio" | Vê | Vê |
-| Acessar `/crm/agenda-r2` | Bloqueado (não está na BU) | Permitido |
-| Acessar `/consorcio/crm` | Permitido | Permitido |
-
----
-
-## Configuração do Thobson Após Implementação
-
-```sql
-UPDATE profiles 
-SET squad = ARRAY['incorporador', 'consorcio']
-WHERE id = 'a15cb111-8831-4146-892a-d61ca674628a';
-```
+- Login → Acesso instantâneo (0ms de delay para roles)
+- Sem "Acesso Negado" indevido
+- Código mais simples e manutenível
+- Menos queries no banco
