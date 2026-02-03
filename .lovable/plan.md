@@ -1,62 +1,68 @@
 
-# Plano: Corrigir Visibilidade de Pipelines para SDRs do Consórcio
+# Plano: Habilitar Escolha de Pipelines APENAS para SDRs do Consórcio
 
-## Problema Identificado
+## Objetivo
 
-Os SDRs do Consórcio, como o Cleiton Lima, estão visualizando apenas uma pipeline fixa porque o sistema está direcionando-os para uma origem incorreta:
-
-**Situação Atual:**
-- O SDR tem a BU `consorcio` configurada no perfil ✓
-- O código busca a origem padrão em `SDR_ORIGIN_BY_BU['consorcio']`
-- Essa constante aponta para `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL` (ID: `4e2b210a-...`)
-- **Porém**, essa origem pertence ao grupo **Perpétuo - X1** que é da BU **Incorporador**!
-
-**Origem Correta para Consórcio:**
-- `PIPE LINE - INSIDE SALES` (ID: `57013597-22f6-4969-848c-404b81dcc0cb`)
-- Grupo: **Perpétuo - Construa para Alugar** (mapeado corretamente para consorcio)
-- Já possui 8 estágios configurados no Kanban
+Permitir que SDRs da BU **Consórcio** escolham entre múltiplas pipelines, enquanto SDRs de outras BUs (Incorporador, Crédito, Projetos, Leilão) mantêm o comportamento atual de pipeline fixa.
 
 ---
 
 ## Solução Proposta
 
-### 1. Atualizar Constante `SDR_ORIGIN_BY_BU` no Frontend
+### 1. Criar Constante de BUs com Sidebar Liberada para SDRs
 
 **Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
 
-Corrigir o mapeamento para apontar para a origem correta:
+Adicionar uma constante que define quais BUs permitem SDRs verem a sidebar:
 
-```
-SDR_ORIGIN_BY_BU = {
-  incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',  // (mantém)
-  consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',     // CORRIGIR: PIPE LINE - INSIDE SALES (grupo Consórcio)
-  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
-  projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
-  leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
-}
+```typescript
+// BUs onde SDRs podem escolher múltiplas pipelines
+export const SDR_MULTI_PIPELINE_BUS: BusinessUnit[] = ['consorcio'];
 ```
 
-### 2. Adicionar Origem ao Mapeamento do Banco de Dados
+---
 
-**Ação:** Inserir registro na tabela `bu_origin_mapping` para que a origem padrão do Consórcio fique registrada oficialmente.
+### 2. Ajustar Lógica de Visibilidade da Sidebar
 
-```sql
-INSERT INTO bu_origin_mapping (bu, entity_type, entity_id, is_default)
-VALUES ('consorcio', 'origin', '57013597-22f6-4969-848c-404b81dcc0cb', true)
-ON CONFLICT DO NOTHING;
+**Arquivo:** `src/pages/crm/Negocios.tsx`
+
+Modificar a lógica de `showSidebar` para ser condicional por BU:
+
+```typescript
+// DE:
+const showSidebar = !isSdr;
+
+// PARA:
+const sdrCanSeeSidebar = isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU);
+const showSidebar = !isSdr || sdrCanSeeSidebar;
 ```
 
-### 3. Atualizar `BU_DEFAULT_ORIGIN_MAP` para Consistência
+**Resultado:**
+- SDRs do Consórcio: `showSidebar = true`
+- SDRs de outras BUs: `showSidebar = false` (comportamento atual)
+- Não-SDRs: `showSidebar = true` (comportamento atual)
 
-Garantir que a origem padrão usada por não-SDRs também esteja correta:
+---
 
-```
-BU_DEFAULT_ORIGIN_MAP = {
-  incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
-  consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',     // CORRIGIR para mesma origem
-  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
-  projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
-  leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+### 3. Ajustar Lógica de Origem Efetiva
+
+**Arquivo:** `src/pages/crm/Negocios.tsx`
+
+Modificar o cálculo de `effectiveOriginId` para respeitar a seleção manual apenas para SDRs do Consórcio:
+
+```typescript
+// Para SDRs
+if (isSdr) {
+  // SDRs de BUs com multi-pipeline podem navegar manualmente
+  if (activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) {
+    if (selectedOriginId) return selectedOriginId;
+  }
+  
+  // Default ou BUs com pipeline fixa
+  if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
+    return SDR_ORIGIN_BY_BU[activeBU];
+  }
+  return SDR_AUTHORIZED_ORIGIN_ID;
 }
 ```
 
@@ -64,32 +70,22 @@ BU_DEFAULT_ORIGIN_MAP = {
 
 ## Detalhes Técnicos
 
-### Mapeamento de IDs Corretos
+### Comportamento por BU
 
-| BU | Origem Padrão SDR | Grupo Pai |
+| BU | SDR vê Sidebar? | SDR pode trocar pipeline? |
 |---|---|---|
-| incorporador | `e3c04f21-...` (PIPELINE INSIDE SALES) | Perpétuo - X1 |
-| **consorcio** | **`57013597-...` (PIPE LINE - INSIDE SALES)** | **Perpétuo - Construa para Alugar** |
-| leilao | `a1b2c3d4-...` (Pipeline Leilão) | BU - LEILÃO |
+| **Consórcio** | ✅ Sim | ✅ Sim |
+| Incorporador | ❌ Não | ❌ Não |
+| Crédito | ❌ Não | ❌ Não |
+| Projetos | ❌ Não | ❌ Não |
+| Leilão | ❌ Não | ❌ Não |
 
-### Fluxo Atual do Código
+### Expansão Futura
 
-```
-Negocios.tsx
-  └─ useActiveBU() → 'consorcio'
-  └─ isSdrRole() → true
-  └─ SDR_ORIGIN_BY_BU['consorcio'] → '4e2b210a...' ← ERRADO!
-      └─ Pertence ao grupo 'Perpétuo - X1' (Incorporador)
-```
+Para liberar outras BUs no futuro, basta adicionar à constante:
 
-### Fluxo Corrigido
-
-```
-Negocios.tsx
-  └─ useActiveBU() → 'consorcio'
-  └─ isSdrRole() → true
-  └─ SDR_ORIGIN_BY_BU['consorcio'] → '57013597...' ← CORRETO
-      └─ Pertence ao grupo 'Perpétuo - Construa para Alugar' (Consórcio)
+```typescript
+export const SDR_MULTI_PIPELINE_BUS: BusinessUnit[] = ['consorcio', 'leilao'];
 ```
 
 ---
@@ -97,17 +93,17 @@ Negocios.tsx
 ## Arquivos a Modificar
 
 1. **`src/components/auth/NegociosAccessGuard.tsx`**
-   - Atualizar `SDR_ORIGIN_BY_BU.consorcio`
-   - Atualizar `BU_DEFAULT_ORIGIN_MAP.consorcio`
+   - Adicionar constante `SDR_MULTI_PIPELINE_BUS`
 
-2. **Migração SQL** (opcional mas recomendado)
-   - Inserir origem padrão no `bu_origin_mapping`
+2. **`src/pages/crm/Negocios.tsx`**
+   - Importar `SDR_MULTI_PIPELINE_BUS`
+   - Ajustar lógica de `showSidebar`
+   - Ajustar lógica de `effectiveOriginId`
 
 ---
 
 ## Resultado Esperado
 
-Após a correção:
-- SDRs do Consórcio verão o Kanban da pipeline "PIPE LINE - INSIDE SALES"
-- Os estágios corretos aparecerão: Novo Lead, Lead Qualificado, Reunião 01 Agendada, etc.
-- O filtro de BU funcionará corretamente para isolar os dados do Consórcio
+- **SDRs do Consórcio**: Sidebar visível, podem navegar entre as 5 pipelines mapeadas
+- **SDRs de outras BUs**: Comportamento inalterado (pipeline fixa, sem sidebar)
+- **Managers/Admins/Coordenadores**: Sem alteração (já veem tudo)
