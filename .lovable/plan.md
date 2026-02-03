@@ -1,85 +1,91 @@
 
+# Plano: Adicionar Botão de Transferência na Linha do Participante (R1)
 
-# Plano: Corrigir Visualizacao do Botao de Edicao na Agenda R2
+## Situação Atual
 
-## Diagnostico
+O drawer da Agenda R1 (`AgendaMeetingDrawer.tsx`) já possui:
+- Botão "Mover" existente na parte inferior do drawer (linha 978-987)
+- `MoveAttendeeModal` já implementado e funcional
 
-O codigo ja foi implementado corretamente, mas a interface nao esta refletindo as mudancas.
+Na linha de cada participante existe:
+- Edição de telefone (lápis)
+- Botão WhatsApp (MessageCircle) 
+- Botão remover (lixeira)
 
-### O que foi implementado (e esta correto)
+**Falta**: Um botão de transferência diretamente na linha do participante.
 
-| Arquivo | Status |
-|---------|--------|
-| `src/hooks/useTransferR2Attendee.ts` | Criado |
-| `src/components/crm/R2AttendeeTransferModal.tsx` | Criado |
-| `src/components/crm/R2MeetingDetailDrawer.tsx` | Modificado com botao Pencil |
+---
 
-### Codigo atual (linha 226-240 do Drawer)
+## Solução
+
+Adicionar um botão `ArrowRightLeft` na linha de cada participante que:
+1. Seleciona automaticamente o participante clicado
+2. Abre o `MoveAttendeeModal` já existente
+
+---
+
+## Alteração
+
+**Arquivo**: `src/components/crm/AgendaMeetingDrawer.tsx`
+
+**Localização**: Linhas 702-728 (seção de botões por participante)
+
+**Adicionar** antes do botão de WhatsApp:
 
 ```typescript
+{/* Botão Transferir - apenas para admins/managers */}
 {canTransfer && (
   <Button
     variant="ghost"
     size="icon"
-    className="h-8 w-8 text-primary hover:bg-primary/10"
+    className="h-8 w-8"
     onClick={(e) => {
       e.stopPropagation();
-      setAttendeeToTransfer(att);
-      setTransferModalOpen(true);
+      setSelectedParticipantId(p.id);
+      setShowMoveModal(true);
     }}
     title="Transferir participante"
   >
-    <Pencil className="h-4 w-4" />
+    <ArrowRightLeft className="h-4 w-4 text-purple-600" />
   </Button>
 )}
 ```
 
-### Permissoes
-
+**Também adicionar** a variável `canTransfer`:
 ```typescript
 const { role } = useAuth();
 const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
-// Usuario atual: admin -> canTransfer = true
 ```
 
-## Problema Identificado
+---
 
-A imagem mostra um icone de "chat/comentario" que **nao existe** no codigo atual do drawer. Isso indica:
-
-1. **Cache do navegador** - O preview esta mostrando uma versao antiga
-2. **Hot reload nao aplicado** - O codigo foi salvo mas nao recarregado
-
-## Solucao
-
-### Opcao 1: Refresh Forcado (mais rapido)
-
-O usuario precisa fazer um **refresh forcado** no navegador:
-- **Windows/Linux**: `Ctrl + Shift + R` ou `Ctrl + F5`
-- **Mac**: `Cmd + Shift + R`
-
-### Opcao 2: Verificar Deploy
-
-Se o refresh nao resolver, posso:
-1. Adicionar um log de debug no codigo
-2. Verificar se o arquivo foi salvo corretamente
-3. Forcar rebuild do preview
-
-## Resultado Esperado
-
-Apos o refresh, cada participante devera mostrar:
+## Resultado Visual Esperado
 
 ```text
 +------------------------------------------+
-|  [F] Francisco Antonio da Silva Rocha    |
-|      Remanejado | Contrato Pago          |
-|      +5511984768433                       |
-|                              [✏️] [🗑️]   |
+|  [O] Oldai                               |
+|      Convidado | Selecionado             |
+|      +5592991357  [✔] [✗]                |
+|                    [↔️] [💬] [🗑️]         |
 +------------------------------------------+
-          Pencil    Trash2
-          (azul)    (vermelho)
+                    Transfer  WhatsApp  Delete
+                    (roxo)    (verde)   (vermelho)
 ```
 
-## Proximo Passo
+---
 
-Se o refresh forcado nao funcionar, posso adicionar um `console.log` para debug ou verificar se ha algum erro no build. Por favor, tente o refresh forcado primeiro e me avise se o botao de lapis aparece.
+## Permissões
 
+O botão será visível apenas para:
+- `admin`
+- `manager`
+- `coordenador`
+
+---
+
+## Vantagens
+
+1. **Reutiliza código existente** - `MoveAttendeeModal` já funciona
+2. **Mínima alteração** - Apenas adiciona um botão
+3. **Consistente com R2** - Mesma experiência visual
+4. **Controle de permissão** - Apenas gestores podem transferir
