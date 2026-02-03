@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Users, FileText, Target, Calendar, ExternalLink, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Users, FileText, Target, Calendar, ExternalLink, RefreshCw, UserCheck } from 'lucide-react';
 import { useEmployeesWithCargo } from '@/hooks/useEmployees';
 import { PlansOteTab } from '@/components/fechamento/PlansOteTab';
 import { ActiveMetricsTab } from '@/components/fechamento/ActiveMetricsTab';
+import { SdrConfigTab } from '@/components/fechamento/SdrConfigTab';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
 
 const CONSORCIO_DEPT = 'BU - Consórcio';
@@ -37,7 +38,7 @@ export default function ConsorcioFechamentoConfig() {
         <div>
           <h1 className="text-2xl font-bold">Configurações - Fechamento Consórcio</h1>
           <p className="text-muted-foreground">
-            Gerencie equipe, planos de compensação e métricas
+            Gerencie equipe, SDRs, planos de compensação e métricas
           </p>
         </div>
       </div>
@@ -46,7 +47,11 @@ export default function ConsorcioFechamentoConfig() {
         <TabsList>
           <TabsTrigger value="equipe" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Equipe
+            Equipe HR
+          </TabsTrigger>
+          <TabsTrigger value="sdrs" className="flex items-center gap-2">
+            <UserCheck className="h-4 w-4" />
+            SDRs
           </TabsTrigger>
           <TabsTrigger value="plans" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -62,13 +67,13 @@ export default function ConsorcioFechamentoConfig() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Aba Equipe */}
+        {/* Aba Equipe HR */}
         <TabsContent value="equipe">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Equipe Consórcio
+                Equipe Consórcio (RH)
               </CardTitle>
               <Button onClick={() => navigate('/rh')}>
                 <ExternalLink className="h-4 w-4 mr-2" />
@@ -143,10 +148,15 @@ export default function ConsorcioFechamentoConfig() {
               <div className="mt-4 text-xs text-muted-foreground bg-muted/50 rounded-md p-3 border">
                 <strong>Fonte de dados:</strong> Os colaboradores são gerenciados no módulo de RH. 
                 Para aparecer nesta lista, o colaborador deve estar na BU Consórcio.
-                Para aparecer em "Planos OTE", deve também ter um cargo do catálogo vinculado.
+                Para SDRs do fechamento, use a aba "SDRs" para cadastrar ou vincular.
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Aba SDRs - NOVA */}
+        <TabsContent value="sdrs">
+          <SdrConfigTab defaultSquad="consorcio" lockSquad />
         </TabsContent>
 
         {/* Aba Planos OTE - filtrado para Consórcio */}
