@@ -1,91 +1,121 @@
 
-# Plano: Adicionar Botão de Transferência na Linha do Participante (R1)
+# Plano: Permitir Admin Ultrapassar Limite de Leads por Reuniao
 
-## Situação Atual
+## Contexto do Problema
 
-O drawer da Agenda R1 (`AgendaMeetingDrawer.tsx`) já possui:
-- Botão "Mover" existente na parte inferior do drawer (linha 978-987)
-- `MoveAttendeeModal` já implementado e funcional
+O sistema atual possui um limite configuravel de leads por slot de reuniao (padrao: 4). Este limite e aplicado em:
 
-Na linha de cada participante existe:
-- Edição de telefone (lápis)
-- Botão WhatsApp (MessageCircle) 
-- Botão remover (lixeira)
+1. **R2AttendeeTransferModal** (linha 236): `disabled={!slot.isAvailable}` - slots cheios ficam desabilitados
+2. **useR2CloserAvailableSlots** (linha 114): `isAvailable: currentCount < maxLeadsPerSlot` - marca slots cheios como indisponiveis
 
-**Falta**: Um botão de transferência diretamente na linha do participante.
+Quando um slot atinge a capacidade maxima, NINGUEM pode adicionar mais leads, nem mesmo admins.
 
 ---
 
-## Solução
+## Solucao Proposta
 
-Adicionar um botão `ArrowRightLeft` na linha de cada participante que:
-1. Seleciona automaticamente o participante clicado
-2. Abre o `MoveAttendeeModal` já existente
+Adicionar um parametro `isAdmin` que permite ultrapassar o limite de capacidade:
+
+- Se `isAdmin = true`: todos os slots aparecem como selecionaveis, mesmo os cheios
+- Se `isAdmin = false`: comportamento atual (slots cheios ficam desabilitados)
 
 ---
 
-## Alteração
+## Arquivos a Modificar
 
-**Arquivo**: `src/components/crm/AgendaMeetingDrawer.tsx`
+### 1. `src/hooks/useR2CloserAvailableSlots.ts`
 
-**Localização**: Linhas 702-728 (seção de botões por participante)
-
-**Adicionar** antes do botão de WhatsApp:
+Adicionar parametro opcional `bypassCapacity`:
 
 ```typescript
-{/* Botão Transferir - apenas para admins/managers */}
-{canTransfer && (
-  <Button
-    variant="ghost"
-    size="icon"
-    className="h-8 w-8"
-    onClick={(e) => {
-      e.stopPropagation();
-      setSelectedParticipantId(p.id);
-      setShowMoveModal(true);
-    }}
-    title="Transferir participante"
-  >
-    <ArrowRightLeft className="h-4 w-4 text-purple-600" />
-  </Button>
-)}
+export function useR2CloserAvailableSlots(
+  closerId: string | undefined, 
+  date: Date | undefined,
+  bypassCapacity: boolean = false  // NOVO
+)
 ```
 
-**Também adicionar** a variável `canTransfer`:
+Alterar calculo de disponibilidade (linha 114):
+
 ```typescript
+isAvailable: bypassCapacity || currentCount < maxLeadsPerSlot,
+```
+
+---
+
+### 2. `src/components/crm/R2AttendeeTransferModal.tsx`
+
+Importar `useAuth` e verificar se usuario e admin:
+
+```typescript
+import { useAuth } from '@/hooks/useAuth';
+
+// Dentro do componente:
 const { role } = useAuth();
-const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
+const isAdmin = role === 'admin';
+```
+
+Passar flag para o hook:
+
+```typescript
+const { data: slotsData } = useR2CloserAvailableSlots(
+  selectedCloserId || undefined,
+  selectedDate,
+  isAdmin  // Bypass para admin
+);
+```
+
+Adicionar indicador visual para slots cheios (mas selecionaveis):
+
+```typescript
+<Badge
+  variant={slot.isAvailable ? 'outline' : 'secondary'}
+  className={cn(
+    'text-xs',
+    slot.currentCount >= slot.maxCount 
+      ? 'text-amber-600 border-amber-300'  // Cheio mas permitido
+      : 'text-green-600 border-green-300'  // Disponivel normal
+  )}
+>
+  {slot.currentCount}/{slot.maxCount}
+  {slot.currentCount >= slot.maxCount && isAdmin && ' (Admin)'}
+</Badge>
 ```
 
 ---
 
-## Resultado Visual Esperado
+## Fluxo Visual Resultante
 
+**Usuario Normal** (SDR, Closer, Coordenador):
 ```text
-+------------------------------------------+
-|  [O] Oldai                               |
-|      Convidado | Selecionado             |
-|      +5592991357  [✔] [✗]                |
-|                    [↔️] [💬] [🗑️]         |
-+------------------------------------------+
-                    Transfer  WhatsApp  Delete
-                    (roxo)    (verde)   (vermelho)
+Horario        Capacidade
+09:00          3/4  [verde - selecionavel]
+10:00          4/4  [cinza - DESABILITADO]
+11:00          2/4  [verde - selecionavel]
+```
+
+**Admin**:
+```text
+Horario        Capacidade
+09:00          3/4  [verde - selecionavel]
+10:00          4/4 (Admin)  [amarelo - SELECIONAVEL]
+11:00          2/4  [verde - selecionavel]
 ```
 
 ---
 
-## Permissões
+## Alteracoes de Codigo
 
-O botão será visível apenas para:
-- `admin`
-- `manager`
-- `coordenador`
+| Arquivo | Linhas | Alteracao |
+|---------|--------|-----------|
+| `useR2CloserAvailableSlots.ts` | ~20, ~114 | Novo parametro + logica bypass |
+| `R2AttendeeTransferModal.tsx` | ~30-35, ~59, ~240-248 | useAuth + passar flag + UI visual |
 
 ---
 
-## Vantagens
+## Consideracoes
 
-1. **Reutiliza código existente** - `MoveAttendeeModal` já funciona
-2. **Mínima alteração** - Apenas adiciona um botão
-3. **Consistente com R2** - Mesma experiência visual
-4. **Controle de permissão** - Apenas gestores podem transferir
+1. **Apenas Admin**: A permissao e exclusiva para role `admin` - managers e coordenadores respeitam o limite
+2. **Indicador Visual**: Slots acima da capacidade mostram badge amarelo com "(Admin)" para clareza
+3. **Auditoria**: O log de transferencia (`attendee_movement_logs`) ja registra quem fez a acao
+4. **Sem Alteracao de Banco**: Nao requer migrations - apenas logica de frontend/hook
