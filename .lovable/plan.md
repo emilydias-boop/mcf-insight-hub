@@ -1,163 +1,150 @@
 
+# Plano: Configurações de Fechamento do Consórcio com Mesma Estrutura do Incorporador
 
-# Plano: Cadastrar SDRs Ithaline e Ygor no Consórcio
+## Situação Atual
 
-## Diagnóstico Atual
+A página de configurações do Consórcio (`/consorcio/fechamento/configuracoes`) possui apenas:
+- Card de estrutura de compensação padrão (OTE, Fixo, Variável)
+- Lista de closers do consórcio
+- Tabela de multiplicadores
 
-### Ithaline Clara dos Santos
-| Item | Status | Detalhe |
-|------|--------|---------|
-| Conta de acesso (`profiles`) | ✅ OK | email: `ithaline.clara@minhacasafinanciada.com`, squad: `['consorcio']` |
-| Permissão (`user_roles`) | ✅ OK | role: `sdr` |
-| Ficha RH (`employees`) | ✅ OK | cargo: SDR, departamento: BU - Consórcio |
-| Cadastro fechamento (`sdr`) | ❌ Faltando | Não existe registro na tabela `sdr` |
-| Vínculo employee→sdr | ❌ Faltando | `employees.sdr_id = null` |
+A página de configurações do Incorporador (`/fechamento-sdr/configuracoes`) possui:
+- Aba **Equipe**: Lista completa de colaboradores comerciais (SDRs e Closers) por BU
+- Aba **Planos OTE**: Configuração individual de planos por colaborador
+- Aba **Métricas Ativas**: Configuração de métricas dinâmicas por mês/cargo/BU
+- Aba **Dias Úteis**: Calendário de dias úteis e iFood
 
-### Ygor
-| Item | Status | Detalhe |
-|------|--------|---------|
-| Conta de acesso (`profiles`) | ❌ Faltando | Não existe |
-| Permissão (`user_roles`) | ❌ Faltando | Não existe |
-| Ficha RH (`employees`) | ❌ Faltando | Não existe |
-| Cadastro fechamento (`sdr`) | ❌ Faltando | Não existe |
+## Solução Proposta
 
-### Cleiton Lima (Referência - Funcionando)
-| Item | Status |
-|------|--------|
-| Conta de acesso | ✅ `cleiton.lima@minhacasafinanciada.com` |
-| Permissão | ✅ role: `sdr` |
-| Ficha RH | ✅ cargo: SDR, `sdr_id` vinculado |
-| Cadastro fechamento | ✅ squad: `consorcio` |
+Reescrever a página `FechamentoConfig.tsx` do Consórcio para usar a **mesma estrutura de abas**, reutilizando os componentes existentes com o filtro de BU = "consorcio" aplicado.
 
----
-
-## O que precisa ser feito
-
-### Para Ithaline (já tem acesso ao sistema)
-
-**Ação 1**: Cadastrar na tabela `sdr` com squad = 'consorcio'
-
-Isso pode ser feito pela interface existente em `/fechamento-sdr/configuracoes` (aba SDRs → botão "Novo SDR"), preenchendo:
-- Nome: Ithaline Clara dos Santos
-- Email: `ithaline.clara@minhacasafinanciada.com`
-- Usuário vinculado: selecionar o email dela
-- Squad: `consorcio` (precisamos adicionar este campo no formulário)
-
-**Ação 2**: Vincular o `sdr_id` no registro de employee dela
-
----
-
-### Para Ygor (não tem conta ainda)
-
-**Passo 1**: Criar conta de usuário
-- Opção A: Convite via Auth do Supabase (requer email do Ygor)
-- Opção B: Cadastro manual se ele for acessar pela primeira vez
-
-**Passo 2**: Configurar profile com squad = ['consorcio']
-
-**Passo 3**: Adicionar role `sdr` em user_roles
-
-**Passo 4**: Criar ficha em employees (RH → Colaboradores → Novo Colaborador)
-
-**Passo 5**: Cadastrar na tabela sdr com squad = 'consorcio'
-
----
-
-## Solução Técnica Recomendada
-
-### Problema identificado no formulário de SDR
-
-O formulário atual de cadastro de SDR (`SdrFormDialog`) não permite selecionar a **squad/BU** do SDR. Isso precisa ser corrigido para que SDRs do Consórcio sejam cadastrados corretamente.
-
-### Alterações necessárias
-
-**Arquivo**: `src/pages/fechamento-sdr/Configuracoes.tsx`
-
-Adicionar campo `squad` no `SdrFormDialog`:
-
-```typescript
-// Adicionar estado
-const [squad, setSquad] = useState<string>('incorporador');
-
-// No formulário, adicionar select
-<div className="space-y-2">
-  <Label>Business Unit (Squad)</Label>
-  <Select value={squad} onValueChange={setSquad}>
-    <SelectTrigger>
-      <SelectValue />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="incorporador">Incorporador</SelectItem>
-      <SelectItem value="consorcio">Consórcio</SelectItem>
-      <SelectItem value="credito">Crédito</SelectItem>
-      <SelectItem value="projetos">Projetos</SelectItem>
-      <SelectItem value="leilao">Leilão</SelectItem>
-    </SelectContent>
-  </Select>
-</div>
-
-// No submit, incluir squad
-await createSdr.mutateAsync({
-  name: name.trim(),
-  email: email.trim() || null,
-  user_id: userId || null,
-  nivel: Number(nivel),
-  meta_diaria: Number(metaDiaria),
-  active,
-  squad, // ← Adicionar
-});
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  Configurações - Fechamento Consórcio                               │
+│  Gerencie equipe, planos de compensação e métricas                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────┐ ┌───────────┐ ┌────────────────┐ ┌───────────┐         │
+│  │ Equipe  │ │ Planos OTE│ │ Métricas Ativas│ │ Dias Úteis│         │
+│  └─────────┘ └───────────┘ └────────────────┘ └───────────┘         │
+│                                                                      │
+│  ... conteúdo da aba selecionada filtrado por BU = consorcio ...   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Vínculo automático com Employee
+## Alterações Técnicas
 
-Atualmente o vínculo `employees.sdr_id` precisa ser feito manualmente. Podemos melhorar o fluxo para que, ao criar um SDR vinculado a um `user_id`, o sistema automaticamente:
-1. Busque o employee com esse `user_id`
-2. Atualize o `sdr_id` no employee
+### 1. Atualizar `src/pages/bu-consorcio/FechamentoConfig.tsx`
 
----
+Transformar a página para ter:
 
-## Resumo de Arquivos
+1. **Aba Equipe**: 
+   - Filtrar colaboradores por `departamento = 'BU - Consórcio'`
+   - Mostrar SDRs e Closers do consórcio
+   - Mesma tabela usada no Incorporador (Nome, Departamento, Cargo, Nível, Status, Admissão, Ações)
+
+2. **Aba Planos OTE**:
+   - Reutilizar componente `PlansOteTab` existente
+   - Aplicar filtro fixo `BU = consorcio`
+   - Os colaboradores já são filtrados por departamento no componente
+
+3. **Aba Métricas Ativas**:
+   - Reutilizar componente `ActiveMetricsTab` existente
+   - Aplicar filtro fixo `squad = consorcio`
+   - Permite configurar métricas específicas para SDRs/Closers do Consórcio
+
+4. **Aba Dias Úteis**:
+   - Reutilizar componente `WorkingDaysCalendar` existente
+   - O calendário é compartilhado entre todas as BUs
+
+### 2. Modificar Componentes Existentes para Aceitar Filtro de BU
+
+Os componentes `PlansOteTab` e `ActiveMetricsTab` já possuem filtro de BU interno. Precisamos criar versões que aceitem uma prop para **pré-selecionar** e **fixar** a BU:
+
+**Opção A (Recomendada)**: Adicionar prop `defaultBU` e `lockBU` aos componentes
+- Quando `lockBU=true`, o select de BU fica oculto/desabilitado
+- O filtro usa a BU passada via prop
+
+**Opção B**: Criar componente wrapper que passa filtro pré-definido
+
+### 3. Estrutura de Abas
+
+```typescript
+<Tabs defaultValue="equipe">
+  <TabsList>
+    <TabsTrigger value="equipe">
+      <Users /> Equipe
+    </TabsTrigger>
+    <TabsTrigger value="plans">
+      <FileText /> Planos OTE
+    </TabsTrigger>
+    <TabsTrigger value="metricas">
+      <Target /> Métricas Ativas
+    </TabsTrigger>
+    <TabsTrigger value="calendar">
+      <Calendar /> Dias Úteis
+    </TabsTrigger>
+  </TabsList>
+
+  <TabsContent value="equipe">
+    {/* Lista de colaboradores do consórcio */}
+  </TabsContent>
+
+  <TabsContent value="plans">
+    <PlansOteTab defaultBU="consorcio" lockBU />
+  </TabsContent>
+
+  <TabsContent value="metricas">
+    <ActiveMetricsTab defaultBU="consorcio" lockBU />
+  </TabsContent>
+
+  <TabsContent value="calendar">
+    <WorkingDaysCalendar />
+  </TabsContent>
+</Tabs>
+```
+
+## Arquivos a Modificar
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/pages/fechamento-sdr/Configuracoes.tsx` | Modificar | Adicionar campo `squad` no SdrFormDialog |
-| `src/hooks/useSdrFechamento.ts` | Modificar | Atualizar `useCreateSdr` para vincular employee automaticamente |
+| `src/pages/bu-consorcio/FechamentoConfig.tsx` | Reescrever | Implementar estrutura completa de abas |
+| `src/components/fechamento/PlansOteTab.tsx` | Modificar | Adicionar props `defaultBU` e `lockBU` opcionais |
+| `src/components/fechamento/ActiveMetricsTab.tsx` | Modificar | Adicionar props `defaultBU` e `lockBU` opcionais |
 
----
+## Detalhes da Aba Equipe (Consórcio)
 
-## Passos para o Usuário (Manual)
+A aba mostrará apenas colaboradores do Consórcio com as colunas:
+- Nome Completo
+- Departamento (badge mostrando "Consórcio")
+- Cargo (do catálogo)
+- Nível (N1, N2, etc)
+- Status (Ativo/Inativo)
+- Data de Admissão
+- Ações (link para editar no RH)
 
-### Cadastrar Ithaline como SDR do Consórcio
-
-1. Ir em `/fechamento-sdr/configuracoes`
-2. Na aba "SDRs", clicar "Novo SDR"
-3. Preencher:
-   - Nome: `Ithaline Clara dos Santos`
-   - Email: `ithaline.clara@minhacasafinanciada.com`
-   - Usuário vinculado: selecionar o email dela
-   - Squad: `consorcio` (após a correção do formulário)
-4. Salvar
-
-### Para Ygor
-
-Primeiro preciso saber:
-- Qual é o email completo do Ygor?
-- Ele já tem conta no sistema? (pode fazer login?)
-
----
+Filtro aplicado:
+```typescript
+employees.filter(emp => 
+  emp.departamento === 'BU - Consórcio'
+)
+```
 
 ## Resultado Esperado
 
-Após as alterações:
+Após a implementação, a página `/consorcio/fechamento/configuracoes` terá:
 
-1. **Página de Fechamento do Consórcio** (`/consorcio/fechamento`) na aba SDRs mostrará:
-   - Cleiton Lima
-   - Ithaline Clara dos Santos
-   - Ygor (após cadastro completo)
+1. **Mesma aparência** da página de configurações do Incorporador
+2. **Dados filtrados** para a BU Consórcio apenas
+3. **Métricas configuráveis** específicas para cada cargo do Consórcio
+4. **Planos OTE individuais** para cada colaborador do Consórcio
+5. **Calendário de dias úteis** compartilhado
 
-2. **Cada SDR poderá**:
-   - Ver seu próprio fechamento
-   - Acessar a agenda do consórcio
-   - Ver negócios da BU Consórcio
-   - Agendar reuniões para os closers do consórcio
+Isso permite que cada BU tenha suas próprias configurações de métricas e pesos, mantendo flexibilidade para diferentes estruturas de compensação.
 
+## Resumo da Implementação
+
+1. **FechamentoConfig.tsx**: Reescrever com Tabs completas e aba Equipe filtrada por BU = Consórcio
+2. **PlansOteTab.tsx**: Adicionar props opcionais para fixar BU
+3. **ActiveMetricsTab.tsx**: Adicionar props opcionais para fixar BU
