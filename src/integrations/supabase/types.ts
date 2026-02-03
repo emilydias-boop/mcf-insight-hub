@@ -1506,6 +1506,122 @@ export type Database = {
         }
         Relationships: []
       }
+      consorcio_closer_payout: {
+        Row: {
+          ajustes_json: Json | null
+          ano_mes: string
+          aprovado_em: string | null
+          aprovado_por: string | null
+          bonus_autorizado: boolean | null
+          bonus_extra: number | null
+          closer_id: string
+          comissao_consorcio: number | null
+          comissao_holding: number | null
+          created_at: string | null
+          dias_uteis_mes: number | null
+          fixo_valor: number | null
+          id: string
+          meta_comissao_consorcio: number | null
+          meta_comissao_holding: number | null
+          meta_organizacao: number | null
+          mult_comissao_consorcio: number | null
+          mult_comissao_holding: number | null
+          mult_organizacao: number | null
+          nfse_id: string | null
+          ote_total: number | null
+          pct_comissao_consorcio: number | null
+          pct_comissao_holding: number | null
+          pct_organizacao: number | null
+          score_organizacao: number | null
+          status: string | null
+          total_conta: number | null
+          updated_at: string | null
+          valor_comissao_consorcio: number | null
+          valor_comissao_holding: number | null
+          valor_organizacao: number | null
+          valor_variavel_final: number | null
+          variavel_total: number | null
+        }
+        Insert: {
+          ajustes_json?: Json | null
+          ano_mes: string
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          bonus_autorizado?: boolean | null
+          bonus_extra?: number | null
+          closer_id: string
+          comissao_consorcio?: number | null
+          comissao_holding?: number | null
+          created_at?: string | null
+          dias_uteis_mes?: number | null
+          fixo_valor?: number | null
+          id?: string
+          meta_comissao_consorcio?: number | null
+          meta_comissao_holding?: number | null
+          meta_organizacao?: number | null
+          mult_comissao_consorcio?: number | null
+          mult_comissao_holding?: number | null
+          mult_organizacao?: number | null
+          nfse_id?: string | null
+          ote_total?: number | null
+          pct_comissao_consorcio?: number | null
+          pct_comissao_holding?: number | null
+          pct_organizacao?: number | null
+          score_organizacao?: number | null
+          status?: string | null
+          total_conta?: number | null
+          updated_at?: string | null
+          valor_comissao_consorcio?: number | null
+          valor_comissao_holding?: number | null
+          valor_organizacao?: number | null
+          valor_variavel_final?: number | null
+          variavel_total?: number | null
+        }
+        Update: {
+          ajustes_json?: Json | null
+          ano_mes?: string
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          bonus_autorizado?: boolean | null
+          bonus_extra?: number | null
+          closer_id?: string
+          comissao_consorcio?: number | null
+          comissao_holding?: number | null
+          created_at?: string | null
+          dias_uteis_mes?: number | null
+          fixo_valor?: number | null
+          id?: string
+          meta_comissao_consorcio?: number | null
+          meta_comissao_holding?: number | null
+          meta_organizacao?: number | null
+          mult_comissao_consorcio?: number | null
+          mult_comissao_holding?: number | null
+          mult_organizacao?: number | null
+          nfse_id?: string | null
+          ote_total?: number | null
+          pct_comissao_consorcio?: number | null
+          pct_comissao_holding?: number | null
+          pct_organizacao?: number | null
+          score_organizacao?: number | null
+          status?: string | null
+          total_conta?: number | null
+          updated_at?: string | null
+          valor_comissao_consorcio?: number | null
+          valor_comissao_holding?: number | null
+          valor_organizacao?: number | null
+          valor_variavel_final?: number | null
+          variavel_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_closer_payout_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consorcio_creditos: {
         Row: {
           ativo: boolean | null
@@ -1720,6 +1836,50 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      consorcio_venda_holding: {
+        Row: {
+          ano_mes: string
+          closer_id: string
+          created_at: string | null
+          created_by: string | null
+          data_venda: string | null
+          descricao: string | null
+          id: string
+          valor_comissao: number
+          valor_venda: number
+        }
+        Insert: {
+          ano_mes: string
+          closer_id: string
+          created_at?: string | null
+          created_by?: string | null
+          data_venda?: string | null
+          descricao?: string | null
+          id?: string
+          valor_comissao: number
+          valor_venda: number
+        }
+        Update: {
+          ano_mes?: string
+          closer_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          data_venda?: string | null
+          descricao?: string | null
+          id?: string
+          valor_comissao?: number
+          valor_venda?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_venda_holding_closer_id_fkey"
+            columns: ["closer_id"]
+            isOneToOne: false
+            referencedRelation: "closers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       consortium_cards: {
         Row: {

@@ -1,25 +1,232 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { format, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calculator } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Calculator, RefreshCcw, Settings, Eye, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { formatCurrency } from '@/lib/formatters';
+import { ConsorcioStatusBadge } from '@/components/consorcio-fechamento/ConsorcioStatusBadge';
+import { useConsorcioPayouts, useRecalculateConsorcioPayouts, useConsorcioClosers } from '@/hooks/useConsorcioFechamento';
 
 export default function ConsorcioFechamento() {
+  const navigate = useNavigate();
+  const [anoMes, setAnoMes] = useState(format(new Date(), 'yyyy-MM'));
+  
+  const { data: payouts, isLoading } = useConsorcioPayouts(anoMes);
+  const { data: closers } = useConsorcioClosers();
+  const recalculate = useRecalculateConsorcioPayouts();
+
+  // Gerar opções de meses (últimos 12 meses)
+  const mesesOptions = Array.from({ length: 12 }, (_, i) => {
+    const date = subMonths(new Date(), i);
+    return {
+      value: format(date, 'yyyy-MM'),
+      label: format(date, "MMMM 'de' yyyy", { locale: ptBR }),
+    };
+  });
+
+  const handleRecalculate = () => {
+    recalculate.mutate(anoMes);
+  };
+
+  const handleMesAnterior = () => {
+    const [ano, mes] = anoMes.split('-').map(Number);
+    const novaData = new Date(ano, mes - 2, 1);
+    setAnoMes(format(novaData, 'yyyy-MM'));
+  };
+
+  const handleProximoMes = () => {
+    const [ano, mes] = anoMes.split('-').map(Number);
+    const novaData = new Date(ano, mes, 1);
+    setAnoMes(format(novaData, 'yyyy-MM'));
+  };
+
+  // Totais
+  const totais = (payouts || []).reduce(
+    (acc, p) => ({
+      fixo: acc.fixo + (p.fixo_valor || 0),
+      variavel: acc.variavel + (p.valor_variavel_final || 0),
+      total: acc.total + (p.total_conta || 0),
+    }),
+    { fixo: 0, variavel: 0, total: 0 }
+  );
+
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <Calculator className="h-8 w-8 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">Fechamento - Consórcio</h1>
-          <p className="text-muted-foreground">
-            Gestão de fechamento e comissões das equipes de consórcio
-          </p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Calculator className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-2xl font-bold">Fechamento - Consórcio</h1>
+            <p className="text-muted-foreground">
+              Gestão de fechamento e comissões dos closers de consórcio
+            </p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={handleMesAnterior}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <Select value={anoMes} onValueChange={setAnoMes}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {mesesOptions.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Button variant="outline" size="icon" onClick={handleProximoMes}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
       </div>
-      
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <Button onClick={handleRecalculate} disabled={recalculate.isPending}>
+          <RefreshCcw className={`h-4 w-4 mr-2 ${recalculate.isPending ? 'animate-spin' : ''}`} />
+          {recalculate.isPending ? 'Processando...' : 'Recalcular Todos'}
+        </Button>
+        
+        <Button variant="outline">
+          <Download className="h-4 w-4 mr-2" />
+          Exportar CSV
+        </Button>
+        
+        <Button 
+          variant="outline" 
+          onClick={() => navigate('/consorcio/fechamento/configuracoes')}
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          Configurações
+        </Button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Fixo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-blue-400">{formatCurrency(totais.fixo)}</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Variável</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-green-400">{formatCurrency(totais.variavel)}</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Conta</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(totais.total)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Em Desenvolvimento</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Este módulo está sendo implementado.</p>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Fixo</TableHead>
+                <TableHead className="text-right">Variável</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    Carregando...
+                  </TableCell>
+                </TableRow>
+              ) : !payouts || payouts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    Nenhum fechamento encontrado. Clique em "Recalcular Todos" para gerar.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                payouts.map((payout) => (
+                  <TableRow key={payout.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {payout.closer?.color && (
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: payout.closer.color }}
+                          />
+                        )}
+                        {payout.closer?.name || 'Closer não encontrado'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <ConsorcioStatusBadge status={payout.status} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(payout.fixo_valor || 0)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(payout.valor_variavel_final || 0)}
+                    </TableCell>
+                    <TableCell className="text-right font-bold">
+                      {formatCurrency(payout.total_conta || 0)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => navigate(`/consorcio/fechamento/${payout.id}`)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Info about SDRs */}
+      <Card className="bg-muted/50 border-dashed">
+        <CardContent className="p-4">
+          <p className="text-sm text-muted-foreground">
+            <strong>SDRs do Consórcio:</strong> Para gerenciar o fechamento dos SDRs, acesse a página{' '}
+            <Button 
+              variant="link" 
+              className="p-0 h-auto text-primary" 
+              onClick={() => navigate('/fechamento-sdr')}
+            >
+              Fechamento SDR
+            </Button>
+            {' '}e filtre por BU = Consórcio.
+          </p>
         </CardContent>
       </Card>
     </div>
