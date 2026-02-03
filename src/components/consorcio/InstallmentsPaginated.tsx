@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Check, Clock, AlertCircle, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Check, Clock, AlertCircle, ChevronLeft, ChevronRight, Filter, Pencil, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,11 +19,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ConsorcioInstallment } from '@/types/consorcio';
 
 interface InstallmentsPaginatedProps {
   installments: ConsorcioInstallment[];
   onPayInstallment: (installment: ConsorcioInstallment) => void;
+  onEditInstallment?: (installment: ConsorcioInstallment) => void;
   isPaying: boolean;
 }
 
@@ -39,6 +46,7 @@ type FilterType = 'todas' | 'pendente' | 'pago' | 'atrasado';
 export function InstallmentsPaginated({ 
   installments, 
   onPayInstallment, 
+  onEditInstallment,
   isPaying 
 }: InstallmentsPaginatedProps) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -159,7 +167,8 @@ export function InstallmentsPaginated({
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead className="text-right">Comissão</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-24">Ação</TableHead>
+                <TableHead className="w-10"></TableHead>
+                <TableHead className="w-32">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -208,16 +217,42 @@ export function InstallmentsPaginated({
                     )}
                   </TableCell>
                   <TableCell>
-                    {installment.status !== 'pago' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onPayInstallment(installment)}
-                        disabled={isPaying}
-                      >
-                        Pagar
-                      </Button>
+                    {installment.observacao && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{installment.observacao}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {onEditInstallment && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onEditInstallment(installment)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {installment.status !== 'pago' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onPayInstallment(installment)}
+                          disabled={isPaying}
+                        >
+                          Pagar
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

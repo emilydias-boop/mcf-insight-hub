@@ -476,6 +476,42 @@ export function usePayInstallment() {
   });
 }
 
+export function useUpdateInstallment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      id: string;
+      tipo: 'cliente' | 'empresa';
+      valor_parcela: number;
+      valor_comissao: number;
+      data_vencimento: string;
+      data_pagamento?: string | null;
+      status: 'pendente' | 'pago' | 'atrasado';
+      observacao?: string;
+    }) => {
+      const { id, ...updateData } = data;
+      
+      const { error } = await supabase
+        .from('consortium_installments')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consortium-card-details'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-installments'] });
+      queryClient.invalidateQueries({ queryKey: ['consortium-summary'] });
+      toast.success('Parcela atualizada com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao atualizar parcela:', error);
+      toast.error('Erro ao atualizar parcela');
+    },
+  });
+}
+
 export function useConsorcioInstallments(cardId: string | null) {
   return useQuery({
     queryKey: ['consortium-installments', cardId],

@@ -2001,6 +2001,7 @@ export type Database = {
           data_vencimento: string
           id: string
           numero_parcela: number
+          observacao: string | null
           status: string
           tipo: string
           updated_at: string
@@ -2014,6 +2015,7 @@ export type Database = {
           data_vencimento: string
           id?: string
           numero_parcela: number
+          observacao?: string | null
           status?: string
           tipo: string
           updated_at?: string
@@ -2027,6 +2029,7 @@ export type Database = {
           data_vencimento?: string
           id?: string
           numero_parcela?: number
+          observacao?: string | null
           status?: string
           tipo?: string
           updated_at?: string
