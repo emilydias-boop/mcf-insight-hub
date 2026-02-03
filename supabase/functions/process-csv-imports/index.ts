@@ -142,11 +142,33 @@ Deno.serve(async (req) => {
     const errors: any[] = job.metadata.errors || []
     let chunkSkipped = 0
     const originId = job.metadata.origin_id // origin_id do job
+    
+    // Set para rastrear contatos já processados neste chunk (deduplicação por contact_id + origin_id)
+    const processedContactOrigins = new Set<string>(job.metadata.processed_contact_origins || [])
 
     for (const csvDeal of chunkDeals) {
       try {
+        // Primeiro, tentar encontrar o contact_id pelo nome/email/telefone
+        const contactIdentifier = csvDeal.contact?.trim()?.toLowerCase()
+        const contactId = contactIdentifier ? contactsCache.get(contactIdentifier) : null
+        
+        // Se encontrou um contato e tem origin_id, verificar duplicação
+        if (contactId && originId) {
+          const existingDealKey = `${contactId}_${originId}`
+          if (processedContactOrigins.has(existingDealKey)) {
+            console.log(`⏭️ Pulando deal duplicado para contato ${contactId} na origem ${originId}: ${csvDeal.name}`)
+            chunkSkipped++
+            continue
+          }
+          processedContactOrigins.add(existingDealKey)
+        }
+        
         const dbDeal = convertToDBFormat(csvDeal, contactsCache, stagesCache, originId)
         if (dbDeal) {
+          // Vincular contact_id se encontrado
+          if (contactId) {
+            dbDeal.contact_id = contactId
+          }
           dbDeals.push(dbDeal)
         } else {
           chunkSkipped++
@@ -193,7 +215,8 @@ Deno.serve(async (req) => {
           total_chunks: totalChunks,
           current_line: endIdx,
           total_lines: totalDeals,
-          errors: errors.slice(0, 100) // Limitar a 100 erros
+          errors: errors.slice(0, 100), // Limitar a 100 erros
+          processed_contact_origins: Array.from(processedContactOrigins) // Persistir para próximo chunk
         }
       })
       .eq('id', job.id)
