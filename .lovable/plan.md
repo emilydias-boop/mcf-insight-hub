@@ -1,180 +1,156 @@
 
-# Plano: Importar/Vincular Contatos do Cleiton
+# Plano: Mostrar Todos os SDRs no Filtro de Responsáveis
 
-## Situação Atual
+## Problema Identificado
 
-| Métrica | Valor |
-|---------|-------|
-| Total de deals do Cleiton | 371 |
-| Deals sem contact_id | 269 |
-| Contatos na lista enviada | 195 |
+O filtro "Todos os responsáveis" só mostra usuários que **já possuem deals atribuídos**. Isso ocorre porque o hook `useDealOwnerOptions` extrai owners apenas dos deals carregados.
 
-### Exemplo de Match
-O contato **Tiago Raifran** já existe em `crm_contacts`:
-- ID: `648cc57d-0c49-4eb3-a2af-1b547dd0d035`
-- Email: `tiagoraifran@gmail.com`
-- Telefone: `63992368338`
+### Evidência
 
-Mas os deals dele estão com `contact_id = NULL`. Precisamos vincular!
+| BU | SDR | Deals | Aparece no Filtro |
+|----|-----|-------|-------------------|
+| Consórcio | Cleiton Anacleto Lima | 368 | ✅ |
+| Consórcio | ithaline clara dos santos | 0 | ❌ |
+| Consórcio | Ygor Ferreira | 0 | ❌ |
+| Incorporador | Evellyn Vieira dos Santos | 0 | ❌ |
+| Incorporador | Juliana Rodrigues | 298 | ✅ |
 
 ---
 
-## Solução: Edge Function para Importação Inteligente
+## Solução Proposta
 
-Criar uma nova edge function `bulk-update-contacts` que:
+Modificar o hook `useDealOwnerOptions` para **combinar**:
+1. Owners extraídos dos deals (lógica atual)
+2. SDRs/Closers da BU ativa que ainda não têm deals
 
-1. **Recebe a lista** de contatos (id, name, email, phone)
-2. **Processa cada contato**:
-   - Se o contato já existe em `crm_contacts` (por email ou telefone): Atualiza dados faltantes
-   - Se não existe: Cria novo contato
-3. **Vincula aos deals**:
-   - Busca deals por nome (match flexível com ILIKE)
-   - Atualiza `contact_id` nos deals encontrados
+Isso garante que todos os membros da equipe apareçam no filtro, mesmo os novos.
 
 ---
 
-## Fluxo de Processamento
+## Mudanças Técnicas
+
+### 1. Modificar `src/hooks/useDealOwnerOptions.ts`
+
+Adicionar parâmetro opcional `activeBU` para incluir SDRs/Closers da BU que não têm deals:
+
+```typescript
+export function useDealOwnerOptions(
+  deals: Deal[] | null | undefined,
+  activeBU?: string // Nova prop
+) {
+  // Lógica atual: extrair owners dos deals...
+  
+  // NOVO: Buscar SDRs/Closers da BU ativa
+  const { data: buTeamMembers } = useQuery({
+    queryKey: ['bu-team-members', activeBU],
+    queryFn: async () => {
+      if (!activeBU) return [];
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, access_status, user_roles(role)')
+        .contains('squad', [activeBU])
+        .eq('access_status', 'ativo');
+      
+      return data?.filter(u => 
+        u.user_roles?.some(r => ['sdr', 'closer'].includes(r.role))
+      ) || [];
+    },
+    enabled: !!activeBU,
+    staleTime: 60_000,
+  });
+  
+  // Combinar: deals + equipe da BU
+  const ownerOptions = useMemo(() => {
+    const options = [...ownersFromDeals];
+    
+    // Adicionar membros da BU que não estão nos deals
+    buTeamMembers?.forEach(member => {
+      if (!options.some(o => o.value === member.id)) {
+        options.push({
+          value: member.id,
+          label: member.full_name || member.email,
+          roleLabel: member.user_roles?.[0]?.role?.toUpperCase(),
+          isInactive: false,
+        });
+      }
+    });
+    
+    return options.sort((a, b) => a.label.localeCompare(b.label));
+  }, [ownersFromDeals, buTeamMembers]);
+}
+```
+
+### 2. Atualizar `src/pages/crm/Negocios.tsx`
+
+Passar a BU ativa para o hook:
+
+```typescript
+// Antes
+const { ownerOptions } = useDealOwnerOptions(dealsData);
+
+// Depois
+const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
+```
+
+---
+
+## Fluxo Após Correção
 
 ```text
-Lista de Contatos (195)
+Filtro de Responsáveis
          |
-         v
-   +-----------+
-   | Para cada |
-   | contato   |
-   +-----------+
+         +---> Owners dos Deals Carregados
+         |           |
+         |           v
+         |     [Cleiton, Juliana, ...]
          |
-         v
-   +----------------+      Sim     +------------------+
-   | Existe em      |------------->| Atualizar email/ |
-   | crm_contacts?  |              | phone faltante   |
-   | (email/phone)  |              +------------------+
-   +----------------+                      |
-         | Não                             |
-         v                                 |
-   +----------------+                      |
-   | Criar novo     |                      |
-   | contato        |                      |
-   +----------------+                      |
-         |                                 |
-         v<--------------------------------+
-   +------------------+
-   | Buscar deals por |
-   | nome (ILIKE)     |
-   +------------------+
-         |
-         v
-   +------------------+
-   | Atualizar        |
-   | contact_id       |
-   +------------------+
+         +---> SDRs/Closers da BU Ativa
+                     |
+                     v
+               [Evellyn, Ithaline, Ygor, ...]
+                     |
+                     v
+           +------------------+
+           | Combinar e       |
+           | Remover Dupes    |
+           +------------------+
+                     |
+                     v
+           Dropdown Completo com Toda Equipe
 ```
 
 ---
 
-## Arquivos a Criar/Modificar
+## Resultado Esperado
 
-### 1. Nova Edge Function: `supabase/functions/bulk-update-contacts/index.ts`
+Após a implementação:
 
-Funcionalidades:
-- Receber array de contatos via POST
-- Processar em chunks para evitar timeout
-- Retornar estatísticas detalhadas
+### Consórcio
+- Cleiton Anacleto Lima (SDR) ✅
+- ithaline clara dos santos (SDR) ✅ **NOVO**
+- Ygor Ferreira (SDR) ✅ **NOVO**
+- João Pedro (Closer) ✅ **NOVO**
+- Victoria Paz (Closer) ✅ **NOVO**
 
-### 2. Atualizar `supabase/config.toml`
-
-Adicionar configuração da nova função.
-
----
-
-## Detalhes Técnicos
-
-### Estrutura do Request
-
-```json
-{
-  "contacts": [
-    {
-      "clint_id": "9d71bfc8-57fb-47bc-a715-1cdf7aab0482",
-      "name": "Adailton lima Borges",
-      "email": "adailtoneng123@gmail.com",
-      "phone": "+55 93981000567"
-    }
-  ],
-  "owner_id": "cleiton.lima@minhacasafinanciada.com"
-}
-```
-
-### Lógica de Match para Contatos
-
-```typescript
-// 1. Buscar por email
-let contact = await supabase
-  .from('crm_contacts')
-  .select('id')
-  .eq('email', email.toLowerCase())
-  .maybeSingle();
-
-// 2. Se não encontrou, buscar por telefone normalizado
-if (!contact.data) {
-  contact = await supabase
-    .from('crm_contacts')
-    .select('id')
-    .eq('phone', normalizedPhone)
-    .maybeSingle();
-}
-
-// 3. Se não encontrou, criar novo
-if (!contact.data) {
-  const { data: newContact } = await supabase
-    .from('crm_contacts')
-    .insert({ clint_id, name, email, phone })
-    .select('id')
-    .single();
-  contactId = newContact.id;
-} else {
-  contactId = contact.data.id;
-}
-```
-
-### Lógica de Vinculação aos Deals
-
-```typescript
-// Atualizar deals do owner que batem com o nome
-await supabase
-  .from('crm_deals')
-  .update({ contact_id: contactId })
-  .eq('owner_id', ownerId)
-  .ilike('name', `%${name}%`)
-  .is('contact_id', null);
-```
+### Incorporador
+- Todos os SDRs existentes ✅
+- Evellyn Vieira dos Santos (SDR) ✅ **NOVO**
+- Closers da BU ✅
 
 ---
 
-## Estatísticas Esperadas
+## Arquivos a Modificar
 
-Após execução:
-
-| Ação | Quantidade Estimada |
-|------|---------------------|
-| Contatos criados | ~150 (novos) |
-| Contatos atualizados | ~45 (já existiam) |
-| Deals vinculados | ~180 (match por nome) |
-| Deals ainda sem contato | ~89 (nomes diferentes) |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useDealOwnerOptions.ts` | Adicionar busca de SDRs/Closers por BU |
+| `src/pages/crm/Negocios.tsx` | Passar `activeBU` para o hook |
 
 ---
 
-## Tratamento de Duplicados na Lista
+## Benefícios
 
-A lista contém duplicados (ex: "Hamilton Veloso Souto" e "Marcelo silva" aparecem 2x). A função vai:
-1. Processar apenas a primeira ocorrência
-2. Pular duplicados usando Set de emails processados
-
----
-
-## Próximos Passos Após Implementação
-
-1. Executar a importação dos 195 contatos do Cleiton
-2. Verificar quantos deals foram vinculados
-3. Para os deals restantes sem contato, verificar se os nomes diferem
-4. Repetir processo com listas dos outros owners
+1. **Onboarding facilitado** - Novos SDRs já aparecem no filtro para receber leads
+2. **Visão completa da equipe** - Managers veem toda a equipe da BU
+3. **Retrocompatível** - Se não passar BU, funciona como antes
