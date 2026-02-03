@@ -43,7 +43,7 @@ import {
 import { useSdrsByBU } from '@/hooks/useSdrFechamento';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { useActiveBU } from '@/hooks/useActiveBU';
-import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
+import { useBUOriginIds } from '@/hooks/useBUPipelineMap';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -113,10 +113,9 @@ export function QuickScheduleModal({
 }: QuickScheduleModalProps) {
   const { role } = useAuth();
   const activeBU = useActiveBU();
-  const { data: buMapping } = useBUPipelineMap(activeBU);
-  const originIds = buMapping?.groups && buMapping.groups.length > 0 
-    ? buMapping.groups 
-    : undefined;
+  // Usar hook que expande grupos para origens filhas
+  const { data: buOriginIds = [] } = useBUOriginIds(activeBU);
+  const originIds = buOriginIds.length > 0 ? buOriginIds : undefined;
   const isCoordinatorOrAbove = ['admin', 'manager', 'coordenador'].includes(role || '');
   
   // Fetch SDRs filtered by BU

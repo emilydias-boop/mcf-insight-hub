@@ -76,6 +76,44 @@ function getFallbackMapping(bu: BusinessUnit): BUPipelineMapResult {
 }
 
 /**
+ * Hook para resolver todos os origin IDs para uma BU
+ * Expande grupos para suas origens filhas
+ */
+export function useBUOriginIds(bu: BusinessUnit | null) {
+  const { data: buMapping } = useBUPipelineMap(bu);
+  
+  return useQuery({
+    queryKey: ['bu-origin-ids', bu, buMapping?.groups, buMapping?.origins],
+    queryFn: async (): Promise<string[]> => {
+      if (!buMapping) return [];
+      
+      const directOrigins = buMapping.origins || [];
+      
+      // Se há grupos mapeados, buscar origens filhas desses grupos
+      if (buMapping.groups && buMapping.groups.length > 0) {
+        const { data: childOrigins, error } = await supabase
+          .from('crm_origins')
+          .select('id')
+          .in('group_id', buMapping.groups);
+        
+        if (error) {
+          console.error('Erro ao buscar origens filhas dos grupos:', error);
+          return directOrigins;
+        }
+        
+        const childOriginIds = childOrigins?.map(o => o.id) || [];
+        // Combinar origens diretas e origens filhas, removendo duplicatas
+        return [...new Set([...directOrigins, ...childOriginIds])];
+      }
+      
+      return directOrigins;
+    },
+    enabled: !!bu && !!buMapping,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  });
+}
+
+/**
  * Hook para verificar se uma BU tem mapeamento no banco
  */
 export function useBUHasMapping(bu: BusinessUnit | null) {
