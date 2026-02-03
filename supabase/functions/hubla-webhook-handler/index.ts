@@ -244,17 +244,21 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
   
   try {
     // 1. Buscar ou criar origem
+    // CORREÇÃO: Usar .limit(1) em vez de .maybeSingle() para evitar criar duplicatas
+    // quando já existem múltiplas origens com o mesmo nome
     let originId: string | null = null;
-    const { data: existingOrigin } = await supabase
+    const { data: existingOrigins } = await supabase
       .from('crm_origins')
       .select('id')
       .ilike('name', data.originName)
-      .maybeSingle();
+      .order('created_at', { ascending: true })
+      .limit(1);
     
-    if (existingOrigin) {
-      originId = existingOrigin.id;
+    if (existingOrigins && existingOrigins.length > 0) {
+      originId = existingOrigins[0].id;
+      console.log(`[CRM] Origem existente encontrada: ${data.originName} (${originId})`);
     } else {
-      // Criar nova origem
+      // Criar nova origem apenas se não existir NENHUMA
       const { data: newOrigin } = await supabase
         .from('crm_origins')
         .insert({
