@@ -335,7 +335,7 @@ export function AppSidebar() {
   const { user, role, signOut, loading: authLoading } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
   const { data: myProducts = [] } = useMyProducts();
-  const { data: myBU } = useMyBU();
+  const { data: myBUs = [] } = useMyBU();
   const { state, toggleSidebar, isMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
@@ -373,10 +373,15 @@ export function AppSidebar() {
       return false;
     }
 
-    // Verificação de BU para SDRs
+    // Verificação de BU - ATUALIZADO PARA ARRAY
     if (item.requiredBU && item.requiredBU.length > 0) {
-      // Se o usuário não tem BU definida ou a BU não está na lista, não mostra
-      if (!myBU || !item.requiredBU.includes(myBU)) {
+      // Se o usuário não tem BUs ou nenhuma BU do usuário está na lista permitida
+      if (!myBUs || myBUs.length === 0) {
+        return false;
+      }
+      // Verifica se alguma BU do usuário está na lista requerida
+      const hasMatchingBU = myBUs.some(bu => item.requiredBU!.includes(bu));
+      if (!hasMatchingBU) {
         return false;
       }
     }

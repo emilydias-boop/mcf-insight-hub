@@ -17,7 +17,7 @@ interface CloserUser {
   id: string;
   full_name: string | null;
   email: string | null;
-  squad: string | null;
+  squad: string[] | null;
   employees?: { id: string }[];
 }
 
@@ -128,7 +128,7 @@ export function CloserFormDialog({ open, onOpenChange, closer }: CloserFormDialo
         name: user.full_name || '',
         email: user.email || '',
         employee_id: emp?.id || undefined,
-        bu: user.squad || 'incorporador',
+        bu: (Array.isArray(user.squad) ? user.squad[0] : user.squad) || 'incorporador',
       });
     }
   };

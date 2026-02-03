@@ -61,7 +61,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
     full_name: "",
     email: "",
     access_status: "ativo" as AccessStatus,
-    squad: "",
+    squad: [] as string[],
   });
 
   // Form state for Security tab
@@ -103,7 +103,7 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
         full_name: userDetails.full_name || "",
         email: userDetails.email || "",
         access_status: userDetails.access_status || "ativo",
-        squad: userDetails.squad || "",
+        squad: userDetails.squad || [],
       });
       setBlockedUntil(userDetails.blocked_until || "");
     }
@@ -348,23 +348,33 @@ export function UserDetailsDrawer({ userId, open, onOpenChange }: UserDetailsDra
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Business Unit (BU)</Label>
-                  <Select 
-                    value={generalData.squad || "none"} 
-                    onValueChange={(value) => setGeneralData({ ...generalData, squad: value === "none" ? "" : value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a BU" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhuma</SelectItem>
-                      <SelectItem value="incorporador">BU - Incorporador MCF</SelectItem>
-                      <SelectItem value="consorcio">BU - Consórcio</SelectItem>
-                      <SelectItem value="credito">BU - Crédito</SelectItem>
-                      <SelectItem value="projetos">BU - Projetos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">Define qual BU o usuário pode visualizar no menu</p>
+                  <Label>Business Units (BUs)</Label>
+                  <div className="space-y-2 p-3 border rounded-md">
+                    {[
+                      { value: 'incorporador', label: 'BU - Incorporador MCF' },
+                      { value: 'consorcio', label: 'BU - Consórcio' },
+                      { value: 'credito', label: 'BU - Crédito' },
+                      { value: 'projetos', label: 'BU - Projetos' },
+                      { value: 'leilao', label: 'BU - Leilão' },
+                    ].map((bu) => (
+                      <label key={bu.value} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={generalData.squad.includes(bu.value)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setGeneralData({ ...generalData, squad: [...generalData.squad, bu.value] });
+                            } else {
+                              setGeneralData({ ...generalData, squad: generalData.squad.filter(s => s !== bu.value) });
+                            }
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">{bu.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Define quais BUs o usuário pode visualizar no menu</p>
                 </div>
 
                 <Button 

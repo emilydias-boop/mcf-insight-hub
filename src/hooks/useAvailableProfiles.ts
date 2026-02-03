@@ -5,7 +5,7 @@ export interface AvailableProfile {
   id: string;
   email: string;
   full_name: string | null;
-  squad: string | null;
+  squad: string[] | null;
   access_status: string | null;
   role: string | null;
 }

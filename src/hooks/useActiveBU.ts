@@ -13,7 +13,7 @@ import { useMyBU, BusinessUnit } from '@/hooks/useMyBU';
  */
 export function useActiveBU(): BusinessUnit | null {
   const buContext = useContext(BUContext);
-  const { data: userBU } = useMyBU();
+  const { data: userBUs = [] } = useMyBU();
 
   return useMemo(() => {
     // If we have a context BU (from route), use it
@@ -21,9 +21,9 @@ export function useActiveBU(): BusinessUnit | null {
       return buContext.activeBU;
     }
     
-    // Otherwise use the user's BU
-    return userBU || null;
-  }, [buContext.activeBU, userBU]);
+    // Return the user's first BU (or null)
+    return userBUs[0] || null;
+  }, [buContext.activeBU, userBUs]);
 }
 
 /**
