@@ -1,16 +1,31 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useConsorcioClosers } from '@/hooks/useConsorcioFechamento';
-import { formatCurrency } from '@/lib/formatters';
-import { OTE_PADRAO_CONSORCIO, PESOS_CLOSER_CONSORCIO } from '@/types/consorcio-fechamento';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ArrowLeft, Users, FileText, Target, Calendar, ExternalLink, RefreshCw } from 'lucide-react';
+import { useEmployeesWithCargo } from '@/hooks/useEmployees';
+import { PlansOteTab } from '@/components/fechamento/PlansOteTab';
+import { ActiveMetricsTab } from '@/components/fechamento/ActiveMetricsTab';
+import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
+
+const CONSORCIO_DEPT = 'BU - Consórcio';
 
 export default function ConsorcioFechamentoConfig() {
   const navigate = useNavigate();
-  const { data: closers, isLoading } = useConsorcioClosers();
+  
+  // Query para colaboradores com cargo
+  const { data: employees, isLoading: employeesLoading } = useEmployeesWithCargo();
+
+  // Filtrar apenas colaboradores do Consórcio
+  const consorcioEmployees = useMemo(() => {
+    if (!employees) return [];
+    return employees.filter(emp => emp.departamento === CONSORCIO_DEPT);
+  }, [employees]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -22,161 +37,133 @@ export default function ConsorcioFechamentoConfig() {
         <div>
           <h1 className="text-2xl font-bold">Configurações - Fechamento Consórcio</h1>
           <p className="text-muted-foreground">
-            Gerencie closers e parâmetros de compensação
+            Gerencie equipe, planos de compensação e métricas
           </p>
         </div>
       </div>
 
-      {/* OTE Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Estrutura de Compensação Padrão</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">OTE Total</p>
-              <p className="text-lg font-bold">{formatCurrency(OTE_PADRAO_CONSORCIO.ote_total)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Fixo (70%)</p>
-              <p className="text-lg font-bold text-blue-400">
-                {formatCurrency(OTE_PADRAO_CONSORCIO.ote_total * OTE_PADRAO_CONSORCIO.fixo_pct)}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Variável (30%)</p>
-              <p className="text-lg font-bold text-green-400">
-                {formatCurrency(OTE_PADRAO_CONSORCIO.ote_total * OTE_PADRAO_CONSORCIO.variavel_pct)}
-              </p>
-            </div>
-          </div>
-          
-          <div className="border-t pt-4">
-            <p className="text-sm font-medium mb-2">Distribuição do Variável:</p>
-            <div className="flex gap-4 flex-wrap">
-              <Badge variant="outline">
-                Comissão Consórcio: {(PESOS_CLOSER_CONSORCIO.comissao_consorcio * 100).toFixed(0)}%
-              </Badge>
-              <Badge variant="outline">
-                Comissão Holding: {(PESOS_CLOSER_CONSORCIO.comissao_holding * 100).toFixed(0)}%
-              </Badge>
-              <Badge variant="outline">
-                Organização: {(PESOS_CLOSER_CONSORCIO.organizacao * 100).toFixed(0)}%
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="equipe" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="equipe" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Equipe
+          </TabsTrigger>
+          <TabsTrigger value="plans" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Planos OTE
+          </TabsTrigger>
+          <TabsTrigger value="metricas" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Métricas Ativas
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Dias Úteis
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Closers List */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Closers do Consórcio
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center">
-                    Carregando...
-                  </TableCell>
-                </TableRow>
-              ) : !closers || closers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
-                    Nenhum closer cadastrado para consórcio.
-                  </TableCell>
-                </TableRow>
+        {/* Aba Equipe */}
+        <TabsContent value="equipe">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Equipe Consórcio
+              </CardTitle>
+              <Button onClick={() => navigate('/rh')}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Gerenciar no RH
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {employeesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : consorcioEmployees.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhum colaborador encontrado no departamento Consórcio.
+                  <p className="text-sm mt-2">
+                    Acesse o módulo de RH para cadastrar colaboradores na BU Consórcio.
+                  </p>
+                </div>
               ) : (
-                closers.map((closer) => (
-                  <TableRow key={closer.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {closer.color && (
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: closer.color }}
-                          />
-                        )}
-                        {closer.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>{closer.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={closer.is_active ? 'default' : 'secondary'}>
-                        {closer.is_active ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome Completo</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead className="text-center">Nível</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Admissão</TableHead>
+                      <TableHead className="text-center">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {consorcioEmployees.map((emp) => (
+                      <TableRow key={emp.id}>
+                        <TableCell className="font-medium">{emp.nome_completo}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {emp.cargo_catalogo?.nome_exibicao || emp.cargo || '-'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {emp.cargo_catalogo?.nivel ? (
+                            <Badge variant="outline" className="font-mono">N{emp.cargo_catalogo.nivel}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={emp.status === 'ativo' ? 'default' : 'outline'}>
+                            {emp.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {emp.data_admissao 
+                            ? format(new Date(emp.data_admissao), 'dd/MM/yyyy', { locale: ptBR })
+                            : '-'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => navigate(`/rh?employee=${emp.id}`)}
+                            title="Editar no RH"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-            </TableBody>
-          </Table>
-          
-          <p className="text-sm text-muted-foreground mt-4">
-            Para adicionar ou editar closers, acesse{' '}
-            <Button 
-              variant="link" 
-              className="p-0 h-auto"
-              onClick={() => navigate('/crm/configuracoes')}
-            >
-              CRM &gt; Configurações &gt; Closers
-            </Button>
-            {' '}e configure com BU = "consorcio".
-          </p>
-        </CardContent>
-      </Card>
+              
+              {/* Nota informativa */}
+              <div className="mt-4 text-xs text-muted-foreground bg-muted/50 rounded-md p-3 border">
+                <strong>Fonte de dados:</strong> Os colaboradores são gerenciados no módulo de RH. 
+                Para aparecer nesta lista, o colaborador deve estar na BU Consórcio.
+                Para aparecer em "Planos OTE", deve também ter um cargo do catálogo vinculado.
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Multiplier Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Tabela de Multiplicadores</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>% Atingimento</TableHead>
-                <TableHead>Multiplicador</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell>&lt; 50%</TableCell>
-                <TableCell>×0.0</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>50% - 69%</TableCell>
-                <TableCell>×0.5</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>70% - 99%</TableCell>
-                <TableCell>×0.7</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>100% - 149%</TableCell>
-                <TableCell>×1.0</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>≥ 150%</TableCell>
-                <TableCell>×1.5</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        {/* Aba Planos OTE - filtrado para Consórcio */}
+        <TabsContent value="plans">
+          <PlansOteTab defaultBU="consorcio" lockBU />
+        </TabsContent>
+
+        {/* Aba Métricas Ativas - filtrado para Consórcio */}
+        <TabsContent value="metricas">
+          <ActiveMetricsTab defaultBU="consorcio" lockBU />
+        </TabsContent>
+
+        {/* Aba Dias Úteis */}
+        <TabsContent value="calendar">
+          <WorkingDaysCalendar />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

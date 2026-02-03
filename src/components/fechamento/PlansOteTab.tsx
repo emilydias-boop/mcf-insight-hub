@@ -74,11 +74,16 @@ interface EmployeeWithPlan {
   sdr_meta_diaria?: number;
 }
 
-export const PlansOteTab = () => {
+interface PlansOteTabProps {
+  defaultBU?: string;
+  lockBU?: boolean;
+}
+
+export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => {
   // Estados de filtros
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCargoId, setSelectedCargoId] = useState<string>('__all__');
-  const [selectedBU, setSelectedBU] = useState<string>('__all__');
+  const [selectedBU, setSelectedBU] = useState<string>(defaultBU || '__all__');
   
   // Estado do dialog de edição
   const [editDialog, setEditDialog] = useState<{
@@ -369,22 +374,24 @@ export const PlansOteTab = () => {
               </Select>
             </div>
 
-            {/* Filtro de BU/Squad */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">BU:</span>
-              <Select value={selectedBU} onValueChange={setSelectedBU}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SQUADS.map(squad => (
-                    <SelectItem key={squad.value} value={squad.value}>
-                      {squad.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Filtro de BU/Squad - oculto se lockBU=true */}
+            {!lockBU && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">BU:</span>
+                <Select value={selectedBU} onValueChange={setSelectedBU}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SQUADS.map(squad => (
+                      <SelectItem key={squad.value} value={squad.value}>
+                        {squad.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </CardHeader>
 
