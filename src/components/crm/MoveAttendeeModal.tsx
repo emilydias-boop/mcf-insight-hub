@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { format, startOfToday, setHours, setMinutes, addMinutes, isBefore, isAfter, startOfDay, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar, Clock, Users, ArrowRight, User, AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ interface AvailableSlot {
   closerColor: string;
   datetime: Date;
   duration: number;
+  isBooked?: boolean;
 }
 
 export function MoveAttendeeModal({ 
@@ -69,6 +71,9 @@ export function MoveAttendeeModal({
   const [selectedCloser, setSelectedCloser] = useState<string | null>(null);
   const [moveReason, setMoveReason] = useState('');
   const queryClient = useQueryClient();
+  
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
   
   const { data: closers } = useClosers();
   const { data: availability } = useCloserAvailability();
@@ -110,13 +115,15 @@ export function MoveAttendeeModal({
               Math.abs(bookedTime.getTime() - slotTime.getTime()) < avail.slot_duration_minutes * 60 * 1000;
           });
           
-          if (!isBooked) {
+          // Admin pode ver todos os horários, mesmo os reservados
+          if (isAdmin || !isBooked) {
             slots.push({
               closerId: closer.id,
               closerName: closer.name,
               closerColor: (closer as any).color || '#3B82F6',
               datetime: new Date(slotTime),
               duration: avail.slot_duration_minutes,
+              isBooked: isBooked,
             });
           }
         }
@@ -126,7 +133,7 @@ export function MoveAttendeeModal({
     }
     
     return slots.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-  }, [selectedDate, closers, availability, bookedSlots]);
+  }, [selectedDate, closers, availability, bookedSlots, isAdmin]);
 
   // Filter out the current meeting
   const existingMeetings = meetings?.filter(m => m.id !== currentMeetingId) || [];
@@ -583,6 +590,17 @@ export function MoveAttendeeModal({
                                   <span className="font-medium text-sm">
                                     {slot.closerName}
                                   </span>
+                                  <Badge
+                                    variant={slot.isBooked ? 'secondary' : 'outline'}
+                                    className={cn(
+                                      'text-xs',
+                                      slot.isBooked 
+                                        ? 'text-amber-600 border-amber-300 bg-amber-50' 
+                                        : 'text-green-600 border-green-300'
+                                    )}
+                                  >
+                                    {slot.isBooked ? 'Ocupado (Admin)' : 'Livre'}
+                                  </Badge>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                   <Clock className="h-3 w-3" />
