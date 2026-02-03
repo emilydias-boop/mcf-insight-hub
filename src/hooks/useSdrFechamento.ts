@@ -1097,12 +1097,13 @@ export const useAllCompPlans = () => {
   });
 };
 
-// Create SDR
+// Create SDR (com vínculo automático ao employee se user_id for fornecido)
 export const useCreateSdr = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (sdr: Omit<Partial<Sdr>, 'name'> & { name: string }) => {
+      // 1. Criar o registro SDR
       const { data, error } = await supabase
         .from('sdr')
         .insert([sdr as any])
@@ -1110,10 +1111,25 @@ export const useCreateSdr = () => {
         .single();
 
       if (error) throw error;
+
+      // 2. Se user_id foi fornecido, vincular automaticamente ao employee
+      if (sdr.user_id && data?.id) {
+        const { error: empError } = await supabase
+          .from('employees')
+          .update({ sdr_id: data.id })
+          .eq('user_id', sdr.user_id);
+        
+        if (empError) {
+          console.warn('Não foi possível vincular employee automaticamente:', empError.message);
+          // Não falha a operação principal, apenas loga o aviso
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sdrs-all'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
       toast.success('SDR criado com sucesso');
     },
     onError: (error: Error) => {

@@ -266,6 +266,7 @@ const SdrFormDialog = ({ onSuccess }: { onSuccess: () => void }) => {
   const [nivel, setNivel] = useState('1');
   const [metaDiaria, setMetaDiaria] = useState('5');
   const [active, setActive] = useState(true);
+  const [squad, setSquad] = useState('incorporador');
   
   const { data: users } = useUsers();
   const createSdr = useCreateSdr();
@@ -283,6 +284,7 @@ const SdrFormDialog = ({ onSuccess }: { onSuccess: () => void }) => {
       nivel: Number(nivel),
       meta_diaria: Number(metaDiaria),
       active,
+      squad,
     });
     
     setName('');
@@ -291,6 +293,7 @@ const SdrFormDialog = ({ onSuccess }: { onSuccess: () => void }) => {
     setNivel('1');
     setMetaDiaria('5');
     setActive(true);
+    setSquad('incorporador');
     setOpen(false);
     onSuccess();
   };
@@ -343,6 +346,21 @@ const SdrFormDialog = ({ onSuccess }: { onSuccess: () => void }) => {
                     {user.email}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Business Unit (Squad)</Label>
+            <Select value={squad} onValueChange={setSquad}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="incorporador">BU - Incorporador</SelectItem>
+                <SelectItem value="consorcio">BU - Consórcio</SelectItem>
+                <SelectItem value="credito">BU - Crédito</SelectItem>
+                <SelectItem value="projetos">BU - Projetos</SelectItem>
+                <SelectItem value="leilao">BU - Leilão</SelectItem>
               </SelectContent>
             </Select>
           </div>
