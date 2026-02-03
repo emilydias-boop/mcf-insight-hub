@@ -1,111 +1,83 @@
 
-# Plano: Mostrar Todas as Reuniões do Closer para Admin
+# Plano: Preservar Status ao Mover Lead para Admin
 
-## Problema Identificado
+## Problema
 
-A query `useMeetingsForDate` (linha 1833 em useAgendaData.ts) filtra apenas reuniões com status `scheduled` ou `rescheduled`:
-
-```typescript
-.in('status', ['scheduled', 'rescheduled'])
-```
-
-Isso exclui reuniões com status `completed`, que são a maioria das reuniões da Cristiane Gomes no dia.
+Ao mover um lead, o sistema sempre define `status: 'rescheduled'`, perdendo o status original como **contract_paid**, **completed**, etc.
 
 ---
 
 ## Solução
 
-Para permitir que o admin veja e encaixe em QUALQUER reunião do closer, preciso:
+Adicionar lógica para admin que preserve o status original do attendee ao mover.
 
-### 1. Modificar `useMeetingsForDate` para aceitar parâmetro de bypass
+---
 
-**Arquivo:** `src/hooks/useAgendaData.ts`
+## Alterações
 
+### Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
+
+**Localização: Linhas 308-316 (moveToNewSlot mutationFn)**
+
+**De:**
 ```typescript
-export function useMeetingsForDate(date: Date | null, includeCompleted: boolean = false) {
-  return useQuery({
-    queryKey: ['meetings-for-date', date?.toISOString(), includeCompleted],
-    queryFn: async () => {
-      // ...
-      let query = supabase
-        .from('meeting_slots')
-        .select(...)
-        .gte('scheduled_at', startOfDay.toISOString())
-        .lte('scheduled_at', endOfDay.toISOString());
-      
-      // Admin pode ver todas, incluindo completed
-      if (includeCompleted) {
-        query = query.in('status', ['scheduled', 'rescheduled', 'completed']);
-      } else {
-        query = query.in('status', ['scheduled', 'rescheduled']);
-      }
-      // ...
-    },
-  });
-}
+const { error: moveError } = await supabase
+  .from('meeting_slot_attendees')
+  .update({ 
+    meeting_slot_id: targetSlotId,
+    status: 'rescheduled',
+    is_reschedule: true,
+    updated_at: new Date().toISOString()
+  })
+  .eq('id', attendee.id);
 ```
 
-### 2. Passar isAdmin para o hook no MoveAttendeeModal
-
-**Arquivo:** `src/components/crm/MoveAttendeeModal.tsx`
-
+**Para:**
 ```typescript
-const { data: meetings, isLoading: meetingsLoading } = useMeetingsForDate(
-  selectedDate,
-  isAdmin // Admin vê reuniões completed também
-);
+// Admin preserva status original (contract_paid, completed, etc)
+// Usuários normais sempre marcam como rescheduled
+const shouldPreserveStatus = isAdmin && 
+  ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
+
+const { error: moveError } = await supabase
+  .from('meeting_slot_attendees')
+  .update({ 
+    meeting_slot_id: targetSlotId,
+    status: shouldPreserveStatus ? currentAttendeeStatus : 'rescheduled',
+    is_reschedule: !shouldPreserveStatus, // Só marca como reschedule se não preservou
+    updated_at: new Date().toISOString()
+  })
+  .eq('id', attendee.id);
 ```
 
-### 3. Adicionar indicador visual de status na lista de reuniões
+**Também atualizar o log de movimentação (linha 379):**
 
-Na seção "Encaixar em Reunião Existente", mostrar badge indicando se a reunião está completed:
+Adicionar campo para indicar que status foi preservado no movimento:
 
 ```typescript
-<Badge 
-  variant={meeting.status === 'completed' ? 'secondary' : 'outline'}
-  className={cn(
-    'text-xs',
-    meeting.status === 'completed' && 'text-blue-600 border-blue-300'
-  )}
->
-  {meeting.status === 'completed' ? 'Realizada' : 'Agendada'}
-</Badge>
+await supabase.from('attendee_movement_logs').insert({
+  // ... campos existentes
+  movement_type: shouldPreserveStatus ? 'transfer_preserved' : 'move',
+  // ...
+});
 ```
 
 ---
 
-## Fluxo Visual Resultante
+## Comportamento Resultante
 
-**Usuário Normal:**
-```text
-Encaixar em Reunião Existente:
-  Cristiane Gomes - 12:15 [Agendada] - 1 participante [Encaixar]
-```
-
-**Admin:**
-```text
-Encaixar em Reunião Existente:
-  Cristiane Gomes - 12:15 [Agendada] - 1 participante [Encaixar]
-  Cristiane Gomes - 13:15 [Realizada] - 2 participantes [Encaixar]
-  Cristiane Gomes - 14:30 [Realizada] - 1 participante [Encaixar]
-  Cristiane Gomes - 17:00 [Realizada] - 3 participantes [Encaixar]
-  Cristiane Gomes - 19:00 [Realizada] - 2 participantes [Encaixar]
-  ... (todas as 7 reuniões)
-```
+| Usuário | Status Original | Status Após Mover |
+|---------|----------------|-------------------|
+| Normal | contract_paid | rescheduled |
+| Normal | scheduled | rescheduled |
+| Admin | contract_paid | **contract_paid** (preservado) |
+| Admin | completed | **completed** (preservado) |
+| Admin | scheduled | rescheduled |
 
 ---
 
-## Resumo das Alterações
+## Resumo
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useAgendaData.ts` | Adicionar parâmetro `includeCompleted` em `useMeetingsForDate` |
-| `src/components/crm/MoveAttendeeModal.tsx` | Passar `isAdmin` para o hook + badge de status |
-
----
-
-## Considerações
-
-1. **Apenas Admin**: Somente admins veem reuniões com status `completed`
-2. **Auditoria**: O log de movimentação já registra todas as ações
-3. **Sem alteração de banco**: Apenas lógica de frontend/query
+- **Usuários normais**: Comportamento atual mantido (sempre rescheduled)
+- **Admin**: Preserva status importantes (contract_paid, completed, refunded, approved, rejected)
+- **Auditoria**: Log registra tipo de movimento diferente para tracking
