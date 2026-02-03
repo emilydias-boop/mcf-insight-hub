@@ -1,7 +1,7 @@
 export type TipoPessoa = 'pf' | 'pj';
 export type ConsorcioStatus = 'ativo' | 'inativo' | 'cancelado' | 'contemplado';
 export type TipoProduto = 'select' | 'parcelinha';
-export type TipoContrato = 'normal' | 'intercalado';
+export type TipoContrato = 'normal' | 'intercalado' | 'intercalado_impar';
 export type OrigemConsorcio = string;
 export type EstadoCivil = 'solteiro' | 'casado' | 'divorciado' | 'viuvo' | 'uniao_estavel';
 export type TipoServidor = 'estadual' | 'federal' | 'municipal';

@@ -114,7 +114,7 @@ const formSchema = z.object({
   prazo_meses: z.number().min(1, 'Prazo é obrigatório'),
   tipo_produto: z.enum(['select', 'parcelinha']),
   empresa_paga_parcelas: z.enum(['sim', 'nao']),
-  tipo_contrato: z.enum(['normal', 'intercalado']).optional(),
+  tipo_contrato: z.enum(['normal', 'intercalado', 'intercalado_impar']).optional(),
   parcelas_pagas_empresa: z.number().min(0).optional(),
   data_contratacao: z.date(),
   dia_vencimento: z.number().min(1).max(31),
@@ -226,7 +226,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       categoria: (card.categoria as 'inside' | 'life') || 'inside',
       tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
       empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
-      tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | undefined,
+      tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
       parcelas_pagas_empresa: card.parcelas_pagas_empresa,
       dia_vencimento: card.dia_vencimento,
       origem: card.origem as 'socio' | 'gr' | 'indicacao' | 'outros',
@@ -480,7 +480,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           categoria: (card.categoria as 'inside' | 'life') || 'inside',
           tipo_produto: card.tipo_produto as 'select' | 'parcelinha',
           empresa_paga_parcelas: (card.parcelas_pagas_empresa > 0 ? 'sim' : 'nao') as 'sim' | 'nao',
-          tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | undefined,
+          tipo_contrato: card.tipo_contrato as 'normal' | 'intercalado' | 'intercalado_impar' | undefined,
           parcelas_pagas_empresa: card.parcelas_pagas_empresa,
           dia_vencimento: card.dia_vencimento,
           origem: card.origem as 'socio' | 'gr' | 'indicacao' | 'outros',
@@ -1111,6 +1111,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
                               <SelectContent>
                                 <SelectItem value="normal">Normal (primeiras parcelas)</SelectItem>
                                 <SelectItem value="intercalado">Intercalado (parcelas pares)</SelectItem>
+                                <SelectItem value="intercalado_impar">Intercalado (parcelas ímpares)</SelectItem>
                               </SelectContent>
                             </Select>
                           </FormItem>
