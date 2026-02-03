@@ -533,6 +533,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           produto_codigo: (card as any).produto_embracon || 'auto',
           condicao_pagamento: ((card as any).condicao_pagamento || 'convencional') as 'convencional' | '50' | '25',
           inclui_seguro: (card as any).inclui_seguro_vida || false,
+          // Controle adicional
+          valor_comissao: card.valor_comissao ? Number(card.valor_comissao) : undefined,
+          e_transferencia: card.e_transferencia || false,
+          transferido_de: card.transferido_de || undefined,
+          observacoes: card.observacoes || undefined,
         });
       } else {
         // Create mode - reset to empty values
