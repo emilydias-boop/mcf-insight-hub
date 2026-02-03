@@ -9,7 +9,9 @@ const LOST_KEYWORDS = [
 const WON_KEYWORDS = [
   'venda realizada', 'contrato pago', 'pagamento concluído',
   'crédito contratado', 'crédito aprovado', 'consórcio fechado',
-  'fechado', 'fechada', 'ganho', 'ganha', 'convertido', 'convertida'
+  'fechado', 'fechada', 'ganho', 'ganha', 'convertido', 'convertida',
+  // Termos específicos do Consórcio
+  'aporte holding', 'carta socios fechada', 'carta + aporte'
 ];
 
 export const getDealStatusFromStage = (stageName: string | null | undefined): DealStatus => {
