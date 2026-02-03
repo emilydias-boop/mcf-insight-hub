@@ -7830,6 +7830,7 @@ export type Database = {
       }
     }
     Functions: {
+      custom_access_token_hook: { Args: { event: Json }; Returns: Json }
       detect_ghost_appointments: { Args: { days_back?: number }; Returns: Json }
       get_all_hubla_transactions:
         | {
