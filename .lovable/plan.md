@@ -1,85 +1,140 @@
 
-# Plano: Ocultar Badge "Remanejado" para Status Preservados
+# Plano: Corrigir Badge "Remanejado/Reagendado" em Todos os Componentes
 
-## Problema Identificado
+## Problema
 
-O badge "Remanejado" é exibido quando `parent_attendee_id` existe:
+O badge "Remanejado/Reagendado" aparece mesmo quando o lead tem status preservado (`contract_paid`, `completed`, etc). Isso ocorre porque a UI verifica apenas:
+- `is_reschedule` (R2)
+- `parent_attendee_id` (R1)
 
-```typescript
-{!att.is_partner && att.parent_attendee_id && (
-  <Badge>Remanejado</Badge>
-)}
-```
-
-Quando um admin move um lead preservando status (ex: `contract_paid`), o sistema:
-1. Cria novo attendee com `parent_attendee_id` (para rastreabilidade)
-2. Preserva o `status` como `contract_paid`
-
-Mas a UI mostra "Remanejado" porque `parent_attendee_id` existe, ignorando que o status foi preservado.
+Sem considerar se o status real deveria ter prioridade visual.
 
 ---
 
-## Solucao
+## Arquivos a Corrigir
 
-Modificar a condicao de exibicao do badge "Remanejado" para NAO mostrar quando o status e um dos preservados (`contract_paid`, `completed`, `refunded`, `approved`, `rejected`).
-
----
-
-## Alteracoes
-
-### 1. Arquivo: `src/components/crm/CloserColumnCalendar.tsx` (linha 372)
+### 1. R2MeetingDetailDrawer.tsx (linha 205-210)
 
 **De:**
-```typescript
-{!att.is_partner && att.parent_attendee_id && (
-  <Badge>Remanejado</Badge>
+```tsx
+{att.is_reschedule && (
+  <Badge>Reagendado</Badge>
 )}
 ```
 
 **Para:**
-```typescript
+```tsx
+{att.is_reschedule && 
+ !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status || '') && (
+  <Badge>Reagendado</Badge>
+)}
+```
+
+---
+
+### 2. R2CloserColumnCalendar.tsx (linhas 270-274 - icone compacto)
+
+**De:**
+```tsx
+{(att as any).is_reschedule && (
+  <span className="flex items-center bg-orange-500/40 rounded px-0.5 shrink-0">
+    <ArrowRightLeft className="h-2.5 w-2.5 text-white" />
+  </span>
+)}
+```
+
+**Para:**
+```tsx
+{(att as any).is_reschedule && 
+ !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
+  <span className="flex items-center bg-orange-500/40 rounded px-0.5 shrink-0">
+    <ArrowRightLeft className="h-2.5 w-2.5 text-white" />
+  </span>
+)}
+```
+
+---
+
+### 3. R2CloserColumnCalendar.tsx (linhas 306-311 - tooltip)
+
+**De:**
+```tsx
+{(att as any).is_reschedule && (
+  <Badge>Reagendado</Badge>
+)}
+```
+
+**Para:**
+```tsx
+{(att as any).is_reschedule && 
+ !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
+  <Badge>Reagendado</Badge>
+)}
+```
+
+---
+
+### 4. CloserColumnCalendar.tsx (linhas 324-328 - icone compacto R1)
+
+**De:**
+```tsx
+{!att.is_partner && att.parent_attendee_id && (
+  <span className="flex items-center bg-orange-500/40 rounded px-0.5">
+    <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
+  </span>
+)}
+```
+
+**Para:**
+```tsx
 {!att.is_partner && att.parent_attendee_id && 
  !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
-  <Badge>Remanejado</Badge>
+  <span className="flex items-center bg-orange-500/40 rounded px-0.5">
+    <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
+  </span>
 )}
 ```
 
-### 2. Arquivo: `src/components/crm/AgendaMeetingDrawer.tsx` (linha 627)
+---
+
+### 5. MeetingsList.tsx (linhas 95-99)
 
 **De:**
-```typescript
-{!p.isPartner && p.parentAttendeeId && (
-  <Badge>Remanejado</Badge>
+```tsx
+{!att.is_partner && att.parent_attendee_id && (
+  <Badge>Remanej.</Badge>
 )}
 ```
 
 **Para:**
-```typescript
-{!p.isPartner && p.parentAttendeeId && 
- !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(p.status) && (
-  <Badge>Remanejado</Badge>
+```tsx
+{!att.is_partner && att.parent_attendee_id && 
+ !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
+  <Badge>Remanej.</Badge>
 )}
 ```
 
 ---
 
-## Resultado Visual Esperado
+## Resultado Esperado
 
-| Status | parent_attendee_id | Badge Mostrado |
-|--------|-------------------|----------------|
-| rescheduled | Sim | **Remanejado** |
-| scheduled | Sim | **Remanejado** |
-| contract_paid | Sim | ~~Remanejado~~ (oculto) |
-| completed | Sim | ~~Remanejado~~ (oculto) |
-| refunded | Sim | ~~Remanejado~~ (oculto) |
+| Status Real | is_reschedule/parent_id | Badge Mostrado |
+|-------------|------------------------|----------------|
+| contract_paid | true | **Nenhum badge laranja** |
+| completed | true | **Nenhum badge laranja** |
+| refunded | true | **Nenhum badge laranja** |
+| rescheduled | true | Remanejado/Reagendado |
+| scheduled | true | Remanejado/Reagendado |
 
-O lead "Francisco Antonio da Silva Rocha" mostrara apenas o badge de status real ("Contrato Pago") sem o badge "Remanejado".
+O lead "Francisco Antonio da Silva Rocha" mostrara apenas seu status real ("Contrato Pago") sem o badge redundante "Remanejado".
 
 ---
 
-## Resumo
+## Resumo de Alteracoes
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `CloserColumnCalendar.tsx` | Adicionar condicao de status na exibicao do badge |
-| `AgendaMeetingDrawer.tsx` | Adicionar condicao de status na exibicao do badge |
+| Arquivo | Local | Tipo |
+|---------|-------|------|
+| R2MeetingDetailDrawer.tsx | Badge na lista de participantes | R2 Drawer |
+| R2CloserColumnCalendar.tsx | Icone compacto + tooltip | R2 Calendar |
+| CloserColumnCalendar.tsx | Icone compacto | R1 Calendar |
+| MeetingsList.tsx | Badge na lista | Lista de reunioes |
