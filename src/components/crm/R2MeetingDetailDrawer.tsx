@@ -202,7 +202,8 @@ export function R2MeetingDetailDrawer({
                               <span className="font-medium text-sm truncate">
                                 {att.name || att.deal?.contact?.name || 'Lead'}
                               </span>
-                              {att.is_reschedule && (
+                              {att.is_reschedule && 
+                               !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status || '') && (
                                 <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 border-orange-300 gap-1 shrink-0">
                                   <ArrowRightLeft className="h-3 w-3" />
                                   Reagendado
