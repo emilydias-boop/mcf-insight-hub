@@ -1,66 +1,175 @@
 
-## Diagnóstico confirmado (por que a data “volta” ao editar)
+# Plano: Corrigir Parcelas Intercaladas + Adicionar Edição de Parcelas
 
-O campo **Data de Contratação** está sendo carregado no formulário com:
+## Problema 1: Bug nas 8 Parcelas Intercaladas
 
-- `new Date(card.data_contratacao)` (tanto no `defaultValues` quanto no `form.reset()` do modal)
+### Análise do Bug
 
-Como `card.data_contratacao` vem do banco no formato **`YYYY-MM-DD`**, o JavaScript interpreta `new Date("2026-01-31")` como **UTC**.  
-Quando isso é convertido para o fuso do Brasil (ex.: UTC-3), a hora “cai” para o dia anterior, e o DatePicker passa a mostrar **30/01/2026** (exatamente como no seu print: lista mostra 31/01, editar mostra 30/01).
+Os dados confirmam o problema. Para o cliente HEITOR NICKEL LOOSE com `parcelas_pagas_empresa = 8` e `tipo_contrato = 'intercalado'`:
 
-Isso é um bug clássico de timezone ao usar `new Date("YYYY-MM-DD")`.
+| Parcela | Tipo Atual | Esperado |
+|---------|------------|----------|
+| 2       | Empresa    | Empresa ✓ (1ª par) |
+| 4       | Empresa    | Empresa ✓ (2ª par) |
+| 6       | Empresa    | Empresa ✓ (3ª par) |
+| 8       | Empresa    | Empresa ✓ (4ª par) |
+| 10      | Empresa    | Empresa ✓ (5ª par) |
+| 12      | Empresa    | Empresa ✓ (6ª par) |
+| 14      | Empresa    | Empresa ✓ (7ª par) |
+| 16      | Empresa    | Empresa ✓ (8ª par) - ÚLTIMA |
+| 18      | Empresa ✗  | Cliente |
+| 20      | Empresa ✗  | Cliente |
+| ...     | Empresa ✗  | Cliente |
 
-O projeto já tem o helper correto para isso: **`parseDateWithoutTimezone()`** em `src/lib/dateHelpers.ts` (inclusive a listagem já usa esse helper para exibir as datas).
+A lógica atual no arquivo `src/hooks/useConsorcio.ts` (linha 224-228) está **correta**:
 
----
+```typescript
+const ehPar = i % 2 === 0;
+const qualParcelaParEhEssa = i / 2; // 2→1, 4→2, 6→3, 8→4...
+tipo = (ehPar && qualParcelaParEhEssa <= input.parcelas_pagas_empresa) ? 'empresa' : 'cliente';
+```
 
-## Mudança proposta (correção definitiva)
+**Resultado esperado da lógica:**
+- Parcela 16: `16 / 2 = 8` ≤ 8 → Empresa ✓
+- Parcela 18: `18 / 2 = 9` > 8 → Cliente ✓
 
-### 1) Ajustar o carregamento da data no ConsorcioCardForm
-Arquivo: `src/components/consorcio/ConsorcioCardForm.tsx`
+**Conclusão:** A lógica está correta, mas os dados no banco estão errados. Isso significa que a carta foi criada com uma versão anterior do código que tinha o bug, ou o código foi corrigido depois que as cartas já existiam.
 
-Trocar **todas** as conversões `new Date(<string YYYY-MM-DD>)` por `parseDateWithoutTimezone(<string>)`, pelo menos em:
+### Solução
 
-- `data_contratacao`
-- (recomendado também) `data_nascimento`, `data_fundacao`  
-  Para evitar o mesmo problema nesses campos quando existirem.
-
-Locais onde isso deve ser feito:
-- `useForm({ defaultValues: ... })` quando `card` existe
-- `useEffect` que roda `form.reset({ ... })` quando abre o modal em modo edição
-
-### 2) Garantir import do helper
-Adicionar/ajustar import no topo do arquivo:
-
-- `import { formatDateForDB, parseDateWithoutTimezone } from '@/lib/dateHelpers';`
-
-(Atualmente o arquivo importa só `formatDateForDB`.)
-
----
-
-## Como vamos validar que ficou correto
-
-1) Abrir a lista de cotas e anotar a **Data de Contratação** de uma cota (ex.: 31/01/2026).  
-2) Clicar em **Editar** na mesma cota.  
-3) Confirmar que o campo **Data de Contratação** abre com a **mesma data**, sem “voltar 1 dia”.  
-4) (Se aplicarmos também nos outros campos) testar um cadastro com `data_nascimento` e/ou `data_fundacao` para confirmar que não há regressão.
+1. Corrigir os dados existentes no banco via SQL
+2. Garantir que novas cartas sejam geradas corretamente (a lógica atual está OK)
 
 ---
 
-## Riscos e efeitos colaterais
+## Problema 2: Edição de Parcelas Individuais
 
-- Baixo risco: a alteração só muda **como a string do banco é convertida para Date no front**.
-- Não muda o formato salvo no banco, porque o envio já usa `formatDateForDB()` (que é adequado).
+### Necessidades Identificadas
+
+O usuário precisa:
+- Editar o **tipo** da parcela (Cliente/Empresa)
+- Editar o **valor** da parcela
+- Editar a **data de vencimento**
+- Adicionar **observação** (motivo de alteração, juros pagos, etc.)
+- Alterar manualmente o **status**
+
+### Implementação
+
+#### 1. Migration: Adicionar campo `observacao` na tabela de parcelas
+
+Adicionar coluna para registrar motivos de alterações.
+
+#### 2. Atualizar tipo TypeScript
+
+Arquivo: `src/types/consorcio.ts`
+
+Adicionar campo `observacao?: string` na interface `ConsorcioInstallment`.
+
+#### 3. Criar hook `useUpdateInstallment`
+
+Arquivo: `src/hooks/useConsorcio.ts`
+
+Novo hook para atualizar parcelas individuais:
+- Tipo (cliente/empresa)
+- Valor da parcela
+- Valor da comissão
+- Data de vencimento
+- Data de pagamento
+- Status
+- Observação
+
+#### 4. Criar componente `EditInstallmentDialog`
+
+Arquivo: `src/components/consorcio/EditInstallmentDialog.tsx`
+
+Dialog com formulário para editar todos os campos da parcela:
+- Select para Tipo (Cliente/Empresa)
+- Input para Valor da Parcela
+- Input para Valor da Comissão
+- DatePicker para Data de Vencimento
+- DatePicker para Data de Pagamento (opcional)
+- Select para Status (Pendente/Pago/Atrasado)
+- Textarea para Observação (motivo da alteração)
+
+#### 5. Atualizar `InstallmentsPaginated`
+
+Arquivo: `src/components/consorcio/InstallmentsPaginated.tsx`
+
+- Adicionar botão "Editar" na coluna de ações (ao lado de "Pagar")
+- Ao clicar, abrir o `EditInstallmentDialog`
+- Receber callback `onEditInstallment` via props
+
+#### 6. Atualizar `ConsorcioCardDrawer`
+
+Arquivo: `src/components/consorcio/ConsorcioCardDrawer.tsx`
+
+- Importar e renderizar `EditInstallmentDialog`
+- Criar handler `handleEditInstallment`
+- Passar props necessárias para `InstallmentsPaginated`
 
 ---
 
-## Observação importante
-O fix anterior que adicionou `observacoes`, `valor_comissao`, etc. no `reset()` está correto e permanece.  
-O problema atual é diferente: é **timezone na conversão de data**.
+## Correção de Dados Existentes
+
+Para corrigir as cartas já criadas com o bug, executaremos uma query SQL que recalcula o tipo correto para cada parcela com `tipo_contrato = 'intercalado'`:
+
+```sql
+UPDATE consortium_installments ci
+SET tipo = CASE 
+  WHEN (ci.numero_parcela % 2 = 0) AND (ci.numero_parcela / 2 <= cc.parcelas_pagas_empresa) 
+  THEN 'empresa' 
+  ELSE 'cliente' 
+END
+FROM consortium_cards cc
+WHERE ci.card_id = cc.id
+  AND cc.tipo_contrato = 'intercalado';
+```
 
 ---
 
-## Arquivos envolvidos
-- `src/components/consorcio/ConsorcioCardForm.tsx` (ajustar parsing de datas)
-- `src/lib/dateHelpers.ts` (já existe `parseDateWithoutTimezone`, não precisa mudar)
+## Arquivos a Criar/Modificar
 
+| Arquivo | Ação |
+|---------|------|
+| `src/types/consorcio.ts` | Adicionar campo `observacao` |
+| `src/hooks/useConsorcio.ts` | Adicionar hook `useUpdateInstallment` |
+| `src/components/consorcio/EditInstallmentDialog.tsx` | Criar novo componente |
+| `src/components/consorcio/InstallmentsPaginated.tsx` | Adicionar botão Editar |
+| `src/components/consorcio/ConsorcioCardDrawer.tsx` | Integrar dialog de edição |
+| Migration SQL | Adicionar coluna `observacao` |
+
+---
+
+## Fluxo da Edição
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  Lista de Parcelas                       │
+│  ┌───┬─────────┬────────────┬─────────┬───────────────┐ │
+│  │ # │  Tipo   │ Vencimento │  Valor  │     Ações     │ │
+│  ├───┼─────────┼────────────┼─────────┼───────────────┤ │
+│  │14 │ Empresa │ 14/03/2027 │R$1.666  │ [Editar][Pagar]│◄─┐
+│  └───┴─────────┴────────────┴─────────┴───────────────┘ │ │
+└─────────────────────────────────────────────────────────┘ │
+                                                            │
+    Clique em "Editar"                                      │
+                                                            │
+┌─────────────────────────────────────────────────────────┐ │
+│            Editar Parcela #14                           │ │
+│  ┌────────────────────────────────────────────────────┐ │ │
+│  │ Tipo:        [Empresa ▼]                           │ │ │
+│  │ Valor:       [R$ 1.666,67        ]                 │ │ │
+│  │ Comissão:    [R$ 0,00            ]                 │ │ │
+│  │ Vencimento:  [14/03/2027         ]                 │ │ │
+│  │ Status:      [Pendente ▼]                          │ │ │
+│  │ Observação:                                        │ │ │
+│  │ ┌────────────────────────────────────────────────┐ │ │ │
+│  │ │ Pago com juros de mora (R$ 50,00)              │ │ │ │
+│  │ └────────────────────────────────────────────────┘ │ │ │
+│  │                                                    │ │ │
+│  │              [Cancelar]  [Salvar]                  │ │ │
+│  └────────────────────────────────────────────────────┘ │ │
+└─────────────────────────────────────────────────────────┘ │
+                         │                                  │
+                         └──────────────────────────────────┘
+```
