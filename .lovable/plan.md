@@ -1,96 +1,74 @@
 
-# Plano: Permitir Admin Mover para Qualquer Horario do Closer (R1)
+# Plano: Mostrar Todas as Reuniões do Closer para Admin
 
-## Problema Atual
+## Problema Identificado
 
-No `MoveAttendeeModal` (Agenda R1), a logica atual (linhas 107-121) filtra slots que ja tem reunioes:
+A query `useMeetingsForDate` (linha 1833 em useAgendaData.ts) filtra apenas reuniões com status `scheduled` ou `rescheduled`:
 
 ```typescript
-const isBooked = bookedSlots?.some(booked => {...});
-
-if (!isBooked) {
-  slots.push({...}); // So adiciona se NAO estiver reservado
-}
+.in('status', ['scheduled', 'rescheduled'])
 ```
 
-Isso significa que horarios com reunioes existentes NAO aparecem como "Slots Disponiveis" - eles so aparecem na secao "Reunioes Existentes" (se houver alguma reuniao naquele dia).
-
-O admin precisa ver TODOS os horarios configurados do closer para poder mover leads para qualquer um deles.
+Isso exclui reuniões com status `completed`, que são a maioria das reuniões da Cristiane Gomes no dia.
 
 ---
 
-## Solucao
+## Solução
 
-Adicionar bypass para admin que mostra todos os slots, independente de ja terem reuniao.
+Para permitir que o admin veja e encaixe em QUALQUER reunião do closer, preciso:
 
----
+### 1. Modificar `useMeetingsForDate` para aceitar parâmetro de bypass
 
-## Alteracoes
-
-### Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
-
-**1. Importar useAuth e criar variavel isAdmin (apos linha 32):**
+**Arquivo:** `src/hooks/useAgendaData.ts`
 
 ```typescript
-import { useAuth } from '@/contexts/AuthContext';
-
-// Dentro do componente (apos linha 71):
-const { role } = useAuth();
-const isAdmin = role === 'admin';
-```
-
-**2. Modificar logica de availableSlots (linhas 107-121):**
-
-De:
-```typescript
-if (!isBooked) {
-  slots.push({...});
-}
-```
-
-Para:
-```typescript
-// Admin pode ver todos os horarios, mesmo os reservados
-if (isAdmin || !isBooked) {
-  slots.push({
-    closerId: closer.id,
-    closerName: closer.name,
-    closerColor: (closer as any).color || '#3B82F6',
-    datetime: new Date(slotTime),
-    duration: avail.slot_duration_minutes,
-    isBooked: isBooked, // Flag para indicar visualmente
+export function useMeetingsForDate(date: Date | null, includeCompleted: boolean = false) {
+  return useQuery({
+    queryKey: ['meetings-for-date', date?.toISOString(), includeCompleted],
+    queryFn: async () => {
+      // ...
+      let query = supabase
+        .from('meeting_slots')
+        .select(...)
+        .gte('scheduled_at', startOfDay.toISOString())
+        .lte('scheduled_at', endOfDay.toISOString());
+      
+      // Admin pode ver todas, incluindo completed
+      if (includeCompleted) {
+        query = query.in('status', ['scheduled', 'rescheduled', 'completed']);
+      } else {
+        query = query.in('status', ['scheduled', 'rescheduled']);
+      }
+      // ...
+    },
   });
 }
 ```
 
-**3. Atualizar interface AvailableSlot (linha 49):**
+### 2. Passar isAdmin para o hook no MoveAttendeeModal
+
+**Arquivo:** `src/components/crm/MoveAttendeeModal.tsx`
 
 ```typescript
-interface AvailableSlot {
-  closerId: string;
-  closerName: string;
-  closerColor: string;
-  datetime: Date;
-  duration: number;
-  isBooked?: boolean; // Nova propriedade
-}
+const { data: meetings, isLoading: meetingsLoading } = useMeetingsForDate(
+  selectedDate,
+  isAdmin // Admin vê reuniões completed também
+);
 ```
 
-**4. Atualizar UI para indicar slots ja reservados (linhas 570-605):**
+### 3. Adicionar indicador visual de status na lista de reuniões
 
-Adicionar badge visual amarelo para slots que ja tem reuniao:
+Na seção "Encaixar em Reunião Existente", mostrar badge indicando se a reunião está completed:
 
 ```typescript
-<Badge
-  variant={slot.isBooked ? 'secondary' : 'outline'}
+<Badge 
+  variant={meeting.status === 'completed' ? 'secondary' : 'outline'}
   className={cn(
     'text-xs',
-    slot.isBooked 
-      ? 'text-amber-600 border-amber-300 bg-amber-50' 
-      : 'text-green-600 border-green-300'
+    meeting.status === 'completed' && 'text-blue-600 border-blue-300'
   )}
 >
-  {slot.isBooked ? 'Ocupado (Admin)' : 'Livre'}
+  {meeting.status === 'completed' ? 'Realizada' : 'Agendada'}
 </Badge>
 ```
 
@@ -98,43 +76,36 @@ Adicionar badge visual amarelo para slots que ja tem reuniao:
 
 ## Fluxo Visual Resultante
 
-**Usuario Normal:**
+**Usuário Normal:**
 ```text
-Slots Disponiveis:
-  Closer A - 09:00 [Livre] [Mover]
-  Closer A - 11:00 [Livre] [Mover]
-  
-Encaixar em Reuniao Existente:
-  Closer A - 10:00 - 2 participantes [Encaixar]
+Encaixar em Reunião Existente:
+  Cristiane Gomes - 12:15 [Agendada] - 1 participante [Encaixar]
 ```
 
 **Admin:**
 ```text
-Slots Disponiveis:
-  Closer A - 09:00 [Livre] [Mover]
-  Closer A - 10:00 [Ocupado (Admin)] [Mover]  <- NOVO
-  Closer A - 11:00 [Livre] [Mover]
-  
-Encaixar em Reuniao Existente:
-  Closer A - 10:00 - 2 participantes [Encaixar]
+Encaixar em Reunião Existente:
+  Cristiane Gomes - 12:15 [Agendada] - 1 participante [Encaixar]
+  Cristiane Gomes - 13:15 [Realizada] - 2 participantes [Encaixar]
+  Cristiane Gomes - 14:30 [Realizada] - 1 participante [Encaixar]
+  Cristiane Gomes - 17:00 [Realizada] - 3 participantes [Encaixar]
+  Cristiane Gomes - 19:00 [Realizada] - 2 participantes [Encaixar]
+  ... (todas as 7 reuniões)
 ```
 
 ---
 
-## Resumo das Alteracoes
+## Resumo das Alterações
 
-| Local | Linhas | Alteracao |
-|-------|--------|-----------|
-| Imports | ~32 | Adicionar `useAuth` |
-| Componente | ~71 | Criar `isAdmin` |
-| Interface | ~49 | Adicionar `isBooked?: boolean` |
-| availableSlots | ~107-121 | Bypass `isBooked` para admin |
-| UI | ~570-605 | Badge visual para slots ocupados |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useAgendaData.ts` | Adicionar parâmetro `includeCompleted` em `useMeetingsForDate` |
+| `src/components/crm/MoveAttendeeModal.tsx` | Passar `isAdmin` para o hook + badge de status |
 
 ---
 
-## Comportamento
+## Considerações
 
-- **Usuarios normais**: Continuam vendo apenas slots vazios + reunioes existentes
-- **Admin**: Ve TODOS os horarios configurados do closer, com indicador visual de ocupacao
-- Ao clicar em um slot "ocupado", o sistema cria/adiciona o lead na reuniao existente daquele horario (logica ja existe no `moveToNewSlot`)
+1. **Apenas Admin**: Somente admins veem reuniões com status `completed`
+2. **Auditoria**: O log de movimentação já registra todas as ações
+3. **Sem alteração de banco**: Apenas lógica de frontend/query
