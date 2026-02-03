@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
   Phone, Calendar, CheckCircle, XCircle, 
-  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft
+  ExternalLink, User, Users, History, RotateCcw, Trash2, ArrowRightLeft, Pencil
 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
@@ -15,13 +15,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { R2MeetingRow, R2StatusOption, R2ThermometerOption } from '@/types/r2Agenda';
+import { R2MeetingRow, R2StatusOption, R2ThermometerOption, R2AttendeeExtended } from '@/types/r2Agenda';
 import { useRemoveR2Attendee, useCancelR2Meeting, useRestoreR2Meeting } from '@/hooks/useR2AttendeeUpdate';
 import { useUpdateAttendeeAndSlotStatus } from '@/hooks/useAgendaData';
 import { RefundModal } from './RefundModal';
 import { R2QualificationTab } from './r2-drawer/R2QualificationTab';
 import { R2EvaluationTab } from './r2-drawer/R2EvaluationTab';
 import { R2NotesTab } from './r2-drawer/R2NotesTab';
+import { R2AttendeeTransferModal } from './R2AttendeeTransferModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface R2MeetingDetailDrawerProps {
   meeting: R2MeetingRow | null;
@@ -52,6 +54,11 @@ export function R2MeetingDetailDrawer({
 }: R2MeetingDetailDrawerProps) {
   const [selectedAttendeeId, setSelectedAttendeeId] = useState<string | null>(null);
   const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [attendeeToTransfer, setAttendeeToTransfer] = useState<R2AttendeeExtended | null>(null);
+  
+  const { role } = useAuth();
+  const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
   
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
@@ -215,17 +222,34 @@ export function R2MeetingDetailDrawer({
                           </div>
                         </div>
                         
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveAttendee(att.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {canTransfer && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-primary hover:bg-primary/10"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAttendeeToTransfer(att);
+                                setTransferModalOpen(true);
+                              }}
+                              title="Transferir participante"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveAttendee(att.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     );
                   })}
@@ -411,6 +435,21 @@ export function R2MeetingDetailDrawer({
           dealName={attendee.name || attendee.deal?.contact?.name}
           originId={(attendee.deal as any)?.origin_id}
           currentCustomFields={attendee.deal?.custom_fields as Record<string, any>}
+          onSuccess={() => onOpenChange(false)}
+        />
+      )}
+
+      {/* Transfer Modal */}
+      {meeting && attendeeToTransfer && (
+        <R2AttendeeTransferModal
+          open={transferModalOpen}
+          onOpenChange={(open) => {
+            setTransferModalOpen(open);
+            if (!open) setAttendeeToTransfer(null);
+          }}
+          attendee={attendeeToTransfer}
+          meeting={meeting}
+          buFilter="incorporador"
           onSuccess={() => onOpenChange(false)}
         />
       )}
