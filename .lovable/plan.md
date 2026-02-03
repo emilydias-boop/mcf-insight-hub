@@ -1,47 +1,66 @@
 
-# Plano: Corrigir Reset de Campos no Modal de Edição de Carta de Consórcio
+## Diagnóstico confirmado (por que a data “volta” ao editar)
 
-## Problema Identificado
+O campo **Data de Contratação** está sendo carregado no formulário com:
 
-Quando o modal de edição é aberto, alguns campos estão sendo resetados para valores vazios em vez de carregar os dados salvos no banco. Isso ocorre porque o `form.reset()` no `useEffect` (linhas 476-536) está **faltando 4 campos** que existem no formulário:
+- `new Date(card.data_contratacao)` (tanto no `defaultValues` quanto no `form.reset()` do modal)
 
-| Campo Faltando | O que acontece |
-|----------------|----------------|
-| `valor_comissao` | Zera o valor da comissão |
-| `e_transferencia` | Reseta para `false` |
-| `transferido_de` | Apaga informação de quem transferiu |
-| `observacoes` | Apaga todas as observações |
+Como `card.data_contratacao` vem do banco no formato **`YYYY-MM-DD`**, o JavaScript interpreta `new Date("2026-01-31")` como **UTC**.  
+Quando isso é convertido para o fuso do Brasil (ex.: UTC-3), a hora “cai” para o dia anterior, e o DatePicker passa a mostrar **30/01/2026** (exatamente como no seu print: lista mostra 31/01, editar mostra 30/01).
 
-## Causa Raiz
+Isso é um bug clássico de timezone ao usar `new Date("YYYY-MM-DD")`.
 
-O `useEffect` que faz o `form.reset()` quando o modal abre (linha 471-595) não está incluindo esses 4 campos do "Controle Adicional", apesar de:
-1. O formulário ter esses campos definidos no schema (linhas 126-129)
-2. O `defaultValues` original incluir esses campos (linhas 241-245)
-3. O tipo `ConsorcioCard` ter esses campos (linhas 88-93)
-4. O `onSubmit` enviar esses campos corretamente (linhas 757-761)
+O projeto já tem o helper correto para isso: **`parseDateWithoutTimezone()`** em `src/lib/dateHelpers.ts` (inclusive a listagem já usa esse helper para exibir as datas).
 
-## Solução
+---
 
-Adicionar os 4 campos faltantes no `form.reset()` do modo de edição.
+## Mudança proposta (correção definitiva)
 
-### Arquivo a Modificar
+### 1) Ajustar o carregamento da data no ConsorcioCardForm
+Arquivo: `src/components/consorcio/ConsorcioCardForm.tsx`
 
-**`src/components/consorcio/ConsorcioCardForm.tsx`**
+Trocar **todas** as conversões `new Date(<string YYYY-MM-DD>)` por `parseDateWithoutTimezone(<string>)`, pelo menos em:
 
-Na função `useEffect` (linha 471-595), dentro do bloco `if (card)` (linha 476-536), adicionar os campos faltantes após a linha 531 (partners):
+- `data_contratacao`
+- (recomendado também) `data_nascimento`, `data_fundacao`  
+  Para evitar o mesmo problema nesses campos quando existirem.
 
-```typescript
-// Adicionar após linha 531:
-// Controle adicional
-valor_comissao: card.valor_comissao ? Number(card.valor_comissao) : undefined,
-e_transferencia: card.e_transferencia || false,
-transferido_de: card.transferido_de || undefined,
-observacoes: card.observacoes || undefined,
-```
+Locais onde isso deve ser feito:
+- `useForm({ defaultValues: ... })` quando `card` existe
+- `useEffect` que roda `form.reset({ ... })` quando abre o modal em modo edição
 
-## Resultado Esperado
+### 2) Garantir import do helper
+Adicionar/ajustar import no topo do arquivo:
 
-Após a correção:
-- Ao abrir o modal de edição, todos os campos serão carregados corretamente com os valores do banco
-- Data de contratação, observações, valor de comissão e demais campos manterão seus valores originais
-- O comportamento será consistente entre `defaultValues` inicial e o `reset()` no useEffect
+- `import { formatDateForDB, parseDateWithoutTimezone } from '@/lib/dateHelpers';`
+
+(Atualmente o arquivo importa só `formatDateForDB`.)
+
+---
+
+## Como vamos validar que ficou correto
+
+1) Abrir a lista de cotas e anotar a **Data de Contratação** de uma cota (ex.: 31/01/2026).  
+2) Clicar em **Editar** na mesma cota.  
+3) Confirmar que o campo **Data de Contratação** abre com a **mesma data**, sem “voltar 1 dia”.  
+4) (Se aplicarmos também nos outros campos) testar um cadastro com `data_nascimento` e/ou `data_fundacao` para confirmar que não há regressão.
+
+---
+
+## Riscos e efeitos colaterais
+
+- Baixo risco: a alteração só muda **como a string do banco é convertida para Date no front**.
+- Não muda o formato salvo no banco, porque o envio já usa `formatDateForDB()` (que é adequado).
+
+---
+
+## Observação importante
+O fix anterior que adicionou `observacoes`, `valor_comissao`, etc. no `reset()` está correto e permanece.  
+O problema atual é diferente: é **timezone na conversão de data**.
+
+---
+
+## Arquivos envolvidos
+- `src/components/consorcio/ConsorcioCardForm.tsx` (ajustar parsing de datas)
+- `src/lib/dateHelpers.ts` (já existe `parseDateWithoutTimezone`, não precisa mudar)
+
