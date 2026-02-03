@@ -1,156 +1,113 @@
 
-# Plano: Mostrar Todos os SDRs no Filtro de Responsáveis
+# Plano: Transferir 108 Leads para Ithaline
 
-## Problema Identificado
+## Situação Identificada
 
-O filtro "Todos os responsáveis" só mostra usuários que **já possuem deals atribuídos**. Isso ocorre porque o hook `useDealOwnerOptions` extrai owners apenas dos deals carregados.
+| Item | Valor |
+|------|-------|
+| Pipeline | Efeito Alavanca + Clube |
+| Origin ID | `7d7b1cb5-2a44-4552-9eff-c3b798646b78` |
+| Total de deals órfãos no pipeline | 3.419 |
+| Leads na lista da Ithaline | 108 |
+| Match exato confirmado | ✅ Nomes batem perfeitamente |
 
-### Evidência
-
-| BU | SDR | Deals | Aparece no Filtro |
-|----|-----|-------|-------------------|
-| Consórcio | Cleiton Anacleto Lima | 368 | ✅ |
-| Consórcio | ithaline clara dos santos | 0 | ❌ |
-| Consórcio | Ygor Ferreira | 0 | ❌ |
-| Incorporador | Evellyn Vieira dos Santos | 0 | ❌ |
-| Incorporador | Juliana Rodrigues | 298 | ✅ |
-
----
-
-## Solução Proposta
-
-Modificar o hook `useDealOwnerOptions` para **combinar**:
-1. Owners extraídos dos deals (lógica atual)
-2. SDRs/Closers da BU ativa que ainda não têm deals
-
-Isso garante que todos os membros da equipe apareçam no filtro, mesmo os novos.
+### Dados da Ithaline
+- **Profile ID**: `411e4b5d-8183-4d6a-b841-88c71d50955f`
+- **Email**: `ithaline.clara@minhacasafinanciada.com`
+- **Nome**: `ithaline clara dos santos`
 
 ---
 
-## Mudanças Técnicas
+## Solução
 
-### 1. Modificar `src/hooks/useDealOwnerOptions.ts`
+Usar a Edge Function `bulk-transfer-by-name` já existente para transferir os 108 deals órfãos para a Ithaline.
 
-Adicionar parâmetro opcional `activeBU` para incluir SDRs/Closers da BU que não têm deals:
+---
 
-```typescript
-export function useDealOwnerOptions(
-  deals: Deal[] | null | undefined,
-  activeBU?: string // Nova prop
-) {
-  // Lógica atual: extrair owners dos deals...
-  
-  // NOVO: Buscar SDRs/Closers da BU ativa
-  const { data: buTeamMembers } = useQuery({
-    queryKey: ['bu-team-members', activeBU],
-    queryFn: async () => {
-      if (!activeBU) return [];
-      
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, access_status, user_roles(role)')
-        .contains('squad', [activeBU])
-        .eq('access_status', 'ativo');
-      
-      return data?.filter(u => 
-        u.user_roles?.some(r => ['sdr', 'closer'].includes(r.role))
-      ) || [];
-    },
-    enabled: !!activeBU,
-    staleTime: 60_000,
-  });
-  
-  // Combinar: deals + equipe da BU
-  const ownerOptions = useMemo(() => {
-    const options = [...ownersFromDeals];
-    
-    // Adicionar membros da BU que não estão nos deals
-    buTeamMembers?.forEach(member => {
-      if (!options.some(o => o.value === member.id)) {
-        options.push({
-          value: member.id,
-          label: member.full_name || member.email,
-          roleLabel: member.user_roles?.[0]?.role?.toUpperCase(),
-          isInactive: false,
-        });
-      }
-    });
-    
-    return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [ownersFromDeals, buTeamMembers]);
+## Execução
+
+Chamar a função com os 108 nomes da lista:
+
+```json
+{
+  "names": [
+    "Ailton Aparecido de Sá",
+    "Alan Edermann",
+    "Aleandre da",
+    "ALEX ALBUQUERQUE SILVA",
+    "Alex Castro Wiedemann",
+    "Alex Ribeiro dos santos",
+    "Alisson de morais",
+    "Amanda Andrade Silva",
+    "Anderson Ferreira",
+    "Andre",
+    ... (mais 98 nomes)
+  ],
+  "origin_id": "7d7b1cb5-2a44-4552-9eff-c3b798646b78",
+  "new_owner_email": "ithaline.clara@minhacasafinanciada.com",
+  "new_owner_profile_id": "411e4b5d-8183-4d6a-b841-88c71d50955f",
+  "new_owner_name": "ithaline clara dos santos"
 }
 ```
 
-### 2. Atualizar `src/pages/crm/Negocios.tsx`
-
-Passar a BU ativa para o hook:
-
-```typescript
-// Antes
-const { ownerOptions } = useDealOwnerOptions(dealsData);
-
-// Depois
-const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
-```
-
 ---
 
-## Fluxo Após Correção
+## Fluxo da Transferência
 
 ```text
-Filtro de Responsáveis
-         |
-         +---> Owners dos Deals Carregados
-         |           |
-         |           v
-         |     [Cleiton, Juliana, ...]
-         |
-         +---> SDRs/Closers da BU Ativa
-                     |
-                     v
-               [Evellyn, Ithaline, Ygor, ...]
-                     |
-                     v
-           +------------------+
-           | Combinar e       |
-           | Remover Dupes    |
-           +------------------+
-                     |
-                     v
-           Dropdown Completo com Toda Equipe
+Lista de 108 nomes
+        |
+        v
++------------------------+
+| Edge Function          |
+| bulk-transfer-by-name  |
++------------------------+
+        |
+        v
++------------------------+
+| SELECT deals WHERE     |
+| origin_id = Alavanca   |
+| AND owner_id IS NULL   |
+| AND name IN (lista)    |
++------------------------+
+        |
+        v
++------------------------+
+| UPDATE deals SET       |
+| owner_id = ithaline    |
+| owner_profile_id = ... |
++------------------------+
+        |
+        v
++------------------------+
+| INSERT deal_activities |
+| (log de auditoria)     |
++------------------------+
+        |
+        v
+Resultado: ~108 deals transferidos
 ```
 
 ---
 
 ## Resultado Esperado
 
-Após a implementação:
-
-### Consórcio
-- Cleiton Anacleto Lima (SDR) ✅
-- ithaline clara dos santos (SDR) ✅ **NOVO**
-- Ygor Ferreira (SDR) ✅ **NOVO**
-- João Pedro (Closer) ✅ **NOVO**
-- Victoria Paz (Closer) ✅ **NOVO**
-
-### Incorporador
-- Todos os SDRs existentes ✅
-- Evellyn Vieira dos Santos (SDR) ✅ **NOVO**
-- Closers da BU ✅
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Deals órfãos no Alavanca | 3.419 | ~3.311 |
+| Deals da Ithaline | 0 | ~108 |
 
 ---
 
-## Arquivos a Modificar
+## Arquivos Modificados
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useDealOwnerOptions.ts` | Adicionar busca de SDRs/Closers por BU |
-| `src/pages/crm/Negocios.tsx` | Passar `activeBU` para o hook |
+Nenhum arquivo será criado ou modificado. Apenas executarei a Edge Function existente com os dados fornecidos.
 
 ---
 
-## Benefícios
+## Observações
 
-1. **Onboarding facilitado** - Novos SDRs já aparecem no filtro para receber leads
-2. **Visão completa da equipe** - Managers veem toda a equipe da BU
-3. **Retrocompatível** - Se não passar BU, funciona como antes
+1. A função usa match **exato** de nomes (case-sensitive)
+2. Os nomes foram verificados e batem perfeitamente com os deals no banco
+3. Cada transferência será registrada em `deal_activities` para auditoria
+4. Os contatos já foram importados na etapa anterior, então os deals serão automaticamente vinculados
