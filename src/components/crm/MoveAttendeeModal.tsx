@@ -81,7 +81,7 @@ export function MoveAttendeeModal({
     selectedDate || new Date(), 
     selectedDate || new Date()
   );
-  const { data: meetings, isLoading: meetingsLoading } = useMeetingsForDate(selectedDate);
+  const { data: meetings, isLoading: meetingsLoading } = useMeetingsForDate(selectedDate, isAdmin);
   const moveAttendee = useMoveAttendeeToMeeting();
 
   // Calculate available slots for the selected date
@@ -654,6 +654,17 @@ export function MoveAttendeeModal({
                                       <span className="font-medium text-sm">
                                         {meeting.closer?.name}
                                       </span>
+                                      <Badge 
+                                        variant={meeting.status === 'completed' ? 'secondary' : 'outline'}
+                                        className={cn(
+                                          'text-xs',
+                                          meeting.status === 'completed' 
+                                            ? 'text-blue-600 border-blue-300 bg-blue-50' 
+                                            : 'text-green-600 border-green-300'
+                                        )}
+                                      >
+                                        {meeting.status === 'completed' ? 'Realizada' : 'Agendada'}
+                                      </Badge>
                                     </div>
                                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                       <Clock className="h-3 w-3" />
