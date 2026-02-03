@@ -1,84 +1,96 @@
 
-# Plano: Permitir Admin Ultrapassar Limite de Leads por Reuniao
+# Plano: Permitir Admin Mover para Qualquer Horario do Closer (R1)
 
-## Contexto do Problema
+## Problema Atual
 
-O sistema atual possui um limite configuravel de leads por slot de reuniao (padrao: 4). Este limite e aplicado em:
-
-1. **R2AttendeeTransferModal** (linha 236): `disabled={!slot.isAvailable}` - slots cheios ficam desabilitados
-2. **useR2CloserAvailableSlots** (linha 114): `isAvailable: currentCount < maxLeadsPerSlot` - marca slots cheios como indisponiveis
-
-Quando um slot atinge a capacidade maxima, NINGUEM pode adicionar mais leads, nem mesmo admins.
-
----
-
-## Solucao Proposta
-
-Adicionar um parametro `isAdmin` que permite ultrapassar o limite de capacidade:
-
-- Se `isAdmin = true`: todos os slots aparecem como selecionaveis, mesmo os cheios
-- Se `isAdmin = false`: comportamento atual (slots cheios ficam desabilitados)
-
----
-
-## Arquivos a Modificar
-
-### 1. `src/hooks/useR2CloserAvailableSlots.ts`
-
-Adicionar parametro opcional `bypassCapacity`:
+No `MoveAttendeeModal` (Agenda R1), a logica atual (linhas 107-121) filtra slots que ja tem reunioes:
 
 ```typescript
-export function useR2CloserAvailableSlots(
-  closerId: string | undefined, 
-  date: Date | undefined,
-  bypassCapacity: boolean = false  // NOVO
-)
+const isBooked = bookedSlots?.some(booked => {...});
+
+if (!isBooked) {
+  slots.push({...}); // So adiciona se NAO estiver reservado
+}
 ```
 
-Alterar calculo de disponibilidade (linha 114):
+Isso significa que horarios com reunioes existentes NAO aparecem como "Slots Disponiveis" - eles so aparecem na secao "Reunioes Existentes" (se houver alguma reuniao naquele dia).
 
-```typescript
-isAvailable: bypassCapacity || currentCount < maxLeadsPerSlot,
-```
+O admin precisa ver TODOS os horarios configurados do closer para poder mover leads para qualquer um deles.
 
 ---
 
-### 2. `src/components/crm/R2AttendeeTransferModal.tsx`
+## Solucao
 
-Importar `useAuth` e verificar se usuario e admin:
+Adicionar bypass para admin que mostra todos os slots, independente de ja terem reuniao.
+
+---
+
+## Alteracoes
+
+### Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
+
+**1. Importar useAuth e criar variavel isAdmin (apos linha 32):**
 
 ```typescript
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
-// Dentro do componente:
+// Dentro do componente (apos linha 71):
 const { role } = useAuth();
 const isAdmin = role === 'admin';
 ```
 
-Passar flag para o hook:
+**2. Modificar logica de availableSlots (linhas 107-121):**
 
+De:
 ```typescript
-const { data: slotsData } = useR2CloserAvailableSlots(
-  selectedCloserId || undefined,
-  selectedDate,
-  isAdmin  // Bypass para admin
-);
+if (!isBooked) {
+  slots.push({...});
+}
 ```
 
-Adicionar indicador visual para slots cheios (mas selecionaveis):
+Para:
+```typescript
+// Admin pode ver todos os horarios, mesmo os reservados
+if (isAdmin || !isBooked) {
+  slots.push({
+    closerId: closer.id,
+    closerName: closer.name,
+    closerColor: (closer as any).color || '#3B82F6',
+    datetime: new Date(slotTime),
+    duration: avail.slot_duration_minutes,
+    isBooked: isBooked, // Flag para indicar visualmente
+  });
+}
+```
+
+**3. Atualizar interface AvailableSlot (linha 49):**
+
+```typescript
+interface AvailableSlot {
+  closerId: string;
+  closerName: string;
+  closerColor: string;
+  datetime: Date;
+  duration: number;
+  isBooked?: boolean; // Nova propriedade
+}
+```
+
+**4. Atualizar UI para indicar slots ja reservados (linhas 570-605):**
+
+Adicionar badge visual amarelo para slots que ja tem reuniao:
 
 ```typescript
 <Badge
-  variant={slot.isAvailable ? 'outline' : 'secondary'}
+  variant={slot.isBooked ? 'secondary' : 'outline'}
   className={cn(
     'text-xs',
-    slot.currentCount >= slot.maxCount 
-      ? 'text-amber-600 border-amber-300'  // Cheio mas permitido
-      : 'text-green-600 border-green-300'  // Disponivel normal
+    slot.isBooked 
+      ? 'text-amber-600 border-amber-300 bg-amber-50' 
+      : 'text-green-600 border-green-300'
   )}
 >
-  {slot.currentCount}/{slot.maxCount}
-  {slot.currentCount >= slot.maxCount && isAdmin && ' (Admin)'}
+  {slot.isBooked ? 'Ocupado (Admin)' : 'Livre'}
 </Badge>
 ```
 
@@ -86,36 +98,43 @@ Adicionar indicador visual para slots cheios (mas selecionaveis):
 
 ## Fluxo Visual Resultante
 
-**Usuario Normal** (SDR, Closer, Coordenador):
+**Usuario Normal:**
 ```text
-Horario        Capacidade
-09:00          3/4  [verde - selecionavel]
-10:00          4/4  [cinza - DESABILITADO]
-11:00          2/4  [verde - selecionavel]
+Slots Disponiveis:
+  Closer A - 09:00 [Livre] [Mover]
+  Closer A - 11:00 [Livre] [Mover]
+  
+Encaixar em Reuniao Existente:
+  Closer A - 10:00 - 2 participantes [Encaixar]
 ```
 
-**Admin**:
+**Admin:**
 ```text
-Horario        Capacidade
-09:00          3/4  [verde - selecionavel]
-10:00          4/4 (Admin)  [amarelo - SELECIONAVEL]
-11:00          2/4  [verde - selecionavel]
+Slots Disponiveis:
+  Closer A - 09:00 [Livre] [Mover]
+  Closer A - 10:00 [Ocupado (Admin)] [Mover]  <- NOVO
+  Closer A - 11:00 [Livre] [Mover]
+  
+Encaixar em Reuniao Existente:
+  Closer A - 10:00 - 2 participantes [Encaixar]
 ```
 
 ---
 
-## Alteracoes de Codigo
+## Resumo das Alteracoes
 
-| Arquivo | Linhas | Alteracao |
-|---------|--------|-----------|
-| `useR2CloserAvailableSlots.ts` | ~20, ~114 | Novo parametro + logica bypass |
-| `R2AttendeeTransferModal.tsx` | ~30-35, ~59, ~240-248 | useAuth + passar flag + UI visual |
+| Local | Linhas | Alteracao |
+|-------|--------|-----------|
+| Imports | ~32 | Adicionar `useAuth` |
+| Componente | ~71 | Criar `isAdmin` |
+| Interface | ~49 | Adicionar `isBooked?: boolean` |
+| availableSlots | ~107-121 | Bypass `isBooked` para admin |
+| UI | ~570-605 | Badge visual para slots ocupados |
 
 ---
 
-## Consideracoes
+## Comportamento
 
-1. **Apenas Admin**: A permissao e exclusiva para role `admin` - managers e coordenadores respeitam o limite
-2. **Indicador Visual**: Slots acima da capacidade mostram badge amarelo com "(Admin)" para clareza
-3. **Auditoria**: O log de transferencia (`attendee_movement_logs`) ja registra quem fez a acao
-4. **Sem Alteracao de Banco**: Nao requer migrations - apenas logica de frontend/hook
+- **Usuarios normais**: Continuam vendo apenas slots vazios + reunioes existentes
+- **Admin**: Ve TODOS os horarios configurados do closer, com indicador visual de ocupacao
+- Ao clicar em um slot "ocupado", o sistema cria/adiciona o lead na reuniao existente daquele horario (logica ja existe no `moveToNewSlot`)
