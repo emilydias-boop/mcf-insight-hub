@@ -38,13 +38,14 @@ import {
   useSendMeetingNotification,
   useSearchWeeklyMeetingLeads,
   useAvailableSlotsCountByDate,
+  useClosersWithAvailability,
 } from '@/hooks/useAgendaData';
+import { useSdrsByBU } from '@/hooks/useSdrFechamento';
 import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { useActiveBU } from '@/hooks/useActiveBU';
 import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { SDR_LIST } from '@/constants/team';
 
 interface QuickScheduleModalProps {
   open: boolean;
@@ -117,6 +118,12 @@ export function QuickScheduleModal({
     ? buMapping.groups 
     : undefined;
   const isCoordinatorOrAbove = ['admin', 'manager', 'coordenador'].includes(role || '');
+  
+  // Fetch SDRs filtered by BU
+  const { data: buSdrs = [] } = useSdrsByBU(activeBU);
+  
+  // Get closer IDs for BU filtering (weekly leads)
+  const closerIdsForBU = useMemo(() => closers.map(c => c.id), [closers]);
   
   // Search mode state
   const [searchMode, setSearchMode] = useState<'normal' | 'weekly'>('normal');
@@ -220,7 +227,7 @@ export function QuickScheduleModal({
   const { data: searchResults = [], isLoading: searching } = useSearchDealsForSchedule(nameQuery, originIds && originIds.length > 0 ? originIds : undefined);
   const { data: phoneSearchResults = [], isLoading: searchingPhone } = useSearchDealsByPhone(phoneQuery);
   const { data: emailSearchResults = [], isLoading: searchingEmail } = useSearchDealsByEmail(emailQuery);
-  const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter);
+  const { data: weeklyLeads = [], isLoading: weeklyLeadsLoading } = useSearchWeeklyMeetingLeads(weeklyStatusFilter, closerIdsForBU);
   const createMeeting = useCreateMeeting();
   const sendNotification = useSendMeetingNotification();
 
@@ -810,9 +817,9 @@ export function QuickScheduleModal({
                 <SelectValue placeholder="Atribuir ao usuário logado" />
               </SelectTrigger>
               <SelectContent>
-                {SDR_LIST.map(sdr => (
+                {buSdrs.map(sdr => (
                   <SelectItem key={sdr.email} value={sdr.email}>
-                    {sdr.nome}
+                    {sdr.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -846,9 +853,9 @@ export function QuickScheduleModal({
             </Select>
           </div>
 
-          {/* Já Constrói Toggle */}
+          {/* Já Constrói / Conhece Consórcio Toggle (dynamic by BU) */}
           <div className="space-y-2">
-            <Label>Já constrói?</Label>
+            <Label>{activeBU === 'consorcio' ? 'Conhece consórcio?' : 'Já constrói?'}</Label>
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -861,7 +868,7 @@ export function QuickScheduleModal({
                 )}
               >
                 <Check className="h-4 w-4 mr-1" />
-                Sim, já constrói
+                {activeBU === 'consorcio' ? 'Sim, já conhece' : 'Sim, já constrói'}
               </Button>
               <Button
                 type="button"
@@ -874,11 +881,14 @@ export function QuickScheduleModal({
                 )}
               >
                 <X className="h-4 w-4 mr-1" />
-                Não constrói
+                {activeBU === 'consorcio' ? 'Não conhece' : 'Não constrói'}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Agrupar leads que constroem juntos e os que não constroem separados
+              {activeBU === 'consorcio' 
+                ? 'Agrupar leads que já conhecem consórcio juntos'
+                : 'Agrupar leads que constroem juntos e os que não constroem separados'
+              }
             </p>
           </div>
 

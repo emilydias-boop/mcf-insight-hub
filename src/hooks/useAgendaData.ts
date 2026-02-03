@@ -875,10 +875,10 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
   });
 }
 
-// Hook to search weekly meeting leads
-export function useSearchWeeklyMeetingLeads(statusFilter?: string) {
+// Hook to search weekly meeting leads with optional BU closer filtering
+export function useSearchWeeklyMeetingLeads(statusFilter?: string, closerIds?: string[]) {
   return useQuery({
-    queryKey: ['weekly-meeting-leads', statusFilter],
+    queryKey: ['weekly-meeting-leads', statusFilter, closerIds],
     queryFn: async () => {
       const now = new Date();
       const weekStart = startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
@@ -894,6 +894,7 @@ export function useSearchWeeklyMeetingLeads(statusFilter?: string) {
           notes,
           meeting_slots!inner(
             scheduled_at,
+            closer_id,
             closer:closers(name)
           )
         `)
@@ -902,6 +903,11 @@ export function useSearchWeeklyMeetingLeads(statusFilter?: string) {
       
       if (statusFilter && statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
+      }
+      
+      // Filter by specific closers (BU isolation)
+      if (closerIds && closerIds.length > 0) {
+        query = query.in('meeting_slots.closer_id', closerIds);
       }
       
       const { data: attendees, error } = await query.order('meeting_slots(scheduled_at)', { ascending: false });
