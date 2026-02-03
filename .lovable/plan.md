@@ -1,109 +1,138 @@
 
-# Plano: Habilitar Escolha de Pipelines APENAS para SDRs do Consórcio
+# Plano: Corrigir Visibilidade de Pipelines e Origens para SDRs do Consórcio
 
-## Objetivo
+## Problemas Identificados
 
-Permitir que SDRs da BU **Consórcio** escolham entre múltiplas pipelines, enquanto SDRs de outras BUs (Incorporador, Crédito, Projetos, Leilão) mantêm o comportamento atual de pipeline fixa.
+### 1. Lógica de `buAuthorizedOrigins` Excludente
+**Arquivo:** `src/pages/crm/Negocios.tsx` (linha 82)
+
+A lógica atual escolhe **OU** origens **OU** grupos:
+```javascript
+return buMapping.origins.length > 0 ? buMapping.origins : buMapping.groups;
+```
+
+O Consórcio tem **5 grupos** E **1 origem** mapeados:
+- Grupos: Perpétuo, Hubla (3 versões), BU - LEILÃO
+- Origem: PIPE LINE - INSIDE SALES
+
+Com a lógica atual, apenas a origem é passada para `allowedOriginIds`, e os grupos são ignorados.
+
+### 2. PipelineSelector Não Usa `skipDedup`
+**Arquivo:** `src/components/crm/PipelineSelector.tsx` (linha 64)
+
+O componente chama `useCRMPipelines()` sem `skipDedup=true`, mesmo quando recebe `allowedGroupIds`. Isso causa deduplicação por nome e os grupos mapeados podem ser ocultados.
+
+### 3. Filtro de Sidebar Incompleto
+**Arquivo:** `src/components/crm/OriginsSidebar.tsx` (linhas 110-139)
+
+O filtro `filteredByBU` não inclui automaticamente as origens de grupos permitidos quando só grupos são mapeados.
 
 ---
 
 ## Solução Proposta
 
-### 1. Criar Constante de BUs com Sidebar Liberada para SDRs
-
-**Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
-
-Adicionar uma constante que define quais BUs permitem SDRs verem a sidebar:
-
-```typescript
-// BUs onde SDRs podem escolher múltiplas pipelines
-export const SDR_MULTI_PIPELINE_BUS: BusinessUnit[] = ['consorcio'];
-```
-
----
-
-### 2. Ajustar Lógica de Visibilidade da Sidebar
+### Correção 1: Combinar Grupos E Origens no `buAuthorizedOrigins`
 
 **Arquivo:** `src/pages/crm/Negocios.tsx`
 
-Modificar a lógica de `showSidebar` para ser condicional por BU:
+Alterar a lógica para incluir AMBOS:
 
 ```typescript
-// DE:
-const showSidebar = !isSdr;
-
-// PARA:
-const sdrCanSeeSidebar = isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU);
-const showSidebar = !isSdr || sdrCanSeeSidebar;
+const buAuthorizedOrigins = useMemo(() => {
+  if (!activeBU || !buMapping) return [];
+  // Combinar grupos E origens (não excludente)
+  return [...buMapping.groups, ...buMapping.origins];
+}, [activeBU, buMapping]);
 ```
 
-**Resultado:**
-- SDRs do Consórcio: `showSidebar = true`
-- SDRs de outras BUs: `showSidebar = false` (comportamento atual)
-- Não-SDRs: `showSidebar = true` (comportamento atual)
+### Correção 2: Passar Flag `skipDedup` para PipelineSelector
 
----
+**Arquivo:** `src/components/crm/PipelineSelector.tsx`
 
-### 3. Ajustar Lógica de Origem Efetiva
-
-**Arquivo:** `src/pages/crm/Negocios.tsx`
-
-Modificar o cálculo de `effectiveOriginId` para respeitar a seleção manual apenas para SDRs do Consórcio:
+Modificar o componente para aceitar e usar o flag:
 
 ```typescript
-// Para SDRs
-if (isSdr) {
-  // SDRs de BUs com multi-pipeline podem navegar manualmente
-  if (activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) {
-    if (selectedOriginId) return selectedOriginId;
-  }
-  
-  // Default ou BUs com pipeline fixa
-  if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
-    return SDR_ORIGIN_BY_BU[activeBU];
-  }
-  return SDR_AUTHORIZED_ORIGIN_ID;
+interface PipelineSelectorProps {
+  selectedPipelineId: string | null;
+  onSelectPipeline: (id: string | null) => void;
+  allowedGroupIds?: string[];
+  skipDedup?: boolean; // NOVO: flag para pular deduplicação
 }
+
+export const PipelineSelector = ({ 
+  selectedPipelineId, 
+  onSelectPipeline, 
+  allowedGroupIds,
+  skipDedup = false // Default: false (comportamento atual)
+}: PipelineSelectorProps) => {
+  // Usar skipDedup quando há filtro de BU
+  const shouldSkipDedup = skipDedup || (allowedGroupIds && allowedGroupIds.length > 0);
+  const { data: pipelines, isLoading } = useCRMPipelines(shouldSkipDedup);
+  // ...
+}
+```
+
+### Correção 3: Passar `skipDedup` na OriginsSidebar
+
+**Arquivo:** `src/components/crm/OriginsSidebar.tsx`
+
+O componente já recebe `allowedGroupIds`, então precisa passar `skipDedup={true}` para o `PipelineSelector`:
+
+```typescript
+<PipelineSelector
+  selectedPipelineId={pipelineId || null}
+  onSelectPipeline={onSelectPipeline}
+  allowedGroupIds={allowedGroupIds}
+  skipDedup={allowedGroupIds && allowedGroupIds.length > 0} // NOVO
+/>
 ```
 
 ---
 
 ## Detalhes Técnicos
 
-### Comportamento por BU
+### Mapeamento Atual do Consórcio no Banco
 
-| BU | SDR vê Sidebar? | SDR pode trocar pipeline? |
-|---|---|---|
-| **Consórcio** | ✅ Sim | ✅ Sim |
-| Incorporador | ❌ Não | ❌ Não |
-| Crédito | ❌ Não | ❌ Não |
-| Projetos | ❌ Não | ❌ Não |
-| Leilão | ❌ Não | ❌ Não |
+| entity_type | entity_name | entity_id |
+|-------------|-------------|-----------|
+| group | Hubla - Construir Para Alugar | 35361575-... |
+| group | BU - LEILÃO (display: BU - Consorcio) | f8a2b3c4-... |
+| group | Hubla - Sócios MCF | 210d505f-... |
+| group | Hubla - Viver de Aluguel | 267905ec-... |
+| group | Perpétuo - Construa para Alugar (default) | b98e3746-... |
+| origin | PIPE LINE - INSIDE SALES (default) | 57013597-... |
 
-### Expansão Futura
+### Fluxo Corrigido
 
-Para liberar outras BUs no futuro, basta adicionar à constante:
-
-```typescript
-export const SDR_MULTI_PIPELINE_BUS: BusinessUnit[] = ['consorcio', 'leilao'];
+```text
+SDR do Consórcio acessa /consorcio/crm/negocios
+  └─ useBUPipelineMap retorna 5 grupos + 1 origem
+  └─ buAuthorizedOrigins = [...grupos, ...origens] (6 IDs)
+  └─ buAllowedGroups = 5 grupos
+  └─ PipelineSelector recebe allowedGroupIds + skipDedup=true
+      └─ Dropdown mostra todos os 5 grupos (sem deduplicação por nome)
+  └─ OriginsSidebar filtra por todos os 6 IDs
+      └─ Mostra origens dos grupos + origem individual
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-1. **`src/components/auth/NegociosAccessGuard.tsx`**
-   - Adicionar constante `SDR_MULTI_PIPELINE_BUS`
+1. **`src/pages/crm/Negocios.tsx`**
+   - Linha 82: Combinar grupos + origens no `buAuthorizedOrigins`
 
-2. **`src/pages/crm/Negocios.tsx`**
-   - Importar `SDR_MULTI_PIPELINE_BUS`
-   - Ajustar lógica de `showSidebar`
-   - Ajustar lógica de `effectiveOriginId`
+2. **`src/components/crm/PipelineSelector.tsx`**
+   - Adicionar prop `skipDedup` e usar quando há filtro de BU
+
+3. **`src/components/crm/OriginsSidebar.tsx`**
+   - Passar `skipDedup` para o `PipelineSelector`
 
 ---
 
 ## Resultado Esperado
 
-- **SDRs do Consórcio**: Sidebar visível, podem navegar entre as 5 pipelines mapeadas
-- **SDRs de outras BUs**: Comportamento inalterado (pipeline fixa, sem sidebar)
-- **Managers/Admins/Coordenadores**: Sem alteração (já veem tudo)
+- Dropdown mostrará os 5 grupos mapeados para Consórcio
+- Sidebar mostrará as origens de cada grupo quando selecionado
+- SDRs do Consórcio poderão navegar entre todas as pipelines autorizadas
+- Não afeta outras BUs (comportamento inalterado para Incorporador, etc.)
