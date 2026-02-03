@@ -17,9 +17,12 @@ interface Deal {
 /**
  * Hook que deriva a lista de owners a partir dos deals carregados,
  * buscando nomes/roles em batch para os UUIDs encontrados.
- * Isso evita depender de joins profiles->user_roles que podem falhar por RLS.
+ * Também inclui SDRs/Closers da BU ativa que ainda não têm deals.
  */
-export function useDealOwnerOptions(deals: Deal[] | null | undefined) {
+export function useDealOwnerOptions(
+  deals: Deal[] | null | undefined,
+  activeBU?: string
+) {
   // Extrair owners únicos dos deals
   const ownerKeys = useMemo(() => {
     const profileIds = new Set<string>();
@@ -82,22 +85,80 @@ export function useDealOwnerOptions(deals: Deal[] | null | undefined) {
     staleTime: 60_000,
   });
 
+  // NOVO: Buscar SDRs/Closers da BU ativa (mesmo que não tenham deals)
+  const { data: buTeamMembers } = useQuery({
+    queryKey: ['bu-team-members', activeBU],
+    queryFn: async () => {
+      if (!activeBU) return [];
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, access_status')
+        .contains('squad', [activeBU])
+        .eq('access_status', 'ativo');
+      
+      if (error) {
+        console.warn('Erro ao buscar membros da BU:', error);
+        return [];
+      }
+      return data || [];
+    },
+    enabled: !!activeBU,
+    staleTime: 60_000,
+  });
+
+  // Buscar roles dos membros da BU
+  const buTeamIds = useMemo(() => 
+    (buTeamMembers || []).map(m => m.id), 
+    [buTeamMembers]
+  );
+
+  const { data: buTeamRoles } = useQuery({
+    queryKey: ['bu-team-roles', buTeamIds],
+    queryFn: async () => {
+      if (buTeamIds.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .in('user_id', buTeamIds)
+        .in('role', ['sdr', 'closer']);
+      
+      if (error) {
+        console.warn('Erro ao buscar roles da equipe BU:', error);
+        return [];
+      }
+      return data || [];
+    },
+    enabled: buTeamIds.length > 0,
+    staleTime: 60_000,
+  });
+
   // Montar lista final de opções
   const ownerOptions = useMemo<OwnerOption[]>(() => {
     const options: OwnerOption[] = [];
+    const addedIds = new Set<string>();
     const rolesMap = new Map<string, string>();
     
-    // Mapear roles por user_id
+    // Mapear roles por user_id (dos deals)
     (rolesData || []).forEach((r) => {
       if (r.user_id && r.role) {
-        // Pegar a primeira role encontrada (ou a mais "importante")
+        if (!rolesMap.has(r.user_id)) {
+          rolesMap.set(r.user_id, r.role);
+        }
+      }
+    });
+
+    // Mapear roles da equipe BU
+    (buTeamRoles || []).forEach((r) => {
+      if (r.user_id && r.role) {
         if (!rolesMap.has(r.user_id)) {
           rolesMap.set(r.user_id, r.role);
         }
       }
     });
     
-    // Adicionar owners com UUID (profiles)
+    // Adicionar owners com UUID (profiles dos deals)
     (profilesData || []).forEach((profile) => {
       const role = rolesMap.get(profile.id);
       const isInactive = profile.access_status === 'desativado';
@@ -108,6 +169,24 @@ export function useDealOwnerOptions(deals: Deal[] | null | undefined) {
         roleLabel: role?.toUpperCase(),
         isInactive,
       });
+      addedIds.add(profile.id);
+    });
+
+    // Adicionar membros da BU que ainda não estão na lista
+    (buTeamMembers || []).forEach((member) => {
+      if (addedIds.has(member.id)) return;
+      
+      const role = rolesMap.get(member.id);
+      // Só adicionar se tiver role SDR ou Closer
+      if (!role) return;
+      
+      options.push({
+        value: member.id,
+        label: member.full_name || member.email?.split('@')[0] || 'Sem nome',
+        roleLabel: role?.toUpperCase(),
+        isInactive: false,
+      });
+      addedIds.add(member.id);
     });
     
     // Adicionar owners legados (só email, sem UUID no deal)
@@ -134,7 +213,7 @@ export function useDealOwnerOptions(deals: Deal[] | null | undefined) {
     });
     
     return options;
-  }, [profilesData, rolesData, ownerKeys.emailOnlyOwners]);
+  }, [profilesData, rolesData, buTeamMembers, buTeamRoles, ownerKeys.emailOnlyOwners]);
 
   return { ownerOptions };
 }
