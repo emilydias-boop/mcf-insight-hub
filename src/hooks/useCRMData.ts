@@ -369,6 +369,7 @@ interface DealFilters {
   stageId?: string;
   contactId?: string;
   ownerId?: string;
+  ownerProfileId?: string; // Filtro por owner_profile_id (UUID) - aplicado no backend
   searchTerm?: string;
   limit?: number;
 }
@@ -424,6 +425,13 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
       if (filters.contactId) query = query.eq('contact_id', filters.contactId);
       // Usar owner_profile_id (UUID) em vez de owner_id (email)
       if (filters.ownerId) query = query.eq('owner_profile_id', filters.ownerId);
+      
+      // NOVO: Filtro de owner no backend para SDRs/Closers
+      // Isso garante que só vejam seus próprios deals, sem race condition
+      if (filters.ownerProfileId) {
+        query = query.eq('owner_profile_id', filters.ownerProfileId);
+      }
+      
       // Note: searchTerm filtering is done on the frontend (Negocios.tsx)
       // to search across deal.name, contact.name, email, and phone
       

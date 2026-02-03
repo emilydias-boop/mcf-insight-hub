@@ -72,6 +72,10 @@ const Negocios = () => {
   const isSdr = isSdrRole(role, allRoles);
   const authorizedOrigins = getAuthorizedOriginsForRole(role);
   
+  // Verificar se é SDR ou Closer (veem apenas próprios deals)
+  // Movido para cima para usar no hook useCRMDeals
+  const isRestrictedRole = role === 'sdr' || role === 'closer';
+  
   // Buscar mapeamento dinâmico da BU do banco de dados
   const { data: buMapping, isLoading: isBuMappingLoading } = useBUPipelineMap(activeBU);
   
@@ -193,6 +197,8 @@ const Negocios = () => {
   });
   
   // Usar o effectiveOriginId calculado para buscar deals
+  // CORREÇÃO: Passar ownerProfileId para SDRs/Closers para filtrar no BACKEND
+  // Isso elimina a race condition onde todos os deals ficavam visíveis momentaneamente
   const { 
     data: dealsData, 
     isLoading, 
@@ -201,6 +207,8 @@ const Negocios = () => {
     originId: effectiveOriginId,
     searchTerm: filters.search || undefined,
     limit: 10000,
+    // Se for SDR/Closer, filtrar por owner_profile_id no backend
+    ownerProfileId: isRestrictedRole ? user?.id : undefined,
   });
   const { getVisibleStages } = useStagePermissions();
   const syncMutation = useSyncClintData();
@@ -267,9 +275,7 @@ const Negocios = () => {
     return map;
   }, [a010StatusMap, dealsData]);
   
-  // Verificar se é SDR ou Closer (veem apenas próprios deals)
-  const isRestrictedRole = role === 'sdr' || role === 'closer';
-  
+  // isRestrictedRole já definido no topo do componente (linha 77)
   const handleSync = () => {
     toast.info('Sincronizando dados do Clint...');
     syncMutation.mutate(undefined, {
