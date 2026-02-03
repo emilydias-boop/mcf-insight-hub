@@ -1,83 +1,146 @@
 
-# Plano: Preservar Status ao Mover Lead para Admin
+# Plano: Completar Preservacao de Status em Todos os Fluxos de Movimento
 
 ## Problema
 
-Ao mover um lead, o sistema sempre define `status: 'rescheduled'`, perdendo o status original como **contract_paid**, **completed**, etc.
+A preservacao de status para admin foi implementada apenas no fluxo de "mesmo dia". Dois outros fluxos ainda forcam `status: 'rescheduled'`:
+
+1. **Encaixar em Reuniao Existente** (`useMoveAttendeeToMeeting` em useAgendaData.ts)
+2. **Mover para novo slot em dia diferente** (criacao de novo attendee em MoveAttendeeModal.tsx)
 
 ---
 
-## Solução
+## Solucao
 
-Adicionar lógica para admin que preserve o status original do attendee ao mover.
+Adicionar parametro `isAdmin` e logica de preservacao nos dois locais faltantes.
 
 ---
 
-## Alterações
+## Alteracoes
 
-### Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
+### 1. Arquivo: `src/hooks/useAgendaData.ts`
 
-**Localização: Linhas 308-316 (moveToNewSlot mutationFn)**
+**Modificar `useMoveAttendeeToMeeting` (linhas 1713-1791)**
 
-**De:**
+Adicionar parametro `preserveStatus` na interface:
+
 ```typescript
-const { error: moveError } = await supabase
-  .from('meeting_slot_attendees')
-  .update({ 
-    meeting_slot_id: targetSlotId,
-    status: 'rescheduled',
-    is_reschedule: true,
-    updated_at: new Date().toISOString()
-  })
-  .eq('id', attendee.id);
+export function useMoveAttendeeToMeeting() {
+  // ...
+  return useMutation({
+    mutationFn: async ({ 
+      // ... parametros existentes
+      preserveStatus  // NOVO: boolean para admin
+    }: { 
+      // ... tipos existentes
+      preserveStatus?: boolean;
+    }) => {
+      // Admin preserva status original (contract_paid, completed, etc)
+      const shouldPreserve = preserveStatus && 
+        ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
+
+      const { error: mainError } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ 
+          meeting_slot_id: targetMeetingSlotId,
+          status: shouldPreserve ? currentAttendeeStatus : 'rescheduled',
+          is_reschedule: !shouldPreserve,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', attendeeId);
+
+      // ... resto do codigo
+      
+      // Atualizar movement_type no log
+      movement_type: shouldPreserve 
+        ? 'transfer_preserved' 
+        : (isNoShow ? 'no_show_reschedule' : 'same_day_reschedule'),
+    }
+  });
+}
 ```
 
-**Para:**
+### 2. Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
+
+**Parte A: Passar `preserveStatus` na chamada de `handleMoveToExisting` (linha 404)**
+
 ```typescript
-// Admin preserva status original (contract_paid, completed, etc)
-// Usuários normais sempre marcam como rescheduled
+moveAttendee.mutate(
+  { 
+    // ... parametros existentes
+    preserveStatus: isAdmin  // NOVO: passa flag de admin
+  },
+  // ...
+);
+```
+
+**Parte B: Preservar status na criacao de novo attendee para dia diferente (linhas 211-225)**
+
+```typescript
+// Admin preserva status original ao mover para dia diferente
 const shouldPreserveStatus = isAdmin && 
   ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
 
-const { error: moveError } = await supabase
+const { data: newAttendee, error: createAttendeeError } = await supabase
   .from('meeting_slot_attendees')
-  .update({ 
+  .insert({
     meeting_slot_id: targetSlotId,
+    contact_id: originalAttendee.contact_id,
+    deal_id: originalAttendee.deal_id,
     status: shouldPreserveStatus ? currentAttendeeStatus : 'rescheduled',
-    is_reschedule: !shouldPreserveStatus, // Só marca como reschedule se não preservou
-    updated_at: new Date().toISOString()
+    is_reschedule: !shouldPreserveStatus,
+    parent_attendee_id: attendee.id,
+    booked_by: originalAttendee.booked_by,
+    booked_at: new Date().toISOString(),
   })
-  .eq('id', attendee.id);
+  .select()
+  .single();
 ```
 
-**Também atualizar o log de movimentação (linha 379):**
-
-Adicionar campo para indicar que status foi preservado no movimento:
+**Parte C: Atualizar movement_type no log (linha 263)**
 
 ```typescript
-await supabase.from('attendee_movement_logs').insert({
-  // ... campos existentes
-  movement_type: shouldPreserveStatus ? 'transfer_preserved' : 'move',
-  // ...
-});
+movement_type: shouldPreserveStatus ? 'transfer_preserved' : 'no_show_reschedule',
+```
+
+**Parte D: Condicionar sync de deal stage (linhas 277-301)**
+
+Apenas sincronizar deal stage para 'rescheduled' se NAO preservou status:
+
+```typescript
+if (originalAttendee.deal_id && !shouldPreserveStatus) {
+  await syncDealStageFromAgenda(originalAttendee.deal_id, 'rescheduled', 'r1');
+  // ... resto do codigo de reschedule count
+}
 ```
 
 ---
 
-## Comportamento Resultante
+## Fluxo de Movimento Completo Apos Correcao
 
-| Usuário | Status Original | Status Após Mover |
-|---------|----------------|-------------------|
-| Normal | contract_paid | rescheduled |
-| Normal | scheduled | rescheduled |
-| Admin | contract_paid | **contract_paid** (preservado) |
-| Admin | completed | **completed** (preservado) |
-| Admin | scheduled | rescheduled |
+| Fluxo | Usuario Normal | Admin |
+|-------|----------------|-------|
+| Novo slot (mesmo dia) | rescheduled | **Preserva** |
+| Novo slot (dia diferente) | rescheduled | **Preserva** |
+| Encaixar em reuniao existente | rescheduled | **Preserva** |
 
 ---
 
-## Resumo
+## Resumo das Alteracoes
 
-- **Usuários normais**: Comportamento atual mantido (sempre rescheduled)
-- **Admin**: Preserva status importantes (contract_paid, completed, refunded, approved, rejected)
-- **Auditoria**: Log registra tipo de movimento diferente para tracking
+| Arquivo | Local | Alteracao |
+|---------|-------|-----------|
+| `useAgendaData.ts` | `useMoveAttendeeToMeeting` | Adicionar `preserveStatus` param + logica |
+| `MoveAttendeeModal.tsx` | `handleMoveToExisting` | Passar `preserveStatus: isAdmin` |
+| `MoveAttendeeModal.tsx` | Criacao novo attendee | Adicionar `shouldPreserveStatus` |
+| `MoveAttendeeModal.tsx` | Log movimento | Usar `transfer_preserved` quando preserva |
+| `MoveAttendeeModal.tsx` | Sync deal stage | Condicionar ao NAO preservar |
+
+---
+
+## Resultado Esperado
+
+Apos implementacao, ao mover o lead "Francisco Antonio da Silva Rocha" como admin:
+- Status **contract_paid** sera mantido
+- Badge mostrara "Contrato Pago" ao inves de "Remanejado"
+- Deal permanece no estagio correto do CRM
