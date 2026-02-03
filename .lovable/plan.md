@@ -1,146 +1,85 @@
 
-# Plano: Completar Preservacao de Status em Todos os Fluxos de Movimento
+# Plano: Ocultar Badge "Remanejado" para Status Preservados
 
-## Problema
+## Problema Identificado
 
-A preservacao de status para admin foi implementada apenas no fluxo de "mesmo dia". Dois outros fluxos ainda forcam `status: 'rescheduled'`:
+O badge "Remanejado" é exibido quando `parent_attendee_id` existe:
 
-1. **Encaixar em Reuniao Existente** (`useMoveAttendeeToMeeting` em useAgendaData.ts)
-2. **Mover para novo slot em dia diferente** (criacao de novo attendee em MoveAttendeeModal.tsx)
+```typescript
+{!att.is_partner && att.parent_attendee_id && (
+  <Badge>Remanejado</Badge>
+)}
+```
+
+Quando um admin move um lead preservando status (ex: `contract_paid`), o sistema:
+1. Cria novo attendee com `parent_attendee_id` (para rastreabilidade)
+2. Preserva o `status` como `contract_paid`
+
+Mas a UI mostra "Remanejado" porque `parent_attendee_id` existe, ignorando que o status foi preservado.
 
 ---
 
 ## Solucao
 
-Adicionar parametro `isAdmin` e logica de preservacao nos dois locais faltantes.
+Modificar a condicao de exibicao do badge "Remanejado" para NAO mostrar quando o status e um dos preservados (`contract_paid`, `completed`, `refunded`, `approved`, `rejected`).
 
 ---
 
 ## Alteracoes
 
-### 1. Arquivo: `src/hooks/useAgendaData.ts`
+### 1. Arquivo: `src/components/crm/CloserColumnCalendar.tsx` (linha 372)
 
-**Modificar `useMoveAttendeeToMeeting` (linhas 1713-1791)**
-
-Adicionar parametro `preserveStatus` na interface:
-
+**De:**
 ```typescript
-export function useMoveAttendeeToMeeting() {
-  // ...
-  return useMutation({
-    mutationFn: async ({ 
-      // ... parametros existentes
-      preserveStatus  // NOVO: boolean para admin
-    }: { 
-      // ... tipos existentes
-      preserveStatus?: boolean;
-    }) => {
-      // Admin preserva status original (contract_paid, completed, etc)
-      const shouldPreserve = preserveStatus && 
-        ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
-
-      const { error: mainError } = await supabase
-        .from('meeting_slot_attendees')
-        .update({ 
-          meeting_slot_id: targetMeetingSlotId,
-          status: shouldPreserve ? currentAttendeeStatus : 'rescheduled',
-          is_reschedule: !shouldPreserve,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', attendeeId);
-
-      // ... resto do codigo
-      
-      // Atualizar movement_type no log
-      movement_type: shouldPreserve 
-        ? 'transfer_preserved' 
-        : (isNoShow ? 'no_show_reschedule' : 'same_day_reschedule'),
-    }
-  });
-}
+{!att.is_partner && att.parent_attendee_id && (
+  <Badge>Remanejado</Badge>
+)}
 ```
 
-### 2. Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
-
-**Parte A: Passar `preserveStatus` na chamada de `handleMoveToExisting` (linha 404)**
-
+**Para:**
 ```typescript
-moveAttendee.mutate(
-  { 
-    // ... parametros existentes
-    preserveStatus: isAdmin  // NOVO: passa flag de admin
-  },
-  // ...
-);
+{!att.is_partner && att.parent_attendee_id && 
+ !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
+  <Badge>Remanejado</Badge>
+)}
 ```
 
-**Parte B: Preservar status na criacao de novo attendee para dia diferente (linhas 211-225)**
+### 2. Arquivo: `src/components/crm/AgendaMeetingDrawer.tsx` (linha 627)
 
+**De:**
 ```typescript
-// Admin preserva status original ao mover para dia diferente
-const shouldPreserveStatus = isAdmin && 
-  ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
-
-const { data: newAttendee, error: createAttendeeError } = await supabase
-  .from('meeting_slot_attendees')
-  .insert({
-    meeting_slot_id: targetSlotId,
-    contact_id: originalAttendee.contact_id,
-    deal_id: originalAttendee.deal_id,
-    status: shouldPreserveStatus ? currentAttendeeStatus : 'rescheduled',
-    is_reschedule: !shouldPreserveStatus,
-    parent_attendee_id: attendee.id,
-    booked_by: originalAttendee.booked_by,
-    booked_at: new Date().toISOString(),
-  })
-  .select()
-  .single();
+{!p.isPartner && p.parentAttendeeId && (
+  <Badge>Remanejado</Badge>
+)}
 ```
 
-**Parte C: Atualizar movement_type no log (linha 263)**
-
+**Para:**
 ```typescript
-movement_type: shouldPreserveStatus ? 'transfer_preserved' : 'no_show_reschedule',
-```
-
-**Parte D: Condicionar sync de deal stage (linhas 277-301)**
-
-Apenas sincronizar deal stage para 'rescheduled' se NAO preservou status:
-
-```typescript
-if (originalAttendee.deal_id && !shouldPreserveStatus) {
-  await syncDealStageFromAgenda(originalAttendee.deal_id, 'rescheduled', 'r1');
-  // ... resto do codigo de reschedule count
-}
+{!p.isPartner && p.parentAttendeeId && 
+ !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(p.status) && (
+  <Badge>Remanejado</Badge>
+)}
 ```
 
 ---
 
-## Fluxo de Movimento Completo Apos Correcao
+## Resultado Visual Esperado
 
-| Fluxo | Usuario Normal | Admin |
-|-------|----------------|-------|
-| Novo slot (mesmo dia) | rescheduled | **Preserva** |
-| Novo slot (dia diferente) | rescheduled | **Preserva** |
-| Encaixar em reuniao existente | rescheduled | **Preserva** |
+| Status | parent_attendee_id | Badge Mostrado |
+|--------|-------------------|----------------|
+| rescheduled | Sim | **Remanejado** |
+| scheduled | Sim | **Remanejado** |
+| contract_paid | Sim | ~~Remanejado~~ (oculto) |
+| completed | Sim | ~~Remanejado~~ (oculto) |
+| refunded | Sim | ~~Remanejado~~ (oculto) |
 
----
-
-## Resumo das Alteracoes
-
-| Arquivo | Local | Alteracao |
-|---------|-------|-----------|
-| `useAgendaData.ts` | `useMoveAttendeeToMeeting` | Adicionar `preserveStatus` param + logica |
-| `MoveAttendeeModal.tsx` | `handleMoveToExisting` | Passar `preserveStatus: isAdmin` |
-| `MoveAttendeeModal.tsx` | Criacao novo attendee | Adicionar `shouldPreserveStatus` |
-| `MoveAttendeeModal.tsx` | Log movimento | Usar `transfer_preserved` quando preserva |
-| `MoveAttendeeModal.tsx` | Sync deal stage | Condicionar ao NAO preservar |
+O lead "Francisco Antonio da Silva Rocha" mostrara apenas o badge de status real ("Contrato Pago") sem o badge "Remanejado".
 
 ---
 
-## Resultado Esperado
+## Resumo
 
-Apos implementacao, ao mover o lead "Francisco Antonio da Silva Rocha" como admin:
-- Status **contract_paid** sera mantido
-- Badge mostrara "Contrato Pago" ao inves de "Remanejado"
-- Deal permanece no estagio correto do CRM
+| Arquivo | Alteracao |
+|---------|-----------|
+| `CloserColumnCalendar.tsx` | Adicionar condicao de status na exibicao do badge |
+| `AgendaMeetingDrawer.tsx` | Adicionar condicao de status na exibicao do badge |
