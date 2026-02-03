@@ -538,6 +538,36 @@ export function useUpdateMeetingStatus() {
   });
 }
 
+export function useRestoreAttendeeContractPaid() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ attendeeId }: { attendeeId: string }) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ 
+          status: 'contract_paid',
+          is_reschedule: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', attendeeId);
+      
+      if (error) throw error;
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['meeting-slot'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['r2-meetings-extended'] });
+      toast.success('Status restaurado para Contrato Pago');
+    },
+    onError: () => {
+      toast.error('Erro ao restaurar status');
+    },
+  });
+}
+
 export function useUpdateAvailability() {
   const queryClient = useQueryClient();
 
