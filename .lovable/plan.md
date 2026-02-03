@@ -1,108 +1,136 @@
 
-# Plano: Isolamento de Closers por BU na Agenda Global
 
-## Problema Identificado
+# Plano: Correção do Modal de Agendamento R1 do Consórcio
 
-Os closers do Consórcio estão aparecendo na agenda do Incorporador (rota `/crm/agenda`). A imagem mostra closers como **João Pedro Martins Vieira**, **Luis Felipe**, **Thobson** e **Victoria Paz** (todos da BU Consórcio) aparecendo junto com closers do Incorporador.
+## Problemas Identificados
 
-### Causa Raiz
+O modal "Agendar Reunião" no CRM do Consórcio está exibindo informações incorretas em três áreas:
 
-A rota global `/crm/agenda` não possui um `BUProvider` definido:
+| Problema | O que aparece | O que deveria aparecer |
+|----------|---------------|------------------------|
+| SDRs | Juliana Rodrigues, Julia Caroline, etc (Incorporador) | Cleiton, Ithaline, Ygor (Consórcio) |
+| "Já constrói?" | Campo específico de construção civil | "Conhece consórcio?" |
+| Leads da Semana | No-shows de todos os closers | Apenas no-shows dos closers do Consórcio |
+
+---
+
+## Análise Técnica
+
+### 1. Lista de SDRs (SDR_LIST)
+
+**Problema**: O modal usa uma constante hardcoded `SDR_LIST` do arquivo `src/constants/team.ts` que contém apenas SDRs do Incorporador.
+
+**Solução**: Criar um hook `useSdrsByBU` que busca SDRs da tabela `sdr` filtrando por `squad` (a BU).
+
+**Dados confirmados no banco:**
+- Cleiton Lima: squad = consorcio ✓
+- Ithaline e Ygor: Existem em `profiles` com squad = consorcio, mas NÃO estão na tabela `sdr`
+
+**Pré-requisito**: Os SDRs Ithaline Clara e Ygor Ferreira precisam ser cadastrados na tabela `sdr` com `squad = 'consorcio'` via interface de configuração do fechamento.
+
+### 2. Campo "Já constrói?"
+
+**Problema**: O campo `already_builds` (boolean) é específico para o contexto de construção civil do Incorporador.
+
+**Solução**: Reutilizar o mesmo campo `already_builds`, mas mudar o label dinamicamente baseado na BU:
+- **Incorporador**: "Já constrói?" com opções "Sim, já constrói" / "Não constrói"
+- **Consórcio**: "Conhece consórcio?" com opções "Sim, já conhece" / "Não conhece"
+
+### 3. Leads da Semana (No-Shows)
+
+**Problema**: O hook `useSearchWeeklyMeetingLeads` busca todos os attendees com status `no_show` da semana, sem filtrar por BU.
+
+**Solução**: Adicionar filtro por `closer.bu` no hook, usando os IDs dos closers da BU ativa.
+
+---
+
+## Alterações Necessárias
+
+### Arquivo 1: `src/hooks/useSdrFechamento.ts`
+**Novo hook**: Adicionar `useSdrsByBU(bu: string)` para buscar SDRs filtrados por squad
+
+```typescript
+export const useSdrsByBU = (bu: string | null) => {
+  return useQuery({
+    queryKey: ['sdrs-by-bu', bu],
+    queryFn: async () => {
+      if (!bu) return [];
+      const { data, error } = await supabase
+        .from('sdr')
+        .select('*')
+        .eq('active', true)
+        .eq('squad', bu)
+        .order('name');
+      if (error) throw error;
+      return data as Sdr[];
+    },
+    enabled: !!bu,
+  });
+};
+```
+
+### Arquivo 2: `src/hooks/useAgendaData.ts`
+**Modificar**: Atualizar `useSearchWeeklyMeetingLeads` para aceitar `closerIds` como parâmetro
+
+```typescript
+export function useSearchWeeklyMeetingLeads(
+  statusFilter?: string,
+  closerIds?: string[]  // Novo parâmetro
+) {
+  // ... busca existente ...
+  // Adicionar filtro: .in('meeting_slots.closer_id', closerIds)
+}
+```
+
+### Arquivo 3: `src/components/crm/QuickScheduleModal.tsx`
+**Modificações**:
+
+1. **Importar** o novo hook `useSdrsByBU` e usar ao invés de `SDR_LIST`
+2. **Passar closerIds** para `useSearchWeeklyMeetingLeads` 
+3. **Renderização condicional do campo "Já constrói?"**:
+   - Se BU = 'consorcio': mostrar "Conhece consórcio?"
+   - Senão: mostrar "Já constrói?"
+
+---
+
+## Fluxo Corrigido
 
 ```text
-Fluxo Atual:
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Rota /crm/agenda (global)                                          │
+│  QuickScheduleModal (Consórcio)                                     │
 │  ↓                                                                  │
-│  useActiveBU() → Não há BUContext → Tenta usar userBUs[0]          │
+│  useActiveBU() → "consorcio"                                        │
 │  ↓                                                                  │
-│  Se usuário não tem squad → Retorna NULL                            │
+│  useSdrsByBU("consorcio") → [Cleiton, Ithaline, Ygor]              │
 │  ↓                                                                  │
-│  useClosersWithAvailability(null) → NÃO aplica filtro de BU        │
+│  useSearchWeeklyMeetingLeads("no_show", consorcioCloserIds)        │
+│    → Apenas no-shows de João Pedro e Victoria Paz                   │
 │  ↓                                                                  │
-│  Retorna TODOS os closers (Incorporador + Consórcio + ...)         │
+│  Campo dinâmico: "Conhece consórcio?" (ao invés de "Já constrói?") │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Dados Confirmados no Banco
+---
 
-| Closer | BU |
-|--------|-----|
-| Cristiane Gomes | incorporador |
-| João Pedro Martins Vieira | **consorcio** |
-| Julio | incorporador |
-| Luis Felipe de Souza Oliveira Ramos | **consorcio** |
-| Mateus Macedo | incorporador |
-| Thayna | incorporador |
-| Thobson | **consorcio** |
-| Victoria Paz | **consorcio** |
+## Pré-Requisito (Ação do Usuário)
+
+Para que a lista de SDRs do Consórcio funcione corretamente, os seguintes SDRs precisam ser cadastrados na tabela `sdr` via a interface de configuração:
+
+| SDR | Email | Squad |
+|-----|-------|-------|
+| Ithaline Clara | ithaline.clara@minhacasafinanciada.com | consorcio |
+| Ygor Ferreira | ygor.ferreira@minhacasafinanciada.com | consorcio |
+
+Acesso: `/consorcio/fechamento/configuracoes` → Aba "Equipe SDR"
 
 ---
 
-## Solução Proposta
+## Resumo das Mudanças
 
-Envolver o layout `CRM.tsx` (rota global `/crm`) com um `BUProvider` padrão para **incorporador**. Isso mantém a compatibilidade com o comportamento histórico (o CRM global sempre foi do Incorporador) e resolve o vazamento de closers de outras BUs.
+1. **Novo hook** `useSdrsByBU` em `useSdrFechamento.ts`
+2. **Modificação** de `useSearchWeeklyMeetingLeads` para filtrar por closerIds
+3. **Modificação** de `QuickScheduleModal.tsx` para:
+   - Usar SDRs dinâmicos por BU
+   - Passar closerIds para filtrar no-shows
+   - Alterar label do campo de qualificação baseado na BU
 
-### Alterações Necessárias
-
-**Arquivo:** `src/pages/CRM.tsx`
-
-1. Importar o `BUProvider` do contexto
-2. Envolver o conteúdo do componente com `<BUProvider bu="incorporador" basePath="/crm">`
-
-```text
-Fluxo Corrigido:
-┌─────────────────────────────────────────────────────────────────────┐
-│  Rota /crm/agenda (global)                                          │
-│  ↓                                                                  │
-│  CRM.tsx com BUProvider bu="incorporador"                           │
-│  ↓                                                                  │
-│  useActiveBU() → Retorna "incorporador" do contexto                │
-│  ↓                                                                  │
-│  useClosersWithAvailability("incorporador")                         │
-│  ↓                                                                  │
-│  Retorna apenas closers com bu="incorporador"                       │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Impacto
-
-- **Agenda R1 e R2**: Mostrará apenas closers do Incorporador na rota `/crm/agenda`
-- **Negócios, Contatos, Atendimentos**: Filtrados automaticamente pelo contexto da BU
-- **Rotas específicas** (`/consorcio/crm/agenda`, etc.): Continuam funcionando normalmente com seus próprios `BUProvider`
-
----
-
-## Detalhes Técnicos
-
-### Modificação em `src/pages/CRM.tsx`
-
-```tsx
-// Adicionar import
-import { BUProvider } from '@/contexts/BUContext';
-
-// Envolver retorno com BUProvider
-return (
-  <BUProvider bu="incorporador" basePath="/crm">
-    <div className="h-full flex flex-col">
-      {/* ... conteúdo existente ... */}
-    </div>
-  </BUProvider>
-);
-```
-
-### Validação
-
-Após a implementação, a agenda em `/crm/agenda` deve mostrar apenas:
-- Cristiane Gomes
-- Julio  
-- Mateus Macedo
-- Thayna
-
-E NÃO deve mostrar:
-- João Pedro Martins Vieira
-- Luis Felipe de Souza Oliveira Ramos
-- Thobson
-- Victoria Paz
