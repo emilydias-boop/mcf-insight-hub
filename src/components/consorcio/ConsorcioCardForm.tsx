@@ -3,7 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
-import { formatDateForDB } from '@/lib/dateHelpers';
+import { formatDateForDB, parseDateWithoutTimezone } from '@/lib/dateHelpers';
 import { ptBR } from 'date-fns/locale';
 import { CalendarIcon, Plus, Trash2, Loader2, Upload, FileText, X, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -235,7 +235,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       cota: card.cota,
       valor_credito: Number(card.valor_credito),
       prazo_meses: card.prazo_meses,
-      data_contratacao: new Date(card.data_contratacao),
+      data_contratacao: parseDateWithoutTimezone(card.data_contratacao),
       vendedor_id: card.vendedor_id || undefined,
       vendedor_name: card.vendedor_name || undefined,
       // Controle adicional
@@ -245,7 +245,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       observacoes: card.observacoes || undefined,
       // PF
       nome_completo: card.nome_completo || undefined,
-      data_nascimento: card.data_nascimento ? new Date(card.data_nascimento) : undefined,
+      data_nascimento: card.data_nascimento ? parseDateWithoutTimezone(card.data_nascimento) : undefined,
       cpf: card.cpf || undefined,
       rg: card.rg || undefined,
       estado_civil: card.estado_civil as any || undefined,
@@ -269,7 +269,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       cnpj: card.cnpj || undefined,
       natureza_juridica: card.natureza_juridica || undefined,
       inscricao_estadual: card.inscricao_estadual || undefined,
-      data_fundacao: card.data_fundacao ? new Date(card.data_fundacao) : undefined,
+      data_fundacao: card.data_fundacao ? parseDateWithoutTimezone(card.data_fundacao) : undefined,
       endereco_comercial_cep: card.endereco_comercial_cep || undefined,
       endereco_comercial_rua: card.endereco_comercial_rua || undefined,
       endereco_comercial_numero: card.endereco_comercial_numero || undefined,
@@ -489,11 +489,11 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           cota: card.cota,
           valor_credito: Number(card.valor_credito),
           prazo_meses: card.prazo_meses,
-          data_contratacao: new Date(card.data_contratacao),
+          data_contratacao: parseDateWithoutTimezone(card.data_contratacao),
           vendedor_id: card.vendedor_id || undefined,
           vendedor_name: card.vendedor_name || undefined,
           nome_completo: card.nome_completo || undefined,
-          data_nascimento: card.data_nascimento ? new Date(card.data_nascimento) : undefined,
+          data_nascimento: card.data_nascimento ? parseDateWithoutTimezone(card.data_nascimento) : undefined,
           cpf: card.cpf || undefined,
           rg: card.rg || undefined,
           estado_civil: card.estado_civil as any || undefined,
@@ -516,7 +516,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
           cnpj: card.cnpj || undefined,
           natureza_juridica: card.natureza_juridica || undefined,
           inscricao_estadual: card.inscricao_estadual || undefined,
-          data_fundacao: card.data_fundacao ? new Date(card.data_fundacao) : undefined,
+          data_fundacao: card.data_fundacao ? parseDateWithoutTimezone(card.data_fundacao) : undefined,
           endereco_comercial_cep: card.endereco_comercial_cep || undefined,
           endereco_comercial_rua: card.endereco_comercial_rua || undefined,
           endereco_comercial_numero: card.endereco_comercial_numero || undefined,
