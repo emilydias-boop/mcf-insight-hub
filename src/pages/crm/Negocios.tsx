@@ -76,10 +76,11 @@ const Negocios = () => {
   const { data: buMapping, isLoading: isBuMappingLoading } = useBUPipelineMap(activeBU);
   
   // Origens autorizadas baseadas na BU ativa (rota ou perfil)
+  // CORREÇÃO: Combinar grupos E origens (não excludente)
   const buAuthorizedOrigins = useMemo(() => {
     if (!activeBU || !buMapping) return []; // Sem BU ou carregando = vê tudo (admin)
-    // Se tem origens configuradas, usar elas; senão, usar grupos
-    return buMapping.origins.length > 0 ? buMapping.origins : buMapping.groups;
+    // Combinar grupos E origens para permitir filtro completo
+    return [...buMapping.groups, ...buMapping.origins];
   }, [activeBU, buMapping]);
   
   // Grupos permitidos no dropdown de funis baseados na BU ativa
