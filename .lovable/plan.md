@@ -1,65 +1,126 @@
 
+# Plano: Correção de Duplicação de Leads por Origem
 
-# Plano: Correção do Cadastro de SDRs no Consórcio
+## Diagnóstico Confirmado
 
-## Diagnóstico Resumido
+### Causa Raiz: 3.734 Origens Duplicadas "A010 Hubla"
 
-### Problema 1: Cadastro de SDR precisa ser feito na página do Incorporador
-O formulário de cadastro de SDRs ("Novo SDR") só existe em `/fechamento-sdr/configuracoes`, que é a página do Incorporador. A página de configurações do Consórcio (`/consorcio/fechamento/configuracoes`) mostra apenas a lista de equipe sem a opção de criar SDR.
+O webhook `hubla-webhook-handler` está criando uma nova origem a cada chamada porque:
 
-### Problema 2: Vínculo de usuário parece não salvar
-O vínculo de usuário na tela do RH **funciona corretamente** - a Ithaline tem o `profile_id` vinculado no banco:
-- `profile_id`: `411e4b5d-8183-4d6a-b841-88c71d50955f`
+1. A busca usa `.maybeSingle()` que retorna `null` quando há **múltiplas correspondências**
+2. O código interpreta `null` como "não existe" e cria uma NOVA origem
+3. Como o `upsert` usa `onConflict(contact_id, origin_id)`, cada nova origin_id permite criar um novo deal
 
-O problema visual é que o componente `ProfileLinkSection` tem seu próprio botão "Vincular" que funciona separadamente do botão "Salvar" do formulário geral.
-
-### Problema 3: Ithaline não aparece no fechamento
-Ela está no RH (tabela `employees`) mas não na tabela `sdr`, por isso não aparece na aba de fechamento SDRs. O campo `sdr_id` na tabela employees está `null`.
+### Impacto Atual
+- **3.734 origens** chamadas "A010 Hubla" criadas desde 14/12/2025
+- Leads duplicados aparecendo como "Novo Lead" mesmo tendo "Venda Realizada" em outro deal
+- SDRs diferentes veem e agendam o mesmo lead
+- Métricas de conversão incorretas
 
 ---
 
-## Solução
+## Solução em 3 Partes
 
-### Alteração 1: Adicionar Aba "SDRs" na Configuração do Consórcio
+### Parte 1: Corrigir o Webhook (Prevenção)
 
-Atualizar `src/pages/bu-consorcio/FechamentoConfig.tsx` para incluir uma nova aba que permite:
-- Listar SDRs do Consórcio (filtrados por `squad = 'consorcio'`)
-- Criar novos SDRs já com `squad = 'consorcio'` pré-selecionado
-- Editar SDRs existentes
+**Arquivo**: `supabase/functions/hubla-webhook-handler/index.ts`
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  Configurações - Fechamento Consórcio                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────┐ ┌─────┐ ┌───────────┐ ┌───────────────┐ ┌──────────┐  │
-│  │ Equipe HR│ │ SDRs│ │ Planos OTE│ │ Métricas Ativas│ │ Dias Úteis│  │
-│  └──────────┘ └─────┘ └───────────┘ └───────────────┘ └──────────┘  │
-│                                                                      │
-│                     [SDRs do Consórcio aqui]                        │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+Trocar `.maybeSingle()` por `.limit(1).single()` na busca de origem:
+
+```typescript
+// ANTES (problemático):
+const { data: existingOrigin } = await supabase
+  .from('crm_origins')
+  .select('id')
+  .ilike('name', data.originName)
+  .maybeSingle();  // Retorna null se houver múltiplas!
+
+// DEPOIS (correto):
+const { data: existingOrigin } = await supabase
+  .from('crm_origins')
+  .select('id')
+  .ilike('name', data.originName)
+  .order('created_at', { ascending: true })
+  .limit(1);
+
+if (existingOrigin && existingOrigin.length > 0) {
+  originId = existingOrigin[0].id;
+}
 ```
 
-### Alteração 2: Criar Componente Reutilizável de SDRs
+### Parte 2: Limpar Origens Duplicadas (Dados)
 
-Extrair a lógica de SDRs do `Configuracoes.tsx` do Incorporador para um componente reutilizável que aceite a prop `squad`:
+Executar SQL para consolidar as 3.734 origens em UMA:
 
-**Novo arquivo**: `src/components/fechamento/SdrConfigTab.tsx`
+```sql
+-- 1. Identificar a origem mais antiga (canonical)
+WITH canonical AS (
+  SELECT id 
+  FROM crm_origins 
+  WHERE name ILIKE '%A010 Hubla%' 
+  ORDER BY created_at ASC 
+  LIMIT 1
+)
+-- 2. Atualizar todos os deals para usar a origem canônica
+UPDATE crm_deals 
+SET origin_id = (SELECT id FROM canonical)
+WHERE origin_id IN (
+  SELECT id FROM crm_origins WHERE name ILIKE '%A010 Hubla%'
+);
 
-Props:
-- `defaultSquad`: string (ex: 'consorcio')
-- `lockSquad`: boolean (quando true, oculta o select de squad)
+-- 3. Atualizar contatos também
+UPDATE crm_contacts 
+SET origin_id = (SELECT id FROM canonical)
+WHERE origin_id IN (
+  SELECT id FROM crm_origins WHERE name ILIKE '%A010 Hubla%'
+);
 
-### Alteração 3: Cadastrar Ithaline como SDR (dados)
+-- 4. Remover origens duplicadas (manter apenas a canônica)
+DELETE FROM crm_origins 
+WHERE name ILIKE '%A010 Hubla%' 
+AND id != (
+  SELECT id FROM crm_origins 
+  WHERE name ILIKE '%A010 Hubla%' 
+  ORDER BY created_at ASC 
+  LIMIT 1
+);
+```
 
-Após implementar as melhorias, o usuário poderá:
-1. Acessar `/consorcio/fechamento/configuracoes`
-2. Ir na aba "SDRs"
-3. Clicar em "Novo SDR"
-4. Vincular a Ithaline que já existe como employee com profile
+### Parte 3: Filtrar Leads por Owner no Backend
 
-Ou posso incluir uma migração para criar o registro automaticamente.
+Implementar o filtro de `owner_profile_id` no backend para garantir que SDRs vejam apenas seus próprios leads:
+
+**Arquivo**: `src/hooks/useCRMData.ts`
+
+```typescript
+interface DealFilters {
+  // ... filtros existentes
+  ownerProfileId?: string; // NOVO
+}
+
+export const useCRMDeals = (filters: DealFilters = {}) => {
+  // ...
+  queryFn: async () => {
+    let query = supabase.from('crm_deals').select(...);
+    
+    // Filtro de owner no BACKEND
+    if (filters.ownerProfileId) {
+      query = query.eq('owner_profile_id', filters.ownerProfileId);
+    }
+    // ...
+  }
+};
+```
+
+**Arquivo**: `src/pages/crm/Negocios.tsx`
+
+```typescript
+const { data: dealsData } = useCRMDeals({
+  originId: effectiveOriginId,
+  // Se for SDR/Closer, filtrar no backend
+  ownerProfileId: isRestrictedRole ? user?.id : undefined,
+});
+```
 
 ---
 
@@ -67,73 +128,33 @@ Ou posso incluir uma migração para criar o registro automaticamente.
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/fechamento/SdrConfigTab.tsx` | Criar | Componente reutilizável para gerenciar SDRs com filtro de squad |
-| `src/pages/bu-consorcio/FechamentoConfig.tsx` | Modificar | Adicionar aba "SDRs" usando o novo componente |
-| `src/pages/fechamento-sdr/Configuracoes.tsx` | Modificar | Usar o componente reutilizável em vez do código inline |
+| `supabase/functions/hubla-webhook-handler/index.ts` | Modificar | Corrigir busca de origem com `.limit(1)` |
+| `src/hooks/useCRMData.ts` | Modificar | Adicionar filtro `ownerProfileId` na query |
+| `src/pages/crm/Negocios.tsx` | Modificar | Passar `user?.id` como `ownerProfileId` para SDRs |
+| SQL Migration | Executar | Consolidar origens e limpar duplicatas |
 
 ---
 
-## Detalhes Técnicos
+## Ordem de Execução
 
-### Componente SdrConfigTab
-
-```typescript
-interface SdrConfigTabProps {
-  defaultSquad?: string;   // Ex: 'consorcio'
-  lockSquad?: boolean;     // Oculta select de squad
-}
-
-export function SdrConfigTab({ defaultSquad = 'incorporador', lockSquad = false }: SdrConfigTabProps) {
-  // Query filtrada por squad
-  const { data: sdrs } = useSdrsAll();
-  
-  const filteredSdrs = useMemo(() => {
-    if (!sdrs) return [];
-    return sdrs.filter(s => s.squad === defaultSquad);
-  }, [sdrs, defaultSquad]);
-
-  // Form dialog com squad pré-preenchido
-  // ...
-}
-```
-
-### Formulário com Vínculo Automático
-
-Ao criar um SDR com `user_id` vinculado:
-1. O hook `useCreateSdr` já busca o employee com esse `user_id`
-2. E já atualiza o `sdr_id` no employee
-
-Isso já está implementado! Só precisa garantir que o usuário seja selecionado.
-
----
-
-## Fluxo para Cadastrar Ithaline
-
-Após a implementação:
-
-1. Acessar `/consorcio/fechamento/configuracoes`
-2. Ir na aba **SDRs**
-3. Clicar em **"Novo SDR"**
-4. Preencher:
-   - Nome: Ithaline Clara dos Santos
-   - Email: ithaline.clara@minhacasafinanciada.com
-   - Usuário vinculado: selecionar email dela
-   - Squad: já estará pré-selecionado como "Consórcio"
-5. Salvar
-
-O sistema vai:
-- Criar registro na tabela `sdr` com `squad = 'consorcio'`
-- Vincular automaticamente o `sdr_id` no employee da Ithaline
+1. **Primeiro**: Corrigir o webhook para parar de criar novas origens
+2. **Segundo**: Executar SQL para consolidar origens duplicadas
+3. **Terceiro**: Implementar filtro de owner no backend
+4. **Quarto**: Limpar deals duplicados manualmente (se necessário)
 
 ---
 
 ## Resultado Esperado
 
-Após as alterações:
+### Antes
+- 3.734 origens "A010 Hubla" causando deals duplicados
+- Leads com "Venda Realizada" aparecem como "Novo Lead" 
+- SDRs veem leads de outros SDRs
+- Agendamentos duplicados como o da Lorena
 
-1. **Página de Configurações do Consórcio** terá 5 abas: Equipe HR, SDRs, Planos OTE, Métricas Ativas, Dias Úteis
-2. **Aba SDRs** mostrará apenas SDRs do Consórcio
-3. **Formulário "Novo SDR"** terá o squad pré-selecionado e bloqueado
-4. **Ithaline** aparecerá no fechamento após ser cadastrada
-5. **Cleiton** continuará aparecendo normalmente
-
+### Depois
+- UMA origem "A010 Hubla" (a mais antiga)
+- Novos webhooks usam a origem existente
+- Upsert funciona corretamente, impedindo duplicatas
+- SDRs veem apenas seus próprios leads
+- Impossível agendar lead de outro SDR
