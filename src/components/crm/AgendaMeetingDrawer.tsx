@@ -150,6 +150,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   // Check if user can delete meetings
   const canDeleteMeeting = role && DELETE_ALLOWED_ROLES.includes(role);
+  
+  // Check if user can transfer attendees
+  const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
 
   const handleDeleteMeeting = () => {
     deleteMeeting.mutate(activeMeeting.id, {
@@ -700,6 +703,22 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
+                      {/* Botão Transferir - apenas para admins/managers/coordenadores */}
+                      {canTransfer && p.id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedParticipantId(p.id!);
+                            setShowMoveModal(true);
+                          }}
+                          title="Transferir participante"
+                        >
+                          <ArrowRightLeft className="h-4 w-4 text-purple-600" />
+                        </Button>
+                      )}
                       {p.phone && videoConferenceLink && (
                         <Button 
                           variant="ghost" 
