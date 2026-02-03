@@ -5296,7 +5296,7 @@ export type Database = {
           id: string
           last_login_at: string | null
           show_on_tv: boolean | null
-          squad: string | null
+          squad: string[] | null
           updated_at: string | null
           whatsapp_signature: string | null
         }
@@ -5310,7 +5310,7 @@ export type Database = {
           id: string
           last_login_at?: string | null
           show_on_tv?: boolean | null
-          squad?: string | null
+          squad?: string[] | null
           updated_at?: string | null
           whatsapp_signature?: string | null
         }
@@ -5324,7 +5324,7 @@ export type Database = {
           id?: string
           last_login_at?: string | null
           show_on_tv?: boolean | null
-          squad?: string | null
+          squad?: string[] | null
           updated_at?: string | null
           whatsapp_signature?: string | null
         }
