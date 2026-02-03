@@ -92,7 +92,8 @@ export function MeetingsList({ meetings, isLoading, onViewDeal }: MeetingsListPr
                             {att.is_partner && (
                               <Badge variant="outline" className="text-[10px] px-1 py-0">Sócio</Badge>
                             )}
-                            {!att.is_partner && att.parent_attendee_id && (
+                            {!att.is_partner && att.parent_attendee_id && 
+                             !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
                               <Badge variant="outline" className="text-[10px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
                                 <ArrowRightLeft className="h-2.5 w-2.5" />
                                 Remanej.

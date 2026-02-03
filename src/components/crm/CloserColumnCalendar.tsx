@@ -321,7 +321,8 @@ export function CloserColumnCalendar({
                                               <DollarSign className="h-2.5 w-2.5 text-white flex-shrink-0" />
                                             </span>
                                           )}
-                                          {!att.is_partner && att.parent_attendee_id && (
+                                          {!att.is_partner && att.parent_attendee_id && 
+                                           !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
                                             <span className="flex items-center bg-orange-500/40 rounded px-0.5">
                                               <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
                                             </span>

@@ -267,7 +267,8 @@ export function R2CloserColumnCalendar({
                                         <span className="truncate font-medium">
                                           {att.name || att.deal?.contact?.name || "Lead"}
                                         </span>
-                                        {(att as any).is_reschedule && (
+                                        {(att as any).is_reschedule && 
+                                         !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
                                           <span className="flex items-center bg-orange-500/40 rounded px-0.5 shrink-0">
                                             <ArrowRightLeft className="h-2.5 w-2.5 text-white" />
                                           </span>
@@ -303,7 +304,8 @@ export function R2CloserColumnCalendar({
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1">
                                       <span>• {att.name || att.deal?.contact?.name || "Lead"}</span>
-                                      {(att as any).is_reschedule && (
+                                      {(att as any).is_reschedule && 
+                                       !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
                                         <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
                                           <ArrowRightLeft className="h-2.5 w-2.5" />
                                           Reagendado
