@@ -1,148 +1,180 @@
 
-# Plano: Resolver Duplicação de Leads na Importação
+# Plano: Importar/Vincular Contatos do Cleiton
 
-## Problema Identificado
+## Situação Atual
 
-O lead "Tiago Raifran" aparece 3 vezes no Kanban porque foram criados **3 deals diferentes** durante a importação CSV:
+| Métrica | Valor |
+|---------|-------|
+| Total de deals do Cleiton | 371 |
+| Deals sem contact_id | 269 |
+| Contatos na lista enviada | 195 |
 
-| Deal ID | clint_id | Estágio | Criado em |
-|---------|----------|---------|-----------|
-| b646bb38 | f49e825a | VENDA REALIZADA 50K | 02/02 19:06 |
-| ac12fa35 | 4a4913c0 | RENOVAÇÃO HUBLA | 02/02 19:02 |
-| 42260084 | 8eb79a08 | APORTE HOLDING | 02/02 19:00 |
+### Exemplo de Match
+O contato **Tiago Raifran** já existe em `crm_contacts`:
+- ID: `648cc57d-0c49-4eb3-a2af-1b547dd0d035`
+- Email: `tiagoraifran@gmail.com`
+- Telefone: `63992368338`
 
-### Causa Raiz
-
-O arquivo CSV original continha 3 linhas para "Tiago Raifran", cada uma com um `id` (clint_id) diferente. A função `upsert_deals_smart` usa `clint_id` como chave de deduplicação:
-
-```sql
-ON CONFLICT (clint_id) DO UPDATE SET ...
-```
-
-Como os IDs eram diferentes, o sistema criou 3 deals separados. Todos estão com `contact_id = NULL` porque não foi possível vincular ao contato existente.
+Mas os deals dele estão com `contact_id = NULL`. Precisamos vincular!
 
 ---
 
-## Solução Proposta
+## Solução: Edge Function para Importação Inteligente
 
-### Parte 1: Melhorar Deduplicação na Importação (Prevenção)
+Criar uma nova edge function `bulk-update-contacts` que:
 
-Modificar a edge function `process-csv-imports` para implementar deduplicação por nome+email quando:
-1. O contato é encontrado no cache por nome/email
-2. Já existe um deal para aquele contato no mesmo origin_id
-
-**Arquivo:** `supabase/functions/process-csv-imports/index.ts`
-
-Adicionar verificação antes de criar o deal:
-```typescript
-// Verificar se já existe deal para este contato na mesma origem
-const existingDealKey = `${contactId}_${originId}`;
-if (processedContactOrigins.has(existingDealKey)) {
-  console.log(`⏭️ Pulando deal duplicado para contato ${contactId} na origem ${originId}`);
-  chunkSkipped++;
-  continue;
-}
-processedContactOrigins.add(existingDealKey);
-```
-
-### Parte 2: Correção de Dados Existentes
-
-Para os deals já duplicados, há duas opções:
-
-**Opção A - Deletar deals duplicados (manual):**
-Manter apenas o deal no estágio mais avançado (ex: APORTE HOLDING = ganho)
-
-```sql
--- Listar duplicados por nome na mesma origem
-SELECT name, COUNT(*) as total, array_agg(id) as deal_ids
-FROM crm_deals 
-WHERE origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78'
-GROUP BY name
-HAVING COUNT(*) > 1;
-
--- Deletar deals duplicados (manter o que tem estágio mais avançado)
-DELETE FROM crm_deals 
-WHERE id IN ('b646bb38-0a94-4ebd-98ec-947cb1406ddc', 'ac12fa35-a4e3-443c-9aa5-acb0d2333533')
-  AND origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78';
-```
-
-**Opção B - Criar função de merge:**
-Uma edge function `merge-duplicate-deals` que identifica e consolida deals duplicados automaticamente.
-
-### Parte 3: Vincular Contatos aos Deals
-
-Os deals estão sem `contact_id`, por isso aparecem sem telefone/email.
-
-```sql
--- Vincular deal do Tiago ao contato existente
-UPDATE crm_deals 
-SET contact_id = (
-  SELECT id FROM crm_contacts 
-  WHERE email = 'tiagoraifran@gmail.com' 
-  LIMIT 1
-)
-WHERE name ILIKE '%Tiago Raifran%'
-  AND origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78'
-  AND contact_id IS NULL;
-```
+1. **Recebe a lista** de contatos (id, name, email, phone)
+2. **Processa cada contato**:
+   - Se o contato já existe em `crm_contacts` (por email ou telefone): Atualiza dados faltantes
+   - Se não existe: Cria novo contato
+3. **Vincula aos deals**:
+   - Busca deals por nome (match flexível com ILIKE)
+   - Atualiza `contact_id` nos deals encontrados
 
 ---
 
-## Fluxo Após Correção
+## Fluxo de Processamento
 
 ```text
-Importação CSV
-      |
-      v
-+------------------+
-|  Verificar se    |
-|  contato existe  |
-+------------------+
-      |
-      v
-+------------------+     Sim    +------------------+
-|  Já tem deal     |----------->|  Pular linha     |
-|  nesta origem?   |            |  (deduplicar)    |
-+------------------+            +------------------+
-      | Não
-      v
-+------------------+
-|  Criar deal com  |
-|  contact_id      |
-|  vinculado       |
-+------------------+
+Lista de Contatos (195)
+         |
+         v
+   +-----------+
+   | Para cada |
+   | contato   |
+   +-----------+
+         |
+         v
+   +----------------+      Sim     +------------------+
+   | Existe em      |------------->| Atualizar email/ |
+   | crm_contacts?  |              | phone faltante   |
+   | (email/phone)  |              +------------------+
+   +----------------+                      |
+         | Não                             |
+         v                                 |
+   +----------------+                      |
+   | Criar novo     |                      |
+   | contato        |                      |
+   +----------------+                      |
+         |                                 |
+         v<--------------------------------+
+   +------------------+
+   | Buscar deals por |
+   | nome (ILIKE)     |
+   +------------------+
+         |
+         v
+   +------------------+
+   | Atualizar        |
+   | contact_id       |
+   +------------------+
 ```
 
 ---
 
-## Arquivos a Modificar
+## Arquivos a Criar/Modificar
 
-1. **`supabase/functions/process-csv-imports/index.ts`**
-   - Adicionar deduplicação por contact_id + origin_id
-   - Garantir vinculação do contact_id quando encontrado
+### 1. Nova Edge Function: `supabase/functions/bulk-update-contacts/index.ts`
 
-2. **Dados existentes (SQL manual ou edge function)**
-   - Deletar/mesclar deals duplicados
-   - Vincular contact_id aos deals órfãos
+Funcionalidades:
+- Receber array de contatos via POST
+- Processar em chunks para evitar timeout
+- Retornar estatísticas detalhadas
 
----
+### 2. Atualizar `supabase/config.toml`
 
-## Recomendação Imediata
-
-Para resolver o caso do "Tiago Raifran" agora:
-
-1. Manter apenas o deal que representa o estágio atual correto (provavelmente "APORTE HOLDING" se ele já fez o aporte)
-2. Deletar os outros dois deals duplicados
-3. Vincular o contact_id ao deal mantido
-
-Deseja que eu implemente a correção na importação e forneça as queries SQL para corrigir os dados existentes?
+Adicionar configuração da nova função.
 
 ---
 
-## Sobre os Contatos Importados
+## Detalhes Técnicos
 
-Você mencionou que vai encaminhar os contatos para subirmos de forma melhor. Ao reimportar:
+### Estrutura do Request
 
-1. Use um arquivo CSV com uma única linha por lead
-2. Inclua a coluna `contact` com email ou nome exato para vincular automaticamente
-3. O sistema tentará encontrar o contato existente e vincular o deal
+```json
+{
+  "contacts": [
+    {
+      "clint_id": "9d71bfc8-57fb-47bc-a715-1cdf7aab0482",
+      "name": "Adailton lima Borges",
+      "email": "adailtoneng123@gmail.com",
+      "phone": "+55 93981000567"
+    }
+  ],
+  "owner_id": "cleiton.lima@minhacasafinanciada.com"
+}
+```
+
+### Lógica de Match para Contatos
+
+```typescript
+// 1. Buscar por email
+let contact = await supabase
+  .from('crm_contacts')
+  .select('id')
+  .eq('email', email.toLowerCase())
+  .maybeSingle();
+
+// 2. Se não encontrou, buscar por telefone normalizado
+if (!contact.data) {
+  contact = await supabase
+    .from('crm_contacts')
+    .select('id')
+    .eq('phone', normalizedPhone)
+    .maybeSingle();
+}
+
+// 3. Se não encontrou, criar novo
+if (!contact.data) {
+  const { data: newContact } = await supabase
+    .from('crm_contacts')
+    .insert({ clint_id, name, email, phone })
+    .select('id')
+    .single();
+  contactId = newContact.id;
+} else {
+  contactId = contact.data.id;
+}
+```
+
+### Lógica de Vinculação aos Deals
+
+```typescript
+// Atualizar deals do owner que batem com o nome
+await supabase
+  .from('crm_deals')
+  .update({ contact_id: contactId })
+  .eq('owner_id', ownerId)
+  .ilike('name', `%${name}%`)
+  .is('contact_id', null);
+```
+
+---
+
+## Estatísticas Esperadas
+
+Após execução:
+
+| Ação | Quantidade Estimada |
+|------|---------------------|
+| Contatos criados | ~150 (novos) |
+| Contatos atualizados | ~45 (já existiam) |
+| Deals vinculados | ~180 (match por nome) |
+| Deals ainda sem contato | ~89 (nomes diferentes) |
+
+---
+
+## Tratamento de Duplicados na Lista
+
+A lista contém duplicados (ex: "Hamilton Veloso Souto" e "Marcelo silva" aparecem 2x). A função vai:
+1. Processar apenas a primeira ocorrência
+2. Pular duplicados usando Set de emails processados
+
+---
+
+## Próximos Passos Após Implementação
+
+1. Executar a importação dos 195 contatos do Cleiton
+2. Verificar quantos deals foram vinculados
+3. Para os deals restantes sem contato, verificar se os nomes diferem
+4. Repetir processo com listas dos outros owners
