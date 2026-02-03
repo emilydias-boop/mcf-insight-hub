@@ -15,7 +15,11 @@ interface AvailableSlot {
   maxCount: number;
 }
 
-export function useR2CloserAvailableSlots(closerId: string | undefined, date: Date | undefined) {
+export function useR2CloserAvailableSlots(
+  closerId: string | undefined, 
+  date: Date | undefined,
+  bypassCapacity: boolean = false
+) {
   return useQuery({
     queryKey: ['r2-closer-slots', closerId, date ? format(date, 'yyyy-MM-dd') : null],
     queryFn: async () => {
@@ -111,7 +115,7 @@ export function useR2CloserAvailableSlots(closerId: string | undefined, date: Da
         return {
           time,
           link: slot.google_meet_link,
-          isAvailable: currentCount < maxLeadsPerSlot,
+          isAvailable: bypassCapacity || currentCount < maxLeadsPerSlot,
           currentCount,
           maxCount: maxLeadsPerSlot,
         };
