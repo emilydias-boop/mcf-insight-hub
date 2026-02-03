@@ -1,92 +1,88 @@
 
-# Plano: Corrigir Transferência - 108 Leads da Ithaline → Ygor
 
-## Situação
+# Plano: Vincular Contatos aos Leads do Ygor
 
-Os 108 leads foram transferidos erroneamente para a Ithaline Clara e precisam ser corrigidos para o Ygor Ferreira.
+## Diagnóstico
 
-| Item | Valor |
-|------|-------|
-| Pipeline | Efeito Alavanca + Clube |
-| Origin ID | `7d7b1cb5-2a44-4552-9eff-c3b798646b78` |
-| Leads a transferir | 108 |
+| Situação | Status |
+|----------|--------|
+| Contatos na base (crm_contacts) | Existem (já foram importados) |
+| Deals do Ygor | 108 deals com `contact_id = NULL` |
+| Problema | Deals não vinculados aos contatos |
 
-### Owners Envolvidos
-
-| De (Ithaline) | Para (Ygor) |
-|---------------|-------------|
-| Profile ID: `411e4b5d-8183-4d6a-b841-88c71d50955f` | Profile ID: `d523e03f-6a23-4668-8286-9ccbba2a5d35` |
-| Email: `ithaline.clara@minhacasafinanciada.com` | Email: `ygor.ferreira@minhacasafinanciada.com` |
+Os contatos já têm email e telefone, mas os deals do Ygor não estão vinculados a eles.
 
 ---
 
 ## Solução
 
-Executar UPDATE direto nos 108 deals que estão atualmente com a Ithaline neste pipeline, transferindo para o Ygor.
+Usar a Edge Function `bulk-update-contacts` que:
+1. Encontra o contato existente por email (já temos os dados)
+2. Vincula o contato ao deal do owner usando match por nome (ILIKE)
 
 ---
 
 ## Execução
 
-Usar a Edge Function `bulk-transfer-by-name` com os mesmos 108 nomes, mas agora direcionando para o Ygor:
+Chamar a função com os 108 contatos e o owner_id do Ygor:
 
 ```json
 {
-  "names": [lista dos 108 nomes],
-  "origin_id": "7d7b1cb5-2a44-4552-9eff-c3b798646b78",
-  "new_owner_email": "ygor.ferreira@minhacasafinanciada.com",
-  "new_owner_profile_id": "d523e03f-6a23-4668-8286-9ccbba2a5d35",
-  "new_owner_name": "Ygor Ferreira"
+  "owner_id": "ygor.ferreira@minhacasafinanciada.com",
+  "contacts": [
+    {
+      "clint_id": "1b7b30b7-3e26-44e6-ada2-1a1ed2c5e3fc",
+      "name": "Ailton Aparecido de Sá",
+      "email": "ailtonapsa@gmail.com",
+      "phone": "+55 11981870466"
+    },
+    ... (mais 107 contatos)
+  ]
 }
 ```
 
-**Obs:** A função `bulk-transfer-by-name` busca deals por nome E `owner_id IS NULL`. Como os deals agora têm owner (Ithaline), precisarei modificar a abordagem para buscar por owner atual OU usar uma query direta.
-
 ---
 
-## Abordagem Alternativa (Mais Segura)
-
-Como os deals já têm owner, vou usar uma query direta via Supabase para transferir todos os deals da Ithaline neste pipeline para o Ygor:
-
-```sql
-UPDATE crm_deals 
-SET owner_id = 'ygor.ferreira@minhacasafinanciada.com',
-    owner_profile_id = 'd523e03f-6a23-4668-8286-9ccbba2a5d35',
-    updated_at = NOW()
-WHERE owner_profile_id = '411e4b5d-8183-4d6a-b841-88c71d50955f'
-  AND origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78'
-```
-
----
-
-## Fluxo
+## Fluxo Esperado
 
 ```text
-108 deals da Ithaline
-         |
-         v
-+------------------------+
-| UPDATE crm_deals       |
-| SET owner = Ygor       |
-| WHERE owner = Ithaline |
-| AND origin = Alavanca  |
-+------------------------+
-         |
-         v
-108 deals transferidos para Ygor
+108 contatos com email/telefone
+              |
+              v
++-----------------------------+
+| Edge Function               |
+| bulk-update-contacts        |
++-----------------------------+
+              |
+              v
++-----------------------------+
+| Para cada contato:          |
+| 1. Buscar por email         |
+| 2. Se existir, pegar ID     |
+| 3. Vincular ao deal do Ygor |
+|    onde name ILIKE contato  |
++-----------------------------+
+              |
+              v
+Deals vinculados com contatos
+(agora visíveis com email/telefone)
 ```
 
 ---
 
 ## Resultado Esperado
 
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Deals da Ithaline (Alavanca) | 108 | 0 |
-| Deals do Ygor (Alavanca) | 0 | 108 |
+| Antes | Depois |
+|-------|--------|
+| 108 deals sem contato | 108 deals com contato vinculado |
+| Sem email/telefone visível | Email e telefone do contato visíveis |
 
 ---
 
-## Arquivos Modificados
+## Observações Técnicas
 
-Nenhum arquivo será modificado. Executarei a transferência via query no banco de dados.
+1. A função `bulk-update-contacts` já está deployada e funcionando
+2. Ela usa `ILIKE` para match flexível de nomes
+3. Os contatos já existem na base (foram importados para a Ithaline anteriormente)
+4. A vinculação será feita nos deals que pertencem ao Ygor (`owner_id`)
+
