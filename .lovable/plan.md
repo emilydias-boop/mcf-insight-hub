@@ -1,88 +1,163 @@
 
+# Plano: Botão de Edição/Transferência de Participante Individual na Agenda R2
 
-# Plano: Vincular Contatos aos Leads do Ygor
+## Contexto
 
-## Diagnóstico
+Atualmente, o sistema possui:
+- **R2RescheduleModal**: Reagenda a **reunião inteira** (meeting_slot) com todos os participantes
+- **R2MeetingDetailDrawer**: Mostra lista de participantes com botão de remover (lixeira)
 
-| Situação | Status |
-|----------|--------|
-| Contatos na base (crm_contacts) | Existem (já foram importados) |
-| Deals do Ygor | 108 deals com `contact_id = NULL` |
-| Problema | Deals não vinculados aos contatos |
-
-Os contatos já têm email e telefone, mas os deals do Ygor não estão vinculados a eles.
+O usuário precisa de uma funcionalidade para **transferir um participante individual** para outro dia, horário e/ou closer, sem afetar os demais participantes da reunião.
 
 ---
 
-## Solução
+## Solução Proposta
 
-Usar a Edge Function `bulk-update-contacts` que:
-1. Encontra o contato existente por email (já temos os dados)
-2. Vincula o contato ao deal do owner usando match por nome (ILIKE)
-
----
-
-## Execução
-
-Chamar a função com os 108 contatos e o owner_id do Ygor:
-
-```json
-{
-  "owner_id": "ygor.ferreira@minhacasafinanciada.com",
-  "contacts": [
-    {
-      "clint_id": "1b7b30b7-3e26-44e6-ada2-1a1ed2c5e3fc",
-      "name": "Ailton Aparecido de Sá",
-      "email": "ailtonapsa@gmail.com",
-      "phone": "+55 11981870466"
-    },
-    ... (mais 107 contatos)
-  ]
-}
-```
-
----
-
-## Fluxo Esperado
+Adicionar um **botão de edição (lápis)** ao lado do botão de lixeira em cada participante no drawer, que abre um modal de transferência individual.
 
 ```text
-108 contatos com email/telefone
-              |
-              v
-+-----------------------------+
-| Edge Function               |
-| bulk-update-contacts        |
-+-----------------------------+
-              |
-              v
-+-----------------------------+
-| Para cada contato:          |
-| 1. Buscar por email         |
-| 2. Se existir, pegar ID     |
-| 3. Vincular ao deal do Ygor |
-|    onde name ILIKE contato  |
-+-----------------------------+
-              |
-              v
-Deals vinculados com contatos
-(agora visíveis com email/telefone)
++------------------------------------------+
+|  [Avatar] Francisco Antonio da Silva     |
+|          Contrato Pago  Selecionado      |
+|          +5511984768433                  |
+|                              [✏️] [🗑️]   |  <-- Novo botão de edição
++------------------------------------------+
 ```
 
 ---
 
-## Resultado Esperado
+## Arquitetura da Solução
 
-| Antes | Depois |
-|-------|--------|
-| 108 deals sem contato | 108 deals com contato vinculado |
-| Sem email/telefone visível | Email e telefone do contato visíveis |
+```text
+                   R2MeetingDetailDrawer
+                           |
+    +----------------------+----------------------+
+    |                      |                      |
+Botão Lixeira      Botão Edição (NOVO)    Botão Realizada
+    |                      |                      |
+    v                      v                      v
+handleRemoveAttendee   Abre Modal          handleStatusChange
+                           |
+                           v
+              R2AttendeeTransferModal (NOVO)
+                           |
+    +----------------------+----------------------+
+    |                      |                      |
+Selecionar          Selecionar           Selecionar
+Closer              Data                 Horário
+    |                      |                      |
+    +----------------------+----------------------+
+                           |
+                           v
+              useTransferR2Attendee (NOVO hook)
+                           |
+    +----------------------+----------------------+
+    |                                             |
+Remove attendee                           Cria/adiciona a
+do slot atual                             novo slot
+```
 
 ---
 
-## Observações Técnicas
+## Arquivos a Criar/Modificar
 
-1. A função `bulk-update-contacts` já está deployada e funcionando
-2. Ela usa `ILIKE` para match flexível de nomes
-3. Os contatos já existem na base (foram importados para a Ithaline anteriormente)
-4. A vinculação será feita nos deals que pertencem ao Ygor (`owner_id`)
+### 1. Novo Componente: `R2AttendeeTransferModal.tsx`
+Modal para transferir um participante individual com:
+- Seletor de Closer R2
+- Seletor de Data (Calendar)
+- Seletor de Horário (baseado em slots disponíveis do closer)
+- Campo de observação/motivo
 
+### 2. Novo Hook: `useTransferR2Attendee.ts`
+Lógica para:
+1. Verificar se já existe um slot no horário de destino
+2. Se existir, adicionar o attendee ao slot existente
+3. Se não existir, criar novo slot e adicionar o attendee
+4. Remover o attendee do slot original
+5. Atualizar `deal_activities` para auditoria
+
+### 3. Modificar: `R2MeetingDetailDrawer.tsx`
+- Adicionar botão de edição (ícone `Pencil` ou `ArrowRightLeft`)
+- Estado para controlar o modal de transferência
+- Passar referência do attendee selecionado ao modal
+- **Condição**: Botão visível apenas para roles `admin`, `manager`, `coordenador`
+
+---
+
+## Detalhes Técnicos
+
+### Fluxo de Transferência
+
+```text
+1. Admin clica no botão de edição do participante "Francisco"
+2. Modal abre com dados atuais (closer, data, horário)
+3. Admin seleciona novo closer: "Maria"
+4. Admin seleciona nova data: "10/02/2026"
+5. Admin seleciona horário disponível: "14:00"
+6. Sistema executa:
+   a) SELECT para verificar se existe slot em 10/02 14:00 com Maria
+   b) Se não existe: INSERT meeting_slots (criar novo)
+   c) UPDATE meeting_slot_attendees SET meeting_slot_id = novo_slot
+   d) Se slot original ficou vazio: DELETE/atualizar status
+   e) INSERT deal_activities (log de auditoria)
+```
+
+### Permissões
+
+O botão de transferência será visível apenas para:
+- `admin`
+- `manager`  
+- `coordenador`
+
+Closers comuns não poderão transferir participantes (apenas visualizar).
+
+---
+
+## Interface do Modal
+
+```text
++----------------------------------------+
+|  Transferir Participante               |
++----------------------------------------+
+|                                        |
+|  Francisco Antonio da Silva            |
+|  +5511984768433                         |
+|  Atual: 05/02 às 10:00 com João        |
+|                                        |
+|  ┌─────────────────────────────────┐   |
+|  │ Novo Closer R2                  │   |
+|  │ [Maria Santos            ▼]    │   |
+|  └─────────────────────────────────┘   |
+|                                        |
+|  ┌──────────────┐ ┌────────────────┐   |
+|  │ Nova Data    │ │ Horário        │   |
+|  │ [10/02/2026] │ │ [14:00    ▼]  │   |
+|  └──────────────┘ └────────────────┘   |
+|                                        |
+|  ┌─────────────────────────────────┐   |
+|  │ Motivo (opcional)               │   |
+|  │ [Cliente mudou disponibilidade] │   |
+|  └─────────────────────────────────┘   |
+|                                        |
+|         [Cancelar]  [Transferir]       |
++----------------------------------------+
+```
+
+---
+
+## Estimativa de Alterações
+
+| Arquivo | Ação | Linhas |
+|---------|------|--------|
+| `src/components/crm/R2AttendeeTransferModal.tsx` | Criar | ~200 |
+| `src/hooks/useTransferR2Attendee.ts` | Criar | ~120 |
+| `src/components/crm/R2MeetingDetailDrawer.tsx` | Modificar | ~30 |
+
+---
+
+## Observações
+
+1. **Slot vazio**: Se após a transferência o slot original ficar sem participantes, ele pode ser mantido como "vazio" ou deletado automaticamente
+2. **Capacidade**: A transferência respeitará o `max_leads_per_slot` do closer de destino
+3. **Auditoria**: Toda transferência será registrada em `deal_activities` com tipo `attendee_transferred`
+4. **Cross-BU**: O sistema já possui lógica de conflito cross-BU que será respeitada na validação de horários
