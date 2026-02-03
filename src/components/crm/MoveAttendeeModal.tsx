@@ -303,14 +303,18 @@ export function MoveAttendeeModal({
 
         return { id: targetSlotId, newAttendeeId: newAttendee.id };
       }
-
       // Para movimentações no mesmo dia, apenas atualizar o attendee existente
+      // Admin preserva status original (contract_paid, completed, etc)
+      // Usuários normais sempre marcam como rescheduled
+      const shouldPreserveStatus = isAdmin && 
+        ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
+
       const { error: moveError } = await supabase
         .from('meeting_slot_attendees')
         .update({ 
           meeting_slot_id: targetSlotId,
-          status: 'rescheduled',
-          is_reschedule: true,
+          status: shouldPreserveStatus ? currentAttendeeStatus : 'rescheduled',
+          is_reschedule: !shouldPreserveStatus,
           updated_at: new Date().toISOString()
         })
         .eq('id', attendee.id);
@@ -361,7 +365,7 @@ export function MoveAttendeeModal({
         to_closer_name: slot.closerName,
         previous_status: currentAttendeeStatus || null,
         reason: reason || null,
-        movement_type: 'same_day_reschedule',
+        movement_type: shouldPreserveStatus ? 'transfer_preserved' : 'same_day_reschedule',
         moved_by: authData?.user?.id || null,
         moved_by_name: movedByName,
         moved_by_role: null
