@@ -60,6 +60,9 @@ export function R2MeetingDetailDrawer({
   const { role } = useAuth();
   const canTransfer = ['admin', 'manager', 'coordenador'].includes(role || '');
   
+  // Debug log - remove after testing
+  console.log('[R2Drawer] role:', role, '| canTransfer:', canTransfer);
+  
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const removeAttendee = useRemoveR2Attendee();
   const cancelMeeting = useCancelR2Meeting();
