@@ -4,6 +4,7 @@ import { startOfWeek, endOfWeek, format, addDays, isSameDay, parseISO } from 'da
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { WEEK_STARTS_ON } from '@/lib/businessDays';
+import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
 
 export interface MeetingAttendee {
   id: string;
@@ -863,8 +864,15 @@ export function useSearchDealsForSchedule(query: string, originIds?: string[]) {
         }
       }
 
-      // 7. Adicionar informação do último attendee aos deals
-      const dealsWithLastAttendee = normalizedDeals.map(deal => ({
+      // 7. Filtrar deals finalizados (won/lost) - apenas retornar deals abertos
+      const openDeals = normalizedDeals.filter(deal => {
+        const stageName = deal.stage?.stage_name;
+        const status = getDealStatusFromStage(stageName);
+        return status === 'open'; // Excluir 'won' e 'lost'
+      });
+
+      // 8. Adicionar informação do último attendee aos deals
+      const dealsWithLastAttendee = openDeals.map(deal => ({
         ...deal,
         lastAttendee: lastAttendeeMap[deal.id] || null
       }));
