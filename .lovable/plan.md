@@ -1,150 +1,87 @@
 
-# Plano: Configurações de Fechamento do Consórcio com Mesma Estrutura do Incorporador
+# Plano: Correção de Inconsistências de Dados entre Telas
 
-## Situação Atual
+## Diagnóstico Identificado
 
-A página de configurações do Consórcio (`/consorcio/fechamento/configuracoes`) possui apenas:
-- Card de estrutura de compensação padrão (OTE, Fixo, Variável)
-- Lista de closers do consórcio
-- Tabela de multiplicadores
+O sistema possui **3 fontes de dados diferentes** que não estão sincronizadas:
 
-A página de configurações do Incorporador (`/fechamento-sdr/configuracoes`) possui:
-- Aba **Equipe**: Lista completa de colaboradores comerciais (SDRs e Closers) por BU
-- Aba **Planos OTE**: Configuração individual de planos por colaborador
-- Aba **Métricas Ativas**: Configuração de métricas dinâmicas por mês/cargo/BU
-- Aba **Dias Úteis**: Calendário de dias úteis e iFood
+| Tela | Fonte de Dados | Filtro Usado |
+|------|---------------|--------------|
+| Fechamento → Closers | Tabela `closers` | `bu = 'consorcio'` |
+| Fechamento → SDRs | Tabela `sdr` | `squad = 'consorcio'` |
+| Configurações → Equipe | Tabela `employees` | `departamento = 'BU - Consórcio'` |
+
+## Problemas por Pessoa
+
+### 1. Victoria Paz
+- **Aparece em**: Fechamento (Closers), Agenda
+- **NÃO aparece em**: Configurações (Equipe)
+- **Causa**: Departamento cadastrado como `"Consorcio"` em vez de `"BU - Consórcio"`
+- **Solução**: Atualizar departamento no RH
+
+### 2. Luis Felipe de Souza
+- **Aparece em**: Fechamento (Closers), Agenda
+- **NÃO aparece em**: Configurações (Equipe)
+- **Causa**: Não possui cadastro na tabela `employees`
+- **Solução**: Criar registro no módulo RH
+
+### 3. Ithaline Clara
+- **Aparece em**: Configurações (Equipe)
+- **NÃO aparece em**: Fechamento (SDRs)
+- **Causa**: Não possui registro na tabela `sdr` (sdr_id = null)
+- **Solução**: Cadastrar como SDR em `/fechamento-sdr/configuracoes`
+
+### 4. Cleiton Lima
+- **Status**: OK - aparece em todas as telas corretas
 
 ## Solução Proposta
 
-Reescrever a página `FechamentoConfig.tsx` do Consórcio para usar a **mesma estrutura de abas**, reutilizando os componentes existentes com o filtro de BU = "consorcio" aplicado.
+### Opção A: Correções Manuais (Recomendada - Rápida)
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  Configurações - Fechamento Consórcio                               │
-│  Gerencie equipe, planos de compensação e métricas                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌─────────┐ ┌───────────┐ ┌────────────────┐ ┌───────────┐         │
-│  │ Equipe  │ │ Planos OTE│ │ Métricas Ativas│ │ Dias Úteis│         │
-│  └─────────┘ └───────────┘ └────────────────┘ └───────────┘         │
-│                                                                      │
-│  ... conteúdo da aba selecionada filtrado por BU = consorcio ...   │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
+Fazer as correções diretamente no banco/interface:
 
-## Alterações Técnicas
+1. **Victoria**: Atualizar departamento de "Consorcio" para "BU - Consórcio" no RH
+2. **Luis Felipe**: Criar cadastro de employee no RH
+3. **Ithaline**: Cadastrar na tabela SDR via Configurações → SDRs
 
-### 1. Atualizar `src/pages/bu-consorcio/FechamentoConfig.tsx`
+### Opção B: Implementar Validação Automática (Melhoria de Longo Prazo)
 
-Transformar a página para ter:
+Adicionar verificação na página de Configurações que detecta e alerta sobre:
+- Closers do consórcio sem cadastro no RH
+- Employees sem registro na tabela SDR (quando cargo é SDR)
+- Departamentos com nomes inconsistentes
 
-1. **Aba Equipe**: 
-   - Filtrar colaboradores por `departamento = 'BU - Consórcio'`
-   - Mostrar SDRs e Closers do consórcio
-   - Mesma tabela usada no Incorporador (Nome, Departamento, Cargo, Nível, Status, Admissão, Ações)
+## Correções de Dados (SQL)
 
-2. **Aba Planos OTE**:
-   - Reutilizar componente `PlansOteTab` existente
-   - Aplicar filtro fixo `BU = consorcio`
-   - Os colaboradores já são filtrados por departamento no componente
+```sql
+-- 1. Corrigir departamento da Victoria
+UPDATE employees 
+SET departamento = 'BU - Consórcio'
+WHERE id = 'e58b2a55-5ea3-4cf6-a3a4-18436015e77e';
 
-3. **Aba Métricas Ativas**:
-   - Reutilizar componente `ActiveMetricsTab` existente
-   - Aplicar filtro fixo `squad = consorcio`
-   - Permite configurar métricas específicas para SDRs/Closers do Consórcio
+-- 2. Luis Felipe precisa ser cadastrado manualmente no RH
+-- (não há como automatizar sem mais informações)
 
-4. **Aba Dias Úteis**:
-   - Reutilizar componente `WorkingDaysCalendar` existente
-   - O calendário é compartilhado entre todas as BUs
-
-### 2. Modificar Componentes Existentes para Aceitar Filtro de BU
-
-Os componentes `PlansOteTab` e `ActiveMetricsTab` já possuem filtro de BU interno. Precisamos criar versões que aceitem uma prop para **pré-selecionar** e **fixar** a BU:
-
-**Opção A (Recomendada)**: Adicionar prop `defaultBU` e `lockBU` aos componentes
-- Quando `lockBU=true`, o select de BU fica oculto/desabilitado
-- O filtro usa a BU passada via prop
-
-**Opção B**: Criar componente wrapper que passa filtro pré-definido
-
-### 3. Estrutura de Abas
-
-```typescript
-<Tabs defaultValue="equipe">
-  <TabsList>
-    <TabsTrigger value="equipe">
-      <Users /> Equipe
-    </TabsTrigger>
-    <TabsTrigger value="plans">
-      <FileText /> Planos OTE
-    </TabsTrigger>
-    <TabsTrigger value="metricas">
-      <Target /> Métricas Ativas
-    </TabsTrigger>
-    <TabsTrigger value="calendar">
-      <Calendar /> Dias Úteis
-    </TabsTrigger>
-  </TabsList>
-
-  <TabsContent value="equipe">
-    {/* Lista de colaboradores do consórcio */}
-  </TabsContent>
-
-  <TabsContent value="plans">
-    <PlansOteTab defaultBU="consorcio" lockBU />
-  </TabsContent>
-
-  <TabsContent value="metricas">
-    <ActiveMetricsTab defaultBU="consorcio" lockBU />
-  </TabsContent>
-
-  <TabsContent value="calendar">
-    <WorkingDaysCalendar />
-  </TabsContent>
-</Tabs>
-```
-
-## Arquivos a Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/pages/bu-consorcio/FechamentoConfig.tsx` | Reescrever | Implementar estrutura completa de abas |
-| `src/components/fechamento/PlansOteTab.tsx` | Modificar | Adicionar props `defaultBU` e `lockBU` opcionais |
-| `src/components/fechamento/ActiveMetricsTab.tsx` | Modificar | Adicionar props `defaultBU` e `lockBU` opcionais |
-
-## Detalhes da Aba Equipe (Consórcio)
-
-A aba mostrará apenas colaboradores do Consórcio com as colunas:
-- Nome Completo
-- Departamento (badge mostrando "Consórcio")
-- Cargo (do catálogo)
-- Nível (N1, N2, etc)
-- Status (Ativo/Inativo)
-- Data de Admissão
-- Ações (link para editar no RH)
-
-Filtro aplicado:
-```typescript
-employees.filter(emp => 
-  emp.departamento === 'BU - Consórcio'
-)
+-- 3. Ithaline precisa ser cadastrada na tabela SDR
+-- Isso pode ser feito via interface em /fechamento-sdr/configuracoes
 ```
 
 ## Resultado Esperado
 
-Após a implementação, a página `/consorcio/fechamento/configuracoes` terá:
+Após as correções:
 
-1. **Mesma aparência** da página de configurações do Incorporador
-2. **Dados filtrados** para a BU Consórcio apenas
-3. **Métricas configuráveis** específicas para cada cargo do Consórcio
-4. **Planos OTE individuais** para cada colaborador do Consórcio
-5. **Calendário de dias úteis** compartilhado
+| Pessoa | Fechamento Closers | Fechamento SDRs | Config Equipe | Agenda |
+|--------|-------------------|-----------------|---------------|--------|
+| Victoria Paz | ✅ | - | ✅ | ✅ |
+| Luis Felipe | ✅ | - | ✅ | ✅ |
+| Thobson | ✅ | - | ✅ | ✅ |
+| João Pedro | ✅ | - | ✅ | ✅ |
+| Cleiton Lima | - | ✅ | ✅ | - |
+| Ithaline | - | ✅ | ✅ | - |
 
-Isso permite que cada BU tenha suas próprias configurações de métricas e pesos, mantendo flexibilidade para diferentes estruturas de compensação.
+## Próximos Passos
 
-## Resumo da Implementação
-
-1. **FechamentoConfig.tsx**: Reescrever com Tabs completas e aba Equipe filtrada por BU = Consórcio
-2. **PlansOteTab.tsx**: Adicionar props opcionais para fixar BU
-3. **ActiveMetricsTab.tsx**: Adicionar props opcionais para fixar BU
+1. Corrigir o departamento da Victoria (pode ser feito via SQL ou RH)
+2. Cadastrar Luis Felipe no módulo RH
+3. Cadastrar Ithaline na tabela SDR via Configurações
+4. (Opcional) Implementar validação automática para evitar inconsistências futuras
