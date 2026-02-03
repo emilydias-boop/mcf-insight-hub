@@ -1806,9 +1806,9 @@ export function useMoveAttendeeToMeeting() {
 
 // ============ Fetch Meetings for a Date (for move attendee modal) ============
 
-export function useMeetingsForDate(date: Date | null) {
+export function useMeetingsForDate(date: Date | null, includeCompleted: boolean = false) {
   return useQuery({
-    queryKey: ['meetings-for-date', date?.toISOString()],
+    queryKey: ['meetings-for-date', date?.toISOString(), includeCompleted],
     queryFn: async () => {
       if (!date) return [];
 
@@ -1817,6 +1817,11 @@ export function useMeetingsForDate(date: Date | null) {
       
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
+
+      // Admin pode ver todas, incluindo completed
+      const statusFilter = includeCompleted 
+        ? ['scheduled', 'rescheduled', 'completed'] 
+        : ['scheduled', 'rescheduled'];
 
       const { data, error } = await supabase
         .from('meeting_slots')
@@ -1830,7 +1835,7 @@ export function useMeetingsForDate(date: Date | null) {
         `)
         .gte('scheduled_at', startOfDay.toISOString())
         .lte('scheduled_at', endOfDay.toISOString())
-        .in('status', ['scheduled', 'rescheduled'])
+        .in('status', statusFilter)
         .order('scheduled_at', { ascending: true });
 
       if (error) throw error;
