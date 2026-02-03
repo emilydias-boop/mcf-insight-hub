@@ -1,140 +1,115 @@
 
-# Plano: Corrigir Badge "Remanejado/Reagendado" em Todos os Componentes
+# Plano: Adicionar Opcao para Admin Restaurar Status de Attendee
 
 ## Problema
 
-O badge "Remanejado/Reagendado" aparece mesmo quando o lead tem status preservado (`contract_paid`, `completed`, etc). Isso ocorre porque a UI verifica apenas:
-- `is_reschedule` (R2)
-- `parent_attendee_id` (R1)
+O lead "Francisco Antonio da Silva Rocha" foi movido antes do fix de preservacao de status. Consequentemente:
+- `status` no banco = `rescheduled` (incorreto)
+- Deveria ser = `contract_paid` (status original)
 
-Sem considerar se o status real deveria ter prioridade visual.
-
----
-
-## Arquivos a Corrigir
-
-### 1. R2MeetingDetailDrawer.tsx (linha 205-210)
-
-**De:**
-```tsx
-{att.is_reschedule && (
-  <Badge>Reagendado</Badge>
-)}
-```
-
-**Para:**
-```tsx
-{att.is_reschedule && 
- !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status || '') && (
-  <Badge>Reagendado</Badge>
-)}
-```
+O fix que implementamos so funciona para movimentos **futuros**.
 
 ---
 
-### 2. R2CloserColumnCalendar.tsx (linhas 270-274 - icone compacto)
+## Solucao
 
-**De:**
-```tsx
-{(att as any).is_reschedule && (
-  <span className="flex items-center bg-orange-500/40 rounded px-0.5 shrink-0">
-    <ArrowRightLeft className="h-2.5 w-2.5 text-white" />
-  </span>
-)}
-```
-
-**Para:**
-```tsx
-{(att as any).is_reschedule && 
- !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
-  <span className="flex items-center bg-orange-500/40 rounded px-0.5 shrink-0">
-    <ArrowRightLeft className="h-2.5 w-2.5 text-white" />
-  </span>
-)}
-```
+Adicionar um botao para admins restaurarem o status `contract_paid` de um attendee que foi incorretamente alterado durante um movimento.
 
 ---
 
-### 3. R2CloserColumnCalendar.tsx (linhas 306-311 - tooltip)
+## Alteracoes
 
-**De:**
-```tsx
-{(att as any).is_reschedule && (
-  <Badge>Reagendado</Badge>
-)}
+### 1. Arquivo: `src/hooks/useAgendaData.ts`
+
+Adicionar mutation `useRestoreAttendeeContractPaid`:
+
+```typescript
+export function useRestoreAttendeeContractPaid() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ attendeeId }: { attendeeId: string }) => {
+      const { error } = await supabase
+        .from('meeting_slot_attendees')
+        .update({ 
+          status: 'contract_paid',
+          is_reschedule: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', attendeeId);
+      
+      if (error) throw error;
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agenda-meetings'] });
+      queryClient.invalidateQueries({ queryKey: ['meeting-slot'] });
+      toast.success('Status restaurado para Contrato Pago');
+    },
+  });
+}
 ```
 
-**Para:**
-```tsx
-{(att as any).is_reschedule && 
- !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
-  <Badge>Reagendado</Badge>
-)}
+### 2. Arquivo: `src/components/crm/AgendaMeetingDrawer.tsx`
+
+**Parte A**: Importar o hook e adicionar estado
+
+```typescript
+import { useRestoreAttendeeContractPaid } from '@/hooks/useAgendaData';
+
+// Dentro do componente
+const restoreContractPaid = useRestoreAttendeeContractPaid();
 ```
 
----
+**Parte B**: Adicionar botao na area de acoes do participante (linha 706-748)
 
-### 4. CloserColumnCalendar.tsx (linhas 324-328 - icone compacto R1)
+Para participantes com status `rescheduled` mas que tem `parent_attendee_id` (foram movidos), adicionar opcao de restaurar:
 
-**De:**
-```tsx
-{!att.is_partner && att.parent_attendee_id && (
-  <span className="flex items-center bg-orange-500/40 rounded px-0.5">
-    <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
-  </span>
-)}
-```
-
-**Para:**
-```tsx
-{!att.is_partner && att.parent_attendee_id && 
- !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
-  <span className="flex items-center bg-orange-500/40 rounded px-0.5">
-    <ArrowRightLeft className="h-2.5 w-2.5 text-white flex-shrink-0" />
-  </span>
+```typescript
+{/* Botao Restaurar Contrato Pago - apenas para admins quando status esta incorreto */}
+{canTransfer && p.id && p.parentAttendeeId && p.status === 'rescheduled' && (
+  <Button
+    variant="ghost"
+    size="icon"
+    className="h-8 w-8"
+    onClick={(e) => {
+      e.stopPropagation();
+      restoreContractPaid.mutate({ attendeeId: p.id! });
+    }}
+    title="Restaurar para Contrato Pago"
+    disabled={restoreContractPaid.isPending}
+  >
+    <DollarSign className="h-4 w-4 text-green-600" />
+  </Button>
 )}
 ```
 
 ---
 
-### 5. MeetingsList.tsx (linhas 95-99)
+## Interface Visual
 
-**De:**
-```tsx
-{!att.is_partner && att.parent_attendee_id && (
-  <Badge>Remanej.</Badge>
-)}
-```
+O botao aparecera apenas quando:
+- Usuario e admin/manager/coordenador (`canTransfer`)
+- Participante foi movido (`parentAttendeeId` existe)
+- Status atual e `rescheduled`
 
-**Para:**
-```tsx
-{!att.is_partner && att.parent_attendee_id && 
- !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
-  <Badge>Remanej.</Badge>
-)}
-```
+Ao clicar:
+- Status atualiza para `contract_paid`
+- `is_reschedule` atualiza para `false`
+- Badges "Remanejado" e "Reagendada" desaparecem
+- Badge "Contrato Pago" aparece
 
 ---
 
-## Resultado Esperado
+## Resumo
 
-| Status Real | is_reschedule/parent_id | Badge Mostrado |
-|-------------|------------------------|----------------|
-| contract_paid | true | **Nenhum badge laranja** |
-| completed | true | **Nenhum badge laranja** |
-| refunded | true | **Nenhum badge laranja** |
-| rescheduled | true | Remanejado/Reagendado |
-| scheduled | true | Remanejado/Reagendado |
-
-O lead "Francisco Antonio da Silva Rocha" mostrara apenas seu status real ("Contrato Pago") sem o badge redundante "Remanejado".
+| Arquivo | Alteracao |
+|---------|-----------|
+| `useAgendaData.ts` | Nova mutation `useRestoreAttendeeContractPaid` |
+| `AgendaMeetingDrawer.tsx` | Botao para restaurar status de attendees movidos |
 
 ---
 
-## Resumo de Alteracoes
+## Resultado
 
-| Arquivo | Local | Tipo |
-|---------|-------|------|
-| R2MeetingDetailDrawer.tsx | Badge na lista de participantes | R2 Drawer |
-| R2CloserColumnCalendar.tsx | Icone compacto + tooltip | R2 Calendar |
-| CloserColumnCalendar.tsx | Icone compacto | R1 Calendar |
-| MeetingsList.tsx | Badge na lista | Lista de reunioes |
+O admin podera clicar no botao $ verde para restaurar o status de "Francisco Antonio da Silva Rocha" para "Contrato Pago", corrigindo o erro do movimento anterior ao fix.
