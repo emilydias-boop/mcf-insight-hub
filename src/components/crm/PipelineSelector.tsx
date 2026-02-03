@@ -61,7 +61,9 @@ export const useCRMPipelines = (skipDedup = false) => {
 };
 
 export const PipelineSelector = ({ selectedPipelineId, onSelectPipeline, allowedGroupIds }: PipelineSelectorProps) => {
-  const { data: pipelines, isLoading } = useCRMPipelines();
+  // Quando há filtro de BU (allowedGroupIds), pular deduplicação para mostrar todos os grupos mapeados
+  const shouldSkipDedup = allowedGroupIds && allowedGroupIds.length > 0;
+  const { data: pipelines, isLoading } = useCRMPipelines(shouldSkipDedup);
   
   // Filtrar pipelines se houver restrição de BU
   const filteredPipelines = useMemo(() => {
