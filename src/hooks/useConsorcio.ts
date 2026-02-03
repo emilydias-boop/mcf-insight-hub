@@ -24,6 +24,7 @@ interface ConsorcioFilters {
   search?: string;
   diaVencimento?: number;
   grupo?: string;
+  origem?: string;
 }
 
 export function useConsorcioCards(filters: ConsorcioFilters = {}) {
@@ -64,6 +65,9 @@ export function useConsorcioCards(filters: ConsorcioFilters = {}) {
       }
       if (filters.grupo) {
         query = query.eq('grupo', filters.grupo);
+      }
+      if (filters.origem) {
+        query = query.eq('origem', filters.origem);
       }
 
       const { data, error } = await query;

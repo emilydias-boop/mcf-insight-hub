@@ -133,6 +133,7 @@ export default function ConsorcioPage() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [vencimentoFilter, setVencimentoFilter] = useState<string>('todos');
   const [grupoFilter, setGrupoFilter] = useState<string>('todos');
+  const [origemFilter, setOrigemFilter] = useState<string>('todos');
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeFilter>({
     startDate: undefined,
     endDate: undefined,
@@ -177,6 +178,7 @@ export default function ConsorcioPage() {
     search: searchTerm || undefined,
     diaVencimento: vencimentoFilter !== 'todos' ? Number(vencimentoFilter) : undefined,
     grupo: grupoFilter !== 'todos' ? grupoFilter : undefined,
+    origem: origemFilter !== 'todos' ? origemFilter : undefined,
   };
 
   const { data: cards, isLoading: cardsLoading } = useConsorcioCards(filters);
@@ -228,7 +230,7 @@ export default function ConsorcioPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, dateRangeFilter]);
+  }, [statusFilter, tipoFilter, vendedorFilter, period, itemsPerPage, searchTerm, vencimentoFilter, grupoFilter, origemFilter, dateRangeFilter]);
 
   const handleViewCard = (card: ConsorcioCard) => {
     setSelectedCardId(card.id);
@@ -496,6 +498,18 @@ export default function ConsorcioPage() {
             <SelectItem value="todos">Grupo</SelectItem>
             {uniqueGrupos.map(grupo => (
               <SelectItem key={grupo} value={grupo}>{grupo}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={origemFilter} onValueChange={setOrigemFilter}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Origem" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Origem</SelectItem>
+            {origemOptions.map(opt => (
+              <SelectItem key={opt.id} value={opt.name}>{opt.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
