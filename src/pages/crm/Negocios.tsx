@@ -24,6 +24,7 @@ import {
   SDR_AUTHORIZED_ORIGIN_ID,
   SDR_ORIGIN_BY_BU,
   BU_DEFAULT_ORIGIN_MAP,
+  SDR_MULTI_PIPELINE_BUS,
 } from '@/components/auth/NegociosAccessGuard';
 import { useBUPipelineMap } from '@/hooks/useBUPipelineMap';
 import { useNewLeadNotifications } from '@/hooks/useNewLeadNotifications';
@@ -99,8 +100,14 @@ const Negocios = () => {
   
   // Calcular o originId correto para usar nas queries
   const effectiveOriginId = useMemo(() => {
-    // Para SDRs, usar a origem da BU ativa (respeitando a rota/perfil)
+    // Para SDRs
     if (isSdr) {
+      // SDRs de BUs com multi-pipeline podem navegar manualmente
+      if (activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU)) {
+        if (selectedOriginId) return selectedOriginId;
+      }
+      
+      // Default ou BUs com pipeline fixa
       if (activeBU && SDR_ORIGIN_BY_BU[activeBU]) {
         return SDR_ORIGIN_BY_BU[activeBU];
       }
@@ -442,8 +449,10 @@ const Negocios = () => {
     setSelectedOriginId(null); // Reset sub-origem ao trocar pipeline
   };
   
-  // Determinar se deve mostrar a sidebar (não para SDRs, e se tem BU, filtrar)
-  const showSidebar = !isSdr;
+  // Determinar se deve mostrar a sidebar
+  // SDRs de BUs com multi-pipeline podem ver a sidebar e navegar
+  const sdrCanSeeSidebar = isSdr && activeBU && SDR_MULTI_PIPELINE_BUS.includes(activeBU);
+  const showSidebar = !isSdr || sdrCanSeeSidebar;
   
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-56px)] overflow-hidden">
