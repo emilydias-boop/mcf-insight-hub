@@ -4,6 +4,10 @@ import { ShieldAlert } from 'lucide-react';
 import { AppRole } from '@/types/user-management';
 import { BusinessUnit } from '@/hooks/useMyBU';
 
+// ============ BUs ONDE SDRs PODEM ESCOLHER MÚLTIPLAS PIPELINES ============
+// SDRs dessas BUs veem a sidebar e podem trocar de pipeline livremente
+export const SDR_MULTI_PIPELINE_BUS: BusinessUnit[] = ['consorcio'];
+
 // ============ MAPEAMENTO BU → PIPELINES ============
 // Define quais origens/grupos cada Business Unit pode ver
 export const BU_PIPELINE_MAP: Record<BusinessUnit, string[]> = {
