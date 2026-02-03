@@ -41,7 +41,7 @@ export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
 // Grupo/Origem padrão para cada BU (para selecionar ao abrir)
 export const BU_DEFAULT_ORIGIN_MAP: Record<BusinessUnit, string> = {
   incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
-  consorcio: '4e2b810a-6782-4ce9-9c0d-10d04c018636', // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
+  consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',    // PIPE LINE - INSIDE SALES (Perpétuo - Construa para Alugar)
   credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
   projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
   leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', // Pipeline Leilão
@@ -66,7 +66,7 @@ export const SDR_AUTHORIZED_GROUP_ID = 'a6f3cbfc-0567-427f-a405-5a869aaa6010';
 // Origem padrão para SDRs de cada BU (respeitando a BU ativa)
 export const SDR_ORIGIN_BY_BU: Record<BusinessUnit, string> = {
   incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c', // PIPELINE INSIDE SALES
-  consorcio: '4e2b810a-6782-4ce9-9c0d-10d04c018636',    // PIPELINE - INSIDE SALES - VIVER DE ALUGUEL
+  consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',    // PIPE LINE - INSIDE SALES (Perpétuo - Construa para Alugar)
   credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',      // Fallback (a definir)
   projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',     // Fallback (a definir)
   leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',       // Pipeline Leilão
