@@ -34,10 +34,15 @@ interface MetricaLocal {
   meta_valor: number | null;
 }
 
-export const ActiveMetricsTab = () => {
+interface ActiveMetricsTabProps {
+  defaultBU?: string;
+  lockBU?: boolean;
+}
+
+export const ActiveMetricsTab = ({ defaultBU, lockBU = false }: ActiveMetricsTabProps) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCargoId, setSelectedCargoId] = useState<string>('__all__');
-  const [selectedSquad, setSelectedSquad] = useState<string>('__all__');
+  const [selectedSquad, setSelectedSquad] = useState<string>(defaultBU || '__all__');
   const [localMetrics, setLocalMetrics] = useState<MetricaLocal[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -261,22 +266,24 @@ export const ActiveMetricsTab = () => {
             </Select>
           </div>
 
-          {/* Squad/BU */}
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground">BU:</Label>
-            <Select value={selectedSquad} onValueChange={setSelectedSquad}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Todas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todas</SelectItem>
-                <SelectItem value="incorporador">Incorporador</SelectItem>
-                <SelectItem value="consorcio">Consórcio</SelectItem>
-                <SelectItem value="credito">Crédito</SelectItem>
-                <SelectItem value="projetos">Projetos</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Squad/BU - oculto se lockBU=true */}
+          {!lockBU && (
+            <div className="flex items-center gap-2">
+              <Label className="text-sm text-muted-foreground">BU:</Label>
+              <Select value={selectedSquad} onValueChange={setSelectedSquad}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todas</SelectItem>
+                  <SelectItem value="incorporador">Incorporador</SelectItem>
+                  <SelectItem value="consorcio">Consórcio</SelectItem>
+                  <SelectItem value="credito">Crédito</SelectItem>
+                  <SelectItem value="projetos">Projetos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Indicador de peso total */}
           <div className="ml-auto">
