@@ -61,9 +61,10 @@ export default function Home() {
 
   // Determine where to navigate based on role and BU
   const getMyAreaDestination = () => {
-    // If user has a BU assigned, go to that BU's dashboard
-    if (myBU) {
-      return BU_CONFIG[myBU as keyof typeof BU_CONFIG]?.href || '/';
+    // If user has BUs assigned, go to the first BU's dashboard
+    const firstBU = Array.isArray(myBU) ? myBU[0] : myBU;
+    if (firstBU) {
+      return BU_CONFIG[firstBU as keyof typeof BU_CONFIG]?.href || '/';
     }
     
     // Otherwise, use role-based destination

@@ -19,7 +19,7 @@ export function useMyBU() {
   return useQuery({
     queryKey: ["my-bu", user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return [];
       
       const { data, error } = await supabase
         .from("profiles")
@@ -28,8 +28,17 @@ export function useMyBU() {
         .single();
 
       if (error) throw error;
-      return data?.squad as BusinessUnit | null;
+      // Retorna array de BUs ou array vazio
+      return (data?.squad as BusinessUnit[]) || [];
     },
     enabled: !!user?.id,
   });
+}
+
+/**
+ * Helper para verificar se usuário tem acesso a uma BU específica
+ */
+export function useHasBUAccess(bu: BusinessUnit): boolean {
+  const { data: myBUs = [] } = useMyBU();
+  return myBUs.includes(bu);
 }

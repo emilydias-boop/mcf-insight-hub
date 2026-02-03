@@ -40,7 +40,7 @@ export interface UserDetails {
   access_status: AccessStatus | null;
   blocked_until: string | null;
   last_login_at: string | null;
-  squad: string | null;
+  squad: string[] | null;
   // Employment (legado - para módulo RH)
   employment: {
     position: string | null;

@@ -328,7 +328,7 @@ export function ConsorcioCardForm({ open, onOpenChange, card }: ConsorcioCardFor
       const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name')
-        .eq('squad', 'consorcio')
+        .contains('squad', ['consorcio'])
         .order('full_name');
       if (error) throw error;
       return data || [];

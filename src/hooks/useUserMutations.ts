@@ -119,7 +119,7 @@ export const useUpdateUserAccess = () => {
         email?: string;
         access_status?: AccessStatus;
         blocked_until?: string | null;
-        squad?: string | null;
+        squad?: string[] | null;
       }
     }) => {
       const { error } = await supabase
