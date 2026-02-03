@@ -208,6 +208,10 @@ export function MoveAttendeeModal({
 
         if (!originalAttendee) throw new Error('Attendee original não encontrado');
 
+        // Admin preserva status original ao mover para dia diferente
+        const shouldPreserveStatusNoShow = isAdmin && 
+          ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
+
         // Criar novo attendee vinculado ao original (reagendamento)
         const { data: newAttendee, error: createAttendeeError } = await supabase
           .from('meeting_slot_attendees')
@@ -215,8 +219,8 @@ export function MoveAttendeeModal({
             meeting_slot_id: targetSlotId,
             contact_id: originalAttendee.contact_id,
             deal_id: originalAttendee.deal_id,
-            status: 'rescheduled',
-            is_reschedule: true,
+            status: shouldPreserveStatusNoShow ? currentAttendeeStatus : 'rescheduled',
+            is_reschedule: !shouldPreserveStatusNoShow,
             parent_attendee_id: attendee.id, // Vincula ao original no-show
             booked_by: originalAttendee.booked_by,
             booked_at: new Date().toISOString(), // Data do reagendamento
@@ -260,7 +264,7 @@ export function MoveAttendeeModal({
           to_closer_name: slot.closerName,
           previous_status: currentAttendeeStatus || null,
           reason: reason || null,
-          movement_type: 'no_show_reschedule',
+          movement_type: shouldPreserveStatusNoShow ? 'transfer_preserved' : 'no_show_reschedule',
           moved_by: authData?.user?.id || null,
           moved_by_name: movedByName,
           moved_by_role: null
@@ -274,8 +278,8 @@ export function MoveAttendeeModal({
           created_by: authData?.user?.id || null,
         });
 
-        // Sync deal stage back to R1 Agendada and mark as rescheduled
-        if (originalAttendee.deal_id) {
+        // Sync deal stage back to R1 Agendada only if NOT preserving status
+        if (originalAttendee.deal_id && !shouldPreserveStatusNoShow) {
           await syncDealStageFromAgenda(originalAttendee.deal_id, 'rescheduled', 'r1');
           
           // Mark deal as rescheduled in custom_fields
@@ -414,7 +418,8 @@ export function MoveAttendeeModal({
         targetCloserName: targetMeeting.closer?.name,
         targetScheduledAt: targetMeeting.scheduled_at,
         reason: moveReason.trim() || undefined,
-        isNoShow: isNoShow
+        isNoShow: isNoShow,
+        preserveStatus: isAdmin
       },
       {
         onSuccess: () => {

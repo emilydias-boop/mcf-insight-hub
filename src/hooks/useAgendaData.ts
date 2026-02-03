@@ -1723,7 +1723,8 @@ export function useMoveAttendeeToMeeting() {
       targetCloserName,
       targetScheduledAt,
       reason,
-      isNoShow
+      isNoShow,
+      preserveStatus
     }: { 
       attendeeId: string; 
       targetMeetingSlotId: string;
@@ -1737,14 +1738,19 @@ export function useMoveAttendeeToMeeting() {
       targetScheduledAt?: string;
       reason?: string;
       isNoShow?: boolean;
+      preserveStatus?: boolean;
     }) => {
-      // Move the main attendee and update status to rescheduled
+      // Admin preserva status original (contract_paid, completed, etc)
+      const shouldPreserve = preserveStatus && 
+        ['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(currentAttendeeStatus || '');
+
+      // Move the main attendee and update status
       const { error: mainError } = await supabase
         .from('meeting_slot_attendees')
         .update({ 
           meeting_slot_id: targetMeetingSlotId,
-          status: 'rescheduled',
-          is_reschedule: true,
+          status: shouldPreserve ? currentAttendeeStatus : 'rescheduled',
+          is_reschedule: !shouldPreserve,
           updated_at: new Date().toISOString()
         })
         .eq('id', attendeeId);
@@ -1784,7 +1790,7 @@ export function useMoveAttendeeToMeeting() {
         to_closer_name: targetCloserName || null,
         previous_status: currentAttendeeStatus || null,
         reason: reason || null,
-        movement_type: isNoShow ? 'no_show_reschedule' : 'same_day_reschedule',
+        movement_type: shouldPreserve ? 'transfer_preserved' : (isNoShow ? 'no_show_reschedule' : 'same_day_reschedule'),
         moved_by: authData?.user?.id || null,
         moved_by_name: movedByName
       });
