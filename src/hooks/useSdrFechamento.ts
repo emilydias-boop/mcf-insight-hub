@@ -54,6 +54,25 @@ export const useSdrs = () => {
   });
 };
 
+// Fetch SDRs filtered by BU/squad
+export const useSdrsByBU = (bu: string | null) => {
+  return useQuery({
+    queryKey: ['sdrs-by-bu', bu],
+    queryFn: async () => {
+      if (!bu) return [];
+      const { data, error } = await supabase
+        .from('sdr')
+        .select('*')
+        .eq('active', true)
+        .eq('squad', bu)
+        .order('name');
+      if (error) throw error;
+      return data as unknown as Sdr[];
+    },
+    enabled: !!bu,
+  });
+};
+
 // Fetch SDR by user_id (for SDR's own view)
 export const useOwnSdr = () => {
   return useQuery({
