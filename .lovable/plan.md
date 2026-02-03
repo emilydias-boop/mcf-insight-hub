@@ -1,91 +1,79 @@
 
-# Plano: Transferir 108 Leads para Ithaline
+# Plano: Corrigir Transferência - 108 Leads da Ithaline → Ygor
 
-## Situação Identificada
+## Situação
+
+Os 108 leads foram transferidos erroneamente para a Ithaline Clara e precisam ser corrigidos para o Ygor Ferreira.
 
 | Item | Valor |
 |------|-------|
 | Pipeline | Efeito Alavanca + Clube |
 | Origin ID | `7d7b1cb5-2a44-4552-9eff-c3b798646b78` |
-| Total de deals órfãos no pipeline | 3.419 |
-| Leads na lista da Ithaline | 108 |
-| Match exato confirmado | ✅ Nomes batem perfeitamente |
+| Leads a transferir | 108 |
 
-### Dados da Ithaline
-- **Profile ID**: `411e4b5d-8183-4d6a-b841-88c71d50955f`
-- **Email**: `ithaline.clara@minhacasafinanciada.com`
-- **Nome**: `ithaline clara dos santos`
+### Owners Envolvidos
+
+| De (Ithaline) | Para (Ygor) |
+|---------------|-------------|
+| Profile ID: `411e4b5d-8183-4d6a-b841-88c71d50955f` | Profile ID: `d523e03f-6a23-4668-8286-9ccbba2a5d35` |
+| Email: `ithaline.clara@minhacasafinanciada.com` | Email: `ygor.ferreira@minhacasafinanciada.com` |
 
 ---
 
 ## Solução
 
-Usar a Edge Function `bulk-transfer-by-name` já existente para transferir os 108 deals órfãos para a Ithaline.
+Executar UPDATE direto nos 108 deals que estão atualmente com a Ithaline neste pipeline, transferindo para o Ygor.
 
 ---
 
 ## Execução
 
-Chamar a função com os 108 nomes da lista:
+Usar a Edge Function `bulk-transfer-by-name` com os mesmos 108 nomes, mas agora direcionando para o Ygor:
 
 ```json
 {
-  "names": [
-    "Ailton Aparecido de Sá",
-    "Alan Edermann",
-    "Aleandre da",
-    "ALEX ALBUQUERQUE SILVA",
-    "Alex Castro Wiedemann",
-    "Alex Ribeiro dos santos",
-    "Alisson de morais",
-    "Amanda Andrade Silva",
-    "Anderson Ferreira",
-    "Andre",
-    ... (mais 98 nomes)
-  ],
+  "names": [lista dos 108 nomes],
   "origin_id": "7d7b1cb5-2a44-4552-9eff-c3b798646b78",
-  "new_owner_email": "ithaline.clara@minhacasafinanciada.com",
-  "new_owner_profile_id": "411e4b5d-8183-4d6a-b841-88c71d50955f",
-  "new_owner_name": "ithaline clara dos santos"
+  "new_owner_email": "ygor.ferreira@minhacasafinanciada.com",
+  "new_owner_profile_id": "d523e03f-6a23-4668-8286-9ccbba2a5d35",
+  "new_owner_name": "Ygor Ferreira"
 }
+```
+
+**Obs:** A função `bulk-transfer-by-name` busca deals por nome E `owner_id IS NULL`. Como os deals agora têm owner (Ithaline), precisarei modificar a abordagem para buscar por owner atual OU usar uma query direta.
+
+---
+
+## Abordagem Alternativa (Mais Segura)
+
+Como os deals já têm owner, vou usar uma query direta via Supabase para transferir todos os deals da Ithaline neste pipeline para o Ygor:
+
+```sql
+UPDATE crm_deals 
+SET owner_id = 'ygor.ferreira@minhacasafinanciada.com',
+    owner_profile_id = 'd523e03f-6a23-4668-8286-9ccbba2a5d35',
+    updated_at = NOW()
+WHERE owner_profile_id = '411e4b5d-8183-4d6a-b841-88c71d50955f'
+  AND origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78'
 ```
 
 ---
 
-## Fluxo da Transferência
+## Fluxo
 
 ```text
-Lista de 108 nomes
-        |
-        v
+108 deals da Ithaline
+         |
+         v
 +------------------------+
-| Edge Function          |
-| bulk-transfer-by-name  |
+| UPDATE crm_deals       |
+| SET owner = Ygor       |
+| WHERE owner = Ithaline |
+| AND origin = Alavanca  |
 +------------------------+
-        |
-        v
-+------------------------+
-| SELECT deals WHERE     |
-| origin_id = Alavanca   |
-| AND owner_id IS NULL   |
-| AND name IN (lista)    |
-+------------------------+
-        |
-        v
-+------------------------+
-| UPDATE deals SET       |
-| owner_id = ithaline    |
-| owner_profile_id = ... |
-+------------------------+
-        |
-        v
-+------------------------+
-| INSERT deal_activities |
-| (log de auditoria)     |
-+------------------------+
-        |
-        v
-Resultado: ~108 deals transferidos
+         |
+         v
+108 deals transferidos para Ygor
 ```
 
 ---
@@ -94,20 +82,11 @@ Resultado: ~108 deals transferidos
 
 | Métrica | Antes | Depois |
 |---------|-------|--------|
-| Deals órfãos no Alavanca | 3.419 | ~3.311 |
-| Deals da Ithaline | 0 | ~108 |
+| Deals da Ithaline (Alavanca) | 108 | 0 |
+| Deals do Ygor (Alavanca) | 0 | 108 |
 
 ---
 
 ## Arquivos Modificados
 
-Nenhum arquivo será criado ou modificado. Apenas executarei a Edge Function existente com os dados fornecidos.
-
----
-
-## Observações
-
-1. A função usa match **exato** de nomes (case-sensitive)
-2. Os nomes foram verificados e batem perfeitamente com os deals no banco
-3. Cada transferência será registrada em `deal_activities` para auditoria
-4. Os contatos já foram importados na etapa anterior, então os deals serão automaticamente vinculados
+Nenhum arquivo será modificado. Executarei a transferência via query no banco de dados.
