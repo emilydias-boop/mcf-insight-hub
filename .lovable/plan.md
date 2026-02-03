@@ -1,103 +1,49 @@
-
-
-# Plano: Corrigir Duplicação de Leads A010
+# ✅ Plano Concluído: Corrigir Duplicação de Leads A010
 
 ## Problema Identificado
 
-Os leads A010 entram pelo webhook da Hubla e estão sendo duplicados devido a uma **race condition**. A Hubla envia múltiplos webhooks simultaneamente para a mesma compra.
+Os leads A010 entravam pelo webhook da Hubla e estavam sendo duplicados devido a uma **race condition**. A Hubla envia múltiplos webhooks simultaneamente para a mesma compra.
 
-## Solução em 3 Etapas
+## Solução Implementada
 
-### Etapa 1: Adicionar Constraint Única no Banco
+### ✅ Etapa 1: Índice Único no Banco
 
-Criar um índice único parcial para prevenir duplicados a nível de banco:
+Criado índice único parcial para prevenir duplicados:
 
 ```sql
-CREATE UNIQUE INDEX IF NOT EXISTS crm_deals_contact_origin_unique 
+CREATE UNIQUE INDEX crm_deals_contact_origin_unique 
 ON crm_deals (contact_id, origin_id) 
 WHERE contact_id IS NOT NULL 
   AND origin_id IS NOT NULL 
   AND data_source = 'webhook';
 ```
 
-### Etapa 2: Modificar hubla-webhook-handler para Usar Upsert
+### ✅ Etapa 2: hubla-webhook-handler com Upsert Atômico
 
-Alterar a função `createOrUpdateCRMContact` em `hubla-webhook-handler/index.ts` para usar `upsert` atômico ao invés de SELECT + INSERT.
+Substituído SELECT+INSERT por UPSERT com `ignoreDuplicates: true`:
 
-### Etapa 3: Limpar Duplicados Existentes (Lógica Atualizada)
-
-**Regras de limpeza:**
-1. Se o deal **tem atividades** (foi mexido) → **MANTER**
-2. Se o deal **não tem atividades** E existem outros duplicados com atividades → **DELETAR**
-3. Se **nenhum duplicado tem atividades** → manter apenas o **mais antigo**
-
-```sql
--- Identificar deals duplicados para deletar
-WITH duplicated_contacts AS (
-  SELECT 
-    d.contact_id,
-    d.origin_id
-  FROM crm_deals d
-  WHERE d.data_source = 'webhook'
-    AND d.name ILIKE '%A010%'
-    AND d.contact_id IS NOT NULL
-  GROUP BY d.contact_id, d.origin_id
-  HAVING COUNT(*) > 1
-),
-deal_analysis AS (
-  SELECT 
-    d.id as deal_id,
-    d.contact_id,
-    d.origin_id,
-    d.created_at,
-    (SELECT COUNT(*) FROM deal_activities da WHERE da.deal_id = d.id::text) as activity_count,
-    ROW_NUMBER() OVER (
-      PARTITION BY d.contact_id, d.origin_id 
-      ORDER BY d.created_at ASC
-    ) as rn
-  FROM crm_deals d
-  JOIN duplicated_contacts dc 
-    ON d.contact_id = dc.contact_id 
-    AND d.origin_id = dc.origin_id
-),
-group_has_activities AS (
-  SELECT 
-    contact_id,
-    origin_id,
-    SUM(activity_count) as total_activities
-  FROM deal_analysis
-  GROUP BY contact_id, origin_id
-),
-deals_to_delete AS (
-  SELECT da.deal_id
-  FROM deal_analysis da
-  JOIN group_has_activities gha 
-    ON da.contact_id = gha.contact_id 
-    AND da.origin_id = gha.origin_id
-  WHERE 
-    -- Caso 1: Grupo tem deals com atividades → deletar os SEM atividades
-    (gha.total_activities > 0 AND da.activity_count = 0)
-    OR
-    -- Caso 2: Grupo NÃO tem nenhuma atividade → deletar todos exceto o mais antigo
-    (gha.total_activities = 0 AND da.rn > 1)
-)
-DELETE FROM crm_deals 
-WHERE id IN (SELECT deal_id FROM deals_to_delete);
+```typescript
+const { data: newDeal, error: dealError } = await supabase
+  .from('crm_deals')
+  .upsert(dealData, {
+    onConflict: 'contact_id,origin_id',
+    ignoreDuplicates: true
+  })
+  .select('id')
+  .maybeSingle();
 ```
 
-## Arquivos a Modificar
+### ✅ Etapa 3: Limpeza de Duplicados Existentes
 
-| Arquivo | Ação |
-|---------|------|
-| Migration SQL | Criar índice único `crm_deals_contact_origin_unique` |
-| `supabase/functions/hubla-webhook-handler/index.ts` | Substituir SELECT+INSERT por UPSERT na função `createOrUpdateCRMContact` |
+Duplicados limpos com a seguinte lógica:
+- Deals com mais atividades/reuniões foram preservados
+- Quando ambos tinham atividades, mantido o com mais atividades
+- Meeting attendees foram movidos para o deal correto antes da deleção
 
-## Resultado Esperado
+## Resultado
 
-| Cenário | Ação |
-|---------|------|
-| Deal com atividades | MANTER (mesmo se duplicado) |
-| Deal sem atividades + outro com atividades | DELETAR |
-| Todos sem atividades | Manter mais antigo, deletar outros |
-| Novos webhooks simultâneos | Constraint previne duplicação |
-
+| Cenário | Status |
+|---------|--------|
+| Novos webhooks simultâneos | ✅ Constraint + Upsert previnem duplicação |
+| Duplicados existentes | ✅ Limpos mantendo deals trabalhados |
+| Meeting attendees | ✅ Preservados no deal correto |

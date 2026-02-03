@@ -366,21 +366,9 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       stageId = genericStage?.id;
     }
     
-    // 4. Verificar se já existe deal para este contato com A010
-    if (contactId) {
-      const { data: existingDeal } = await supabase
-        .from('crm_deals')
-        .select('id')
-        .eq('contact_id', contactId)
-        .ilike('product_name', '%A010%')
-        .maybeSingle();
-      
-      if (existingDeal) {
-        console.log(`[CRM] Deal A010 já existe para este contato: ${existingDeal.id}`);
-        return;
-      }
-      
-      // 4.1 NOVO: Herdar owner de outro deal do mesmo contato
+    // 4. Criar deal usando UPSERT atômico (previne duplicação por race condition)
+    if (contactId && originId) {
+      // 4.1 Herdar owner de outro deal do mesmo contato
       let inheritedOwnerId: string | null = null;
       const { data: dealWithOwner } = await supabase
         .from('crm_deals')
@@ -395,40 +383,53 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         console.log(`[CRM] Owner herdado de outro deal: ${inheritedOwnerId}`);
       }
       
-      // 5. Criar novo deal (com owner herdado se disponível)
+      // 4.2 Usar UPSERT atômico - se já existir deal para este contact_id+origin_id, ignora
+      const dealData = {
+        clint_id: `hubla-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        name: `${data.name || 'Cliente'} - A010`,
+        value: data.value || 0,
+        contact_id: contactId,
+        origin_id: originId,
+        stage_id: stageId,
+        owner_id: inheritedOwnerId,
+        product_name: data.productName,
+        tags: ['A010', 'Hubla'],
+        custom_fields: { source: 'hubla', product: data.productName },
+        data_source: 'webhook'
+      };
+      
       const { data: newDeal, error: dealError } = await supabase
         .from('crm_deals')
-        .insert({
-          clint_id: `hubla-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-          name: `${data.name || 'Cliente'} - A010`,
-          value: data.value || 0,
-          contact_id: contactId,
-          origin_id: originId,
-          stage_id: stageId,
-          owner_id: inheritedOwnerId, // NOVO: owner herdado
-          product_name: data.productName,
-          tags: ['A010', 'Hubla'],
-          custom_fields: { source: 'hubla', product: data.productName },
-          data_source: 'webhook'
+        .upsert(dealData, {
+          onConflict: 'contact_id,origin_id',
+          ignoreDuplicates: true
         })
         .select('id')
-        .single();
+        .maybeSingle();
       
-      if (!dealError && newDeal) {
+      // Se ignoreDuplicates=true e já existia, newDeal será null mas sem erro
+      if (dealError) {
+        // Ignorar erro de constraint única (23505) - significa que já existe
+        if (dealError.code === '23505' || dealError.message?.includes('duplicate')) {
+          console.log(`[CRM] Deal já existe para contact_id=${contactId}, origin_id=${originId} (ignorado)`);
+        } else {
+          console.error('[CRM] Erro ao criar deal:', dealError);
+        }
+      } else if (newDeal) {
         console.log(`[CRM] Deal criado: ${data.name} - A010 (${newDeal.id}) com owner: ${inheritedOwnerId || 'nenhum'}`);
         
-        // 6. Gerar tarefas automáticas baseadas nos templates do estágio
+        // 5. Gerar tarefas automáticas baseadas nos templates do estágio
         if (stageId) {
           await generateTasksForDeal(supabase, {
             dealId: newDeal.id,
             contactId: contactId,
-            ownerId: inheritedOwnerId, // NOVO: passar owner herdado para as tarefas
+            ownerId: inheritedOwnerId,
             originId,
             stageId,
           });
         }
-      } else if (dealError) {
-        console.error('[CRM] Erro ao criar deal:', dealError);
+      } else {
+        console.log(`[CRM] Deal já existe para este contato/origem (upsert ignorado)`);
       }
     }
   } catch (err) {
