@@ -166,10 +166,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           initialSessionHandled.current = true;
         }
         
+        // Session restoration: SIGNED_IN fires when returning to tab/page
+        // After initial session is handled, just update state without navigation
+        if (event === 'SIGNED_IN' && initialSessionHandled.current && newSession) {
+          console.log('[Auth] Session restored from storage, updating state only');
+          const { primaryRole, roles } = extractRolesFromSession(newSession);
+          setSession(newSession);
+          setUser(newSession.user);
+          setRole(primaryRole);
+          setAllRoles(roles);
+          setLoading(false);
+          return;
+        }
+        
         // For token refresh, just update session and re-extract roles from new token
-        if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && 
-            user && 
-            newSession?.user?.id === user.id) {
+        if (event === 'TOKEN_REFRESHED' && user && newSession?.user?.id === user.id) {
           console.log('[Auth] Token refreshed, re-extracting roles from new JWT');
           const { primaryRole, roles } = extractRolesFromSession(newSession);
           setSession(newSession);
