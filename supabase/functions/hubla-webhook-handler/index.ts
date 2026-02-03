@@ -232,6 +232,9 @@ interface CRMContactData {
   value: number;
 }
 
+// CONSTANTE: Origin canônico para todos os leads A010
+const PIPELINE_INSIDE_SALES_ORIGIN = 'PIPELINE INSIDE SALES';
+
 async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Promise<void> {
   if (!data.email && !data.phone) {
     console.log('[CRM] Sem email ou telefone, pulando criação de contato');
@@ -242,28 +245,30 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
   const normalizedPhone = normalizePhone(data.phone);
   console.log(`[CRM] Telefone normalizado: ${data.phone} -> ${normalizedPhone}`);
   
+  // CORREÇÃO: Sempre usar PIPELINE INSIDE SALES para A010 (evitar criar origens duplicadas)
+  const targetOriginName = data.originName === 'A010 Hubla' ? PIPELINE_INSIDE_SALES_ORIGIN : data.originName;
+  console.log(`[CRM] Origem target: ${targetOriginName} (original: ${data.originName})`);
+  
   try {
     // 1. Buscar ou criar origem
-    // CORREÇÃO: Usar .limit(1) em vez de .maybeSingle() para evitar criar duplicatas
-    // quando já existem múltiplas origens com o mesmo nome
     let originId: string | null = null;
     const { data: existingOrigins } = await supabase
       .from('crm_origins')
       .select('id')
-      .ilike('name', data.originName)
+      .ilike('name', targetOriginName)
       .order('created_at', { ascending: true })
       .limit(1);
     
     if (existingOrigins && existingOrigins.length > 0) {
       originId = existingOrigins[0].id;
-      console.log(`[CRM] Origem existente encontrada: ${data.originName} (${originId})`);
+      console.log(`[CRM] Origem existente encontrada: ${targetOriginName} (${originId})`);
     } else {
       // Criar nova origem apenas se não existir NENHUMA
       const { data: newOrigin } = await supabase
         .from('crm_origins')
         .insert({
           clint_id: `hubla-origin-${Date.now()}`,
-          name: data.originName,
+          name: targetOriginName,
           description: 'Criada automaticamente via webhook Hubla'
         })
         .select('id')
@@ -271,7 +276,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       
       if (newOrigin) {
         originId = newOrigin.id;
-        console.log(`[CRM] Origem criada: ${data.originName} (${originId})`);
+        console.log(`[CRM] Origem criada: ${targetOriginName} (${originId})`);
       }
     }
     
@@ -344,7 +349,58 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       }
     }
     
-    // 3. Buscar estágio "Novo Lead" para a origem
+    // === NOVO: VERIFICAR SE JÁ EXISTE DEAL PARA ESTE CONTATO NO PIPELINE ===
+    let existingDeal: any = null;
+    if (contactId && originId) {
+      const { data: dealByContactOrigin } = await supabase
+        .from('crm_deals')
+        .select('id, tags, value, custom_fields')
+        .eq('contact_id', contactId)
+        .eq('origin_id', originId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (dealByContactOrigin) {
+        existingDeal = dealByContactOrigin;
+        console.log(`[CRM] Deal existente encontrado para contato: ${existingDeal.id}`);
+      }
+    }
+    
+    // Se deal existe, ATUALIZAR tags + valor (não criar novo)
+    if (existingDeal) {
+      const currentTags = existingDeal.tags || [];
+      const newTags = currentTags.includes('A010') ? currentTags : [...currentTags, 'A010'];
+      
+      // Merge custom_fields preservando dados existentes
+      const currentCustomFields = existingDeal.custom_fields || {};
+      const updatedCustomFields = {
+        ...currentCustomFields,
+        a010_compra: true,
+        a010_produto: data.productName,
+        a010_data: new Date().toISOString(),
+      };
+      
+      // Atualizar valor se o novo for maior (upsell)
+      const newValue = Math.max(existingDeal.value || 0, data.value || 0);
+      
+      await supabase
+        .from('crm_deals')
+        .update({
+          tags: newTags,
+          value: newValue,
+          custom_fields: updatedCustomFields,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingDeal.id);
+      
+      console.log(`[CRM] Deal atualizado com tag A010: ${existingDeal.id} - Valor: R$ ${newValue}`);
+      return; // Não criar novo deal
+    }
+    
+    // === CONTINUAR COM CRIAÇÃO DE DEAL SE NÃO EXISTIR ===
+    
+    // 6. Buscar estágio "Novo Lead" para a origem
     let stageId: string | null = null;
     if (originId) {
       const { data: stage } = await supabase
@@ -370,9 +426,9 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       stageId = genericStage?.id;
     }
     
-    // 4. Criar deal usando UPSERT atômico (previne duplicação por race condition)
+    // 7. Criar deal usando UPSERT atômico (previne duplicação por race condition)
     if (contactId && originId) {
-      // 4.1 Herdar owner de outro deal do mesmo contato
+      // 7.1 Herdar owner de outro deal do mesmo contato
       let inheritedOwnerId: string | null = null;
       const { data: dealWithOwner } = await supabase
         .from('crm_deals')
@@ -387,7 +443,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         console.log(`[CRM] Owner herdado de outro deal: ${inheritedOwnerId}`);
       }
       
-      // 4.2 Usar UPSERT atômico - se já existir deal para este contact_id+origin_id, ignora
+      // 7.2 Usar UPSERT atômico - se já existir deal para este contact_id+origin_id, ignora
       const dealData = {
         clint_id: `hubla-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
         name: `${data.name || 'Cliente'} - A010`,
@@ -398,7 +454,12 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         owner_id: inheritedOwnerId,
         product_name: data.productName,
         tags: ['A010', 'Hubla'],
-        custom_fields: { source: 'hubla', product: data.productName },
+        custom_fields: { 
+          source: 'hubla', 
+          product: data.productName,
+          a010_compra: true,
+          a010_data: new Date().toISOString()
+        },
         data_source: 'webhook'
       };
       
@@ -422,7 +483,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       } else if (newDeal) {
         console.log(`[CRM] Deal criado: ${data.name} - A010 (${newDeal.id}) com owner: ${inheritedOwnerId || 'nenhum'}`);
         
-        // 5. Gerar tarefas automáticas baseadas nos templates do estágio
+        // 8. Gerar tarefas automáticas baseadas nos templates do estágio
         if (stageId) {
           await generateTasksForDeal(supabase, {
             dealId: newDeal.id,
@@ -1119,6 +1180,57 @@ serve(async (req) => {
             .eq('sale_date', new Date(invoice.created_at || invoice.createdAt).toISOString().split('T')[0]);
 
           console.log(`🔄 Reembolso processado: ${hublaId}`);
+          
+          // === NOVO: Atualizar deal no CRM com badge de reembolso ===
+          const customerEmail = invoice.customer?.email || invoice.customer_email || invoice.payer?.email;
+          if (customerEmail) {
+            console.log(`🔴 [REEMBOLSO CRM] Buscando contato por email: ${customerEmail}`);
+            
+            const { data: contact } = await supabase
+              .from('crm_contacts')
+              .select('id')
+              .ilike('email', customerEmail)
+              .limit(1)
+              .maybeSingle();
+            
+            if (contact) {
+              // Buscar deals do contato para atualizar
+              const { data: deals } = await supabase
+                .from('crm_deals')
+                .select('id, custom_fields, tags')
+                .eq('contact_id', contact.id);
+              
+              if (deals && deals.length > 0) {
+                for (const deal of deals) {
+                  // Merge custom_fields preservando dados existentes
+                  const currentCustomFields = deal.custom_fields || {};
+                  const updatedCustomFields = {
+                    ...currentCustomFields,
+                    reembolso_solicitado: true,
+                    reembolso_em: new Date().toISOString(),
+                    motivo_reembolso: 'Reembolso automático via Hubla'
+                  };
+                  
+                  // Adicionar tag Reembolso se não existir
+                  const currentTags = deal.tags || [];
+                  const newTags = currentTags.includes('Reembolso') ? currentTags : [...currentTags, 'Reembolso'];
+                  
+                  await supabase
+                    .from('crm_deals')
+                    .update({
+                      custom_fields: updatedCustomFields,
+                      tags: newTags,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', deal.id);
+                  
+                  console.log(`🔴 [REEMBOLSO CRM] Deal ${deal.id} marcado com badge de reembolso`);
+                }
+              }
+            } else {
+              console.log(`🔴 [REEMBOLSO CRM] Contato não encontrado para email: ${customerEmail}`);
+            }
+          }
         }
       }
 
