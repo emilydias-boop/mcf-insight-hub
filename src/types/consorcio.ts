@@ -130,6 +130,7 @@ export interface ConsorcioInstallment {
   data_vencimento: string;
   data_pagamento?: string;
   status: StatusParcela;
+  observacao?: string;
   created_at: string;
   updated_at: string;
 }

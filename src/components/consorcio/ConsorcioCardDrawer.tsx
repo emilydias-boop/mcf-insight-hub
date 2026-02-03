@@ -37,7 +37,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard, useUpdateCardStatus } from "@/hooks/useConsorcio";
+import { useConsorcioCardDetails, usePayInstallment, useDeleteConsorcioCard, useUpdateCardStatus, useUpdateInstallment } from "@/hooks/useConsorcio";
 import { useRecalculateCommissions } from "@/hooks/useRecalculateCommissions";
 import { STATUS_OPTIONS, ESTADO_CIVIL_OPTIONS, ConsorcioInstallment, ConsorcioStatus, MotivoContemplacao } from "@/types/consorcio";
 import { calcularResumoComissoes } from "@/lib/commissionCalculator";
@@ -48,6 +48,7 @@ import { GroupDetailsCard } from "./GroupDetailsCard";
 import { InadimplenciaAlert } from "./InadimplenciaAlert";
 import { ContemplationCard } from "./ContemplationCard";
 import { StatusEditDropdown } from "./StatusEditDropdown";
+import { EditInstallmentDialog, UpdateInstallmentData } from "./EditInstallmentDialog";
 
 interface ConsorcioCardDrawerProps {
   cardId: string | null;
@@ -91,8 +92,11 @@ function getEstadoCivilLabel(value?: string | null): string {
 
 export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCardDrawerProps) {
   const [editFormOpen, setEditFormOpen] = useState(false);
+  const [editInstallmentOpen, setEditInstallmentOpen] = useState(false);
+  const [selectedInstallment, setSelectedInstallment] = useState<ConsorcioInstallment | null>(null);
   const { data: card, isLoading } = useConsorcioCardDetails(cardId);
   const payInstallment = usePayInstallment();
+  const updateInstallment = useUpdateInstallment();
   const deleteCard = useDeleteConsorcioCard();
   const recalculateCommissions = useRecalculateCommissions();
   const updateCardStatus = useUpdateCardStatus();
@@ -164,6 +168,17 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
         ...data,
       });
     }
+  };
+
+  const handleEditInstallment = (installment: ConsorcioInstallment) => {
+    setSelectedInstallment(installment);
+    setEditInstallmentOpen(true);
+  };
+
+  const handleSaveInstallment = async (data: UpdateInstallmentData) => {
+    await updateInstallment.mutateAsync(data);
+    setEditInstallmentOpen(false);
+    setSelectedInstallment(null);
   };
 
   const displayName = card?.tipo_pessoa === "pf" ? card?.nome_completo : card?.razao_social;
@@ -315,6 +330,7 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
                       <InstallmentsPaginated
                         installments={card.installments || []}
                         onPayInstallment={handlePayInstallment}
+                        onEditInstallment={handleEditInstallment}
                         isPaying={payInstallment.isPending}
                       />
                     </TabsContent>
@@ -741,6 +757,18 @@ export function ConsorcioCardDrawer({ cardId, open, onOpenChange }: ConsorcioCar
             </div>
           </ScrollArea>
         </div>
+
+        {/* Edit Installment Dialog */}
+        <EditInstallmentDialog
+          installment={selectedInstallment}
+          open={editInstallmentOpen}
+          onOpenChange={(open) => {
+            setEditInstallmentOpen(open);
+            if (!open) setSelectedInstallment(null);
+          }}
+          onSave={handleSaveInstallment}
+          isSaving={updateInstallment.isPending}
+        />
       </SheetContent>
 
       {/* Edit Form */}
