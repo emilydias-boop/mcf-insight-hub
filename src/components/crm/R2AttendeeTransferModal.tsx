@@ -32,6 +32,7 @@ import { useActiveR2Closers } from '@/hooks/useR2Closers';
 import { useR2CloserAvailableSlots } from '@/hooks/useR2CloserAvailableSlots';
 import { useTransferR2Attendee } from '@/hooks/useTransferR2Attendee';
 import { R2AttendeeExtended, R2MeetingRow } from '@/types/r2Agenda';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface R2AttendeeTransferModalProps {
   open: boolean;
@@ -55,10 +56,14 @@ export function R2AttendeeTransferModal({
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [reason, setReason] = useState<string>('');
 
+  const { role } = useAuth();
+  const isAdmin = role === 'admin';
+
   const { data: closers = [], isLoading: loadingClosers } = useActiveR2Closers(buFilter);
   const { data: slotsData, isLoading: loadingSlots } = useR2CloserAvailableSlots(
     selectedCloserId || undefined,
-    selectedDate
+    selectedDate,
+    isAdmin // Admin pode ultrapassar limite de capacidade
   );
   const transferMutation = useTransferR2Attendee();
 
@@ -229,28 +234,36 @@ export function R2AttendeeTransferModal({
                       {loadingSlots ? 'Carregando...' : 'Nenhum horário configurado'}
                     </div>
                   ) : (
-                    slotsData.availableSlots.map((slot) => (
-                      <SelectItem
-                        key={slot.time}
-                        value={slot.time}
-                        disabled={!slot.isAvailable}
-                      >
-                        <div className="flex items-center justify-between gap-3 w-full">
-                          <span>{slot.time}</span>
-                          <Badge
-                            variant={slot.isAvailable ? 'outline' : 'secondary'}
-                            className={cn(
-                              'text-xs',
-                              slot.isAvailable
-                                ? 'text-green-600 border-green-300'
-                                : 'text-muted-foreground'
-                            )}
-                          >
-                            {slot.currentCount}/{slot.maxCount}
-                          </Badge>
-                        </div>
-                      </SelectItem>
-                    ))
+                    slotsData.availableSlots.map((slot) => {
+                      const isFull = slot.currentCount >= slot.maxCount;
+                      const isAdminOverride = isFull && isAdmin;
+                      
+                      return (
+                        <SelectItem
+                          key={slot.time}
+                          value={slot.time}
+                          disabled={!slot.isAvailable}
+                        >
+                          <div className="flex items-center justify-between gap-3 w-full">
+                            <span>{slot.time}</span>
+                            <Badge
+                              variant={slot.isAvailable ? 'outline' : 'secondary'}
+                              className={cn(
+                                'text-xs',
+                                isAdminOverride
+                                  ? 'text-amber-600 border-amber-300'
+                                  : slot.isAvailable
+                                    ? 'text-green-600 border-green-300'
+                                    : 'text-muted-foreground'
+                              )}
+                            >
+                              {slot.currentCount}/{slot.maxCount}
+                              {isAdminOverride && ' (Admin)'}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      );
+                    })
                   )}
                 </SelectContent>
               </Select>
