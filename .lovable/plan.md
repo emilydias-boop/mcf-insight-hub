@@ -1,136 +1,92 @@
 
-
-# Plano: Corrigir Busca de Leads no Agendamento do Consórcio
+# Plano: Filtrar Leads Finalizados na Busca de Agendamento
 
 ## Problema Identificado
 
-Ao buscar leads no modal de agendamento R1 do Consórcio, leads como "Tiago Raifran" não aparecem, apesar de existirem no pipeline de Negócios.
+O lead "Tiago Raifran" aparece 3 vezes na busca de agendamento porque existem 3 deals com seu nome em diferentes estágios:
 
-### Causa Raiz
+| Deal | Estágio | Status Correto | Deveria aparecer? |
+|------|---------|----------------|-------------------|
+| Tiago Raifran | APORTE HOLDING | WON (já fez aporte na holding) | Não |
+| Tiago Raifran | VENDA REALIZADA 50K | WON (venda concluída) | Não |
+| Tiago Raifran | RENOVAÇÃO HUBLA | OPEN (renovação pendente) | Sim |
 
-O código em `QuickScheduleModal.tsx` (linha 117-119) está passando **IDs de grupos** para o hook de busca, mas o filtro é aplicado em `origin_id`:
-
-```typescript
-const originIds = buMapping?.groups && buMapping.groups.length > 0 
-  ? buMapping.groups    // ❌ Passa IDs de GRUPOS
-  : undefined;
-```
-
-O hook `useSearchDealsForSchedule` filtra por `origin_id`:
-```typescript
-dealsQuery = dealsQuery.in('origin_id', originIds);  // ❌ Nunca encontra porque origin_id ≠ group_id
-```
-
-### Dados Confirmados
-
-| Entidade | ID | Tipo |
-|----------|-----|------|
-| Lead "Tiago Raifran" | `origin_id = 7d7b1cb5-...` | Origin "Efeito Alavanca + Clube" |
-| Grupo pai | `f8a2b3c4-...` | Group "BU - LEILÃO" |
-| Mapeamento Consórcio | `f8a2b3c4-...` | Group (entity_type=group) |
-
-A busca passa o group_id, mas o deal tem origin_id → não há match.
+O sistema atual não reconhece os estágios específicos do Consórcio como "ganhos".
 
 ---
 
 ## Solução Proposta
 
-Criar um novo hook `useBUOriginIds` que expande grupos para suas origens filhas, garantindo que a busca use IDs de origens reais.
+### Parte 1: Atualizar Keywords de Estágios Ganhos
 
-### Alterações
+Adicionar os termos específicos do Consórcio ao arquivo de mapeamento de status.
 
-**Arquivo 1: `src/hooks/useBUPipelineMap.ts`**
+**Arquivo:** `src/lib/dealStatusHelper.ts`
 
-Adicionar novo hook `useBUOriginIds` que:
-1. Recebe o mapeamento da BU
-2. Se há grupos mapeados, busca todas as origens filhas desses grupos
-3. Combina com origens mapeadas diretamente
-4. Retorna lista final de origin IDs para filtrar
+Atualizar `WON_KEYWORDS` para incluir:
+- `aporte holding`
+- `carta socios fechada`
+- `carta + aporte`
+- `venda realizada`
 
-```typescript
-export function useBUOriginIds(bu: BusinessUnit | null) {
-  const { data: buMapping } = useBUPipelineMap(bu);
-  
-  return useQuery({
-    queryKey: ['bu-origin-ids', bu, buMapping?.groups],
-    queryFn: async () => {
-      if (!buMapping) return [];
-      
-      const directOrigins = buMapping.origins || [];
-      
-      // Se há grupos, buscar origens filhas
-      if (buMapping.groups && buMapping.groups.length > 0) {
-        const { data: childOrigins } = await supabase
-          .from('crm_origins')
-          .select('id')
-          .in('group_id', buMapping.groups);
-        
-        const childOriginIds = childOrigins?.map(o => o.id) || [];
-        return [...new Set([...directOrigins, ...childOriginIds])];
-      }
-      
-      return directOrigins;
-    },
-    enabled: !!bu && !!buMapping,
-  });
-}
-```
+### Parte 2: Filtrar Deals na Busca
 
-**Arquivo 2: `src/components/crm/QuickScheduleModal.tsx`**
+Modificar o hook de busca para excluir deals que estão em estágios finalizados (ganhos ou perdidos).
 
-Substituir:
-```typescript
-// ANTES (linha 116-119)
-const { data: buMapping } = useBUPipelineMap(activeBU);
-const originIds = buMapping?.groups && buMapping.groups.length > 0 
-  ? buMapping.groups 
-  : undefined;
-```
+**Arquivo:** `src/hooks/useAgendaData.ts`
 
-Por:
-```typescript
-// DEPOIS
-const { data: buOriginIds = [] } = useBUOriginIds(activeBU);
-const originIds = buOriginIds.length > 0 ? buOriginIds : undefined;
-```
-
----
-
-## Fluxo Corrigido
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  QuickScheduleModal (Consórcio)                                     │
-│  ↓                                                                  │
-│  useBUOriginIds("consorcio")                                        │
-│  ↓                                                                  │
-│  buMapping.groups = [f8a2b3c4-..., b98e3746-..., ...]              │
-│  ↓                                                                  │
-│  Busca crm_origins WHERE group_id IN (grupos)                       │
-│  ↓                                                                  │
-│  Retorna: [7d7b1cb5-..., 57013597-..., d69dd4ff-..., ...]          │
-│        (Efeito Alavanca, PIPELINE INSIDE SALES, etc)                │
-│  ↓                                                                  │
-│  useSearchDealsForSchedule("Tiago", originIds)                     │
-│  ↓                                                                  │
-│  Encontra lead com origin_id = 7d7b1cb5-... ✓                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
+Na função `useSearchDealsForSchedule`:
+1. Importar `getDealStatusFromStage` do helper
+2. Após normalizar os deals, filtrar apenas os que têm status `open`
+3. Retornar somente deals ainda em andamento
 
 ---
 
 ## Resultado Esperado
 
-Após a implementação, ao buscar "Tiago Raifran" no modal de agendamento do Consórcio:
+Após a implementação, ao buscar "Tiago Raifran" no modal de agendamento:
 
 | Antes | Depois |
 |-------|--------|
-| "Nenhum lead encontrado" | Lista com "Tiago Raifran" da origem "Efeito Alavanca + Clube" |
+| 3 resultados (todos os deals) | 1 resultado (apenas RENOVAÇÃO HUBLA) |
 
 ---
 
-## Arquivos Modificados
+## Detalhes Técnicos
 
-1. `src/hooks/useBUPipelineMap.ts` - Adicionar hook `useBUOriginIds`
-2. `src/components/crm/QuickScheduleModal.tsx` - Usar novo hook para obter origin IDs corretos
+### Modificação 1: `src/lib/dealStatusHelper.ts`
 
+```typescript
+const WON_KEYWORDS = [
+  'venda realizada', 'contrato pago', 'pagamento concluído',
+  'crédito contratado', 'crédito aprovado', 'consórcio fechado',
+  'fechado', 'fechada', 'ganho', 'ganha', 'convertido', 'convertida',
+  // Termos específicos do Consórcio
+  'aporte holding', 'carta socios fechada', 'carta + aporte'
+];
+```
+
+### Modificação 2: `src/hooks/useAgendaData.ts`
+
+```typescript
+import { getDealStatusFromStage } from '@/lib/dealStatusHelper';
+
+// Dentro de useSearchDealsForSchedule, após normalizar os deals:
+const openDeals = normalizedDeals.filter(deal => {
+  const status = getDealStatusFromStage(deal.stage?.stage_name);
+  return status === 'open'; // Excluir 'won' e 'lost'
+});
+```
+
+---
+
+## Nota sobre Dados Faltantes
+
+Os deals de "Tiago Raifran" estão com `contact_id = NULL`, por isso aparecem sem telefone e email. Isso é um problema de dados que requer correção manual via SQL ou através da interface de edição de negócios.
+
+---
+
+## Arquivos a Modificar
+
+1. `src/lib/dealStatusHelper.ts` - Adicionar keywords do Consórcio
+2. `src/hooks/useAgendaData.ts` - Filtrar deals finalizados na busca
