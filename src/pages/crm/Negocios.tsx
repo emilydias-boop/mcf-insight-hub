@@ -215,7 +215,7 @@ const Negocios = () => {
   const visibleStages = getVisibleStages();
   
   // Derivar opções de owners a partir dos deals carregados
-  const { ownerOptions } = useDealOwnerOptions(dealsData);
+  const { ownerOptions } = useDealOwnerOptions(dealsData, activeBU);
   
   // Buscar tags únicas para o filtro
   const { data: availableTags, isLoading: isLoadingTags } = useUniqueDealTags({
