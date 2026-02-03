@@ -1,138 +1,66 @@
 
-# Plano: Corrigir Visibilidade de Pipelines e Origens para SDRs do Consórcio
+# Plano: Transferir Leads para Cleiton (SDR Consórcio)
 
-## Problemas Identificados
+## Contexto
 
-### 1. Lógica de `buAuthorizedOrigins` Excludente
-**Arquivo:** `src/pages/crm/Negocios.tsx` (linha 82)
+Os 206 IDs de leads fornecidos são de uma fonte externa e não correspondem aos UUIDs do banco de dados. Os deals existem na pipeline **Efeito Alavanca + Clube** (`7d7b1cb5-2a44-4552-9eff-c3b798646b78`) com UUIDs diferentes, identificáveis pelo **nome do lead**.
 
-A lógica atual escolhe **OU** origens **OU** grupos:
-```javascript
-return buMapping.origins.length > 0 ? buMapping.origins : buMapping.groups;
-```
+## Dados do Cleiton
 
-O Consórcio tem **5 grupos** E **1 origem** mapeados:
-- Grupos: Perpétuo, Hubla (3 versões), BU - LEILÃO
-- Origem: PIPE LINE - INSIDE SALES
-
-Com a lógica atual, apenas a origem é passada para `allowedOriginIds`, e os grupos são ignorados.
-
-### 2. PipelineSelector Não Usa `skipDedup`
-**Arquivo:** `src/components/crm/PipelineSelector.tsx` (linha 64)
-
-O componente chama `useCRMPipelines()` sem `skipDedup=true`, mesmo quando recebe `allowedGroupIds`. Isso causa deduplicação por nome e os grupos mapeados podem ser ocultados.
-
-### 3. Filtro de Sidebar Incompleto
-**Arquivo:** `src/components/crm/OriginsSidebar.tsx` (linhas 110-139)
-
-O filtro `filteredByBU` não inclui automaticamente as origens de grupos permitidos quando só grupos são mapeados.
-
----
+| Campo | Valor |
+|-------|-------|
+| Nome | Cleiton Anacleto Lima |
+| Email | cleiton.lima@minhacasafinanciada.com |
+| Profile ID | 16828627-136e-42ef-9623-62dedfbc9d89 |
+| Role | SDR |
 
 ## Solução Proposta
 
-### Correção 1: Combinar Grupos E Origens no `buAuthorizedOrigins`
+### Opção 1: Script SQL Direto (Recomendado para 206 leads)
 
-**Arquivo:** `src/pages/crm/Negocios.tsx`
+Executar um UPDATE direto no banco usando a lista de nomes fornecida:
 
-Alterar a lógica para incluir AMBOS:
-
-```typescript
-const buAuthorizedOrigins = useMemo(() => {
-  if (!activeBU || !buMapping) return [];
-  // Combinar grupos E origens (não excludente)
-  return [...buMapping.groups, ...buMapping.origins];
-}, [activeBU, buMapping]);
+```sql
+-- Transferir deals para Cleiton por nome na pipeline Efeito Alavanca + Clube
+UPDATE crm_deals
+SET 
+  owner_id = 'cleiton.lima@minhacasafinanciada.com',
+  owner_profile_id = '16828627-136e-42ef-9623-62dedfbc9d89',
+  updated_at = NOW()
+WHERE origin_id = '7d7b1cb5-2a44-4552-9eff-c3b798646b78'
+  AND owner_id IS NULL
+  AND name IN (
+    'matheus', 'Felipe Clemente de Sá', 'Marcio Renato Martins', 'Giovanni kazuo',
+    'Cristiano Alberto dos Santos', 'ARY DRUMOND', 'Italo Cortez', 'Lucia Shiraichi',
+    -- ... lista completa de 206 nomes únicos
+  );
 ```
 
-### Correção 2: Passar Flag `skipDedup` para PipelineSelector
+E depois registrar a atividade de transferência em massa.
 
-**Arquivo:** `src/components/crm/PipelineSelector.tsx`
+### Opção 2: Edge Function de Transferência por Nome
 
-Modificar o componente para aceitar e usar o flag:
+Criar uma Edge Function que:
+1. Recebe lista de nomes + pipeline + novo owner
+2. Busca os IDs reais no banco por nome
+3. Usa a lógica existente do `useBulkTransfer` para transferir
 
-```typescript
-interface PipelineSelectorProps {
-  selectedPipelineId: string | null;
-  onSelectPipeline: (id: string | null) => void;
-  allowedGroupIds?: string[];
-  skipDedup?: boolean; // NOVO: flag para pular deduplicação
-}
+## Nomes a Transferir (206 registros - nomes únicos da lista)
 
-export const PipelineSelector = ({ 
-  selectedPipelineId, 
-  onSelectPipeline, 
-  allowedGroupIds,
-  skipDedup = false // Default: false (comportamento atual)
-}: PipelineSelectorProps) => {
-  // Usar skipDedup quando há filtro de BU
-  const shouldSkipDedup = skipDedup || (allowedGroupIds && allowedGroupIds.length > 0);
-  const { data: pipelines, isLoading } = useCRMPipelines(shouldSkipDedup);
-  // ...
-}
-```
+A lista completa fornecida contém 206 linhas. Após remover duplicatas por nome, temos aproximadamente **150-170 nomes únicos** que correspondem a deals órfãos na pipeline.
 
-### Correção 3: Passar `skipDedup` na OriginsSidebar
+## Implementação Recomendada
 
-**Arquivo:** `src/components/crm/OriginsSidebar.tsx`
+1. **Primeiro**: Executar query para identificar exatamente quantos deals correspondem aos nomes
+2. **Segundo**: Gerar e executar o UPDATE SQL com a lista completa
+3. **Terceiro**: Registrar atividades de transferência via INSERT em `deal_activities`
 
-O componente já recebe `allowedGroupIds`, então precisa passar `skipDedup={true}` para o `PipelineSelector`:
+## Alternativa: Usar o Hook Existente
 
-```typescript
-<PipelineSelector
-  selectedPipelineId={pipelineId || null}
-  onSelectPipeline={onSelectPipeline}
-  allowedGroupIds={allowedGroupIds}
-  skipDedup={allowedGroupIds && allowedGroupIds.length > 0} // NOVO
-/>
-```
+Se preferir usar a interface do sistema:
+1. Listar os IDs reais buscando por nome
+2. Usar o `useBulkTransfer` com os IDs corretos do banco
 
 ---
 
-## Detalhes Técnicos
-
-### Mapeamento Atual do Consórcio no Banco
-
-| entity_type | entity_name | entity_id |
-|-------------|-------------|-----------|
-| group | Hubla - Construir Para Alugar | 35361575-... |
-| group | BU - LEILÃO (display: BU - Consorcio) | f8a2b3c4-... |
-| group | Hubla - Sócios MCF | 210d505f-... |
-| group | Hubla - Viver de Aluguel | 267905ec-... |
-| group | Perpétuo - Construa para Alugar (default) | b98e3746-... |
-| origin | PIPE LINE - INSIDE SALES (default) | 57013597-... |
-
-### Fluxo Corrigido
-
-```text
-SDR do Consórcio acessa /consorcio/crm/negocios
-  └─ useBUPipelineMap retorna 5 grupos + 1 origem
-  └─ buAuthorizedOrigins = [...grupos, ...origens] (6 IDs)
-  └─ buAllowedGroups = 5 grupos
-  └─ PipelineSelector recebe allowedGroupIds + skipDedup=true
-      └─ Dropdown mostra todos os 5 grupos (sem deduplicação por nome)
-  └─ OriginsSidebar filtra por todos os 6 IDs
-      └─ Mostra origens dos grupos + origem individual
-```
-
----
-
-## Arquivos a Modificar
-
-1. **`src/pages/crm/Negocios.tsx`**
-   - Linha 82: Combinar grupos + origens no `buAuthorizedOrigins`
-
-2. **`src/components/crm/PipelineSelector.tsx`**
-   - Adicionar prop `skipDedup` e usar quando há filtro de BU
-
-3. **`src/components/crm/OriginsSidebar.tsx`**
-   - Passar `skipDedup` para o `PipelineSelector`
-
----
-
-## Resultado Esperado
-
-- Dropdown mostrará os 5 grupos mapeados para Consórcio
-- Sidebar mostrará as origens de cada grupo quando selecionado
-- SDRs do Consórcio poderão navegar entre todas as pipelines autorizadas
-- Não afeta outras BUs (comportamento inalterado para Incorporador, etc.)
+**Próximo passo:** Confirme qual abordagem prefere e eu executo a transferência completa.
