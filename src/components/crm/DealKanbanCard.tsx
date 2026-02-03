@@ -292,6 +292,15 @@ export const DealKanbanCard = ({
             </Badge>
           )}
           
+          {/* Badge de Reembolso (prioridade visual) */}
+          {(deal.custom_fields as Record<string, unknown>)?.reembolso_solicitado && (
+            <Badge 
+              variant="outline" 
+              className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400 dark:border-red-700"
+            >
+              Reembolso
+            </Badge>
+          )}
           {isRescheduled && (
             <Badge 
               variant="outline" 
