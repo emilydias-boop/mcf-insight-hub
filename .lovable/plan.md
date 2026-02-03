@@ -1,180 +1,163 @@
 
 
-# Plano: Adicionar SDRs na Página de Fechamento do Consórcio
+# Plano: Cadastrar SDRs Ithaline e Ygor no Consórcio
 
-## Situação Atual
+## Diagnóstico Atual
 
-A página `/consorcio/fechamento` mostra apenas os **Closers do Consórcio** (4 pessoas), enquanto os **SDRs do Consórcio** (atualmente 1 - Cleiton Lima) são gerenciados separadamente na página `/fechamento-sdr` com filtro de BU.
+### Ithaline Clara dos Santos
+| Item | Status | Detalhe |
+|------|--------|---------|
+| Conta de acesso (`profiles`) | ✅ OK | email: `ithaline.clara@minhacasafinanciada.com`, squad: `['consorcio']` |
+| Permissão (`user_roles`) | ✅ OK | role: `sdr` |
+| Ficha RH (`employees`) | ✅ OK | cargo: SDR, departamento: BU - Consórcio |
+| Cadastro fechamento (`sdr`) | ❌ Faltando | Não existe registro na tabela `sdr` |
+| Vínculo employee→sdr | ❌ Faltando | `employees.sdr_id = null` |
 
-O usuário deseja que **ambos** apareçam na mesma página de fechamento do Consórcio.
+### Ygor
+| Item | Status | Detalhe |
+|------|--------|---------|
+| Conta de acesso (`profiles`) | ❌ Faltando | Não existe |
+| Permissão (`user_roles`) | ❌ Faltando | Não existe |
+| Ficha RH (`employees`) | ❌ Faltando | Não existe |
+| Cadastro fechamento (`sdr`) | ❌ Faltando | Não existe |
 
-## Proposta de Solução
+### Cleiton Lima (Referência - Funcionando)
+| Item | Status |
+|------|--------|
+| Conta de acesso | ✅ `cleiton.lima@minhacasafinanciada.com` |
+| Permissão | ✅ role: `sdr` |
+| Ficha RH | ✅ cargo: SDR, `sdr_id` vinculado |
+| Cadastro fechamento | ✅ squad: `consorcio` |
 
-Adicionar **abas (tabs)** na página de Fechamento do Consórcio para separar:
-- **Aba Closers**: Lista atual de closers com comissões (já implementado)
-- **Aba SDRs**: Lista de SDRs do consórcio com métricas (novo)
+---
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  Fechamento - Consórcio                                [Fev 2026 ▼] │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────┐ ┌──────────────┐                                  │
-│  │   Closers    │ │    SDRs      │    (abas)                        │
-│  └──────────────┘ └──────────────┘                                  │
-│                                                                      │
-│  [Recalcular Todos] [Exportar CSV] [Configurações]                  │
-│                                                                      │
-│  ... (conteúdo da aba selecionada) ...                              │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
+## O que precisa ser feito
 
-## Alterações Técnicas
+### Para Ithaline (já tem acesso ao sistema)
 
-### 1. Atualizar página `Fechamento.tsx`
+**Ação 1**: Cadastrar na tabela `sdr` com squad = 'consorcio'
 
-- Adicionar componente `Tabs` do Radix UI
-- Criar duas tabs: "Closers" e "SDRs"
-- Na aba SDRs, reutilizar o hook `useSdrPayouts` com filtro `squad: 'consorcio'`
+Isso pode ser feito pela interface existente em `/fechamento-sdr/configuracoes` (aba SDRs → botão "Novo SDR"), preenchendo:
+- Nome: Ithaline Clara dos Santos
+- Email: `ithaline.clara@minhacasafinanciada.com`
+- Usuário vinculado: selecionar o email dela
+- Squad: `consorcio` (precisamos adicionar este campo no formulário)
 
-### 2. Novo hook para SDRs do Consórcio
+**Ação 2**: Vincular o `sdr_id` no registro de employee dela
 
-Criar função auxiliar no hook existente ou usar diretamente:
+---
+
+### Para Ygor (não tem conta ainda)
+
+**Passo 1**: Criar conta de usuário
+- Opção A: Convite via Auth do Supabase (requer email do Ygor)
+- Opção B: Cadastro manual se ele for acessar pela primeira vez
+
+**Passo 2**: Configurar profile com squad = ['consorcio']
+
+**Passo 3**: Adicionar role `sdr` em user_roles
+
+**Passo 4**: Criar ficha em employees (RH → Colaboradores → Novo Colaborador)
+
+**Passo 5**: Cadastrar na tabela sdr com squad = 'consorcio'
+
+---
+
+## Solução Técnica Recomendada
+
+### Problema identificado no formulário de SDR
+
+O formulário atual de cadastro de SDR (`SdrFormDialog`) não permite selecionar a **squad/BU** do SDR. Isso precisa ser corrigido para que SDRs do Consórcio sejam cadastrados corretamente.
+
+### Alterações necessárias
+
+**Arquivo**: `src/pages/fechamento-sdr/Configuracoes.tsx`
+
+Adicionar campo `squad` no `SdrFormDialog`:
+
 ```typescript
-// Buscar payouts de SDRs do consórcio
-const { data: sdrPayouts } = useSdrPayouts(anoMes, {
-  squad: 'consorcio',
+// Adicionar estado
+const [squad, setSquad] = useState<string>('incorporador');
+
+// No formulário, adicionar select
+<div className="space-y-2">
+  <Label>Business Unit (Squad)</Label>
+  <Select value={squad} onValueChange={setSquad}>
+    <SelectTrigger>
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="incorporador">Incorporador</SelectItem>
+      <SelectItem value="consorcio">Consórcio</SelectItem>
+      <SelectItem value="credito">Crédito</SelectItem>
+      <SelectItem value="projetos">Projetos</SelectItem>
+      <SelectItem value="leilao">Leilão</SelectItem>
+    </SelectContent>
+  </Select>
+</div>
+
+// No submit, incluir squad
+await createSdr.mutateAsync({
+  name: name.trim(),
+  email: email.trim() || null,
+  user_id: userId || null,
+  nivel: Number(nivel),
+  meta_diaria: Number(metaDiaria),
+  active,
+  squad, // ← Adicionar
 });
 ```
 
-### 3. Botão "Recalcular Todos" unificado
+### Vínculo automático com Employee
 
-O botão irá:
-1. Recalcular closers via `useRecalculateConsorcioPayouts`
-2. Recalcular SDRs via edge function existente (com filtro de BU)
+Atualmente o vínculo `employees.sdr_id` precisa ser feito manualmente. Podemos melhorar o fluxo para que, ao criar um SDR vinculado a um `user_id`, o sistema automaticamente:
+1. Busque o employee com esse `user_id`
+2. Atualize o `sdr_id` no employee
 
-### 4. Totais separados por aba
+---
 
-Cada aba terá seus próprios cards de resumo (Total Fixo, Variável, Conta).
+## Resumo de Arquivos
 
-## Arquivos a Modificar
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/pages/fechamento-sdr/Configuracoes.tsx` | Modificar | Adicionar campo `squad` no SdrFormDialog |
+| `src/hooks/useSdrFechamento.ts` | Modificar | Atualizar `useCreateSdr` para vincular employee automaticamente |
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/bu-consorcio/Fechamento.tsx` | Adicionar Tabs, importar hooks de SDR, criar seção de SDRs |
-| `src/components/consorcio-fechamento/ConsorcioSdrTable.tsx` | Novo componente para tabela de SDRs (opcional, pode ser inline) |
+---
 
-## Implementação
+## Passos para o Usuário (Manual)
 
-### Estrutura de Tabs
+### Cadastrar Ithaline como SDR do Consórcio
 
-```typescript
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+1. Ir em `/fechamento-sdr/configuracoes`
+2. Na aba "SDRs", clicar "Novo SDR"
+3. Preencher:
+   - Nome: `Ithaline Clara dos Santos`
+   - Email: `ithaline.clara@minhacasafinanciada.com`
+   - Usuário vinculado: selecionar o email dela
+   - Squad: `consorcio` (após a correção do formulário)
+4. Salvar
 
-// Na página:
-<Tabs defaultValue="closers">
-  <TabsList>
-    <TabsTrigger value="closers">
-      Closers ({payouts?.length || 0})
-    </TabsTrigger>
-    <TabsTrigger value="sdrs">
-      SDRs ({sdrPayouts?.length || 0})
-    </TabsTrigger>
-  </TabsList>
-  
-  <TabsContent value="closers">
-    {/* Cards de resumo dos Closers */}
-    {/* Tabela de Closers existente */}
-  </TabsContent>
-  
-  <TabsContent value="sdrs">
-    {/* Cards de resumo dos SDRs */}
-    {/* Tabela de SDRs */}
-  </TabsContent>
-</Tabs>
-```
+### Para Ygor
 
-### Dados dos SDRs
+Primeiro preciso saber:
+- Qual é o email completo do Ygor?
+- Ele já tem conta no sistema? (pode fazer login?)
 
-```typescript
-import { useSdrPayouts, useRecalculateAllPayouts } from '@/hooks/useSdrFechamento';
+---
 
-// No componente:
-const { data: sdrPayouts, isLoading: sdrLoading } = useSdrPayouts(anoMes, {
-  squad: 'consorcio',
-});
+## Resultado Esperado
 
-// Totais dos SDRs
-const sdrTotais = (sdrPayouts || []).reduce(
-  (acc, p) => ({
-    fixo: acc.fixo + (p.valor_fixo || 0),
-    variavel: acc.variavel + (p.valor_variavel_total || 0),
-    total: acc.total + (p.total_conta || 0),
-    ifood: acc.ifood + (p.total_ifood || 0),
-  }),
-  { fixo: 0, variavel: 0, total: 0, ifood: 0 }
-);
-```
+Após as alterações:
 
-### Tabela de SDRs (similar à existente)
+1. **Página de Fechamento do Consórcio** (`/consorcio/fechamento`) na aba SDRs mostrará:
+   - Cleiton Lima
+   - Ithaline Clara dos Santos
+   - Ygor (após cadastro completo)
 
-Incluir colunas: Nome, Cargo, Status, % Meta, Fixo, Variável, Total, iFood, Ação
-
-### Navegação para Detalhe
-
-Ao clicar no SDR, navegar para `/fechamento-sdr/{payoutId}` (reutiliza página existente)
-
-## Resultado Final
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  Fechamento - Consórcio                                [Fev 2026 ▼] │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────────┐ ┌──────────────────┐                          │
-│  │  Closers (4)     │ │   SDRs (1)       │                          │
-│  └──────────────────┘ └──────────────────┘                          │
-│                                                                      │
-│  [Recalcular Todos] [Exportar CSV] [Configurações]                  │
-│                                                                      │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │ Total Fixo        │ Total Variável   │ Total Conta          │    │
-│  │ R$ 14.000,00      │ R$ 600,00        │ R$ 14.600,00         │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                                                                      │
-│  Nome                       │ Status    │ Fixo    │ ... │ Ação     │
-│  ─────────────────────────────────────────────────────────────────  │
-│  Victoria Paz               │ Rascunho  │ R$3.500 │ ... │ [👁]     │
-│  Thobson                    │ Rascunho  │ R$3.500 │ ... │ [👁]     │
-│  Luis Felipe de Souza       │ Rascunho  │ R$3.500 │ ... │ [👁]     │
-│  João Pedro Martins Vieira  │ Rascunho  │ R$3.500 │ ... │ [👁]     │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-Ao clicar na aba "SDRs":
-
-```text
-│  ┌──────────────────┐ ┌──────────────────┐                          │
-│  │  Closers (4)     │ │ ▶ SDRs (1)       │                          │
-│  └──────────────────┘ └──────────────────┘                          │
-│                                                                      │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │ Total Fixo      │ Total Variável │ Total Conta │ Total iFood│    │
-│  │ R$ 2.000,00     │ R$ 1.200,00    │ R$ 3.200,00 │ R$ 150,00  │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                                                                      │
-│  Nome          │ % Meta │ Status   │ Fixo    │ Var.   │ Total │ Ação│
-│  ───────────────────────────────────────────────────────────────────│
-│  Cleiton Lima  │ 85%    │ Rascunho │ R$2.000 │ R$1.200│ R$3.2k│ [👁]│
-│                                                                      │
-```
-
-## Benefícios
-
-1. **Experiência unificada**: Gestores do Consórcio veem toda a equipe em um só lugar
-2. **Reutilização**: Aproveita hooks e tipos já existentes do sistema SDR
-3. **Consistência**: Mesma interface visual para closers e SDRs
-4. **Sem duplicação**: SDRs continuam usando a infraestrutura existente (`sdr_month_payout`)
+2. **Cada SDR poderá**:
+   - Ver seu próprio fechamento
+   - Acessar a agenda do consórcio
+   - Ver negócios da BU Consórcio
+   - Agendar reuniões para os closers do consórcio
 
