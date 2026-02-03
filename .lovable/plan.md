@@ -1,92 +1,103 @@
 
-# Plano: Preservar Navegação ao Restaurar Sessão
+
+# Plano: Corrigir Duplicação de Leads A010
 
 ## Problema Identificado
 
-Quando o usuário sai da página e volta, acontece o seguinte fluxo problemático:
+Os leads A010 entram pelo webhook da Hubla e estão sendo duplicados devido a uma **race condition**. A Hubla envia múltiplos webhooks simultaneamente para a mesma compra.
 
-```text
-1. Usuário está em /crm/reunioes-equipe
-2. Sai da aba/página  
-3. Volta para a página
-4. AuthContext reinicia (user = null, loading = true)
-5. Supabase dispara SIGNED_IN ao restaurar sessão do localStorage
-6. Durante loading, ProtectedRoute mostra spinner
-7. Quando loading termina, rota "/" é avaliada
-8. Navigate to="/home" é acionado → Usuário vai para /home
+## Solução em 3 Etapas
+
+### Etapa 1: Adicionar Constraint Única no Banco
+
+Criar um índice único parcial para prevenir duplicados a nível de banco:
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS crm_deals_contact_origin_unique 
+ON crm_deals (contact_id, origin_id) 
+WHERE contact_id IS NOT NULL 
+  AND origin_id IS NOT NULL 
+  AND data_source = 'webhook';
 ```
 
-## Causa Raiz
+### Etapa 2: Modificar hubla-webhook-handler para Usar Upsert
 
-A rota index em `App.tsx` (linha 162) força redirecionamento:
-```tsx
-<Route index element={<Navigate to="/home" replace />} />
+Alterar a função `createOrUpdateCRMContact` em `hubla-webhook-handler/index.ts` para usar `upsert` atômico ao invés de SELECT + INSERT.
+
+### Etapa 3: Limpar Duplicados Existentes (Lógica Atualizada)
+
+**Regras de limpeza:**
+1. Se o deal **tem atividades** (foi mexido) → **MANTER**
+2. Se o deal **não tem atividades** E existem outros duplicados com atividades → **DELETAR**
+3. Se **nenhum duplicado tem atividades** → manter apenas o **mais antigo**
+
+```sql
+-- Identificar deals duplicados para deletar
+WITH duplicated_contacts AS (
+  SELECT 
+    d.contact_id,
+    d.origin_id
+  FROM crm_deals d
+  WHERE d.data_source = 'webhook'
+    AND d.name ILIKE '%A010%'
+    AND d.contact_id IS NOT NULL
+  GROUP BY d.contact_id, d.origin_id
+  HAVING COUNT(*) > 1
+),
+deal_analysis AS (
+  SELECT 
+    d.id as deal_id,
+    d.contact_id,
+    d.origin_id,
+    d.created_at,
+    (SELECT COUNT(*) FROM deal_activities da WHERE da.deal_id = d.id::text) as activity_count,
+    ROW_NUMBER() OVER (
+      PARTITION BY d.contact_id, d.origin_id 
+      ORDER BY d.created_at ASC
+    ) as rn
+  FROM crm_deals d
+  JOIN duplicated_contacts dc 
+    ON d.contact_id = dc.contact_id 
+    AND d.origin_id = dc.origin_id
+),
+group_has_activities AS (
+  SELECT 
+    contact_id,
+    origin_id,
+    SUM(activity_count) as total_activities
+  FROM deal_analysis
+  GROUP BY contact_id, origin_id
+),
+deals_to_delete AS (
+  SELECT da.deal_id
+  FROM deal_analysis da
+  JOIN group_has_activities gha 
+    ON da.contact_id = gha.contact_id 
+    AND da.origin_id = gha.origin_id
+  WHERE 
+    -- Caso 1: Grupo tem deals com atividades → deletar os SEM atividades
+    (gha.total_activities > 0 AND da.activity_count = 0)
+    OR
+    -- Caso 2: Grupo NÃO tem nenhuma atividade → deletar todos exceto o mais antigo
+    (gha.total_activities = 0 AND da.rn > 1)
+)
+DELETE FROM crm_deals 
+WHERE id IN (SELECT deal_id FROM deals_to_delete);
 ```
 
-Quando o AuthContext reinicia, a URL pode ser momentaneamente interpretada como `/` antes da navegação ser restaurada.
-
-## Solução
-
-Modificar o `AuthContext` para **não interferir na navegação** quando a sessão é restaurada. O usuário deve permanecer na URL atual.
-
-### Mudanças Necessárias
-
-**1. Remover navegação automática do `handleSession`**
-
-O `handleSession` não deve fazer nenhum redirecionamento - apenas atualizar o estado de autenticação.
-
-**2. Manter navegação apenas no `signIn` explícito**
-
-A navegação para `/home` ou `/sdr/minhas-reunioes` deve acontecer **somente** quando o usuário faz login manualmente via formulário.
-
-**3. Verificar o comportamento do `ProtectedRoute`**
-
-Garantir que o `ProtectedRoute` não force redirecionamento desnecessário durante a restauração da sessão.
-
-### Código a Modificar
-
-**`src/contexts/AuthContext.tsx`**
-
-Na função `onAuthStateChange`, quando o evento for `SIGNED_IN` mas o usuário já estava logado (sessão restaurada do localStorage), não fazer nada de navegação:
-
-```typescript
-// Atual - problema: user é null quando volta para página
-if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && 
-    user && 
-    newSession?.user?.id === user.id) {
-  // ...
-  return;
-}
-
-// Novo - usar ref para rastrear se é sessão restaurada
-if (event === 'SIGNED_IN' && initialSessionHandled.current) {
-  // Sessão restaurada, apenas atualizar estado sem navegar
-  const { primaryRole, roles } = extractRolesFromSession(newSession);
-  setSession(newSession);
-  setUser(newSession.user);
-  setRole(primaryRole);
-  setAllRoles(roles);
-  setLoading(false);
-  return;
-}
-```
-
-### Impacto
-
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Login manual | Vai para /home | Vai para /home ✓ |
-| Sessão restaurada (volta aba) | Vai para /home ❌ | Permanece na URL atual ✓ |
-| Token refresh | Permanece na URL | Permanece na URL ✓ |
-
-### Arquivos a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/contexts/AuthContext.tsx` | Ajustar lógica de onAuthStateChange para não navegar em sessão restaurada |
+| Migration SQL | Criar índice único `crm_deals_contact_origin_unique` |
+| `supabase/functions/hubla-webhook-handler/index.ts` | Substituir SELECT+INSERT por UPSERT na função `createOrUpdateCRMContact` |
 
 ## Resultado Esperado
 
-- Usuário em `/crm/reunioes-equipe` → sai → volta → continua em `/crm/reunioes-equipe`
-- Login manual continua funcionando normalmente
-- Token refresh continua funcionando normalmente
+| Cenário | Ação |
+|---------|------|
+| Deal com atividades | MANTER (mesmo se duplicado) |
+| Deal sem atividades + outro com atividades | DELETAR |
+| Todos sem atividades | Manter mais antigo, deletar outros |
+| Novos webhooks simultâneos | Constraint previne duplicação |
+
