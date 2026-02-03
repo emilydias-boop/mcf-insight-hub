@@ -369,7 +369,8 @@ export function CloserColumnCalendar({
                                           Outside
                                         </Badge>
                                       )}
-                                      {!att.is_partner && att.parent_attendee_id && (
+                                      {!att.is_partner && att.parent_attendee_id && 
+                                       !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(att.status) && (
                                         <Badge variant="outline" className="text-[9px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 gap-0.5">
                                           <ArrowRightLeft className="h-2.5 w-2.5" />
                                           Remanejado

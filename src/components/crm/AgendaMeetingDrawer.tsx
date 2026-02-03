@@ -624,7 +624,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                               {p.parentAttendeeName ? `Sócio de ${p.parentAttendeeName.split(' ')[0]}` : 'Sócio'}
                             </Badge>
                           )}
-                          {!p.isPartner && p.parentAttendeeId && (
+                          {!p.isPartner && p.parentAttendeeId && 
+                           !['contract_paid', 'completed', 'refunded', 'approved', 'rejected'].includes(p.status) && (
                             <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300 gap-1">
                               <ArrowRightLeft className="h-3 w-3" />
                               Remanejado
