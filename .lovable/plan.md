@@ -1,150 +1,183 @@
 
-# Plano: Corrigir Bug de Roles Ficando Permanentemente como "Viewer"
+# Plano: Suporte a Múltiplas BUs por Usuário
 
-## Problema Identificado
+## Problema Atual
 
-O usuário Thobson está com role `coordenador` no banco, mas a interface mostra "Viewer". Isso acontece porque:
+O campo `squad` na tabela `profiles` é do tipo TEXT, permitindo apenas **uma BU por usuário**. Thobson está configurado como "consorcio", então:
 
-1. O `loadRolesInBackground` tem timeout de 8s com fallback para `viewer`
-2. Se ocorrer timeout, ele ainda marca `hasLoadedRoles.current = true`
-3. Em eventos subsequentes (TOKEN_REFRESHED, navegação), o sistema pula a recarga porque pensa que já tem os roles corretos
-4. O usuário fica permanentemente preso como "Viewer"
+- Ele não vê os menus de "BU - Incorporador MCF" na sidebar
+- Ele não consegue acessar `/crm/agenda-r2` (CRM do Incorporador)
 
-### Fluxo do Bug:
+## Solução Proposta
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  1. Login/navegação inicial                                         │
-│  2. handleSession → define roleLoading=true                         │
-│  3. loadRolesInBackground inicia                                    │
-│  4. Query demora > 8s (rede lenta/servidor ocupado)                 │
-│  5. Timeout! Fallback: role='viewer'                                │
-│  6. hasLoadedRoles.current = true ← ERRO! Marca como carregado      │
-│                                                                     │
-│  7. Usuário navega ou tab focus → TOKEN_REFRESHED                   │
-│  8. Código verifica: hasLoadedRoles.current = true                  │
-│  9. Pula handleSession → mantém role='viewer' permanentemente ❌    │
-└─────────────────────────────────────────────────────────────────────┘
+Alterar o sistema para suportar múltiplas BUs por usuário através de um campo array.
+
+---
+
+## Alterações no Banco de Dados
+
+### 1. Migração do campo `squad`
+
+Executar SQL no Supabase para converter o campo de TEXT para TEXT[]:
+
+```sql
+-- Backup do valor atual
+ALTER TABLE profiles ADD COLUMN squad_backup TEXT;
+UPDATE profiles SET squad_backup = squad;
+
+-- Converter para array
+ALTER TABLE profiles 
+  ALTER COLUMN squad TYPE TEXT[] 
+  USING CASE 
+    WHEN squad IS NOT NULL THEN ARRAY[squad]
+    ELSE NULL
+  END;
 ```
 
 ---
 
-## Solução
+## Alterações no Código
 
-### 1. Não marcar como carregado se usou fallback do timeout
+### 2. Hook useMyBU
 
-**Arquivo:** `src/contexts/AuthContext.tsx`
+**Arquivo:** `src/hooks/useMyBU.ts`
 
-**Modificar linhas 159-177:**
+Atualizar para retornar array de BUs:
 
 ```typescript
-// Fetch roles with timeout
-const roleResult = await withTimeout(
-  fetchUserRoles(userId),
-  ROLE_TIMEOUT_MS,
-  null // fallback: null indica timeout
-);
+export function useMyBU() {
+  const { user } = useAuth();
 
-if (version !== roleLoadVersion.current) return;
+  return useQuery({
+    queryKey: ["my-bu", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("squad")
+        .eq("id", user.id)
+        .single();
 
-// Se timeout ocorreu, usar viewer MAS não marcar como carregado
-if (roleResult === null) {
-  console.warn('[Auth] Role fetch timed out, using viewer temporarily');
-  setRole('viewer');
-  setAllRoles(['viewer']);
-  // NÃO definir hasLoadedRoles.current = true aqui!
-  // Isso permite que roles sejam recarregadas em próximo evento
-  return;
+      if (error) throw error;
+      // Retorna array de BUs ou array vazio
+      return (data?.squad as BusinessUnit[]) || [];
+    },
+    enabled: !!user?.id,
+  });
 }
 
-const { primaryRole, roles } = roleResult;
-
-if (roles.length === 0) {
-  setRole('viewer');
-  setAllRoles(['viewer']);
-} else {
-  setRole(primaryRole);
-  setAllRoles(roles);
+// Helper para verificar se usuário tem acesso a uma BU específica
+export function useHasBUAccess(bu: BusinessUnit): boolean {
+  const { data: myBUs = [] } = useMyBU();
+  return myBUs.includes(bu);
 }
-
-// Só marcar como carregado se realmente buscou do banco
-hasLoadedRoles.current = true;
-console.log('[Auth] Roles loaded:', { primaryRole, roles });
 ```
 
-### 2. Forçar recarga se role atual é 'viewer' mas há sessão válida
+### 3. Hook useActiveBU
 
-**Arquivo:** `src/contexts/AuthContext.tsx`
+**Arquivo:** `src/hooks/useActiveBU.ts`
 
-**Modificar lógica de TOKEN_REFRESHED (linhas 254-262):**
+Ajustar para funcionar com array:
 
 ```typescript
-// Preserve roles during token refresh - don't reset if same user
-// BUT: if roles weren't properly loaded (still viewer), try again
-if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && 
-    user && 
-    newSession?.user?.id === user.id) {
-  
-  // Se hasLoadedRoles é false, significa que houve timeout anterior
-  // Tentar carregar novamente
-  if (!hasLoadedRoles.current) {
-    console.log('[Auth] Token refreshed but roles not loaded, reloading...');
-    const myVersion = ++roleLoadVersion.current;
-    setRoleLoading(true);
-    setTimeout(() => {
-      loadRolesInBackground(newSession.user.id, myVersion);
-    }, 0);
-  } else {
-    console.log('[Auth] Token refreshed, keeping existing roles');
+export function useActiveBU(): BusinessUnit | null {
+  const buContext = useContext(BUContext);
+  const { data: userBUs = [] } = useMyBU();
+
+  return useMemo(() => {
+    // Se temos BU no contexto (da rota), usa ela
+    if (buContext.activeBU) {
+      return buContext.activeBU;
+    }
+    
+    // Retorna a primeira BU do usuário (ou null)
+    return userBUs[0] || null;
+  }, [buContext.activeBU, userBUs]);
+}
+```
+
+### 4. AppSidebar - Filtro de BU
+
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
+
+Atualizar lógica de filtragem para verificar se **qualquer** BU do usuário está na lista:
+
+```typescript
+// Linha ~377-382
+// Verificação de BU para SDRs - ATUALIZADO PARA ARRAY
+if (item.requiredBU && item.requiredBU.length > 0) {
+  // Se o usuário não tem BUs ou nenhuma BU do usuário está na lista permitida
+  if (!myBUs || myBUs.length === 0) {
+    return false;
   }
-  setSession(newSession);
-  return;
+  // Verifica se alguma BU do usuário está na lista requerida
+  const hasMatchingBU = myBUs.some(bu => item.requiredBU!.includes(bu));
+  if (!hasMatchingBU) {
+    return false;
+  }
 }
+```
+
+### 5. Página de Gerenciamento de Usuários
+
+**Arquivo:** `src/pages/GerenciamentoUsuarios.tsx` (ou componente de edição)
+
+Atualizar UI para permitir seleção múltipla de BUs com checkboxes:
+
+```typescript
+// Trocar Select por CheckboxGroup
+<div className="space-y-2">
+  <Label>Business Units</Label>
+  {BU_OPTIONS.filter(bu => bu.value).map((bu) => (
+    <div key={bu.value} className="flex items-center space-x-2">
+      <Checkbox
+        checked={selectedBUs.includes(bu.value as BusinessUnit)}
+        onCheckedChange={(checked) => {
+          if (checked) {
+            setSelectedBUs([...selectedBUs, bu.value as BusinessUnit]);
+          } else {
+            setSelectedBUs(selectedBUs.filter(b => b !== bu.value));
+          }
+        }}
+      />
+      <Label>{bu.label}</Label>
+    </div>
+  ))}
+</div>
 ```
 
 ---
 
-## Resumo de Alterações
+## Resumo das Alterações
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/contexts/AuthContext.tsx` | 1. Usar `null` como fallback em vez de viewer object |
-| | 2. Não definir `hasLoadedRoles.current = true` em caso de timeout |
-| | 3. Re-tentar carregar roles em TOKEN_REFRESHED se `hasLoadedRoles = false` |
+| Componente | Alteração |
+|------------|-----------|
+| **Banco de dados** | Migrar `squad` de TEXT para TEXT[] |
+| `useMyBU` | Retornar `BusinessUnit[]` em vez de `BusinessUnit \| null` |
+| `useActiveBU` | Trabalhar com array de BUs |
+| `AppSidebar` | Verificar `myBUs.some()` em vez de `myBU === ` |
+| UI de Usuários | Checkboxes para múltiplas BUs |
 
 ---
 
 ## Resultado Esperado
 
+Após as alterações, Thobson poderá:
+
 | Cenário | Antes | Depois |
 |---------|-------|--------|
-| Timeout na primeira carga | Fica viewer permanentemente | Viewer temporário, recarrega depois |
-| TOKEN_REFRESHED com timeout anterior | Mantém viewer errado | Re-tenta carregar roles |
-| Carga normal (sem timeout) | OK | Mantém igual |
+| Ver menu "BU - Incorporador MCF" | Não vê | Vê |
+| Ver menu "BU - Consórcio" | Vê | Vê |
+| Acessar `/crm/agenda-r2` | Bloqueado (não está na BU) | Permitido |
+| Acessar `/consorcio/crm` | Permitido | Permitido |
 
 ---
 
-## Fluxo Corrigido
+## Configuração do Thobson Após Implementação
 
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  1. Login inicial                                                   │
-│  2. Query demora > 8s → timeout                                     │
-│  3. role='viewer' (temporário), hasLoadedRoles=false                │
-│                                                                     │
-│  4. Usuário muda de tab → TOKEN_REFRESHED                           │
-│  5. Código verifica: hasLoadedRoles = false                         │
-│  6. Re-inicia loadRolesInBackground                                 │
-│  7. Desta vez query retorna: 'coordenador'                          │
-│  8. hasLoadedRoles = true                                           │
-│  9. UI atualiza: "Coordenador" ✓                                    │
-└─────────────────────────────────────────────────────────────────────┘
+```sql
+UPDATE profiles 
+SET squad = ARRAY['incorporador', 'consorcio']
+WHERE id = 'a15cb111-8831-4146-892a-d61ca674628a';
 ```
-
----
-
-## Nota Importante
-
-**Thobson com role `coordenador` não deveria acessar `/usuarios` mesmo após correção** - a tabela `role_permissions` mostra que `coordenador` tem `permission_level: none` para o recurso `usuarios`. Isso é comportamento esperado.
-
-Após a correção, a sidebar vai mostrar "Coordenador" (não "Viewer"), mas ele ainda verá "Acesso Negado" na página `/usuarios` porque não tem permissão.
