@@ -55,6 +55,7 @@ import {
   useUpdateAttendeeAndSlotStatus,
   useUpdateAttendeeNotes,
   useUpdateAttendeePhone,
+  useRestoreAttendeeContractPaid,
 } from '@/hooks/useAgendaData';
 import { MoveAttendeeModal } from './MoveAttendeeModal';
 import { AttendeeNotesSection } from './AttendeeNotesSection';
@@ -146,6 +147,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   const updateAttendeeAndSlotStatus = useUpdateAttendeeAndSlotStatus();
   const updateAttendeeNotes = useUpdateAttendeeNotes();
   const updateAttendeePhone = useUpdateAttendeePhone();
+  const restoreContractPaid = useRestoreAttendeeContractPaid();
   const { findOrCreateConversationByPhone, selectConversation } = useConversationsContext();
 
   // Check if user can delete meetings
@@ -718,6 +720,22 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                           title="Transferir participante"
                         >
                           <ArrowRightLeft className="h-4 w-4 text-purple-600" />
+                        </Button>
+                      )}
+                      {/* Botão Restaurar Contrato Pago - apenas para admins quando status está incorreto */}
+                      {canTransfer && p.id && p.parentAttendeeId && p.status === 'rescheduled' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            restoreContractPaid.mutate({ attendeeId: p.id! });
+                          }}
+                          title="Restaurar para Contrato Pago"
+                          disabled={restoreContractPaid.isPending}
+                        >
+                          <DollarSign className="h-4 w-4 text-green-600" />
                         </Button>
                       )}
                       {p.phone && videoConferenceLink && (
