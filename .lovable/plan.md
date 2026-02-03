@@ -1,49 +1,113 @@
-# ✅ Plano Concluído: Corrigir Duplicação de Leads A010
+
+# Plano: Corrigir Visibilidade de Pipelines para SDRs do Consórcio
 
 ## Problema Identificado
 
-Os leads A010 entravam pelo webhook da Hubla e estavam sendo duplicados devido a uma **race condition**. A Hubla envia múltiplos webhooks simultaneamente para a mesma compra.
+Os SDRs do Consórcio, como o Cleiton Lima, estão visualizando apenas uma pipeline fixa porque o sistema está direcionando-os para uma origem incorreta:
 
-## Solução Implementada
+**Situação Atual:**
+- O SDR tem a BU `consorcio` configurada no perfil ✓
+- O código busca a origem padrão em `SDR_ORIGIN_BY_BU['consorcio']`
+- Essa constante aponta para `PIPELINE - INSIDE SALES - VIVER DE ALUGUEL` (ID: `4e2b210a-...`)
+- **Porém**, essa origem pertence ao grupo **Perpétuo - X1** que é da BU **Incorporador**!
 
-### ✅ Etapa 1: Índice Único no Banco
+**Origem Correta para Consórcio:**
+- `PIPE LINE - INSIDE SALES` (ID: `57013597-22f6-4969-848c-404b81dcc0cb`)
+- Grupo: **Perpétuo - Construa para Alugar** (mapeado corretamente para consorcio)
+- Já possui 8 estágios configurados no Kanban
 
-Criado índice único parcial para prevenir duplicados:
+---
+
+## Solução Proposta
+
+### 1. Atualizar Constante `SDR_ORIGIN_BY_BU` no Frontend
+
+**Arquivo:** `src/components/auth/NegociosAccessGuard.tsx`
+
+Corrigir o mapeamento para apontar para a origem correta:
+
+```
+SDR_ORIGIN_BY_BU = {
+  incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',  // (mantém)
+  consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',     // CORRIGIR: PIPE LINE - INSIDE SALES (grupo Consórcio)
+  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+  projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+  leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+}
+```
+
+### 2. Adicionar Origem ao Mapeamento do Banco de Dados
+
+**Ação:** Inserir registro na tabela `bu_origin_mapping` para que a origem padrão do Consórcio fique registrada oficialmente.
 
 ```sql
-CREATE UNIQUE INDEX crm_deals_contact_origin_unique 
-ON crm_deals (contact_id, origin_id) 
-WHERE contact_id IS NOT NULL 
-  AND origin_id IS NOT NULL 
-  AND data_source = 'webhook';
+INSERT INTO bu_origin_mapping (bu, entity_type, entity_id, is_default)
+VALUES ('consorcio', 'origin', '57013597-22f6-4969-848c-404b81dcc0cb', true)
+ON CONFLICT DO NOTHING;
 ```
 
-### ✅ Etapa 2: hubla-webhook-handler com Upsert Atômico
+### 3. Atualizar `BU_DEFAULT_ORIGIN_MAP` para Consistência
 
-Substituído SELECT+INSERT por UPSERT com `ignoreDuplicates: true`:
+Garantir que a origem padrão usada por não-SDRs também esteja correta:
 
-```typescript
-const { data: newDeal, error: dealError } = await supabase
-  .from('crm_deals')
-  .upsert(dealData, {
-    onConflict: 'contact_id,origin_id',
-    ignoreDuplicates: true
-  })
-  .select('id')
-  .maybeSingle();
+```
+BU_DEFAULT_ORIGIN_MAP = {
+  incorporador: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+  consorcio: '57013597-22f6-4969-848c-404b81dcc0cb',     // CORRIGIR para mesma origem
+  credito: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+  projetos: 'e3c04f21-ba2c-4c66-84f8-b4341c826b1c',
+  leilao: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+}
 ```
 
-### ✅ Etapa 3: Limpeza de Duplicados Existentes
+---
 
-Duplicados limpos com a seguinte lógica:
-- Deals com mais atividades/reuniões foram preservados
-- Quando ambos tinham atividades, mantido o com mais atividades
-- Meeting attendees foram movidos para o deal correto antes da deleção
+## Detalhes Técnicos
 
-## Resultado
+### Mapeamento de IDs Corretos
 
-| Cenário | Status |
-|---------|--------|
-| Novos webhooks simultâneos | ✅ Constraint + Upsert previnem duplicação |
-| Duplicados existentes | ✅ Limpos mantendo deals trabalhados |
-| Meeting attendees | ✅ Preservados no deal correto |
+| BU | Origem Padrão SDR | Grupo Pai |
+|---|---|---|
+| incorporador | `e3c04f21-...` (PIPELINE INSIDE SALES) | Perpétuo - X1 |
+| **consorcio** | **`57013597-...` (PIPE LINE - INSIDE SALES)** | **Perpétuo - Construa para Alugar** |
+| leilao | `a1b2c3d4-...` (Pipeline Leilão) | BU - LEILÃO |
+
+### Fluxo Atual do Código
+
+```
+Negocios.tsx
+  └─ useActiveBU() → 'consorcio'
+  └─ isSdrRole() → true
+  └─ SDR_ORIGIN_BY_BU['consorcio'] → '4e2b210a...' ← ERRADO!
+      └─ Pertence ao grupo 'Perpétuo - X1' (Incorporador)
+```
+
+### Fluxo Corrigido
+
+```
+Negocios.tsx
+  └─ useActiveBU() → 'consorcio'
+  └─ isSdrRole() → true
+  └─ SDR_ORIGIN_BY_BU['consorcio'] → '57013597...' ← CORRETO
+      └─ Pertence ao grupo 'Perpétuo - Construa para Alugar' (Consórcio)
+```
+
+---
+
+## Arquivos a Modificar
+
+1. **`src/components/auth/NegociosAccessGuard.tsx`**
+   - Atualizar `SDR_ORIGIN_BY_BU.consorcio`
+   - Atualizar `BU_DEFAULT_ORIGIN_MAP.consorcio`
+
+2. **Migração SQL** (opcional mas recomendado)
+   - Inserir origem padrão no `bu_origin_mapping`
+
+---
+
+## Resultado Esperado
+
+Após a correção:
+- SDRs do Consórcio verão o Kanban da pipeline "PIPE LINE - INSIDE SALES"
+- Os estágios corretos aparecerão: Novo Lead, Lead Qualificado, Reunião 01 Agendada, etc.
+- O filtro de BU funcionará corretamente para isolar os dados do Consórcio
