@@ -136,8 +136,9 @@ export function MoveAttendeeModal({
   }, [selectedDate, currentMeetingDate]);
 
   // Permitir mover para outro dia se o participante está como no_show
+  // Admin pode mover para qualquer dia independente do status
   const isNoShow = currentAttendeeStatus === 'no_show';
-  const blockDifferentDay = isDifferentDay && !isNoShow;
+  const blockDifferentDay = isDifferentDay && !isNoShow && !isAdmin;
 
   // Apply closer filter
   const filteredSlots = useMemo(() => {
