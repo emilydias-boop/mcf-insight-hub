@@ -266,3 +266,6 @@ verify_jwt = false
 
 [functions.bulk-update-contacts]
 verify_jwt = false
+
+[functions.process-deal-replication]
+verify_jwt = false

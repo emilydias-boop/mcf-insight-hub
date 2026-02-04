@@ -2776,6 +2776,8 @@ export type Database = {
           product_name: string | null
           r1_closer_email: string | null
           r2_closer_email: string | null
+          replicated_at: string | null
+          replicated_from_deal_id: string | null
           stage_id: string | null
           tags: string[] | null
           updated_at: string | null
@@ -2801,6 +2803,8 @@ export type Database = {
           product_name?: string | null
           r1_closer_email?: string | null
           r2_closer_email?: string | null
+          replicated_at?: string | null
+          replicated_from_deal_id?: string | null
           stage_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
@@ -2826,6 +2830,8 @@ export type Database = {
           product_name?: string | null
           r1_closer_email?: string | null
           r2_closer_email?: string | null
+          replicated_at?: string | null
+          replicated_from_deal_id?: string | null
           stage_id?: string | null
           tags?: string[] | null
           updated_at?: string | null
@@ -2859,6 +2865,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_performance_summary"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "crm_deals_replicated_from_deal_id_fkey"
+            columns: ["replicated_from_deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "crm_deals_stage_id_fkey"
@@ -3173,6 +3186,202 @@ export type Database = {
           to_stage?: string | null
         }
         Relationships: []
+      }
+      deal_replication_logs: {
+        Row: {
+          error_message: string | null
+          executed_at: string
+          id: string
+          metadata: Json | null
+          rule_id: string
+          source_deal_id: string
+          status: string
+          target_deal_id: string
+        }
+        Insert: {
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          metadata?: Json | null
+          rule_id: string
+          source_deal_id: string
+          status?: string
+          target_deal_id: string
+        }
+        Update: {
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          metadata?: Json | null
+          rule_id?: string
+          source_deal_id?: string
+          status?: string
+          target_deal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_replication_logs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "deal_replication_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_replication_logs_source_deal_id_fkey"
+            columns: ["source_deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_replication_logs_target_deal_id_fkey"
+            columns: ["target_deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_replication_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          deal_id: string
+          error_message: string | null
+          id: string
+          origin_id: string
+          processed_at: string | null
+          stage_id: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          deal_id: string
+          error_message?: string | null
+          id?: string
+          origin_id: string
+          processed_at?: string | null
+          stage_id: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          deal_id?: string
+          error_message?: string | null
+          id?: string
+          origin_id?: string
+          processed_at?: string | null
+          stage_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_replication_queue_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "crm_deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_replication_queue_origin_id_fkey"
+            columns: ["origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_replication_queue_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_replication_rules: {
+        Row: {
+          copy_custom_fields: boolean
+          copy_tasks: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          match_condition: Json | null
+          name: string
+          priority: number
+          source_origin_id: string
+          source_stage_id: string
+          target_origin_id: string
+          target_stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          copy_custom_fields?: boolean
+          copy_tasks?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          match_condition?: Json | null
+          name: string
+          priority?: number
+          source_origin_id: string
+          source_stage_id: string
+          target_origin_id: string
+          target_stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          copy_custom_fields?: boolean
+          copy_tasks?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          match_condition?: Json | null
+          name?: string
+          priority?: number
+          source_origin_id?: string
+          source_stage_id?: string
+          target_origin_id?: string
+          target_stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_replication_rules_source_origin_id_fkey"
+            columns: ["source_origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_replication_rules_source_stage_id_fkey"
+            columns: ["source_stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_replication_rules_target_origin_id_fkey"
+            columns: ["target_origin_id"]
+            isOneToOne: false
+            referencedRelation: "crm_origins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_replication_rules_target_stage_id_fkey"
+            columns: ["target_stage_id"]
+            isOneToOne: false
+            referencedRelation: "crm_stages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       deal_stages: {
         Row: {

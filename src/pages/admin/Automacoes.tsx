@@ -5,7 +5,8 @@ import { TemplateList } from "@/components/automations/TemplateList";
 import { AutomationLogs } from "@/components/automations/AutomationLogs";
 import { AutomationSettings } from "@/components/automations/AutomationSettings";
 import { AutomationMetrics } from "@/components/automations/AutomationMetrics";
-import { Bot, FileText, History, Settings, BarChart3 } from "lucide-react";
+import { ReplicationRulesEditor } from "@/components/crm/automations/ReplicationRulesEditor";
+import { Bot, FileText, History, Settings, BarChart3, Copy } from "lucide-react";
 
 export default function Automacoes() {
   return (
@@ -25,6 +26,10 @@ export default function Automacoes() {
             <Bot className="h-4 w-4" />
             Fluxos
           </TabsTrigger>
+          <TabsTrigger value="replication" className="flex items-center gap-2">
+            <Copy className="h-4 w-4" />
+            Cross-Pipeline
+          </TabsTrigger>
           <TabsTrigger value="templates" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Templates
@@ -41,6 +46,10 @@ export default function Automacoes() {
 
         <TabsContent value="flows" className="space-y-4">
           <FlowList />
+        </TabsContent>
+
+        <TabsContent value="replication" className="space-y-4">
+          <ReplicationRulesEditor />
         </TabsContent>
 
         <TabsContent value="templates" className="space-y-4">
