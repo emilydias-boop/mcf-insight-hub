@@ -31,6 +31,7 @@ export interface CloserLead {
   contact_email: string | null;
   contact_phone: string | null;
   status: string;
+  contract_paid_at: string | null;
   scheduled_at: string;
   booked_by_name: string | null;
   origin_name: string | null;
@@ -121,7 +122,8 @@ export function useCloserDetailData({
             deal_id,
             attendee_name,
             attendee_phone,
-            booked_by
+            booked_by,
+            contract_paid_at
           )
         `)
         .eq('closer_id', closerId)
@@ -131,11 +133,13 @@ export function useCloserDetailData({
 
       if (meetingsError) throw meetingsError;
 
-      // Filter attendees with completed or contract_paid status
+      // Filter attendees with completed/contract_paid status OR contract_paid_at preenchido
+      // FONTE DA VERDADE: contract_paid_at IS NOT NULL indica contrato pago
       const relevantStatuses = ['completed', 'contract_paid'];
       const attendeesWithDeals: {
         attendeeId: string;
         status: string;
+        contractPaidAt: string | null;
         dealId: string;
         attendeeName: string | null;
         attendeePhone: string | null;
@@ -145,10 +149,16 @@ export function useCloserDetailData({
 
       meetings?.forEach(meeting => {
         meeting.meeting_slot_attendees?.forEach(att => {
-          if (att.deal_id && relevantStatuses.includes(att.status)) {
+          // Incluir se: status relevante OU contract_paid_at existe
+          const hasRelevantStatus = relevantStatuses.includes(att.status);
+          const hasContractPaid = !!(att as any).contract_paid_at;
+          
+          if (att.deal_id && (hasRelevantStatus || hasContractPaid)) {
             attendeesWithDeals.push({
               attendeeId: att.id,
-              status: att.status,
+              // Usar 'contract_paid' como status de display se contract_paid_at existe
+              status: hasContractPaid ? 'contract_paid' : att.status,
+              contractPaidAt: (att as any).contract_paid_at || null,
               dealId: att.deal_id,
               attendeeName: att.attendee_name,
               attendeePhone: att.attendee_phone,
@@ -219,6 +229,7 @@ export function useCloserDetailData({
           contact_email: dealInfo?.contactEmail,
           contact_phone: att.attendeePhone || dealInfo?.contactPhone,
           status: att.status,
+          contract_paid_at: att.contractPaidAt,
           scheduled_at: att.scheduledAt,
           booked_by_name: att.bookedBy ? profilesMap[att.bookedBy] || null : null,
           origin_name: dealInfo?.originName,
