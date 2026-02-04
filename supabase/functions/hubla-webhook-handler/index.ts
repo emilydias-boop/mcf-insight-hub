@@ -77,6 +77,8 @@ const PRODUCT_MAPPING: Record<string, string> = {
   'PROGRAMA SÓCIOS': 'socios',
   'A007': 'socios',
   'CLUBE ARREMATE': 'clube_arremate',
+  'CLUBE DO ARREMATE': 'clube_arremate',
+  'CONTRATO - CLUBE DO ARREMATE': 'contrato_clube_arremate',
   'CA': 'clube_arremate',
   'IMERSÃO': 'imersao',
   'IMERSÃO PRESENCIAL': 'ob_evento',
@@ -89,7 +91,18 @@ function mapProductCategory(productName: string, productCode?: string): string {
   const name = productName?.toUpperCase() || '';
   const code = productCode?.toUpperCase() || '';
   
-  // Verificar se é produto excluído do Incorporador 50k
+  // ===== PRIORIDADE 1: Detectar produtos de consórcio =====
+  // Contrato - Clube do Arremate (mais específico primeiro)
+  if (name.includes('CONTRATO') && name.includes('CLUBE')) {
+    return 'contrato_clube_arremate';
+  }
+  
+  // Clube do Arremate (genérico)
+  if (name.includes('CLUBE') && name.includes('ARREMATE')) {
+    return 'clube_arremate';
+  }
+  
+  // ===== PRIORIDADE 2: Verificar se é produto excluído do Incorporador 50k =====
   for (const excluded of EXCLUDED_FROM_INCORPORADOR) {
     if (name.includes(excluded) || code === excluded) {
       // Mapear para categoria correta
@@ -854,6 +867,239 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
   }
 }
 
+// ============= CONSÓRCIO: Configuração e Função de Criação de Deals =============
+const CONSORCIO_ORIGIN_ID = '7d7b1cb5-2a44-4552-9eff-c3b798646b78';
+const STAGE_CLUBE_ARREMATE = 'bf370a4f-1476-4933-8c70-01a38cfdb34f';
+const STAGE_RENOVACAO_HUBLA = '3e545cd2-4214-4510-9ec4-dfcc6eccede8';
+
+const CONSORCIO_STAGE_MAP: Record<string, string> = {
+  'clube_arremate': STAGE_CLUBE_ARREMATE,
+  'contrato_clube_arremate': STAGE_CLUBE_ARREMATE,
+  'renovacao': STAGE_RENOVACAO_HUBLA,
+};
+
+const CONSORCIO_PRODUCT_CATEGORIES = ['clube_arremate', 'contrato_clube_arremate', 'renovacao'];
+
+interface ConsorcioDealData {
+  email: string | null;
+  phone: string | null;
+  name: string | null;
+  productName: string;
+  productCategory: string;
+  value: number;
+  saleDate: string;
+}
+
+async function createDealForConsorcioProduct(supabase: any, data: ConsorcioDealData): Promise<void> {
+  console.log(`🏦 [CONSÓRCIO] Iniciando criação de deal para: ${data.productName} (${data.productCategory})`);
+  
+  // 1. Determinar stage de destino
+  const stageId = CONSORCIO_STAGE_MAP[data.productCategory];
+  if (!stageId) {
+    console.log(`🏦 [CONSÓRCIO] Categoria não mapeada para Consórcio: ${data.productCategory}`);
+    return;
+  }
+  
+  console.log(`🏦 [CONSÓRCIO] Stage destino: ${stageId}`);
+  
+  // Normalizar telefone
+  const normalizedPhone = normalizePhone(data.phone);
+  
+  try {
+    // 2. Buscar contato existente por EMAIL primeiro
+    let contactId: string | null = null;
+    
+    if (data.email) {
+      const { data: byEmail } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .ilike('email', data.email)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      
+      if (byEmail) {
+        contactId = byEmail.id;
+        console.log(`🏦 [CONSÓRCIO] Contato existente por email: ${contactId}`);
+      }
+    }
+    
+    // 3. Se não encontrou por email, buscar por telefone
+    if (!contactId && normalizedPhone) {
+      const phoneDigits = normalizedPhone.replace(/\D/g, '');
+      const { data: byPhone } = await supabase
+        .from('crm_contacts')
+        .select('id')
+        .or(`phone.eq.${normalizedPhone},phone.eq.+${phoneDigits},phone.eq.${phoneDigits}`)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      
+      if (byPhone) {
+        contactId = byPhone.id;
+        console.log(`🏦 [CONSÓRCIO] Contato existente por telefone: ${contactId}`);
+      }
+    }
+    
+    // 4. Se não encontrou, criar novo contato
+    if (!contactId) {
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          clint_id: `consorcio-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+          name: data.name || 'Cliente Consórcio',
+          email: data.email,
+          phone: normalizedPhone,
+          origin_id: CONSORCIO_ORIGIN_ID,
+          tags: [data.productCategory, 'Hubla', 'Consórcio'],
+          custom_fields: { source: 'hubla_consorcio', product: data.productName }
+        })
+        .select('id')
+        .single();
+      
+      if (contactError) {
+        console.error('🏦 [CONSÓRCIO] Erro ao criar contato:', contactError);
+        return;
+      }
+      
+      contactId = newContact?.id;
+      console.log(`🏦 [CONSÓRCIO] Novo contato criado: ${contactId}`);
+    }
+    
+    if (!contactId) {
+      console.log('🏦 [CONSÓRCIO] Não foi possível obter contactId');
+      return;
+    }
+    
+    // 5. Verificar deal existente do contato em QUALQUER pipeline (para vinculação)
+    let linkedDealId: string | null = null;
+    const { data: existingDeal } = await supabase
+      .from('crm_deals')
+      .select('id, origin_id, name')
+      .eq('contact_id', contactId)
+      .neq('origin_id', CONSORCIO_ORIGIN_ID)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (existingDeal) {
+      linkedDealId = existingDeal.id;
+      console.log(`🏦 [CONSÓRCIO] Deal existente para vincular: ${linkedDealId} (${existingDeal.name})`);
+    }
+    
+    // 6. Verificar se já existe deal no pipeline Consórcio para evitar duplicação
+    const { data: dealInConsorcio } = await supabase
+      .from('crm_deals')
+      .select('id, custom_fields, tags, value')
+      .eq('contact_id', contactId)
+      .eq('origin_id', CONSORCIO_ORIGIN_ID)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (dealInConsorcio) {
+      console.log(`🏦 [CONSÓRCIO] Deal já existe no pipeline Consórcio: ${dealInConsorcio.id} - Atualizando...`);
+      
+      // Atualizar deal existente com novos dados
+      const currentCustomFields = dealInConsorcio.custom_fields || {};
+      const updatedCustomFields = {
+        ...currentCustomFields,
+        ultima_compra_consorcio: new Date().toISOString(),
+        ultimo_produto: data.productName,
+        linked_deal_id: linkedDealId || currentCustomFields.linked_deal_id,
+      };
+      
+      const currentTags = dealInConsorcio.tags || [];
+      const newTag = data.productCategory.replace(/_/g, '-');
+      const newTags = currentTags.includes(newTag) ? currentTags : [...currentTags, newTag];
+      
+      await supabase
+        .from('crm_deals')
+        .update({
+          custom_fields: updatedCustomFields,
+          tags: newTags,
+          value: Math.max(dealInConsorcio.value || 0, data.value || 0),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', dealInConsorcio.id);
+      
+      console.log(`🏦 [CONSÓRCIO] Deal atualizado: ${dealInConsorcio.id}`);
+      return;
+    }
+    
+    // 7. Criar novo deal no Consórcio
+    const dealData = {
+      clint_id: `consorcio-deal-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      name: `${data.name || 'Cliente'} - ${data.productName}`,
+      value: data.value || 0,
+      contact_id: contactId,
+      origin_id: CONSORCIO_ORIGIN_ID,
+      stage_id: stageId,
+      product_name: data.productName,
+      tags: [data.productCategory.replace(/_/g, '-'), 'Hubla', 'Consórcio'],
+      custom_fields: {
+        source: 'hubla_consorcio',
+        product: data.productName,
+        product_category: data.productCategory,
+        sale_date: data.saleDate,
+        linked_deal_id: linkedDealId,
+      },
+      data_source: 'webhook',
+    };
+    
+    const { data: newDeal, error: dealError } = await supabase
+      .from('crm_deals')
+      .insert(dealData)
+      .select('id')
+      .single();
+    
+    if (dealError) {
+      if (dealError.code === '23505' || dealError.message?.includes('duplicate')) {
+        console.log(`🏦 [CONSÓRCIO] Deal já existe (constraint) - ignorando`);
+      } else {
+        console.error('🏦 [CONSÓRCIO] Erro ao criar deal:', dealError);
+      }
+      return;
+    }
+    
+    console.log(`✅ [CONSÓRCIO] Deal criado: ${newDeal.id} - ${dealData.name}`);
+    
+    // 8. Registrar atividade no deal original (se existir)
+    if (linkedDealId && newDeal?.id) {
+      const activityDescription = `🔗 Cliente comprou "${data.productName}" - Deal criado no pipeline Consórcio (ID: ${newDeal.id})`;
+      
+      await supabase
+        .from('deal_activities')
+        .insert({
+          deal_id: linkedDealId,
+          activity_type: 'note',
+          description: activityDescription,
+          metadata: {
+            consorcio_deal_id: newDeal.id,
+            product_name: data.productName,
+            product_category: data.productCategory,
+            value: data.value,
+            created_by: 'hubla_webhook'
+          }
+        });
+      
+      console.log(`🏦 [CONSÓRCIO] Atividade registrada no deal original: ${linkedDealId}`);
+    }
+    
+    // 9. Gerar tarefas automáticas para o novo deal
+    await generateTasksForDeal(supabase, {
+      dealId: newDeal.id,
+      contactId: contactId,
+      ownerId: null,
+      originId: CONSORCIO_ORIGIN_ID,
+      stageId,
+    });
+    
+  } catch (err) {
+    console.error('🏦 [CONSÓRCIO] Erro ao criar deal:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -958,6 +1204,20 @@ serve(async (req) => {
             value: netValue
           });
         }
+        
+        // 🏦 CONSÓRCIO: Se for produto de consórcio e primeira parcela, criar deal
+        if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && installment === 1) {
+          console.log(`🏦 [CONSÓRCIO NewSale] Detectado: ${productName} (${productCategory})`);
+          await createDealForConsorcioProduct(supabase, {
+            email: transactionData.customer_email,
+            phone: transactionData.customer_phone,
+            name: transactionData.customer_name,
+            productName: productName,
+            productCategory: productCategory,
+            value: netValue,
+            saleDate: saleDate,
+          });
+        }
       }
 
       // invoice.payment_succeeded - extrair items individuais
@@ -1060,6 +1320,20 @@ serve(async (req) => {
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
               saleDate: saleDate
+            });
+          }
+          
+          // 🏦 CONSÓRCIO: Se for produto de consórcio e primeira parcela, criar deal
+          if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && installment === 1) {
+            console.log(`🏦 [CONSÓRCIO invoice.payment_succeeded] Detectado (sem items): ${productName} (${productCategory})`);
+            await createDealForConsorcioProduct(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              productName: productName,
+              productCategory: productCategory,
+              value: netValue,
+              saleDate: saleDate,
             });
           }
         }
@@ -1174,6 +1448,20 @@ serve(async (req) => {
               customerPhone: transactionData.customer_phone,
               customerName: transactionData.customer_name,
               saleDate: saleDate
+            });
+          }
+          
+          // 🏦 CONSÓRCIO: Se for produto de consórcio, não for offer, e primeira parcela, criar deal
+          if (CONSORCIO_PRODUCT_CATEGORIES.includes(productCategory) && !isOffer && installment === 1) {
+            console.log(`🏦 [CONSÓRCIO invoice.payment_succeeded] Detectado (item): ${productName} (${productCategory})`);
+            await createDealForConsorcioProduct(supabase, {
+              email: transactionData.customer_email,
+              phone: transactionData.customer_phone,
+              name: transactionData.customer_name,
+              productName: productName,
+              productCategory: productCategory,
+              value: itemNetValue,
+              saleDate: saleDate,
             });
           }
         }
