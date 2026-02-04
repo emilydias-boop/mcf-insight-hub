@@ -29,6 +29,7 @@ import {
   Crown,
   CheckSquare,
   Trophy,
+  Briefcase,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
 import { NavLink } from "@/components/NavLink";
@@ -250,6 +251,9 @@ const menuItems: MenuItem[] = [
   },
 
   // ===== ITENS AVULSOS PARA SDR/CLOSER =====
+  // NOTA: Os itens "Agenda" e "Negócios" para SDR/Closer são gerados dinamicamente
+  // dentro do componente AppSidebar para suportar rotas baseadas na BU do usuário.
+  // Veja a variável `dynamicSDRCloserItems` no componente.
 
   // Minhas Reuniões (apenas SDR)
   {
@@ -269,15 +273,6 @@ const menuItems: MenuItem[] = [
     resource: "crm",
     requiredRoles: ["closer"],
     separator: true,
-  },
-
-  // Agenda (SDR, Closer e Closer Sombra)
-  {
-    title: "Agenda",
-    url: "/crm/agenda",
-    icon: Calendar,
-    resource: "crm",
-    requiredRoles: ["sdr", "closer", "closer_sombra"],
   },
 
   // Metas da Equipe (SDRs, Closers e Closer Sombra da BU Incorporador)
@@ -331,6 +326,29 @@ const personalMenuItems: PersonalMenuItem[] = [
   { title: "Alertas", url: "/alertas", icon: Bell },
 ];
 
+// Mapa de base paths do CRM por BU
+const BU_CRM_BASE_PATH: Record<BusinessUnit, string> = {
+  incorporador: '/crm',
+  consorcio: '/consorcio/crm',
+  credito: '/bu-credito/crm',
+  projetos: '/bu-projetos/crm',
+  leilao: '/leilao/crm',
+};
+
+// Helper para resolver o base path do CRM baseado nas BUs do usuário
+const getCRMBasePath = (userBUs: BusinessUnit[]): string => {
+  // Prioridade para BUs específicas (não-incorporador primeiro)
+  const buPriority: BusinessUnit[] = ['consorcio', 'credito', 'projetos', 'leilao'];
+  
+  for (const bu of buPriority) {
+    if (userBUs.includes(bu)) {
+      return BU_CRM_BASE_PATH[bu];
+    }
+  }
+  
+  return '/crm'; // fallback (incorporador ou sem BU)
+};
+
 export function AppSidebar() {
   const { user, role, signOut, loading: authLoading } = useAuth();
   const { canAccessResource, isAdmin } = useMyPermissions();
@@ -342,6 +360,29 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
   const showText = isMobile || !isCollapsed;
   const [myFilesOpen, setMyFilesOpen] = useState(false);
+
+  // === ITENS DINÂMICOS PARA SDR/CLOSER ===
+  // Estes itens precisam de URLs dinâmicas baseadas na BU do usuário
+  const crmBasePath = getCRMBasePath(myBUs);
+  
+  const dynamicSDRCloserItems: MenuItem[] = [
+    // Agenda (SDR, Closer e Closer Sombra) - URL dinâmica por BU
+    {
+      title: "Agenda",
+      url: `${crmBasePath}/agenda`,
+      icon: Calendar,
+      resource: "crm",
+      requiredRoles: ["sdr", "closer", "closer_sombra"],
+    },
+    // Negócios (SDR, Closer) - URL dinâmica por BU  
+    {
+      title: "Negócios",
+      url: `${crmBasePath}/negocios`,
+      icon: Briefcase,
+      resource: "crm",
+      requiredRoles: ["sdr", "closer"],
+    },
+  ];
 
   const getRoleBadgeVariant = (userRole: AppRole | null, isLoading: boolean) => {
     if (isLoading) return "outline";
@@ -362,8 +403,11 @@ export function AppSidebar() {
     return "Viewer";
   };
 
+  // Combinar menu items estáticos com itens dinâmicos de SDR/Closer
+  const allMenuItems = [...menuItems, ...dynamicSDRCloserItems];
+
   // Filtragem de menu items
-  const filteredMenuItems = menuItems.filter((item) => {
+  const filteredMenuItems = allMenuItems.filter((item) => {
     // Se tem requiredRoles e o usuário não tem a role
     if (item.requiredRoles && role && !item.requiredRoles.includes(role)) {
       // Se o item tem requiredProducts, verifica se o usuário tem algum dos produtos
