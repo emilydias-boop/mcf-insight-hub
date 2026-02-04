@@ -1,122 +1,57 @@
 
+# Plano: Corrigir Discrepância de Contagem de Contratos (31 vs 32)
 
-# Plano: Sincronizar Datas de Pagamento Históricas (Janeiro-Fevereiro 2026)
+## Problema Identificado
 
-## Resumo do Problema
+O KPI "Contratos" mostra **31** enquanto a tabela de Closers mostra **32**. A diferença é causada por **1 registro inconsistente**:
 
-| Métrica | Valor |
-|---------|-------|
-| Total de attendees com data errada | 64 |
-| Dias afetados | 9 |
-| Período | 21/01/2026 - 04/02/2026 |
+| Campo | Valor |
+|-------|-------|
+| Cliente | Francisco Antonio da Silva Rocha |
+| ID | f3205837-1f29-41a5-99c8-94540074aa8d |
+| Status atual | `completed` |
+| contract_paid_at | 2026-02-03 14:00:00 |
+| Closer | Cristiane Gomes |
+| SDR | caroline.souza@minhacasafinanciada.com |
 
-O webhook estava usando `meeting.scheduled_at` em vez de `data.saleDate` para popular `contract_paid_at`. Isso foi corrigido no código, mas os dados históricos precisam ser atualizados.
+## Causa Raiz
 
----
+- **KPI Card**: Usa RPC `get_sdr_metrics_from_agenda` que filtra por `status IN ('contract_paid', 'refunded')`
+- **Tabela Closers**: Usa hook `useR1CloserMetrics` que filtra por `contract_paid_at IS NOT NULL`
 
-## Exemplos de Discrepâncias Encontradas
-
-| Cliente | Data Atual (Reunião) | Data Correta (Hubla) | Diferença |
-|---------|---------------------|---------------------|-----------|
-| Gregorio | 31/01 14:30 | 02/02 13:04 | +2 dias |
-| Anna | 21/01 14:30 | 28/01 21:39 | +7 dias |
-| Nadiel Todescatt | 22/01 17:00 | 03/02 15:02 | +12 dias |
-| André Laface | 28/01 20:15 | 30/01 00:07 | +2 dias |
-| Theidy | 03/02 16:00 | 03/02 20:18 | Mesmo dia |
+Francisco tem `contract_paid_at` preenchido, mas o status ficou como `completed` (provavelmente um pagamento manual ou erro de sincronização).
 
 ---
 
-## Solução: SQL de Correção em Massa
+## Solucao Recomendada: Corrigir o Status do Registro
 
-Execute o seguinte SQL no **Cloud View > Run SQL** (selecione ambiente **Test** ou **Live** conforme necessário):
+Execute este SQL no **Cloud View > Run SQL** (ambiente Live):
 
 ```sql
--- ============================================
--- CORREÇÃO DE contract_paid_at HISTÓRICOS
--- Sincroniza com sale_date real da Hubla
--- ============================================
-
--- Atualização em massa usando JOIN com hubla_transactions
-UPDATE meeting_slot_attendees msa
-SET contract_paid_at = ht.sale_date
-FROM hubla_transactions ht
-WHERE ht.product_category = 'contrato'
-  AND ht.sale_date >= '2026-01-01'
-  AND msa.status IN ('contract_paid', 'refunded')
-  AND msa.contract_paid_at = (
-    SELECT ms.scheduled_at 
-    FROM meeting_slots ms 
-    WHERE ms.id = msa.meeting_slot_id
-  )
-  AND (
-    -- Match por nome normalizado
-    LOWER(TRIM(ht.customer_name)) = LOWER(TRIM(msa.attendee_name))
-    OR 
-    -- Match por telefone (últimos 9 dígitos)
-    RIGHT(REGEXP_REPLACE(ht.customer_phone, '[^0-9]', '', 'g'), 9) = 
-    RIGHT(REGEXP_REPLACE(msa.attendee_phone, '[^0-9]', '', 'g'), 9)
-  );
+-- Corrigir status do Francisco para contract_paid
+UPDATE meeting_slot_attendees 
+SET status = 'contract_paid'
+WHERE id = 'f3205837-1f29-41a5-99c8-94540074aa8d'
+  AND status = 'completed'
+  AND contract_paid_at IS NOT NULL;
 ```
 
 ---
 
-## Registros que Serão Corrigidos
+## Resultado Esperado
 
-A query acima vai atualizar automaticamente todos os 64 registros identificados, incluindo:
-
-**Fevereiro 2026:**
-- Rodrigo Cruvinel Leite (04/02)
-- Osvaldo Da Silveira Pedrosa Júnior (04/02)
-- Fernando Magalhães Ferreira (04/02)
-- Raimundo Nonato de Sousa Rosal (04/02)
-- Rejane Sena Ferreira (04/02)
-- Rusmar Dueti (04/02)
-- Claudia Brito Martins (03/02)
-- cleano melo (03/02)
-- Alexandre Vinícius de Oliveira (03/02)
-- Maria (03/02)
-- Mazen Hassan Baja (03/02)
-- ... e mais 20+ registros
-
-**Janeiro 2026:**
-- Gregorio (31/01 → 02/02)
-- Anna Paula (21/01 → 28/01)
-- Nadiel Todescatt (22/01 → 03/02)
-- André Laface (28/01 → 30/01)
-- Lucas Falvela (28/01 → 29/01)
-- ... e mais 30+ registros
+Apos executar:
+- **KPI Card "Contratos"**: 32
+- **Tabela Closers Total**: 32
+- Ambos sincronizados
 
 ---
 
-## Verificação Pós-Correção
+## Nota Tecnica
 
-Após executar o SQL, rode esta query para confirmar:
+Essa inconsistencia pode ocorrer quando:
+1. O pagamento foi registrado manualmente sem atualizar o status
+2. O webhook Hubla preencheu `contract_paid_at` mas falhou ao atualizar o status
+3. Houve uma condicao de corrida entre o webhook e uma acao manual
 
-```sql
--- Verificar se ainda existem registros com data de reunião
-SELECT COUNT(*) as registros_pendentes
-FROM meeting_slot_attendees msa
-JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
-WHERE msa.status IN ('contract_paid', 'refunded')
-  AND ms.scheduled_at >= '2026-01-01'
-  AND msa.contract_paid_at = ms.scheduled_at;
--- Esperado: 0 ou poucos (registros sem match na Hubla)
-```
-
----
-
-## Impacto nas Métricas
-
-Após a correção:
-- **Contratos Pagos por dia**: Refletirá a data real do pagamento
-- **Métricas de Closer**: Atribuição correta ao mês do fechamento financeiro
-- **Follow-ups**: Vendas de follow-up serão creditadas na data certa
-
----
-
-## Próximos Passos
-
-1. **Execute o SQL principal** no Supabase
-2. **Rode a verificação** para confirmar
-3. **Recarregue a página** de métricas para ver os números atualizados
-
+O codigo ja esta correto - apenas este registro historico precisa de correcao.
