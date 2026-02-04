@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 
 export interface SdrAgendaMetricsById {
+  agendamentos: number;
   r1_agendada: number;
   r1_realizada: number;
   no_shows: number;
@@ -15,7 +16,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
     queryKey: ['sdr-agenda-metrics-by-id', sdrId, anoMes],
     queryFn: async (): Promise<SdrAgendaMetricsById> => {
       if (!sdrId || !anoMes) {
-        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
       }
 
       // 1. Buscar email do SDR
@@ -27,7 +28,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
 
       if (sdrError || !sdr?.email) {
         console.error('[useSdrAgendaMetricsBySdrId] Error fetching SDR:', sdrError);
-        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
       }
 
       // 2. Calcular período do mês
@@ -45,11 +46,12 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
 
       if (error) {
         console.error('[useSdrAgendaMetricsBySdrId] RPC error:', error);
-        return { r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
+        return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, no_shows: 0, contratos: 0, vendas_parceria: 0 };
       }
 
       // Handle response - extract first metric from array
       const response = data as unknown as { metrics: Array<{
+        agendamentos: number;
         r1_agendada: number;
         r1_realizada: number;
         no_shows: number;
@@ -60,6 +62,7 @@ export const useSdrAgendaMetricsBySdrId = (sdrId: string | undefined, anoMes: st
       const metrics = response?.metrics?.[0];
 
       return {
+        agendamentos: metrics?.agendamentos || 0,
         r1_agendada: metrics?.r1_agendada || 0,
         r1_realizada: metrics?.r1_realizada || 0,
         no_shows: metrics?.no_shows || 0,
