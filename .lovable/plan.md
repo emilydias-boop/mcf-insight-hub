@@ -1,110 +1,108 @@
 
-# Plano: Corrigir Discrepância de Valores e Salvamento Manual
+# Plano: Corrigir Contagem de Contratos por Data de Pagamento
 
-## Problemas Identificados
+## Problema Identificado
 
-### Problema 1: Discrepância de Valores (169 vs 167)
-A edge function `recalculate-sdr-payout` usa a métrica errada:
-- **Linha 346**: `reunioesAgendadas = metrics.r1_agendada || 0`
-- Isso pega `r1_agendada` (reuniões marcadas PARA o período = 167)
-- Deveria usar `agendamentos` (reuniões criadas NO período = 169)
+O hook `useCloserAgendaMetrics.ts` (usado para Closers no painel de fechamento) conta contratos pagos baseado na **data da reunião** (`scheduled_at`), não na **data do pagamento** (`contract_paid_at`).
 
-### Problema 2: Salvamento Manual Não Funciona
-Fluxo atual quando usuário salva:
-1. `useRecalculateWithKpi` salva KPI com valor editado (ex: 170)
-2. Edge function é chamada
-3. Edge function busca dados da Agenda e **SOBRESCREVE** o KPI (linhas 527-529)
-4. Valor do usuário é perdido
+**Cenário atual problemático:**
+- Reunião R1 acontece em **Janeiro**
+- Lead fecha contrato em **Fevereiro** (follow-up)
+- Sistema conta o contrato em **Janeiro** (errado)
+- Deveria contar em **Fevereiro** (data real da venda)
 
----
+## Arquivo a Modificar
 
-## Solução
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useCloserAgendaMetrics.ts` | Separar query de contratos, usar `contract_paid_at` |
 
-### Arquivo a Modificar
-`supabase/functions/recalculate-sdr-payout/index.ts`
+## Solução Técnica
 
-### Mudança 1: Usar `agendamentos` em vez de `r1_agendada`
-```typescript
-// Linha 346: ANTES
-reunioesAgendadas = metrics.r1_agendada || 0;
-
-// DEPOIS
-reunioesAgendadas = metrics.agendamentos || 0;
-```
-
-### Mudança 2: Respeitar Valores Manuais
-A edge function já busca o KPI existente antes de atualizar (linha 501-506). O problema é que ela sempre sobrescreve se a Agenda retornou dados.
-
-Solução: Comparar timestamps para detectar edição manual recente:
+Atualmente o hook faz uma única query filtrando por `scheduled_at` e conta todos os attendees com status `contract_paid`:
 
 ```typescript
-// Linhas 525-548: ANTES (sempre sobrescreve com Agenda)
-const updateFields: Record<string, unknown> = {
-  reunioes_agendadas: reunioesAgendadas > 0 
-    ? reunioesAgendadas 
-    : existingKpi.reunioes_agendadas,
-  ...
-};
+// ANTES (Linhas 64-76, 102-105)
+const { data: slots } = await supabase
+  .from('meeting_slots')
+  .select(...)
+  .gte('scheduled_at', `${startDate}...`)  // <-- Problema: usa data da reunião
+  .lte('scheduled_at', `${endDate}...`);
 
-// DEPOIS (preserva edição manual recente)
-// Se KPI foi atualizado nos últimos 10 segundos, preservar valores manuais
-const kpiUpdatedAt = new Date(existingKpi.updated_at).getTime();
-const now = Date.now();
-const wasManuallyEdited = (now - kpiUpdatedAt) < 10000; // 10 segundos
-
-const updateFields: Record<string, unknown> = {
-  // Preservar valores se foi edição manual recente
-  reunioes_agendadas: wasManuallyEdited 
-    ? existingKpi.reunioes_agendadas
-    : (reunioesAgendadas > 0 ? reunioesAgendadas : existingKpi.reunioes_agendadas),
-  
-  reunioes_realizadas: wasManuallyEdited
-    ? existingKpi.reunioes_realizadas
-    : (reunioesRealizadas > 0 ? reunioesRealizadas : existingKpi.reunioes_realizadas),
-  
-  no_shows: wasManuallyEdited
-    ? existingKpi.no_shows
-    : (reunioesAgendadas > 0 ? noShows : existingKpi.no_shows),
-  
-  taxa_no_show: wasManuallyEdited
-    ? existingKpi.taxa_no_show
-    : (reunioesAgendadas > 0 ? taxaNoShow : existingKpi.taxa_no_show),
-  
-  updated_at: new Date().toISOString(),
-};
+// Conta contratos das reuniões do período
+if (['contract_paid', 'refunded'].includes(status)) {
+  contratos_pagos++;  // <-- Conta no mês da reunião, não do pagamento
+}
 ```
 
----
+**Solução:** Fazer query separada para contratos usando `contract_paid_at`:
+
+```typescript
+// DEPOIS: Query separada para contratos por data de pagamento
+const { data: contractsByPaymentDate } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id,
+    status,
+    contract_paid_at,
+    meeting_slot:meeting_slots!inner(closer_id)
+  `)
+  .eq('meeting_slot.closer_id', closerId)
+  .in('status', ['contract_paid', 'refunded'])
+  .not('contract_paid_at', 'is', null)
+  .gte('contract_paid_at', `${startDate}T00:00:00`)
+  .lte('contract_paid_at', `${endDate}T23:59:59`);
+
+// Fallback para contratos antigos sem contract_paid_at
+const { data: contractsWithoutTimestamp } = await supabase
+  .from('meeting_slot_attendees')
+  .select(...)
+  .eq('meeting_slot.closer_id', closerId)
+  .in('status', ['contract_paid', 'refunded'])
+  .is('contract_paid_at', null)
+  .gte('meeting_slot.scheduled_at', `${startDate}...`)
+  .lte('meeting_slot.scheduled_at', `${endDate}...`);
+
+// Total de contratos = pagamentos no período + fallback
+contratos_pagos = (contractsByPaymentDate?.length || 0) + 
+                  (contractsWithoutTimestamp?.length || 0);
+```
 
 ## Fluxo Corrigido
 
 ```text
 ANTES (Problemático):
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│ Usuário edita│ --> │ Salva KPI    │ --> │ Edge Function│
-│ valor: 170   │     │ (170)        │     │ sobrescreve  │
-└──────────────┘     └──────────────┘     │ com 167      │
-                                          └──────────────┘
+┌────────────────────────┐
+│ Reunião em Janeiro     │
+│ Pagamento em Fevereiro │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ Contagem em JANEIRO    │  <-- Errado (usa scheduled_at)
+└────────────────────────┘
 
-DEPOIS (Corrigido):
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│ Usuário edita│ --> │ Salva KPI    │ --> │ Edge Function│
-│ valor: 170   │     │ (170)        │     │ PRESERVA 170 │
-└──────────────┘     └──────────────┘     │ (edit < 10s) │
-                                          └──────────────┘
+DEPOIS (Correto):
+┌────────────────────────┐
+│ Reunião em Janeiro     │
+│ Pagamento em Fevereiro │
+└────────────────────────┘
+         │
+         ▼
+┌────────────────────────┐
+│ Contagem em FEVEREIRO  │  <-- Correto (usa contract_paid_at)
+└────────────────────────┘
 ```
 
----
+## Impacto
 
-## Resumo das Mudanças
+- **Closers** terão contratos contabilizados corretamente na data da venda
+- Follow-ups que fecham depois da reunião original serão creditados no mês correto
+- Mantém fallback para contratos antigos sem timestamp de pagamento
+- Alinha comportamento com `useR1CloserMetrics.ts` que já usa essa lógica
 
-| Linha | Mudança |
-|-------|---------|
-| 346 | `r1_agendada` → `agendamentos` |
-| 525-548 | Adicionar lógica para preservar edições manuais recentes |
+## Resumo Técnico
 
-## Resultado Esperado
-
-1. O indicador "Agendamento" mostrará 169 (igual ao formulário)
-2. Edições manuais serão preservadas após salvar
-3. Recálculos automáticos (batch mensal) continuarão atualizando com dados da Agenda
+- **1 arquivo** modificado (`useCloserAgendaMetrics.ts`)
+- **1 query adicional** para contratos por `contract_paid_at`
+- **Zero breaking changes** - apenas corrige a data de atribuição
