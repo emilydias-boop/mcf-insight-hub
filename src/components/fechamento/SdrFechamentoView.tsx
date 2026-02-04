@@ -122,8 +122,8 @@ export function SdrFechamentoView({ payout }: SdrFechamentoViewProps) {
         <CardContent className="pt-0">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-3 rounded-lg bg-muted/50">
-              <div className="text-xs text-muted-foreground/70">
-                Reuniões Agendadas
+            <div className="text-xs text-muted-foreground/70">
+                Agendamento
               </div>
               <div className="text-lg font-semibold mt-0.5">
                 {(payout.pct_reunioes_agendadas || 0).toFixed(1)}%

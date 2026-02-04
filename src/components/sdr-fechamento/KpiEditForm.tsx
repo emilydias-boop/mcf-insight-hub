@@ -356,7 +356,7 @@ export const KpiEditForm = ({
                 {/* Campo: Reuniões Agendadas - Auto (Agenda) + Editável */}
                 <div className="space-y-1">
                   <Label htmlFor="reunioes_agendadas" className="flex items-center gap-1.5 text-xs">
-                    Reuniões Agendadas
+                    Agendamento
                     <Badge variant="outline" className="text-[10px] h-4 border-green-500 text-green-500">
                       <Calendar className="h-2.5 w-2.5 mr-0.5" />
                       Auto (Agenda)

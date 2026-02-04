@@ -216,7 +216,7 @@ const FechamentoSDRDetail = () => {
       "",
       "=== INDICADORES DE META ===",
       "Indicador;Meta;Realizado;%;Faixa;Multiplicador;Valor Base;Valor Final",
-      `Reuniões Agendadas;${compPlan?.meta_reunioes_agendadas || 0};${kpi?.reunioes_agendadas || 0};${(payout.pct_reunioes_agendadas || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_reunioes_agendadas || 0)};${payout.mult_reunioes_agendadas || 0}x;${compPlan?.valor_meta_rpg || 0};${payout.valor_reunioes_agendadas || 0}`,
+      `Agendamento;${compPlan?.meta_reunioes_agendadas || 0};${kpi?.reunioes_agendadas || 0};${(payout.pct_reunioes_agendadas || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_reunioes_agendadas || 0)};${payout.mult_reunioes_agendadas || 0}x;${compPlan?.valor_meta_rpg || 0};${payout.valor_reunioes_agendadas || 0}`,
       `Reuniões Realizadas;${compPlan?.meta_reunioes_realizadas || 0};${kpi?.reunioes_realizadas || 0};${(payout.pct_reunioes_realizadas || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_reunioes_realizadas || 0)};${payout.mult_reunioes_realizadas || 0}x;${compPlan?.valor_docs_reuniao || 0};${payout.valor_reunioes_realizadas || 0}`,
       `Tentativas de Ligações;${compPlan?.meta_tentativas || 0};${kpi?.tentativas_ligacoes || 0};${(payout.pct_tentativas || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_tentativas || 0)};${payout.mult_tentativas || 0}x;${compPlan?.valor_tentativas || 0};${payout.valor_tentativas || 0}`,
       `Organização Clint;${compPlan?.meta_organizacao || 100};${kpi?.score_organizacao || 0};${(payout.pct_organizacao || 0).toFixed(1)}%;${getMultiplierRange(payout.pct_organizacao || 0)};${payout.mult_organizacao || 0}x;${compPlan?.valor_organizacao || 0};${payout.valor_organizacao || 0}`,
