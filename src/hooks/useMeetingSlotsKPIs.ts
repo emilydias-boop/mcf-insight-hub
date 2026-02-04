@@ -40,9 +40,9 @@ export function useMeetingSlotsKPIs(startDate: Date, endDate: Date) {
         (a) => a.status !== "cancelled"
       ).length;
 
-      // R1 Realizada: completed OR contract_paid (paid = meeting happened)
+      // R1 Realizada: completed OR contract_paid OR refunded (paid = meeting happened)
       const totalRealizadas = attendees.filter(
-        (a) => a.status === "completed" || a.status === "contract_paid"
+        (a) => a.status === "completed" || a.status === "contract_paid" || a.status === "refunded"
       ).length;
 
       // No-Show: ONLY from "No-Show" button clicks (status = no_show)

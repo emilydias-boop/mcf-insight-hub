@@ -14,29 +14,33 @@ export function useR2MeetingSlotsKPIs(startDate: Date, endDate: Date) {
       const startISO = startOfDay(startDate).toISOString();
       const endISO = endOfDay(endDate).toISOString();
 
-      // Query meeting_slots for R2 meetings (meeting_type = 'r2')
+      // Query meeting_slot_attendees for R2 meetings (meeting_type = 'r2')
+      // This counts each attendee correctly (slots can have multiple attendees)
       const { data, error } = await supabase
-        .from("meeting_slots")
-        .select("id, status")
-        .eq("meeting_type", "r2")
-        .gte("scheduled_at", startISO)
-        .lte("scheduled_at", endISO);
+        .from("meeting_slot_attendees")
+        .select(`
+          status,
+          meeting_slot:meeting_slots!inner(scheduled_at, meeting_type)
+        `)
+        .eq("meeting_slot.meeting_type", "r2")
+        .gte("meeting_slot.scheduled_at", startISO)
+        .lte("meeting_slot.scheduled_at", endISO);
 
       if (error) {
         console.error("Error fetching R2 meeting slots KPIs:", error);
         throw error;
       }
 
-      const slots = data || [];
+      const attendees = data || [];
 
-      // R2 Agendadas: ALL slots that were scheduled for the period (excludes only cancelled)
-      const r2Agendadas = slots.filter(
-        (s) => s.status !== "cancelled"
+      // R2 Agendadas: ALL attendees scheduled for the period (excludes only cancelled)
+      const r2Agendadas = attendees.filter(
+        (a) => a.status !== "cancelled"
       ).length;
 
-      // R2 Realizadas: ONLY completed meetings (status = completed)
-      const r2Realizadas = slots.filter(
-        (s) => s.status === "completed"
+      // R2 Realizadas: completed OR contract_paid OR refunded
+      const r2Realizadas = attendees.filter(
+        (a) => a.status === "completed" || a.status === "contract_paid" || a.status === "refunded"
       ).length;
 
       return {
