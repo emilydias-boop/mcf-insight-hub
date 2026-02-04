@@ -222,7 +222,8 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
 
   // All meetings at this slot (main + related)
   const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
-  const activeMeeting = allMeetings.find(m => m.id === selectedMeetingId) || meeting;
+  // Use first meeting as reference for slot data (closer, time, etc) - attendees are consolidated
+  const activeMeeting = meeting;
 
   // Sync notes when active meeting changes (only reset participant selection)
   useEffect(() => {
@@ -231,15 +232,21 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
   }, [activeMeeting?.id]);
 
   // Get participants - needed before early return for useEffect dependency
-  // All participants come from meeting_slot_attendees table now
+  // Consolidate attendees from ALL meetings at this slot
   const getParticipantsListEarly = () => {
     if (!activeMeeting) return [];
     
-    return activeMeeting.attendees?.map(att => ({
-      id: att.id,
-      notes: att.notes,
-      closerNotes: att.closer_notes,
-    })) || [];
+    const allAttendees: { id: string; notes: string | null; closerNotes: string | null }[] = [];
+    for (const m of allMeetings) {
+      if (m.attendees) {
+        allAttendees.push(...m.attendees.map(att => ({
+          id: att.id,
+          notes: att.notes,
+          closerNotes: att.closer_notes,
+        })));
+      }
+    }
+    return allAttendees;
   };
   
   const participantsEarly = getParticipantsListEarly();
@@ -428,40 +435,50 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
     });
   };
 
-  // Get all participants from the attendees table - all are treated equally
+  // Get all participants from ALL meetings at this slot - consolidated view
   const getParticipantsList = () => {
-    const attendees = activeMeeting.attendees || [];
+    // Combine attendees from ALL meetings at the same slot
+    const allAttendees: MeetingAttendee[] = [];
+    for (const m of allMeetings) {
+      if (m.attendees) {
+        allAttendees.push(...m.attendees);
+      }
+    }
     
     // Create a map for parent attendee lookup
-    const attendeeMap = new Map(attendees.map(a => [a.id, a]));
+    const attendeeMap = new Map(allAttendees.map(a => [a.id, a]));
     
-    return attendees.map(att => {
+    return allAttendees.map(att => {
+      // Find the meeting this attendee belongs to for fallback data
+      const attendeeMeeting = allMeetings.find(m => m.attendees?.some(a => a.id === att.id)) || activeMeeting;
+      
       // Fallback chain for name: attendee_name -> contact.name -> deal.name -> meeting.deal.contact.name -> meeting.deal.name -> 'Participante'
       const name = att.attendee_name 
         || att.contact?.name 
         || att.deal?.name
-        || activeMeeting.deal?.contact?.name 
-        || activeMeeting.deal?.name 
+        || attendeeMeeting.deal?.contact?.name 
+        || attendeeMeeting.deal?.name 
         || 'Participante';
       // Fallback chain for phone: attendee_phone -> contact.phone -> meeting.deal.contact.phone
-      const phone = att.attendee_phone || att.contact?.phone || activeMeeting.deal?.contact?.phone;
+      const phone = att.attendee_phone || att.contact?.phone || attendeeMeeting.deal?.contact?.phone;
       const parentAttendee = att.parent_attendee_id ? attendeeMap.get(att.parent_attendee_id) : null;
       
       return {
         id: att.id,
         name,
         phone,
-        dealId: att.deal_id || parentAttendee?.deal_id || activeMeeting.deal_id,
+        dealId: att.deal_id || parentAttendee?.deal_id || attendeeMeeting.deal_id,
         isPartner: att.is_partner || false,
         notifiedAt: att.notified_at,
-        bookedBy: att.booked_by || parentAttendee?.booked_by || activeMeeting.booked_by,
+        bookedBy: att.booked_by || parentAttendee?.booked_by || attendeeMeeting.booked_by,
         notes: att.notes,
         closerNotes: att.closer_notes,
         status: att.status || 'scheduled',
         contractPaidAt: att.contract_paid_at,
-        bookedByProfile: att.booked_by_profile || parentAttendee?.booked_by_profile || activeMeeting.booked_by_profile,
+        bookedByProfile: att.booked_by_profile || parentAttendee?.booked_by_profile || attendeeMeeting.booked_by_profile,
         parentAttendeeId: att.parent_attendee_id,
         parentAttendeeName: parentAttendee ? (parentAttendee.attendee_name || parentAttendee.contact?.name || 'Lead') : null,
+        slotId: attendeeMeeting.id, // Track which slot this attendee belongs to
       };
     });
   };
@@ -486,29 +503,9 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         <SheetHeader className="border-b p-4">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-lg">
-              {allMeetings.length > 1 
-                ? `Reuniões às ${format(parseISO(meeting.scheduled_at), 'HH:mm')} (${allMeetings.length})`
-                : 'Detalhes da Reunião'
-              }
+              Reunião às {format(parseISO(meeting.scheduled_at), 'HH:mm')}
             </SheetTitle>
           </div>
-          
-          {/* Tabs for multiple meetings */}
-          {allMeetings.length > 1 && (
-            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-              {allMeetings.map((m) => (
-                <Button
-                  key={m.id}
-                  variant={activeMeeting.id === m.id ? 'default' : 'outline'}
-                  size="sm"
-                  className="text-xs flex-shrink-0"
-                  onClick={() => setSelectedMeetingId(m.id)}
-                >
-                  {m.deal?.contact?.name?.split(' ')[0] || m.deal?.name?.split(' ')[0] || 'Lead'}
-                </Button>
-              ))}
-            </div>
-          )}
         </SheetHeader>
 
         <ScrollArea className="flex-1 p-6">
