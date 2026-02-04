@@ -458,6 +458,7 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
         notes: att.notes,
         closerNotes: att.closer_notes,
         status: att.status || 'scheduled',
+        contractPaidAt: att.contract_paid_at,
         bookedByProfile: att.booked_by_profile || parentAttendee?.booked_by_profile || activeMeeting.booked_by_profile,
         parentAttendeeId: att.parent_attendee_id,
         parentAttendeeName: parentAttendee ? (parentAttendee.attendee_name || parentAttendee.contact?.name || 'Lead') : null,
@@ -637,12 +638,17 @@ export function AgendaMeetingDrawer({ meeting, relatedMeetings = [], open, onOpe
                               Outside {outsideData[p.id]?.contractDate && `- ${format(parseISO(outsideData[p.id].contractDate!), 'dd/MM')}`}
                             </Badge>
                           )}
-                          {/* Individual Status Badge */}
-                          {p.status && p.status !== 'scheduled' && (
-                            <Badge className={cn('text-xs text-white', STATUS_LABELS[p.status]?.color || 'bg-muted')}>
-                              {STATUS_LABELS[p.status]?.label || p.status}
-                            </Badge>
-                          )}
+                          {/* Individual Status Badge - contract_paid_at takes priority */}
+                          {(() => {
+                            // If contract_paid_at exists, always show "Contrato Pago" regardless of status field
+                            const displayStatus = p.contractPaidAt ? 'contract_paid' : p.status;
+                            if (!displayStatus || displayStatus === 'scheduled') return null;
+                            return (
+                              <Badge className={cn('text-xs text-white', STATUS_LABELS[displayStatus]?.color || 'bg-muted')}>
+                                {STATUS_LABELS[displayStatus]?.label || displayStatus}
+                              </Badge>
+                            );
+                          })()}
                           {selectedParticipant?.id === p.id && (
                             <Badge className="text-xs bg-primary">Selecionado</Badge>
                           )}
