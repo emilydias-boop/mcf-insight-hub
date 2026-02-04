@@ -137,12 +137,12 @@ export function CloserColumnCalendar({
     if (!isSlotConfigured(closerId, slotTime)) return false;
 
     // Verificar se já existe reunião nesse slot para este closer
-    const hasMeeting = getMeetingForSlot(closerId, slotTime);
-    return !hasMeeting;
+    const hasMeetings = getMeetingsForSlot(closerId, slotTime);
+    return hasMeetings.length === 0;
   };
 
-  const getMeetingForSlot = (closerId: string, slotTime: Date) => {
-    return meetings.find((m) => {
+  const getMeetingsForSlot = (closerId: string, slotTime: Date) => {
+    return meetings.filter((m) => {
       if (m.closer_id !== closerId) return false;
       const meetingTime = parseISO(m.scheduled_at);
       return (
@@ -274,7 +274,11 @@ export function CloserColumnCalendar({
               </div>
 
               {closers.map((closer) => {
-                const meeting = getMeetingForSlot(closer.id, slot);
+                const slotMeetings = getMeetingsForSlot(closer.id, slot);
+                const hasMeetings = slotMeetings.length > 0;
+                // Combinar attendees de todos os meetings no mesmo slot
+                const allAttendees = slotMeetings.flatMap(m => m.attendees || []);
+                const firstMeeting = slotMeetings[0];
                 const available = isSlotAvailable(closer.id, slot);
                 const isBlocked = blockedDates.some(
                   (bd) => bd.closer_id === closer.id && isSameDay(parseISO(bd.blocked_date), selectedDate),
@@ -285,22 +289,22 @@ export function CloserColumnCalendar({
                     key={`${closer.id}-${idx}`}
                     className={cn("min-h-[40px] p-0.5 border-l relative", isCurrentSlot && "bg-primary/5")}
                   >
-                    {meeting ? (
+                    {hasMeetings && firstMeeting ? (
                       <div className="relative group h-full">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={() => onSelectMeeting(meeting)}
+                                onClick={() => onSelectMeeting(firstMeeting)}
                                 className={cn(
                                   "w-full h-full px-2 py-1 rounded text-xs text-white text-left transition-colors",
-                                  STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled,
+                                  STATUS_STYLES[firstMeeting.status] || STATUS_STYLES.scheduled,
                                 )}
                               >
                               <div className="space-y-0.5">
-                                {meeting.attendees?.length ? (
-                                  meeting.attendees.slice(0, 3).map((att, i) => {
-                                    const sdrName = att.booked_by_profile?.full_name || meeting.booked_by_profile?.full_name;
+                                {allAttendees.length ? (
+                                  allAttendees.slice(0, 3).map((att) => {
+                                    const sdrName = att.booked_by_profile?.full_name || firstMeeting.booked_by_profile?.full_name;
                                     const leadFirstName = (att.attendee_name || att.contact?.name || "Lead").split(' ')[0];
                                     return (
                                       <div key={att.id} className="flex items-center justify-between gap-1">
@@ -342,11 +346,11 @@ export function CloserColumnCalendar({
                                   })
                                 ) : (
                                   <div className="font-medium truncate">
-                                    {meeting.deal?.contact?.name || meeting.deal?.name || "Lead"}
+                                    {firstMeeting.deal?.contact?.name || firstMeeting.deal?.name || "Lead"}
                                   </div>
                                 )}
-                                {meeting.attendees && meeting.attendees.length > 3 && (
-                                  <div className="text-[10px] opacity-80">+{meeting.attendees.length - 3} mais</div>
+                                {allAttendees.length > 3 && (
+                                  <div className="text-[10px] opacity-80">+{allAttendees.length - 3} mais</div>
                                 )}
                               </div>
                             </button>
@@ -354,8 +358,8 @@ export function CloserColumnCalendar({
                           <TooltipContent side="right" className="max-w-xs">
                             <div className="space-y-1">
                               <div className="font-semibold text-xs mb-1">Participantes:</div>
-                              {meeting.attendees?.length ? (
-                                meeting.attendees.map((att) => (
+                              {allAttendees.length ? (
+                                allAttendees.map((att) => (
                                   <div key={att.id} className="text-xs flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1 flex-wrap">
                                       <span>• {att.attendee_name || att.contact?.name || "Lead"}</span>
@@ -387,18 +391,18 @@ export function CloserColumnCalendar({
                                   </div>
                                 ))
                               ) : (
-                                <div className="text-xs">{meeting.deal?.contact?.name || meeting.deal?.name}</div>
+                                <div className="text-xs">{firstMeeting.deal?.contact?.name || firstMeeting.deal?.name}</div>
                               )}
                               <div className="text-xs text-muted-foreground pt-1">
-                                {format(parseISO(meeting.scheduled_at), "HH:mm")} - {meeting.duration_minutes}min
+                                {format(parseISO(firstMeeting.scheduled_at), "HH:mm")} - {firstMeeting.duration_minutes}min
                               </div>
                               <Badge variant="outline" className="text-xs">
-                                {meeting.status === "scheduled" && "Agendada"}
-                                {meeting.status === "rescheduled" && "Reagendada"}
-                                {meeting.status === "completed" && "Realizada"}
-                                {meeting.status === "no_show" && "No-show"}
-                                {meeting.status === "canceled" && "Cancelada"}
-                                {meeting.status === "contract_paid" && "Contrato Pago"}
+                                {firstMeeting.status === "scheduled" && "Agendada"}
+                                {firstMeeting.status === "rescheduled" && "Reagendada"}
+                                {firstMeeting.status === "completed" && "Realizada"}
+                                {firstMeeting.status === "no_show" && "No-show"}
+                                {firstMeeting.status === "canceled" && "Cancelada"}
+                                {firstMeeting.status === "contract_paid" && "Contrato Pago"}
                               </Badge>
                             </div>
                           </TooltipContent>
