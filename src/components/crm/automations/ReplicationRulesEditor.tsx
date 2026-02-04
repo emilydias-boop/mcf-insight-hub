@@ -64,7 +64,7 @@ export function ReplicationRulesEditor({ originId }: ReplicationRulesEditorProps
     queryKey: ['crm-origins-list'],
     queryFn: async () => {
       // @ts-ignore - Supabase types cause deep instantiation
-      const result = await supabase.from('crm_origins').select('id, name').eq('is_active', true).order('name');
+      const result = await supabase.from('crm_origins').select('id, name').eq('is_archived', false).order('name');
       return (result.data ?? []) as Array<{ id: string; name: string }>;
     },
   });
