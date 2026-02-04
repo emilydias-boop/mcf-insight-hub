@@ -13,9 +13,15 @@ interface CSVDeal {
   contact?: string
   origin?: string
   owner?: string
+  dono?: string // Alias para owner
   tags?: string
   expected_close_date?: string
   probability?: string
+  email?: string
+  phone?: string
+  telefone?: string
+  celular?: string
+  whatsapp?: string
   [key: string]: string | undefined
 }
 
@@ -27,11 +33,18 @@ interface CRMDeal {
   contact_id?: string
   origin_id?: string
   owner_id?: string
+  owner_profile_id?: string
   tags?: string[]
   custom_fields?: Record<string, any>
   expected_close_date?: string
   probability?: number
   updated_at: string
+}
+
+interface ContactData {
+  name: string
+  email?: string
+  phone?: string
 }
 
 const CHUNK_SIZE = 1000 // Processar 1000 deals por vez
@@ -130,6 +143,7 @@ Deno.serve(async (req) => {
     console.log('🗂️ Carregando caches...')
     const contactsCache = await loadContactsCache(supabase)
     const stagesCache = await loadStagesCache(supabase)
+    const profilesCache = await loadProfilesCache(supabase)
 
     // Processar apenas 1 chunk
     const startIdx = currentChunk * CHUNK_SIZE
@@ -141,6 +155,7 @@ Deno.serve(async (req) => {
     const dbDeals: CRMDeal[] = []
     const errors: any[] = job.metadata.errors || []
     let chunkSkipped = 0
+    let contactsCreated = 0
     const originId = job.metadata.origin_id // origin_id do job
     const ownerEmail = job.metadata.owner_email // owner do job (opcional)
     const ownerProfileId = job.metadata.owner_profile_id // owner profile id do job (opcional)
@@ -150,9 +165,25 @@ Deno.serve(async (req) => {
 
     for (const csvDeal of chunkDeals) {
       try {
-        // Primeiro, tentar encontrar o contact_id pelo nome/email/telefone
-        const contactIdentifier = csvDeal.contact?.trim()?.toLowerCase()
-        const contactId = contactIdentifier ? contactsCache.get(contactIdentifier) : null
+        // Extrair dados de contato do CSV
+        const contactData = extractContactData(csvDeal)
+        
+        // Tentar encontrar contato existente por email ou telefone
+        let contactId = findContactInCache(contactData, contactsCache)
+        
+        // Se não encontrou e tem dados suficientes, criar novo contato
+        if (!contactId && contactData.name && (contactData.email || contactData.phone)) {
+          const newContactId = await createContact(supabase, contactData)
+          if (newContactId) {
+            contactId = newContactId
+            contactsCreated++
+            // Adicionar ao cache para evitar duplicatas no mesmo chunk
+            if (contactData.email) contactsCache.set(contactData.email.toLowerCase(), newContactId)
+            if (contactData.phone) contactsCache.set(normalizePhone(contactData.phone), newContactId)
+            if (contactData.name) contactsCache.set(contactData.name.toLowerCase(), newContactId)
+            console.log(`✅ Contato criado: ${contactData.name} (${newContactId})`)
+          }
+        }
         
         // Se encontrou um contato e tem origin_id, verificar duplicação
         if (contactId && originId) {
@@ -171,13 +202,21 @@ Deno.serve(async (req) => {
           if (contactId) {
             dbDeal.contact_id = contactId
           }
-          // Aplicar owner do job se definido (prioridade sobre CSV)
-          if (ownerEmail) {
-            dbDeal.owner_id = ownerEmail
-            if (ownerProfileId) {
-              (dbDeal as any).owner_profile_id = ownerProfileId
+          
+          // Resolver owner: prioridade para job, depois CSV
+          const csvOwnerEmail = csvDeal.owner?.trim() || csvDeal.dono?.trim()
+          const finalOwnerEmail = ownerEmail || csvOwnerEmail
+          
+          if (finalOwnerEmail) {
+            dbDeal.owner_id = finalOwnerEmail
+            
+            // Resolver owner_profile_id
+            const resolvedProfileId = ownerProfileId || profilesCache.get(finalOwnerEmail.toLowerCase())
+            if (resolvedProfileId) {
+              dbDeal.owner_profile_id = resolvedProfileId
             }
           }
+          
           dbDeals.push(dbDeal)
         } else {
           chunkSkipped++
@@ -205,10 +244,11 @@ Deno.serve(async (req) => {
     // Atualizar totais acumulados
     const currentProcessed = (job.total_processed || 0) + dbDeals.length
     const currentSkipped = (job.total_skipped || 0) + chunkSkipped
+    const totalContactsCreated = (job.metadata.contacts_created || 0) + contactsCreated
     const nextChunk = currentChunk + 1
     const isComplete = nextChunk >= totalChunks
 
-    console.log(`✅ Chunk ${currentChunk + 1} processado: ${dbDeals.length} salvos, ${chunkSkipped} pulados`)
+    console.log(`✅ Chunk ${currentChunk + 1} processado: ${dbDeals.length} salvos, ${chunkSkipped} pulados, ${contactsCreated} contatos criados`)
 
     // Atualizar job com progresso
     await supabase
@@ -224,6 +264,7 @@ Deno.serve(async (req) => {
           total_chunks: totalChunks,
           current_line: endIdx,
           total_lines: totalDeals,
+          contacts_created: totalContactsCreated,
           errors: errors.slice(0, 100), // Limitar a 100 erros
           processed_contact_origins: Array.from(processedContactOrigins) // Persistir para próximo chunk
         }
@@ -231,7 +272,7 @@ Deno.serve(async (req) => {
       .eq('id', job.id)
 
     const message = isComplete 
-      ? `✅ Importação completa: ${currentProcessed} deals processados`
+      ? `✅ Importação completa: ${currentProcessed} deals processados, ${totalContactsCreated} contatos criados`
       : `📦 Chunk ${nextChunk}/${totalChunks} processado. Próximo chunk será processado pelo cron.`
 
     console.log(message)
@@ -245,7 +286,8 @@ Deno.serve(async (req) => {
         total_chunks: totalChunks,
         is_complete: isComplete,
         total_processed: currentProcessed,
-        total_skipped: currentSkipped
+        total_skipped: currentSkipped,
+        contacts_created: totalContactsCreated
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
@@ -317,6 +359,91 @@ function parseLine(line: string, delimiter: string): string[] {
   return values.map(v => v.replace(/^"|"$/g, ''))
 }
 
+/**
+ * Extrai dados de contato do CSV (nome, email, telefone)
+ */
+function extractContactData(csvDeal: CSVDeal): ContactData {
+  const name = csvDeal.contact?.trim() || csvDeal.name?.trim() || ''
+  const email = csvDeal.email?.trim() || ''
+  const phone = csvDeal.phone?.trim() || 
+                csvDeal.telefone?.trim() || 
+                csvDeal.celular?.trim() || 
+                csvDeal.whatsapp?.trim() || ''
+  
+  return { name, email, phone }
+}
+
+/**
+ * Normaliza número de telefone para formato E.164
+ */
+function normalizePhone(phone: string): string {
+  let clean = phone.replace(/\D/g, '')
+  
+  if (clean.startsWith('0')) {
+    clean = clean.substring(1)
+  }
+  
+  if (!clean.startsWith('55') && clean.length <= 11) {
+    clean = '55' + clean
+  }
+  
+  return '+' + clean
+}
+
+/**
+ * Busca contato no cache por email, telefone ou nome
+ */
+function findContactInCache(contactData: ContactData, cache: Map<string, string>): string | null {
+  // Prioridade 1: email
+  if (contactData.email) {
+    const byEmail = cache.get(contactData.email.toLowerCase())
+    if (byEmail) return byEmail
+  }
+  
+  // Prioridade 2: telefone normalizado
+  if (contactData.phone) {
+    const normalizedPhone = normalizePhone(contactData.phone)
+    const byPhone = cache.get(normalizedPhone)
+    if (byPhone) return byPhone
+    
+    // Tentar sem normalização também
+    const byRawPhone = cache.get(contactData.phone.toLowerCase())
+    if (byRawPhone) return byRawPhone
+  }
+  
+  // Prioridade 3: nome
+  if (contactData.name) {
+    const byName = cache.get(contactData.name.toLowerCase())
+    if (byName) return byName
+  }
+  
+  return null
+}
+
+/**
+ * Cria novo contato no banco de dados
+ */
+async function createContact(supabase: any, contactData: ContactData): Promise<string | null> {
+  const normalizedPhone = contactData.phone ? normalizePhone(contactData.phone) : null
+  
+  const { data, error } = await supabase
+    .from('crm_contacts')
+    .insert({
+      name: contactData.name,
+      email: contactData.email || null,
+      phone: normalizedPhone
+    })
+    .select('id')
+    .single()
+  
+  if (error) {
+    console.error(`❌ Erro ao criar contato ${contactData.name}:`, error)
+    return null
+  }
+  
+  return data?.id || null
+}
+
 function convertToDBFormat(
   csvDeal: CSVDeal,
   contactsCache: Map<string, string>,
@@ -351,14 +478,7 @@ function convertToDBFormat(
     if (stageId) dbDeal.stage_id = stageId
   }
 
-  if (csvDeal.contact) {
-    const contactId = contactsCache.get(csvDeal.contact.toLowerCase())
-    if (contactId) dbDeal.contact_id = contactId
-  }
-
-  if (csvDeal.owner) {
-    dbDeal.owner_id = csvDeal.owner.trim()
-  }
+  // contact_id será atribuído separadamente após busca/criação do contato
 
   if (csvDeal.tags) {
     dbDeal.tags = csvDeal.tags.split(',').map(t => t.trim()).filter(Boolean)
@@ -375,8 +495,8 @@ function convertToDBFormat(
     }
   }
 
-  // Custom fields
-  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'tags', 'expected_close_date', 'probability']
+  // Custom fields - incluir email/phone que não foram mapeados para contato
+  const excludedFields = ['id', 'name', 'value', 'stage', 'contact', 'origin', 'owner', 'dono', 'tags', 'expected_close_date', 'probability', 'email', 'phone', 'telefone', 'celular', 'whatsapp']
   const customFields: Record<string, any> = {}
   
   for (const [key, value] of Object.entries(csvDeal)) {
@@ -441,5 +561,27 @@ async function loadStagesCache(supabase: any): Promise<Map<string, string>> {
   }
   
   console.log(`✅ Cache de estágios: ${cache.size} entradas (local + legado)`)
+  return cache
+}
+
+/**
+ * Carrega cache de profiles para resolver owner_profile_id
+ */
+async function loadProfilesCache(supabase: any): Promise<Map<string, string>> {
+  const cache = new Map<string, string>()
+  
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, email')
+  
+  if (profiles) {
+    for (const profile of profiles) {
+      if (profile.email) {
+        cache.set(profile.email.toLowerCase(), profile.id)
+      }
+    }
+  }
+  
+  console.log(`✅ Cache de profiles: ${cache.size} entradas`)
   return cache
 }
