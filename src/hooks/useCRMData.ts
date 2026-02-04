@@ -556,7 +556,20 @@ export const useUpdateCRMDeal = () => {
   
   return useMutation({
     mutationFn: async ({ id, previousStageId, ...deal }: any) => {
-      // First, update the deal
+      // Auto-sync owner_profile_id when owner_id is updated
+      if (deal.owner_id && !deal.owner_profile_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', deal.owner_id)
+          .maybeSingle();
+        
+        if (profile) {
+          deal.owner_profile_id = profile.id;
+        }
+      }
+      
+      // Update the deal
       const { data, error } = await supabase
         .from('crm_deals')
         .update(deal)

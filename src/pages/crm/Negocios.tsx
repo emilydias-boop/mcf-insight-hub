@@ -327,10 +327,7 @@ const Negocios = () => {
     return (dealsData || []).filter((deal: any) => {
       if (!deal || !deal.id || !deal.name) return false;
       
-      // Filtro por role: SDR/Closer veem apenas seus próprios deals
-      if (isRestrictedRole && userProfile?.email) {
-        if (deal.owner_id !== userProfile.email) return false;
-      }
+      // Filtro por role removido - backend já filtra por owner_profile_id
       
       // Busca expandida: nome do deal, nome do contato, email e telefone
       if (filters.search) {
