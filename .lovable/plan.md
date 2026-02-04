@@ -1,97 +1,98 @@
 
-# Plano: Corrigir Permissão de Upload de NFSe para SDRs/Closers
+# Plano: Corrigir Atualização da UI Após Envio de NFSe
 
 ## Problema Identificado
 
-O erro "new row violates row-level security policy" está ocorrendo no **upload do arquivo** para o bucket `user-files`, não na inserção na tabela `rh_nfse`.
+Após o envio bem-sucedido da NFSe, a UI não atualiza para mostrar o card verde "NFSe Enviada" - o botão "Enviar NFSe" continua visível.
 
-### Causa Raiz
+### Causa Raiz: Query Key Mismatch
 
-A política RLS de INSERT no bucket `user-files` permite apenas:
-- Admin
-- Manager  
-- Coordenador
-
-O Cleiton é **SDR**, portanto não tem permissão para fazer upload de arquivos neste bucket.
-
-### Código que Falha
-
+No arquivo `MeuFechamento.tsx` (linha 89):
 ```tsx
-// EnviarNfseFechamentoModal.tsx linha 62-64
-const { error: uploadError } = await supabase.storage
-  .from('user-files')
-  .upload(fileName, file, { upsert: true });
+queryClient.invalidateQueries({ queryKey: ['own-payout', selectedMonth] });
 ```
 
-O path sendo usado: `${employeeId}/nfse-fechamento-${year}-${month}.pdf`
+Porém, no hook `useOwnFechamento.ts` (linha 89), a query usa **3 elementos** na key:
+```tsx
+queryKey: ['own-payout', anoMes, sdrRecord?.id],
+```
+
+A invalidação usa apenas 2 elementos `['own-payout', selectedMonth]`, mas a query real tem 3 elementos `['own-payout', anoMes, sdrRecord?.id]`. O React Query faz match parcial, **mas a invalidação não está funcionando corretamente** porque precisa corresponder ao prefixo exato ou usar a opção correta.
 
 ## Solução
 
-Criar uma nova política RLS no storage que permita colaboradores fazerem upload de seus próprios arquivos de NFSe, validando que o path contém seu `employee_id`.
+Modificar a invalidação para usar um match mais amplo que capture todas as queries do payout:
 
-### Migração SQL
-
-```sql
--- Permitir colaboradores fazerem upload de suas próprias NFSe
-CREATE POLICY "Colaboradores podem fazer upload de suas NFSe"
-ON storage.objects
-FOR INSERT
-TO authenticated
-WITH CHECK (
-  bucket_id = 'user-files'
-  AND (storage.foldername(name))[1] IN (
-    SELECT id::text 
-    FROM employees 
-    WHERE user_id = auth.uid()
-  )
-);
-
--- Permitir colaboradores atualizarem seus próprios arquivos (para upsert funcionar)
-CREATE POLICY "Colaboradores podem atualizar suas NFSe"
-ON storage.objects
-FOR UPDATE
-TO authenticated
-USING (
-  bucket_id = 'user-files'
-  AND (storage.foldername(name))[1] IN (
-    SELECT id::text 
-    FROM employees 
-    WHERE user_id = auth.uid()
-  )
-);
-```
-
-### Lógica da Política
-
-A função `storage.foldername(name)` extrai o primeiro segmento do path. Como o código usa:
-```
-${employeeId}/nfse-fechamento-2026-1.pdf
-```
-
-A política verifica se o `employeeId` no path corresponde a um employee vinculado ao `auth.uid()` do usuário logado.
-
-## Resultado Esperado
-
-Após a migração:
-- Cleiton (SDR) poderá fazer upload de arquivos em `cc98aaeb-b7ba-4c98-baf7-74a5b9137604/...`
-- Outros SDRs/Closers também poderão enviar suas próprias NFSes
-- A segurança é mantida: cada usuário só pode fazer upload em sua própria pasta
-
-## Arquivos Afetados
+### Arquivo a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `supabase/migrations/xxx.sql` | Adicionar políticas de storage para colaboradores |
+| `src/pages/fechamento-sdr/MeuFechamento.tsx` | Corrigir a invalidação de queries |
 
-## Detalhamento Técnico
+### Implementação
 
-### Validação de Segurança
+No `handleNfseSuccess`, existem duas opções:
 
-A política é segura porque:
-1. O `employee_id` é gerado pelo sistema (vem de `useMyEmployee`)
-2. O usuário não pode manipular o path para fazer upload em pastas de outros
-3. A verificação `employees.user_id = auth.uid()` garante que o usuário só acessa seu próprio registro
+**Opção 1 - Invalidar de forma mais ampla** (Recomendada):
+```tsx
+const handleNfseSuccess = () => {
+  setShowNfseModal(false);
+  // Invalida todas as queries que começam com 'own-payout'
+  queryClient.invalidateQueries({ 
+    queryKey: ['own-payout'],
+    exact: false 
+  });
+};
+```
 
-### Alternativa Considerada
+**Opção 2 - Incluir o sdrRecord.id na invalidação**:
+```tsx
+const handleNfseSuccess = () => {
+  setShowNfseModal(false);
+  queryClient.invalidateQueries({ 
+    queryKey: ['own-payout', selectedMonth, userRecord?.id] 
+  });
+};
+```
 
-Outra opção seria usar um bucket separado `nfse-files`, mas isso adicionaria complexidade desnecessária. A solução de adicionar a política ao bucket existente é mais simples e consistente.
+A **Opção 1** é mais robusta pois não depende de ter o `userRecord` disponível no escopo e garante que todas as queries relacionadas sejam invalidadas.
+
+## Fluxo Corrigido
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                     ANTES (Buggy)                               │
+├─────────────────────────────────────────────────────────────────┤
+│ 1. Upload NFSe → OK                                             │
+│ 2. Insert rh_nfse → OK                                          │
+│ 3. Update sdr_month_payout.nfse_id → OK                         │
+│ 4. Toast "Sucesso!" → OK                                        │
+│ 5. invalidateQueries(['own-payout', '2026-01']) → ❌ No Match   │
+│    (Query real: ['own-payout', '2026-01', 'uuid-do-sdr'])       │
+│ 6. UI não atualiza → Botão continua visível                     │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                     DEPOIS (Corrigido)                          │
+├─────────────────────────────────────────────────────────────────┤
+│ 1-4. (Igual)                                                    │
+│ 5. invalidateQueries(['own-payout'], exact: false) → ✅ Match   │
+│ 6. React Query refetch → payout.nfse_id agora preenchido        │
+│ 7. UI atualiza → Card verde "NFSe Enviada" aparece              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Resultado Esperado
+
+Após o fix:
+1. Cleiton envia a NFSe
+2. Toast "NFSe enviada com sucesso!" aparece
+3. Modal fecha
+4. Card laranja "Fechamento Aprovado!" **desaparece**
+5. Card verde "NFSe Enviada" **aparece** com botão "Ver NFSe"
+
+## Impacto
+
+- **1 linha** de código modificada
+- **Nenhuma mudança** no banco de dados
+- **Nenhum efeito colateral** - apenas garante que a query seja refetch
