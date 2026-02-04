@@ -1,75 +1,172 @@
 
-# Plano: Corrigir Stage IDs dos Leads Importados
+# Plano: Sistema de Automação Cross-Pipeline (Replicação de Deals)
 
-## Problema Identificado
+## Objetivo
 
-Os 2.120 leads foram importados na pipeline **"VIVER DE ALUGUEL"** com os `origin_id` corretos, mas os `stage_id` estão apontando para estágios de **outras pipelines**:
+Criar um sistema configurável que, quando um Deal chega em determinada etapa (ex: "Venda Realizada"), automaticamente duplica esse Deal em outras pipelines conforme regras definidas por produto/categoria.
 
-| Status | Quantidade |
-|--------|------------|
-| Deals com stage compatível | 1.057 |
-| Deals com stage incompatível (invisíveis) | 1.063 |
-| **Total** | **2.120** |
+## Arquitetura da Solução
 
-O Kanban só exibe deals cujo `stage_id` pertence à pipeline selecionada. Os 1.063 deals com IDs de outras pipelines simplesmente não aparecem.
-
-## Mapeamento Necessário
-
-| Estágio Original | Stage ID Antigo | → | Stage ID Novo (VIVER DE ALUGUEL) |
-|------------------|-----------------|---|-----------------------------------|
-| Novo Lead | `87447ae0-...` | → | `2c69bf1d-...` |
-| Lead Qualificado | `92e0f271-...` | → | `1c798114-...` |
-| Reunião 1 Agendada | `23524566-...` | → | `3a189b34-...` |
-| NO-SHOW | `bb69af6a-...` | → | `95b7cfa2-...` |
-| Reunião 1 Realizada | `fd937fc5-...` | → | `0f450ec9-...` |
-| Contrato Pago | `e93f1934-...` | → | `a35fea26-...` |
-| Venda realizada | `1ba95c4f-...` | → | `aa194279-...` |
-
-## Solução
-
-Executar uma migração SQL que atualiza os `stage_id` dos deals para os IDs corretos da pipeline "VIVER DE ALUGUEL":
-
-```sql
--- Atualizar stage_id dos deals para IDs da pipeline VIVER DE ALUGUEL
-UPDATE crm_deals
-SET stage_id = CASE stage_id
-  -- Novo Lead
-  WHEN '87447ae0-b203-4217-887f-604f48ccc890' THEN '2c69bf1d-94d5-4b6d-928d-dcf12da2d78c'
-  -- Lead Qualificado
-  WHEN '92e0f271-564d-4930-abf0-c9a431c533e6' THEN '1c798114-fb5f-4648-849e-846e764b0fa3'
-  -- Reunião 1 Agendada
-  WHEN '23524566-ed63-473c-9466-e9152f6a47ba' THEN '3a189b34-3ec2-41dd-a1b3-dd022363cf81'
-  -- NO-SHOW
-  WHEN 'bb69af6a-646f-4743-b32d-9d1dbf243ae4' THEN '95b7cfa2-8a23-4b01-af42-973097a36c7d'
-  -- Reunião 1 Realizada
-  WHEN 'fd937fc5-826a-4e36-b171-2dfe48509beb' THEN '0f450ec9-0f00-4fbe-8400-cdb2440897e5'
-  -- Contrato Pago
-  WHEN 'e93f1934-024b-4d07-839c-10a2c8227fdd' THEN 'a35fea26-805e-40d5-b604-56fd6319addf'
-  -- Venda realizada
-  WHEN '1ba95c4f-6870-46d5-b935-435ccc74a23b' THEN 'aa194279-c40e-458d-80aa-c5179b414658'
-  ELSE stage_id
-END
-WHERE origin_id = '4e2b810a-6782-4ce9-9c0d-10d04c018636'
-  AND stage_id IN (
-    '87447ae0-b203-4217-887f-604f48ccc890',
-    '92e0f271-564d-4930-abf0-c9a431c533e6',
-    '23524566-ed63-473c-9466-e9152f6a47ba',
-    'bb69af6a-646f-4743-b32d-9d1dbf243ae4',
-    'fd937fc5-826a-4e36-b171-2dfe48509beb',
-    'e93f1934-024b-4d07-839c-10a2c8227fdd',
-    '1ba95c4f-6870-46d5-b935-435ccc74a23b'
-  );
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     FLUXO DE AUTOMAÇÃO CROSS-PIPELINE                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   Deal atualizado                                                        │
+│        │                                                                 │
+│        ▼                                                                 │
+│   Trigger no banco ──► Verificar regras ──► Criar Deals nas destinos    │
+│                         (deal_replication_rules)                         │
+│                                                                          │
+│   Exemplo:                                                               │
+│   ┌────────────────────┐    ┌──────────────────────────────────────┐    │
+│   │ Inside Sales       │    │ Destinos configurados:                │    │
+│   │ "Venda Realizada"  │ ──►│ • Consórcio → "VENDA REALIZADA 50K"   │    │
+│   │                    │    │ • Pós Venda → "01 - MCF PROJETOS"     │    │
+│   └────────────────────┘    │ • The Club → "05 - The Club"          │    │
+│                              └──────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Resultado Esperado
+## Componentes a Criar
 
-Após a migração:
-- Todos os 2.120 deals terão `stage_id` compatíveis com a pipeline "VIVER DE ALUGUEL"
-- O Kanban exibirá todos os leads corretamente em suas colunas
-- A distribuição permanece a mesma, apenas os IDs são corrigidos
+### 1. Nova Tabela: `deal_replication_rules`
 
-## Arquivo a Criar
+Armazenará as regras de replicação:
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `supabase/migrations/XXXXXX_fix_viver_aluguel_stage_ids.sql` | Migração para corrigir os stage_id |
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `id` | uuid | PK |
+| `name` | text | Nome descritivo da regra |
+| `source_origin_id` | uuid | Pipeline de origem (ex: Inside Sales) |
+| `source_stage_id` | uuid | Etapa que dispara a automação |
+| `target_origin_id` | uuid | Pipeline de destino |
+| `target_stage_id` | uuid | Etapa inicial no destino |
+| `match_condition` | jsonb | Condições de match (produto, tags, etc.) |
+| `is_active` | boolean | Ativa/inativa a regra |
+| `copy_custom_fields` | boolean | Copiar custom_fields? |
+| `copy_tasks` | boolean | Gerar tasks no destino? |
+| `priority` | integer | Ordem de execução |
+
+### 2. Edge Function: `process-deal-replication`
+
+Processa a replicação baseada nas regras configuradas:
+
+```text
+1. Receber deal_id + novo stage_id
+2. Buscar regras ativas para source_origin + source_stage
+3. Para cada regra:
+   a. Verificar match_condition (produto, tags)
+   b. Verificar se já existe deal replicado
+   c. Criar novo deal na pipeline destino
+   d. Copiar dados relevantes
+   e. Registrar em deal_activities
+```
+
+### 3. Database Trigger: `trigger_deal_replication`
+
+Disparar automaticamente quando `crm_deals.stage_id` muda para uma etapa configurada.
+
+### 4. UI de Configuração
+
+Nova seção no PipelineConfigModal:
+- **Aba "Automações"** com listagem de regras
+- Formulário para criar/editar regras
+- Seletor de condições (produto, tags)
+
+## Mapeamento Inicial de Produtos
+
+Baseado na conversa, as regras iniciais seriam:
+
+| Produto/Condição | Pipeline Destino | Etapa Destino |
+|------------------|------------------|---------------|
+| Parceria (A001, A009, etc.) | Efeito Alavanca + Clube | VENDA REALIZADA 50K |
+| Consórcio | 04 - MCF Crédito - Consórcio | Primeira etapa |
+| Crédito | 03 - MCF Crédito - Construção | Primeira etapa |
+| The Club | 05 - The Club | Primeira etapa |
+| Projetos | 01 - MCF PROJETOS | Primeira etapa |
+
+## Fluxo de Dados
+
+```text
+┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
+│  UPDATE deal    │────►│ Trigger PostgreSQL   │────►│ Edge Function   │
+│  stage_id = X   │     │ check_replication    │     │ process-deal-   │
+│                 │     │                      │     │ replication     │
+└─────────────────┘     └──────────────────────┘     └────────┬────────┘
+                                                              │
+                        ┌─────────────────────────────────────┘
+                        ▼
+              ┌─────────────────────────────────────┐
+              │  Para cada regra aplicável:         │
+              │  1. Verificar condições de match    │
+              │  2. Evitar duplicatas               │
+              │  3. INSERT novo deal na destino     │
+              │  4. Copiar contato (se novo)        │
+              │  5. Log em deal_activities          │
+              └─────────────────────────────────────┘
+```
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `supabase/migrations/XXXX_create_deal_replication_rules.sql` | Criar | Tabela + RLS + trigger |
+| `supabase/functions/process-deal-replication/index.ts` | Criar | Lógica de replicação |
+| `src/hooks/useDealReplicationRules.ts` | Criar | CRUD das regras |
+| `src/components/crm/automations/ReplicationRulesEditor.tsx` | Criar | UI de gerenciamento |
+| `src/components/crm/PipelineConfigModal.tsx` | Modificar | Adicionar aba "Automações" |
+
+## Detalhes Técnicos
+
+### Estrutura do `match_condition` (JSONB)
+
+```json
+{
+  "type": "product_name",
+  "operator": "contains",
+  "values": ["A001", "A009", "PARCERIA"]
+}
+```
+
+Ou para tags:
+```json
+{
+  "type": "tags",
+  "operator": "includes_any",
+  "values": ["parceria", "consorcio-50k"]
+}
+```
+
+### Prevenção de Duplicatas
+
+Antes de criar o deal replicado:
+1. Verificar se já existe deal com mesmo `contact_id` + `origin_id`
+2. Verificar campo `replicated_from_deal_id` para evitar loops
+
+### Campos Copiados no Deal Replicado
+
+- `name` (nome do deal)
+- `contact_id` (referência ao mesmo contato)
+- `value` (valor da venda)
+- `custom_fields` (se configurado)
+- `owner_id` (manter ou usar distribuição)
+- `replicated_from_deal_id` (novo campo para rastreabilidade)
+- `replicated_at` (timestamp)
+
+## Benefícios
+
+1. **Configurável**: Regras podem ser criadas/editadas pela UI
+2. **Rastreável**: Todo deal replicado tem referência ao original
+3. **Flexível**: Condições por produto, tags, ou ambos
+4. **Seguro**: RLS aplicado, sem loops infinitos
+5. **Escalável**: Múltiplas regras por pipeline
+
+## Próximos Passos (Implementação)
+
+1. Criar migration com tabela + trigger
+2. Criar Edge Function de processamento
+3. Criar hooks React para gerenciar regras
+4. Criar UI de configuração
+5. Configurar regras iniciais baseadas no mapeamento definido
+6. Testar fluxo completo
