@@ -289,41 +289,43 @@ export default function ReunioesEquipe() {
     return baseData.filter(s => s.sdrEmail === sdrFilter);
   }, [datePreset, mergedBySDR, bySDR, sdrFilter]);
 
-  // Values for goals panel - using meeting_slots for R1 metrics
-  // AGENDAMENTO: usa teamKPIs para consistência com card e tabela (filtrado por SDR_LIST)
-  // R1 AGENDADA: conta por data da REUNIÃO (scheduled_at)
+  // Values for goals panel - UNIFICADO: usa teamKPIs para consistência (filtrado por SDR_LIST)
+  // R1 Agendada = Realizadas + NoShows + Pendentes (todas que foram marcadas)
+  // Isso garante que GoalsPanel e TeamKPICards mostrem os mesmos números
+  const dayPendentes = pendentesHoje ?? 0;
+  
   const dayValues = useMemo(() => ({
-    agendamento: dayKPIs?.totalAgendamentos || 0, // Mesmo dado do card/tabela
-    r1Agendada: dayAgendaKPIs?.totalAgendadas || 0, // MARCADAS para hoje
-    r1Realizada: dayAgendaKPIs?.totalRealizadas || 0,
-    noShow: dayAgendaKPIs?.totalNoShows || 0,
-    contrato: dayKPIs.totalContratos,
-    r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0, // From meeting_slots (R2 agenda)
-    r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0, // From meeting_slots (R2 agenda)
+    agendamento: dayKPIs?.totalAgendamentos || 0,
+    r1Agendada: (dayKPIs?.totalRealizadas || 0) + (dayKPIs?.totalNoShows || 0) + dayPendentes,
+    r1Realizada: dayKPIs?.totalRealizadas || 0,
+    noShow: dayKPIs?.totalNoShows || 0,
+    contrato: dayKPIs?.totalContratos || 0,
+    r2Agendada: dayR2AgendaKPIs?.r2Agendadas || 0,
+    r2Realizada: dayR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: dayR2VendasKPIs?.vendasRealizadas || 0,
-  }), [dayKPIs, dayAgendaKPIs, dayR2AgendaKPIs, dayR2VendasKPIs]);
+  }), [dayKPIs, dayPendentes, dayR2AgendaKPIs, dayR2VendasKPIs]);
 
   const weekValues = useMemo(() => ({
-    agendamento: weekKPIs?.totalAgendamentos || 0, // Mesmo dado do card/tabela
-    r1Agendada: weekAgendaKPIs?.totalAgendadas || 0, // MARCADAS para a semana
-    r1Realizada: weekAgendaKPIs?.totalRealizadas || 0,
-    noShow: weekAgendaKPIs?.totalNoShows || 0,
-    contrato: weekKPIs.totalContratos,
-    r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0, // From meeting_slots (R2 agenda)
-    r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0, // From meeting_slots (R2 agenda)
+    agendamento: weekKPIs?.totalAgendamentos || 0,
+    r1Agendada: (weekKPIs?.totalRealizadas || 0) + (weekKPIs?.totalNoShows || 0),
+    r1Realizada: weekKPIs?.totalRealizadas || 0,
+    noShow: weekKPIs?.totalNoShows || 0,
+    contrato: weekKPIs?.totalContratos || 0,
+    r2Agendada: weekR2AgendaKPIs?.r2Agendadas || 0,
+    r2Realizada: weekR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: weekR2VendasKPIs?.vendasRealizadas || 0,
-  }), [weekKPIs, weekAgendaKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
+  }), [weekKPIs, weekR2AgendaKPIs, weekR2VendasKPIs]);
 
   const monthValues = useMemo(() => ({
-    agendamento: monthKPIs?.totalAgendamentos || 0, // Mesmo dado do card/tabela
-    r1Agendada: monthAgendaKPIs?.totalAgendadas || 0, // MARCADAS para o mês
-    r1Realizada: monthAgendaKPIs?.totalRealizadas || 0,
-    noShow: monthAgendaKPIs?.totalNoShows || 0,
-    contrato: monthKPIs.totalContratos,
-    r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0, // From meeting_slots (R2 agenda)
-    r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0, // From meeting_slots (R2 agenda)
+    agendamento: monthKPIs?.totalAgendamentos || 0,
+    r1Agendada: (monthKPIs?.totalRealizadas || 0) + (monthKPIs?.totalNoShows || 0),
+    r1Realizada: monthKPIs?.totalRealizadas || 0,
+    noShow: monthKPIs?.totalNoShows || 0,
+    contrato: monthKPIs?.totalContratos || 0,
+    r2Agendada: monthR2AgendaKPIs?.r2Agendadas || 0,
+    r2Realizada: monthR2AgendaKPIs?.r2Realizadas || 0,
     vendaRealizada: monthR2VendasKPIs?.vendasRealizadas || 0,
-  }), [monthKPIs, monthAgendaKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
+  }), [monthKPIs, monthR2AgendaKPIs, monthR2VendasKPIs]);
 
   // Handlers that sync with URL
   const handlePresetChange = (preset: DatePreset) => {
