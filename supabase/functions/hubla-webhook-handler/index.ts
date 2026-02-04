@@ -430,9 +430,10 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
     if (contactId && originId) {
       // 7.1 Herdar owner de outro deal do mesmo contato
       let inheritedOwnerId: string | null = null;
+      let inheritedOwnerProfileId: string | null = null;
       const { data: dealWithOwner } = await supabase
         .from('crm_deals')
-        .select('owner_id')
+        .select('owner_id, owner_profile_id')
         .eq('contact_id', contactId)
         .not('owner_id', 'is', null)
         .limit(1)
@@ -440,7 +441,22 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
       
       if (dealWithOwner?.owner_id) {
         inheritedOwnerId = dealWithOwner.owner_id;
+        inheritedOwnerProfileId = dealWithOwner.owner_profile_id;
         console.log(`[CRM] Owner herdado de outro deal: ${inheritedOwnerId}`);
+        
+        // Se herdou owner_id mas não tem profile_id, buscar
+        if (!inheritedOwnerProfileId && inheritedOwnerId) {
+          const { data: ownerProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', inheritedOwnerId)
+            .maybeSingle();
+          
+          if (ownerProfile) {
+            inheritedOwnerProfileId = ownerProfile.id;
+            console.log(`[CRM] Profile ID encontrado: ${inheritedOwnerProfileId}`);
+          }
+        }
       }
       
       // 7.2 Usar UPSERT atômico - se já existir deal para este contact_id+origin_id, ignora
@@ -452,6 +468,7 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
         origin_id: originId,
         stage_id: stageId,
         owner_id: inheritedOwnerId,
+        owner_profile_id: inheritedOwnerProfileId,
         product_name: data.productName,
         tags: ['A010', 'Hubla'],
         custom_fields: { 

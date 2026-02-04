@@ -253,6 +253,7 @@ serve(async (req) => {
 
     // 10. Get next owner based on distribution
     let assignedOwner: string | null = null;
+    let assignedOwnerProfileId: string | null = null;
     const { data: nextOwner, error: ownerError } = await supabase
       .rpc('get_next_lead_owner', { p_origin_id: endpoint.origin_id });
 
@@ -261,6 +262,20 @@ serve(async (req) => {
     } else if (nextOwner) {
       assignedOwner = nextOwner;
       console.log('[WEBHOOK-RECEIVER] 👤 Owner atribuído automaticamente:', assignedOwner);
+      
+      // Buscar owner_profile_id correspondente
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', assignedOwner)
+        .maybeSingle();
+      
+      if (ownerProfile) {
+        assignedOwnerProfileId = ownerProfile.id;
+        console.log('[WEBHOOK-RECEIVER] 👤 Profile ID encontrado:', assignedOwnerProfileId);
+      } else {
+        console.log('[WEBHOOK-RECEIVER] ⚠️ Profile não encontrado para email:', assignedOwner);
+      }
     } else {
       console.log('[WEBHOOK-RECEIVER] ⚠️ Nenhum owner configurado para distribuição');
     }
@@ -277,6 +292,7 @@ serve(async (req) => {
         origin_id: endpoint.origin_id,
         stage_id: stageId,
         owner_id: assignedOwner,
+        owner_profile_id: assignedOwnerProfileId,
         product_name: endpoint.name,
         tags: autoTags,
         custom_fields: customFields,

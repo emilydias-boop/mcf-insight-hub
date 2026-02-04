@@ -1086,6 +1086,20 @@ async function handleDealStageChanged(supabase: any, data: any) {
     if (ownerFromWebhook && !dealHasOwner) {
       updateData.owner_id = ownerFromWebhook;
       console.log('[DEAL.STAGE_CHANGED] Updating missing owner_id:', ownerFromWebhook);
+      
+      // Buscar owner_profile_id correspondente
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', ownerFromWebhook)
+        .maybeSingle();
+      
+      if (ownerProfile) {
+        updateData.owner_profile_id = ownerProfile.id;
+        console.log('[DEAL.STAGE_CHANGED] Profile ID encontrado:', ownerProfile.id);
+      } else {
+        console.log('[DEAL.STAGE_CHANGED] ⚠️ Profile não encontrado para email:', ownerFromWebhook);
+      }
     }
 
     const { error: updateError } = await supabase

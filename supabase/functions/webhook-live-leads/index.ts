@@ -118,6 +118,7 @@ serve(async (req) => {
 
     // 4. Buscar próximo owner baseado na distribuição configurada
     let assignedOwner: string | null = null;
+    let assignedOwnerProfileId: string | null = null;
     const { data: nextOwner, error: ownerError } = await supabase
       .rpc('get_next_lead_owner', { p_origin_id: LIVE_ORIGIN_ID });
 
@@ -126,6 +127,20 @@ serve(async (req) => {
     } else if (nextOwner) {
       assignedOwner = nextOwner;
       console.log('[LIVE-LEAD] 👤 Owner atribuído automaticamente:', assignedOwner);
+      
+      // Buscar owner_profile_id correspondente
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', assignedOwner)
+        .maybeSingle();
+      
+      if (ownerProfile) {
+        assignedOwnerProfileId = ownerProfile.id;
+        console.log('[LIVE-LEAD] 👤 Profile ID encontrado:', assignedOwnerProfileId);
+      } else {
+        console.log('[LIVE-LEAD] ⚠️ Profile não encontrado para email:', assignedOwner);
+      }
     } else {
       console.log('[LIVE-LEAD] ⚠️ Nenhum owner configurado para distribuição');
     }
@@ -142,6 +157,7 @@ serve(async (req) => {
         origin_id: LIVE_ORIGIN_ID,
         stage_id: LIVE_INITIAL_STAGE_ID,
         owner_id: assignedOwner,
+        owner_profile_id: assignedOwnerProfileId,
         product_name: 'LIVE',
         tags: ['Lead-Live'],
         custom_fields: customFields,
