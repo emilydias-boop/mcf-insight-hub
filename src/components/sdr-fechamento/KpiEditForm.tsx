@@ -88,7 +88,7 @@ export const KpiEditForm = ({
     if (!kpi && agendaMetrics.data && !agendaMetrics.isLoading) {
       setFormData(prev => ({
         ...prev,
-        reunioes_agendadas: agendaMetrics.data.r1_agendada,
+        reunioes_agendadas: agendaMetrics.data.agendamentos,
         reunioes_realizadas: agendaMetrics.data.r1_realizada,
         no_shows: agendaMetrics.data.no_shows,
       }));
@@ -115,7 +115,7 @@ export const KpiEditForm = ({
     if (agendaMetrics.data) {
       setFormData(prev => ({
         ...prev,
-        reunioes_agendadas: agendaMetrics.data!.r1_agendada,
+        reunioes_agendadas: agendaMetrics.data!.agendamentos,
         reunioes_realizadas: agendaMetrics.data!.r1_realizada,
         no_shows: agendaMetrics.data!.no_shows,
       }));
@@ -365,7 +365,7 @@ export const KpiEditForm = ({
                   <span className="text-[10px] text-muted-foreground/70 block">
                     Meta: {metaAgendadasCalculada} ({sdrMetaDiaria}/dia × {diasUteisMes} dias)
                     {agendaMetrics.data && (
-                      <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.r1_agendada}</span>
+                      <span className="ml-1 text-green-500">• Agenda: {agendaMetrics.data.agendamentos}</span>
                     )}
                   </span>
                   <Input
