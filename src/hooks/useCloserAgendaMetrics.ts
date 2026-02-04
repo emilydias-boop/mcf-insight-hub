@@ -6,7 +6,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
  * Métricas de Closer baseadas na Agenda (meeting_slots/meeting_slot_attendees)
  * - Busca closer_id pelo email do SDR na tabela closers
  * - Conta reuniões atendidas pelo closer no período
- * - Conta contratos pagos (contract_paid + refunded)
+ * - Conta contratos pagos (contract_paid + refunded) pela DATA DO PAGAMENTO
  * - Conta no-shows
  * - Conta vendas parceria de hubla_transactions
  */
@@ -14,7 +14,7 @@ export interface CloserAgendaMetrics {
   closerId: string | null;
   r1_alocadas: number;        // Total de slots alocados ao closer
   r1_realizadas: number;      // completed + contract_paid + refunded
-  contratos_pagos: number;    // contract_paid + refunded
+  contratos_pagos: number;    // contract_paid + refunded (pela data do pagamento)
   no_shows: number;           // status = no_show
   vendas_parceria: number;    // hubla_transactions com product_category='parceria'
 }
@@ -60,7 +60,7 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
       const startDate = format(startOfMonth(monthDate), 'yyyy-MM-dd');
       const endDate = format(endOfMonth(monthDate), 'yyyy-MM-dd');
 
-      // 4. Buscar todos os meeting_slots do closer no período
+      // 4. Buscar todos os meeting_slots do closer no período (para R1 alocadas, realizadas, no-shows)
       const { data: slots, error: slotsError } = await supabase
         .from('meeting_slots')
         .select(`
@@ -80,10 +80,9 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         return { closerId, r1_alocadas: 0, r1_realizadas: 0, contratos_pagos: 0, no_shows: 0, vendas_parceria: 0 };
       }
 
-      // 5. Contar métricas baseadas nos attendees
+      // 5. Contar métricas baseadas nos attendees (EXCETO contratos_pagos)
       let r1_alocadas = 0;
       let r1_realizadas = 0;
-      let contratos_pagos = 0;
       let no_shows = 0;
 
       slots?.forEach(slot => {
@@ -99,11 +98,6 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
             r1_realizadas++;
           }
           
-          // Contratos pagos: contract_paid, refunded
-          if (['contract_paid', 'refunded'].includes(status)) {
-            contratos_pagos++;
-          }
-          
           // No-shows
           if (status === 'no_show') {
             no_shows++;
@@ -111,8 +105,55 @@ export const useCloserAgendaMetrics = (sdrId: string | undefined, anoMes: string
         });
       });
 
-      // 6. Buscar vendas parceria de hubla_transactions
-      // Vendas parceria são transações com product_category='parceria' linkadas a attendees deste closer
+      // 6. CONTRATOS PAGOS: Buscar pela DATA DO PAGAMENTO (contract_paid_at)
+      // Query 1: Contratos com contract_paid_at no período
+      const { data: contractsByPaymentDate, error: contractsError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          contract_paid_at,
+          meeting_slot:meeting_slots!inner(closer_id)
+        `)
+        .eq('meeting_slot.closer_id', closerId)
+        .in('status', ['contract_paid', 'refunded'])
+        .not('contract_paid_at', 'is', null)
+        .gte('contract_paid_at', `${startDate}T00:00:00`)
+        .lte('contract_paid_at', `${endDate}T23:59:59`);
+
+      if (contractsError) {
+        console.error('[useCloserAgendaMetrics] Error fetching contracts by payment date:', contractsError);
+      }
+
+      // Query 2: Fallback para contratos antigos sem contract_paid_at (usa scheduled_at)
+      const { data: contractsWithoutTimestamp, error: fallbackError } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          id,
+          status,
+          contract_paid_at,
+          meeting_slot:meeting_slots!inner(closer_id, scheduled_at)
+        `)
+        .eq('meeting_slot.closer_id', closerId)
+        .in('status', ['contract_paid', 'refunded'])
+        .is('contract_paid_at', null)
+        .gte('meeting_slot.scheduled_at', `${startDate}T00:00:00`)
+        .lte('meeting_slot.scheduled_at', `${endDate}T23:59:59`);
+
+      if (fallbackError) {
+        console.error('[useCloserAgendaMetrics] Error fetching contracts fallback:', fallbackError);
+      }
+
+      // Total de contratos = pagamentos no período + fallback
+      const contratos_pagos = (contractsByPaymentDate?.length || 0) + (contractsWithoutTimestamp?.length || 0);
+
+      console.log('[useCloserAgendaMetrics] Contratos pagos:', {
+        byPaymentDate: contractsByPaymentDate?.length || 0,
+        fallback: contractsWithoutTimestamp?.length || 0,
+        total: contratos_pagos
+      });
+
+      // 7. Buscar vendas parceria de hubla_transactions
       const attendeeIds = slots?.flatMap(s => 
         (s.meeting_slot_attendees || []).map((a: any) => a.id)
       ) || [];
