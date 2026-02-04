@@ -453,19 +453,47 @@ serve(async (req) => {
           console.log(`   ✅ Comp plan fallback criado para ${sdr.name} (Nível ${nivel}): OTE R$${fallbackValues.ote_total}`);
         }
 
-        // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS =====
+        // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FILTRO POR SQUAD) =====
         let metricasAtivas: MetricaAtiva[] = [];
         if (employeeData?.cargo_catalogo_id) {
-          const { data: metricas } = await supabase
-            .from('fechamento_metricas_mes')
-            .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
-            .eq('ano_mes', ano_mes)
-            .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
-            .eq('ativo', true);
+          let metricas: MetricaAtiva[] | null = null;
+          
+          // Primeiro: buscar métricas específicas do squad
+          if (sdr.squad) {
+            const { data: metricasSquad } = await supabase
+              .from('fechamento_metricas_mes')
+              .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
+              .eq('ano_mes', ano_mes)
+              .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+              .eq('squad', sdr.squad)
+              .eq('ativo', true);
+            
+            if (metricasSquad && metricasSquad.length > 0) {
+              metricas = metricasSquad;
+              console.log(`   📋 Métricas específicas do squad '${sdr.squad}' encontradas`);
+            }
+          }
+          
+          // Fallback: métricas genéricas (squad = null)
+          if (!metricas || metricas.length === 0) {
+            const { data: metricasGerais } = await supabase
+              .from('fechamento_metricas_mes')
+              .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
+              .eq('ano_mes', ano_mes)
+              .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+              .is('squad', null)
+              .eq('ativo', true);
+            
+            if (metricasGerais && metricasGerais.length > 0) {
+              metricas = metricasGerais;
+              console.log(`   📋 Métricas genéricas (sem squad) encontradas`);
+            }
+          }
           
           if (metricas && metricas.length > 0) {
             metricasAtivas = metricas;
-            console.log(`   📋 Métricas ativas encontradas para ${sdr.name}:`, metricas.map(m => m.nome_metrica).join(', '));
+            console.log(`   📋 Métricas ativas para ${sdr.name}:`, 
+              metricas.map(m => `${m.nome_metrica}(${m.peso_percentual}%)`).join(', '));
           }
         }
 
