@@ -2779,6 +2779,7 @@ export type Database = {
           replicated_at: string | null
           replicated_from_deal_id: string | null
           stage_id: string | null
+          stage_moved_at: string | null
           tags: string[] | null
           updated_at: string | null
           value: number | null
@@ -2806,6 +2807,7 @@ export type Database = {
           replicated_at?: string | null
           replicated_from_deal_id?: string | null
           stage_id?: string | null
+          stage_moved_at?: string | null
           tags?: string[] | null
           updated_at?: string | null
           value?: number | null
@@ -2833,6 +2835,7 @@ export type Database = {
           replicated_at?: string | null
           replicated_from_deal_id?: string | null
           stage_id?: string | null
+          stage_moved_at?: string | null
           tags?: string[] | null
           updated_at?: string | null
           value?: number | null

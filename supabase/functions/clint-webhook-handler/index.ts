@@ -647,7 +647,8 @@ async function handleDealCreated(supabase: any, data: any) {
       expected_close_date: data.expected_close_date || dealData.expected_close_date,
       custom_fields: customFields,
       product_name: productName,
-      data_source: 'webhook'
+      data_source: 'webhook',
+      stage_moved_at: new Date().toISOString()
     }, { onConflict: 'clint_id' })
     .select()
     .single();
@@ -1038,7 +1039,8 @@ async function handleDealStageChanged(supabase: any, data: any) {
           deal_closer: data.deal_closer,
           deal_origin: data.deal_origin || originName,
         },
-        data_source: 'webhook'
+        data_source: 'webhook',
+        stage_moved_at: new Date().toISOString()
       })
       .select('id, stage_id')
       .single();
@@ -1073,7 +1075,8 @@ async function handleDealStageChanged(supabase: any, data: any) {
     const updateData: any = {
       stage_id: newStage.id,
       updated_at: new Date().toISOString(),
-      data_source: 'webhook'
+      data_source: 'webhook',
+      stage_moved_at: new Date().toISOString()
     };
     
     // Se temos origin_id do webhook, atualizar também

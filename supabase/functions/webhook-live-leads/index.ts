@@ -162,7 +162,8 @@ serve(async (req) => {
         tags: ['Lead-Live'],
         custom_fields: customFields,
         data_source: 'webhook',
-        created_at: dealCreatedAt
+        created_at: dealCreatedAt,
+        stage_moved_at: new Date().toISOString()
       })
       .select('id')
       .single();

@@ -413,7 +413,7 @@ export const useCRMDeals = (filters: DealFilters = {}) => {
           crm_origins(name),
           crm_stages(stage_name, color)
         `)
-        .order('created_at', { ascending: false })
+        .order('stage_moved_at', { ascending: false, nullsFirst: false })
         .limit(limit);
       
       // Aplicar filtro de origens
@@ -513,9 +513,15 @@ export const useCreateCRMDeal = () => {
   
   return useMutation({
     mutationFn: async (deal: any) => {
+      // Set stage_moved_at for new deals
+      const dealWithTimestamp = {
+        ...deal,
+        stage_moved_at: new Date().toISOString(),
+      };
+      
       const { data, error } = await supabase
         .from('crm_deals')
-        .insert([deal as any])
+        .insert([dealWithTimestamp as any])
         .select()
         .single();
       
@@ -567,6 +573,11 @@ export const useUpdateCRMDeal = () => {
         if (profile) {
           deal.owner_profile_id = profile.id;
         }
+      }
+      
+      // Update stage_moved_at when stage changes
+      if (deal.stage_id && previousStageId !== deal.stage_id) {
+        deal.stage_moved_at = new Date().toISOString();
       }
       
       // Update the deal

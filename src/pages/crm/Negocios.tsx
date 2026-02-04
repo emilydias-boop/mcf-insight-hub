@@ -323,6 +323,32 @@ const Negocios = () => {
     }
   };
   
+  // Handler para seleção por quantidade (de cima para baixo em cada estágio)
+  const handleSelectByCount = (count: number | 'all') => {
+    if (!dealsData) return;
+    
+    const newSelectedIds = new Set<string>();
+    
+    // Agrupar deals por stage_id mantendo a ordem original (já ordenados por stage_moved_at DESC)
+    const dealsByStage: Record<string, string[]> = {};
+    
+    filteredDeals.forEach((deal: any) => {
+      if (!deal.stage_id) return;
+      if (!dealsByStage[deal.stage_id]) {
+        dealsByStage[deal.stage_id] = [];
+      }
+      dealsByStage[deal.stage_id].push(deal.id);
+    });
+    
+    // Selecionar os primeiros N de cada estágio (ou todos)
+    Object.values(dealsByStage).forEach((stageDealIds) => {
+      const toSelect = count === 'all' ? stageDealIds : stageDealIds.slice(0, count);
+      toSelect.forEach(id => newSelectedIds.add(id));
+    });
+    
+    setSelectedDealIds(newSelectedIds);
+  };
+  
   const filteredDeals = useMemo(() => {
     return (dealsData || []).filter((deal: any) => {
       if (!deal || !deal.id || !deal.name) return false;
@@ -584,6 +610,8 @@ const Negocios = () => {
         onTransfer={() => setTransferDialogOpen(true)}
         onClearSelection={handleClearSelection}
         isTransferring={bulkTransfer.isPending}
+        selectionMode={selectionMode}
+        onSelectByCount={handleSelectByCount}
       />
       
       {/* Dialog de transferência em massa */}
