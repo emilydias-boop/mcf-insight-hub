@@ -71,10 +71,10 @@ export function CloserSummaryTable({
               <TableHead className="text-muted-foreground font-medium">Closer</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">Outside</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">Outside</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R2 Agendada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa Conv.</TableHead>
             </TableRow>
@@ -125,6 +125,9 @@ export function CloserSummaryTable({
                     <span className="text-green-400 font-medium">{row.r1_realizada}</span>
                   </TableCell>
                   <TableCell className="text-center">
+                    <span className="text-orange-400 font-medium">{row.outside}</span>
+                  </TableCell>
+                  <TableCell className="text-center">
                     <span className="text-red-400">{row.noshow}</span>
                   </TableCell>
                   <TableCell className="text-center">
@@ -132,9 +135,6 @@ export function CloserSummaryTable({
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-amber-400 font-medium">{row.contrato_pago}</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className="text-orange-400 font-medium">{row.outside}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
@@ -160,6 +160,9 @@ export function CloserSummaryTable({
                 <span className="text-green-400">{totals.r1_realizada}</span>
               </TableCell>
               <TableCell className="text-center">
+                <span className="text-orange-400">{totals.outside}</span>
+              </TableCell>
+              <TableCell className="text-center">
                 <span className="text-red-400">{totals.noshow}</span>
               </TableCell>
               <TableCell className="text-center">
@@ -175,9 +178,6 @@ export function CloserSummaryTable({
               </TableCell>
               <TableCell className="text-center">
                 <span className="text-amber-400">{totals.contrato_pago}</span>
-              </TableCell>
-              <TableCell className="text-center">
-                <span className="text-orange-400">{totals.outside}</span>
               </TableCell>
               <TableCell className="text-center">
                 <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
