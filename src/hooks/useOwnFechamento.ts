@@ -48,11 +48,24 @@ export function useOwnFechamento(anoMes: string): OwnFechamentoData {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) return null;
 
-      const { data, error } = await supabase
+      // First try to find by user_id
+      let { data, error } = await supabase
         .from('sdr')
         .select('*')
         .eq('user_id', authUser.id)
         .single();
+      
+      // Fallback: search by email if not found by user_id
+      if (error?.code === 'PGRST116' && authUser.email) {
+        const emailResult = await supabase
+          .from('sdr')
+          .select('*')
+          .eq('email', authUser.email)
+          .single();
+        
+        data = emailResult.data;
+        error = emailResult.error;
+      }
       
       if (error && error.code !== 'PGRST116') throw error;
       return data as Sdr | null;
