@@ -1,47 +1,92 @@
 
-# Plano: Adicionar Alex Dias a Lista de SDRs
+# Plano: Adicionar Seletor de SDR na Importação de Negócios
 
-## Problema Identificado
+## Objetivo
 
-O contrato pago de **Jose Vianey De Souza** (agendado por Alex Dias) nao esta sendo contabilizado nas metricas do Julio porque Alex Dias nao esta na `SDR_LIST`.
+Permitir que ao importar um CSV de leads, você possa selecionar um SDR específico para receber **todos** os deals dessa importação automaticamente.
 
-**Dados atuais:**
-- Hudson Alves: booked by Leticia Nunes ✓ (na lista)
-- Jose Vianey: booked by Alex Dias ✗ (NAO na lista)
-- cleano melo: booked by Antony Elias ✓ (na lista)
+## Alterações
 
-## Solucao
+### 1. Frontend - `src/pages/crm/ImportarNegocios.tsx`
 
-Adicionar Alex Dias a lista de SDRs validos.
+**Adicionar seletor de "Atribuir a" (SDR):**
 
-## Alteracao
-
-### Arquivo: `src/constants/team.ts`
-
-**Linha 11** - Adicionar Alex Dias antes do fechamento do array:
+- Novo estado: `selectedOwnerId` (email do SDR) e `selectedOwnerProfileId` (UUID)
+- Novo componente Select para escolher o SDR da lista de usuários ativos
+- Passar `owner_email` e `owner_profile_id` no FormData junto com `origin_id`
 
 ```typescript
-export const SDR_LIST = [
-  { nome: "Juliana Rodrigues", email: "juliana.rodrigues@minhacasafinanciada.com" },
-  { nome: "Julia Caroline", email: "julia.caroline@minhacasafinanciada.com" },
-  { nome: "Antony Elias", email: "antony.elias@minhacasafinanciada.com" },
-  { nome: "Vinicius Rangel", email: "rangel.vinicius@minhacasafinanciada.com" },
-  { nome: "Jessica Martins", email: "jessica.martins@minhacasafinanciada.com" },
-  { nome: "Leticia Nunes", email: "leticia.nunes@minhacasafinanciada.com" },
-  { nome: "Caroline Correa", email: "carol.correa@minhacasafinanciada.com" },
-  { nome: "Caroline Souza", email: "caroline.souza@minhacasafinanciada.com" },
-  { nome: "Alex Dias", email: "alex.dias@minhacasafinanciada.com" },  // NOVO
-];
+// Novos estados
+const [selectedOwnerEmail, setSelectedOwnerEmail] = useState<string | null>(null);
+const [selectedOwnerProfileId, setSelectedOwnerProfileId] = useState<string | null>(null);
+
+// Nova query para buscar usuários ativos (SDRs + Closers)
+const { data: activeUsers } = useQuery({
+  queryKey: ['active-users-for-import'],
+  queryFn: async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, email, name')
+      .order('name');
+    return data || [];
+  }
+});
+
+// No handleImport, enviar os dados do owner
+formData.append('owner_email', selectedOwnerEmail);
+formData.append('owner_profile_id', selectedOwnerProfileId);
 ```
 
-## Resultado Esperado
+### 2. Edge Function - `supabase/functions/import-deals-csv/index.ts`
 
-- Julio mostrara 3 contratos pagos corretamente
-- Todas as metricas agendadas por Alex Dias serao contabilizadas
-- Relatorios gerais de performance incluirao esses dados
+**Receber e armazenar o owner no job metadata:**
 
-## Arquivos
+```typescript
+const ownerEmail = formData.get('owner_email') as string | null;
+const ownerProfileId = formData.get('owner_profile_id') as string | null;
 
-| Arquivo | Alteracao |
+// No metadata do job
+metadata: {
+  // ...existente
+  owner_email: ownerEmail || null,
+  owner_profile_id: ownerProfileId || null,
+}
+```
+
+### 3. Edge Function - `supabase/functions/process-csv-imports/index.ts`
+
+**Aplicar o owner a todos os deals:**
+
+```typescript
+// Linha ~144, junto com originId
+const ownerEmail = job.metadata.owner_email;
+const ownerProfileId = job.metadata.owner_profile_id;
+
+// Na conversão (linha ~350-352), priorizar owner do job se existir
+if (ownerEmail) {
+  dbDeal.owner_id = ownerEmail;
+  dbDeal.owner_profile_id = ownerProfileId;
+} else if (csvDeal.owner) {
+  dbDeal.owner_id = csvDeal.owner.trim();
+}
+```
+
+---
+
+## Fluxo do Usuário
+
+1. Acessa **CRM > Configurações > Importar Negócios**
+2. Seleciona a **Pipeline de destino**
+3. Seleciona o **SDR** no novo campo "Atribuir a" (opcional)
+4. Faz upload do CSV
+5. Todos os deals são criados já com o owner correto
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
 |---------|-----------|
-| `src/constants/team.ts` | Adicionar Alex Dias a SDR_LIST |
+| `src/pages/crm/ImportarNegocios.tsx` | Adicionar seletor de SDR e enviar no FormData |
+| `supabase/functions/import-deals-csv/index.ts` | Receber owner_email e owner_profile_id |
+| `supabase/functions/process-csv-imports/index.ts` | Aplicar owner a todos os deals importados |
