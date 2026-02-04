@@ -1,101 +1,110 @@
 
-# Plano: Adicionar Métrica "Agendamento" ao Painel de Fechamento
+# Plano: Corrigir Discrepância de Valores e Salvamento Manual
 
-## Contexto
+## Problemas Identificados
 
-Existem duas métricas diferentes:
-- **Agendamento** (`agendamentos`): Reuniões **criadas no período** (produção do SDR) - usa `created_at`/`booked_at`
-- **R1 Agendada** (`r1_agendada`): Reuniões **marcadas para o período** - usa `scheduled_at`
+### Problema 1: Discrepância de Valores (169 vs 167)
+A edge function `recalculate-sdr-payout` usa a métrica errada:
+- **Linha 346**: `reunioesAgendadas = metrics.r1_agendada || 0`
+- Isso pega `r1_agendada` (reuniões marcadas PARA o período = 167)
+- Deveria usar `agendamentos` (reuniões criadas NO período = 169)
 
-A RPC `get_sdr_metrics_from_agenda` já retorna ambas, mas o hook `useSdrAgendaMetricsBySdrId` só captura `r1_agendada`. O painel de fechamento atualmente usa `r1_agendada` para calcular o KPI "Reuniões Agendadas", quando deveria usar `agendamentos`.
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useSdrAgendaMetricsBySdrId.ts` | Adicionar `agendamentos` ao retorno |
-| `src/components/sdr-fechamento/KpiEditForm.tsx` | Usar `agendamentos` no campo "Agendamento" |
+### Problema 2: Salvamento Manual Não Funciona
+Fluxo atual quando usuário salva:
+1. `useRecalculateWithKpi` salva KPI com valor editado (ex: 170)
+2. Edge function é chamada
+3. Edge function busca dados da Agenda e **SOBRESCREVE** o KPI (linhas 527-529)
+4. Valor do usuário é perdido
 
 ---
 
-## Detalhes da Implementação
+## Solução
 
-### 1. useSdrAgendaMetricsBySdrId.ts
+### Arquivo a Modificar
+`supabase/functions/recalculate-sdr-payout/index.ts`
 
-Adicionar `agendamentos` à interface e ao retorno:
+### Mudança 1: Usar `agendamentos` em vez de `r1_agendada`
+```typescript
+// Linha 346: ANTES
+reunioesAgendadas = metrics.r1_agendada || 0;
+
+// DEPOIS
+reunioesAgendadas = metrics.agendamentos || 0;
+```
+
+### Mudança 2: Respeitar Valores Manuais
+A edge function já busca o KPI existente antes de atualizar (linha 501-506). O problema é que ela sempre sobrescreve se a Agenda retornou dados.
+
+Solução: Comparar timestamps para detectar edição manual recente:
 
 ```typescript
-// Interface atualizada (linha 5-11)
-export interface SdrAgendaMetricsById {
-  agendamentos: number;    // NOVO: reuniões criadas no período
-  r1_agendada: number;
-  r1_realizada: number;
-  no_shows: number;
-  contratos: number;
-  vendas_parceria: number;
-}
-
-// Retorno atualizado (linhas 18, 30, 48, 62)
-return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, ... };
-
-// Extrair da response (linha 52-58)
-const response = data as unknown as { metrics: Array<{
-  agendamentos: number;  // NOVO
-  r1_agendada: number;
+// Linhas 525-548: ANTES (sempre sobrescreve com Agenda)
+const updateFields: Record<string, unknown> = {
+  reunioes_agendadas: reunioesAgendadas > 0 
+    ? reunioesAgendadas 
+    : existingKpi.reunioes_agendadas,
   ...
-}> };
+};
 
-// Retorno final (linha 62-68)
-return {
-  agendamentos: metrics?.agendamentos || 0,  // NOVO
-  r1_agendada: metrics?.r1_agendada || 0,
-  ...
+// DEPOIS (preserva edição manual recente)
+// Se KPI foi atualizado nos últimos 10 segundos, preservar valores manuais
+const kpiUpdatedAt = new Date(existingKpi.updated_at).getTime();
+const now = Date.now();
+const wasManuallyEdited = (now - kpiUpdatedAt) < 10000; // 10 segundos
+
+const updateFields: Record<string, unknown> = {
+  // Preservar valores se foi edição manual recente
+  reunioes_agendadas: wasManuallyEdited 
+    ? existingKpi.reunioes_agendadas
+    : (reunioesAgendadas > 0 ? reunioesAgendadas : existingKpi.reunioes_agendadas),
+  
+  reunioes_realizadas: wasManuallyEdited
+    ? existingKpi.reunioes_realizadas
+    : (reunioesRealizadas > 0 ? reunioesRealizadas : existingKpi.reunioes_realizadas),
+  
+  no_shows: wasManuallyEdited
+    ? existingKpi.no_shows
+    : (reunioesAgendadas > 0 ? noShows : existingKpi.no_shows),
+  
+  taxa_no_show: wasManuallyEdited
+    ? existingKpi.taxa_no_show
+    : (reunioesAgendadas > 0 ? taxaNoShow : existingKpi.taxa_no_show),
+  
+  updated_at: new Date().toISOString(),
 };
 ```
 
-### 2. KpiEditForm.tsx
-
-Alterar o campo de "Agendamento" para usar `agendamentos` em vez de `r1_agendada`:
-
-```tsx
-// Onde mostra o valor automático da Agenda para "Agendamento" (linha ~380)
-// ANTES:
-autoValue={agendaMetrics.data?.r1_agendada}
-
-// DEPOIS:
-autoValue={agendaMetrics.data?.agendamentos}
-```
-
 ---
 
-## Fluxo de Dados Corrigido
+## Fluxo Corrigido
 
 ```text
-RPC get_sdr_metrics_from_agenda
-        │
-        ├── agendamentos ────► useSdrAgendaMetricsBySdrId ────► KpiEditForm
-        │                      (NOVO campo adicionado)          (Campo "Agendamento")
-        │
-        └── r1_agendada ────► (não usado no fechamento)
+ANTES (Problemático):
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Usuário edita│ --> │ Salva KPI    │ --> │ Edge Function│
+│ valor: 170   │     │ (170)        │     │ sobrescreve  │
+└──────────────┘     └──────────────┘     │ com 167      │
+                                          └──────────────┘
+
+DEPOIS (Corrigido):
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Usuário edita│ --> │ Salva KPI    │ --> │ Edge Function│
+│ valor: 170   │     │ (170)        │     │ PRESERVA 170 │
+└──────────────┘     └──────────────┘     │ (edit < 10s) │
+                                          └──────────────┘
 ```
 
 ---
 
-## Resultado Visual
+## Resumo das Mudanças
 
-O campo "Agendamento" no painel de fechamento passará a mostrar:
-- **Antes**: Reuniões marcadas PARA o mês (scheduled_at)
-- **Depois**: Reuniões criadas pelo SDR no mês (booked_at) - métrica de produtividade
+| Linha | Mudança |
+|-------|---------|
+| 346 | `r1_agendada` → `agendamentos` |
+| 525-548 | Adicionar lógica para preservar edições manuais recentes |
 
-Isso alinha o painel de fechamento com os outros painéis (Reuniões Equipe, Tabela SDR).
+## Resultado Esperado
 
----
-
-## Resumo Técnico
-
-- **2 arquivos** modificados
-- **1 campo** adicionado ao hook (`agendamentos`)
-- **1 referência** atualizada no formulário
-- **Zero impacto** em outros componentes (campo `r1_agendada` permanece disponível)
+1. O indicador "Agendamento" mostrará 169 (igual ao formulário)
+2. Edições manuais serão preservadas após salvar
+3. Recálculos automáticos (batch mensal) continuarão atualizando com dados da Agenda
