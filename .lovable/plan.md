@@ -1,138 +1,182 @@
 
-# Plano: Correção da Visibilidade de SDRs no Fechamento do Consórcio
+# Plano: Corrigir Cálculo do Fechamento SDR - Edge Function sem Fallback
 
 ## Diagnóstico do Problema
 
-Ithaline e Ygor **existem na tabela `sdr`** com `squad = 'consorcio'` e `active = true`, porém não aparecem no fechamento porque:
+O botão "Salvar e Recalcular" não está calculando os valores porque:
 
-| SDR | Email | sdr_comp_plan | employees (RH) |
-|-----|-------|---------------|----------------|
-| Cleiton Lima | ✅ Tem | ✅ 4 planos | ✅ Vinculado |
-| Ithaline | ❌ Nulo | ❌ Nenhum | ❌ Não vinculado |
-| Ygor | ❌ Nulo | ❌ Nenhum | ❌ Não vinculado |
+1. **Fluxo atual**: O frontend salva o KPI e chama a edge function `recalculate-sdr-payout`
+2. **Problema na Edge Function**: A função busca o `sdr_comp_plan` vigente com esta query:
 
-O sistema de fechamento (`useRecalculateAllPayouts`) **ignora SDRs sem plano de compensação**:
-```typescript
-if (!compPlan) continue;  // <-- Linha 817 - pula quem não tem plano
+```sql
+WHERE sdr_id = ? 
+  AND vigencia_inicio <= '2026-01-01'
+  AND (vigencia_fim IS NULL OR vigencia_fim >= '2026-01-01')
 ```
 
-## Soluções Disponíveis
+3. **Situação de Cleiton Lima**:
+   - Plano mais recente: inicia em 2026-02-01 (fevereiro) - **não cobre janeiro**
+   - Plano anterior: terminou em 2025-10-31 (outubro)
+   - Resultado: **nenhum plano cobre janeiro 2026**
 
-### Opção A: Cadastrar Planos Individuais (Correção via UI)
-**Não requer código** - apenas configuração no sistema existente.
+4. **Consequência**: A edge function encontra `compPlan = null` e executa `continue`, pulando o SDR sem calcular nada
 
-1. Acesse `/consorcio/fechamento/configuracoes` → aba **"Planos OTE"**
-2. Para cada SDR sem plano (Ithaline e Ygor):
-   - Clique em "Editar" na linha do colaborador
-   - Defina os valores de OTE, Fixo, Variável
-   - Salve o plano
-3. Volte ao fechamento e clique em "Recalcular Todos"
+## Evidência nos Logs
 
-**Problema**: Ithaline e Ygor não aparecem na aba Planos OTE porque:
-- Não têm `cargo_catalogo_id` (não estão no RH com cargo vinculado)
-
-### Opção B: Modificar Sistema para Usar Fallback (Recomendado)
-
-Atualizar `useRecalculateAllPayouts` para:
-1. Se não houver `sdr_comp_plan`, buscar valores do `cargo_catalogo` do funcionário no RH
-2. Se também não houver funcionário no RH, usar **valores padrão** baseados no nível do SDR
-
-Isso garante que **todos os SDRs ativos** apareçam no fechamento, mesmo sem configuração individual.
-
-### Opção C: Criar Funcionalidade de Plano Rápido na Aba SDRs
-
-Adicionar botão "Criar Plano OTE" diretamente na tabela de SDRs para quem não tem.
-
----
-
-## Implementação Recomendada (Opção B + C Combinadas)
-
-### Etapa 1: Fallback no Recálculo
-
-Modificar `src/hooks/useSdrFechamento.ts` na função `useRecalculateAllPayouts`:
-
-```text
-┌──────────────────────────────────────────────────────────────┐
-│           FLUXO ATUAL (com problema)                         │
-├──────────────────────────────────────────────────────────────┤
-│ Para cada SDR ativo:                                         │
-│   → Buscar comp_plan                                         │
-│   → SE não tem comp_plan → PULA (continue) ❌                │
-│   → Calcular payout                                          │
-└──────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────┐
-│           FLUXO PROPOSTO (com fallback)                      │
-├──────────────────────────────────────────────────────────────┤
-│ Para cada SDR ativo:                                         │
-│   → Buscar comp_plan                                         │
-│   → SE não tem comp_plan:                                    │
-│       → Buscar cargo_catalogo via employee                   │
-│       → SE tem cargo_catalogo → Usar OTE do catálogo ✅      │
-│       → SE não tem → Usar valores padrão do nível ✅         │
-│   → Calcular payout                                          │
-└──────────────────────────────────────────────────────────────┘
+```
+⚠️ Plano de compensação não encontrado para Cleiton Lima
+⚠️ Nenhuma métrica encontrada na RPC para Cleiton Lima  
+📊 Resultado: 0 processados, 0 erros
 ```
 
-### Etapa 2: Valores Padrão por Nível
+## Solução Proposta
 
-Criar constante com OTE padrão para SDRs sem configuração:
+### Opção 1: Corrigir Dados (Solução Imediata)
 
-```typescript
-const DEFAULT_OTE_BY_LEVEL = {
-  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 1200 },
-  2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
-  3: { ote_total: 5000, fixo_valor: 3500, variavel_total: 1500 },
-  // ... etc
-};
+Ajustar o plano existente para cobrir janeiro 2026:
+
+```sql
+UPDATE sdr_comp_plan 
+SET vigencia_inicio = '2026-01-01'
+WHERE id = '52584bcf-e8ac-4da3-92ce-1a9299fb2f6b';
+-- OU aprovar o plano PENDING
 ```
 
-### Etapa 3: Criar/Atualizar Plano Implícito
+### Opção 2: Adicionar Fallback na Edge Function (Solução Definitiva)
 
-Quando usar fallback, **criar automaticamente** um `sdr_comp_plan` para o SDR com os valores inferidos, garantindo rastreabilidade.
+Modificar a edge function `recalculate-sdr-payout` para usar a mesma lógica de fallback implementada no frontend:
 
----
+1. Se não encontrar comp_plan vigente, buscar `cargo_catalogo` do employee
+2. Se não houver cargo_catalogo, usar valores padrão por nível do SDR
+3. Opcionalmente, criar um comp_plan automático para rastreabilidade
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useSdrFechamento.ts` | Adicionar fallback para cargo_catalogo e valores padrão em `useRecalculateAllPayouts` e `useRecalculatePayout` |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Adicionar lógica de fallback quando não encontrar comp_plan |
 
-## Resultado Esperado
+## Implementacao Tecnica
 
-Após implementação:
-1. **Clicar em "Recalcular Todos"** no fechamento de Consórcio
-2. Sistema criará automaticamente payouts para Ithaline e Ygor usando valores padrão
-3. Ambos aparecerão na lista de SDRs com status "Rascunho"
+### Adicionar Constantes de Fallback (linhas ~55-65)
 
-## Teste
-
-1. Acessar `/consorcio/fechamento`
-2. Clicar em "Recalcular Todos"
-3. Verificar se Ithaline e Ygor aparecem na aba SDRs
-
----
-
-## Resumo Técnico
-
-A modificação principal está na função `useRecalculateAllPayouts` (linhas ~764-893):
-
-**Antes (linha 817):**
 ```typescript
-if (!compPlan) continue;
+const DEFAULT_OTE_BY_LEVEL: Record<number, { 
+  ote_total: number; 
+  fixo_valor: number; 
+  variavel_total: number 
+}> = {
+  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 1200 },
+  2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
+  3: { ote_total: 5000, fixo_valor: 3500, variavel_total: 1500 },
+  4: { ote_total: 5500, fixo_valor: 3850, variavel_total: 1650 },
+  5: { ote_total: 6000, fixo_valor: 4200, variavel_total: 1800 },
+};
 ```
 
-**Depois:**
+### Modificar Lógica de Busca do Comp Plan (linhas ~358-361)
+
+Antes:
 ```typescript
-if (!compPlan) {
-  // Fallback: criar comp_plan a partir de cargo_catalogo ou valores padrão
-  compPlan = await createFallbackCompPlan(sdr.id, anoMes, employeeMap.get(sdr.id));
-  if (!compPlan) continue; // Só pula se realmente não conseguir criar
+if (compError || !compPlan) {
+  console.log(`⚠️ Plano de compensação não encontrado para ${sdr.name}`);
+  continue;
 }
 ```
 
-A nova função `createFallbackCompPlan` irá:
-1. Tentar usar `cargo_catalogo` do employee vinculado
-2. Fallback para valores padrão baseados em `sdr.nivel`
-3. Inserir registro em `sdr_comp_plan` para persistência
+Depois:
+```typescript
+let effectiveCompPlan = compPlan;
+
+if (compError || !compPlan) {
+  console.log(`⚠️ Plano vigente não encontrado para ${sdr.name}. Criando fallback...`);
+  
+  // Buscar nivel do SDR
+  const { data: sdrFull } = await supabase
+    .from('sdr')
+    .select('nivel')
+    .eq('id', sdr.id)
+    .single();
+  
+  const nivel = sdrFull?.nivel || 1;
+  const fallback = DEFAULT_OTE_BY_LEVEL[nivel] || DEFAULT_OTE_BY_LEVEL[1];
+  
+  // Tentar usar cargo_catalogo se disponível
+  if (employeeData?.cargo_catalogo_id) {
+    const { data: cargo } = await supabase
+      .from('cargos_catalogo')
+      .select('ote_total, fixo_valor, variavel_valor')
+      .eq('id', employeeData.cargo_catalogo_id)
+      .single();
+    
+    if (cargo && cargo.ote_total > 0) {
+      fallback.ote_total = cargo.ote_total;
+      fallback.fixo_valor = cargo.fixo_valor;
+      fallback.variavel_total = cargo.variavel_valor;
+    }
+  }
+  
+  // Criar comp_plan implícito para o mês
+  const newPlan = {
+    sdr_id: sdr.id,
+    vigencia_inicio: monthStart,
+    vigencia_fim: monthEnd,
+    ote_total: fallback.ote_total,
+    fixo_valor: fallback.fixo_valor,
+    variavel_total: fallback.variavel_total,
+    valor_meta_rpg: Math.round(fallback.variavel_total * 0.35),
+    valor_docs_reuniao: Math.round(fallback.variavel_total * 0.35),
+    valor_tentativas: Math.round(fallback.variavel_total * 0.15),
+    valor_organizacao: Math.round(fallback.variavel_total * 0.15),
+    ifood_mensal: 150,
+    ifood_ultrameta: 50,
+    meta_reunioes_agendadas: 15,
+    meta_reunioes_realizadas: 12,
+    meta_tentativas: 400,
+    meta_organizacao: 100,
+    dias_uteis: calendarData?.dias_uteis_final || 22,
+    meta_no_show_pct: 30,
+    status: 'APPROVED',
+  };
+  
+  const { data: createdPlan, error: createError } = await supabase
+    .from('sdr_comp_plan')
+    .insert(newPlan)
+    .select()
+    .single();
+  
+  if (createError) {
+    console.error(`❌ Erro ao criar comp_plan fallback: ${createError.message}`);
+    continue;
+  }
+  
+  effectiveCompPlan = createdPlan;
+  console.log(`✅ Comp plan fallback criado para ${sdr.name}`);
+}
+```
+
+## Teste Esperado
+
+Apos a implementacao:
+1. Acessar fechamento de janeiro 2026 para Cleiton Lima
+2. Inserir os KPIs (217 agendadas, 157 realizadas, 100 organizacao)
+3. Clicar em "Salvar e Recalcular"
+4. Sistema deve criar comp_plan automatico e calcular:
+   - Agendadas: 217 / 140 = 155% -> mult 1.5x
+   - Realizadas: 157 / 152 = 103% -> mult 1x
+   - Organizacao: 100 / 100 = 100% -> mult 1x
+
+## Correcao Imediata (Dados)
+
+Enquanto a implementacao nao e feita, o problema pode ser corrigido ajustando o plano existente:
+
+```sql
+-- Opcao A: Ajustar vigencia do plano pendente para cobrir janeiro
+UPDATE sdr_comp_plan 
+SET vigencia_inicio = '2026-01-01', status = 'APPROVED'
+WHERE id = '52584bcf-e8ac-4da3-92ce-1a9299fb2f6b';
+
+-- Opcao B: Criar plano especifico para janeiro
+INSERT INTO sdr_comp_plan (sdr_id, vigencia_inicio, vigencia_fim, ote_total, fixo_valor, variavel_total, ...)
+VALUES ('11111111-0001-0001-0001-000000000006', '2026-01-01', '2026-01-31', 4500, 3200, 1300, ...);
+```
