@@ -1,131 +1,118 @@
 
-# Plano: Corrigir Valores do Comp Plan e Pesos de Métricas
 
-## Diagnóstico Detalhado
+# Plano: Corrigir Filtro de Métricas por Squad
 
-Comparando o sistema com a planilha de referência, encontrei **5 problemas**:
+## Problema Identificado
 
-### 1. Fixo Incorreto
-| | Sistema | Planilha |
-|--|---------|----------|
-| Fixo | R$ 3.200,00 | R$ 3.150,00 |
+A query de busca das métricas ativas (`fechamento_metricas_mes`) **não filtra pelo squad do SDR**, retornando métricas duplicadas com pesos diferentes.
 
-O Fixo deveria ser **70% do OTE** = 70% × R$ 4.500 = **R$ 3.150,00**
+### Situação Atual
 
-### 2. Variável Base Incorreto
-| | Sistema | Planilha |
-|--|---------|----------|
-| Variável | R$ 1.300,00 | R$ 1.350,00 |
+Ao buscar métricas para Cleiton Lima (squad = 'consorcio'), a query retorna:
 
-O Variável deveria ser **30% do OTE** = 30% × R$ 4.500 = **R$ 1.350,00**
+| nome_metrica | peso_percentual | squad |
+|--------------|-----------------|-------|
+| agendamentos | **25%** | null (antiga) |
+| realizadas | **25%** | null (antiga) |
+| tentativas | 25% | null |
+| no_show | 25% | null |
+| agendamentos | 35% | consorcio |
+| realizadas | 55% | consorcio |
+| organizacao | 10% | consorcio |
 
-### 3. Pesos das Métricas Incorretos
-| Métrica | Sistema | Planilha (correto) |
-|---------|---------|-------------------|
-| Agendadas | R$ 470 (36%) | R$ 472,50 (**35%**) |
-| Realizadas | R$ 750 (58%) | R$ 742,50 (**55%**) |
-| Organização | R$ 195 (15%) | R$ 135,00 (**10%**) |
+O código usa `.find()` que retorna a **primeira** ocorrência, logo pega os pesos antigos de 25% em vez dos corretos 35%/55%/10%.
 
-O fallback está usando 35%/35%/15%/15%, mas deveria ser **35%/55%/10%**.
+### Cálculo Errado (atual)
+```
+variavelTotal = R$ 1.350
+Agendadas: 1350 × 0.25 × 1.5 = R$ 506,25  ❌
+Realizadas: 1350 × 0.25 × 1.5 = R$ 506,25 ❌
+```
 
-### 4. iFood Mensal Incorreto
-| | Sistema | Planilha |
-|--|---------|----------|
-| iFood | R$ 600,00 | R$ 570,00 |
-
-O iFood correto para SDR 2 é **R$ 570,00**.
-
-### 5. Resultado da Diferença
-
-| Descrição | Sistema | Planilha | Diferença |
-|-----------|---------|----------|-----------|
-| Agendadas | R$ 811,13 | R$ 708,75 | +R$ 102,38 |
-| Realizadas | R$ 1.274,63 | R$ 1.113,75 | +R$ 160,88 |
-| Organização | R$ 154,50 | R$ 135,00 | +R$ 19,50 |
-| Fixo | R$ 3.200,00 | R$ 3.150,00 | +R$ 50,00 |
-| **Total** | **R$ 5.440,25** | **R$ 5.107,50** | **+R$ 332,76** |
+### Cálculo Correto (esperado)
+```
+Agendadas: 1350 × 0.35 × 1.5 = R$ 708,75  ✓
+Realizadas: 1350 × 0.55 × 1.5 = R$ 1.113,75 ✓
+```
 
 ## Solução
 
+Modificar a query de métricas para **filtrar pelo squad do SDR**. Se não houver métricas para o squad específico, fazer fallback para métricas sem squad.
+
 ### Arquivo a Modificar
-`supabase/functions/recalculate-sdr-payout/index.ts`
+`supabase/functions/recalculate-sdr-payout/index.ts` (linhas 456-470)
 
-### Alteração 1: Corrigir DEFAULT_OTE_BY_LEVEL (linhas 63-68)
-
-O nível 2 está com fixo incorreto:
-
+### Código Atual
 ```typescript
-// ANTES (linha 65)
-2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
-
-// Está correto no fallback, mas o comp_plan criado está usando valores errados
+const { data: metricas } = await supabase
+  .from('fechamento_metricas_mes')
+  .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
+  .eq('ano_mes', ano_mes)
+  .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+  .eq('ativo', true);
 ```
 
-### Alteração 2: Corrigir Pesos do Fallback (linhas 424-427)
-
+### Código Corrigido
 ```typescript
-// ANTES
-valor_meta_rpg: Math.round(fallbackValues.variavel_total * 0.35),      // Agendadas
-valor_docs_reuniao: Math.round(fallbackValues.variavel_total * 0.35), // Realizadas (ERRADO!)
-valor_tentativas: Math.round(fallbackValues.variavel_total * 0.15),   // Tentativas
-valor_organizacao: Math.round(fallbackValues.variavel_total * 0.15),  // Organização (ERRADO!)
+// Primeiro buscar métricas específicas do squad
+let metricas: MetricaAtiva[] | null = null;
 
-// DEPOIS (pesos corretos da planilha)
-valor_meta_rpg: Math.round(fallbackValues.variavel_total * 0.35),      // Agendadas = 35%
-valor_docs_reuniao: Math.round(fallbackValues.variavel_total * 0.55), // Realizadas = 55%
-valor_tentativas: 0,                                                   // Tentativas = 0% (SDR Consórcio não usa)
-valor_organizacao: Math.round(fallbackValues.variavel_total * 0.10),  // Organização = 10%
+if (sdr.squad) {
+  const { data: metricasSquad } = await supabase
+    .from('fechamento_metricas_mes')
+    .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
+    .eq('ano_mes', ano_mes)
+    .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+    .eq('squad', sdr.squad)
+    .eq('ativo', true);
+  
+  if (metricasSquad && metricasSquad.length > 0) {
+    metricas = metricasSquad;
+    console.log(`   📋 Métricas específicas do squad '${sdr.squad}' encontradas`);
+  }
+}
+
+// Fallback: métricas genéricas (squad = null)
+if (!metricas || metricas.length === 0) {
+  const { data: metricasGerais } = await supabase
+    .from('fechamento_metricas_mes')
+    .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
+    .eq('ano_mes', ano_mes)
+    .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+    .is('squad', null)
+    .eq('ativo', true);
+  
+  if (metricasGerais && metricasGerais.length > 0) {
+    metricas = metricasGerais;
+    console.log(`   📋 Métricas genéricas (sem squad) encontradas`);
+  }
+}
+
+if (metricas && metricas.length > 0) {
+  metricasAtivas = metricas;
+  console.log(`   📋 Métricas ativas para ${sdr.name}:`, 
+    metricas.map(m => `${m.nome_metrica}(${m.peso_percentual}%)`).join(', '));
+}
 ```
 
-### Alteração 3: Corrigir iFood no Fallback (linha 428)
+## Limpeza de Dados
 
-```typescript
-// ANTES
-ifood_mensal: 150,
-
-// DEPOIS (usar valor correto por nível)
-ifood_mensal: nivel === 2 ? 570 : 600,  // SDR 2 = R$ 570
-```
-
-### Alteração 4: Corrigir o Comp Plan Existente
-
-O comp_plan criado automaticamente (`id: 0a3f1e45-d1e7-4675-ae29-fdd424871cba`) precisa ser corrigido na base:
+Após a correção do código, as métricas antigas (sem squad) para o cargo SDR Consórcio devem ser removidas para evitar confusão:
 
 ```sql
-UPDATE sdr_comp_plan 
-SET 
-  fixo_valor = 3150,
-  variavel_total = 1350,
-  valor_meta_rpg = 472.50,
-  valor_docs_reuniao = 742.50,
-  valor_tentativas = 0,
-  valor_organizacao = 135.00
-WHERE id = '0a3f1e45-d1e7-4675-ae29-fdd424871cba';
+-- Remover métricas antigas sem squad para SDR Consórcio 2026-01
+DELETE FROM fechamento_metricas_mes 
+WHERE cargo_catalogo_id = '48f6d1ce-2fc3-47a0-859a-cfed0da32715'
+  AND ano_mes = '2026-01'
+  AND squad IS NULL;
 ```
 
-E atualizar o payout para usar o iFood correto:
+## Resultado Esperado
 
-```sql
-UPDATE sdr_month_payout
-SET ifood_mensal = 570
-WHERE id = 'd0cff632-7f99-4e5b-a3e1-f7b867e1ead2';
-```
+Após a correção:
+- Agendadas: R$ 472,50 × 1.5 = **R$ 708,75**
+- Realizadas: R$ 742,50 × 1.5 = **R$ 1.113,75**
+- Organização: R$ 135,00 × 1.0 = **R$ 135,00**
+- **Total Variável**: R$ 1.957,50
+- **Total Conta**: R$ 3.150,00 + R$ 1.957,50 = **R$ 5.107,50**
 
-## Cálculo Esperado Após Correção
-
-| Métrica | Base (100%) | Mult | Valor Final |
-|---------|-------------|------|-------------|
-| Agendadas (35%) | R$ 472,50 | 1.5x | **R$ 708,75** |
-| Realizadas (55%) | R$ 742,50 | 1.5x | **R$ 1.113,75** |
-| Organização (10%) | R$ 135,00 | 1.0x | **R$ 135,00** |
-| **Subtotal Variável** | | | **R$ 1.957,50** |
-| Fixo (70%) | | | **R$ 3.150,00** |
-| **Total Conta** | | | **R$ 5.107,50** |
-| iFood | | | **R$ 570,00** |
-
-## Resumo das Alterações
-
-1. Corrigir pesos no fallback: 35%/55%/0%/10%
-2. Corrigir iFood por nível
-3. Atualizar comp_plan existente na base
-4. Recalcular payout
