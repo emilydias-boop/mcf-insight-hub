@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useMeetingsForDate, useMoveAttendeeToMeeting, syncDealStageFromAgenda } from '@/hooks/useAgendaData';
-import { useClosers, useCloserAvailability, useBookedSlots } from '@/hooks/useCloserScheduling';
+import { useClosers, useBookedSlots } from '@/hooks/useCloserScheduling';
+import { useCloserDaySlots } from '@/hooks/useCloserMeetingLinks';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -76,7 +77,8 @@ export function MoveAttendeeModal({
   const isAdmin = role === 'admin';
   
   const { data: closers } = useClosers();
-  const { data: availability } = useCloserAvailability();
+  const dayOfWeek = selectedDate ? selectedDate.getDay() : 0;
+  const { data: daySlots } = useCloserDaySlots(dayOfWeek, 'r1');
   const { data: bookedSlots } = useBookedSlots(
     selectedDate || new Date(), 
     selectedDate || new Date()
@@ -84,56 +86,45 @@ export function MoveAttendeeModal({
   const { data: meetings, isLoading: meetingsLoading } = useMeetingsForDate(selectedDate, isAdmin);
   const moveAttendee = useMoveAttendeeToMeeting();
 
-  // Calculate available slots for the selected date
+  // Calculate available slots for the selected date using closer_meeting_links
   const availableSlots = useMemo(() => {
-    if (!selectedDate || !closers || !availability) return [];
-    
-    const dayOfWeek = selectedDate.getDay();
-    const dayAvailability = availability.filter(a => a.day_of_week === dayOfWeek);
+    if (!selectedDate || !closers || !daySlots) return [];
     
     const slots: AvailableSlot[] = [];
     
-    for (const avail of dayAvailability) {
-      const closer = closers.find(c => c.id === avail.closer_id);
+    for (const slot of daySlots) {
+      const closer = closers.find(c => c.id === slot.closer_id);
       if (!closer) continue;
       
-      // Parse start and end times
-      const [startHour, startMin] = avail.start_time.split(':').map(Number);
-      const [endHour, endMin] = avail.end_time.split(':').map(Number);
+      // Parse o horário do slot (formato HH:mm:ss)
+      const [hour, minute] = slot.start_time.split(':').map(Number);
+      const slotTime = setMinutes(setHours(startOfDay(selectedDate), hour), minute);
       
-      let slotTime = setMinutes(setHours(startOfDay(selectedDate), startHour), startMin);
-      const endTime = setMinutes(setHours(startOfDay(selectedDate), endHour), endMin);
-      
-      // Generate slots
-      while (isBefore(slotTime, endTime)) {
-        // Check if slot is in the future
-        if (isAfter(slotTime, new Date())) {
-          // Check if slot is not already booked
-          const isBooked = bookedSlots?.some(booked => {
-            const bookedTime = new Date(booked.scheduled_at);
-            return booked.closer_id === closer.id && 
-              Math.abs(bookedTime.getTime() - slotTime.getTime()) < avail.slot_duration_minutes * 60 * 1000;
-          });
-          
-          // Admin pode ver todos os horários, mesmo os reservados
-          if (isAdmin || !isBooked) {
-            slots.push({
-              closerId: closer.id,
-              closerName: closer.name,
-              closerColor: (closer as any).color || '#3B82F6',
-              datetime: new Date(slotTime),
-              duration: avail.slot_duration_minutes,
-              isBooked: isBooked,
-            });
-          }
-        }
+      // Verificar se o slot é no futuro
+      if (isAfter(slotTime, new Date())) {
+        // Verificar se já está reservado
+        const isBooked = bookedSlots?.some(booked => {
+          const bookedTime = new Date(booked.scheduled_at);
+          return booked.closer_id === closer.id && 
+            format(bookedTime, 'HH:mm') === format(slotTime, 'HH:mm');
+        });
         
-        slotTime = addMinutes(slotTime, avail.slot_duration_minutes);
+        // Admin pode ver todos os horários, mesmo os reservados
+        if (isAdmin || !isBooked) {
+          slots.push({
+            closerId: closer.id,
+            closerName: closer.name,
+            closerColor: (closer as any).color || '#3B82F6',
+            datetime: new Date(slotTime),
+            duration: 60, // duração padrão
+            isBooked: isBooked,
+          });
+        }
       }
     }
     
     return slots.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-  }, [selectedDate, closers, availability, bookedSlots, isAdmin]);
+  }, [selectedDate, closers, daySlots, bookedSlots, isAdmin]);
 
   // Filter out the current meeting
   const existingMeetings = meetings?.filter(m => m.id !== currentMeetingId) || [];
