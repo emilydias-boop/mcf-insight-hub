@@ -1,81 +1,100 @@
 
+# Plano: Remover Outside da Taxa de Conversao - Correcao Completa
 
-# Plano: Remover Outside da Taxa de Conversao dos Closers
+## Problema
 
-## Problema Atual
+A alteracao anterior foi aplicada apenas em 2 arquivos, mas existem outros locais que ainda calculam a Taxa de Conversao incluindo Outside:
 
-A Taxa de Conversao inclui **Outside** no calculo:
-- Formula atual: `(Contrato Pago + Outside) / R1 Realizada × 100`
-- Problema: Outside sao vendas que ocorreram ANTES da reuniao - o closer nao converteu essas vendas
-
-## Solucao
-
-Ajustar a formula para usar apenas contratos genuinamente convertidos pelo closer:
-- Nova formula: `Contrato Pago / R1 Realizada × 100`
+| Arquivo | Linha | Status |
+|---------|-------|--------|
+| `useCloserDetailData.ts` | 288, 306 | Corrigido |
+| `CloserDetailKPICards.tsx` | 101 | Corrigido |
+| `CloserSummaryTable.tsx` | 56-57, 85-86 | Pendente |
+| `CloserMeetingsDetailPage.tsx` | 147 | Pendente |
 
 ---
 
 ## Arquivos a Modificar
 
-### 1. `src/hooks/useCloserDetailData.ts`
+### 1. `src/components/sdr/CloserSummaryTable.tsx`
 
-**Linha 288** - Media da equipe:
+Este e o componente da **tabela de closers no Painel Comercial** - onde voce viu a discrepancia.
+
+**Linha 55-58** - Total da tabela:
 ```typescript
 // DE:
-avgTaxaConversao: avgR1Realizada > 0 ? ((avgContratoPago + avgOutside) / avgR1Realizada) * 100 : 0,
-
-// PARA:
-avgTaxaConversao: avgR1Realizada > 0 ? (avgContratoPago / avgR1Realizada) * 100 : 0,
-```
-
-**Linha 306** - Calculo individual para ranking:
-```typescript
-// DE:
-taxaConversao: c.r1_realizada > 0 ? ((c.contrato_pago + c.outside) / c.r1_realizada) * 100 : 0,
-
-// PARA:
-taxaConversao: c.r1_realizada > 0 ? (c.contrato_pago / c.r1_realizada) * 100 : 0,
-```
-
-### 2. `src/components/closer/CloserDetailKPICards.tsx`
-
-**Linhas 101-103** - KPI Card individual:
-```typescript
-// DE:
-const taxaConversao = m.r1_realizada > 0 
-  ? ((m.contrato_pago + m.outside) / m.r1_realizada) * 100 
+const totalTaxaConversao = totals.r1_realizada > 0 
+  ? (((totals.contrato_pago + totals.outside) / totals.r1_realizada) * 100)
   : 0;
 
 // PARA:
-const taxaConversao = m.r1_realizada > 0 
-  ? (m.contrato_pago / m.r1_realizada) * 100 
+const totalTaxaConversao = totals.r1_realizada > 0 
+  ? ((totals.contrato_pago / totals.r1_realizada) * 100)
+  : 0;
+```
+
+**Linha 84-87** - Por linha (cada closer):
+```typescript
+// DE:
+const taxaConversao = row.r1_realizada > 0 
+  ? (((row.contrato_pago + row.outside) / row.r1_realizada) * 100)
+  : 0;
+
+// PARA:
+const taxaConversao = row.r1_realizada > 0 
+  ? ((row.contrato_pago / row.r1_realizada) * 100)
   : 0;
 ```
 
 ---
 
-## Impacto
+### 2. `src/pages/crm/CloserMeetingsDetailPage.tsx`
 
-| Metrica | Antes | Depois |
-|---------|-------|--------|
-| Taxa Conversao | (CP + Outside) / Realizada | CP / Realizada |
-| Contrato Pago | Sem alteracao | Sem alteracao |
-| Outside | Continua sendo exibido separadamente | Continua sendo exibido separadamente |
+Este e o **card de Resumo do Periodo** na pagina de detalhe do closer.
 
-O **Outside** continuara visivel como metrica separada, mas nao inflara artificialmente a taxa de conversao do closer.
+**Linha 145-148**:
+```typescript
+// DE:
+{closerMetrics?.r1_realizada && closerMetrics.r1_realizada > 0
+  ? (((closerMetrics.contrato_pago + closerMetrics.outside) / closerMetrics.r1_realizada) * 100).toFixed(1)
+  : '0.0'}%
+
+// PARA:
+{closerMetrics?.r1_realizada && closerMetrics.r1_realizada > 0
+  ? ((closerMetrics.contrato_pago / closerMetrics.r1_realizada) * 100).toFixed(1)
+  : '0.0'}%
+```
+
+---
+
+## Resumo das Alteracoes
+
+| Local | Tipo | Impacto |
+|-------|------|---------|
+| Tabela Closers (total) | Calculo | Linha "Total" na tabela |
+| Tabela Closers (por linha) | Calculo | Cada closer na tabela |
+| Detalhe Closer (resumo) | Exibicao | Card "Taxa de Conversao" |
+
+---
+
+## Resultado Esperado
+
+Apos implementar:
+- **Taxa de Conversao** = `Contrato Pago / R1 Realizada x 100`
+- **Outside** continua visivel como coluna separada
+- Consistencia em todos os periodos (Dia, Semana, Mes)
 
 ---
 
 ## Secao Tecnica
 
 ### Arquivos Afetados
-- `src/hooks/useCloserDetailData.ts` (2 alteracoes)
-- `src/components/closer/CloserDetailKPICards.tsx` (1 alteracao)
+- `src/components/sdr/CloserSummaryTable.tsx` (2 alteracoes)
+- `src/pages/crm/CloserMeetingsDetailPage.tsx` (1 alteracao)
 
-### Escopo das Alteracoes
-- Hook de dados: calculo de media da equipe e ranking
-- Componente KPI: calculo local para exibicao
+### Formula Final
+```
+Taxa Conversao = (Contrato Pago / R1 Realizada) × 100
+```
 
-### Verificacao
-Apos implementar, a taxa de conversao deve diminuir para closers que tinham Outsides, refletindo apenas as vendas genuinamente convertidas.
-
+A metrica Outside permanece como informacao complementar, sem impactar a taxa de conversao oficial do closer.
