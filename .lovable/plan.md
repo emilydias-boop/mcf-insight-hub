@@ -1,118 +1,59 @@
 
 
-# Plano: Corrigir Filtro de Métricas por Squad
+# Plano: Vincular user_id no Registro SDR
 
 ## Problema Identificado
 
-A query de busca das métricas ativas (`fechamento_metricas_mes`) **não filtra pelo squad do SDR**, retornando métricas duplicadas com pesos diferentes.
+O Cleiton Lima está vendo a mensagem "Você não está cadastrado no sistema de fechamento" porque:
 
-### Situação Atual
+1. O hook `useOwnFechamento` busca SDRs pelo `user_id` do usuário autenticado
+2. O registro SDR do Cleiton tem `user_id = NULL`
+3. Sem esse vínculo, o sistema não consegue identificar o fechamento do usuário
 
-Ao buscar métricas para Cleiton Lima (squad = 'consorcio'), a query retorna:
+### Dados Atuais
 
-| nome_metrica | peso_percentual | squad |
-|--------------|-----------------|-------|
-| agendamentos | **25%** | null (antiga) |
-| realizadas | **25%** | null (antiga) |
-| tentativas | 25% | null |
-| no_show | 25% | null |
-| agendamentos | 35% | consorcio |
-| realizadas | 55% | consorcio |
-| organizacao | 10% | consorcio |
-
-O código usa `.find()` que retorna a **primeira** ocorrência, logo pega os pesos antigos de 25% em vez dos corretos 35%/55%/10%.
-
-### Cálculo Errado (atual)
-```
-variavelTotal = R$ 1.350
-Agendadas: 1350 × 0.25 × 1.5 = R$ 506,25  ❌
-Realizadas: 1350 × 0.25 × 1.5 = R$ 506,25 ❌
-```
-
-### Cálculo Correto (esperado)
-```
-Agendadas: 1350 × 0.35 × 1.5 = R$ 708,75  ✓
-Realizadas: 1350 × 0.55 × 1.5 = R$ 1.113,75 ✓
-```
+| Campo | Valor |
+|-------|-------|
+| Profile ID (auth) | `16828627-136e-42ef-9623-62dedfbc9d89` |
+| SDR ID | `11111111-0001-0001-0001-000000000006` |
+| SDR user_id | `NULL` ❌ |
+| Payout existe? | Sim (status: LOCKED, R$ 5.107,50) |
 
 ## Solução
 
-Modificar a query de métricas para **filtrar pelo squad do SDR**. Se não houver métricas para o squad específico, fazer fallback para métricas sem squad.
+### Opção 1: Atualizar o registro SDR existente (recomendado)
 
-### Arquivo a Modificar
-`supabase/functions/recalculate-sdr-payout/index.ts` (linhas 456-470)
-
-### Código Atual
-```typescript
-const { data: metricas } = await supabase
-  .from('fechamento_metricas_mes')
-  .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
-  .eq('ano_mes', ano_mes)
-  .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
-  .eq('ativo', true);
-```
-
-### Código Corrigido
-```typescript
-// Primeiro buscar métricas específicas do squad
-let metricas: MetricaAtiva[] | null = null;
-
-if (sdr.squad) {
-  const { data: metricasSquad } = await supabase
-    .from('fechamento_metricas_mes')
-    .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
-    .eq('ano_mes', ano_mes)
-    .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
-    .eq('squad', sdr.squad)
-    .eq('ativo', true);
-  
-  if (metricasSquad && metricasSquad.length > 0) {
-    metricas = metricasSquad;
-    console.log(`   📋 Métricas específicas do squad '${sdr.squad}' encontradas`);
-  }
-}
-
-// Fallback: métricas genéricas (squad = null)
-if (!metricas || metricas.length === 0) {
-  const { data: metricasGerais } = await supabase
-    .from('fechamento_metricas_mes')
-    .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
-    .eq('ano_mes', ano_mes)
-    .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
-    .is('squad', null)
-    .eq('ativo', true);
-  
-  if (metricasGerais && metricasGerais.length > 0) {
-    metricas = metricasGerais;
-    console.log(`   📋 Métricas genéricas (sem squad) encontradas`);
-  }
-}
-
-if (metricas && metricas.length > 0) {
-  metricasAtivas = metricas;
-  console.log(`   📋 Métricas ativas para ${sdr.name}:`, 
-    metricas.map(m => `${m.nome_metrica}(${m.peso_percentual}%)`).join(', '));
-}
-```
-
-## Limpeza de Dados
-
-Após a correção do código, as métricas antigas (sem squad) para o cargo SDR Consórcio devem ser removidas para evitar confusão:
+Vincular o `user_id` do profile ao registro SDR:
 
 ```sql
--- Remover métricas antigas sem squad para SDR Consórcio 2026-01
-DELETE FROM fechamento_metricas_mes 
-WHERE cargo_catalogo_id = '48f6d1ce-2fc3-47a0-859a-cfed0da32715'
-  AND ano_mes = '2026-01'
-  AND squad IS NULL;
+UPDATE sdr 
+SET user_id = '16828627-136e-42ef-9623-62dedfbc9d89'
+WHERE id = '11111111-0001-0001-0001-000000000006';
 ```
+
+### Opção 2: Melhorar o hook para fallback por email
+
+Modificar o hook `useOwnFechamento` para buscar também por email quando não encontrar por `user_id`:
+
+```typescript
+// Em useOwnFechamento.ts, linha 51-58
+const { data, error } = await supabase
+  .from('sdr')
+  .select('*')
+  .or(`user_id.eq.${authUser.id},email.eq.${authUser.email}`)
+  .limit(1)
+  .single();
+```
+
+## Recomendação
+
+Aplicar **ambas** as soluções:
+1. Corrigir o registro do Cleiton imediatamente via migração SQL
+2. Adicionar fallback por email no hook para casos futuros
 
 ## Resultado Esperado
 
-Após a correção:
-- Agendadas: R$ 472,50 × 1.5 = **R$ 708,75**
-- Realizadas: R$ 742,50 × 1.5 = **R$ 1.113,75**
-- Organização: R$ 135,00 × 1.0 = **R$ 135,00**
-- **Total Variável**: R$ 1.957,50
-- **Total Conta**: R$ 3.150,00 + R$ 1.957,50 = **R$ 5.107,50**
+Após vincular o `user_id`, o Cleiton poderá ver seu fechamento de Janeiro 2026 com:
+- Status: LOCKED
+- Total Conta: R$ 5.107,50
 
