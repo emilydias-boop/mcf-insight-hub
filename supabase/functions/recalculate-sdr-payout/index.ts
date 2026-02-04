@@ -421,11 +421,13 @@ serve(async (req) => {
             ote_total: fallbackValues.ote_total,
             fixo_valor: fallbackValues.fixo_valor,
             variavel_total: fallbackValues.variavel_total,
+            // Pesos corretos: Agendadas 35%, Realizadas 55%, Tentativas 0%, Organização 10%
             valor_meta_rpg: Math.round(fallbackValues.variavel_total * 0.35),
-            valor_docs_reuniao: Math.round(fallbackValues.variavel_total * 0.35),
-            valor_tentativas: Math.round(fallbackValues.variavel_total * 0.15),
-            valor_organizacao: Math.round(fallbackValues.variavel_total * 0.15),
-            ifood_mensal: 150,
+            valor_docs_reuniao: Math.round(fallbackValues.variavel_total * 0.55),
+            valor_tentativas: 0,
+            valor_organizacao: Math.round(fallbackValues.variavel_total * 0.10),
+            // iFood por nível: SDR 2 = R$ 570, outros = R$ 600
+            ifood_mensal: nivel === 2 ? 570 : 600,
             ifood_ultrameta: 50,
             meta_reunioes_agendadas: 15,
             meta_reunioes_realizadas: 12,
