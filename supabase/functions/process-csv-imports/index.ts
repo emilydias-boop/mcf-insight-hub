@@ -142,6 +142,8 @@ Deno.serve(async (req) => {
     const errors: any[] = job.metadata.errors || []
     let chunkSkipped = 0
     const originId = job.metadata.origin_id // origin_id do job
+    const ownerEmail = job.metadata.owner_email // owner do job (opcional)
+    const ownerProfileId = job.metadata.owner_profile_id // owner profile id do job (opcional)
     
     // Set para rastrear contatos já processados neste chunk (deduplicação por contact_id + origin_id)
     const processedContactOrigins = new Set<string>(job.metadata.processed_contact_origins || [])
@@ -168,6 +170,13 @@ Deno.serve(async (req) => {
           // Vincular contact_id se encontrado
           if (contactId) {
             dbDeal.contact_id = contactId
+          }
+          // Aplicar owner do job se definido (prioridade sobre CSV)
+          if (ownerEmail) {
+            dbDeal.owner_id = ownerEmail
+            if (ownerProfileId) {
+              (dbDeal as any).owner_profile_id = ownerProfileId
+            }
           }
           dbDeals.push(dbDeal)
         } else {

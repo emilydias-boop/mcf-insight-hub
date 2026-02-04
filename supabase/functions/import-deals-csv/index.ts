@@ -20,6 +20,8 @@ Deno.serve(async (req) => {
     const formData = await req.formData()
     const file = formData.get('file') as File
     const originId = formData.get('origin_id') as string
+    const ownerEmail = formData.get('owner_email') as string | null
+    const ownerProfileId = formData.get('owner_profile_id') as string | null
     
     if (!file) {
       throw new Error('Nenhum arquivo fornecido')
@@ -31,6 +33,9 @@ Deno.serve(async (req) => {
 
     console.log(`📄 Arquivo recebido: ${file.name} (${file.size} bytes)`)
     console.log(`🎯 Origin ID: ${originId}`)
+    if (ownerEmail) {
+      console.log(`👤 Owner: ${ownerEmail} (${ownerProfileId})`);
+    }
 
     // Ler conteúdo do arquivo
     const csvText = await file.text()
@@ -75,6 +80,8 @@ Deno.serve(async (req) => {
           file_path: filePath,
           total_deals: totalDeals,
           origin_id: originId,
+          owner_email: ownerEmail || null,
+          owner_profile_id: ownerProfileId || null,
           uploaded_at: new Date().toISOString()
         }
       })
