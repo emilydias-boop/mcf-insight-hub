@@ -42,6 +42,8 @@ const ImportarNegocios = () => {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [selectedOriginId, setSelectedOriginId] = useState<string | null>(null);
+  const [selectedOwnerEmail, setSelectedOwnerEmail] = useState<string | null>(null);
+  const [selectedOwnerProfileId, setSelectedOwnerProfileId] = useState<string | null>(null);
 
   // Buscar origens disponíveis
   const { data: origins, isLoading: originsLoading } = useQuery({
@@ -51,6 +53,19 @@ const ImportarNegocios = () => {
         .from('crm_origins')
         .select('id, name, display_name')
         .order('name');
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Buscar usuários ativos para atribuição
+  const { data: activeUsers, isLoading: usersLoading } = useQuery({
+    queryKey: ['active-users-for-import'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .order('email');
       if (error) throw error;
       return data || [];
     }
@@ -91,6 +106,12 @@ const ImportarNegocios = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('origin_id', selectedOriginId);
+      if (selectedOwnerEmail) {
+        formData.append('owner_email', selectedOwnerEmail);
+      }
+      if (selectedOwnerProfileId) {
+        formData.append('owner_profile_id', selectedOwnerProfileId);
+      }
 
       const { data, error } = await supabase.functions.invoke('import-deals-csv', {
         body: formData,
@@ -251,6 +272,36 @@ const ImportarNegocios = () => {
             </Select>
             <p className="text-xs text-muted-foreground">
               Todos os deals importados serão associados a esta pipeline
+            </p>
+          </div>
+
+          {/* Seletor de SDR/Responsável */}
+          <div className="space-y-2">
+            <Label htmlFor="owner-select" className="text-sm font-medium">
+              Atribuir a (opcional)
+            </Label>
+            <Select 
+              value={selectedOwnerProfileId || ''} 
+              onValueChange={(value) => {
+                const user = activeUsers?.find(u => u.id === value);
+                setSelectedOwnerProfileId(value || null);
+                setSelectedOwnerEmail(user?.email || null);
+              }}
+              disabled={isImporting}
+            >
+              <SelectTrigger id="owner-select" className="w-full">
+                <SelectValue placeholder={usersLoading ? "Carregando..." : "Selecione um responsável"} />
+              </SelectTrigger>
+              <SelectContent>
+                {activeUsers?.map(user => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Todos os deals importados serão atribuídos a este responsável
             </p>
           </div>
 
