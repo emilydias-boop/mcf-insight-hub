@@ -490,7 +490,8 @@ async function createOrUpdateCRMContact(supabase: any, data: CRMContactData): Pr
           a010_compra: true,
           a010_data: new Date().toISOString()
         },
-        data_source: 'webhook'
+        data_source: 'webhook',
+        stage_moved_at: new Date().toISOString()
       };
       
       const { data: newDeal, error: dealError } = await supabase
