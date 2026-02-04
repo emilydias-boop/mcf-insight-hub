@@ -1,79 +1,113 @@
 
-
-# Plano: Incluir Reunioes Existentes no Calculo de Horarios Visiveis
+# Plano: Corrigir Exibicao de Multiplos Slots no Mesmo Horario
 
 ## Problema Identificado
 
-O lead "Oldai" foi movido para Mateus Macedo em 03/02 (segunda-feira) as 18:00. Porem:
+Na view "Por Closer" (`CloserColumnCalendar.tsx`), a funcao `getMeetingForSlot` usa `.find()` que retorna apenas o **primeiro** meeting encontrado:
 
-1. Mateus Macedo so tem slot configurado para **terca-feira** (day_of_week: 2) as 18:00
-2. A agenda calcula os horarios visiveis baseado apenas nos **slots configurados** em `closer_meeting_links`
-3. Como nao ha configuracao para segunda-feira, o horario 18:00 nao aparece na grade
-4. Resultado: o lead existe no banco mas nao e visivel na interface
+```typescript
+const getMeetingForSlot = (closerId: string, slotTime: Date) => {
+  return meetings.find((m) => {  // <-- find retorna apenas 1
+    ...
+  });
+};
+```
 
 **Dados no banco:**
-- Slot ID: 3c3602f2
-- Closer: Mateus Macedo (incorporador)
-- Data: 2026-02-03 21:00 UTC (18:00 BRT)
-- Attendee: Oldai
-- Status: rescheduled
-- meeting_type: r1
+- Slot 8b1107c6: Mateus, 21:00, Claudia + Guilherme
+- Slot 3c3602f2: Mateus, 21:00, Oldai
+
+O `.find()` retorna apenas o primeiro slot, ignorando o Oldai.
 
 ---
 
 ## Solucao
 
-Modificar o calculo de `timeSlots` no `AgendaCalendar.tsx` para tambem considerar **reunioes existentes**, nao apenas slots configurados.
+Alterar a funcao para retornar **todos** os meetings e combinar os attendees na renderizacao.
 
 ---
 
 ## Alteracoes
 
-### Arquivo: `src/components/crm/AgendaCalendar.tsx`
+### Arquivo: `src/components/crm/CloserColumnCalendar.tsx`
 
-**Linhas 137-183** - Atualizar calculo de `timeSlots` para incluir horarios de meetings existentes:
+**1. Renomear funcao e usar `filter` (linhas 144-154):**
 
+De:
 ```typescript
-const timeSlots = useMemo(() => {
-  let minHour = DEFAULT_END_HOUR;
-  let maxHour = DEFAULT_START_HOUR;
-
-  // ADICIONAR: Considerar horarios das reunioes existentes
-  for (const meeting of meetings) {
-    const meetingDate = parseISO(meeting.scheduled_at);
-    const hour = meetingDate.getHours();
-    const minute = meetingDate.getMinutes();
-    minHour = Math.min(minHour, hour);
-    const slotEndMinutes = hour * 60 + minute + (meeting.duration_minutes || 60);
-    const slotEndHour = Math.ceil(slotEndMinutes / 60);
-    maxHour = Math.max(maxHour, slotEndHour);
-  }
-
-  // Manter logica existente para slots configurados (R2 e R1)
-  if (meetingType === 'r2' && r2DailySlotsMap) {
-    // ... codigo existente ...
-  } else if (meetingLinkSlots) {
-    // ... codigo existente ...
-  }
-
-  // Fallback se nenhum slot encontrado
-  if (minHour >= maxHour) {
-    minHour = DEFAULT_START_HOUR;
-    maxHour = DEFAULT_END_HOUR;
-  }
-
-  // ... resto do codigo ...
-}, [meetingLinkSlots, r2DailySlotsMap, meetingType, meetings]); // Adicionar meetings as dependencias
+const getMeetingForSlot = (closerId: string, slotTime: Date) => {
+  return meetings.find((m) => {
+    if (m.closer_id !== closerId) return false;
+    const meetingTime = parseISO(m.scheduled_at);
+    return (
+      isSameDay(meetingTime, slotTime) &&
+      meetingTime.getHours() === slotTime.getHours() &&
+      meetingTime.getMinutes() === slotTime.getMinutes()
+    );
+  });
+};
 ```
+
+Para:
+```typescript
+const getMeetingsForSlot = (closerId: string, slotTime: Date) => {
+  return meetings.filter((m) => {
+    if (m.closer_id !== closerId) return false;
+    const meetingTime = parseISO(m.scheduled_at);
+    return (
+      isSameDay(meetingTime, slotTime) &&
+      meetingTime.getHours() === slotTime.getHours() &&
+      meetingTime.getMinutes() === slotTime.getMinutes()
+    );
+  });
+};
+```
+
+**2. Atualizar `isSlotAvailable` (linha 140):**
+
+De:
+```typescript
+const hasMeeting = getMeetingForSlot(closerId, slotTime);
+return !hasMeeting;
+```
+
+Para:
+```typescript
+const hasMeetings = getMeetingsForSlot(closerId, slotTime);
+return hasMeetings.length === 0;
+```
+
+**3. Atualizar uso na renderizacao (linhas 277-288):**
+
+De:
+```typescript
+const meeting = getMeetingForSlot(closer.id, slot);
+...
+{meeting ? (
+```
+
+Para:
+```typescript
+const slotMeetings = getMeetingsForSlot(closer.id, slot);
+const hasMeetings = slotMeetings.length > 0;
+// Combinar attendees de todos os meetings
+const allAttendees = slotMeetings.flatMap(m => m.attendees || []);
+const firstMeeting = slotMeetings[0];
+...
+{hasMeetings ? (
+```
+
+**4. Atualizar renderizacao de attendees para usar `allAttendees`:**
+
+Onde o codigo itera sobre `meeting.attendees`, usar `allAttendees` para exibir attendees de todos os slots combinados.
 
 ---
 
 ## Resultado Esperado
 
-- Reunioes existentes em horarios nao configurados serao visiveis na agenda
-- O lead "Oldai" com Mateus Macedo em 03/02 as 18:00 aparecera normalmente
-- Admins podem mover leads para qualquer horario sem perder visibilidade
-- Compatibilidade mantida com slots configurados
+- O Oldai aparecera junto com Claudia e Guilherme na celula do Mateus as 18:00
+- Qualquer quantidade de slots do mesmo closer no mesmo horario sera combinada
+- Consistente com a view "Calendario" que ja combina multiplos slots
 
 ---
 
@@ -81,5 +115,4 @@ const timeSlots = useMemo(() => {
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `AgendaCalendar.tsx` | Adicionar meetings ao calculo de timeSlots (linhas 137-183) |
-
+| `CloserColumnCalendar.tsx` | Mudar `find` para `filter` e combinar attendees |
