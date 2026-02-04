@@ -1,98 +1,171 @@
 
-# Plano: Corrigir Atualização da UI Após Envio de NFSe
+# Plano: Corrigir Matching Automático de Contrato Pago
 
-## Problema Identificado
+## Problema Diagnosticado
 
-Após o envio bem-sucedido da NFSe, a UI não atualiza para mostrar o card verde "NFSe Enviada" - o botão "Enviar NFSe" continua visível.
+### Dados do Caso Henrique Bergamini:
+- **Transação**: henrickbergamini85@gmail.com, +5531995481915, R$ 497 (14:25 UTC)
+- **Attendee**: henrickbergamini85@gmail.com, 31995481915 (reunião 13:15 UTC)
+- **Status atual**: `completed` mas `contract_paid_at = NULL`
+- **Resultado**: 3 transações duplicadas, nenhuma vinculada
 
-### Causa Raiz: Query Key Mismatch
+### Causas Identificadas:
 
-No arquivo `MeuFechamento.tsx` (linha 89):
-```tsx
-queryClient.invalidateQueries({ queryKey: ['own-payout', selectedMonth] });
+**1. Padrão N+1 no hubla-webhook-handler (Principal)**
+O `autoMarkContractPaid` faz uma query individual para cada attendee buscar o email/phone do contato:
+```javascript
+// Para cada attendee (287+ registros)...
+const { data: deal } = await supabase
+  .from('crm_deals')
+  .select('contact:crm_contacts(email, phone)')
+  .eq('id', attendee.deal_id)
+  .maybeSingle();
 ```
 
-Porém, no hook `useOwnFechamento.ts` (linha 89), a query usa **3 elementos** na key:
-```tsx
-queryKey: ['own-payout', anoMes, sdrRecord?.id],
+Isso causa timeouts e race conditions com muitos attendees.
+
+**2. Inconsistência entre Webhooks**
+O `webhook-make-contrato` usa JOIN (performático):
+```javascript
+crm_deals!deal_id(
+  id,
+  crm_contacts!contact_id(email, phone)
+)
 ```
 
-A invalidação usa apenas 2 elementos `['own-payout', selectedMonth]`, mas a query real tem 3 elementos `['own-payout', anoMes, sdrRecord?.id]`. O React Query faz match parcial, **mas a invalidação não está funcionando corretamente** porque precisa corresponder ao prefixo exato ou usar a opção correta.
+Enquanto `hubla-webhook-handler` faz N+1 queries (lento).
+
+**3. Falta de Fallback por Nome**
+Quando email e telefone falham (formatação diferente, dados incompletos), não há fallback por nome similar.
+
+---
 
 ## Solução
 
-Modificar a invalidação para usar um match mais amplo que capture todas as queries do payout:
+Atualizar o `hubla-webhook-handler` para usar o mesmo padrão performático do `webhook-make-contrato`.
 
 ### Arquivo a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/fechamento-sdr/MeuFechamento.tsx` | Corrigir a invalidação de queries |
+| `supabase/functions/hubla-webhook-handler/index.ts` | Refatorar autoMarkContractPaid para usar JOIN |
 
-### Implementação
+### Mudanças Específicas
 
-No `handleNfseSuccess`, existem duas opções:
+**1. Alterar a query para incluir dados do contato via JOIN:**
 
-**Opção 1 - Invalidar de forma mais ampla** (Recomendada):
-```tsx
-const handleNfseSuccess = () => {
-  setShowNfseModal(false);
-  // Invalida todas as queries que começam com 'own-payout'
-  queryClient.invalidateQueries({ 
-    queryKey: ['own-payout'],
-    exact: false 
-  });
-};
+```javascript
+// ANTES (N+1 - lento)
+const { data: attendeesRaw } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id, status, meeting_slot_id, attendee_name, attendee_phone, deal_id,
+    meeting_slots!inner(...)
+  `)
+  ...
+
+// Para cada attendee:
+const { data: deal } = await supabase
+  .from('crm_deals')
+  .select('contact:crm_contacts(email, phone)')
+  .eq('id', attendee.deal_id)
+  .maybeSingle();
+
+// DEPOIS (JOIN - rápido)
+const { data: attendeesRaw } = await supabase
+  .from('meeting_slot_attendees')
+  .select(`
+    id, status, meeting_slot_id, attendee_name, attendee_phone, deal_id,
+    meeting_slots!inner(...),
+    crm_deals!deal_id(
+      id,
+      crm_contacts!contact_id(email, phone)
+    )
+  `)
+  ...
+
+// Acesso direto sem query adicional:
+const contactEmail = attendee.crm_deals?.crm_contacts?.email;
 ```
 
-**Opção 2 - Incluir o sdrRecord.id na invalidação**:
-```tsx
-const handleNfseSuccess = () => {
-  setShowNfseModal(false);
-  queryClient.invalidateQueries({ 
-    queryKey: ['own-payout', selectedMonth, userRecord?.id] 
-  });
-};
+**2. Adicionar fallback por nome normalizado:**
+
+```javascript
+// Match por NOME (prioridade 3) - fuzzy match como último recurso
+if (!matchingAttendee && !phoneMatchCandidate && data.customerName) {
+  const normalizedSearchName = normalizeNameForMatch(data.customerName);
+  
+  for (const attendee of attendees) {
+    const normalizedAttendeeName = normalizeNameForMatch(attendee.attendee_name);
+    if (normalizedAttendeeName === normalizedSearchName) {
+      nameMatchCandidate = { attendee, meeting: attendee.meeting_slots };
+      console.log(`📝 [AUTO-PAGO] Candidato por NOME: ${attendee.attendee_name}`);
+      break;
+    }
+  }
+}
+
+function normalizeNameForMatch(name: string): string {
+  return (name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[^a-z0-9]/g, '') // Só alfanuméricos
+    .trim();
+}
 ```
 
-A **Opção 1** é mais robusta pois não depende de ter o `userRecord` disponível no escopo e garante que todas as queries relacionadas sejam invalidadas.
+**3. Melhorar logs para diagnóstico:**
+
+```javascript
+// Log detalhado quando não encontra match
+if (!matchingAttendee) {
+  console.log(`❌ [AUTO-PAGO] Nenhum match encontrado:`);
+  console.log(`   - Email buscado: "${emailLower}"`);
+  console.log(`   - Phone suffix: "${phoneSuffix}"`);
+  console.log(`   - Nome: "${data.customerName}"`);
+  console.log(`   - Total attendees verificados: ${attendees.length}`);
+  console.log(`   - Attendees com deal_id: ${attendees.filter(a => a.deal_id).length}`);
+  return;
+}
+```
+
+---
 
 ## Fluxo Corrigido
 
 ```text
+ANTES (N+1 - lento/falível):
 ┌─────────────────────────────────────────────────────────────────┐
-│                     ANTES (Buggy)                               │
-├─────────────────────────────────────────────────────────────────┤
-│ 1. Upload NFSe → OK                                             │
-│ 2. Insert rh_nfse → OK                                          │
-│ 3. Update sdr_month_payout.nfse_id → OK                         │
-│ 4. Toast "Sucesso!" → OK                                        │
-│ 5. invalidateQueries(['own-payout', '2026-01']) → ❌ No Match   │
-│    (Query real: ['own-payout', '2026-01', 'uuid-do-sdr'])       │
-│ 6. UI não atualiza → Botão continua visível                     │
+│ 1. Query attendees (287 registros)                              │
+│ 2. Para CADA attendee:                                          │
+│    → Query crm_deals → Query crm_contacts                       │
+│    → Total: 287+ queries adicionais                             │
+│ 3. Timeout ou race condition → Match falha                      │
 └─────────────────────────────────────────────────────────────────┘
 
+DEPOIS (JOIN - rápido):
 ┌─────────────────────────────────────────────────────────────────┐
-│                     DEPOIS (Corrigido)                          │
-├─────────────────────────────────────────────────────────────────┤
-│ 1-4. (Igual)                                                    │
-│ 5. invalidateQueries(['own-payout'], exact: false) → ✅ Match   │
-│ 6. React Query refetch → payout.nfse_id agora preenchido        │
-│ 7. UI atualiza → Card verde "NFSe Enviada" aparece              │
+│ 1. Query attendees com JOIN (1 query com todos os dados)        │
+│ 2. Loop em memória para matching (sem queries adicionais)       │
+│ 3. Match por email → phone → nome (3 prioridades)               │
+│ 4. Atualização atômica                                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Resultado Esperado
+---
 
-Após o fix:
-1. Cleiton envia a NFSe
-2. Toast "NFSe enviada com sucesso!" aparece
-3. Modal fecha
-4. Card laranja "Fechamento Aprovado!" **desaparece**
-5. Card verde "NFSe Enviada" **aparece** com botão "Ver NFSe"
+## Testes Necessários
 
-## Impacto
+1. **Reprocessar Henrique manualmente** após deploy para validar fix
+2. **Monitorar logs** nas próximas vendas de contrato
+3. **Verificar métricas de tempo** de execução do webhook
 
-- **1 linha** de código modificada
-- **Nenhuma mudança** no banco de dados
-- **Nenhum efeito colateral** - apenas garante que a query seja refetch
+---
+
+## Resumo Técnico
+
+- **Arquivo modificado**: `supabase/functions/hubla-webhook-handler/index.ts`
+- **Linhas afetadas**: ~600-720 (função autoMarkContractPaid)
+- **Impacto**: Reduz tempo de execução de 10-30s para ~500ms
+- **Compatibilidade**: Mantém mesma lógica do webhook-make-contrato que já funciona
