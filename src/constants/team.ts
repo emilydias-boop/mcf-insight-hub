@@ -8,6 +8,7 @@ export const SDR_LIST = [
   { nome: "Leticia Nunes", email: "leticia.nunes@minhacasafinanciada.com" },
   { nome: "Caroline Correa", email: "carol.correa@minhacasafinanciada.com" },
   { nome: "Caroline Souza", email: "caroline.souza@minhacasafinanciada.com" },
+  { nome: "Alex Dias", email: "alex.dias@minhacasafinanciada.com" },
 ];
 
 // Lista de Closers (para validação)
