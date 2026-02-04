@@ -1,182 +1,118 @@
 
-# Plano: Corrigir Cálculo do Fechamento SDR - Edge Function sem Fallback
+# Plano: Corrigir Sobrescrita de KPIs Manuais no Fechamento
 
-## Diagnóstico do Problema
+## Problema Identificado
 
-O botão "Salvar e Recalcular" não está calculando os valores porque:
+O botão "Salvar e Recalcular" está apagando os valores manuais de **Reuniões Agendadas** e **Reuniões Realizadas** porque:
 
-1. **Fluxo atual**: O frontend salva o KPI e chama a edge function `recalculate-sdr-payout`
-2. **Problema na Edge Function**: A função busca o `sdr_comp_plan` vigente com esta query:
+1. O frontend salva corretamente os valores digitados (ex: 217 agendadas, 157 realizadas)
+2. Após salvar, chama a edge function `recalculate-sdr-payout`
+3. A edge function busca dados na RPC `get_sdr_metrics_from_agenda`
+4. Para SDRs do Consórcio (como Cleiton Lima), a RPC retorna 0 (pois usam outra fonte de dados)
+5. A edge function **sobrescreve os valores manuais** com os dados da Agenda:
 
-```sql
-WHERE sdr_id = ? 
-  AND vigencia_inicio <= '2026-01-01'
-  AND (vigencia_fim IS NULL OR vigencia_fim >= '2026-01-01')
-```
-
-3. **Situação de Cleiton Lima**:
-   - Plano mais recente: inicia em 2026-02-01 (fevereiro) - **não cobre janeiro**
-   - Plano anterior: terminou em 2025-10-31 (outubro)
-   - Resultado: **nenhum plano cobre janeiro 2026**
-
-4. **Consequência**: A edge function encontra `compPlan = null` e executa `continue`, pulando o SDR sem calcular nada
-
-## Evidência nos Logs
-
-```
-⚠️ Plano de compensação não encontrado para Cleiton Lima
-⚠️ Nenhuma métrica encontrada na RPC para Cleiton Lima  
-📊 Resultado: 0 processados, 0 erros
+```typescript
+// Linha 493-500 da edge function - PROBLEMA AQUI
+const updateFields = {
+  reunioes_agendadas: reunioesAgendadas,    // Sobrescreve valor manual com 0!
+  reunioes_realizadas: reunioesRealizadas,  // Sobrescreve valor manual com 0!
+  no_shows: noShows,
+  taxa_no_show: taxaNoShow,
+};
 ```
 
 ## Solução Proposta
 
-### Opção 1: Corrigir Dados (Solução Imediata)
+Modificar a edge function para **preservar valores manuais quando já existem dados no KPI**:
 
-Ajustar o plano existente para cobrir janeiro 2026:
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                    FLUXO ATUAL (com bug)                     │
+├──────────────────────────────────────────────────────────────┤
+│ Frontend salva KPI (agendadas=217)                           │
+│     ↓                                                        │
+│ Edge function busca Agenda (retorna 0)                       │
+│     ↓                                                        │
+│ SOBRESCREVE: reunioes_agendadas = 0  ❌                      │
+└──────────────────────────────────────────────────────────────┘
 
-```sql
-UPDATE sdr_comp_plan 
-SET vigencia_inicio = '2026-01-01'
-WHERE id = '52584bcf-e8ac-4da3-92ce-1a9299fb2f6b';
--- OU aprovar o plano PENDING
+┌──────────────────────────────────────────────────────────────┐
+│                   FLUXO CORRIGIDO                            │
+├──────────────────────────────────────────────────────────────┤
+│ Frontend salva KPI (agendadas=217)                           │
+│     ↓                                                        │
+│ Edge function busca Agenda (retorna 0)                       │
+│     ↓                                                        │
+│ PRESERVA: reunioes_agendadas = 217 (valor do KPI) ✅         │
+│ (Só sobrescreve se valor da Agenda > 0)                      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Opção 2: Adicionar Fallback na Edge Function (Solução Definitiva)
+## Implementação Técnica
 
-Modificar a edge function `recalculate-sdr-payout` para usar a mesma lógica de fallback implementada no frontend:
+### Arquivo a Modificar:
+`supabase/functions/recalculate-sdr-payout/index.ts`
 
-1. Se não encontrar comp_plan vigente, buscar `cargo_catalogo` do employee
-2. Se não houver cargo_catalogo, usar valores padrão por nível do SDR
-3. Opcionalmente, criar um comp_plan automático para rastreabilidade
+### Mudança (linhas ~493-500):
 
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Adicionar lógica de fallback quando não encontrar comp_plan |
-
-## Implementacao Tecnica
-
-### Adicionar Constantes de Fallback (linhas ~55-65)
-
+**Antes:**
 ```typescript
-const DEFAULT_OTE_BY_LEVEL: Record<number, { 
-  ote_total: number; 
-  fixo_valor: number; 
-  variavel_total: number 
-}> = {
-  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 1200 },
-  2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
-  3: { ote_total: 5000, fixo_valor: 3500, variavel_total: 1500 },
-  4: { ote_total: 5500, fixo_valor: 3850, variavel_total: 1650 },
-  5: { ote_total: 6000, fixo_valor: 4200, variavel_total: 1800 },
+const updateFields: Record<string, unknown> = {
+  reunioes_agendadas: reunioesAgendadas,
+  reunioes_realizadas: reunioesRealizadas,
+  no_shows: noShows,
+  taxa_no_show: taxaNoShow,
+  updated_at: new Date().toISOString(),
 };
 ```
 
-### Modificar Lógica de Busca do Comp Plan (linhas ~358-361)
-
-Antes:
+**Depois:**
 ```typescript
-if (compError || !compPlan) {
-  console.log(`⚠️ Plano de compensação não encontrado para ${sdr.name}`);
-  continue;
-}
+// PRESERVAR valores manuais se Agenda não tiver dados
+// Só sobrescrever se a Agenda retornou valores > 0
+const updateFields: Record<string, unknown> = {
+  // Agendadas: usar Agenda apenas se > 0, senão manter valor existente
+  reunioes_agendadas: reunioesAgendadas > 0 
+    ? reunioesAgendadas 
+    : existingKpi.reunioes_agendadas,
+  
+  // Realizadas: usar Agenda apenas se > 0, senão manter valor existente
+  reunioes_realizadas: reunioesRealizadas > 0 
+    ? reunioesRealizadas 
+    : existingKpi.reunioes_realizadas,
+  
+  // No-shows: manter lógica atual (pode ser 0 legitimamente)
+  // Só atualizar se reunioes_agendadas veio da Agenda
+  no_shows: reunioesAgendadas > 0 
+    ? noShows 
+    : existingKpi.no_shows,
+  
+  // Taxa recalculada com base nos valores finais
+  taxa_no_show: reunioesAgendadas > 0 
+    ? taxaNoShow 
+    : existingKpi.taxa_no_show,
+  
+  updated_at: new Date().toISOString(),
+};
+
+console.log(`   📊 Valores finais: Agendadas=${updateFields.reunioes_agendadas}, Realizadas=${updateFields.reunioes_realizadas} (${reunioesAgendadas > 0 ? 'Agenda' : 'Manual'})`);
 ```
 
-Depois:
-```typescript
-let effectiveCompPlan = compPlan;
+## Comportamento Após Correção
 
-if (compError || !compPlan) {
-  console.log(`⚠️ Plano vigente não encontrado para ${sdr.name}. Criando fallback...`);
-  
-  // Buscar nivel do SDR
-  const { data: sdrFull } = await supabase
-    .from('sdr')
-    .select('nivel')
-    .eq('id', sdr.id)
-    .single();
-  
-  const nivel = sdrFull?.nivel || 1;
-  const fallback = DEFAULT_OTE_BY_LEVEL[nivel] || DEFAULT_OTE_BY_LEVEL[1];
-  
-  // Tentar usar cargo_catalogo se disponível
-  if (employeeData?.cargo_catalogo_id) {
-    const { data: cargo } = await supabase
-      .from('cargos_catalogo')
-      .select('ote_total, fixo_valor, variavel_valor')
-      .eq('id', employeeData.cargo_catalogo_id)
-      .single();
-    
-    if (cargo && cargo.ote_total > 0) {
-      fallback.ote_total = cargo.ote_total;
-      fallback.fixo_valor = cargo.fixo_valor;
-      fallback.variavel_total = cargo.variavel_valor;
-    }
-  }
-  
-  // Criar comp_plan implícito para o mês
-  const newPlan = {
-    sdr_id: sdr.id,
-    vigencia_inicio: monthStart,
-    vigencia_fim: monthEnd,
-    ote_total: fallback.ote_total,
-    fixo_valor: fallback.fixo_valor,
-    variavel_total: fallback.variavel_total,
-    valor_meta_rpg: Math.round(fallback.variavel_total * 0.35),
-    valor_docs_reuniao: Math.round(fallback.variavel_total * 0.35),
-    valor_tentativas: Math.round(fallback.variavel_total * 0.15),
-    valor_organizacao: Math.round(fallback.variavel_total * 0.15),
-    ifood_mensal: 150,
-    ifood_ultrameta: 50,
-    meta_reunioes_agendadas: 15,
-    meta_reunioes_realizadas: 12,
-    meta_tentativas: 400,
-    meta_organizacao: 100,
-    dias_uteis: calendarData?.dias_uteis_final || 22,
-    meta_no_show_pct: 30,
-    status: 'APPROVED',
-  };
-  
-  const { data: createdPlan, error: createError } = await supabase
-    .from('sdr_comp_plan')
-    .insert(newPlan)
-    .select()
-    .single();
-  
-  if (createError) {
-    console.error(`❌ Erro ao criar comp_plan fallback: ${createError.message}`);
-    continue;
-  }
-  
-  effectiveCompPlan = createdPlan;
-  console.log(`✅ Comp plan fallback criado para ${sdr.name}`);
-}
-```
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| SDR com dados na Agenda | Usa Agenda ✅ | Usa Agenda ✅ |
+| SDR manual (Consórcio) | Apaga valores ❌ | Preserva valores ✅ |
+| SDR sem dados (novo) | Cria com 0 ✅ | Cria com 0 ✅ |
 
-## Teste Esperado
+## Teste de Validação
 
-Apos a implementacao:
-1. Acessar fechamento de janeiro 2026 para Cleiton Lima
-2. Inserir os KPIs (217 agendadas, 157 realizadas, 100 organizacao)
+1. Acessar fechamento de Cleiton Lima (janeiro 2026)
+2. Inserir valores manuais:
+   - Agendadas: 217
+   - Realizadas: 157
+   - Organização: 100
 3. Clicar em "Salvar e Recalcular"
-4. Sistema deve criar comp_plan automatico e calcular:
-   - Agendadas: 217 / 140 = 155% -> mult 1.5x
-   - Realizadas: 157 / 152 = 103% -> mult 1x
-   - Organizacao: 100 / 100 = 100% -> mult 1x
-
-## Correcao Imediata (Dados)
-
-Enquanto a implementacao nao e feita, o problema pode ser corrigido ajustando o plano existente:
-
-```sql
--- Opcao A: Ajustar vigencia do plano pendente para cobrir janeiro
-UPDATE sdr_comp_plan 
-SET vigencia_inicio = '2026-01-01', status = 'APPROVED'
-WHERE id = '52584bcf-e8ac-4da3-92ce-1a9299fb2f6b';
-
--- Opcao B: Criar plano especifico para janeiro
-INSERT INTO sdr_comp_plan (sdr_id, vigencia_inicio, vigencia_fim, ote_total, fixo_valor, variavel_total, ...)
-VALUES ('11111111-0001-0001-0001-000000000006', '2026-01-01', '2026-01-31', 4500, 3200, 1300, ...);
-```
+4. **Esperado**: Valores mantidos, percentuais calculados corretamente
+5. **Esperado**: Agendamentos = 217 / 140 = 155% → mult 1.5x
