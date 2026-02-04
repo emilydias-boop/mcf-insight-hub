@@ -1,241 +1,138 @@
 
-# Plano: Automação de Criação de Deals para Produtos Hubla no CRM de Consórcio
+# Plano: Correção da Visibilidade de SDRs no Fechamento do Consórcio
 
-## Resumo Executivo
+## Diagnóstico do Problema
 
-Implementar automação no webhook da Hubla para criar deals automaticamente no pipeline **"Efeito Alavanca + Clube"** quando os seguintes produtos são vendidos:
+Ithaline e Ygor **existem na tabela `sdr`** com `squad = 'consorcio'` e `active = true`, porém não aparecem no fechamento porque:
 
-| Produto | Etapa de Destino | Valor Ref. |
-|---------|------------------|------------|
-| Clube do Arremate | CLUBE DO ARREMATE | R$ 297 |
-| A006 - Renovação Parceiro MCF | RENOVAÇÃO HUBLA | R$ 1.000 |
-| Contrato - Clube do Arremate | CLUBE DO ARREMATE | R$ 497 |
+| SDR | Email | sdr_comp_plan | employees (RH) |
+|-----|-------|---------------|----------------|
+| Cleiton Lima | ✅ Tem | ✅ 4 planos | ✅ Vinculado |
+| Ithaline | ❌ Nulo | ❌ Nenhum | ❌ Não vinculado |
+| Ygor | ❌ Nulo | ❌ Nenhum | ❌ Não vinculado |
 
-## Arquitetura da Solução
+O sistema de fechamento (`useRecalculateAllPayouts`) **ignora SDRs sem plano de compensação**:
+```typescript
+if (!compPlan) continue;  // <-- Linha 817 - pula quem não tem plano
+```
+
+## Soluções Disponíveis
+
+### Opção A: Cadastrar Planos Individuais (Correção via UI)
+**Não requer código** - apenas configuração no sistema existente.
+
+1. Acesse `/consorcio/fechamento/configuracoes` → aba **"Planos OTE"**
+2. Para cada SDR sem plano (Ithaline e Ygor):
+   - Clique em "Editar" na linha do colaborador
+   - Defina os valores de OTE, Fixo, Variável
+   - Salve o plano
+3. Volte ao fechamento e clique em "Recalcular Todos"
+
+**Problema**: Ithaline e Ygor não aparecem na aba Planos OTE porque:
+- Não têm `cargo_catalogo_id` (não estão no RH com cargo vinculado)
+
+### Opção B: Modificar Sistema para Usar Fallback (Recomendado)
+
+Atualizar `useRecalculateAllPayouts` para:
+1. Se não houver `sdr_comp_plan`, buscar valores do `cargo_catalogo` do funcionário no RH
+2. Se também não houver funcionário no RH, usar **valores padrão** baseados no nível do SDR
+
+Isso garante que **todos os SDRs ativos** apareçam no fechamento, mesmo sem configuração individual.
+
+### Opção C: Criar Funcionalidade de Plano Rápido na Aba SDRs
+
+Adicionar botão "Criar Plano OTE" diretamente na tabela de SDRs para quem não tem.
+
+---
+
+## Implementação Recomendada (Opção B + C Combinadas)
+
+### Etapa 1: Fallback no Recálculo
+
+Modificar `src/hooks/useSdrFechamento.ts` na função `useRecalculateAllPayouts`:
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│                          HUBLA WEBHOOK                           │
-└──────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌──────────────────────────────────────────────────────────────────┐
-│            hubla-webhook-handler (Edge Function)                 │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │ 1. Detectar categoria do produto                          │  │
-│  │    - 'clube_arremate' → CLUBE DO ARREMATE                 │  │
-│  │    - 'renovacao' → RENOVAÇÃO HUBLA                        │  │
-│  │    - 'contrato_clube_arremate' → CLUBE DO ARREMATE        │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                              │                                    │
-│                              ▼                                    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │ 2. createDealForConsorcioProduct()                         │  │
-│  │    - Buscar/criar contato                                  │  │
-│  │    - Verificar deal existente em QUALQUER pipeline         │  │
-│  │    - Criar novo deal no Consórcio                          │  │
-│  │    - Vincular via custom_fields.linked_deal_id             │  │
-│  └────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│           FLUXO ATUAL (com problema)                         │
+├──────────────────────────────────────────────────────────────┤
+│ Para cada SDR ativo:                                         │
+│   → Buscar comp_plan                                         │
+│   → SE não tem comp_plan → PULA (continue) ❌                │
+│   → Calcular payout                                          │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│           FLUXO PROPOSTO (com fallback)                      │
+├──────────────────────────────────────────────────────────────┤
+│ Para cada SDR ativo:                                         │
+│   → Buscar comp_plan                                         │
+│   → SE não tem comp_plan:                                    │
+│       → Buscar cargo_catalogo via employee                   │
+│       → SE tem cargo_catalogo → Usar OTE do catálogo ✅      │
+│       → SE não tem → Usar valores padrão do nível ✅         │
+│   → Calcular payout                                          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## Mapeamento de Produtos → Etapas
+### Etapa 2: Valores Padrão por Nível
 
-| Produto Hubla | Categoria | Origin ID (Pipeline) | Stage ID (Etapa) |
-|---------------|-----------|----------------------|------------------|
-| Clube do Arremate | clube_arremate | 7d7b1cb5-2a44-4552-9eff-c3b798646b78 | bf370a4f-1476-4933-8c70-01a38cfdb34f |
-| Contrato - Clube do Arremate | contrato_clube_arremate | 7d7b1cb5-2a44-4552-9eff-c3b798646b78 | bf370a4f-1476-4933-8c70-01a38cfdb34f |
-| A006 - Renovação Parceiro MCF | renovacao | 7d7b1cb5-2a44-4552-9eff-c3b798646b78 | 3e545cd2-4214-4510-9ec4-dfcc6eccede8 |
-
-## Detalhes de Implementação
-
-### 1. Atualizar Mapeamento de Categorias
-
-Adicionar novas categorias ao `PRODUCT_MAPPING` existente:
+Criar constante com OTE padrão para SDRs sem configuração:
 
 ```typescript
-const PRODUCT_MAPPING = {
-  // ... (existente)
-  
-  // Consórcio - Clube do Arremate
-  'CLUBE DO ARREMATE': 'clube_arremate',
-  'CLUBE ARREMATE': 'clube_arremate',
-  'CONTRATO - CLUBE DO ARREMATE': 'contrato_clube_arremate',
-  
-  // Consórcio - Renovação (A006 já está mapeado como 'renovacao')
+const DEFAULT_OTE_BY_LEVEL = {
+  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 1200 },
+  2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
+  3: { ote_total: 5000, fixo_valor: 3500, variavel_total: 1500 },
+  // ... etc
 };
 ```
 
-### 2. Nova Função: `createDealForConsorcioProduct()`
+### Etapa 3: Criar/Atualizar Plano Implícito
 
-Lógica principal:
+Quando usar fallback, **criar automaticamente** um `sdr_comp_plan` para o SDR com os valores inferidos, garantindo rastreabilidade.
 
-1. **Buscar contato existente** por email ou telefone
-2. **Verificar deal existente** do cliente em qualquer pipeline
-3. **Criar novo deal** no pipeline "Efeito Alavanca + Clube"
-4. **Vincular ao deal existente** (se houver) via `custom_fields.linked_deal_id`
-5. **Registrar atividade** no deal de origem (se existir)
-
-### 3. Constantes de Configuração
-
-```typescript
-// IDs fixos do pipeline Consórcio
-const CONSORCIO_ORIGIN_ID = '7d7b1cb5-2a44-4552-9eff-c3b798646b78';
-const STAGE_CLUBE_ARREMATE = 'bf370a4f-1476-4933-8c70-01a38cfdb34f';
-const STAGE_RENOVACAO_HUBLA = '3e545cd2-4214-4510-9ec4-dfcc6eccede8';
-
-// Mapeamento categoria → stage
-const CONSORCIO_STAGE_MAP = {
-  'clube_arremate': STAGE_CLUBE_ARREMATE,
-  'contrato_clube_arremate': STAGE_CLUBE_ARREMATE,
-  'renovacao': STAGE_RENOVACAO_HUBLA,
-};
-```
-
-### 4. Integração no Fluxo do Webhook
-
-Após salvar a transação em `hubla_transactions`, verificar se é produto de consórcio:
-
-```typescript
-// Após upsert da transação
-if (['clube_arremate', 'contrato_clube_arremate', 'renovacao'].includes(productCategory)) {
-  // Apenas primeira parcela cria deal
-  if (installment === 1) {
-    await createDealForConsorcioProduct(supabase, {
-      email: customerEmail,
-      phone: customerPhone,
-      name: customerName,
-      productName: productName,
-      productCategory: productCategory,
-      value: netValue,
-      saleDate: saleDate,
-    });
-  }
-}
-```
-
-### 5. Vinculação com Deal Existente
-
-Quando o cliente já tem deal em outro pipeline:
-
-1. Encontrar o deal mais recente do contato
-2. Armazenar `linked_deal_id` no `custom_fields` do novo deal
-3. Criar atividade "🔗 Deal criado no Consórcio" no deal original
+---
 
 ## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/hubla-webhook-handler/index.ts` | Adicionar função `createDealForConsorcioProduct()` e integrar no fluxo |
+| `src/hooks/useSdrFechamento.ts` | Adicionar fallback para cargo_catalogo e valores padrão em `useRecalculateAllPayouts` e `useRecalculatePayout` |
 
-## Teste da Implementação
+## Resultado Esperado
 
-Após deploy, simular webhook com payload de "Clube do Arremate":
+Após implementação:
+1. **Clicar em "Recalcular Todos"** no fechamento de Consórcio
+2. Sistema criará automaticamente payouts para Ithaline e Ygor usando valores padrão
+3. Ambos aparecerão na lista de SDRs com status "Rascunho"
 
-```json
-{
-  "event": "NewSale",
-  "productName": "Clube do Arremate",
-  "userEmail": "teste@email.com",
-  "userPhone": "+5511999998888",
-  "userName": "Cliente Teste"
-}
-```
+## Teste
 
-**Resultado esperado:**
-- Novo deal criado em "Efeito Alavanca + Clube"
-- Etapa inicial: "CLUBE DO ARREMATE"
-- Se cliente tinha deal em outro pipeline → atividade registrada
-
-## Mirroring de Stages (crm_stages)
-
-As stages do `local_pipeline_stages` já estão espelhadas na tabela `crm_stages` com os mesmos IDs:
-
-| Stage ID | Nome |
-|----------|------|
-| bf370a4f-1476-4933-8c70-01a38cfdb34f | CLUBE DO ARREMATE |
-| 3e545cd2-4214-4510-9ec4-dfcc6eccede8 | RENOVAÇÃO HUBLA |
-
-Isso garante compatibilidade com Foreign Keys e visualização correta no Kanban.
+1. Acessar `/consorcio/fechamento`
+2. Clicar em "Recalcular Todos"
+3. Verificar se Ithaline e Ygor aparecem na aba SDRs
 
 ---
 
-## Seção Técnica
+## Resumo Técnico
 
-### Detecção de Categoria (Atualização)
+A modificação principal está na função `useRecalculateAllPayouts` (linhas ~764-893):
 
+**Antes (linha 817):**
 ```typescript
-function mapProductCategory(productName: string, productCode?: string): string {
-  const name = productName?.toUpperCase() || '';
-  
-  // Prioridade: Contrato - Clube do Arremate (específico)
-  if (name.includes('CONTRATO') && name.includes('CLUBE')) {
-    return 'contrato_clube_arremate';
-  }
-  
-  // Clube do Arremate (genérico)
-  if (name.includes('CLUBE') && name.includes('ARREMATE')) {
-    return 'clube_arremate';
-  }
-  
-  // A006 / Renovação (já existente)
-  // ... resto do código existente
+if (!compPlan) continue;
+```
+
+**Depois:**
+```typescript
+if (!compPlan) {
+  // Fallback: criar comp_plan a partir de cargo_catalogo ou valores padrão
+  compPlan = await createFallbackCompPlan(sdr.id, anoMes, employeeMap.get(sdr.id));
+  if (!compPlan) continue; // Só pula se realmente não conseguir criar
 }
 ```
 
-### Função Principal
-
-```typescript
-interface ConsorcioDealData {
-  email: string | null;
-  phone: string | null;
-  name: string | null;
-  productName: string;
-  productCategory: string;
-  value: number;
-  saleDate: string;
-}
-
-async function createDealForConsorcioProduct(
-  supabase: any, 
-  data: ConsorcioDealData
-): Promise<void> {
-  // 1. Determinar stage de destino
-  const stageId = CONSORCIO_STAGE_MAP[data.productCategory];
-  if (!stageId) return;
-  
-  // 2. Buscar ou criar contato
-  let contactId = await findOrCreateContact(supabase, data);
-  if (!contactId) return;
-  
-  // 3. Verificar deal existente do contato (qualquer pipeline)
-  const existingDeal = await findExistingDeal(supabase, contactId);
-  
-  // 4. Verificar se já existe deal neste pipeline para evitar duplicação
-  const dealInConsorcio = await checkDealInOrigin(
-    supabase, contactId, CONSORCIO_ORIGIN_ID
-  );
-  if (dealInConsorcio) {
-    // Atualizar tags/value do deal existente
-    await updateExistingDeal(supabase, dealInConsorcio, data);
-    return;
-  }
-  
-  // 5. Criar novo deal no Consórcio
-  const newDealId = await createDeal(supabase, {
-    contactId,
-    originId: CONSORCIO_ORIGIN_ID,
-    stageId,
-    name: `${data.name} - ${data.productName}`,
-    value: data.value,
-    linkedDealId: existingDeal?.id || null,
-  });
-  
-  // 6. Registrar atividade no deal original (se existir)
-  if (existingDeal && newDealId) {
-    await logActivityOnDeal(supabase, existingDeal.id, 
-      `🔗 Cliente comprou "${data.productName}" - Deal criado no Consórcio`
-    );
-  }
-}
-```
+A nova função `createFallbackCompPlan` irá:
+1. Tentar usar `cargo_catalogo` do employee vinculado
+2. Fallback para valores padrão baseados em `sdr.nivel`
+3. Inserir registro em `sdr_comp_plan` para persistência
