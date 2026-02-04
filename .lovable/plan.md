@@ -1,62 +1,122 @@
 
-# Plano: Corrigir Datas de Pagamento Históricas
 
-## Problema Identificado
+# Plano: Sincronizar Datas de Pagamento Históricas (Janeiro-Fevereiro 2026)
 
-3 attendees estão com `contract_paid_at` usando a **data da reunião** em vez da **data do pagamento**:
+## Resumo do Problema
 
-| Cliente | Data Atual | Data Correta (Hubla) |
-|---------|-----------|---------------------|
-| André | 03/02 19:00 | 04/02 21:19 |
-| Israel Anijar | 03/02 17:00 | 04/02 19:30 |
-| Henrique | NULL | 04/02 14:25 |
+| Métrica | Valor |
+|---------|-------|
+| Total de attendees com data errada | 64 |
+| Dias afetados | 9 |
+| Período | 21/01/2026 - 04/02/2026 |
 
-Isso causa a discrepância: **9 contratos na agenda vs 11 na Hubla** para hoje.
+O webhook estava usando `meeting.scheduled_at` em vez de `data.saleDate` para popular `contract_paid_at`. Isso foi corrigido no código, mas os dados históricos precisam ser atualizados.
 
 ---
 
-## Solução: Script SQL de Correção
+## Exemplos de Discrepâncias Encontradas
 
-Preciso criar uma edge function temporária que execute o UPDATE, ou você pode executar este SQL manualmente no Cloud View > Run SQL:
+| Cliente | Data Atual (Reunião) | Data Correta (Hubla) | Diferença |
+|---------|---------------------|---------------------|-----------|
+| Gregorio | 31/01 14:30 | 02/02 13:04 | +2 dias |
+| Anna | 21/01 14:30 | 28/01 21:39 | +7 dias |
+| Nadiel Todescatt | 22/01 17:00 | 03/02 15:02 | +12 dias |
+| André Laface | 28/01 20:15 | 30/01 00:07 | +2 dias |
+| Theidy | 03/02 16:00 | 03/02 20:18 | Mesmo dia |
+
+---
+
+## Solução: SQL de Correção em Massa
+
+Execute o seguinte SQL no **Cloud View > Run SQL** (selecione ambiente **Test** ou **Live** conforme necessário):
 
 ```sql
--- Corrigir André (follow-up de 03/02, pagou em 04/02)
-UPDATE meeting_slot_attendees 
-SET contract_paid_at = '2026-02-04 21:19:04.276+00'
-WHERE id = 'f7d60a7c-a539-4bed-8bf1-d037196f2735';
+-- ============================================
+-- CORREÇÃO DE contract_paid_at HISTÓRICOS
+-- Sincroniza com sale_date real da Hubla
+-- ============================================
 
--- Corrigir Israel Anijar (follow-up de 03/02, pagou em 04/02)
-UPDATE meeting_slot_attendees 
-SET contract_paid_at = '2026-02-04 19:30:01.849+00'
-WHERE id = '20e9767d-3557-43c3-8f7f-c3ea96b75fce';
-
--- Corrigir Henrique (contract_paid_at era NULL)
-UPDATE meeting_slot_attendees 
-SET contract_paid_at = '2026-02-04 14:25:20.262+00'
-WHERE id = '3543e422-d87c-4c63-b4fa-13c933f21597';
+-- Atualização em massa usando JOIN com hubla_transactions
+UPDATE meeting_slot_attendees msa
+SET contract_paid_at = ht.sale_date
+FROM hubla_transactions ht
+WHERE ht.product_category = 'contrato'
+  AND ht.sale_date >= '2026-01-01'
+  AND msa.status IN ('contract_paid', 'refunded')
+  AND msa.contract_paid_at = (
+    SELECT ms.scheduled_at 
+    FROM meeting_slots ms 
+    WHERE ms.id = msa.meeting_slot_id
+  )
+  AND (
+    -- Match por nome normalizado
+    LOWER(TRIM(ht.customer_name)) = LOWER(TRIM(msa.attendee_name))
+    OR 
+    -- Match por telefone (últimos 9 dígitos)
+    RIGHT(REGEXP_REPLACE(ht.customer_phone, '[^0-9]', '', 'g'), 9) = 
+    RIGHT(REGEXP_REPLACE(msa.attendee_phone, '[^0-9]', '', 'g'), 9)
+  );
 ```
 
 ---
 
-## Ação Recomendada
+## Registros que Serão Corrigidos
 
-1. **Execute o SQL acima** no Supabase Dashboard > SQL Editor
-2. Após executar, a agenda mostrará **11 contratos** para 04/02 (em vez de 9)
+A query acima vai atualizar automaticamente todos os 64 registros identificados, incluindo:
+
+**Fevereiro 2026:**
+- Rodrigo Cruvinel Leite (04/02)
+- Osvaldo Da Silveira Pedrosa Júnior (04/02)
+- Fernando Magalhães Ferreira (04/02)
+- Raimundo Nonato de Sousa Rosal (04/02)
+- Rejane Sena Ferreira (04/02)
+- Rusmar Dueti (04/02)
+- Claudia Brito Martins (03/02)
+- cleano melo (03/02)
+- Alexandre Vinícius de Oliveira (03/02)
+- Maria (03/02)
+- Mazen Hassan Baja (03/02)
+- ... e mais 20+ registros
+
+**Janeiro 2026:**
+- Gregorio (31/01 → 02/02)
+- Anna Paula (21/01 → 28/01)
+- Nadiel Todescatt (22/01 → 03/02)
+- André Laface (28/01 → 30/01)
+- Lucas Falvela (28/01 → 29/01)
+- ... e mais 30+ registros
 
 ---
 
-## Sobre os 2 Contratos Restantes (Lucas e Eduardo)
+## Verificação Pós-Correção
 
-Esses clientes compraram com **emails diferentes** na Hubla vs agenda:
-- Lucas Chaves: `lucas_chaves1994@outlook.com` (Hubla) vs `lucas_nchaves@icloud.com` (agenda)
-- Eduardo Henrique: `edeoliveiraimoveis@gmail.com` (não encontrado na agenda)
+Após executar o SQL, rode esta query para confirmar:
 
-Esses precisam de vinculação manual ou o webhook precisa melhorar o match por telefone/nome.
+```sql
+-- Verificar se ainda existem registros com data de reunião
+SELECT COUNT(*) as registros_pendentes
+FROM meeting_slot_attendees msa
+JOIN meeting_slots ms ON ms.id = msa.meeting_slot_id
+WHERE msa.status IN ('contract_paid', 'refunded')
+  AND ms.scheduled_at >= '2026-01-01'
+  AND msa.contract_paid_at = ms.scheduled_at;
+-- Esperado: 0 ou poucos (registros sem match na Hubla)
+```
 
 ---
 
-## Resumo
+## Impacto nas Métricas
 
-- **3 registros** corrigidos com data real do pagamento
-- **2 registros** pendentes (emails divergentes)
-- **Webhook já corrigido** para futuros pagamentos usarem `data.saleDate`
+Após a correção:
+- **Contratos Pagos por dia**: Refletirá a data real do pagamento
+- **Métricas de Closer**: Atribuição correta ao mês do fechamento financeiro
+- **Follow-ups**: Vendas de follow-up serão creditadas na data certa
+
+---
+
+## Próximos Passos
+
+1. **Execute o SQL principal** no Supabase
+2. **Rode a verificação** para confirmar
+3. **Recarregue a página** de métricas para ver os números atualizados
+
