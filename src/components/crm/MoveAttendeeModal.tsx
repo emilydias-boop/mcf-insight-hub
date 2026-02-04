@@ -481,7 +481,7 @@ export function MoveAttendeeModal({
                     setSelectedDate(date || null);
                     setCalendarOpen(false);
                   }}
-                  disabled={(date) => date < startOfToday()}
+                  disabled={(date) => !isAdmin && date < startOfToday()}
                   locale={ptBR}
                 />
               </PopoverContent>
