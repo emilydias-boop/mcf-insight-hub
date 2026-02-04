@@ -9,11 +9,12 @@ import { useStagePermissions, isLostStage } from '@/hooks/useStagePermissions';
 import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
+import { StageSelectionControls } from './StageSelectionControls';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
-import { Inbox, ChevronDown, Square, CheckSquare, MinusSquare } from 'lucide-react';
+import { Inbox, ChevronDown } from 'lucide-react';
 
 interface Deal {
   id: string;
@@ -32,10 +33,11 @@ interface DealKanbanBoardProps {
   deals: Deal[];
   originId?: string;
   showLostDeals?: boolean;
-  selectionMode?: boolean;
   selectedDealIds?: Set<string>;
   onSelectionChange?: (dealId: string, selected: boolean) => void;
-  onSelectAllInStage?: (dealIds: string[], selected: boolean) => void;
+  onSelectByCountInStage?: (dealIds: string[], count: number) => void;
+  onSelectAllInStage?: (dealIds: string[]) => void;
+  onClearStageSelection?: (dealIds: string[]) => void;
   channelMap?: Map<string, SalesChannel>;
 }
 
@@ -45,10 +47,11 @@ export const DealKanbanBoard = ({
   deals, 
   originId, 
   showLostDeals = false,
-  selectionMode = false,
   selectedDealIds = new Set(),
   onSelectionChange,
+  onSelectByCountInStage,
   onSelectAllInStage,
+  onClearStageSelection,
   channelMap,
 }: DealKanbanBoardProps) => {
   const { canMoveFromStage, canMoveToStage, canViewStage } = useStagePermissions();
@@ -120,19 +123,8 @@ export const DealKanbanBoard = ({
     }));
   };
 
-  const handleSelectAllInStage = (stageDeals: Deal[]) => {
-    const stageDealIds = stageDeals.map(d => d.id);
-    const allSelected = stageDealIds.every(id => selectedDealIds.has(id));
-    onSelectAllInStage?.(stageDealIds, !allSelected);
-  };
-
-  const getStageSelectionState = (stageDeals: Deal[]) => {
-    if (stageDeals.length === 0) return 'none';
-    const selectedCount = stageDeals.filter(d => selectedDealIds.has(d.id)).length;
-    if (selectedCount === 0) return 'none';
-    if (selectedCount === stageDeals.length) return 'all';
-    return 'some';
-  };
+  // Seleção always enabled - checkboxes aparecem quando há handlers
+  const selectionEnabled = !!(onSelectionChange && onSelectAllInStage);
 
   const handleDealClick = (dealId: string) => {
     setSelectedDealId(dealId);
@@ -239,31 +231,21 @@ export const DealKanbanBoard = ({
               <div key={stage.id} className="flex-shrink-0 w-[280px] h-full">
                 <Card className="h-full flex flex-col">
                   <CardHeader className={`flex-shrink-0 py-3 ${stage.color || 'bg-muted'}`}>
-                    <CardTitle className="text-sm font-medium flex items-center justify-between">
-                      <span>{stage.stage_name}</span>
-                      <div className="flex items-center gap-1">
-                        {selectionMode && stageDeals.length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSelectAllInStage(stageDeals);
-                            }}
-                            className="h-6 w-6 p-0 hover:bg-background/50"
-                            title={`Selecionar todos (${stageDeals.length})`}
-                          >
-                            {getStageSelectionState(stageDeals) === 'all' ? (
-                              <CheckSquare className="h-4 w-4" />
-                            ) : getStageSelectionState(stageDeals) === 'some' ? (
-                              <MinusSquare className="h-4 w-4" />
-                            ) : (
-                              <Square className="h-4 w-4" />
-                            )}
-                          </Button>
-                        )}
+                    <CardTitle className="text-sm font-medium">
+                      <div className="flex items-center justify-between">
+                        <span>{stage.stage_name}</span>
                         <Badge variant="secondary">{stageDeals.length}</Badge>
                       </div>
+                      {/* Controles de seleção por estágio */}
+                      {selectionEnabled && stageDeals.length > 0 && (
+                        <StageSelectionControls
+                          stageDeals={stageDeals}
+                          selectedDealIds={selectedDealIds}
+                          onSelectByCount={(dealIds, count) => onSelectByCountInStage?.(dealIds, count)}
+                          onSelectAll={(dealIds) => onSelectAllInStage?.(dealIds)}
+                          onClearStage={(dealIds) => onClearStageSelection?.(dealIds)}
+                        />
+                      )}
                     </CardTitle>
                   </CardHeader>
                   
@@ -290,13 +272,13 @@ export const DealKanbanBoard = ({
                               return (
                                 <Draggable key={deal.id} draggableId={deal.id} index={index}>
                                   {(provided, snapshot) => (
-                                    <DealKanbanCard
+                                <DealKanbanCard
                                       deal={deal}
                                       isDragging={snapshot.isDragging}
                                       provided={provided}
                                       onClick={() => handleDealClick(deal.id)}
                                       activitySummary={activitySummaries?.get(deal.id)}
-                                      selectionMode={selectionMode}
+                                      selectionMode={selectionEnabled}
                                       isSelected={selectedDealIds.has(deal.id)}
                                       onSelect={onSelectionChange}
                                       salesChannel={salesChannel}
