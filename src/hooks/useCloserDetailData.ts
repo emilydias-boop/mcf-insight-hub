@@ -285,7 +285,7 @@ export function useCloserDetailData({
       avgContratoPago,
       avgOutside,
       avgR2Agendada: totals.r2Agendada / count,
-      avgTaxaConversao: avgR1Realizada > 0 ? ((avgContratoPago + avgOutside) / avgR1Realizada) * 100 : 0,
+      avgTaxaConversao: avgR1Realizada > 0 ? (avgContratoPago / avgR1Realizada) * 100 : 0,
       avgTaxaNoShow: avgR1Agendada > 0 ? (avgNoShow / avgR1Agendada) * 100 : 0,
     };
   }, [allClosers]);
@@ -303,7 +303,7 @@ export function useCloserDetailData({
     // Calculate conversion rates for sorting
     const withRates = allClosers.map(c => ({
       ...c,
-      taxaConversao: c.r1_realizada > 0 ? ((c.contrato_pago + c.outside) / c.r1_realizada) * 100 : 0,
+      taxaConversao: c.r1_realizada > 0 ? (c.contrato_pago / c.r1_realizada) * 100 : 0,
       taxaNoShow: c.r1_agendada > 0 ? (c.noshow / c.r1_agendada) * 100 : 0,
     }));
     
