@@ -1,123 +1,33 @@
 
-# Plano: Renomear "Reuniões Agendadas" para "Agendamento"
+# Plano: Corrigir Label "Agendamento" no Painel de Indicadores
 
-## Visão Geral
+## Problema Identificado
 
-Alterar o label do indicador de "Reuniões Agendadas" para "Agendamento" em todos os componentes de fechamento SDR, mantendo os dados e cálculos inalterados.
+O label "Reuniões Agendadas" ainda aparece no painel "Indicadores de Meta" porque vem de um fallback hardcoded no hook `useActiveMetricsForSdr.ts`.
 
----
+## Arquivo a Modificar
 
-## Arquivos a Modificar
-
-| Arquivo | Local | Alteração |
+| Arquivo | Linha | Alteração |
 |---------|-------|-----------|
-| `src/components/fechamento/SdrFechamentoView.tsx` | Linha 126 | "Reuniões Agendadas" → "Agendamento" |
-| `src/components/sdr-fechamento/KpiEditForm.tsx` | Linha 359 | "Reuniões Agendadas" → "Agendamento" |
-| `src/pages/fechamento-sdr/Detail.tsx` | Linha 219 (export CSV) | "Reuniões Agendadas" → "Agendamento" |
-| `src/pages/fechamento-sdr/Index.tsx` | Linhas 225, 231 | "% Reuniões Agendadas" → "% Agendamento"<br>"Valor Reuniões Agendadas" → "Valor Agendamento" |
-| `src/pages/fechamento-sdr/Configuracoes.tsx` | Linhas 203, 476 | "Reuniões Agendadas" → "Agendamento" |
+| `src/hooks/useActiveMetricsForSdr.ts` | 18 | `label_exibicao: 'Reuniões Agendadas'` → `label_exibicao: 'Agendamento'` |
 
----
+## Mudança
 
-## Detalhes das Mudanças
-
-### 1. SdrFechamentoView.tsx (Resumo dos Indicadores)
-```tsx
-// Linha 126: ANTES
-<div className="text-xs text-muted-foreground/70">
-  Reuniões Agendadas
-</div>
+```typescript
+// Linha 18: ANTES
+{ nome_metrica: 'agendamentos', label_exibicao: 'Reuniões Agendadas', peso_percentual: 25, fonte_dados: 'agenda' },
 
 // DEPOIS
-<div className="text-xs text-muted-foreground/70">
-  Agendamento
-</div>
+{ nome_metrica: 'agendamentos', label_exibicao: 'Agendamento', peso_percentual: 25, fonte_dados: 'agenda' },
 ```
 
-### 2. KpiEditForm.tsx (Edição de KPIs)
-```tsx
-// Linha 359: ANTES
-<Label htmlFor="reunioes_agendadas" className="...">
-  Reuniões Agendadas
-  ...
-</Label>
+## Por que isso acontece
 
-// DEPOIS
-<Label htmlFor="reunioes_agendadas" className="...">
-  Agendamento
-  ...
-</Label>
-```
+O componente `DynamicIndicatorsGrid` usa o hook `useActiveMetricsForSdr` que:
+1. Primeiro tenta buscar métricas configuradas na tabela `fechamento_metricas_mes`
+2. Se não encontrar, usa o array `DEFAULT_SDR_METRICS` como fallback
+3. O fallback tinha o label antigo "Reuniões Agendadas"
 
-### 3. Detail.tsx (Exportação CSV Individual)
-```tsx
-// Linha 219: ANTES
-`Reuniões Agendadas;${compPlan?.meta_reunioes_agendadas || 0};...`
+## Resultado
 
-// DEPOIS
-`Agendamento;${compPlan?.meta_reunioes_agendadas || 0};...`
-```
-
-### 4. Index.tsx (Exportação CSV em Lote)
-```tsx
-// Linha 225: ANTES
-"% Reuniões Agendadas",
-
-// DEPOIS
-"% Agendamento",
-
-// Linha 231: ANTES
-"Valor Reuniões Agendadas",
-
-// DEPOIS
-"Valor Agendamento",
-```
-
-### 5. Configuracoes.tsx (Notas Informativas)
-```tsx
-// Linhas 203 e 476: ANTES
-<strong>Metas automáticas:</strong> Reuniões Agendadas usa meta diária...
-
-// DEPOIS
-<strong>Metas automáticas:</strong> Agendamento usa meta diária...
-```
-
----
-
-## O Que NÃO Muda
-
-- **Nomes de campos no banco de dados**: `reunioes_agendadas` permanece igual
-- **Nomes de variáveis no código**: `formData.reunioes_agendadas`, `kpi.reunioes_agendadas`, etc.
-- **Cálculos e lógica de negócio**: Toda a lógica de métricas permanece inalterada
-- **Dados puxados da Agenda**: Continuam vindo do hook `useSdrAgendaMetricsBySdrId`
-
----
-
-## Resultado Visual
-
-### Card de Indicadores (Antes)
-```text
-┌────────────────┐ ┌────────────────┐
-│ Reuniões       │ │ Reuniões       │
-│ Agendadas      │ │ Realizadas     │
-│    85.5%       │ │    92.0%       │
-└────────────────┘ └────────────────┘
-```
-
-### Card de Indicadores (Depois)
-```text
-┌────────────────┐ ┌────────────────┐
-│ Agendamento    │ │ Reuniões       │
-│    85.5%       │ │ Realizadas     │
-│ Mult: 0.9x     │ │    92.0%       │
-└────────────────┘ └────────────────┘
-```
-
----
-
-## Resumo Técnico
-
-- **5 arquivos** modificados
-- **6 ocorrências** de texto alteradas
-- **Zero impacto** em lógica ou dados
-- Apenas mudança de nomenclatura (label display)
+Após a mudança, o painel de Indicadores de Meta mostrará "Agendamento" em vez de "Reuniões Agendadas".
