@@ -15,7 +15,7 @@ interface UseActiveMetricsResult {
 
 // Default SDR metrics as fallback
 const DEFAULT_SDR_METRICS: Partial<ActiveMetric>[] = [
-  { nome_metrica: 'agendamentos', label_exibicao: 'Reuniões Agendadas', peso_percentual: 25, fonte_dados: 'agenda' },
+  { nome_metrica: 'agendamentos', label_exibicao: 'Agendamento', peso_percentual: 25, fonte_dados: 'agenda' },
   { nome_metrica: 'realizadas', label_exibicao: 'Reuniões Realizadas', peso_percentual: 25, fonte_dados: 'agenda' },
   { nome_metrica: 'tentativas', label_exibicao: 'Tentativas de Ligações', peso_percentual: 25, fonte_dados: 'twilio' },
   { nome_metrica: 'organizacao', label_exibicao: 'Organização', peso_percentual: 25, fonte_dados: 'manual' },
