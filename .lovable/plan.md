@@ -1,113 +1,104 @@
 
-# Plano: Corrigir Exibicao de Multiplos Slots no Mesmo Horario
+# Plano: Consolidar Todos os Participantes no Drawer
 
-## Problema Identificado
+## Problema
 
-Na view "Por Closer" (`CloserColumnCalendar.tsx`), a funcao `getMeetingForSlot` usa `.find()` que retorna apenas o **primeiro** meeting encontrado:
+Quando existem multiplos meeting_slots no mesmo horario/closer, o drawer exibe **tabs separadas** para cada slot. O usuario precisa clicar em cada tab para ver os participantes de cada slot.
 
-```typescript
-const getMeetingForSlot = (closerId: string, slotTime: Date) => {
-  return meetings.find((m) => {  // <-- find retorna apenas 1
-    ...
-  });
-};
-```
+**Comportamento atual:**
+- Slot 1 (8b1107c6): Claudia + Guilherme
+- Slot 2 (3c3602f2): Oldai
+- Drawer mostra tabs "Lead" | "Lead" e exibe participantes de apenas um slot por vez
 
-**Dados no banco:**
-- Slot 8b1107c6: Mateus, 21:00, Claudia + Guilherme
-- Slot 3c3602f2: Mateus, 21:00, Oldai
-
-O `.find()` retorna apenas o primeiro slot, ignorando o Oldai.
+**Comportamento desejado:**
+- Uma unica lista com todos: Claudia, Guilherme, Oldai
 
 ---
 
 ## Solucao
 
-Alterar a funcao para retornar **todos** os meetings e combinar os attendees na renderizacao.
+Modificar o drawer para combinar os attendees de todos os meetings relacionados em uma unica lista, em vez de exibir tabs separadas.
 
 ---
 
 ## Alteracoes
 
-### Arquivo: `src/components/crm/CloserColumnCalendar.tsx`
+### Arquivo: `src/components/crm/AgendaMeetingDrawer.tsx`
 
-**1. Renomear funcao e usar `filter` (linhas 144-154):**
+**1. Combinar attendees de todos os meetings (perto da linha 224):**
 
 De:
 ```typescript
-const getMeetingForSlot = (closerId: string, slotTime: Date) => {
-  return meetings.find((m) => {
-    if (m.closer_id !== closerId) return false;
-    const meetingTime = parseISO(m.scheduled_at);
-    return (
-      isSameDay(meetingTime, slotTime) &&
-      meetingTime.getHours() === slotTime.getHours() &&
-      meetingTime.getMinutes() === slotTime.getMinutes()
-    );
+const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
+const activeMeeting = allMeetings.find(m => m.id === selectedMeetingId) || meeting;
+```
+
+Para:
+```typescript
+const allMeetings = meeting ? [meeting, ...relatedMeetings.filter(m => m.id !== meeting.id)] : [];
+// Usar primeiro meeting como referencia para dados do slot (closer, horario, etc)
+const activeMeeting = meeting;
+```
+
+**2. Atualizar funcao `getParticipantsList` para combinar attendees de todos os meetings (linhas ~430-470):**
+
+Modificar para iterar sobre `allMeetings` em vez de apenas `activeMeeting`:
+
+```typescript
+const getParticipantsList = () => {
+  // Combinar attendees de TODOS os meetings no mesmo slot
+  const allAttendees: MeetingAttendee[] = [];
+  for (const m of allMeetings) {
+    if (m.attendees) {
+      allAttendees.push(...m.attendees);
+    }
+  }
+  
+  // Mapear para formato de participante (codigo existente)
+  return allAttendees.map(att => {
+    // ... manter logica existente de mapeamento ...
   });
 };
 ```
 
-Para:
+**3. Remover ou simplificar as tabs de meetings (linhas 496-511):**
+
+Como todos os participantes serao exibidos juntos, as tabs nao sao mais necessarias. Remover a secao:
+
 ```typescript
-const getMeetingsForSlot = (closerId: string, slotTime: Date) => {
-  return meetings.filter((m) => {
-    if (m.closer_id !== closerId) return false;
-    const meetingTime = parseISO(m.scheduled_at);
-    return (
-      isSameDay(meetingTime, slotTime) &&
-      meetingTime.getHours() === slotTime.getHours() &&
-      meetingTime.getMinutes() === slotTime.getMinutes()
-    );
-  });
-};
+{/* Tabs for multiple meetings */}
+{allMeetings.length > 1 && (
+  <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+    {allMeetings.map((m) => (
+      // ...
+    ))}
+  </div>
+)}
 ```
 
-**2. Atualizar `isSlotAvailable` (linha 140):**
+**4. Atualizar titulo para refletir consolidacao:**
 
-De:
 ```typescript
-const hasMeeting = getMeetingForSlot(closerId, slotTime);
-return !hasMeeting;
+<SheetTitle className="text-lg">
+  Reuniao às {format(parseISO(meeting.scheduled_at), 'HH:mm')}
+</SheetTitle>
 ```
 
-Para:
-```typescript
-const hasMeetings = getMeetingsForSlot(closerId, slotTime);
-return hasMeetings.length === 0;
-```
+**5. Ajustar referencias a `activeMeeting` onde necessario:**
 
-**3. Atualizar uso na renderizacao (linhas 277-288):**
-
-De:
-```typescript
-const meeting = getMeetingForSlot(closer.id, slot);
-...
-{meeting ? (
-```
-
-Para:
-```typescript
-const slotMeetings = getMeetingsForSlot(closer.id, slot);
-const hasMeetings = slotMeetings.length > 0;
-// Combinar attendees de todos os meetings
-const allAttendees = slotMeetings.flatMap(m => m.attendees || []);
-const firstMeeting = slotMeetings[0];
-...
-{hasMeetings ? (
-```
-
-**4. Atualizar renderizacao de attendees para usar `allAttendees`:**
-
-Onde o codigo itera sobre `meeting.attendees`, usar `allAttendees` para exibir attendees de todos os slots combinados.
+Para acoes como:
+- `video_conference_link`: usar do primeiro meeting ou buscar do closer
+- `deal_id`: cada participante ja tem seu proprio `dealId`
+- Status updates: ja usam `attendeeId` individual
 
 ---
 
 ## Resultado Esperado
 
-- O Oldai aparecera junto com Claudia e Guilherme na celula do Mateus as 18:00
-- Qualquer quantidade de slots do mesmo closer no mesmo horario sera combinada
-- Consistente com a view "Calendario" que ja combina multiplos slots
+- Drawer exibe "Reuniao às 18:00"
+- "Participantes (3)" mostrando Claudia, Guilherme e Oldai juntos
+- Cada participante mantem suas proprias acoes (status, notas, etc)
+- Sem necessidade de tabs para alternar entre slots
 
 ---
 
@@ -115,4 +106,4 @@ Onde o codigo itera sobre `meeting.attendees`, usar `allAttendees` para exibir a
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `CloserColumnCalendar.tsx` | Mudar `find` para `filter` e combinar attendees |
+| `AgendaMeetingDrawer.tsx` | Consolidar attendees de todos meetings, remover tabs |
