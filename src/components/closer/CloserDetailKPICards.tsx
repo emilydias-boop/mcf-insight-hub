@@ -99,7 +99,7 @@ export function CloserDetailKPICards({
 
   // Calculate rates
   const taxaConversao = m.r1_realizada > 0 
-    ? ((m.contrato_pago + m.outside) / m.r1_realizada) * 100 
+    ? (m.contrato_pago / m.r1_realizada) * 100 
     : 0;
   
   const taxaNoShow = m.r1_agendada > 0 
