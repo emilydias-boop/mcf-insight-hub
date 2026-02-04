@@ -760,16 +760,92 @@ export const useRecalculatePayout = () => {
   });
 };
 
+// Default OTE values by SDR level for fallback when no comp_plan exists
+const DEFAULT_OTE_BY_LEVEL: Record<number, { ote_total: number; fixo_valor: number; variavel_total: number }> = {
+  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 1200 },
+  2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
+  3: { ote_total: 5000, fixo_valor: 3500, variavel_total: 1500 },
+  4: { ote_total: 5500, fixo_valor: 3850, variavel_total: 1650 },
+  5: { ote_total: 6000, fixo_valor: 4200, variavel_total: 1800 },
+};
+
+// Create fallback comp_plan when SDR doesn't have one configured
+async function createFallbackCompPlan(
+  sdrId: string, 
+  anoMes: string, 
+  nivel: number,
+  employeeData?: any
+): Promise<SdrCompPlan | null> {
+  const [year, month] = anoMes.split('-').map(Number);
+  const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+  
+  // Try to get OTE from cargo_catalogo first
+  let oteValues = DEFAULT_OTE_BY_LEVEL[nivel] || DEFAULT_OTE_BY_LEVEL[1];
+  
+  if (employeeData?.cargo_catalogo_id) {
+    const { data: cargo } = await supabase
+      .from('cargos_catalogo')
+      .select('ote_total, fixo_valor, variavel_valor')
+      .eq('id', employeeData.cargo_catalogo_id)
+      .single();
+    
+    if (cargo && cargo.ote_total > 0) {
+      oteValues = {
+        ote_total: cargo.ote_total,
+        fixo_valor: cargo.fixo_valor,
+        variavel_total: cargo.variavel_valor,
+      };
+    }
+  }
+  
+  // Create comp_plan with fallback values
+  const newPlan = {
+    sdr_id: sdrId,
+    vigencia_inicio: monthStart,
+    vigencia_fim: null,
+    ote_total: oteValues.ote_total,
+    fixo_valor: oteValues.fixo_valor,
+    variavel_total: oteValues.variavel_total,
+    // Default metric values
+    valor_meta_rpg: Math.round(oteValues.variavel_total * 0.35),
+    valor_docs_reuniao: Math.round(oteValues.variavel_total * 0.35),
+    valor_tentativas: Math.round(oteValues.variavel_total * 0.15),
+    valor_organizacao: Math.round(oteValues.variavel_total * 0.15),
+    ifood_mensal: 150,
+    ifood_ultrameta: 50,
+    meta_reunioes_agendadas: 15,
+    meta_reunioes_realizadas: 12,
+    meta_tentativas: 400,
+    meta_organizacao: 100,
+    dias_uteis: 22,
+    meta_no_show_pct: 30,
+    status: 'APPROVED' as const,
+  };
+  
+  const { data: createdPlan, error } = await supabase
+    .from('sdr_comp_plan')
+    .insert(newPlan)
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('Error creating fallback comp_plan:', error);
+    return null;
+  }
+  
+  return createdPlan as SdrCompPlan;
+}
+
 // Recalculate all payouts for a month
 export const useRecalculateAllPayouts = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (anoMes: string) => {
-      // Get all active SDRs with role_type
+      // Get all active SDRs with role_type and nivel
       const { data: sdrs, error: sdrsError } = await supabase
         .from('sdr')
-        .select('id, meta_diaria, role_type')
+        .select('id, meta_diaria, role_type, nivel')
         .eq('active', true);
 
       if (sdrsError) throw sdrsError;
@@ -783,7 +859,10 @@ export const useRecalculateAllPayouts = () => {
           cargo_catalogo_id,
           cargo_catalogo:cargo_catalogo_id (
             nome_exibicao,
-            cargo_base
+            cargo_base,
+            ote_total,
+            fixo_valor,
+            variavel_valor
           )
         `)
         .eq('status', 'ativo')
@@ -804,7 +883,7 @@ export const useRecalculateAllPayouts = () => {
           const [year, month] = anoMes.split('-').map(Number);
           const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
 
-          const { data: compPlan } = await supabase
+          let { data: compPlan } = await supabase
             .from('sdr_comp_plan')
             .select('*')
             .eq('sdr_id', sdr.id)
@@ -814,7 +893,12 @@ export const useRecalculateAllPayouts = () => {
             .limit(1)
             .single();
 
-          if (!compPlan) continue;
+          // Fallback: create comp_plan from cargo_catalogo or default values
+          if (!compPlan) {
+            const employeeData = employeeMap.get(sdr.id);
+            compPlan = await createFallbackCompPlan(sdr.id, anoMes, sdr.nivel || 1, employeeData);
+            if (!compPlan) continue;
+          }
 
           // Get or create KPI
           let { data: kpi } = await supabase
