@@ -1,13 +1,22 @@
 
-# Plano: Permitir Admin Selecionar Datas Anteriores
+# Plano: Permitir Admin Ver Slots de Datas Passadas
 
 ## Problema
 
-O calendário no modal "Mover Participante" bloqueia todas as datas anteriores a hoje, mesmo para administradores. O admin deveria poder mover leads para qualquer data, incluindo datas passadas.
+O admin pode selecionar datas passadas no calendario, mas os slots nao aparecem porque a logica de geracao filtra slots que nao estao no futuro.
+
+**Linha 104 atual:**
+```typescript
+if (isAfter(slotTime, new Date())) {
+```
+
+**Resultado:** Para terça-feira 03/02 (passado), mesmo com Mateus Macedo tendo slot as 18:00, nenhum slot aparece.
+
+---
 
 ## Solucao
 
-Condicionar o bloqueio de datas passadas apenas para usuarios que nao sao admin.
+Condicionar a verificacao de "futuro" apenas para usuarios nao-admin.
 
 ---
 
@@ -15,25 +24,25 @@ Condicionar o bloqueio de datas passadas apenas para usuarios que nao sao admin.
 
 ### Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
 
-**Linha 484** - Atualizar prop `disabled` do CalendarComponent:
+**Linha 104** - Atualizar verificacao de horario:
 
 De:
 ```typescript
-disabled={(date) => date < startOfToday()}
+if (isAfter(slotTime, new Date())) {
 ```
 
 Para:
 ```typescript
-disabled={(date) => !isAdmin && date < startOfToday()}
+if (isAdmin || isAfter(slotTime, new Date())) {
 ```
 
 ---
 
 ## Resultado Esperado
 
-- **Admin**: pode selecionar qualquer data no calendario, incluindo dias passados (1, 2, 3 de fevereiro)
-- **Outros usuarios**: continuam bloqueados de selecionar datas anteriores a hoje
-- Consistente com as outras permissoes de admin ja implementadas
+- **Admin**: ve todos os slots configurados para qualquer data selecionada (incluindo passadas)
+- **Outros usuarios**: continuam vendo apenas slots futuros
+- Mateus Macedo aparecera com slot as 18:00 na terca-feira 03/02
 
 ---
 
@@ -41,4 +50,4 @@ disabled={(date) => !isAdmin && date < startOfToday()}
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `MoveAttendeeModal.tsx` | Adicionar `!isAdmin &&` na linha 484 |
+| `MoveAttendeeModal.tsx` | Adicionar `isAdmin ||` na linha 104 |
