@@ -1,22 +1,13 @@
 
-# Plano: Permitir Admin Mover Leads para Qualquer Dia
+# Plano: Permitir Admin Selecionar Datas Anteriores
 
 ## Problema
 
-O modal "Mover Participante" bloqueia movimentacao para dias diferentes se o status nao for "No-Show". O admin deveria ter poder total para mover leads independente do status.
-
-Linha 140 atual:
-```typescript
-const blockDifferentDay = isDifferentDay && !isNoShow;
-```
-
-Resultado: admin ve a mensagem de bloqueio igual a qualquer usuario.
-
----
+O calendário no modal "Mover Participante" bloqueia todas as datas anteriores a hoje, mesmo para administradores. O admin deveria poder mover leads para qualquer data, incluindo datas passadas.
 
 ## Solucao
 
-Adicionar `&& !isAdmin` na condicao de bloqueio, permitindo que admins movam para qualquer dia.
+Condicionar o bloqueio de datas passadas apenas para usuarios que nao sao admin.
 
 ---
 
@@ -24,25 +15,25 @@ Adicionar `&& !isAdmin` na condicao de bloqueio, permitindo que admins movam par
 
 ### Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
 
-**Linha 140** - Atualizar logica de bloqueio:
+**Linha 484** - Atualizar prop `disabled` do CalendarComponent:
 
 De:
 ```typescript
-const blockDifferentDay = isDifferentDay && !isNoShow;
+disabled={(date) => date < startOfToday()}
 ```
 
 Para:
 ```typescript
-const blockDifferentDay = isDifferentDay && !isNoShow && !isAdmin;
+disabled={(date) => !isAdmin && date < startOfToday()}
 ```
 
 ---
 
 ## Resultado Esperado
 
-- **Admin**: pode mover leads para qualquer dia, independente do status atual
-- **Outros usuarios**: continuam precisando marcar como No-Show para mover para outro dia
-- Nenhuma mensagem de bloqueio aparece para admin
+- **Admin**: pode selecionar qualquer data no calendario, incluindo dias passados (1, 2, 3 de fevereiro)
+- **Outros usuarios**: continuam bloqueados de selecionar datas anteriores a hoje
+- Consistente com as outras permissoes de admin ja implementadas
 
 ---
 
@@ -50,4 +41,4 @@ const blockDifferentDay = isDifferentDay && !isNoShow && !isAdmin;
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `MoveAttendeeModal.tsx` | Adicionar `&& !isAdmin` na linha 140 |
+| `MoveAttendeeModal.tsx` | Adicionar `!isAdmin &&` na linha 484 |
