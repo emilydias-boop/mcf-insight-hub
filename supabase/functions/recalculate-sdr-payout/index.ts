@@ -343,7 +343,8 @@ serve(async (req) => {
             } else if (metricsData && metricsData.metrics && metricsData.metrics.length > 0) {
               const metrics = metricsData.metrics[0];
               // Campos da RPC get_sdr_metrics_from_agenda
-              reunioesAgendadas = metrics.r1_agendada || 0;
+              // IMPORTANTE: usar agendamentos (criados NO período) ao invés de r1_agendada (marcadas PARA o período)
+              reunioesAgendadas = metrics.agendamentos || 0;
               noShows = metrics.no_shows || 0;
               reunioesRealizadas = metrics.r1_realizada || 0;
               taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
@@ -520,33 +521,38 @@ serve(async (req) => {
             no_shows: noShows,
           });
           
-          // PRESERVAR valores manuais se Agenda não tiver dados
-          // Só sobrescrever se a Agenda retornou valores > 0
+          // PRESERVAR valores manuais se KPI foi editado recentemente (< 10 segundos)
+          // Isso permite que edições manuais do usuário sejam preservadas
+          const kpiUpdatedAt = existingKpi.updated_at ? new Date(existingKpi.updated_at).getTime() : 0;
+          const now = Date.now();
+          const wasManuallyEdited = (now - kpiUpdatedAt) < 10000; // 10 segundos
+          
+          if (wasManuallyEdited) {
+            console.log(`   🔒 KPI foi editado manualmente há ${Math.round((now - kpiUpdatedAt) / 1000)}s - PRESERVANDO valores manuais`);
+          }
+          
           const updateFields: Record<string, unknown> = {
-            // Agendadas: usar Agenda apenas se > 0, senão manter valor existente
-            reunioes_agendadas: reunioesAgendadas > 0 
-              ? reunioesAgendadas 
-              : existingKpi.reunioes_agendadas,
+            // Se foi edição manual recente, preservar valores do usuário
+            reunioes_agendadas: wasManuallyEdited 
+              ? existingKpi.reunioes_agendadas
+              : (reunioesAgendadas > 0 ? reunioesAgendadas : existingKpi.reunioes_agendadas),
             
-            // Realizadas: usar Agenda apenas se > 0, senão manter valor existente
-            reunioes_realizadas: reunioesRealizadas > 0 
-              ? reunioesRealizadas 
-              : existingKpi.reunioes_realizadas,
+            reunioes_realizadas: wasManuallyEdited
+              ? existingKpi.reunioes_realizadas
+              : (reunioesRealizadas > 0 ? reunioesRealizadas : existingKpi.reunioes_realizadas),
             
-            // No-shows: só atualizar se reunioes_agendadas veio da Agenda
-            no_shows: reunioesAgendadas > 0 
-              ? noShows 
-              : existingKpi.no_shows,
+            no_shows: wasManuallyEdited
+              ? existingKpi.no_shows
+              : (reunioesAgendadas > 0 ? noShows : existingKpi.no_shows),
             
-            // Taxa recalculada com base nos valores finais
-            taxa_no_show: reunioesAgendadas > 0 
-              ? taxaNoShow 
-              : existingKpi.taxa_no_show,
+            taxa_no_show: wasManuallyEdited
+              ? existingKpi.taxa_no_show
+              : (reunioesAgendadas > 0 ? taxaNoShow : existingKpi.taxa_no_show),
             
             updated_at: new Date().toISOString(),
           };
           
-          console.log(`   📊 Valores finais: Agendadas=${updateFields.reunioes_agendadas}, Realizadas=${updateFields.reunioes_realizadas} (${reunioesAgendadas > 0 ? 'Agenda' : 'Manual'})`);
+          console.log(`   📊 Valores finais: Agendadas=${updateFields.reunioes_agendadas}, Realizadas=${updateFields.reunioes_realizadas} (${wasManuallyEdited ? 'Manual Preservado' : reunioesAgendadas > 0 ? 'Agenda' : 'Existente'})`);
           
           const { data: updatedKpi, error: updateError } = await supabase
             .from('sdr_month_kpi')
