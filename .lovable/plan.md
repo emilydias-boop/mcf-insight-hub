@@ -1,106 +1,53 @@
 
-# Plano: Seleção por Quantidade e Ordenação por Movimento no Kanban
+# Plano: Mover Modo Seleção para Cada Estágio
 
 ## Visão Geral
 
-Duas melhorias no CRM Kanban:
-1. **Seleção numérica**: Permitir escolher quantidade de leads para selecionar (de cima para baixo)
-2. **Ordenação por movimento**: Leads novos ou movidos aparecem sempre no topo do estágio
+Descentralizar o modo de seleção: em vez de um botão global "Modo Seleção" no topo, cada estágio terá seus próprios controles de seleção no header da coluna.
 
 ---
 
-## Parte 1: Seleção por Quantidade
+## Mudanças na Interface
 
-### Mudanças na Interface
-
-**Arquivo: `src/components/crm/DealFilters.tsx`**
-Adicionar um seletor de quantidade no modo de seleção:
-- Input numérico para definir "Selecionar X leads"
-- Botão "Aplicar" que seleciona os primeiros X leads de cada estágio
-- Opção "Selecionar Todos"
-
-**Arquivo: `src/components/crm/DealKanbanBoard.tsx`**
-Adicionar handler para seleção por quantidade:
-- Receber prop `selectCount: number | 'all'`
-- Função `onSelectByCount` que itera pelos estágios e seleciona os primeiros N
-
-**Arquivo: `src/pages/crm/Negocios.tsx`**
-- Novo estado: `selectionCount: number | null`
-- Função que aplica a seleção em todos os estágios visíveis
-
-### Fluxo de Uso
-
+### Antes (Global)
 ```text
-1. Usuário ativa "Modo Seleção"
-2. Aparece input "Quantidade a selecionar: [___] ou [Todos]"
-3. Usuário digita "50" e clica "Aplicar"
-4. Sistema seleciona os primeiros 50 leads de CADA estágio (de cima para baixo)
-5. BulkActionsBar mostra "150 leads selecionados" (50 x 3 estágios)
+┌─────────────────────────────────────────────────────────────────────┐
+│ [Buscar...]  [Status▼]  [Responsável▼]        [✓ Modo Seleção]     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ Novo Lead 75│  │ Qualificado │  │ Agendado 40 │
+├─────────────┤  ├─────────────┤  ├─────────────┤
+│ □ Lead 1    │  │ □ Lead 1    │  │ □ Lead 1    │
+│ □ Lead 2    │  │ □ Lead 2    │  │ □ Lead 2    │
+└─────────────┘  └─────────────┘  └─────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  # Selecionar quantidade: [___] [Aplicar] [Todos]          [X]      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Depois (Por Estágio)
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ [Buscar...]  [Status▼]  [Responsável▼]                              │
+└─────────────────────────────────────────────────────────────────────┘
 
-## Parte 2: Ordenação por Movimento
+┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│ Novo Lead      75 │  │ Qualificado   50  │  │ Agendado      40  │
+│ [☐] [50▼] [✓Todos]│  │ [☐] [50▼] [✓Todos]│  │ [☐] [50▼] [✓Todos]│
+├───────────────────┤  ├───────────────────┤  ├───────────────────┤
+│ ✓ Lead 1          │  │ □ Lead 1          │  │ □ Lead 1          │
+│ ✓ Lead 2          │  │ □ Lead 2          │  │ □ Lead 2          │
+│ ...               │  │ ...               │  │ ...               │
+│ ✓ Lead 50         │  │ □ Lead 50         │  │ □ Lead 40         │
+│ □ Lead 51         │  │                   │  │                   │
+└───────────────────┘  └───────────────────┘  └───────────────────┘
 
-### Mudança no Banco de Dados
-
-**Nova coluna em `crm_deals`:**
-```sql
-ALTER TABLE crm_deals 
-ADD COLUMN stage_moved_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-
--- Preencher dados existentes com created_at como fallback
-UPDATE crm_deals SET stage_moved_at = COALESCE(updated_at, created_at);
-
--- Index para performance na ordenação
-CREATE INDEX idx_crm_deals_stage_moved_at ON crm_deals(stage_moved_at DESC);
+┌─────────────────────────────────────────────────────────────────────┐
+│  ✓ 50 leads selecionados  │ [Transferir para...] [X]                │
+└─────────────────────────────────────────────────────────────────────┘
 ```
-
-### Mudanças no Código
-
-**Arquivo: `src/hooks/useCRMData.ts`**
-
-1. **useCRMDeals** - Alterar ordenação:
-```typescript
-// ANTES
-.order('created_at', { ascending: false })
-
-// DEPOIS
-.order('stage_moved_at', { ascending: false, nullsFirst: false })
-```
-
-2. **useUpdateCRMDeal** - Atualizar timestamp ao mover:
-```typescript
-// Quando stage_id muda, atualizar stage_moved_at
-if (deal.stage_id && previousStageId !== deal.stage_id) {
-  deal.stage_moved_at = new Date().toISOString();
-}
-```
-
-3. **useCreateCRMDeal** - Definir ao criar:
-```typescript
-// Incluir stage_moved_at na criação
-const dealWithTimestamp = {
-  ...deal,
-  stage_moved_at: new Date().toISOString(),
-};
-```
-
-**Arquivos de Webhook (Edge Functions):**
-- `webhook-lead-receiver/index.ts`
-- `webhook-live-leads/index.ts`
-- `clint-webhook-handler/index.ts`
-- `hubla-webhook-handler/index.ts`
-
-Todos precisam incluir `stage_moved_at: new Date().toISOString()` ao inserir ou atualizar deals.
-
-### Benefícios da Ordenação
-
-| Ação | Resultado |
-|------|-----------|
-| Novo lead entra via webhook | Aparece no topo do estágio inicial |
-| SDR arrasta lead para outro estágio | Lead vai para o topo do novo estágio |
-| Automação move lead (ex: agendamento) | Lead aparece no topo |
 
 ---
 
@@ -108,71 +55,121 @@ Todos precisam incluir `stage_moved_at: new Date().toISOString()` ao inserir ou 
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/crm/Negocios.tsx` | Adicionar estado/UI de seleção por quantidade |
-| `src/components/crm/DealKanbanBoard.tsx` | Adicionar prop e handler de seleção numérica |
-| `src/components/crm/BulkActionsBar.tsx` | Adicionar input de quantidade |
-| `src/hooks/useCRMData.ts` | Alterar ordenação e atualizar timestamp |
-| `supabase/functions/webhook-lead-receiver/index.ts` | Incluir stage_moved_at |
-| `supabase/functions/webhook-live-leads/index.ts` | Incluir stage_moved_at |
-| `supabase/functions/clint-webhook-handler/index.ts` | Incluir stage_moved_at |
-| `supabase/functions/hubla-webhook-handler/index.ts` | Incluir stage_moved_at |
+| `src/components/crm/DealFilters.tsx` | Remover botão "Modo Seleção" |
+| `src/components/crm/DealKanbanBoard.tsx` | Adicionar controles de seleção no header de cada estágio |
+| `src/components/crm/BulkActionsBar.tsx` | Simplificar - remover selector de quantidade (fica no stage) |
+| `src/pages/crm/Negocios.tsx` | Remover estado `selectionMode` global, adaptar handlers |
 
 ---
 
-## Migração SQL Necessária
+## Detalhes da Implementação
 
-```sql
--- 1. Adicionar coluna
-ALTER TABLE crm_deals 
-ADD COLUMN IF NOT EXISTS stage_moved_at TIMESTAMP WITH TIME ZONE;
+### 1. DealKanbanBoard.tsx - Novo Header do Estágio
 
--- 2. Preencher dados existentes
-UPDATE crm_deals 
-SET stage_moved_at = COALESCE(updated_at, created_at) 
-WHERE stage_moved_at IS NULL;
+Cada coluna terá:
+- **Input numérico**: Selecionar os primeiros N leads do estágio
+- **Botão "Todos"**: Selecionar todos os leads do estágio
+- **Checkbox visual**: Mostra estado (nenhum/parcial/todos)
 
--- 3. Definir default para novos registros
-ALTER TABLE crm_deals 
-ALTER COLUMN stage_moved_at SET DEFAULT NOW();
-
--- 4. Criar índice para performance
-CREATE INDEX IF NOT EXISTS idx_crm_deals_stage_moved_at 
-ON crm_deals(stage_moved_at DESC NULLS LAST);
+```tsx
+<CardHeader className={`flex-shrink-0 py-3 ${stage.color || 'bg-muted'}`}>
+  <CardTitle className="text-sm font-medium">
+    <div className="flex items-center justify-between">
+      <span>{stage.stage_name}</span>
+      <Badge variant="secondary">{stageDeals.length}</Badge>
+    </div>
+    {/* Nova barra de seleção por estágio */}
+    {stageDeals.length > 0 && (
+      <div className="flex items-center gap-1 mt-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleSelectAllInStage(stageDeals)}
+          className="h-6 w-6 p-0"
+        >
+          {/* Ícone de checkbox baseado no estado */}
+        </Button>
+        <Input
+          type="number"
+          placeholder="Qtd"
+          className="w-14 h-6 text-xs"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSelectByCountInStage(stage.id, count);
+          }}
+        />
+        <Button size="sm" variant="ghost" className="h-6 text-xs">
+          Todos
+        </Button>
+      </div>
+    )}
+  </CardTitle>
+</CardHeader>
 ```
+
+### 2. Novo Componente: StageSelectionControls
+
+Criar um componente dedicado para os controles de seleção de cada estágio:
+
+```tsx
+interface StageSelectionControlsProps {
+  stageId: string;
+  stageDeals: Deal[];
+  selectedDealIds: Set<string>;
+  onSelectByCount: (stageId: string, count: number) => void;
+  onSelectAll: (stageId: string) => void;
+  onClearStage: (stageId: string) => void;
+}
+
+const StageSelectionControls = ({...}: StageSelectionControlsProps) => {
+  const [count, setCount] = useState('');
+  
+  // Retorna controles compactos para o header
+  return (
+    <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-border/30">
+      {/* Checkbox de estado */}
+      {/* Input de quantidade */}
+      {/* Botão "Todos" */}
+    </div>
+  );
+};
+```
+
+### 3. DealFilters.tsx
+
+Remover:
+- Prop `selectionMode`
+- Prop `onToggleSelectionMode`
+- Botão "Modo Seleção"
+
+### 4. BulkActionsBar.tsx
+
+Simplificar para mostrar apenas quando há seleção:
+- Remover estado de quantidade input global
+- Manter apenas: contador de selecionados + botão Transferir + botão X
+
+### 5. Negocios.tsx
+
+- Remover estado `selectionMode` global
+- Adaptar `handleSelectByCount` para receber `stageId`
+- Nova função `handleSelectByCountInStage(stageId: string, count: number)`
+- O modo de seleção será "automático" - ativa quando qualquer deal é selecionado
 
 ---
 
-## Interface de Seleção por Quantidade
+## Fluxo de Uso Atualizado
 
-A UI ficará assim no modo de seleção:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  🔲 Modo Seleção    Quantidade: [  50  ] [Aplicar] [Todos]  │
-└─────────────────────────────────────────────────────────────┘
-
-Kanban:
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│ Novo Lead 75 │ │ Qualificado  │ │ Agendado 40  │
-├──────────────┤ ├──────────────┤ ├──────────────┤
-│ ✓ Lead 1     │ │ ✓ Lead 1     │ │ ✓ Lead 1     │
-│ ✓ Lead 2     │ │ ✓ Lead 2     │ │ ✓ Lead 2     │
-│ ...          │ │ ...          │ │ ...          │
-│ ✓ Lead 50    │ │ ✓ Lead 50    │ │ ✓ Lead 40    │
-│ □ Lead 51    │ │ □ Lead 51    │ │              │
-│ □ Lead 52    │ │ ...          │ │              │
-└──────────────┘ └──────────────┘ └──────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│  ✓ 140 leads selecionados  │ [Transferir para...] [X]       │
-└─────────────────────────────────────────────────────────────┘
-```
+1. Usuário vê os controles de seleção em cada estágio
+2. Digita "30" no input de um estágio específico e pressiona Enter
+3. Os primeiros 30 leads daquele estágio são selecionados (de cima para baixo)
+4. BulkActionsBar aparece com "30 leads selecionados"
+5. Pode repetir em outros estágios para acumular seleção
+6. Clica "Transferir para..." para ação em massa
 
 ---
 
 ## Resumo Técnico
 
-- **Banco de dados**: 1 nova coluna + 1 índice
-- **Frontend**: 3 arquivos modificados
-- **Backend**: 4 Edge Functions atualizadas
-- **Impacto**: Zero downtime, migração compatível com dados existentes
+- **Remoção**: Botão global "Modo Seleção" do DealFilters
+- **Adição**: Controles inline no header de cada estágio do Kanban
+- **Comportamento**: Seleção sempre disponível, BulkActionsBar aparece automaticamente quando há seleção
+- **UX**: Mais intuitivo - controles visíveis no contexto de cada estágio
