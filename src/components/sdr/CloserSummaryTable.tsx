@@ -70,8 +70,8 @@ export function CloserSummaryTable({
             <TableRow className="hover:bg-muted/50">
               <TableHead className="text-muted-foreground font-medium">Closer</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">R1 Agendada</TableHead>
-              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Outside</TableHead>
+              <TableHead className="text-muted-foreground text-center font-medium">R1 Realizada</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">No-show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Taxa No-Show</TableHead>
               <TableHead className="text-muted-foreground text-center font-medium">Contrato Pago</TableHead>
@@ -122,10 +122,10 @@ export function CloserSummaryTable({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className="text-green-400 font-medium">{row.r1_realizada}</span>
+                    <span className="text-orange-400 font-medium">{row.outside}</span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <span className="text-orange-400 font-medium">{row.outside}</span>
+                    <span className="text-green-400 font-medium">{row.r1_realizada}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="text-red-400">{row.noshow}</span>
@@ -157,10 +157,10 @@ export function CloserSummaryTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-center">
-                <span className="text-green-400">{totals.r1_realizada}</span>
+                <span className="text-orange-400">{totals.outside}</span>
               </TableCell>
               <TableCell className="text-center">
-                <span className="text-orange-400">{totals.outside}</span>
+                <span className="text-green-400">{totals.r1_realizada}</span>
               </TableCell>
               <TableCell className="text-center">
                 <span className="text-red-400">{totals.noshow}</span>
