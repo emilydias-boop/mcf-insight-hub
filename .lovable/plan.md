@@ -1,59 +1,149 @@
 
 
-# Plano: Vincular user_id no Registro SDR
+# Plano: Corrigir Vínculo user_id nos Employees e Adicionar Fallback por Email
 
 ## Problema Identificado
 
-O Cleiton Lima está vendo a mensagem "Você não está cadastrado no sistema de fechamento" porque:
+O card "Enviar NFSe" não aparece porque a condição na linha 177 do `MeuFechamento.tsx` exige `myEmployee && payout.status === 'APPROVED'`. 
 
-1. O hook `useOwnFechamento` busca SDRs pelo `user_id` do usuário autenticado
-2. O registro SDR do Cleiton tem `user_id = NULL`
-3. Sem esse vínculo, o sistema não consegue identificar o fechamento do usuário
+O hook `useMyEmployee` busca na tabela `employees` por `user_id`, mas **a maioria dos funcionários PJ não tem `user_id` vinculado**.
 
-### Dados Atuais
+### Funcionários PJ Afetados (com profile correspondente mas sem user_id)
 
-| Campo | Valor |
-|-------|-------|
-| Profile ID (auth) | `16828627-136e-42ef-9623-62dedfbc9d89` |
-| SDR ID | `11111111-0001-0001-0001-000000000006` |
-| SDR user_id | `NULL` ❌ |
-| Payout existe? | Sim (status: LOCKED, R$ 5.107,50) |
+| Funcionário | Email | Profile ID | Employee user_id |
+|-------------|-------|------------|------------------|
+| Cleiton Lima | cleiton.lima@... | 16828627-... | ❌ NULL |
+| Angelina Maia | angelina.maia@... | 62411788-... | ❌ NULL |
+| Antony Elias | antony.elias@... | 70113bef-... | ❌ NULL |
+| Carol Correa | carol.correa@... | c7005c87-... | ❌ NULL |
+| Carol Souza | caroline.souza@... | 4c947a4c-... | ❌ NULL |
+| Cristiane Gomes | cristiane.gomes@... | c8fd2b83-... | ❌ NULL |
+| Jessica Martins | jessica.martins@... | b0ea004d-... | ❌ NULL |
+| Juliana Rodrigues | juliana.rodrigues@... | baa6047c-... | ❌ NULL |
+| Julio Caetano | julio.caetano@... | dd76c153-... | ❌ NULL |
+| Leticia Nunes | leticia.nunes@... | c1ede6ed-... | ❌ NULL |
 
-## Solução
+## Solução em Duas Partes
 
-### Opção 1: Atualizar o registro SDR existente (recomendado)
+### Parte 1: Migração SQL para Vincular user_id em Massa
 
-Vincular o `user_id` do profile ao registro SDR:
+Atualizar todos os registros da tabela `employees` onde existe um `profile` com email correspondente:
 
 ```sql
-UPDATE sdr 
-SET user_id = '16828627-136e-42ef-9623-62dedfbc9d89'
-WHERE id = '11111111-0001-0001-0001-000000000006';
+UPDATE employees e
+SET user_id = p.id
+FROM profiles p
+WHERE LOWER(e.email_pessoal) = LOWER(p.email)
+  AND e.user_id IS NULL
+  AND e.email_pessoal IS NOT NULL;
 ```
 
-### Opção 2: Melhorar o hook para fallback por email
+### Parte 2: Fallback por Email no Hook useMyEmployee
 
-Modificar o hook `useOwnFechamento` para buscar também por email quando não encontrar por `user_id`:
+Modificar o hook para buscar por email quando não encontrar por `user_id` (previne problemas futuros):
+
+**Arquivo:** `src/hooks/useMyEmployee.ts`
 
 ```typescript
-// Em useOwnFechamento.ts, linha 51-58
-const { data, error } = await supabase
-  .from('sdr')
-  .select('*')
-  .or(`user_id.eq.${authUser.id},email.eq.${authUser.email}`)
-  .limit(1)
-  .single();
+export function useMyEmployee() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['my-employee', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      
+      // Primeiro tenta buscar por user_id
+      let { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      // Fallback: buscar por email_pessoal se não encontrou
+      if (!data && user.email) {
+        const emailResult = await supabase
+          .from('employees')
+          .select('*')
+          .eq('email_pessoal', user.email)
+          .maybeSingle();
+        
+        if (emailResult.data) {
+          data = emailResult.data;
+          console.log('Employee encontrado via email fallback:', data.nome_completo);
+        }
+      }
+      
+      if (error) throw error;
+      return data as Employee | null;
+    },
+    enabled: !!user?.id,
+  });
+}
 ```
 
-## Recomendação
+## Fluxo Completo de Envio de NFSe
 
-Aplicar **ambas** as soluções:
-1. Corrigir o registro do Cleiton imediatamente via migração SQL
-2. Adicionar fallback por email no hook para casos futuros
+Após as correções, o fluxo funcionará assim:
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                    FLUXO DE ENVIO DE NFSe                       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │  1. SDR/Closer acessa /meu-fechamento  │
+         └────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │  2. useOwnFechamento busca o payout    │
+         │     (via user_id ou email no SDR)      │
+         └────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │  3. useMyEmployee busca employee       │
+         │     (via user_id ou email_pessoal)     │
+         └────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │  4. Se status = APPROVED e             │
+         │     myEmployee existe e nfse_id = NULL │
+         │     → Exibe card amarelo "Enviar NFSe" │
+         └────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │  5. Usuário clica "Enviar NFSe"        │
+         │     → Abre EnviarNfseFechamentoModal   │
+         └────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │  6. Upload do PDF para storage         │
+         │     → Cria registro em rh_nfse         │
+         │     → Atualiza payout.nfse_id          │
+         └────────────────────────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │  7. Card verde "NFSe Enviada" aparece  │
+         │     → Aguardando financeiro confirmar  │
+         └────────────────────────────────────────┘
+```
+
+## Arquivos a Modificar
+
+1. **Migração SQL** - Vincular user_id em massa
+2. **`src/hooks/useMyEmployee.ts`** - Adicionar fallback por email
 
 ## Resultado Esperado
 
-Após vincular o `user_id`, o Cleiton poderá ver seu fechamento de Janeiro 2026 com:
-- Status: LOCKED
-- Total Conta: R$ 5.107,50
+Após as correções:
+- Cleiton Lima e todos os outros PJ poderão ver o card "Enviar NFSe"
+- O botão aparecerá quando o fechamento estiver com status APPROVED
+- Novos funcionários sem user_id também serão encontrados via email
 
