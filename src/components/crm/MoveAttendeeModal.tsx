@@ -100,8 +100,8 @@ export function MoveAttendeeModal({
       const [hour, minute] = slot.start_time.split(':').map(Number);
       const slotTime = setMinutes(setHours(startOfDay(selectedDate), hour), minute);
       
-      // Verificar se o slot é no futuro
-      if (isAfter(slotTime, new Date())) {
+      // Verificar se o slot é no futuro (admin pode ver datas passadas)
+      if (isAdmin || isAfter(slotTime, new Date())) {
         // Verificar se já está reservado
         const isBooked = bookedSlots?.some(booked => {
           const bookedTime = new Date(booked.scheduled_at);
