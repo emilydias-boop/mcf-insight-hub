@@ -1,33 +1,101 @@
 
-# Plano: Corrigir Label "Agendamento" no Painel de Indicadores
+# Plano: Adicionar Métrica "Agendamento" ao Painel de Fechamento
 
-## Problema Identificado
+## Contexto
 
-O label "Reuniões Agendadas" ainda aparece no painel "Indicadores de Meta" porque vem de um fallback hardcoded no hook `useActiveMetricsForSdr.ts`.
+Existem duas métricas diferentes:
+- **Agendamento** (`agendamentos`): Reuniões **criadas no período** (produção do SDR) - usa `created_at`/`booked_at`
+- **R1 Agendada** (`r1_agendada`): Reuniões **marcadas para o período** - usa `scheduled_at`
 
-## Arquivo a Modificar
+A RPC `get_sdr_metrics_from_agenda` já retorna ambas, mas o hook `useSdrAgendaMetricsBySdrId` só captura `r1_agendada`. O painel de fechamento atualmente usa `r1_agendada` para calcular o KPI "Reuniões Agendadas", quando deveria usar `agendamentos`.
 
-| Arquivo | Linha | Alteração |
-|---------|-------|-----------|
-| `src/hooks/useActiveMetricsForSdr.ts` | 18 | `label_exibicao: 'Reuniões Agendadas'` → `label_exibicao: 'Agendamento'` |
+---
 
-## Mudança
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useSdrAgendaMetricsBySdrId.ts` | Adicionar `agendamentos` ao retorno |
+| `src/components/sdr-fechamento/KpiEditForm.tsx` | Usar `agendamentos` no campo "Agendamento" |
+
+---
+
+## Detalhes da Implementação
+
+### 1. useSdrAgendaMetricsBySdrId.ts
+
+Adicionar `agendamentos` à interface e ao retorno:
 
 ```typescript
-// Linha 18: ANTES
-{ nome_metrica: 'agendamentos', label_exibicao: 'Reuniões Agendadas', peso_percentual: 25, fonte_dados: 'agenda' },
+// Interface atualizada (linha 5-11)
+export interface SdrAgendaMetricsById {
+  agendamentos: number;    // NOVO: reuniões criadas no período
+  r1_agendada: number;
+  r1_realizada: number;
+  no_shows: number;
+  contratos: number;
+  vendas_parceria: number;
+}
 
-// DEPOIS
-{ nome_metrica: 'agendamentos', label_exibicao: 'Agendamento', peso_percentual: 25, fonte_dados: 'agenda' },
+// Retorno atualizado (linhas 18, 30, 48, 62)
+return { agendamentos: 0, r1_agendada: 0, r1_realizada: 0, ... };
+
+// Extrair da response (linha 52-58)
+const response = data as unknown as { metrics: Array<{
+  agendamentos: number;  // NOVO
+  r1_agendada: number;
+  ...
+}> };
+
+// Retorno final (linha 62-68)
+return {
+  agendamentos: metrics?.agendamentos || 0,  // NOVO
+  r1_agendada: metrics?.r1_agendada || 0,
+  ...
+};
 ```
 
-## Por que isso acontece
+### 2. KpiEditForm.tsx
 
-O componente `DynamicIndicatorsGrid` usa o hook `useActiveMetricsForSdr` que:
-1. Primeiro tenta buscar métricas configuradas na tabela `fechamento_metricas_mes`
-2. Se não encontrar, usa o array `DEFAULT_SDR_METRICS` como fallback
-3. O fallback tinha o label antigo "Reuniões Agendadas"
+Alterar o campo de "Agendamento" para usar `agendamentos` em vez de `r1_agendada`:
 
-## Resultado
+```tsx
+// Onde mostra o valor automático da Agenda para "Agendamento" (linha ~380)
+// ANTES:
+autoValue={agendaMetrics.data?.r1_agendada}
 
-Após a mudança, o painel de Indicadores de Meta mostrará "Agendamento" em vez de "Reuniões Agendadas".
+// DEPOIS:
+autoValue={agendaMetrics.data?.agendamentos}
+```
+
+---
+
+## Fluxo de Dados Corrigido
+
+```text
+RPC get_sdr_metrics_from_agenda
+        │
+        ├── agendamentos ────► useSdrAgendaMetricsBySdrId ────► KpiEditForm
+        │                      (NOVO campo adicionado)          (Campo "Agendamento")
+        │
+        └── r1_agendada ────► (não usado no fechamento)
+```
+
+---
+
+## Resultado Visual
+
+O campo "Agendamento" no painel de fechamento passará a mostrar:
+- **Antes**: Reuniões marcadas PARA o mês (scheduled_at)
+- **Depois**: Reuniões criadas pelo SDR no mês (booked_at) - métrica de produtividade
+
+Isso alinha o painel de fechamento com os outros painéis (Reuniões Equipe, Tabela SDR).
+
+---
+
+## Resumo Técnico
+
+- **2 arquivos** modificados
+- **1 campo** adicionado ao hook (`agendamentos`)
+- **1 referência** atualizada no formulário
+- **Zero impacto** em outros componentes (campo `r1_agendada` permanece disponível)
