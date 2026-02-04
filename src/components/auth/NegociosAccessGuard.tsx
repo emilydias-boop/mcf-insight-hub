@@ -36,6 +36,7 @@ export const BU_GROUP_MAP: Record<BusinessUnit, string[]> = {
     'b98e3746-d727-445b-b878-fc5742b6e6b8', // Perpétuo - Construa para Alugar
     '267905ec-8fcf-4373-8d62-273bb6c6f8ca', // Hubla - Viver de Aluguel
     '35361575-d8a9-4ea0-8703-372a2988d2be', // Hubla - Construir Para Alugar
+    'a6f3cbfc-0567-427f-a405-5a869aaa6010', // Perpétuo - X1 (contém PIPELINE - INSIDE SALES - VIVER DE ALUGUEL)
   ],
   credito: [],    // A definir
   projetos: [],   // A definir
