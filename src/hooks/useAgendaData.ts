@@ -20,6 +20,7 @@ export interface MeetingAttendee {
   closer_notes: string | null;
   parent_attendee_id?: string | null;
   already_builds: boolean | null;
+  contract_paid_at?: string | null;
   contact?: {
     id: string;
     name: string;
@@ -165,6 +166,7 @@ export function useAgendaMeetings(
             closer_notes,
             parent_attendee_id,
             already_builds,
+            contract_paid_at,
             contact:crm_contacts(id, name, phone, email),
             deal:crm_deals(id, name),
             parent_attendee:meeting_slot_attendees!parent_attendee_id(
