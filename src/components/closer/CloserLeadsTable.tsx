@@ -37,8 +37,11 @@ export function CloserLeadsTable({ leads, isLoading }: CloserLeadsTableProps) {
     );
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (status: string, contractPaidAt?: string | null) => {
+    // contract_paid_at tem prioridade - fonte da verdade para contrato pago
+    const displayStatus = contractPaidAt ? 'contract_paid' : status;
+    
+    switch (displayStatus) {
       case 'contract_paid':
         return (
           <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
@@ -92,7 +95,7 @@ export function CloserLeadsTable({ leads, isLoading }: CloserLeadsTableProps) {
                 <TableCell className="text-muted-foreground">
                   {lead.booked_by_name || '-'}
                 </TableCell>
-                <TableCell>{getStatusBadge(lead.status)}</TableCell>
+                <TableCell>{getStatusBadge(lead.status, lead.contract_paid_at)}</TableCell>
                 <TableCell>
                   {lead.origin_name ? (
                     <Badge variant="outline" className="text-xs">

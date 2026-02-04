@@ -167,7 +167,7 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
 
       // ========== CONTRACT PAID BY PAYMENT DATE ==========
       // Buscar contratos pagos pela DATA DO PAGAMENTO (não da reunião)
-      // Isso captura follow-ups onde a reunião foi em outro dia
+      // FONTE DA VERDADE: contract_paid_at IS NOT NULL (independente do status)
       const { data: contractsByPaymentDate, error: contractsError } = await supabase
         .from('meeting_slot_attendees')
         .select(`
@@ -181,14 +181,14 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
             scheduled_at
           )
         `)
-        .eq('status', 'contract_paid')
         .eq('meeting_slot.meeting_type', 'r1')
+        .not('contract_paid_at', 'is', null)
         .gte('contract_paid_at', start)
         .lte('contract_paid_at', end);
 
       if (contractsError) throw contractsError;
 
-      // Também buscar contratos SEM contract_paid_at (fallback para scheduled_at)
+      // Também buscar contratos com status contract_paid mas SEM contract_paid_at (fallback para scheduled_at)
       // Esses são contratos antigos que não têm timestamp de pagamento
       const { data: contractsWithoutTimestamp } = await supabase
         .from('meeting_slot_attendees')
@@ -210,26 +210,30 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
         .lte('meeting_slot.scheduled_at', end);
 
       // Mapear contratos pagos no período por closer
+      // Usar Set para evitar duplicatas entre as duas queries
       const contractsByCloser = new Map<string, number>();
+      const countedAttendeeIds = new Set<string>();
       
-      // Processar contratos COM contract_paid_at
+      // Processar contratos COM contract_paid_at (prioridade)
       contractsByPaymentDate?.forEach(att => {
         const closerId = (att.meeting_slot as any)?.closer_id;
-        if (closerId && att.booked_by) {
+        if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {
           const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
           if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
             contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+            countedAttendeeIds.add(att.id);
           }
         }
       });
 
-      // Processar contratos SEM contract_paid_at (fallback)
+      // Processar contratos SEM contract_paid_at (fallback) - apenas se não foi contado ainda
       contractsWithoutTimestamp?.forEach(att => {
         const closerId = (att.meeting_slot as any)?.closer_id;
-        if (closerId && att.booked_by) {
+        if (closerId && att.booked_by && !countedAttendeeIds.has(att.id)) {
           const bookedByEmail = profileEmailMap.get(att.booked_by) || allProfileEmailMap.get(att.booked_by);
           if (bookedByEmail && validSdrEmails.has(bookedByEmail)) {
             contractsByCloser.set(closerId, (contractsByCloser.get(closerId) || 0) + 1);
+            countedAttendeeIds.add(att.id);
           }
         }
       });
@@ -376,7 +380,8 @@ export function useR1CloserMetrics(startDate: Date, endDate: Date) {
             metric!.r1_agendada++;
           }
           
-          // R1 Realizada: completed OR contract_paid (paid = meeting happened)
+          // R1 Realizada: completed OR contract_paid OR has contract_paid_at
+          // Isso inclui attendees que foram movidos (status = rescheduled) mas tem contract_paid_at
           if (status === 'completed' || status === 'contract_paid') {
             metric!.r1_realizada++;
           }
