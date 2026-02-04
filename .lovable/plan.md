@@ -1,175 +1,123 @@
 
-# Plano: Mover Modo Seleção para Cada Estágio
+# Plano: Renomear "Reuniões Agendadas" para "Agendamento"
 
 ## Visão Geral
 
-Descentralizar o modo de seleção: em vez de um botão global "Modo Seleção" no topo, cada estágio terá seus próprios controles de seleção no header da coluna.
-
----
-
-## Mudanças na Interface
-
-### Antes (Global)
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ [Buscar...]  [Status▼]  [Responsável▼]        [✓ Modo Seleção]     │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│ Novo Lead 75│  │ Qualificado │  │ Agendado 40 │
-├─────────────┤  ├─────────────┤  ├─────────────┤
-│ □ Lead 1    │  │ □ Lead 1    │  │ □ Lead 1    │
-│ □ Lead 2    │  │ □ Lead 2    │  │ □ Lead 2    │
-└─────────────┘  └─────────────┘  └─────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│  # Selecionar quantidade: [___] [Aplicar] [Todos]          [X]      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Depois (Por Estágio)
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ [Buscar...]  [Status▼]  [Responsável▼]                              │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
-│ Novo Lead      75 │  │ Qualificado   50  │  │ Agendado      40  │
-│ [☐] [50▼] [✓Todos]│  │ [☐] [50▼] [✓Todos]│  │ [☐] [50▼] [✓Todos]│
-├───────────────────┤  ├───────────────────┤  ├───────────────────┤
-│ ✓ Lead 1          │  │ □ Lead 1          │  │ □ Lead 1          │
-│ ✓ Lead 2          │  │ □ Lead 2          │  │ □ Lead 2          │
-│ ...               │  │ ...               │  │ ...               │
-│ ✓ Lead 50         │  │ □ Lead 50         │  │ □ Lead 40         │
-│ □ Lead 51         │  │                   │  │                   │
-└───────────────────┘  └───────────────────┘  └───────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│  ✓ 50 leads selecionados  │ [Transferir para...] [X]                │
-└─────────────────────────────────────────────────────────────────────┘
-```
+Alterar o label do indicador de "Reuniões Agendadas" para "Agendamento" em todos os componentes de fechamento SDR, mantendo os dados e cálculos inalterados.
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/components/crm/DealFilters.tsx` | Remover botão "Modo Seleção" |
-| `src/components/crm/DealKanbanBoard.tsx` | Adicionar controles de seleção no header de cada estágio |
-| `src/components/crm/BulkActionsBar.tsx` | Simplificar - remover selector de quantidade (fica no stage) |
-| `src/pages/crm/Negocios.tsx` | Remover estado `selectionMode` global, adaptar handlers |
+| Arquivo | Local | Alteração |
+|---------|-------|-----------|
+| `src/components/fechamento/SdrFechamentoView.tsx` | Linha 126 | "Reuniões Agendadas" → "Agendamento" |
+| `src/components/sdr-fechamento/KpiEditForm.tsx` | Linha 359 | "Reuniões Agendadas" → "Agendamento" |
+| `src/pages/fechamento-sdr/Detail.tsx` | Linha 219 (export CSV) | "Reuniões Agendadas" → "Agendamento" |
+| `src/pages/fechamento-sdr/Index.tsx` | Linhas 225, 231 | "% Reuniões Agendadas" → "% Agendamento"<br>"Valor Reuniões Agendadas" → "Valor Agendamento" |
+| `src/pages/fechamento-sdr/Configuracoes.tsx` | Linhas 203, 476 | "Reuniões Agendadas" → "Agendamento" |
 
 ---
 
-## Detalhes da Implementação
+## Detalhes das Mudanças
 
-### 1. DealKanbanBoard.tsx - Novo Header do Estágio
-
-Cada coluna terá:
-- **Input numérico**: Selecionar os primeiros N leads do estágio
-- **Botão "Todos"**: Selecionar todos os leads do estágio
-- **Checkbox visual**: Mostra estado (nenhum/parcial/todos)
-
+### 1. SdrFechamentoView.tsx (Resumo dos Indicadores)
 ```tsx
-<CardHeader className={`flex-shrink-0 py-3 ${stage.color || 'bg-muted'}`}>
-  <CardTitle className="text-sm font-medium">
-    <div className="flex items-center justify-between">
-      <span>{stage.stage_name}</span>
-      <Badge variant="secondary">{stageDeals.length}</Badge>
-    </div>
-    {/* Nova barra de seleção por estágio */}
-    {stageDeals.length > 0 && (
-      <div className="flex items-center gap-1 mt-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => handleSelectAllInStage(stageDeals)}
-          className="h-6 w-6 p-0"
-        >
-          {/* Ícone de checkbox baseado no estado */}
-        </Button>
-        <Input
-          type="number"
-          placeholder="Qtd"
-          className="w-14 h-6 text-xs"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSelectByCountInStage(stage.id, count);
-          }}
-        />
-        <Button size="sm" variant="ghost" className="h-6 text-xs">
-          Todos
-        </Button>
-      </div>
-    )}
-  </CardTitle>
-</CardHeader>
+// Linha 126: ANTES
+<div className="text-xs text-muted-foreground/70">
+  Reuniões Agendadas
+</div>
+
+// DEPOIS
+<div className="text-xs text-muted-foreground/70">
+  Agendamento
+</div>
 ```
 
-### 2. Novo Componente: StageSelectionControls
-
-Criar um componente dedicado para os controles de seleção de cada estágio:
-
+### 2. KpiEditForm.tsx (Edição de KPIs)
 ```tsx
-interface StageSelectionControlsProps {
-  stageId: string;
-  stageDeals: Deal[];
-  selectedDealIds: Set<string>;
-  onSelectByCount: (stageId: string, count: number) => void;
-  onSelectAll: (stageId: string) => void;
-  onClearStage: (stageId: string) => void;
-}
+// Linha 359: ANTES
+<Label htmlFor="reunioes_agendadas" className="...">
+  Reuniões Agendadas
+  ...
+</Label>
 
-const StageSelectionControls = ({...}: StageSelectionControlsProps) => {
-  const [count, setCount] = useState('');
-  
-  // Retorna controles compactos para o header
-  return (
-    <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-border/30">
-      {/* Checkbox de estado */}
-      {/* Input de quantidade */}
-      {/* Botão "Todos" */}
-    </div>
-  );
-};
+// DEPOIS
+<Label htmlFor="reunioes_agendadas" className="...">
+  Agendamento
+  ...
+</Label>
 ```
 
-### 3. DealFilters.tsx
+### 3. Detail.tsx (Exportação CSV Individual)
+```tsx
+// Linha 219: ANTES
+`Reuniões Agendadas;${compPlan?.meta_reunioes_agendadas || 0};...`
 
-Remover:
-- Prop `selectionMode`
-- Prop `onToggleSelectionMode`
-- Botão "Modo Seleção"
+// DEPOIS
+`Agendamento;${compPlan?.meta_reunioes_agendadas || 0};...`
+```
 
-### 4. BulkActionsBar.tsx
+### 4. Index.tsx (Exportação CSV em Lote)
+```tsx
+// Linha 225: ANTES
+"% Reuniões Agendadas",
 
-Simplificar para mostrar apenas quando há seleção:
-- Remover estado de quantidade input global
-- Manter apenas: contador de selecionados + botão Transferir + botão X
+// DEPOIS
+"% Agendamento",
 
-### 5. Negocios.tsx
+// Linha 231: ANTES
+"Valor Reuniões Agendadas",
 
-- Remover estado `selectionMode` global
-- Adaptar `handleSelectByCount` para receber `stageId`
-- Nova função `handleSelectByCountInStage(stageId: string, count: number)`
-- O modo de seleção será "automático" - ativa quando qualquer deal é selecionado
+// DEPOIS
+"Valor Agendamento",
+```
+
+### 5. Configuracoes.tsx (Notas Informativas)
+```tsx
+// Linhas 203 e 476: ANTES
+<strong>Metas automáticas:</strong> Reuniões Agendadas usa meta diária...
+
+// DEPOIS
+<strong>Metas automáticas:</strong> Agendamento usa meta diária...
+```
 
 ---
 
-## Fluxo de Uso Atualizado
+## O Que NÃO Muda
 
-1. Usuário vê os controles de seleção em cada estágio
-2. Digita "30" no input de um estágio específico e pressiona Enter
-3. Os primeiros 30 leads daquele estágio são selecionados (de cima para baixo)
-4. BulkActionsBar aparece com "30 leads selecionados"
-5. Pode repetir em outros estágios para acumular seleção
-6. Clica "Transferir para..." para ação em massa
+- **Nomes de campos no banco de dados**: `reunioes_agendadas` permanece igual
+- **Nomes de variáveis no código**: `formData.reunioes_agendadas`, `kpi.reunioes_agendadas`, etc.
+- **Cálculos e lógica de negócio**: Toda a lógica de métricas permanece inalterada
+- **Dados puxados da Agenda**: Continuam vindo do hook `useSdrAgendaMetricsBySdrId`
+
+---
+
+## Resultado Visual
+
+### Card de Indicadores (Antes)
+```text
+┌────────────────┐ ┌────────────────┐
+│ Reuniões       │ │ Reuniões       │
+│ Agendadas      │ │ Realizadas     │
+│    85.5%       │ │    92.0%       │
+└────────────────┘ └────────────────┘
+```
+
+### Card de Indicadores (Depois)
+```text
+┌────────────────┐ ┌────────────────┐
+│ Agendamento    │ │ Reuniões       │
+│    85.5%       │ │ Realizadas     │
+│ Mult: 0.9x     │ │    92.0%       │
+└────────────────┘ └────────────────┘
+```
 
 ---
 
 ## Resumo Técnico
 
-- **Remoção**: Botão global "Modo Seleção" do DealFilters
-- **Adição**: Controles inline no header de cada estágio do Kanban
-- **Comportamento**: Seleção sempre disponível, BulkActionsBar aparece automaticamente quando há seleção
-- **UX**: Mais intuitivo - controles visíveis no contexto de cada estágio
+- **5 arquivos** modificados
+- **6 ocorrências** de texto alteradas
+- **Zero impacto** em lógica ou dados
+- Apenas mudança de nomenclatura (label display)
