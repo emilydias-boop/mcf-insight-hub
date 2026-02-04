@@ -144,7 +144,7 @@ export default function CloserMeetingsDetailPage() {
                     <span className="text-muted-foreground">Taxa de Conversão</span>
                     <span className="text-xl font-bold text-blue-400">
                       {closerMetrics?.r1_realizada && closerMetrics.r1_realizada > 0
-                        ? (((closerMetrics.contrato_pago + closerMetrics.outside) / closerMetrics.r1_realizada) * 100).toFixed(1)
+                        ? ((closerMetrics.contrato_pago / closerMetrics.r1_realizada) * 100).toFixed(1)
                         : '0.0'}%
                     </span>
                   </div>
