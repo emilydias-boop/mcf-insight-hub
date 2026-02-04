@@ -1,149 +1,95 @@
 
+## Contexto (o que deveria acontecer)
+O botão/card **“Enviar NFSe”** aparece na tela **“Meu Fechamento”** (rota `/meu-fechamento`) quando **todas** as condições abaixo são verdadeiras:
 
-# Plano: Corrigir Vínculo user_id nos Employees e Adicionar Fallback por Email
+1) O mês selecionado tem um payout (`payout` existe)  
+2) `payout.status === 'APPROVED'`  
+3) `payout.nfse_id` está vazio (a NFSe ainda não foi enviada)  
+4) O hook `useMyEmployee()` retorna um `employee` (variável `myEmployee` não pode ser `null`)  
 
-## Problema Identificado
+Pelos prints, você está no lugar correto (Meu Fechamento / detalhes), o payout já está **Aprovado**, mas o card não aparece porque o `myEmployee` está vindo **null**.
 
-O card "Enviar NFSe" não aparece porque a condição na linha 177 do `MeuFechamento.tsx` exige `myEmployee && payout.status === 'APPROVED'`. 
+---
 
-O hook `useMyEmployee` busca na tabela `employees` por `user_id`, mas **a maioria dos funcionários PJ não tem `user_id` vinculado**.
+## Diagnóstico (por que o `myEmployee` está `null` mesmo com fallback)
+Pelos requests de rede do navegador:
 
-### Funcionários PJ Afetados (com profile correspondente mas sem user_id)
+- `GET /employees?user_id=eq.<uid>` → retorna `[]`
+- `GET /employees?email_pessoal=ilike.<email>` → retorna `[]`
 
-| Funcionário | Email | Profile ID | Employee user_id |
-|-------------|-------|------------|------------------|
-| Cleiton Lima | cleiton.lima@... | 16828627-... | ❌ NULL |
-| Angelina Maia | angelina.maia@... | 62411788-... | ❌ NULL |
-| Antony Elias | antony.elias@... | 70113bef-... | ❌ NULL |
-| Carol Correa | carol.correa@... | c7005c87-... | ❌ NULL |
-| Carol Souza | caroline.souza@... | 4c947a4c-... | ❌ NULL |
-| Cristiane Gomes | cristiane.gomes@... | c8fd2b83-... | ❌ NULL |
-| Jessica Martins | jessica.martins@... | b0ea004d-... | ❌ NULL |
-| Juliana Rodrigues | juliana.rodrigues@... | baa6047c-... | ❌ NULL |
-| Julio Caetano | julio.caetano@... | dd76c153-... | ❌ NULL |
-| Leticia Nunes | leticia.nunes@... | c1ede6ed-... | ❌ NULL |
+Mas no banco existe o registro do Cleiton em `employees` com:
+- `email_pessoal = cleiton.lima@minhacasafinanciada.com`
+- `user_id = NULL`
 
-## Solução em Duas Partes
+Isso é um sinal clássico de **RLS (Row Level Security) bloqueando SELECT** na tabela `employees`.  
+Mesmo buscando por email, a policy provavelmente exige `employees.user_id = auth.uid()`; como `user_id` está nulo, o Supabase retorna **200 com lista vazia** (não dá erro).
 
-### Parte 1: Migração SQL para Vincular user_id em Massa
+Conclusão: o fallback por email no frontend não resolve enquanto a tabela `employees` estiver protegida por RLS (como deve estar, pois contém dados sensíveis). O caminho correto é **vincular `employees.user_id` ao usuário autenticado**.
 
-Atualizar todos os registros da tabela `employees` onde existe um `profile` com email correspondente:
+---
 
+## Objetivo
+Garantir que:
+- Cleiton (e demais colaboradores com cadastro em `employees`) consigam ser “enxergados” via RLS
+- O card “Enviar NFSe” apareça automaticamente assim que o fechamento estiver `APPROVED` e sem `nfse_id`
+
+---
+
+## Implementação (o que vou fazer quando você aprovar a execução)
+### 1) Criar uma migração SQL segura para vincular `employees.user_id` via `auth.users`
+Em vez de usar `profiles.id` (que pode não existir em `auth.users` e quebrar por FK), faremos a vinculação usando `auth.users.id` por email:
+
+- Atualizar **somente** quando:
+  - `employees.user_id is null`
+  - `employees.email_pessoal` não é nulo
+  - existe um usuário em `auth.users` com `auth.users.email = employees.email_pessoal`
+
+SQL (modelo):
 ```sql
-UPDATE employees e
-SET user_id = p.id
-FROM profiles p
-WHERE LOWER(e.email_pessoal) = LOWER(p.email)
-  AND e.user_id IS NULL
-  AND e.email_pessoal IS NOT NULL;
+update public.employees e
+set user_id = u.id
+from auth.users u
+where e.user_id is null
+  and e.email_pessoal is not null
+  and lower(e.email_pessoal) = lower(u.email);
 ```
 
-### Parte 2: Fallback por Email no Hook useMyEmployee
+Isso:
+- respeita o FK para `auth.users`
+- não tenta criar vínculos “fantasmas”
+- corrige em massa os casos em que existe usuário autenticável para aquele email
 
-Modificar o hook para buscar por email quando não encontrar por `user_id` (previne problemas futuros):
+### 2) Validar o caso do Cleiton especificamente
+Após a migração:
+- Confirmar que `employees.user_id` do Cleiton passou a ser o `uid` dele.
+- Confirmar que `useMyEmployee()` passa a retornar um registro (o request `/employees?user_id=eq.<uid>` deve voltar com 1 linha).
 
-**Arquivo:** `src/hooks/useMyEmployee.ts`
+### 3) Confirmar o comportamento de UI (sem mudar layout)
+Sem alterar a tela, o card deve aparecer automaticamente ao recarregar, pois a condição já existe no `MeuFechamento.tsx`:
 
-```typescript
-export function useMyEmployee() {
-  const { user } = useAuth();
+- `payout.status === 'APPROVED'`
+- `!payout.nfse_id`
+- `myEmployee` definido
 
-  return useQuery({
-    queryKey: ['my-employee', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      
-      // Primeiro tenta buscar por user_id
-      let { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      // Fallback: buscar por email_pessoal se não encontrou
-      if (!data && user.email) {
-        const emailResult = await supabase
-          .from('employees')
-          .select('*')
-          .eq('email_pessoal', user.email)
-          .maybeSingle();
-        
-        if (emailResult.data) {
-          data = emailResult.data;
-          console.log('Employee encontrado via email fallback:', data.nome_completo);
-        }
-      }
-      
-      if (error) throw error;
-      return data as Employee | null;
-    },
-    enabled: !!user?.id,
-  });
-}
-```
+### 4) Passos de teste (o que você/ele deve fazer)
+No usuário do Cleiton:
 
-## Fluxo Completo de Envio de NFSe
+1. Abrir `/meu-fechamento`
+2. Selecionar **Janeiro 2026**
+3. Confirmar que aparece o card amarelo “Fechamento Aprovado! Envie sua NFSe…”
+4. Clicar **Enviar NFSe**
+5. No modal, anexar o PDF/XML (dependendo do que o modal pedir) e enviar
+6. Após sucesso, deve aparecer o card verde “NFSe Enviada” com o botão “Ver NFSe”
 
-Após as correções, o fluxo funcionará assim:
+---
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    FLUXO DE ENVIO DE NFSe                       │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────────────────────────┐
-         │  1. SDR/Closer acessa /meu-fechamento  │
-         └────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────────────────────────┐
-         │  2. useOwnFechamento busca o payout    │
-         │     (via user_id ou email no SDR)      │
-         └────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────────────────────────┐
-         │  3. useMyEmployee busca employee       │
-         │     (via user_id ou email_pessoal)     │
-         └────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────────────────────────┐
-         │  4. Se status = APPROVED e             │
-         │     myEmployee existe e nfse_id = NULL │
-         │     → Exibe card amarelo "Enviar NFSe" │
-         └────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────────────────────────┐
-         │  5. Usuário clica "Enviar NFSe"        │
-         │     → Abre EnviarNfseFechamentoModal   │
-         └────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────────────────────────┐
-         │  6. Upload do PDF para storage         │
-         │     → Cria registro em rh_nfse         │
-         │     → Atualiza payout.nfse_id          │
-         └────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌────────────────────────────────────────┐
-         │  7. Card verde "NFSe Enviada" aparece  │
-         │     → Aguardando financeiro confirmar  │
-         └────────────────────────────────────────┘
-```
+## Riscos e cuidados
+- `employees` contém dados pessoais; a RLS deve continuar restritiva. A correção ideal é **ligar o `user_id`**, não abrir acesso por email via policy.
+- Emails divergentes (ex.: `email_pessoal` diferente do email de login) não serão vinculados automaticamente. Nesses casos, precisaremos corrigir o email no RH ou fazer um vínculo manual pontual.
 
-## Arquivos a Modificar
+---
 
-1. **Migração SQL** - Vincular user_id em massa
-2. **`src/hooks/useMyEmployee.ts`** - Adicionar fallback por email
-
-## Resultado Esperado
-
-Após as correções:
-- Cleiton Lima e todos os outros PJ poderão ver o card "Enviar NFSe"
-- O botão aparecerá quando o fechamento estiver com status APPROVED
-- Novos funcionários sem user_id também serão encontrados via email
+## Entregáveis
+- 1 migração SQL nova em `supabase/migrations/*` fazendo o update via `auth.users`
+- (Opcional, se necessário) um ajuste pequeno de observabilidade: log/telemetria discreta no frontend para indicar “employee não encontrado” (sem expor dados sensíveis)
 
