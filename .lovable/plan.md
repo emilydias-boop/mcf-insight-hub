@@ -1,48 +1,79 @@
 
-# Plano: Permitir Admin Ver Slots de Datas Passadas
 
-## Problema
+# Plano: Incluir Reunioes Existentes no Calculo de Horarios Visiveis
 
-O admin pode selecionar datas passadas no calendario, mas os slots nao aparecem porque a logica de geracao filtra slots que nao estao no futuro.
+## Problema Identificado
 
-**Linha 104 atual:**
-```typescript
-if (isAfter(slotTime, new Date())) {
-```
+O lead "Oldai" foi movido para Mateus Macedo em 03/02 (segunda-feira) as 18:00. Porem:
 
-**Resultado:** Para terça-feira 03/02 (passado), mesmo com Mateus Macedo tendo slot as 18:00, nenhum slot aparece.
+1. Mateus Macedo so tem slot configurado para **terca-feira** (day_of_week: 2) as 18:00
+2. A agenda calcula os horarios visiveis baseado apenas nos **slots configurados** em `closer_meeting_links`
+3. Como nao ha configuracao para segunda-feira, o horario 18:00 nao aparece na grade
+4. Resultado: o lead existe no banco mas nao e visivel na interface
+
+**Dados no banco:**
+- Slot ID: 3c3602f2
+- Closer: Mateus Macedo (incorporador)
+- Data: 2026-02-03 21:00 UTC (18:00 BRT)
+- Attendee: Oldai
+- Status: rescheduled
+- meeting_type: r1
 
 ---
 
 ## Solucao
 
-Condicionar a verificacao de "futuro" apenas para usuarios nao-admin.
+Modificar o calculo de `timeSlots` no `AgendaCalendar.tsx` para tambem considerar **reunioes existentes**, nao apenas slots configurados.
 
 ---
 
 ## Alteracoes
 
-### Arquivo: `src/components/crm/MoveAttendeeModal.tsx`
+### Arquivo: `src/components/crm/AgendaCalendar.tsx`
 
-**Linha 104** - Atualizar verificacao de horario:
+**Linhas 137-183** - Atualizar calculo de `timeSlots` para incluir horarios de meetings existentes:
 
-De:
 ```typescript
-if (isAfter(slotTime, new Date())) {
-```
+const timeSlots = useMemo(() => {
+  let minHour = DEFAULT_END_HOUR;
+  let maxHour = DEFAULT_START_HOUR;
 
-Para:
-```typescript
-if (isAdmin || isAfter(slotTime, new Date())) {
+  // ADICIONAR: Considerar horarios das reunioes existentes
+  for (const meeting of meetings) {
+    const meetingDate = parseISO(meeting.scheduled_at);
+    const hour = meetingDate.getHours();
+    const minute = meetingDate.getMinutes();
+    minHour = Math.min(minHour, hour);
+    const slotEndMinutes = hour * 60 + minute + (meeting.duration_minutes || 60);
+    const slotEndHour = Math.ceil(slotEndMinutes / 60);
+    maxHour = Math.max(maxHour, slotEndHour);
+  }
+
+  // Manter logica existente para slots configurados (R2 e R1)
+  if (meetingType === 'r2' && r2DailySlotsMap) {
+    // ... codigo existente ...
+  } else if (meetingLinkSlots) {
+    // ... codigo existente ...
+  }
+
+  // Fallback se nenhum slot encontrado
+  if (minHour >= maxHour) {
+    minHour = DEFAULT_START_HOUR;
+    maxHour = DEFAULT_END_HOUR;
+  }
+
+  // ... resto do codigo ...
+}, [meetingLinkSlots, r2DailySlotsMap, meetingType, meetings]); // Adicionar meetings as dependencias
 ```
 
 ---
 
 ## Resultado Esperado
 
-- **Admin**: ve todos os slots configurados para qualquer data selecionada (incluindo passadas)
-- **Outros usuarios**: continuam vendo apenas slots futuros
-- Mateus Macedo aparecera com slot as 18:00 na terca-feira 03/02
+- Reunioes existentes em horarios nao configurados serao visiveis na agenda
+- O lead "Oldai" com Mateus Macedo em 03/02 as 18:00 aparecera normalmente
+- Admins podem mover leads para qualquer horario sem perder visibilidade
+- Compatibilidade mantida com slots configurados
 
 ---
 
@@ -50,4 +81,5 @@ if (isAdmin || isAfter(slotTime, new Date())) {
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `MoveAttendeeModal.tsx` | Adicionar `isAdmin ||` na linha 104 |
+| `AgendaCalendar.tsx` | Adicionar meetings ao calculo de timeSlots (linhas 137-183) |
+
