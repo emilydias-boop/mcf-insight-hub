@@ -52,9 +52,9 @@ export function CloserSummaryTable({
     { r1_agendada: 0, r1_realizada: 0, noshow: 0, contrato_pago: 0, outside: 0, r2_agendada: 0 }
   );
 
-  // Calculate total conversion rate ((Contrato + Outside) / Realizada)
+  // Calculate total conversion rate (Contrato / Realizada)
   const totalTaxaConversao = totals.r1_realizada > 0 
-    ? (((totals.contrato_pago + totals.outside) / totals.r1_realizada) * 100)
+    ? ((totals.contrato_pago / totals.r1_realizada) * 100)
     : 0;
 
   // Calculate total no-show rate (No-Show / Agendada)
@@ -81,9 +81,9 @@ export function CloserSummaryTable({
           </TableHeader>
           <TableBody>
             {data.map((row) => {
-              // Calculate taxa de conversão ((Contrato Pago + Outside) / R1 Realizada)
+              // Calculate taxa de conversão (Contrato Pago / R1 Realizada)
               const taxaConversao = row.r1_realizada > 0 
-                ? (((row.contrato_pago + row.outside) / row.r1_realizada) * 100)
+                ? ((row.contrato_pago / row.r1_realizada) * 100)
                 : 0;
               const taxaConversaoFormatted = taxaConversao.toFixed(1);
 
