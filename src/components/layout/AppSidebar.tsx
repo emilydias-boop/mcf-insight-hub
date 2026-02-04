@@ -28,7 +28,6 @@ import {
   ShoppingCart,
   Crown,
   CheckSquare,
-  Trophy,
   Briefcase,
 } from "lucide-react";
 import { DrawerArquivosUsuario } from "@/components/user-management/DrawerArquivosUsuario";
@@ -241,13 +240,6 @@ const menuItems: MenuItem[] = [
     url: "/tarefas",
     icon: CheckSquare,
     requiredRoles: ["admin", "manager", "coordenador"],
-  },
-
-  // PREMIAÇÕES - Visível para todas as roles
-  {
-    title: "Premiações",
-    url: "/premiacoes",
-    icon: Trophy,
   },
 
   // ===== ITENS AVULSOS PARA SDR/CLOSER =====
