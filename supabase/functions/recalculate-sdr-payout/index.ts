@@ -55,6 +55,19 @@ interface Kpi {
 const META_TENTATIVAS_DIARIA = 84; // Meta fixa de 84 tentativas por dia
 const META_ORGANIZACAO = 100; // Meta fixa de 100%
 
+// Fallback OTE values by SDR level when no comp_plan exists
+const DEFAULT_OTE_BY_LEVEL: Record<number, { 
+  ote_total: number; 
+  fixo_valor: number; 
+  variavel_total: number 
+}> = {
+  1: { ote_total: 4000, fixo_valor: 2800, variavel_total: 1200 },
+  2: { ote_total: 4500, fixo_valor: 3150, variavel_total: 1350 },
+  3: { ote_total: 5000, fixo_valor: 3500, variavel_total: 1500 },
+  4: { ote_total: 5500, fixo_valor: 3850, variavel_total: 1650 },
+  5: { ote_total: 6000, fixo_valor: 4200, variavel_total: 1800 },
+};
+
 interface MetricaAtiva {
   nome_metrica: string;
   peso_percentual: number;
@@ -344,8 +357,16 @@ serve(async (req) => {
           console.log(`   ⚠️ ${isCloser ? 'Closer' : 'SDR'} ${sdr.name} não tem email configurado`);
         }
 
+        // ===== BUSCAR EMPLOYEE PRIMEIRO (necessário para fallback) =====
+        const { data: employeeData } = await supabase
+          .from('employees')
+          .select('cargo_catalogo_id')
+          .eq('sdr_id', sdr.id)
+          .eq('status', 'ativo')
+          .maybeSingle();
+
         // Get comp plan
-        const { data: compPlan, error: compError } = await supabase
+        const { data: compPlanResult, error: compError } = await supabase
           .from('sdr_comp_plan')
           .select('*')
           .eq('sdr_id', sdr.id)
@@ -355,20 +376,82 @@ serve(async (req) => {
           .limit(1)
           .single();
 
+        let compPlan = compPlanResult;
+
+        // ===== FALLBACK: Criar comp_plan automático se não existir =====
         if (compError || !compPlan) {
-          console.log(`   ⚠️ Plano de compensação não encontrado para ${sdr.name}`);
-          continue;
+          console.log(`   ⚠️ Plano vigente não encontrado para ${sdr.name}. Criando fallback...`);
+          
+          // Buscar nivel do SDR
+          const { data: sdrFull } = await supabase
+            .from('sdr')
+            .select('nivel')
+            .eq('id', sdr.id)
+            .single();
+          
+          const nivel = sdrFull?.nivel || 1;
+          const fallbackDefault = DEFAULT_OTE_BY_LEVEL[nivel] ?? DEFAULT_OTE_BY_LEVEL[1];
+          let fallbackValues = { ...fallbackDefault };
+          
+          // Tentar usar cargo_catalogo se disponível
+          if (employeeData?.cargo_catalogo_id) {
+            const { data: cargo } = await supabase
+              .from('cargos_catalogo')
+              .select('ote_total, fixo_valor, variavel_valor')
+              .eq('id', employeeData.cargo_catalogo_id)
+              .single();
+            
+            if (cargo && cargo.ote_total > 0) {
+              fallbackValues = {
+                ote_total: cargo.ote_total,
+                fixo_valor: cargo.fixo_valor,
+                variavel_total: cargo.variavel_valor,
+              };
+              console.log(`   📋 Usando valores do cargo_catalogo para ${sdr.name}`);
+            }
+          }
+          
+          const diasUteis = calendarData?.dias_uteis_final || 22;
+          
+          // Criar comp_plan implícito para o mês
+          const newPlan = {
+            sdr_id: sdr.id,
+            vigencia_inicio: monthStart,
+            vigencia_fim: monthEnd,
+            ote_total: fallbackValues.ote_total,
+            fixo_valor: fallbackValues.fixo_valor,
+            variavel_total: fallbackValues.variavel_total,
+            valor_meta_rpg: Math.round(fallbackValues.variavel_total * 0.35),
+            valor_docs_reuniao: Math.round(fallbackValues.variavel_total * 0.35),
+            valor_tentativas: Math.round(fallbackValues.variavel_total * 0.15),
+            valor_organizacao: Math.round(fallbackValues.variavel_total * 0.15),
+            ifood_mensal: 150,
+            ifood_ultrameta: 50,
+            meta_reunioes_agendadas: 15,
+            meta_reunioes_realizadas: 12,
+            meta_tentativas: 400,
+            meta_organizacao: 100,
+            dias_uteis: diasUteis,
+            meta_no_show_pct: 30,
+            status: 'APPROVED',
+          };
+          
+          const { data: createdPlan, error: createError } = await supabase
+            .from('sdr_comp_plan')
+            .insert(newPlan)
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error(`   ❌ Erro ao criar comp_plan fallback: ${createError.message}`);
+            continue;
+          }
+          
+          compPlan = createdPlan;
+          console.log(`   ✅ Comp plan fallback criado para ${sdr.name} (Nível ${nivel}): OTE R$${fallbackValues.ote_total}`);
         }
 
         // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS =====
-        // Primeiro precisamos buscar o employee para pegar cargo_catalogo_id
-        const { data: employeeData } = await supabase
-          .from('employees')
-          .select('cargo_catalogo_id')
-          .eq('sdr_id', sdr.id)
-          .eq('status', 'ativo')
-          .maybeSingle();
-
         let metricasAtivas: MetricaAtiva[] = [];
         if (employeeData?.cargo_catalogo_id) {
           const { data: metricas } = await supabase
