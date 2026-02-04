@@ -12,11 +12,26 @@ export function useMyEmployee() {
     queryFn: async () => {
       if (!user?.id) return null;
       
-      const { data, error } = await supabase
+      // Primeiro tenta buscar por user_id
+      let { data, error } = await supabase
         .from('employees')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
+      
+      // Fallback: buscar por email_pessoal se não encontrou por user_id
+      if (!data && user.email) {
+        const emailResult = await supabase
+          .from('employees')
+          .select('*')
+          .ilike('email_pessoal', user.email)
+          .maybeSingle();
+        
+        if (emailResult.data) {
+          data = emailResult.data;
+          console.log('Employee encontrado via email fallback:', data.nome_completo);
+        }
+      }
       
       if (error) throw error;
       return data as Employee | null;
