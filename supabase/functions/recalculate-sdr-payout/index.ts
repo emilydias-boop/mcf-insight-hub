@@ -490,15 +490,33 @@ serve(async (req) => {
             no_shows: noShows,
           });
           
-          // Campos da Agenda: SEMPRE atualizar
-          // Campos manuais (tentativas_ligacoes, score_organizacao): PRESERVAR
+          // PRESERVAR valores manuais se Agenda não tiver dados
+          // Só sobrescrever se a Agenda retornou valores > 0
           const updateFields: Record<string, unknown> = {
-            reunioes_agendadas: reunioesAgendadas,
-            reunioes_realizadas: reunioesRealizadas,
-            no_shows: noShows,
-            taxa_no_show: taxaNoShow,
+            // Agendadas: usar Agenda apenas se > 0, senão manter valor existente
+            reunioes_agendadas: reunioesAgendadas > 0 
+              ? reunioesAgendadas 
+              : existingKpi.reunioes_agendadas,
+            
+            // Realizadas: usar Agenda apenas se > 0, senão manter valor existente
+            reunioes_realizadas: reunioesRealizadas > 0 
+              ? reunioesRealizadas 
+              : existingKpi.reunioes_realizadas,
+            
+            // No-shows: só atualizar se reunioes_agendadas veio da Agenda
+            no_shows: reunioesAgendadas > 0 
+              ? noShows 
+              : existingKpi.no_shows,
+            
+            // Taxa recalculada com base nos valores finais
+            taxa_no_show: reunioesAgendadas > 0 
+              ? taxaNoShow 
+              : existingKpi.taxa_no_show,
+            
             updated_at: new Date().toISOString(),
           };
+          
+          console.log(`   📊 Valores finais: Agendadas=${updateFields.reunioes_agendadas}, Realizadas=${updateFields.reunioes_realizadas} (${reunioesAgendadas > 0 ? 'Agenda' : 'Manual'})`);
           
           const { data: updatedKpi, error: updateError } = await supabase
             .from('sdr_month_kpi')
