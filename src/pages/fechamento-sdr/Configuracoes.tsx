@@ -200,7 +200,7 @@ const EditCompPlanDialog = ({ plan, onSuccess }: { plan: SdrCompPlan; onSuccess:
         
         {/* Nota informativa sobre metas automáticas */}
         <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2.5 border">
-          <strong>Metas automáticas:</strong> Reuniões Agendadas usa meta diária do SDR × dias úteis, 
+          <strong>Metas automáticas:</strong> Agendamento usa meta diária do SDR × dias úteis, 
           Realizadas usa 70% do realizado, Tentativas usa 84/dia e Organização usa 100%.
         </div>
         
@@ -473,7 +473,7 @@ const CompPlanFormDialog = ({ sdrs, onSuccess }: { sdrs: Sdr[]; onSuccess: () =>
         
         {/* Nota informativa sobre metas automáticas */}
         <div className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2.5 border">
-          <strong>Metas automáticas:</strong> Reuniões Agendadas usa meta diária do SDR × dias úteis, 
+          <strong>Metas automáticas:</strong> Agendamento usa meta diária do SDR × dias úteis, 
           Realizadas usa 70% do realizado, Tentativas usa 84/dia e Organização usa 100%.
         </div>
         
