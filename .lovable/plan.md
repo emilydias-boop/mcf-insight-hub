@@ -1,33 +1,55 @@
 
-# Correção: Pipelines não aparecem no seletor de Regras de Replicação
+# Plano: Testar Automação de Replicação Cross-Pipeline
 
-## Problema Identificado
+## Objetivo
 
-O seletor de "Pipeline" no modal de criação de regras está vazio porque a query está usando uma coluna inexistente.
+Mover um deal de teste para a etapa "Venda realizada" no Inside Sales e verificar se o trigger de replicação funciona corretamente.
 
-**Causa:** A tabela `crm_origins` usa `is_archived` (boolean inverso), mas o código está filtrando por `is_active` que não existe.
+## Deal Selecionado para Teste
 
-## Correção Necessária
+| Campo | Valor |
+|-------|-------|
+| Deal ID | `39a6d3c2-cb62-4ba3-ba50-7063765493bc` |
+| Nome | Roberta Buarque |
+| Pipeline | PIPELINE INSIDE SALES |
+| Estágio Atual | Lead Gratuito |
+| Estágio Destino | Venda realizada |
 
-**Arquivo:** `src/components/crm/automations/ReplicationRulesEditor.tsx`
+## Regra de Replicação Ativa
 
-**Linha 67 (atual):**
-```typescript
-const result = await supabase.from('crm_origins').select('id, name').eq('is_active', true).order('name');
-```
+| Config | Valor |
+|--------|-------|
+| Nome | Parceria -> Consorcio |
+| Origem | PIPELINE INSIDE SALES → "Venda realizada" |
+| Destino | Efeito Alavanca + Clube → "VENDA REALIZADA 50K" |
+| Condição | Nenhuma (replica todos os deals) |
 
-**Corrigir para:**
-```typescript
-const result = await supabase.from('crm_origins').select('id, name').eq('is_archived', false).order('name');
-```
+## Ações a Executar
 
-## Resumo da Mudança
+1. **Atualizar o deal** para o estágio "Venda realizada"
+   ```sql
+   UPDATE crm_deals 
+   SET stage_id = '3a2776e2-a536-4a2a-bb7b-a2f53c8941df'
+   WHERE id = '39a6d3c2-cb62-4ba3-ba50-7063765493bc';
+   ```
 
-| Componente | Antes | Depois |
-|------------|-------|--------|
-| Query de origins | `.eq('is_active', true)` | `.eq('is_archived', false)` |
-| Efeito | Lista vazia | Lista com todas as pipelines ativas |
+2. **Verificar fila de replicação** para confirmar que o trigger funcionou
+   ```sql
+   SELECT * FROM deal_replication_queue 
+   WHERE deal_id = '39a6d3c2-cb62-4ba3-ba50-7063765493bc';
+   ```
 
-## Validação
+3. **Processar a fila** chamando a Edge Function `process-deal-replication`
 
-A tabela `crm_stages` está correta (usa `is_active`), então não precisa de alteração.
+4. **Verificar deal replicado** no pipeline destino
+   ```sql
+   SELECT * FROM crm_deals 
+   WHERE replicated_from_deal_id = '39a6d3c2-cb62-4ba3-ba50-7063765493bc';
+   ```
+
+## Resultado Esperado
+
+- Deal aparece na fila `deal_replication_queue` com status "pending"
+- Após processar, novo deal criado em "Efeito Alavanca + Clube"
+- Log registrado em `deal_replication_logs`
+- Atividades criadas em ambos os deals
