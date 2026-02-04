@@ -1,32 +1,84 @@
 
-# Plano: Remover Funcao de Restaurar Contrato Pago
+# Plano: Usar contract_paid_at como Fonte da Verdade para Badge
+
+## Problema
+
+O lead "Francisco Antonio da Silva Rocha" tem:
+- `status` = `rescheduled` (incorreto, foi sobrescrito durante movimento)
+- `contract_paid_at` = preenchido (indica que contrato foi pago)
+
+O badge mostra "Reagendada" porque usa `status`, mas deveria mostrar "Contrato Pago" baseado em `contract_paid_at`.
+
+---
+
+## Solucao
+
+Modificar a logica do badge de status para verificar `contract_paid_at` primeiro. Se existir, mostrar "Contrato Pago" independente do valor de `status`.
+
+---
 
 ## Alteracoes
 
-### 1. Arquivo: `src/hooks/useAgendaData.ts`
+### Arquivo: `src/components/crm/AgendaMeetingDrawer.tsx`
 
-Remover a funcao `useRestoreAttendeeContractPaid` (linhas 541-571).
+**Linha 641-644** - Badge de Status Individual:
 
-### 2. Arquivo: `src/components/crm/AgendaMeetingDrawer.tsx`
-
-**Parte A**: Remover import do hook (linha 58):
-```typescript
-// Remover: useRestoreAttendeeContractPaid
+**De:**
+```tsx
+{/* Individual Status Badge */}
+{p.status && p.status !== 'scheduled' && (
+  <Badge className={cn('text-xs text-white', STATUS_LABELS[p.status]?.color || 'bg-muted')}>
+    {STATUS_LABELS[p.status]?.label || p.status}
+  </Badge>
+)}
 ```
 
-**Parte B**: Remover inicializacao do hook (linha 150):
-```typescript
-// Remover: const restoreContractPaid = useRestoreAttendeeContractPaid();
+**Para:**
+```tsx
+{/* Individual Status Badge - contract_paid_at takes priority */}
+{(() => {
+  // Se tem contract_paid_at, sempre mostrar Contrato Pago
+  const displayStatus = p.contractPaidAt ? 'contract_paid' : p.status;
+  if (!displayStatus || displayStatus === 'scheduled') return null;
+  return (
+    <Badge className={cn('text-xs text-white', STATUS_LABELS[displayStatus]?.color || 'bg-muted')}>
+      {STATUS_LABELS[displayStatus]?.label || displayStatus}
+    </Badge>
+  );
+})()}
 ```
 
-**Parte C**: Remover o botao de restaurar (linhas 725-740):
+### Arquivo: `src/hooks/useAgendaData.ts`
+
+Garantir que `contract_paid_at` seja incluido na query e mapeado para os participantes.
+
+**Na interface MeetingAttendee (linha 9-42):**
+
+Adicionar:
 ```typescript
-// Remover todo o bloco do botao "Restaurar Contrato Pago"
+contract_paid_at?: string | null;
 ```
 
-## Resumo
+**Na query de meetings** - incluir o campo `contract_paid_at` no select dos attendees.
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `useAgendaData.ts` | Remover funcao `useRestoreAttendeeContractPaid` |
-| `AgendaMeetingDrawer.tsx` | Remover import, hook e botao |
+---
+
+## Logica Final
+
+| contract_paid_at | status | Badge Mostrado |
+|------------------|--------|----------------|
+| preenchido | rescheduled | **Contrato Pago** |
+| preenchido | scheduled | **Contrato Pago** |
+| null | contract_paid | Contrato Pago |
+| null | completed | Realizada |
+| null | rescheduled | Reagendada |
+
+---
+
+## Resultado
+
+O lead "Francisco Antonio da Silva Rocha" mostrara:
+- Badge "Contrato Pago" (verde) baseado em `contract_paid_at`
+- Sem badge "Reagendada" redundante
+
+Isso funciona para todos os casos historicos sem necessidade de corrigir dados manualmente.
