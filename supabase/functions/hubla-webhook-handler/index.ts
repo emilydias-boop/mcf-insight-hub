@@ -605,9 +605,19 @@ interface AutoMarkData {
   saleDate: string;
 }
 
+// Normalizar nome para match fuzzy
+function normalizeNameForMatch(name: string): string {
+  return (name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[^a-z0-9]/g, '') // Só alfanuméricos
+    .trim();
+}
+
 async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<void> {
-  if (!data.customerEmail && !data.customerPhone) {
-    console.log('🎯 [AUTO-PAGO] Sem email ou telefone para buscar reunião');
+  if (!data.customerEmail && !data.customerPhone && !data.customerName) {
+    console.log('🎯 [AUTO-PAGO] Sem email, telefone ou nome para buscar reunião');
     return;
   }
 
@@ -615,15 +625,17 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
   const phoneDigits = data.customerPhone?.replace(/\D/g, '') || '';
   const phoneSuffix = phoneDigits.slice(-9);
   const emailLower = data.customerEmail?.toLowerCase()?.trim() || '';
+  const normalizedSearchName = normalizeNameForMatch(data.customerName || '');
 
-  console.log(`🎯 [AUTO-PAGO] Buscando match para: email="${emailLower}", phone_suffix="${phoneSuffix}", name="${data.customerName}"`);
+  console.log(`🎯 [AUTO-PAGO] Buscando match para: email="${emailLower}", phone_suffix="${phoneSuffix}", name="${data.customerName}" (normalized="${normalizedSearchName}")`);
 
   try {
     // CORREÇÃO 1: Limitar busca aos últimos 14 dias
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
-    // Buscar attendees R1 dos últimos 14 dias
+    // CORREÇÃO PRINCIPAL: Usar JOIN para buscar dados do contato em uma única query
+    // Elimina o padrão N+1 que causava timeouts
     const { data: attendeesRaw, error: queryError } = await supabase
       .from('meeting_slot_attendees')
       .select(`
@@ -639,6 +651,13 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
           status,
           meeting_type,
           closer_id
+        ),
+        crm_deals!deal_id(
+          id,
+          crm_contacts!contact_id(
+            email,
+            phone
+          )
         )
       `)
       .eq('meeting_slots.meeting_type', 'r1')
@@ -665,29 +684,28 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
 
     console.log(`🎯 [AUTO-PAGO] ${attendees.length} attendees encontrados (últimos 14 dias)`);
 
-    // CORREÇÃO 3: Match em duas fases - email primeiro, telefone como fallback
+    // CORREÇÃO 3: Match em três fases - email primeiro, telefone depois, nome como fallback
     let matchingAttendee: any = null;
     let meeting: any = null;
     let matchType: string = '';
     let phoneMatchCandidate: { attendee: any; meeting: any } | null = null;
+    let nameMatchCandidate: { attendee: any; meeting: any } | null = null;
 
     for (const attendee of attendees) {
       if (!attendee.deal_id) {
         continue;
       }
 
-      // Buscar email/phone do contato via deal_id
-      const { data: deal } = await supabase
-        .from('crm_deals')
-        .select('contact:crm_contacts(email, phone)')
-        .eq('id', attendee.deal_id)
-        .maybeSingle();
+      // Acessar dados do contato diretamente via JOIN (SEM query adicional!)
+      const contactEmail = attendee.crm_deals?.crm_contacts?.email?.toLowerCase()?.trim() || '';
+      const contactPhone = attendee.crm_deals?.crm_contacts?.phone?.replace(/\D/g, '') || '';
+      const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
+      const normalizedAttendeeName = normalizeNameForMatch(attendee.attendee_name);
 
-      const contactEmail = deal?.contact?.email?.toLowerCase()?.trim() || '';
-      const contactPhone = deal?.contact?.phone?.replace(/\D/g, '') || '';
-
-      // Log para debug detalhado
-      console.log(`🔍 Verificando: ${attendee.attendee_name} | CRM email: "${contactEmail}" | CRM phone: "${contactPhone}" | deal: ${attendee.deal_id}`);
+      // Log para debug detalhado (apenas primeiros 5 para não poluir)
+      if (attendees.indexOf(attendee) < 5) {
+        console.log(`🔍 Verificando: ${attendee.attendee_name} | email: "${contactEmail}" | phone: "${contactPhone.slice(-9)}" | deal: ${attendee.deal_id}`);
+      }
 
       // Match por EMAIL (prioridade 1) - break imediato
       if (emailLower && contactEmail && contactEmail === emailLower) {
@@ -698,17 +716,24 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
         break;
       }
 
-      // Match por TELEFONE (prioridade 2) - guardar como candidato, continuar buscando email
+      // Match por TELEFONE (prioridade 2) - guardar como candidato
       if (phoneSuffix.length >= 8 && !phoneMatchCandidate) {
-        const attendeePhoneClean = attendee.attendee_phone?.replace(/\D/g, '') || '';
         if (contactPhone.endsWith(phoneSuffix) || attendeePhoneClean.endsWith(phoneSuffix)) {
           phoneMatchCandidate = { attendee, meeting: attendee.meeting_slots };
           console.log(`📞 [AUTO-PAGO] Candidato por TELEFONE: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
         }
       }
+
+      // Match por NOME (prioridade 3) - guardar como candidato
+      if (normalizedSearchName && !nameMatchCandidate && normalizedAttendeeName) {
+        if (normalizedAttendeeName === normalizedSearchName) {
+          nameMatchCandidate = { attendee, meeting: attendee.meeting_slots };
+          console.log(`📝 [AUTO-PAGO] Candidato por NOME: ${attendee.attendee_name} - deal: ${attendee.deal_id}`);
+        }
+      }
     }
 
-    // Se não encontrou por email, usar candidato de telefone
+    // Usar candidatos na ordem de prioridade: email > telefone > nome
     if (!matchingAttendee && phoneMatchCandidate) {
       matchingAttendee = phoneMatchCandidate.attendee;
       meeting = phoneMatchCandidate.meeting;
@@ -716,8 +741,21 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       console.log(`✅ [AUTO-PAGO] Match final por TELEFONE: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
     }
 
+    if (!matchingAttendee && nameMatchCandidate) {
+      matchingAttendee = nameMatchCandidate.attendee;
+      meeting = nameMatchCandidate.meeting;
+      matchType = 'nome';
+      console.log(`✅ [AUTO-PAGO] Match final por NOME: ${matchingAttendee.attendee_name} - deal: ${matchingAttendee.deal_id}`);
+    }
+
+    // Log detalhado quando não encontra match
     if (!matchingAttendee) {
-      console.log(`🎯 [AUTO-PAGO] Nenhum match encontrado para email="${emailLower}" ou phone_suffix="${phoneSuffix}"`);
+      console.log(`❌ [AUTO-PAGO] Nenhum match encontrado:`);
+      console.log(`   - Email buscado: "${emailLower}"`);
+      console.log(`   - Phone suffix: "${phoneSuffix}"`);
+      console.log(`   - Nome normalizado: "${normalizedSearchName}"`);
+      console.log(`   - Total attendees verificados: ${attendees.length}`);
+      console.log(`   - Attendees com deal_id: ${attendees.filter((a: any) => a.deal_id).length}`);
       return;
     }
 
@@ -763,7 +801,8 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
             meeting_id: meeting.id,
             customer_name: data.customerName,
             sale_date: data.saleDate,
-            attendee_name: matchingAttendee.attendee_name
+            attendee_name: matchingAttendee.attendee_name,
+            match_type: matchType
           },
           read: false
         });
@@ -861,7 +900,7 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
       }
     }
 
-    console.log(`🎉 [AUTO-PAGO] Contrato marcado como pago automaticamente!`);
+    console.log(`🎉 [AUTO-PAGO] Contrato marcado como pago automaticamente via ${matchType.toUpperCase()}!`);
   } catch (err: any) {
     console.error('🎯 [AUTO-PAGO] Erro:', err.message);
   }
