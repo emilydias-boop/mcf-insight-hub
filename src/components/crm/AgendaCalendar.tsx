@@ -133,10 +133,21 @@ export function AgendaCalendar({
     selectedDate
   );
 
-  // Calculate dynamic time slots based on configured slots
+  // Calculate dynamic time slots based on configured slots AND existing meetings
   const timeSlots = useMemo(() => {
     let minHour = DEFAULT_END_HOUR;
     let maxHour = DEFAULT_START_HOUR;
+
+    // Include hours from existing meetings (ensures visibility for off-schedule meetings)
+    for (const meeting of meetings) {
+      const meetingDate = parseISO(meeting.scheduled_at);
+      const hour = meetingDate.getHours();
+      const minute = meetingDate.getMinutes();
+      minHour = Math.min(minHour, hour);
+      const slotEndMinutes = hour * 60 + minute + (meeting.duration_minutes || 60);
+      const slotEndHour = Math.ceil(slotEndMinutes / 60);
+      maxHour = Math.max(maxHour, slotEndHour);
+    }
 
     if (meetingType === 'r2' && r2DailySlotsMap) {
       // For R2, use daily slots map
@@ -180,7 +191,7 @@ export function AgendaCalendar({
       minute: (i % 4) * 15,
       index: i,
     }));
-  }, [meetingLinkSlots, r2DailySlotsMap, meetingType]);
+  }, [meetingLinkSlots, r2DailySlotsMap, meetingType, meetings]);
   
   // Calcular posição da linha vermelha em pixels (depends on timeSlots)
   const getCurrentTimePosition = useCallback(() => {
