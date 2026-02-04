@@ -86,7 +86,10 @@ const MeuFechamento = () => {
 
   const handleNfseSuccess = () => {
     setShowNfseModal(false);
-    queryClient.invalidateQueries({ queryKey: ['own-payout', selectedMonth] });
+    queryClient.invalidateQueries({ 
+      queryKey: ['own-payout'],
+      exact: false 
+    });
   };
 
   if (isLoading) {
