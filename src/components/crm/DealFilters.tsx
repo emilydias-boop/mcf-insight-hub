@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Search, X, Calendar as CalendarIcon, CheckSquare, Clock, Radio, Phone } from 'lucide-react';
+import { Search, X, Calendar as CalendarIcon, Clock, Radio, Phone } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -41,8 +41,6 @@ interface DealFiltersProps {
   filters: DealFiltersState;
   onChange: (filters: DealFiltersState) => void;
   onClear: () => void;
-  selectionMode?: boolean;
-  onToggleSelectionMode?: () => void;
   /** Lista de owners derivada dos deals (quando fornecida, substitui a query interna) */
   ownerOptions?: OwnerOption[];
   /** Tags únicas disponíveis para filtro */
@@ -55,8 +53,6 @@ export const DealFilters = ({
   filters, 
   onChange, 
   onClear, 
-  selectionMode = false,
-  onToggleSelectionMode,
   ownerOptions,
   availableTags = [],
   isLoadingTags = false,
@@ -406,19 +402,6 @@ export const DealFilters = ({
         <Button variant="ghost" size="sm" onClick={onClear}>
           <X className="h-4 w-4 mr-1" />
           Limpar ({activeFiltersCount})
-        </Button>
-      )}
-      
-      {/* Botão de Modo Seleção */}
-      {onToggleSelectionMode && (
-        <Button 
-          variant={selectionMode ? "default" : "outline"} 
-          size="sm" 
-          onClick={onToggleSelectionMode}
-          className="ml-auto"
-        >
-          <CheckSquare className="h-4 w-4 mr-1" />
-          {selectionMode ? "Sair do modo" : "Modo Seleção"}
         </Button>
       )}
     </div>

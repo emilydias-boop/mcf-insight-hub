@@ -57,8 +57,7 @@ const Negocios = () => {
     selectedTags: [],
   });
   
-  // Estado para modo de seleção e transferência em massa
-  const [selectionMode, setSelectionMode] = useState(false);
+  // Estado para seleção e transferência em massa
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const bulkTransfer = useBulkTransfer();
@@ -299,55 +298,36 @@ const Negocios = () => {
   
   const handleClearSelection = () => {
     setSelectedDealIds(new Set());
-    setSelectionMode(false);
   };
 
-  const handleSelectAllInStage = (dealIds: string[], selected: boolean) => {
+  // Handler para selecionar todos os leads de um estágio
+  const handleSelectAllInStage = (dealIds: string[]) => {
     setSelectedDealIds(prev => {
       const newSet = new Set(prev);
-      dealIds.forEach(id => {
-        if (selected) {
-          newSet.add(id);
-        } else {
-          newSet.delete(id);
-        }
-      });
+      dealIds.forEach(id => newSet.add(id));
       return newSet;
     });
   };
   
-  const handleToggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
-    if (selectionMode) {
-      setSelectedDealIds(new Set());
-    }
+  // Handler para limpar seleção de um estágio
+  const handleClearStageSelection = (dealIds: string[]) => {
+    setSelectedDealIds(prev => {
+      const newSet = new Set(prev);
+      dealIds.forEach(id => newSet.delete(id));
+      return newSet;
+    });
   };
   
-  // Handler para seleção por quantidade (de cima para baixo em cada estágio)
-  const handleSelectByCount = (count: number | 'all') => {
-    if (!dealsData) return;
-    
-    const newSelectedIds = new Set<string>();
-    
-    // Agrupar deals por stage_id mantendo a ordem original (já ordenados por stage_moved_at DESC)
-    const dealsByStage: Record<string, string[]> = {};
-    
-    filteredDeals.forEach((deal: any) => {
-      if (!deal.stage_id) return;
-      if (!dealsByStage[deal.stage_id]) {
-        dealsByStage[deal.stage_id] = [];
-      }
-      dealsByStage[deal.stage_id].push(deal.id);
+  // Handler para selecionar por quantidade em um estágio específico
+  const handleSelectByCountInStage = (dealIds: string[], count: number) => {
+    setSelectedDealIds(prev => {
+      const newSet = new Set(prev);
+      // Selecionar os primeiros N da lista (já ordenada por stage_moved_at)
+      dealIds.slice(0, count).forEach(id => newSet.add(id));
+      return newSet;
     });
-    
-    // Selecionar os primeiros N de cada estágio (ou todos)
-    Object.values(dealsByStage).forEach((stageDealIds) => {
-      const toSelect = count === 'all' ? stageDealIds : stageDealIds.slice(0, count);
-      toSelect.forEach(id => newSelectedIds.add(id));
-    });
-    
-    setSelectedDealIds(newSelectedIds);
   };
+  
   
   const filteredDeals = useMemo(() => {
     return (dealsData || []).filter((deal: any) => {
@@ -544,8 +524,6 @@ const Negocios = () => {
           filters={filters} 
           onChange={setFilters} 
           onClear={clearFilters}
-          selectionMode={selectionMode}
-          onToggleSelectionMode={handleToggleSelectionMode}
           ownerOptions={ownerOptions}
           availableTags={availableTags || []}
           isLoadingTags={isLoadingTags}
@@ -594,10 +572,11 @@ const Negocios = () => {
               }))}
               originId={effectiveOriginId}
               showLostDeals={filters.dealStatus === 'lost'}
-              selectionMode={selectionMode}
               selectedDealIds={selectedDealIds}
               onSelectionChange={handleSelectionChange}
+              onSelectByCountInStage={handleSelectByCountInStage}
               onSelectAllInStage={handleSelectAllInStage}
+              onClearStageSelection={handleClearStageSelection}
               channelMap={channelMap}
             />
           )}
@@ -610,8 +589,6 @@ const Negocios = () => {
         onTransfer={() => setTransferDialogOpen(true)}
         onClearSelection={handleClearSelection}
         isTransferring={bulkTransfer.isPending}
-        selectionMode={selectionMode}
-        onSelectByCount={handleSelectByCount}
       />
       
       {/* Dialog de transferência em massa */}
