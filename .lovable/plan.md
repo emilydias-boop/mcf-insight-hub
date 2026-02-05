@@ -1,106 +1,160 @@
 
-# Plano: Adicionar Filtro de Closer R1 na Agenda R2
+# Plano: Adicionar Filtro de Closer R1 nas Abas Pendentes e No-Shows
 
 ## Objetivo
 
-Adicionar um filtro na Agenda R2 que permita filtrar as reunioes pelo closer que conduziu a R1, facilitando o acompanhamento do funil de vendas.
-
----
-
-## Como Vai Funcionar
-
-1. Novo dropdown "Closer R1" ao lado dos filtros existentes
-2. Selecionar um closer R1 mostra apenas leads que passaram pela R1 daquele closer
-3. Funciona em conjunto com os filtros existentes (Closer R2, Status)
+Adicionar filtro por Closer R1 nas abas "Pendentes" e "No-Shows" da Agenda R2, permitindo ver apenas leads que passaram pela R1 de um closer especifico.
 
 ---
 
 ## Alteracoes
 
-### Arquivo: `src/pages/crm/AgendaR2.tsx`
+### 1. Aba Pendentes (`src/components/crm/R2PendingLeadsPanel.tsx`)
 
-**1. Adicionar estado do filtro (linha ~76)**
-```typescript
-const [r1CloserFilter, setR1CloserFilter] = useState<string>("all");
-```
+Os dados do Closer R1 ja estao disponiveis (`meeting_slot.closer`), so precisamos adicionar o filtro na UI.
 
-**2. Importar hook de closers R1**
-```typescript
-import { useGestorClosers } from "@/hooks/useGestorClosers";
-```
+**Alteracoes:**
 
-**3. Buscar lista de closers R1 (apos linha ~126)**
 ```typescript
+// Adicionar imports
+import { useGestorClosers } from '@/hooks/useGestorClosers';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// Adicionar estado
+const [r1CloserFilter, setR1CloserFilter] = useState<string>('all');
+
+// Buscar closers R1
 const { data: r1Closers = [] } = useGestorClosers('r1');
+
+// Filtrar leads
+const filteredLeads = useMemo(() => {
+  if (r1CloserFilter === 'all') return pendingLeads;
+  return pendingLeads.filter(lead => lead.meeting_slot?.closer?.id === r1CloserFilter);
+}, [pendingLeads, r1CloserFilter]);
 ```
 
-**4. Adicionar filtro na logica de filteredMeetings (linha ~143)**
-```typescript
-// Filtro por closer R1
-if (r1CloserFilter !== "all") {
-  filtered = filtered.filter((m) => m.r1_closer?.id === r1CloserFilter);
-}
-```
-
-**5. Adicionar dropdown na UI (apos linha ~488)**
-```typescript
-{/* R1 Closer Filter */}
-{!isR2Closer && (
-  <Select value={r1CloserFilter} onValueChange={setR1CloserFilter}>
-    <SelectTrigger className="w-[180px]">
-      <SelectValue placeholder="Closer R1" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="all">Todos Closers R1</SelectItem>
-      {r1Closers.map((closer) => (
-        <SelectItem key={closer.id} value={closer.id}>
-          {closer.name}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-)}
+**UI - Adicionar dropdown no header:**
+```text
++------------------------------------------+
+| 43 pendentes  Leads aguardando R2        |
+|                                          |
+| [Closer R1: Todos ▼]                     |
++------------------------------------------+
 ```
 
 ---
 
-## Fluxo de Filtragem
+### 2. Aba No-Shows (`src/hooks/useR2NoShowLeads.ts` + `src/components/crm/R2NoShowsPanel.tsx`)
+
+**Passo 1: Atualizar hook para incluir r1_closer_id**
+
+No `useR2NoShowLeads.ts`, modificar o mapeamento R1 para incluir o ID:
+
+```typescript
+// Interface atualizada
+export interface R2NoShowLead {
+  // ... campos existentes ...
+  r1_closer_id: string | null;    // NOVO
+  r1_closer_name: string | null;
+}
+
+// r1Map atualizado
+let r1Map = new Map<string, { 
+  closer_id: string | null;       // NOVO
+  closer_name: string | null; 
+  date: string | null 
+}>();
+
+// Na query R1, ja busca closer.id (verificar se precisa ajuste)
+```
+
+**Passo 2: Adicionar filtro no painel**
+
+No `R2NoShowsPanel.tsx`:
+
+```typescript
+// Adicionar import
+import { useGestorClosers } from '@/hooks/useGestorClosers';
+
+// Adicionar estado
+const [r1CloserFilter, setR1CloserFilter] = useState<string>('all');
+
+// Buscar closers R1
+const { data: r1Closers = [] } = useGestorClosers('r1');
+
+// Filtrar leads (client-side)
+const filteredLeads = useMemo(() => {
+  if (r1CloserFilter === 'all') return leads;
+  return leads.filter(l => l.r1_closer_id === r1CloserFilter);
+}, [leads, r1CloserFilter]);
+```
+
+**UI - Adicionar dropdown ao lado do filtro existente:**
+```text
++--------------------------------------------------------+
+| Periodo: [Dia] [Semana] [Mes]  [Personalizado]         |
+|                                                        |
+| Socio R2: [Todos ▼]   Closer R1: [Todos ▼]            |
++--------------------------------------------------------+
+```
+
+---
+
+## Fluxo de Dados
 
 ```text
-Reunioes R2
-    |
-    v
-Filtro Closer R2 (existente)
-    |
-    v
-Filtro Status (existente)
-    |
-    v
-Filtro Closer R1 (NOVO)  <-- Filtra por quem fez a R1
-    |
-    v
-Lista filtrada
+Pendentes:
+  useR2PendingLeads
+      |
+      v
+  meeting_slot.closer.id  <-- Este E o closer R1
+      |
+      v
+  Filtro client-side por r1CloserFilter
+
+
+No-Shows:
+  useR2NoShowLeads
+      |
+      v
+  r1Map[deal_id] = { closer_id, closer_name, date }
+      |
+      v
+  R2NoShowLead.r1_closer_id  <-- NOVO campo
+      |
+      v
+  Filtro client-side por r1CloserFilter
 ```
 
 ---
 
-## Resultado Visual
+## Arquivos a Modificar
 
-Na barra de filtros, ao lado do dropdown "Closer" (R2) e "Status", aparecera um novo dropdown "Closer R1" com a lista de closers que fazem R1 (Julio, Thayna, Cristiane, Mateus Macedo, etc.)
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/components/crm/R2PendingLeadsPanel.tsx` | Adicionar estado, hook useGestorClosers, dropdown UI, filtro client-side |
+| `src/hooks/useR2NoShowLeads.ts` | Adicionar `r1_closer_id` na interface e no mapeamento |
+| `src/components/crm/R2NoShowsPanel.tsx` | Adicionar estado, hook, dropdown UI, filtro client-side |
 
 ---
 
 ## Secao Tecnica
 
 ### Dados Disponiveis
-O hook `useR2MeetingsExtended` ja retorna `r1_closer` em cada meeting:
-```typescript
-r1_closer: { id: string; name: string; scheduled_at: string | null }
-```
 
-### Hook Utilizado
-`useGestorClosers('r1')` - ja existe e retorna closers filtrados por meeting_type='r1'
+**Pendentes (useR2PendingLeads):**
+- `meeting_slot.closer.id` - ID do closer que fez R1
+- `meeting_slot.closer.name` - Nome do closer R1
 
-### Dependencias entre Filtros
-Os 3 filtros funcionam em cascata (AND logico):
-- Closer R2 AND Status AND Closer R1 = Resultado final
+**No-Shows (useR2NoShowLeads):**
+- `r1_closer_name` - Ja existe
+- `r1_closer_id` - Precisa adicionar (vem da query R1 existente)
+
+### Hook useGestorClosers
+
+Ja utilizado na AgendaR2.tsx, retorna closers filtrados por `meeting_type = 'r1'`:
+- Julio
+- Thayna
+- Cristiane Gomes
+- Mateus Macedo
+- etc.
