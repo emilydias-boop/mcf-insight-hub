@@ -1,146 +1,95 @@
 
-# Plano: Correção Completa do Filtro de Tags
+# Plano: Corrigir Duplicação de Atribuição de Contratos Pagos
 
-## Problemas Identificados
+## Problema Identificado
 
-### 1. Inconsistência de Escopo entre Hooks
-O hook `useCRMDeals` verifica se `originId` é um grupo e busca todas as origens filhas:
-```typescript
-// useCRMDeals trata grupos corretamente
-if (groupCheck) {
-  const { data: childOrigins } = await supabase
-    .from('crm_origins').select('id').eq('group_id', filters.originId);
-  originIds = childOrigins?.map(o => o.id) || [];
-}
-```
+O lead **Eduardo Spadaro** foi atribuído incorretamente ao **Julio** quando deveria estar apenas com o **Mateus Macedo**. Isso acontece porque:
 
-Mas `useUniqueDealTags` **NÃO** faz isso:
-```typescript
-// useUniqueDealTags não trata grupos!
-if (originId) {
-  query = query.eq('origin_id', originId); // Falha se originId for um grupo
-}
-```
+1. O mesmo `deal_id` tem **múltiplos attendees** em reuniões diferentes
+2. O sistema **não verifica** se já existe outro attendee do mesmo deal marcado como `contract_paid`
+3. Resultado: **dois closers recebem crédito** pelo mesmo contrato
 
-Isso pode causar deals visíveis cujas tags não estão disponíveis no filtro.
+### Dados do Caso
 
-### 2. Falta de Validação de Tipo nas Tags
-O código assume que `deal.tags` é sempre um array de strings, mas pode conter valores `null` ou tipos inesperados.
+| Closer | Data Reunião | Status | contract_paid_at |
+|--------|--------------|--------|------------------|
+| Mateus Macedo | 04/02 22:00 | contract_paid | 05/02 01:19 |
+| Julio | 29/01 21:00 | contract_paid | 04/02 23:41 |
+| Julio | 31/01 17:00 | no_show | - |
+
+Como o contrato do Julio foi registrado em **04/02**, ele aparece nas métricas de "hoje" (04/02), enquanto o contrato correto do Mateus só aparecerá nas métricas de **05/02**.
 
 ---
 
-## Alterações Necessárias
+## Solução
 
-### Arquivo 1: `src/hooks/useUniqueDealTags.ts`
+### 1. Correção Imediata dos Dados
 
-Atualizar para tratar grupos da mesma forma que `useCRMDeals`:
+Executar SQL para remover o `contract_paid` incorreto do attendee do Julio:
 
-```typescript
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-
-interface UseUniqueDealTagsOptions {
-  originId?: string;
-  enabled?: boolean;
-}
-
-export const useUniqueDealTags = (options: UseUniqueDealTagsOptions = {}) => {
-  const { originId, enabled = true } = options;
-
-  return useQuery({
-    queryKey: ['unique-deal-tags', originId],
-    queryFn: async () => {
-      let originIds: string[] = [];
-
-      // Verificar se originId é um grupo (mesma lógica de useCRMDeals)
-      if (originId) {
-        const { data: groupCheck } = await supabase
-          .from('crm_groups')
-          .select('id')
-          .eq('id', originId)
-          .maybeSingle();
-
-        if (groupCheck) {
-          // É um grupo - buscar todas as origens filhas
-          const { data: childOrigins } = await supabase
-            .from('crm_origins')
-            .select('id')
-            .eq('group_id', originId);
-
-          originIds = childOrigins?.map(o => o.id) || [];
-        } else {
-          // É uma origem normal
-          originIds = [originId];
-        }
-      }
-
-      let query = supabase
-        .from('crm_deals')
-        .select('tags')
-        .not('tags', 'is', null);
-
-      // Aplicar filtro de origens (múltiplas se for grupo)
-      if (originIds.length > 0) {
-        query = query.in('origin_id', originIds);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Extrair e deduplicar todas as tags (com validação de tipo)
-      const allTags = (data || []).flatMap((d) => 
-        (d.tags || []).filter((t): t is string => typeof t === 'string' && t.trim() !== '')
-      );
-      const uniqueTags = [...new Set(allTags)].sort((a, b) => 
-        a.toLowerCase().localeCompare(b.toLowerCase())
-      );
-
-      return uniqueTags.slice(0, 500);
-    },
-    enabled,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-  });
-};
+```text
+UPDATE meeting_slot_attendees 
+SET 
+  status = 'scheduled',
+  contract_paid_at = NULL
+WHERE id = '378717c3-c04b-4c2b-a1fd-a35dff44681c';
+-- Attendee do Julio (29/01) que foi incorretamente marcado
 ```
 
----
+### 2. Prevenção de Duplicatas no Webhook
 
-### Arquivo 2: `src/pages/crm/Negocios.tsx`
+Modificar `hubla-webhook-handler` para verificar se o `deal_id` já possui outro attendee com `contract_paid`:
 
-Atualizar o filtro de tags (linhas 430-448) com validação de tipo mais rigorosa:
+**Arquivo:** `supabase/functions/hubla-webhook-handler/index.ts`
+
+**Adicionar verificação após encontrar o match (linha ~761):**
 
 ```typescript
-// Filtro por tags selecionadas (com normalização e validação de tipo)
-if (filters.selectedTags.length > 0) {
-  // Garantir que tags é um array válido
-  const dealTags = Array.isArray(deal.tags) ? deal.tags : [];
+// NOVA VERIFICAÇÃO: Evitar duplicatas por deal_id
+if (matchingAttendee.deal_id) {
+  const { data: existingPaid } = await supabase
+    .from('meeting_slot_attendees')
+    .select('id, meeting_slots!inner(closer_id, scheduled_at)')
+    .eq('deal_id', matchingAttendee.deal_id)
+    .not('contract_paid_at', 'is', null)
+    .neq('id', matchingAttendee.id)
+    .limit(1)
+    .maybeSingle();
   
-  // Normalização avançada: remove acentos, padroniza separadores
-  const normalizeTag = (t: unknown): string => {
-    if (typeof t !== 'string') return '';
-    return t
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, '-')
-      .trim()
-      .toLowerCase();
-  };
-  
-  const normalizedSelectedTags = filters.selectedTags.map(normalizeTag).filter(Boolean);
-  const normalizedDealTags = dealTags.map(normalizeTag).filter(Boolean);
-  
-  // Se nenhuma tag selecionada é válida, não filtrar
-  if (normalizedSelectedTags.length === 0) {
-    // Skip tag filter if all selected tags are invalid
-  } else {
-    const hasMatchingTag = normalizedSelectedTags.some(selectedTag => 
-      normalizedDealTags.includes(selectedTag)
-    );
-    if (!hasMatchingTag) return false;
+  if (existingPaid) {
+    console.log(`⚠️ [AUTO-PAGO] Deal ${matchingAttendee.deal_id} JÁ possui outro attendee pago (${existingPaid.id}). Pulando para evitar duplicata.`);
+    return;
   }
 }
+```
+
+### 3. Prevenção de Duplicatas na Vinculação Manual
+
+Modificar `useLinkContractToAttendee.ts` para verificar duplicatas antes de vincular:
+
+**Arquivo:** `src/hooks/useLinkContractToAttendee.ts`
+
+**Adicionar verificação no início da mutação:**
+
+```typescript
+mutationFn: async ({ transactionId, attendeeId, dealId }: LinkContractParams) => {
+  // NOVA VERIFICAÇÃO: Evitar duplicatas por deal_id
+  if (dealId) {
+    const { data: existingPaid } = await supabase
+      .from('meeting_slot_attendees')
+      .select('id, attendee_name')
+      .eq('deal_id', dealId)
+      .not('contract_paid_at', 'is', null)
+      .neq('id', attendeeId)
+      .limit(1)
+      .maybeSingle();
+    
+    if (existingPaid) {
+      throw new Error(`Este lead já possui contrato pago vinculado a outro attendee (${existingPaid.attendee_name})`);
+    }
+  }
+  
+  // ... resto do código existente
 ```
 
 ---
@@ -148,29 +97,35 @@ if (filters.selectedTags.length > 0) {
 ## Fluxo Corrigido
 
 ```text
-Usuário seleciona pipeline (pode ser grupo ou origem)
+Webhook Hubla recebe pagamento
     |
     V
-useCRMDeals: Verifica se é grupo → busca origens filhas → retorna deals
-useUniqueDealTags: Verifica se é grupo → busca origens filhas → retorna tags
+Busca attendee por email/telefone
     |
     V
-Ambos usam o MESMO conjunto de origens
+NOVO: Verifica se deal_id já tem outro attendee pago
     |
-    V
-Tags disponíveis = tags dos mesmos deals exibidos ✓
+    +-- Se SIM: Log e ignora (evita duplicata)
     |
-    V
-Filtro normaliza e compara corretamente
-    |
-    V
-Apenas deals com a tag selecionada aparecem
+    +-- Se NÃO: Marca attendee como contract_paid
 ```
 
 ---
 
 ## Resultado Esperado
 
-1. **Consistência**: Tags disponíveis sempre correspondem aos deals visíveis
-2. **Robustez**: Validação de tipo previne erros silenciosos
-3. **Precisão**: Filtro exclui corretamente deals sem a tag selecionada
+1. **Imediato**: Corrigir o contrato do Eduardo Spadaro - Julio perde 1 contrato, Mateus mantém 1
+2. **Futuro**: Impossível criar duplicatas - sistema verifica antes de atribuir
+3. **Métricas**: Cada contrato é contado apenas uma vez, para o closer correto
+
+---
+
+## Notas para Correção Manual
+
+Se preferir corrigir manualmente via SQL no Supabase Dashboard:
+
+1. Acessar SQL Editor
+2. Executar a query de correção do item 1
+3. Recarregar a página do Painel Comercial
+
+Isso removerá o crédito incorreto do Julio e manterá apenas o crédito correto do Mateus Macedo.
