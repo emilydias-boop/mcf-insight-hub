@@ -1,131 +1,114 @@
 
-# Plano: Corrigir Duplicação de Atribuição de Contratos Pagos
+# Plano: Adicionar Outside ao KPI de Contratos
 
-## Problema Identificado
+## Contexto
 
-O lead **Eduardo Spadaro** foi atribuído incorretamente ao **Julio** quando deveria estar apenas com o **Mateus Macedo**. Isso acontece porque:
-
-1. O mesmo `deal_id` tem **múltiplos attendees** em reuniões diferentes
-2. O sistema **não verifica** se já existe outro attendee do mesmo deal marcado como `contract_paid`
-3. Resultado: **dois closers recebem crédito** pelo mesmo contrato
-
-### Dados do Caso
-
-| Closer | Data Reunião | Status | contract_paid_at |
-|--------|--------------|--------|------------------|
-| Mateus Macedo | 04/02 22:00 | contract_paid | 05/02 01:19 |
-| Julio | 29/01 21:00 | contract_paid | 04/02 23:41 |
-| Julio | 31/01 17:00 | no_show | - |
-
-Como o contrato do Julio foi registrado em **04/02**, ele aparece nas métricas de "hoje" (04/02), enquanto o contrato correto do Mateus só aparecerá nas métricas de **05/02**.
-
----
+O card "Contratos" na página de Reuniões de Equipe mostra apenas contratos pagos (vendas após a reunião). O usuário quer que também inclua **Outside** (vendas realizadas ANTES da reunião agendada).
 
 ## Solução
 
-### 1. Correção Imediata dos Dados
+Criar um novo hook para calcular "Outside" por SDR (similar ao que já existe para Closers no `useR1CloserMetrics`) e somar esse valor ao total de contratos no TeamKPICards.
 
-Executar SQL para remover o `contract_paid` incorreto do attendee do Julio:
+---
 
-```text
-UPDATE meeting_slot_attendees 
-SET 
-  status = 'scheduled',
-  contract_paid_at = NULL
-WHERE id = '378717c3-c04b-4c2b-a1fd-a35dff44681c';
--- Attendee do Julio (29/01) que foi incorretamente marcado
-```
+## Alterações
 
-### 2. Prevenção de Duplicatas no Webhook
+### 1. Criar Hook: `src/hooks/useSdrOutsideMetrics.ts`
 
-Modificar `hubla-webhook-handler` para verificar se o `deal_id` já possui outro attendee com `contract_paid`:
-
-**Arquivo:** `supabase/functions/hubla-webhook-handler/index.ts`
-
-**Adicionar verificação após encontrar o match (linha ~761):**
+Hook que detecta leads cujo contrato foi pago ANTES da reunião R1 agendada, agrupando por SDR:
 
 ```typescript
-// NOVA VERIFICAÇÃO: Evitar duplicatas por deal_id
-if (matchingAttendee.deal_id) {
-  const { data: existingPaid } = await supabase
-    .from('meeting_slot_attendees')
-    .select('id, meeting_slots!inner(closer_id, scheduled_at)')
-    .eq('deal_id', matchingAttendee.deal_id)
-    .not('contract_paid_at', 'is', null)
-    .neq('id', matchingAttendee.id)
-    .limit(1)
-    .maybeSingle();
-  
-  if (existingPaid) {
-    console.log(`⚠️ [AUTO-PAGO] Deal ${matchingAttendee.deal_id} JÁ possui outro attendee pago (${existingPaid.id}). Pulando para evitar duplicata.`);
-    return;
-  }
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { format, startOfDay, endOfDay } from "date-fns";
+import { SDR_LIST } from "@/constants/team";
+
+export const useSdrOutsideMetrics = (startDate: Date | null, endDate: Date | null) => {
+  return useQuery({
+    queryKey: ['sdr-outside-metrics', 
+      startDate ? format(startDate, 'yyyy-MM-dd') : null,
+      endDate ? format(endDate, 'yyyy-MM-dd') : null
+    ],
+    queryFn: async () => {
+      // 1. Buscar R1 meetings no período
+      // 2. Para cada attendee, verificar hubla_transactions com sale_date < scheduled_at
+      // 3. Agrupar por booked_by (SDR)
+      // 4. Retornar { totalOutside, outsideBySdr }
+    },
+    enabled: !!startDate && !!endDate,
+  });
+};
+```
+
+### 2. Atualizar Interface: `src/hooks/useTeamMeetingsData.ts`
+
+Adicionar campo `totalOutside` à interface `TeamKPIs`:
+
+```typescript
+export interface TeamKPIs {
+  sdrCount: number;
+  totalAgendamentos: number;
+  totalRealizadas: number;
+  totalNoShows: number;
+  totalContratos: number;
+  totalOutside: number;      // NOVO
+  taxaConversao: number;
+  taxaNoShow: number;
 }
 ```
 
-### 3. Prevenção de Duplicatas na Vinculação Manual
+### 3. Atualizar Cards: `src/components/sdr/TeamKPICards.tsx`
 
-Modificar `useLinkContractToAttendee.ts` para verificar duplicatas antes de vincular:
-
-**Arquivo:** `src/hooks/useLinkContractToAttendee.ts`
-
-**Adicionar verificação no início da mutação:**
+Modificar o card "Contratos" para exibir a soma de contratos + outside:
 
 ```typescript
-mutationFn: async ({ transactionId, attendeeId, dealId }: LinkContractParams) => {
-  // NOVA VERIFICAÇÃO: Evitar duplicatas por deal_id
-  if (dealId) {
-    const { data: existingPaid } = await supabase
-      .from('meeting_slot_attendees')
-      .select('id, attendee_name')
-      .eq('deal_id', dealId)
-      .not('contract_paid_at', 'is', null)
-      .neq('id', attendeeId)
-      .limit(1)
-      .maybeSingle();
-    
-    if (existingPaid) {
-      throw new Error(`Este lead já possui contrato pago vinculado a outro attendee (${existingPaid.attendee_name})`);
-    }
-  }
-  
-  // ... resto do código existente
+{
+  title: "Contratos",
+  value: kpis.totalContratos + (kpis.totalOutside || 0),
+  icon: FileText,
+  color: "text-amber-500",
+  bgColor: "bg-amber-500/10",
+  tooltip: `Contratos: ${kpis.totalContratos} | Outside: ${kpis.totalOutside || 0}`
+}
+```
+
+### 4. Integrar na Página: `src/pages/crm/ReunioesEquipe.tsx`
+
+Consumir o novo hook e passar o valor de outside para os KPIs:
+
+```typescript
+// Adicionar o hook
+const { data: outsideData } = useSdrOutsideMetrics(startDate, endDate);
+
+// Combinar com teamKPIs
+const enrichedKPIs = {
+  ...teamKPIs,
+  totalOutside: outsideData?.totalOutside || 0
+};
+
+// Passar para TeamKPICards
+<TeamKPICards kpis={enrichedKPIs} ... />
 ```
 
 ---
 
-## Fluxo Corrigido
+## Lógica de Detecção Outside (Detalhada)
 
-```text
-Webhook Hubla recebe pagamento
-    |
-    V
-Busca attendee por email/telefone
-    |
-    V
-NOVO: Verifica se deal_id já tem outro attendee pago
-    |
-    +-- Se SIM: Log e ignora (evita duplicata)
-    |
-    +-- Se NÃO: Marca attendee como contract_paid
-```
+A lógica já existe no `useR1CloserMetrics` e será replicada para SDRs:
+
+1. Buscar todos os `meeting_slot_attendees` de R1 no período
+2. Extrair `deal_id` → buscar email do contato via `crm_deals.contact`
+3. Buscar `hubla_transactions` com `product_name ILIKE '%Contrato%'` para esses emails
+4. Comparar `sale_date` (transação) com `scheduled_at` (reunião)
+5. Se `sale_date < scheduled_at` → é Outside
+6. Agrupar contagem por `booked_by` (SDR)
 
 ---
 
 ## Resultado Esperado
 
-1. **Imediato**: Corrigir o contrato do Eduardo Spadaro - Julio perde 1 contrato, Mateus mantém 1
-2. **Futuro**: Impossível criar duplicatas - sistema verifica antes de atribuir
-3. **Métricas**: Cada contrato é contado apenas uma vez, para o closer correto
+| Card | Antes | Depois |
+|------|-------|--------|
+| Contratos | 15 | 18 (15 + 3 outside) |
 
----
-
-## Notas para Correção Manual
-
-Se preferir corrigir manualmente via SQL no Supabase Dashboard:
-
-1. Acessar SQL Editor
-2. Executar a query de correção do item 1
-3. Recarregar a página do Painel Comercial
-
-Isso removerá o crédito incorreto do Julio e manterá apenas o crédito correto do Mateus Macedo.
+O tooltip mostrará o breakdown: "Contratos: 15 | Outside: 3"
