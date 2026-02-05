@@ -429,22 +429,30 @@ const Negocios = () => {
       
       // Filtro por tags selecionadas
       if (filters.selectedTags.length > 0) {
-        const dealTags = deal.tags || [];
+        // Garantir que tags é um array válido
+        const dealTags = Array.isArray(deal.tags) ? deal.tags : [];
         
-        // Normalização avançada: remove acentos, padroniza separadores
-        const normalizeTag = (t: string) => 
-          t.normalize('NFD')                    // Decompose para separar acentos
+        // Normalização avançada: remove acentos, padroniza separadores (com validação de tipo)
+        const normalizeTag = (t: unknown): string => {
+          if (typeof t !== 'string') return '';
+          return t
+            .normalize('NFD')                    // Decompose para separar acentos
            .replace(/[\u0300-\u036f]/g, '')     // Remove diacríticos (acentos)
            .replace(/\s+/g, '-')                // Espaços → hífens
            .trim()
            .toLowerCase();
-        const normalizedSelectedTags = filters.selectedTags.map(normalizeTag);
-        const normalizedDealTags = dealTags.map((t: string) => normalizeTag(t));
+        };
         
-        const hasMatchingTag = normalizedSelectedTags.some(selectedTag => 
-          normalizedDealTags.includes(selectedTag)
-        );
-        if (!hasMatchingTag) return false;
+        const normalizedSelectedTags = filters.selectedTags.map(normalizeTag).filter(Boolean);
+        const normalizedDealTags = dealTags.map(normalizeTag).filter(Boolean);
+        
+        // Se nenhuma tag selecionada é válida, não filtrar
+        if (normalizedSelectedTags.length > 0) {
+          const hasMatchingTag = normalizedSelectedTags.some(selectedTag => 
+            normalizedDealTags.includes(selectedTag)
+          );
+          if (!hasMatchingTag) return false;
+        }
       }
       
       return true;
