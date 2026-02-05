@@ -8811,12 +8811,10 @@ export type Database = {
       }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_sdr_metrics: { Args: { target_date: string }; Returns: Json }
-      get_user_role:
-        | { Args: never; Returns: string }
-        | {
-            Args: { _user_id: string }
-            Returns: Database["public"]["Enums"]["app_role"]
-          }
+      get_user_role: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
