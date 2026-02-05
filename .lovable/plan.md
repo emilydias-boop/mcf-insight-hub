@@ -1,46 +1,71 @@
 
+# Corrigir Faturamento por Mês no TeamGoalsSummary
 
-# Sistema de Metas Mensais da Equipe - CONCLUÍDO ✅
+## Problema Identificado
 
-## Status de Implementação
+O componente `TeamGoalsSummary` mostra o faturamento de **fevereiro** quando o usuário seleciona **janeiro** no fechamento. Isso acontece porque:
 
-| Item | Status |
-|------|--------|
-| Migração SQL (team_monthly_goals, team_monthly_goal_winners) | ✅ Concluído |
-| Hook useTeamMonthlyGoals | ✅ Concluído |
-| Componente TeamMonthlyGoalsTab (Configurações) | ✅ Concluído |
-| Integração em Configuracoes.tsx | ✅ Concluído |
-| Hook useUltrametaByBU atualizado | ✅ Concluído |
-| Componente TeamGoalsSummary | ✅ Concluído |
-| Integração em Index.tsx | ✅ Concluído |
-| Edge Function recalculate-sdr-payout | ✅ Concluído |
+1. O hook `useUltrametaByBU()` sempre usa `new Date()` para calcular o período
+2. Não recebe o parâmetro `anoMes` do mês selecionado
+3. Resultado: mostra R$ 329.568 (fevereiro) em vez de R$ 2.035.898 (janeiro)
 
-## Funcionalidades Implementadas
+## Arquitetura da Solução
 
-### 1. Configuração de Metas (TeamMonthlyGoalsTab)
-- Configurar metas mensais por BU: Meta, Supermeta, Ultrameta, Meta Divina
-- Definir valores de premiação para cada nível
-- Copiar configurações do mês anterior
+### Opção Escolhida: Criar Hook Específico para Faturamento por Mês
 
-### 2. Resumo Visual (TeamGoalsSummary)
-- Exibe faturamento atual vs metas configuradas
-- Badges visuais indicando níveis atingidos
-- Notificação especial quando Ultrameta/Meta Divina é batida
-- Identificação automática do melhor SDR e Closer
-- Botões de autorização para premiações Meta Divina
+Em vez de modificar o `useUltrametaByBU` (que é usado em outros lugares para o mês atual), vou criar lógica específica no `TeamGoalsSummary` que calcula o faturamento baseado no `anoMes` recebido como prop.
 
-### 3. Lógica de Premiação (Edge Function)
-- Calcula faturamento por BU automaticamente
-- Se Ultrameta batida: todos recebem `ultrameta_premio_ifood` configurado
-- Se Meta Divina batida: registra vencedores automaticamente
-- Vencedores precisam de autorização manual do admin
+## Mudanças Necessárias
 
-## Fluxo de Uso
+### 1. Modificar `TeamGoalsSummary.tsx`
 
-1. **Admin configura metas** em Fechamento > Configurações > Metas Equipe
-2. **Sistema calcula faturamento** automaticamente ao recalcular payouts
-3. **Se Ultrameta batida**: iFood de todos é ajustado automaticamente
-4. **Se Meta Divina batida**: 
-   - Melhor SDR e Closer são identificados
-   - Aparecem no resumo com botão "Autorizar"
-   - Admin autoriza e premiação é liberada
+**Adicionar cálculo de faturamento específico para o mês selecionado:**
+
+- Usar o `anoMes` recebido como prop para definir o período
+- Buscar transações diretamente via RPC `get_all_hubla_transactions` com as datas corretas
+- Aplicar a mesma lógica de deduplicação (`getDeduplicatedGross`)
+- Remover dependência do `useUltrametaByBU()` que sempre usa o mês atual
+
+**Lógica de cálculo por BU:**
+- **Incorporador**: Usar RPC `get_all_hubla_transactions` + deduplicação
+- **Consórcio**: Somar `valor_credito` da tabela `consortium_cards`
+- **Leilão**: Somar transações com `product_category = 'clube_arremate'`
+
+### 2. Criar Hook Auxiliar (Opcional)
+
+Se necessário reutilizar essa lógica, podemos criar um hook `useTeamRevenueByMonth(anoMes, bu)` que:
+- Recebe `anoMes` (ex: "2026-01") e `bu` (ex: "incorporador")
+- Calcula o faturamento específico do mês
+- Retorna o valor correto
+
+## Fluxo Corrigido
+
+```text
+ANTES (errado):
+TeamGoalsSummary(anoMes="2026-01")
+  └── useUltrametaByBU() 
+       └── new Date() → fevereiro 2026
+            └── Faturamento: R$ 329.568 ❌
+
+DEPOIS (correto):
+TeamGoalsSummary(anoMes="2026-01")
+  └── Calcular início/fim de janeiro 2026
+       └── RPC get_all_hubla_transactions(jan 1-31)
+            └── Faturamento: R$ 2.035.898 ✅
+```
+
+## Código da Correção
+
+O `TeamGoalsSummary` passará a:
+
+1. Parsear o `anoMes` para extrair ano e mês
+2. Calcular `startOfMonth` e `endOfMonth` do mês selecionado
+3. Buscar transações do período correto
+4. Aplicar deduplicação
+5. Exibir o faturamento correto
+
+## Resultado Esperado
+
+- Janeiro 2026 → Faturamento R$ 2.035.898,00 (mesmo valor da página de transações)
+- Metas comparadas corretamente com o faturamento do mês
+- Meta, Supermeta, Ultrameta e Meta Divina calculadas sobre o valor correto
