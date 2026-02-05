@@ -10,6 +10,7 @@ export interface TeamKPIs {
   totalRealizadas: number;
   totalNoShows: number;
   totalContratos: number;
+  totalOutside: number;
   taxaConversao: number;
   taxaNoShow: number;
 }
@@ -98,6 +99,7 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
       totalRealizadas,
       totalNoShows,
       totalContratos,
+      totalOutside: 0, // Will be enriched by useSdrOutsideMetrics in the page
       taxaConversao,
       taxaNoShow,
     };
