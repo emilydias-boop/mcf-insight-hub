@@ -260,6 +260,273 @@ export type Database = {
         }
         Relationships: []
       }
+      asset_assignment_items: {
+        Row: {
+          assignment_id: string
+          conferido_devolucao: boolean | null
+          descricao: string | null
+          id: string
+          item_tipo: string
+          observacao_devolucao: string | null
+        }
+        Insert: {
+          assignment_id: string
+          conferido_devolucao?: boolean | null
+          descricao?: string | null
+          id?: string
+          item_tipo: string
+          observacao_devolucao?: string | null
+        }
+        Update: {
+          assignment_id?: string
+          conferido_devolucao?: boolean | null
+          descricao?: string | null
+          id?: string
+          item_tipo?: string
+          observacao_devolucao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_assignment_items_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "asset_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_assignments: {
+        Row: {
+          asset_id: string
+          cargo: string | null
+          created_at: string
+          created_by: string | null
+          data_devolucao_real: string | null
+          data_liberacao: string
+          data_prevista_devolucao: string | null
+          employee_id: string
+          id: string
+          setor: string | null
+          status: Database["public"]["Enums"]["assignment_status"]
+          termo_id: string | null
+        }
+        Insert: {
+          asset_id: string
+          cargo?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_devolucao_real?: string | null
+          data_liberacao?: string
+          data_prevista_devolucao?: string | null
+          employee_id: string
+          id?: string
+          setor?: string | null
+          status?: Database["public"]["Enums"]["assignment_status"]
+          termo_id?: string | null
+        }
+        Update: {
+          asset_id?: string
+          cargo?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_devolucao_real?: string | null
+          data_liberacao?: string
+          data_prevista_devolucao?: string | null
+          employee_id?: string
+          id?: string
+          setor?: string | null
+          status?: Database["public"]["Enums"]["assignment_status"]
+          termo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_assignments_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_assignments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_assignments_termo_id_fkey"
+            columns: ["termo_id"]
+            isOneToOne: false
+            referencedRelation: "asset_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_history: {
+        Row: {
+          asset_id: string
+          created_at: string
+          created_by: string | null
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          descricao: string | null
+          id: string
+          tipo_evento: Database["public"]["Enums"]["asset_event_type"]
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          created_by?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string | null
+          id?: string
+          tipo_evento: Database["public"]["Enums"]["asset_event_type"]
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          created_by?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string | null
+          id?: string
+          tipo_evento?: Database["public"]["Enums"]["asset_event_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_history_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_terms: {
+        Row: {
+          aceito: boolean | null
+          asset_id: string
+          assignment_id: string | null
+          assinatura_digital: string | null
+          bloqueado: boolean | null
+          created_at: string
+          data_aceite: string | null
+          employee_id: string
+          id: string
+          ip_aceite: string | null
+          storage_path: string | null
+          termo_conteudo: string
+        }
+        Insert: {
+          aceito?: boolean | null
+          asset_id: string
+          assignment_id?: string | null
+          assinatura_digital?: string | null
+          bloqueado?: boolean | null
+          created_at?: string
+          data_aceite?: string | null
+          employee_id: string
+          id?: string
+          ip_aceite?: string | null
+          storage_path?: string | null
+          termo_conteudo: string
+        }
+        Update: {
+          aceito?: boolean | null
+          asset_id?: string
+          assignment_id?: string | null
+          assinatura_digital?: string | null
+          bloqueado?: boolean | null
+          created_at?: string
+          data_aceite?: string | null
+          employee_id?: string
+          id?: string
+          ip_aceite?: string | null
+          storage_path?: string | null
+          termo_conteudo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_terms_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_terms_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "asset_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_terms_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_compra: string | null
+          fornecedor: string | null
+          id: string
+          marca: string | null
+          modelo: string | null
+          nota_fiscal_path: string | null
+          nota_fiscal_url: string | null
+          numero_patrimonio: string
+          numero_serie: string | null
+          observacoes: string | null
+          sistema_operacional: string | null
+          status: Database["public"]["Enums"]["asset_status"]
+          tipo: Database["public"]["Enums"]["asset_type"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_compra?: string | null
+          fornecedor?: string | null
+          id?: string
+          marca?: string | null
+          modelo?: string | null
+          nota_fiscal_path?: string | null
+          nota_fiscal_url?: string | null
+          numero_patrimonio: string
+          numero_serie?: string | null
+          observacoes?: string | null
+          sistema_operacional?: string | null
+          status?: Database["public"]["Enums"]["asset_status"]
+          tipo: Database["public"]["Enums"]["asset_type"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_compra?: string | null
+          fornecedor?: string | null
+          id?: string
+          marca?: string | null
+          modelo?: string | null
+          nota_fiscal_path?: string | null
+          nota_fiscal_url?: string | null
+          numero_patrimonio?: string
+          numero_serie?: string | null
+          observacoes?: string | null
+          sistema_operacional?: string | null
+          status?: Database["public"]["Enums"]["asset_status"]
+          tipo?: Database["public"]["Enums"]["asset_type"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       attendee_movement_logs: {
         Row: {
           attendee_id: string
@@ -8544,10 +8811,12 @@ export type Database = {
       }
       get_tv_funnel_metrics: { Args: { target_date: string }; Returns: Json }
       get_tv_sdr_metrics: { Args: { target_date: string }; Returns: Json }
-      get_user_role: {
-        Args: { _user_id: string }
-        Returns: Database["public"]["Enums"]["app_role"]
-      }
+      get_user_role:
+        | { Args: never; Returns: string }
+        | {
+            Args: { _user_id: string }
+            Returns: Database["public"]["Enums"]["app_role"]
+          }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -8590,6 +8859,28 @@ export type Database = {
         | "rh"
         | "financeiro"
         | "closer_sombra"
+      asset_event_type:
+        | "comprado"
+        | "liberado"
+        | "transferido"
+        | "manutencao"
+        | "devolucao"
+        | "baixa"
+      asset_status:
+        | "em_estoque"
+        | "em_uso"
+        | "em_manutencao"
+        | "devolvido"
+        | "baixado"
+      asset_type:
+        | "notebook"
+        | "desktop"
+        | "monitor"
+        | "celular"
+        | "tablet"
+        | "impressora"
+        | "outro"
+      assignment_status: "ativo" | "devolvido" | "transferido"
       auction_status: "ativo" | "encerrado" | "cancelado"
       automation_channel: "whatsapp" | "email" | "sms"
       automation_status:
@@ -8647,6 +8938,7 @@ export type Database = {
         | "tv_sdr"
         | "usuarios"
         | "financeiro"
+        | "patrimonio"
       target_period: "mensal" | "trimestral" | "anual"
       target_type: "receita" | "vendas" | "leads" | "conversao" | "custom"
       transaction_status: "pago" | "pendente" | "cancelado"
@@ -8798,6 +9090,31 @@ export const Constants = {
         "financeiro",
         "closer_sombra",
       ],
+      asset_event_type: [
+        "comprado",
+        "liberado",
+        "transferido",
+        "manutencao",
+        "devolucao",
+        "baixa",
+      ],
+      asset_status: [
+        "em_estoque",
+        "em_uso",
+        "em_manutencao",
+        "devolvido",
+        "baixado",
+      ],
+      asset_type: [
+        "notebook",
+        "desktop",
+        "monitor",
+        "celular",
+        "tablet",
+        "impressora",
+        "outro",
+      ],
+      assignment_status: ["ativo", "devolvido", "transferido"],
       auction_status: ["ativo", "encerrado", "cancelado"],
       automation_channel: ["whatsapp", "email", "sms"],
       automation_status: [
@@ -8859,6 +9176,7 @@ export const Constants = {
         "tv_sdr",
         "usuarios",
         "financeiro",
+        "patrimonio",
       ],
       target_period: ["mensal", "trimestral", "anual"],
       target_type: ["receita", "vendas", "leads", "conversao", "custom"],

@@ -185,4 +185,5 @@ export const RESOURCE_LABELS: Record<ResourceType, string> = {
   tv_sdr: "TV SDR",
   usuarios: "Gestão de Usuários",
   financeiro: "Módulo Financeiro",
+  patrimonio: "Patrimônio (TI)",
 };
