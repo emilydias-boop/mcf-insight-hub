@@ -696,13 +696,27 @@ serve(async (req) => {
           console.log(`   ⚠️ ${isCloser ? 'Closer' : 'SDR'} ${sdr.name} não tem email configurado`);
         }
 
-        // ===== BUSCAR EMPLOYEE PRIMEIRO (necessário para fallback) =====
+        // ===== BUSCAR EMPLOYEE PRIMEIRO (necessário para fallback e elegibilidade ultrameta) =====
         const { data: employeeData } = await supabase
           .from('employees')
-          .select('cargo_catalogo_id')
+          .select('cargo_catalogo_id, data_admissao')
           .eq('sdr_id', sdr.id)
           .eq('status', 'ativo')
           .maybeSingle();
+
+        // ===== VERIFICAR ELEGIBILIDADE PARA ULTRAMETA (precisa estar desde o início do mês) =====
+        const dataAdmissao = employeeData?.data_admissao 
+          ? new Date(employeeData.data_admissao) 
+          : null;
+        const inicioMes = new Date(year, month - 1, 1);
+        // Elegível se entrou antes do início do mês OU se data_admissao é null
+        const elegivelUltrameta = !dataAdmissao || dataAdmissao < inicioMes;
+        
+        if (!elegivelUltrameta) {
+          console.log(`   ⏭️ ${sdr.name} NÃO elegível para Ultrameta (admissão em ${dataAdmissao?.toISOString().split('T')[0]})`);
+        } else {
+          console.log(`   ✅ ${sdr.name} elegível para Ultrameta (admissão: ${dataAdmissao?.toISOString().split('T')[0] || 'antes do período'})`);
+        }
 
         // ===== BUSCAR CARGO_CATALOGO PARA CLOSERS =====
         let cargoInfo: CargoInfo | null = null;
@@ -1098,11 +1112,15 @@ serve(async (req) => {
           
           // Se ultrameta do time foi batida, usar o prêmio configurado na meta do time
           // Caso contrário, usar lógica individual (apenas se performance >= 100%)
+          // IMPORTANTE: Só é elegível quem estava na equipe desde o início do mês
           let ifoodUltrameta = 0;
-          if (teamUltrametaHit && teamGoal) {
+          if (teamUltrametaHit && teamGoal && elegivelUltrameta) {
             ifoodUltrameta = teamGoal.ultrameta_premio_ifood || 0;
             console.log(`   🎁 Ultrameta do Time batida! iFood Ultrameta = R$ ${ifoodUltrameta}`);
-          } else if (pctMediaGlobal >= 100) {
+          } else if (teamUltrametaHit && teamGoal && !elegivelUltrameta) {
+            ifoodUltrameta = 0;
+            console.log(`   ⏭️ ${sdr.name} não elegível para Ultrameta (entrou no meio do mês)`);
+          } else if (pctMediaGlobal >= 100 && elegivelUltrameta) {
             ifoodUltrameta = compPlan.ifood_ultrameta || 0;
           }
           
@@ -1153,11 +1171,16 @@ serve(async (req) => {
           const teamGoal = teamGoalsByBU[sdrSquad];
           const teamUltrametaHit = buUltrametaHit[sdrSquad] || false;
           
-          if (teamUltrametaHit && teamGoal) {
+          if (teamUltrametaHit && teamGoal && elegivelUltrameta) {
             // Substituir ifood_ultrameta pelo valor do prêmio do time
             baseValues.ifood_ultrameta = teamGoal.ultrameta_premio_ifood || 0;
             baseValues.total_ifood = baseValues.ifood_mensal + baseValues.ifood_ultrameta;
             console.log(`   🎁 Ultrameta do Time batida para SDR! iFood Ultrameta = R$ ${baseValues.ifood_ultrameta}`);
+          } else if (teamUltrametaHit && teamGoal && !elegivelUltrameta) {
+            // Colaborador entrou no meio do mês - não recebe ultrameta
+            baseValues.ifood_ultrameta = 0;
+            baseValues.total_ifood = baseValues.ifood_mensal;
+            console.log(`   ⏭️ SDR ${sdr.name} não elegível para Ultrameta (entrou no meio do mês)`);
           }
           
           calculatedValues = baseValues;

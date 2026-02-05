@@ -2,6 +2,8 @@
 
 # Correção: iFood Ultrameta - Soma e Elegibilidade por Data de Admissão
 
+## ✅ Status: Implementado
+
 ## Regras de Negócio Identificadas
 
 ### 1. iFood Mensal vs iFood Ultrameta
@@ -23,67 +25,35 @@ Exemplo: Para meta de janeiro/2026, quem entrou em 15/01/2026 não recebe a ultr
 
 ---
 
-## Mudanças Necessárias
+## Mudanças Implementadas
 
 ### 1. Edge Function `recalculate-sdr-payout`
 
-**Modificação principal:**
+**Modificações realizadas:**
 
-```text
-ANTES:
-  ifood_ultrameta = teamGoal.ultrameta_premio_ifood (para todos)
+1. **Busca de `data_admissao`**: Adicionado campo `data_admissao` na query do employee
+2. **Verificação de elegibilidade**: Comparação entre `data_admissao` e primeiro dia do mês
+3. **Condição para Closers**: Só libera `ifood_ultrameta` se `elegivelUltrameta = true`
+4. **Condição para SDRs**: Mesma lógica aplicada no cálculo padrão
 
-DEPOIS:
-  1. Buscar data_admissao do employee vinculado ao SDR
-  2. Se data_admissao >= início do mês → ifood_ultrameta = 0
-  3. Se data_admissao < início do mês (ou NULL) → ifood_ultrameta = teamGoal.ultrameta_premio_ifood
-```
-
-**Código a adicionar (dentro do loop de SDRs):**
+**Código adicionado:**
 
 ```typescript
 // Verificar elegibilidade para ultrameta (precisa estar desde o início do mês)
-const { data: employeeData } = await supabase
-  .from('employees')
-  .select('data_admissao')
-  .eq('sdr_id', sdr.id)
-  .eq('status', 'ativo')
-  .single();
-
 const dataAdmissao = employeeData?.data_admissao 
   ? new Date(employeeData.data_admissao) 
   : null;
-
 const inicioMes = new Date(year, month - 1, 1);
-
 // Elegível se entrou antes do início do mês OU se data_admissao é null
 const elegivelUltrameta = !dataAdmissao || dataAdmissao < inicioMes;
 
+// Aplicar elegibilidade nas condições de atribuição de ifood_ultrameta
 if (teamUltrametaHit && teamGoal && elegivelUltrameta) {
-  ifoodUltrameta = teamGoal.ultrameta_premio_ifood;
-  console.log(`   🎁 Ultrameta liberada para ${sdr.name}`);
+  ifoodUltrameta = teamGoal.ultrameta_premio_ifood || 0;
 } else if (teamUltrametaHit && teamGoal && !elegivelUltrameta) {
-  ifoodUltrameta = 0;
-  console.log(`   ⏭️ ${sdr.name} não elegível (admissão em ${dataAdmissao})`);
+  ifoodUltrameta = 0; // Não elegível por ter entrado no meio do mês
 }
 ```
-
-### 2. Componente `TeamGoalsSummary.tsx`
-
-**Adicionar informação visual sobre quem é elegível:**
-
-Na seção de Ultrameta batida, mostrar:
-- Total de colaboradores elegíveis
-- Mencionar que novos colaboradores não recebem
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Adicionar verificação de `data_admissao` antes de liberar `ifood_ultrameta` |
-| `src/components/fechamento/TeamGoalsSummary.tsx` | (Opcional) Mostrar contagem de elegíveis vs não elegíveis |
 
 ---
 
@@ -125,7 +95,6 @@ Para cada colaborador:
 
 ## Resumo da Correção
 
-1. **Soma de valores**: O iFood Ultrameta sempre soma com o iFood mensal (já está correto no código)
-2. **Elegibilidade**: Adicionar verificação de `data_admissao` para filtrar novos colaboradores
-3. **Pagamento**: iFood mensal no dia 1º, Ultrameta no dia 20 (regra operacional, não afeta o código)
-
+1. **Soma de valores**: O iFood Ultrameta sempre soma com o iFood mensal ✅
+2. **Elegibilidade**: Verificação de `data_admissao` implementada ✅
+3. **Logs**: Adicionados logs claros indicando elegibilidade ✅
