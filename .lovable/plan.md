@@ -1,118 +1,296 @@
 
-# Plano: Persistência e Carregamento Instantâneo dos Relatórios
+# Plano: Sistema de Rastreamento de Atividades por SDR (Corrigido)
 
-## Problemas Identificados
+## Contexto
 
-1. **Recarrega ao sair da página**: `refetchOnWindowFocus` está no default (`true`), causando refetch sempre que o usuário volta à aba
-2. **`staleTime` muito curto**: Apenas 2 minutos - dados são considerados "stale" rapidamente
-3. **Sem dados de placeholder**: Não usa `keepPreviousData`, então mostra loading spinner enquanto busca novos dados
+O sistema já possui:
+- `stage_moved_at` em `crm_deals` - atualizado ao arrastar lead
+- `deal_activities` - registra atividades como ligações, notas, mudanças de estágio
+- `calls` - registra ligações separadamente
 
-## Solução
+**Problema**: Lead do ano passado trabalhado hoje deve contar nas métricas do dia atual, considerando TANTO atividades QUANTO arrastamento de estágio.
 
-Atualizar os hooks de relatório para:
-- Desabilitar refetch ao focar janela
-- Aumentar tempo de cache
-- Mostrar dados anteriores enquanto atualiza em background
+---
+
+## Solução Corrigida
+
+### Lógica de Contabilização
+
+```text
+last_worked_at = MAX(
+  stage_moved_at,           // Quando arrastou para outro estágio
+  última deal_activities,   // Quando fez nota, ligação via sistema
+  última calls              // Quando ligou via Twilio
+)
+```
+
+Assim, se o SDR:
+1. Faz ligação → registra atividade → `last_worked_at` atualiza
+2. Depois arrasta → `stage_moved_at` atualiza → `last_worked_at` usa o maior valor
+3. Lead é contabilizado NO ESTÁGIO ATUAL com data de trabalho correta
 
 ---
 
 ## Alterações Necessárias
 
-### 1. Hook: `src/hooks/useContractReport.ts`
+### 1. Migração: Campo `last_worked_at` + Trigger Combinado
 
-Atualizar configuração do useQuery (linha 40-221):
+Criar campo que atualiza automaticamente quando houver atividade OU mudança de estágio:
+
+```sql
+-- Adicionar campo
+ALTER TABLE crm_deals ADD COLUMN last_worked_at TIMESTAMPTZ;
+
+-- Inicializar com MAIOR entre stage_moved_at e created_at
+UPDATE crm_deals SET last_worked_at = COALESCE(
+  GREATEST(stage_moved_at, created_at),
+  created_at
+);
+
+-- Trigger para deal_activities
+CREATE OR REPLACE FUNCTION update_deal_last_worked_from_activity()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE crm_deals 
+  SET last_worked_at = GREATEST(
+    COALESCE(last_worked_at, '1970-01-01'),
+    NEW.created_at
+  )
+  WHERE clint_id = NEW.deal_id OR id::text = NEW.deal_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_deal_activity_last_worked
+AFTER INSERT ON deal_activities
+FOR EACH ROW EXECUTE FUNCTION update_deal_last_worked_from_activity();
+
+-- Trigger para calls
+CREATE OR REPLACE FUNCTION update_deal_last_worked_from_call()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE crm_deals 
+  SET last_worked_at = GREATEST(
+    COALESCE(last_worked_at, '1970-01-01'),
+    NEW.created_at
+  )
+  WHERE id = NEW.deal_id::uuid;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_call_last_worked
+AFTER INSERT ON calls
+FOR EACH ROW EXECUTE FUNCTION update_deal_last_worked_from_call();
+```
+
+### 2. Atualizar `useUpdateCRMDeal` para Sincronizar `last_worked_at`
+
+**Arquivo:** `src/hooks/useCRMData.ts`
+
+Quando `stage_moved_at` atualiza, também atualizar `last_worked_at`:
 
 ```typescript
-return useQuery({
-  queryKey: ['contract-report', filters, allowedCloserIds],
-  queryFn: async (): Promise<ContractReportRow[]> => {
-    // ... queryFn existente (sem alterações)
-  },
-  enabled: filters.startDate instanceof Date && filters.endDate instanceof Date,
+// Linha ~579 - Após atualizar stage_moved_at
+if (deal.stage_id && previousStageId !== deal.stage_id) {
+  const now = new Date().toISOString();
+  deal.stage_moved_at = now;
+  deal.last_worked_at = now; // NOVO: sincronizar
+}
+```
+
+### 3. Criar Hook: `src/hooks/useSdrActivityMetrics.ts`
+
+Hook para métricas de atividades por SDR no período:
+
+```typescript
+export interface SdrActivityMetrics {
+  sdrEmail: string;
+  sdrName: string;
   
-  // NOVAS CONFIGURAÇÕES:
-  staleTime: 10 * 60 * 1000,        // 10 minutos - dados não são refetchados automaticamente
-  gcTime: 30 * 60 * 1000,           // 30 minutos - mantém em cache mesmo após unmount
-  refetchOnWindowFocus: false,       // NÃO refetch ao voltar para a aba
-  refetchOnReconnect: false,         // NÃO refetch ao reconectar internet
-  placeholderData: (previousData) => previousData, // Mostra dados anteriores instantaneamente
-});
-```
-
-### 2. Hook: `src/hooks/useHublaA000Contracts.ts`
-
-Mesma atualização (linha 24-71):
-
-```typescript
-return useQuery({
-  queryKey: ['hubla-a000-contracts', filters],
-  queryFn: async (): Promise<HublaA000Transaction[]> => {
-    // ... queryFn existente (sem alterações)
-  },
-  enabled: filters.startDate instanceof Date && filters.endDate instanceof Date,
+  // Atividades do período
+  totalCalls: number;
+  answeredCalls: number;
+  notesAdded: number;
+  stageChanges: number;
   
-  // NOVAS CONFIGURAÇÕES:
-  staleTime: 10 * 60 * 1000,
-  gcTime: 30 * 60 * 1000,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: false,
-  placeholderData: (previousData) => previousData,
-});
+  // Leads trabalhados
+  uniqueLeadsWorked: number;
+  
+  // Calculado
+  avgCallsPerLead: number;
+}
+
+export function useSdrActivityMetrics(
+  startDate: Date,
+  endDate: Date,
+  originId?: string
+) {
+  return useQuery({
+    queryKey: ['sdr-activity-metrics', startDate, endDate, originId],
+    queryFn: async (): Promise<SdrActivityMetrics[]> => {
+      // 1. Buscar ligações por user_id no período
+      // 2. Buscar deal_activities por user_id no período
+      // 3. Agrupar por user_id (SDR) usando SDR_LIST
+      // 4. Calcular unique leads via deal_id
+    },
+  });
+}
 ```
 
-### 3. Query de Origens em `ContractReportPanel.tsx`
+### 4. Adicionar Filtro "Prioridade de Trabalho" no Kanban
 
-Atualizar a query de origens (linha 70-83) para manter consistência:
+**Arquivo:** `src/components/crm/DealFilters.tsx`
+
+Adicionar novo campo à interface e novo select:
 
 ```typescript
-const { data: origins = [] } = useQuery<OriginOption[]>({
-  queryKey: ['crm-origins-simple'],
-  queryFn: async (): Promise<OriginOption[]> => {
-    // ... queryFn existente
-  },
-  staleTime: 30 * 60 * 1000,       // 30 minutos (origens mudam raramente)
-  gcTime: 60 * 60 * 1000,          // 1 hora
-  refetchOnWindowFocus: false,
-});
+// Interface
+export interface DealFiltersState {
+  // ... campos existentes
+  activityPriority: 'all' | 'high' | 'medium' | 'low' | null;
+}
+
+// Lógica:
+// high (🔴): 0 atividades - nunca foi trabalhado
+// medium (🟡): 1-3 atividades - pouco trabalhado
+// low (🟢): 4+ atividades - bastante trabalhado
 ```
+
+Adicionar select no componente:
+
+```typescript
+<Select
+  value={filters.activityPriority || 'all'}
+  onValueChange={(value) => onChange({ 
+    ...filters, 
+    activityPriority: value === 'all' ? null : value 
+  })}
+>
+  <SelectTrigger className="w-[160px]">
+    <div className="flex items-center gap-2">
+      <Activity className="h-4 w-4" />
+      <SelectValue placeholder="Prioridade" />
+    </div>
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="all">Qualquer</SelectItem>
+    <SelectItem value="high">
+      <span className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-red-500" />
+        Alta (0 ativ.)
+      </span>
+    </SelectItem>
+    <SelectItem value="medium">
+      <span className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-yellow-500" />
+        Média (1-3 ativ.)
+      </span>
+    </SelectItem>
+    <SelectItem value="low">
+      <span className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-green-500" />
+        Baixa (4+ ativ.)
+      </span>
+    </SelectItem>
+  </SelectContent>
+</Select>
+```
+
+### 5. Atualizar `useBatchDealActivitySummary` para Incluir Total de Atividades
+
+**Arquivo:** `src/hooks/useDealActivitySummary.ts`
+
+Adicionar campo `totalActivities` que soma todas as interações:
+
+```typescript
+export interface ActivitySummary {
+  // ... campos existentes
+  totalActivities: number; // NOVO: calls + notes + whatsapp + stage_changes
+}
+
+// Na queryFn, calcular:
+summary.totalActivities = summary.totalCalls + summary.whatsappSent + notesCount;
+```
+
+### 6. Adicionar Badge de Prioridade no Card do Kanban
+
+**Arquivo:** `src/components/crm/DealKanbanCard.tsx`
+
+Exibir badge colorido baseado no total de atividades:
+
+```typescript
+// Função helper
+const getActivityPriorityBadge = (totalActivities: number) => {
+  if (totalActivities === 0) {
+    return { color: 'bg-red-500', label: '0', tooltip: 'Alta prioridade - sem atividades' };
+  }
+  if (totalActivities <= 3) {
+    return { color: 'bg-yellow-500', label: totalActivities.toString(), tooltip: 'Média prioridade' };
+  }
+  return { color: 'bg-green-500', label: totalActivities.toString(), tooltip: 'Baixa prioridade' };
+};
+
+// No JSX, próximo ao badge de canal:
+{activitySummary && (
+  <Badge 
+    variant="outline"
+    className={`text-[10px] px-1 py-0 ${priorityBadge.color} text-white`}
+  >
+    {priorityBadge.label}
+  </Badge>
+)}
+```
+
+### 7. Criar Seção de KPIs de Atividades em ReunioesEquipe
+
+**Arquivo:** `src/pages/crm/ReunioesEquipe.tsx`
+
+Adicionar tabela de atividades por SDR:
+
+| SDR | Ligações | Atendidas | Notas | Movimentações | Leads Trabalhados |
+|-----|----------|-----------|-------|---------------|-------------------|
+| Ana | 45 | 12 | 8 | 30 | 35 |
+| Carlos | 38 | 15 | 5 | 25 | 30 |
 
 ---
 
-## Comportamento Após Alterações
+## Arquivos a Modificar/Criar
 
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Sair da aba e voltar | Mostra loading, refetch | Mostra dados instantaneamente |
-| Mudar filtros | Loading completo | Mostra dados antigos + atualiza em background |
-| Fechar página e reabrir (< 30min) | Loading completo | Dados do cache + atualiza silenciosamente |
-| Dados com > 10min | Refetch automático | Mantém cache, só atualiza se usuário forçar |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| Database | Migration | Campo `last_worked_at` + triggers |
+| `src/hooks/useCRMData.ts` | Modificar | Sincronizar `last_worked_at` ao arrastar |
+| `src/hooks/useSdrActivityMetrics.ts` | Criar | Hook de métricas de atividade |
+| `src/components/crm/DealFilters.tsx` | Modificar | Filtro de prioridade de atividade |
+| `src/hooks/useDealActivitySummary.ts` | Modificar | Campo `totalActivities` |
+| `src/components/crm/DealKanbanCard.tsx` | Modificar | Badge de prioridade |
+| `src/pages/crm/ReunioesEquipe.tsx` | Modificar | Seção de KPIs de atividades |
 
 ---
 
-## Fluxo Visual
+## Fluxo Corrigido
 
 ```text
-Usuário abre relatório
+SDR trabalha lead antigo (2025)
+    |
+    +-- Faz ligação → deal_activities INSERT → trigger atualiza last_worked_at
+    |
+    +-- Arrasta para outro estágio → stage_moved_at E last_worked_at atualizam
     |
     V
-Cache existe? ─── SIM ─── Mostra instantaneamente
-    |                          |
-   NÃO                    Background: verifica se stale
-    |                          |
-    V                          V
-Mostra loading        Se stale (>10min): atualiza silenciosamente
-    |
-    V
-Busca dados
-    |
-    V
-Armazena em cache (30min)
+Lead contabilizado:
+  - NO ESTÁGIO ATUAL (stage_id correto)
+  - COM DATA DE TRABALHO = HOJE (last_worked_at)
+  - NAS MÉTRICAS DO SDR DO DIA ATUAL
 ```
 
 ---
 
 ## Resultado Esperado
 
-1. **Instantâneo**: Tabela aparece imediatamente ao entrar na página (sem spinner)
-2. **Persistente**: Dados mantidos ao trocar abas/apps
-3. **Background refresh**: Atualizações ocorrem silenciosamente sem bloquear a UI
+1. **Contabilização correta**: Lead arrastado conta no estágio de destino, não no anterior
+2. **Data de trabalho precisa**: Usa o MAIOR entre arrastamento e última atividade
+3. **Filtro de priorização**: SDRs focam em leads com menos atividades (🔴 primeiro)
+4. **Badge visual**: Identifica rapidamente leads negligenciados
+5. **Relatório de KPIs**: Gestores acompanham produtividade de cada SDR
