@@ -1,50 +1,49 @@
 
-# Plano: Corrigir Criação de Novo Negócio via DealFormDialog
+# Diagnóstico: Métricas Ativas ESTÃO Funcionando Corretamente
 
-## Problema Identificado
+## O que encontrei
 
-O erro ao criar novo negócio é:
-```
-null value in column "clint_id" of relation "crm_deals" violates not-null constraint
-```
+Após análise detalhada, confirmei que **os novos pesos das métricas ativas ESTÃO sendo aplicados corretamente** no fechamento da Carol Correa.
 
-**Causa raiz**: O campo `clint_id` é obrigatório (`NOT NULL`) na tabela `crm_deals`, mas o `DealFormDialog` não inclui esse campo no payload ao criar o deal.
+### Dados salvos nas Métricas Ativas (corretos)
 
-| Campo | Requerido | Payload Atual |
-|-------|-----------|---------------|
-| `clint_id` | ✅ NOT NULL | ❌ Não incluído |
-| `data_source` | ✅ default='csv' | ❌ Não incluído |
-| `name` | ✅ | ✅ Incluído |
-| `value` | ✅ | ✅ Incluído |
-| `stage_id` | ✅ | ✅ Incluído |
-| `contact_id` | ✅ | ✅ Incluído |
-| `origin_id` | ✅ | ✅ Incluído |
+| Métrica | Peso Configurado |
+|---------|------------------|
+| Agendamentos | 35.19% |
+| Realizadas | 35.19% |
+| Tentativas | 14.81% |
+| Organização | 14.81% |
 
-## Solução
+### Cálculo do Payout da Carol (Janeiro 2026)
 
-Adicionar `clint_id` e `data_source` ao payload de criação do deal no `DealFormDialog.tsx`:
+| Métrica | % Atingimento | Multiplicador | Base (Variável × Peso) | Valor Final |
+|---------|---------------|---------------|------------------------|-------------|
+| Agendamentos | 100.56% | 1.0 | 1200 × 35.19% = 422.28 | R$ 422.28 |
+| Realizadas | 98.41% | 0.7 (faixa 86-99%) | 1200 × 35.19% = 422.28 | R$ 295.60 |
+| Tentativas | 76.49% | 0.5 (faixa 71-85%) | 1200 × 14.81% = 177.72 | R$ 88.86 |
+| Organização | 100% | 1.0 | 1200 × 14.81% = 177.72 | R$ 177.72 |
+| **TOTAL VARIÁVEL** | | | | **R$ 984.46** |
 
-```typescript
-const payload = {
-  name: data.name,
-  value: data.value,
-  stage_id: data.stage,
-  contact_id: newContact.id,
-  origin_id: defaultOriginId,
-  owner_id: selectedProfile?.email || undefined,
-  owner_profile_id: data.owner_id || undefined,
-  clint_id: `local-${Date.now()}`,  // ← ADICIONAR
-  data_source: 'manual',             // ← ADICIONAR (indica criação manual)
-};
-```
+### Por que parece diferente?
 
-## Arquivo a Modificar
+O valor de "Realizadas" (R$ 295.60) é menor que "Agendamentos" (R$ 422.28) **não porque o peso está errado**, mas porque:
+- Carol atingiu 98.41% da meta de Realizadas
+- Isso coloca ela na faixa de multiplicador 0.7 (86-99%)
+- Então: `422.28 × 0.7 = 295.60`
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/crm/DealFormDialog.tsx` | Adicionar `clint_id` e `data_source` ao payload (linhas 165-173) |
+Enquanto em Agendamentos:
+- Carol atingiu 100.56% 
+- Multiplicador 1.0 (faixa 100-119%)
+- Então: `422.28 × 1.0 = 422.28`
 
-## Detalhes Técnicos
+## Não é necessária nenhuma correção técnica
 
-- **`clint_id`**: Usa formato `local-{timestamp}` para indicar que é um deal criado localmente (não sincronizado do Clint CRM externo)
-- **`data_source`**: Marca como `'manual'` para diferenciar de leads vindos de webhook, CSV ou Clint sync
+O sistema está funcionando conforme esperado:
+1. ✅ Métricas são salvas corretamente por cargo/BU
+2. ✅ Edge Function busca métricas específicas do squad (incorporador)
+3. ✅ Pesos são aplicados ao variável total
+4. ✅ Multiplicadores são aplicados conforme faixas de atingimento
+
+## Sugestão de Melhoria (Opcional)
+
+Para facilitar a visualização e evitar confusão futura, podemos adicionar uma coluna "Peso %" na tela de fechamento individual, mostrando claramente qual peso está sendo usado em cada métrica.
