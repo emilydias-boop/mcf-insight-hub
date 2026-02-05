@@ -1,172 +1,151 @@
 
-# Próximos Passos - Central de Patrimônio de TI
+# Plano: Meta de Contratos Pagos Baseada em % das Realizadas
 
-## Estado Atual (Concluído)
+## Contexto do Problema
 
-| Componente | Status |
-|------------|--------|
-| Banco de dados (tabelas + RLS) | Concluído |
-| Types/Interfaces TypeScript | Concluído |
-| Hooks (CRUD assets, assignments, history, terms) | Concluído |
-| Listagem de equipamentos com filtros | Concluído |
-| Formulário de cadastro de equipamento | Concluído |
-| Dashboard de estatísticas | Concluído |
+Atualmente, a meta de "Contratos Pagos" para Closers é calculada como:
+- `Meta Diária × Dias Úteis` (ex: 20/dia × 20 dias = 400 contratos)
 
----
+O usuário precisa que a meta seja calculada como:
+- `Porcentagem × Realizadas` (ex: 30% × 230 realizadas = 69 contratos)
 
-## Fase 2 - Detalhes e Histórico do Equipamento
-
-### 2.1 Página de Detalhes do Equipamento
-Criar `/patrimonio/:id` com:
-- **Card de Informações**: dados gerais (patrimônio, tipo, marca/modelo, S/O, nº série, fornecedor)
-- **Badge de Status**: status atual com cores distintas
-- **Responsável Atual**: card com foto/nome do colaborador (se em uso)
-- **Timeline de Histórico**: eventos ordenados (compra, liberação, devolução, manutenção, baixa)
-- **Ações rápidas**: botões para Editar, Liberar, Devolver, Manutenção, Baixa
-
-### 2.2 Componentes Necessários
-- `AssetDetailsPage.tsx` - página completa de detalhes
-- `AssetInfoCard.tsx` - card com dados do equipamento
-- `AssetTimeline.tsx` - timeline visual do histórico
-- `AssetCurrentHolder.tsx` - card do responsável atual
+Isso representa a **taxa de conversão esperada** por nível do Closer.
 
 ---
 
-## Fase 3 - Fluxo de Liberação (Check-out)
+## Estratégia de Solução
 
-### 3.1 Dialog de Liberação
-Modal para atribuir equipamento a colaborador:
-- Seletor de colaborador (busca por nome)
-- Data de liberação (padrão: hoje)
-- Data prevista de devolução (opcional)
-- Checklist de itens entregues (mouse, carregador, headset, etc.)
+Adicionar um novo campo `meta_percentual` na tabela `fechamento_metricas_mes` para métricas onde a meta é dinâmica (baseada em outra métrica).
 
-### 3.2 Geração Automática do Termo
-- Gerar conteúdo do termo com dados do equipamento + colaborador + itens
-- Criar registro em `asset_terms` com `aceito = false`
-- Atualizar status do equipamento para `em_uso`
-- Registrar evento `liberado` no histórico
+Quando `meta_percentual` está preenchido:
+- A meta de contratos = `(realizadas × meta_percentual) / 100`
+- Ignora o campo `meta_valor`
 
-### 3.3 Componentes Necessários
-- `AssignAssetDialog.tsx` - modal de liberação
-- `EmployeeSelector.tsx` - combo de busca de colaboradores
-- `ChecklistEditor.tsx` - seletor de itens com observações
+Quando `meta_percentual` está vazio:
+- Continua usando `meta_valor × diasUteis` como antes
 
 ---
 
-## Fase 4 - Aceite Digital do Termo
+## Mudanças Técnicas
 
-### 4.1 Tela de Aceite (Colaborador)
-Acessível via "Meu RH" ou link direto:
-- Exibir conteúdo completo do termo (formatado)
-- Checkbox "Li e aceito os termos"
-- Área de assinatura digital (canvas touch/mouse)
-- Botão "Assinar e Aceitar"
+### 1. Banco de Dados (Migration)
 
-### 4.2 Lógica de Aceite
-- Capturar assinatura como base64
-- Atualizar `asset_terms`: `aceito = true`, `data_aceite`, `assinatura_digital`, `bloqueado = true`
-- Registrar IP do aceite (via edge function ou header)
+Adicionar nova coluna na tabela `fechamento_metricas_mes`:
 
-### 4.3 Seção "Meus Equipamentos" no Meu RH
-Nova seção na página Meu RH mostrando:
-- Lista de equipamentos atualmente atribuídos
-- Status do termo (pendente/aceito)
-- Link para visualizar/aceitar termo
+```sql
+ALTER TABLE fechamento_metricas_mes 
+ADD COLUMN meta_percentual numeric DEFAULT NULL;
 
-### 4.4 Componentes Necessários
-- `MeuRHPatrimonioSection.tsx` - seção para Meu RH
-- `TermAcceptanceDialog.tsx` - modal de aceite
-- `SignaturePad.tsx` - canvas para assinatura digital
-- `TermViewer.tsx` - visualizador do termo formatado
-
----
-
-## Fase 5 - Fluxo de Devolução
-
-### 5.1 Dialog de Devolução
-Modal para conferência e devolução:
-- Exibir itens do checklist original
-- Para cada item: checkbox "Conferido" + campo observação
-- Seletor de status pós-devolução: `em_estoque` ou `em_manutencao`
-- Observações gerais
-
-### 5.2 Lógica de Devolução
-- Atualizar `asset_assignment_items` com conferência
-- Atualizar `asset_assignments`: `status = 'devolvido'`, `data_devolucao_real`
-- Atualizar `assets`: status conforme escolha
-- Registrar evento `devolucao` no histórico
-
-### 5.3 Componentes Necessários
-- `ReturnAssetDialog.tsx` - modal de devolução com checklist
-
----
-
-## Fase 6 - Transferência entre Colaboradores
-
-### 6.1 Dialog de Transferência
-Quando equipamento está em uso, permitir transferir para outro colaborador:
-- Finaliza assignment atual (`status = 'transferido'`)
-- Cria novo assignment para novo colaborador
-- Gera novo termo de responsabilidade
-- Registra evento `transferido` no histórico
-
-### 6.2 Componentes Necessários
-- `TransferAssetDialog.tsx` - modal de transferência
-- Reutilizar `EmployeeSelector` e `ChecklistEditor`
-
----
-
-## Fase 7 - Upload de Nota Fiscal
-
-### 7.1 Funcionalidade
-- Upload de arquivo PDF/imagem da NF
-- Armazenar no bucket Supabase `patrimonio-nf`
-- Salvar URL em `assets.nota_fiscal_url`
-
-### 7.2 Componentes Necessários
-- `InvoiceUploader.tsx` - componente de upload
-- Configurar bucket de storage (migration)
-
----
-
-## Ordem de Implementação Recomendada
-
-```text
-Prioridade 1 (MVP funcional):
-├── 2.1 Página de detalhes do equipamento
-├── 2.2 Timeline de histórico
-├── 3.1 Dialog de liberação
-└── 3.2 Geração do termo
-
-Prioridade 2 (Fluxo completo):
-├── 4.1 Aceite digital do termo
-├── 4.3 Seção Meu RH - Equipamentos
-└── 5.1 Dialog de devolução
-
-Prioridade 3 (Complementares):
-├── 6.1 Transferência
-└── 7.1 Upload de NF
+COMMENT ON COLUMN fechamento_metricas_mes.meta_percentual IS 
+  'Percentual para cálculo dinâmico da meta (ex: 30 = 30% das Realizadas para Contratos)';
 ```
 
+### 2. Atualizar Types TypeScript
+
+Adicionar `meta_percentual?: number | null` no tipo `FechamentoMetricaMes`.
+
+### 3. Modificar `ActiveMetricsTab.tsx`
+
+Na interface de configuração de métricas:
+- Adicionar campo "Meta %" ao lado do campo "Meta" para a métrica "Contratos Pagos"
+- Quando preenchido, exibir: `Meta: {X}% das Realizadas`
+
+Layout proposto:
+```text
+Contratos Pagos   [Ativo] ✓
+├─ Peso: [35] %
+├─ Tipo Meta: ○ Valor Fixo  ● % Realizadas
+└─ Meta %: [30] % → (30% das Realizadas)
+```
+
+### 4. Modificar `DynamicIndicatorCard.tsx`
+
+No cálculo da métrica "contratos" (`isDynamicCalc = true`):
+
+```typescript
+// Antes:
+const metaDiaria = metrica.meta_valor || 1;
+const metaAjustada = metaDiaria * diasUteisMes;
+
+// Depois:
+let metaAjustada: number;
+if (metrica.meta_percentual && metrica.meta_percentual > 0) {
+  // Meta dinâmica: X% das Realizadas
+  const realizadas = kpi?.reunioes_realizadas || 0;
+  metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
+} else {
+  // Meta fixa: valor diário × dias úteis
+  const metaDiaria = metrica.meta_valor || 1;
+  metaAjustada = metaDiaria * diasUteisMes;
+}
+```
+
+### 5. Modificar `KpiEditForm.tsx`
+
+Atualizar exibição da meta de contratos para mostrar:
+- Se meta percentual: `Meta: {X}% de {realizadas} = {calculado} contratos`
+- Se meta fixa: `Meta: {Y}/dia × {dias} = {total} contratos`
+
+### 6. Modificar `useFechamentoMetricas.ts`
+
+Incluir `meta_percentual` nas operações de CRUD.
+
 ---
 
-## Arquivos a Criar/Modificar
+## Comportamento Final
 
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/patrimonio/[id].tsx` | Criar |
-| `src/components/patrimonio/AssetInfoCard.tsx` | Criar |
-| `src/components/patrimonio/AssetTimeline.tsx` | Criar |
-| `src/components/patrimonio/AssetCurrentHolder.tsx` | Criar |
-| `src/components/patrimonio/AssignAssetDialog.tsx` | Criar |
-| `src/components/patrimonio/ReturnAssetDialog.tsx` | Criar |
-| `src/components/patrimonio/TransferAssetDialog.tsx` | Criar |
-| `src/components/patrimonio/EmployeeSelector.tsx` | Criar |
-| `src/components/patrimonio/ChecklistEditor.tsx` | Criar |
-| `src/components/patrimonio/TermViewer.tsx` | Criar |
-| `src/components/patrimonio/TermAcceptanceDialog.tsx` | Criar |
-| `src/components/patrimonio/SignaturePad.tsx` | Criar |
-| `src/components/meu-rh/MeuRHPatrimonioSection.tsx` | Criar |
-| `src/pages/MeuRH.tsx` | Modificar (adicionar seção) |
-| `src/App.tsx` | Modificar (adicionar rota detalhes) |
+### Exemplo do Julio (Nível 1):
+```text
+Configuração:
+├─ Nível 1 Closer → meta_percentual = 30
+
+Cálculo:
+├─ R1 Realizadas: 230
+├─ Meta Contratos: 30% × 230 = 69
+├─ Contratos Reais: 89
+├─ % Atingido: 89/69 = 129%
+├─ Multiplicador: 1x (100-119%)
+└─ Valor: R$ 1.050 × 1 = R$ 1.050
+```
+
+### Configuração por Nível (Sugestão):
+| Nível | Meta % Contratos |
+|-------|------------------|
+| 1     | 30%              |
+| 2     | 35%              |
+| 3     | 40%              |
+| 4     | 45%              |
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/migrations/xxx.sql` | Adicionar coluna `meta_percentual` |
+| `src/types/sdr-fechamento.ts` | Adicionar campo no tipo `FechamentoMetricaMes` |
+| `src/integrations/supabase/types.ts` | Atualizar types (automático após migration) |
+| `src/components/fechamento/ActiveMetricsTab.tsx` | UI para configurar meta % |
+| `src/components/fechamento/DynamicIndicatorCard.tsx` | Lógica de cálculo dinâmico |
+| `src/components/sdr-fechamento/KpiEditForm.tsx` | Exibição da meta calculada |
+| `src/hooks/useFechamentoMetricas.ts` | CRUD com novo campo |
+
+---
+
+## Validações e Edge Cases
+
+1. **Se realizadas = 0**: Meta = 0 (evita divisão por zero)
+2. **Se meta_percentual não preenchido**: Usa lógica antiga (meta_valor × diasUteis)
+3. **Copiar do mês anterior**: Incluir `meta_percentual` na cópia
+4. **Fallback Closers**: Usar 30% como padrão se não configurado
+
+---
+
+## Ordem de Implementação
+
+1. Criar migration SQL para adicionar coluna
+2. Atualizar types TypeScript
+3. Modificar `ActiveMetricsTab` para UI de configuração
+4. Modificar `DynamicIndicatorCard` para cálculo
+5. Atualizar `KpiEditForm` para exibição
+6. Testar com Julio e validar números
