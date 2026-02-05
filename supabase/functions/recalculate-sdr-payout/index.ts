@@ -72,8 +72,178 @@ interface MetricaAtiva {
   nome_metrica: string;
   peso_percentual: number;
   meta_valor: number | null;
+  meta_percentual: number | null; // Percentual para metas dinâmicas (ex: 30 = 30% das Realizadas)
   fonte_dados: string | null;
 }
+
+interface CargoInfo {
+  ote_total: number;
+  fixo_valor: number;
+  variavel_valor: number;
+}
+
+// ===== NOVO: Função de cálculo específica para Closers com métricas dinâmicas =====
+const calculateCloserPayoutValues = (
+  kpi: Kpi,
+  metricasAtivas: MetricaAtiva[],
+  cargoInfo: CargoInfo,
+  compPlan: CompPlan,
+  calendarIfoodMensal?: number,
+  diasUteisMes?: number
+) => {
+  const diasUteisReal = diasUteisMes || compPlan.dias_uteis || 19;
+  
+  // Usar variável do cargo_catalogo
+  const variavelTotal = cargoInfo.variavel_valor || compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao;
+  const fixoValor = cargoInfo.fixo_valor || compPlan.fixo_valor;
+  
+  console.log(`   💼 Closer: Variável Total do Cargo = R$ ${variavelTotal}, Fixo = R$ ${fixoValor}`);
+  
+  // Buscar métricas configuradas
+  const metricaRealizadas = metricasAtivas.find(m => m.nome_metrica === 'realizadas');
+  const metricaContratos = metricasAtivas.find(m => m.nome_metrica === 'contratos');
+  const metricaOrganizacao = metricasAtivas.find(m => m.nome_metrica === 'organizacao');
+  const metricaVendasParceria = metricasAtivas.find(m => m.nome_metrica === 'vendas_parceria');
+  
+  let valorVariavelTotal = 0;
+  let pctContratos = 0;
+  let multContratos = 0;
+  let valorContratos = 0;
+  let metaContratosCalculada = 0;
+  
+  // ===== CÁLCULO DE CONTRATOS (meta dinâmica) =====
+  if (metricaContratos && metricaContratos.peso_percentual > 0) {
+    const pesoContratos = metricaContratos.peso_percentual;
+    const valorBaseContratos = (variavelTotal * pesoContratos) / 100;
+    
+    // Se meta_percentual está preenchido, calcular meta como % das Realizadas
+    if (metricaContratos.meta_percentual && metricaContratos.meta_percentual > 0) {
+      const realizadas = kpi.reunioes_realizadas || 0;
+      metaContratosCalculada = Math.round((realizadas * metricaContratos.meta_percentual) / 100);
+      console.log(`   📊 Meta Contratos: ${metricaContratos.meta_percentual}% de ${realizadas} = ${metaContratosCalculada}`);
+    } else {
+      // Fallback: meta_valor × dias úteis
+      metaContratosCalculada = (metricaContratos.meta_valor || 1) * diasUteisReal;
+    }
+    
+    // Evitar divisão por zero
+    if (metaContratosCalculada > 0) {
+      // Aqui precisamos do valor real de contratos pagos (vem do KPI ou será passado externamente)
+      // Por enquanto, usamos um placeholder que será preenchido pela lógica externa
+      const contratosPagos = 0; // Será preenchido externamente
+      pctContratos = (contratosPagos / metaContratosCalculada) * 100;
+    }
+    
+    multContratos = getMultiplier(pctContratos);
+    valorContratos = valorBaseContratos * multContratos;
+    valorVariavelTotal += valorContratos;
+    
+    console.log(`   📊 Contratos: Meta=${metaContratosCalculada}, %=${pctContratos.toFixed(1)}%, Mult=${multContratos}, Valor=R$ ${valorContratos.toFixed(2)}`);
+  }
+  
+  // ===== CÁLCULO DE ORGANIZAÇÃO (meta fixa 100%) =====
+  let pctOrganizacao = 0;
+  let multOrganizacao = 0;
+  let valorOrganizacao = 0;
+  
+  if (metricaOrganizacao && metricaOrganizacao.peso_percentual > 0) {
+    const pesoOrganizacao = metricaOrganizacao.peso_percentual;
+    const valorBaseOrganizacao = (variavelTotal * pesoOrganizacao) / 100;
+    
+    pctOrganizacao = (kpi.score_organizacao / META_ORGANIZACAO) * 100;
+    multOrganizacao = getMultiplier(pctOrganizacao);
+    valorOrganizacao = valorBaseOrganizacao * multOrganizacao;
+    valorVariavelTotal += valorOrganizacao;
+    
+    console.log(`   📊 Organização: Score=${kpi.score_organizacao}%, Mult=${multOrganizacao}, Valor=R$ ${valorOrganizacao.toFixed(2)}`);
+  }
+  
+  // ===== CÁLCULO DE REALIZADAS (para Closers que usam essa métrica) =====
+  let pctRealizadas = 0;
+  let multRealizadas = 0;
+  let valorRealizadas = 0;
+  let metaRealizadasCalculada = 0;
+  
+  if (metricaRealizadas && metricaRealizadas.peso_percentual > 0) {
+    const pesoRealizadas = metricaRealizadas.peso_percentual;
+    const valorBaseRealizadas = (variavelTotal * pesoRealizadas) / 100;
+    
+    metaRealizadasCalculada = (metricaRealizadas.meta_valor || 10) * diasUteisReal;
+    pctRealizadas = metaRealizadasCalculada > 0 
+      ? (kpi.reunioes_realizadas / metaRealizadasCalculada) * 100 
+      : 0;
+    multRealizadas = getMultiplier(Math.min(pctRealizadas, 120));
+    valorRealizadas = valorBaseRealizadas * multRealizadas;
+    valorVariavelTotal += valorRealizadas;
+    
+    console.log(`   📊 Realizadas: Real=${kpi.reunioes_realizadas}, Meta=${metaRealizadasCalculada}, %=${pctRealizadas.toFixed(1)}%, Mult=${multRealizadas}, Valor=R$ ${valorRealizadas.toFixed(2)}`);
+  }
+  
+  // ===== CÁLCULO DE VENDAS PARCERIA (meta dinâmica se configurada) =====
+  let valorVendasParceria = 0;
+  
+  if (metricaVendasParceria && metricaVendasParceria.peso_percentual > 0) {
+    const pesoVendasParceria = metricaVendasParceria.peso_percentual;
+    const valorBaseVendasParceria = (variavelTotal * pesoVendasParceria) / 100;
+    
+    // Vendas Parceria geralmente não tem meta, apenas soma o valor
+    // ou usa meta_percentual similar a contratos
+    valorVendasParceria = valorBaseVendasParceria; // Será ajustado com multiplicador se houver meta
+    valorVariavelTotal += valorVendasParceria;
+    
+    console.log(`   📊 Vendas Parceria: Peso=${pesoVendasParceria}%, Valor=R$ ${valorVendasParceria.toFixed(2)}`);
+  }
+  
+  const totalConta = fixoValor + valorVariavelTotal;
+  
+  // iFood para Closers: usar média das métricas que têm peso
+  const metricsWithWeight = metricasAtivas.filter(m => m.peso_percentual > 0);
+  let pctMediaGlobal = 0;
+  if (metricsWithWeight.length > 0) {
+    // Calcular média ponderada ou simples das performances
+    const totalPct = pctContratos + pctOrganizacao + pctRealizadas;
+    const metricsCount = (pctContratos > 0 ? 1 : 0) + (pctOrganizacao > 0 ? 1 : 0) + (pctRealizadas > 0 ? 1 : 0);
+    pctMediaGlobal = metricsCount > 0 ? totalPct / metricsCount : 0;
+  }
+  
+  const ifoodMensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
+  const ifoodUltrameta = pctMediaGlobal >= 100 ? compPlan.ifood_ultrameta : 0;
+  const totalIfood = ifoodMensal + ifoodUltrameta;
+  
+  console.log(`   💰 Closer Total: Variável=R$ ${valorVariavelTotal.toFixed(2)}, Fixo=R$ ${fixoValor}, Total=R$ ${totalConta.toFixed(2)}`);
+  
+  return {
+    pct_reunioes_agendadas: 0, // Closers não usam agendadas
+    pct_reunioes_realizadas: pctRealizadas,
+    pct_tentativas: 0,
+    pct_organizacao: pctOrganizacao,
+    pct_no_show: 0,
+    mult_reunioes_agendadas: 0,
+    mult_reunioes_realizadas: multRealizadas,
+    mult_tentativas: 0,
+    mult_organizacao: multOrganizacao,
+    mult_no_show: 0,
+    valor_reunioes_agendadas: 0,
+    valor_reunioes_realizadas: valorRealizadas,
+    valor_tentativas: 0,
+    valor_organizacao: valorOrganizacao,
+    valor_variavel_total: valorVariavelTotal,
+    valor_fixo: fixoValor,
+    total_conta: totalConta,
+    ifood_mensal: ifoodMensal,
+    ifood_ultrameta: ifoodUltrameta,
+    total_ifood: totalIfood,
+    meta_agendadas_ajustada: 0,
+    meta_realizadas_ajustada: metaRealizadasCalculada,
+    meta_tentativas_ajustada: 0,
+    dias_uteis_mes: diasUteisReal,
+    // Campos adicionais para Closer
+    meta_contratos_calculada: metaContratosCalculada,
+    pct_contratos: pctContratos,
+    mult_contratos: multContratos,
+    valor_contratos: valorContratos,
+  };
+};
 
 const calculatePayoutValues = (
   compPlan: CompPlan, 
@@ -297,6 +467,7 @@ serve(async (req) => {
         let noShows = 0;
         let reunioesRealizadas = 0;
         let taxaNoShow = 0;
+        let contratosPagos = 0; // Novo: contratos pagos para Closers
 
         if (sdr.email) {
           if (isCloser) {
@@ -325,7 +496,23 @@ serve(async (req) => {
                 noShows = closerSlots.filter(m => m.status === 'no_show').length;
                 taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
                 
-                console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}`);
+                // Buscar contratos pagos (attendees com contract_paid_at no período)
+                const { data: attendeesData } = await supabase
+                  .from('meeting_slot_attendees')
+                  .select('id, contract_paid_at')
+                  .in('slot_id', closerSlots.map(s => s.id))
+                  .not('contract_paid_at', 'is', null);
+                
+                if (attendeesData) {
+                  // Filtrar por contratos pagos no período
+                  contratosPagos = attendeesData.filter(a => {
+                    if (!a.contract_paid_at) return false;
+                    const paidAt = a.contract_paid_at.substring(0, 10);
+                    return paidAt >= monthStart && paidAt <= monthEnd;
+                  }).length;
+                }
+                
+                console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}, Contratos=${contratosPagos}`);
               }
             } else {
               console.log(`   ⚠️ Closer ${sdr.name} não encontrado na tabela closers`);
@@ -366,6 +553,21 @@ serve(async (req) => {
           .eq('status', 'ativo')
           .maybeSingle();
 
+        // ===== BUSCAR CARGO_CATALOGO PARA CLOSERS =====
+        let cargoInfo: CargoInfo | null = null;
+        if (employeeData?.cargo_catalogo_id) {
+          const { data: cargoData } = await supabase
+            .from('cargos_catalogo')
+            .select('ote_total, fixo_valor, variavel_valor')
+            .eq('id', employeeData.cargo_catalogo_id)
+            .single();
+          
+          if (cargoData) {
+            cargoInfo = cargoData as CargoInfo;
+            console.log(`   💼 Cargo: OTE=${cargoInfo.ote_total}, Fixo=${cargoInfo.fixo_valor}, Variável=${cargoInfo.variavel_valor}`);
+          }
+        }
+
         // Get comp plan
         const { data: compPlanResult, error: compError } = await supabase
           .from('sdr_comp_plan')
@@ -395,21 +597,13 @@ serve(async (req) => {
           let fallbackValues = { ...fallbackDefault };
           
           // Tentar usar cargo_catalogo se disponível
-          if (employeeData?.cargo_catalogo_id) {
-            const { data: cargo } = await supabase
-              .from('cargos_catalogo')
-              .select('ote_total, fixo_valor, variavel_valor')
-              .eq('id', employeeData.cargo_catalogo_id)
-              .single();
-            
-            if (cargo && cargo.ote_total > 0) {
-              fallbackValues = {
-                ote_total: cargo.ote_total,
-                fixo_valor: cargo.fixo_valor,
-                variavel_total: cargo.variavel_valor,
-              };
-              console.log(`   📋 Usando valores do cargo_catalogo para ${sdr.name}`);
-            }
+          if (cargoInfo && cargoInfo.ote_total > 0) {
+            fallbackValues = {
+              ote_total: cargoInfo.ote_total,
+              fixo_valor: cargoInfo.fixo_valor,
+              variavel_total: cargoInfo.variavel_valor,
+            };
+            console.log(`   📋 Usando valores do cargo_catalogo para ${sdr.name}`);
           }
           
           const diasUteis = calendarData?.dias_uteis_final || 22;
@@ -454,7 +648,7 @@ serve(async (req) => {
           console.log(`   ✅ Comp plan fallback criado para ${sdr.name} (Nível ${nivel}): OTE R$${fallbackValues.ote_total}`);
         }
 
-        // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FILTRO POR SQUAD) =====
+        // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FILTRO POR SQUAD E meta_percentual) =====
         let metricasAtivas: MetricaAtiva[] = [];
         if (employeeData?.cargo_catalogo_id) {
           let metricas: MetricaAtiva[] | null = null;
@@ -463,7 +657,7 @@ serve(async (req) => {
           if (sdr.squad) {
             const { data: metricasSquad } = await supabase
               .from('fechamento_metricas_mes')
-              .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
+              .select('nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
               .eq('ano_mes', ano_mes)
               .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
               .eq('squad', sdr.squad)
@@ -479,7 +673,7 @@ serve(async (req) => {
           if (!metricas || metricas.length === 0) {
             const { data: metricasGerais } = await supabase
               .from('fechamento_metricas_mes')
-              .select('nome_metrica, peso_percentual, meta_valor, fonte_dados')
+              .select('nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
               .eq('ano_mes', ano_mes)
               .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
               .is('squad', null)
@@ -494,7 +688,7 @@ serve(async (req) => {
           if (metricas && metricas.length > 0) {
             metricasAtivas = metricas;
             console.log(`   📋 Métricas ativas para ${sdr.name}:`, 
-              metricas.map(m => `${m.nome_metrica}(${m.peso_percentual}%)`).join(', '));
+              metricas.map(m => `${m.nome_metrica}(${m.peso_percentual}%${m.meta_percentual ? `, meta%=${m.meta_percentual}` : ''})`).join(', '));
           }
         }
 
@@ -580,7 +774,7 @@ serve(async (req) => {
             taxa_no_show: taxaNoShow,
             tentativas_ligacoes: 0,
             score_organizacao: 0,
-            intermediacoes_contrato: 0,
+            intermediacoes_contrato: isCloser ? contratosPagos : 0,
             updated_at: new Date().toISOString(),
           };
 
@@ -620,21 +814,158 @@ serve(async (req) => {
           kpi.intermediacoes_contrato = interCount;
         }
 
-        // Calculate values - passa dias_uteis_final do calendário e métricas ativas
+        // Calculate values - lógica diferente para Closers com métricas ativas
         const diasUteisMes = calendarData?.dias_uteis_final ?? null;
-        const calculatedValues = calculatePayoutValues(
-          compPlan as CompPlan, 
-          kpi as Kpi, 
-          sdr.meta_diaria || 0, 
-          calendarIfoodMensal, 
-          diasUteisMes, 
-          isCloser,
-          metricasAtivas.length > 0 ? metricasAtivas : undefined
-        );
+        let calculatedValues;
+        
+        if (isCloser && metricasAtivas.length > 0 && cargoInfo) {
+          // ===== NOVO: Usar cálculo específico para Closers com métricas dinâmicas =====
+          
+          // Criar KPI com contratos pagos para o cálculo
+          const kpiForCloser: Kpi = {
+            reunioes_agendadas: kpi.reunioes_agendadas || 0,
+            reunioes_realizadas: kpi.reunioes_realizadas || 0,
+            tentativas_ligacoes: 0,
+            score_organizacao: kpi.score_organizacao || 0,
+            no_shows: kpi.no_shows || 0,
+          };
+          
+          // Buscar contratos pagos reais para Closer
+          const metricaContratos = metricasAtivas.find(m => m.nome_metrica === 'contratos');
+          let metaContratosCalculada = 0;
+          let pctContratos = 0;
+          let multContratos = 0;
+          let valorContratos = 0;
+          
+          if (metricaContratos && metricaContratos.peso_percentual > 0) {
+            const pesoContratos = metricaContratos.peso_percentual;
+            const valorBaseContratos = (cargoInfo.variavel_valor * pesoContratos) / 100;
+            
+            // Se meta_percentual está preenchido, calcular meta como % das Realizadas
+            if (metricaContratos.meta_percentual && metricaContratos.meta_percentual > 0) {
+              const realizadas = kpiForCloser.reunioes_realizadas;
+              metaContratosCalculada = Math.round((realizadas * metricaContratos.meta_percentual) / 100);
+              console.log(`   📊 Meta Contratos: ${metricaContratos.meta_percentual}% de ${realizadas} = ${metaContratosCalculada}`);
+            } else {
+              // Fallback: meta_valor × dias úteis
+              metaContratosCalculada = (metricaContratos.meta_valor || 1) * (diasUteisMes || 19);
+            }
+            
+            // Evitar divisão por zero
+            if (metaContratosCalculada > 0) {
+              pctContratos = (contratosPagos / metaContratosCalculada) * 100;
+            }
+            
+            multContratos = getMultiplier(Math.min(pctContratos, 120));
+            valorContratos = valorBaseContratos * multContratos;
+            
+            console.log(`   📊 Contratos: Real=${contratosPagos}, Meta=${metaContratosCalculada}, %=${pctContratos.toFixed(1)}%, Mult=${multContratos}, Valor=R$ ${valorContratos.toFixed(2)}`);
+          }
+          
+          // Calcular organização
+          const metricaOrganizacao = metricasAtivas.find(m => m.nome_metrica === 'organizacao');
+          let pctOrganizacao = 0;
+          let multOrganizacao = 0;
+          let valorOrganizacao = 0;
+          
+          if (metricaOrganizacao && metricaOrganizacao.peso_percentual > 0) {
+            const pesoOrganizacao = metricaOrganizacao.peso_percentual;
+            const valorBaseOrganizacao = (cargoInfo.variavel_valor * pesoOrganizacao) / 100;
+            
+            pctOrganizacao = (kpiForCloser.score_organizacao / META_ORGANIZACAO) * 100;
+            multOrganizacao = getMultiplier(Math.min(pctOrganizacao, 120));
+            valorOrganizacao = valorBaseOrganizacao * multOrganizacao;
+            
+            console.log(`   📊 Organização: Score=${kpiForCloser.score_organizacao}%, Mult=${multOrganizacao}, Valor=R$ ${valorOrganizacao.toFixed(2)}`);
+          }
+          
+          // Calcular realizadas (se configurado para Closer)
+          const metricaRealizadas = metricasAtivas.find(m => m.nome_metrica === 'realizadas');
+          let pctRealizadas = 0;
+          let multRealizadas = 0;
+          let valorRealizadas = 0;
+          let metaRealizadasCalculada = 0;
+          
+          if (metricaRealizadas && metricaRealizadas.peso_percentual > 0) {
+            const pesoRealizadas = metricaRealizadas.peso_percentual;
+            const valorBaseRealizadas = (cargoInfo.variavel_valor * pesoRealizadas) / 100;
+            
+            metaRealizadasCalculada = (metricaRealizadas.meta_valor || 10) * (diasUteisMes || 19);
+            pctRealizadas = metaRealizadasCalculada > 0 
+              ? (kpiForCloser.reunioes_realizadas / metaRealizadasCalculada) * 100 
+              : 0;
+            multRealizadas = getMultiplier(Math.min(pctRealizadas, 120));
+            valorRealizadas = valorBaseRealizadas * multRealizadas;
+            
+            console.log(`   📊 Realizadas: Real=${kpiForCloser.reunioes_realizadas}, Meta=${metaRealizadasCalculada}, %=${pctRealizadas.toFixed(1)}%, Mult=${multRealizadas}, Valor=R$ ${valorRealizadas.toFixed(2)}`);
+          }
+          
+          // Vendas Parceria
+          const metricaVendasParceria = metricasAtivas.find(m => m.nome_metrica === 'vendas_parceria');
+          let valorVendasParceria = 0;
+          
+          if (metricaVendasParceria && metricaVendasParceria.peso_percentual > 0) {
+            const pesoVendasParceria = metricaVendasParceria.peso_percentual;
+            // Por enquanto, sem multiplicador para vendas parceria
+            valorVendasParceria = (cargoInfo.variavel_valor * pesoVendasParceria) / 100;
+            console.log(`   📊 Vendas Parceria: Peso=${pesoVendasParceria}%, Valor Base=R$ ${valorVendasParceria.toFixed(2)}`);
+          }
+          
+          const valorVariavelTotal = valorContratos + valorOrganizacao + valorRealizadas + valorVendasParceria;
+          const fixoValor = cargoInfo.fixo_valor;
+          const totalConta = fixoValor + valorVariavelTotal;
+          
+          // iFood para Closers
+          const pctMediaGlobal = pctContratos; // Para Closers, usar contratos como principal métrica
+          const ifoodMensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
+          const ifoodUltrameta = pctMediaGlobal >= 100 ? compPlan.ifood_ultrameta : 0;
+          const totalIfood = ifoodMensal + ifoodUltrameta;
+          
+          console.log(`   💰 Closer Total: Variável=R$ ${valorVariavelTotal.toFixed(2)}, Fixo=R$ ${fixoValor}, Total=R$ ${totalConta.toFixed(2)}`);
+          
+          calculatedValues = {
+            pct_reunioes_agendadas: 0,
+            pct_reunioes_realizadas: pctRealizadas,
+            pct_tentativas: 0,
+            pct_organizacao: pctOrganizacao,
+            pct_no_show: 0,
+            mult_reunioes_agendadas: 0,
+            mult_reunioes_realizadas: multRealizadas,
+            mult_tentativas: 0,
+            mult_organizacao: multOrganizacao,
+            mult_no_show: 0,
+            valor_reunioes_agendadas: 0,
+            valor_reunioes_realizadas: valorRealizadas + valorContratos, // Incluir contratos aqui para compatibilidade
+            valor_tentativas: 0,
+            valor_organizacao: valorOrganizacao,
+            valor_variavel_total: valorVariavelTotal,
+            valor_fixo: fixoValor,
+            total_conta: totalConta,
+            ifood_mensal: ifoodMensal,
+            ifood_ultrameta: ifoodUltrameta,
+            total_ifood: totalIfood,
+            meta_agendadas_ajustada: 0,
+            meta_realizadas_ajustada: metaRealizadasCalculada || metaContratosCalculada,
+            meta_tentativas_ajustada: 0,
+            dias_uteis_mes: diasUteisMes || 19,
+          };
+        } else {
+          // Usar cálculo padrão para SDRs
+          calculatedValues = calculatePayoutValues(
+            compPlan as CompPlan, 
+            kpi as Kpi, 
+            sdr.meta_diaria || 0, 
+            calendarIfoodMensal, 
+            diasUteisMes, 
+            isCloser,
+            metricasAtivas.length > 0 ? metricasAtivas : undefined
+          );
+        }
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
           pct_agendadas: calculatedValues.pct_reunioes_agendadas.toFixed(1),
           pct_realizadas: calculatedValues.pct_reunioes_realizadas.toFixed(1),
+          valor_variavel: calculatedValues.valor_variavel_total.toFixed(2),
           ifood_mensal: calculatedValues.ifood_mensal,
           dias_uteis_mes: calculatedValues.dias_uteis_mes,
           meta_agendadas_ajustada: calculatedValues.meta_agendadas_ajustada,
