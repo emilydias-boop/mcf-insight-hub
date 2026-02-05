@@ -258,7 +258,7 @@ export const DealKanbanBoardInfinite = ({
                                   isDragging={snapshot.isDragging}
                                   provided={provided}
                                   onClick={() => handleDealClick(deal.id)}
-                                  activitySummary={activitySummaries?.get(deal.id)}
+                                  activitySummary={activitySummaries?.get(deal.id.toLowerCase().trim())}
                                 />
                               )}
                             </Draggable>
