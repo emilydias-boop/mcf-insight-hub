@@ -762,6 +762,23 @@ async function autoMarkContractPaid(supabase: any, data: AutoMarkData): Promise<
 
     console.log(`🎉 [AUTO-PAGO] Match por ${matchType.toUpperCase()}: Attendee ${matchingAttendee.id} (${matchingAttendee.attendee_name}) - Reunião: ${meeting.id}`);
 
+    // VERIFICAÇÃO: Evitar duplicatas - se deal_id já tem outro attendee pago, ignorar
+    if (matchingAttendee.deal_id) {
+      const { data: existingPaid } = await supabase
+        .from('meeting_slot_attendees')
+        .select('id, attendee_name')
+        .eq('deal_id', matchingAttendee.deal_id)
+        .not('contract_paid_at', 'is', null)
+        .neq('id', matchingAttendee.id)
+        .limit(1)
+        .maybeSingle();
+      
+      if (existingPaid) {
+        console.log(`⚠️ [AUTO-PAGO] Deal ${matchingAttendee.deal_id} JÁ possui outro attendee pago (${existingPaid.id} - ${existingPaid.attendee_name}). Pulando para evitar duplicata.`);
+        return;
+      }
+    }
+
     // 3. Atualizar attendee para contract_paid com a data REAL do pagamento (saleDate da Hubla)
     const { error: updateError } = await supabase
       .from('meeting_slot_attendees')
