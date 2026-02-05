@@ -259,7 +259,7 @@ export const DealKanbanCard = ({
     return `${Math.floor(diffMinutes / 1440)}d`;
   };
 
-  const timeAgoShort = deal.updated_at ? getShortTimeAgo(deal.updated_at) : null;
+  const timeAgoShort = deal.created_at ? getShortTimeAgo(deal.created_at) : null;
   const totalCalls = activitySummary?.totalCalls || 0;
   const maxAttempts = activitySummary?.maxAttempts || 5;
   const displayPhone = contactPhone || extractPhoneFromDeal(deal, contact);
