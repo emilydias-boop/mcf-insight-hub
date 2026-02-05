@@ -1174,6 +1174,7 @@ export type Database = {
           nivel: number | null
           nome_exibicao: string
           ote_total: number
+          role_sistema: string | null
           updated_at: string
           variavel_valor: number
         }
@@ -1188,6 +1189,7 @@ export type Database = {
           nivel?: number | null
           nome_exibicao: string
           ote_total?: number
+          role_sistema?: string | null
           updated_at?: string
           variavel_valor?: number
         }
@@ -1202,6 +1204,7 @@ export type Database = {
           nivel?: number | null
           nome_exibicao?: string
           ote_total?: number
+          role_sistema?: string | null
           updated_at?: string
           variavel_valor?: number
         }

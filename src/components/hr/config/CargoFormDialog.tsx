@@ -34,6 +34,18 @@ const MODELO_VARIAVEL_OPTIONS = [
   { value: 'bonus_metas', label: 'Bônus por Metas' },
 ];
 
+const ROLE_SISTEMA_OPTIONS = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'coordenador', label: 'Coordenador' },
+  { value: 'sdr', label: 'SDR' },
+  { value: 'closer', label: 'Closer' },
+  { value: 'closer_sombra', label: 'Closer Sombra' },
+  { value: 'financeiro', label: 'Financeiro' },
+  { value: 'rh', label: 'RH' },
+  { value: 'viewer', label: 'Viewer' },
+];
+
 const formSchema = z.object({
   nome_exibicao: z.string().min(2, "Nome é obrigatório"),
   cargo_base: z.string().min(2, "Cargo base é obrigatório"),
@@ -42,6 +54,7 @@ const formSchema = z.object({
   fixo_valor: z.number().min(0),
   variavel_valor: z.number().min(0),
   modelo_variavel: z.string().optional(),
+  role_sistema: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -66,6 +79,7 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
       fixo_valor: 0,
       variavel_valor: 0,
       modelo_variavel: "score_metricas",
+      role_sistema: "viewer",
     },
   });
 
@@ -79,6 +93,7 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
         fixo_valor: cargo.fixo_valor,
         variavel_valor: cargo.variavel_valor,
         modelo_variavel: cargo.modelo_variavel,
+        role_sistema: cargo.role_sistema || "viewer",
       });
     } else {
       form.reset({
@@ -89,6 +104,7 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
         fixo_valor: 0,
         variavel_valor: 0,
         modelo_variavel: "score_metricas",
+        role_sistema: "viewer",
       });
     }
   }, [cargo, form]);
@@ -229,6 +245,34 @@ export default function CargoFormDialog({ open, onOpenChange, cargo }: CargoForm
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="role_sistema"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role de Sistema</FormLabel>
+                  <Select value={field.value || "viewer"} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {ROLE_SISTEMA_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Define as permissões de acesso ao sistema para usuários com este cargo
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="grid grid-cols-3 gap-4">
               <FormField

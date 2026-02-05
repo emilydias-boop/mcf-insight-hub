@@ -10,6 +10,7 @@ interface CreateUserRequest {
   full_name: string;
   role: string;
   squad?: string | null;
+  cargo_id?: string;
 }
 
 Deno.serve(async (req) => {
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const { email, full_name, role, squad }: CreateUserRequest = await req.json();
+    const { email, full_name, role, squad, cargo_id }: CreateUserRequest = await req.json();
 
     // Validate required fields
     if (!email || !full_name || !role) {
@@ -145,6 +146,42 @@ Deno.serve(async (req) => {
       if (profileError) {
         console.error("Error updating profile squad:", profileError);
         // Don't fail the whole operation
+      }
+    }
+
+    // Link employee to cargo if cargo_id provided
+    if (cargo_id) {
+      // First check if employee exists, if not create one
+      const { data: existingEmployee } = await supabaseAdmin
+        .from("employees")
+        .select("id")
+        .eq("user_id", newUser.user.id)
+        .maybeSingle();
+
+      if (existingEmployee) {
+        const { error: empUpdateError } = await supabaseAdmin
+          .from("employees")
+          .update({ cargo_catalogo_id: cargo_id })
+          .eq("id", existingEmployee.id);
+        
+        if (empUpdateError) {
+          console.error("Error updating employee cargo:", empUpdateError);
+        }
+      } else {
+        // Create employee record linked to cargo
+        const { error: empCreateError } = await supabaseAdmin
+          .from("employees")
+          .insert({
+            user_id: newUser.user.id,
+            nome: full_name,
+            email: email,
+            cargo_catalogo_id: cargo_id,
+            ativo: true,
+          });
+        
+        if (empCreateError) {
+          console.error("Error creating employee:", empCreateError);
+        }
       }
     }
 

@@ -52,11 +52,30 @@ export interface Cargo {
   variavel_valor: number;
   ote_total: number;
   modelo_variavel: string;
+  role_sistema: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
   // Computed
   employee_count?: number;
+}
+
+// Hook para buscar cargos ativos (para uso em formulários)
+export function useCargosAtivos() {
+  return useQuery({
+    queryKey: ['cargos-ativos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('cargos_catalogo')
+        .select('id, nome_exibicao, cargo_base, area, role_sistema')
+        .eq('ativo', true)
+        .order('area')
+        .order('nivel');
+
+      if (error) throw error;
+      return data || [];
+    }
+  });
 }
 
 // ============= DEPARTAMENTOS =============

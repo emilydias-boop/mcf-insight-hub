@@ -13,6 +13,7 @@ export const useCreateUser = () => {
       full_name: string;
       role: string;
       squad?: string | null;
+      cargo_id?: string;
     }) => {
       const { data: result, error } = await supabase.functions.invoke("create-user", {
         body: data,
