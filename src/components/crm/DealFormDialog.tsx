@@ -170,6 +170,8 @@ export function DealFormDialog({
         origin_id: defaultOriginId,
         owner_id: selectedProfile?.email || undefined, // legacy (email)
         owner_profile_id: data.owner_id || undefined,  // novo (UUID)
+        clint_id: `local-${Date.now()}`,  // ID local para deals criados manualmente
+        data_source: 'manual',             // Indica criação manual (não webhook/CSV)
       };
 
       const newDeal = await createDealMutation.mutateAsync(payload);
