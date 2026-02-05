@@ -213,12 +213,21 @@ export function useR2PendingLeads() {
           contract_paid_at: a.contract_paid_at || a.meeting_slot?.scheduled_at || a.created_at,
         })) as R2PendingLead[];
 
-      // Step 7: For rescheduled leads, find the most recent R1 closer
-      const dealIdsForLatestCloser = pendingLeads
-        .filter(a => a.deal_id)
-        .map(a => a.deal_id as string);
+      // Step 7: For rescheduled leads, find the most recent R1 closer by CONTACT (not deal)
+      // This ensures we find meetings across all deals belonging to the same contact
+      const contactIdsForLatestCloser = new Set<string>();
+      pendingLeads.forEach(lead => {
+        if (lead.contact_id) contactIdsForLatestCloser.add(lead.contact_id);
+      });
 
-      if (dealIdsForLatestCloser.length > 0) {
+      // Get all deal_ids for these contacts (we already have this from Step 3)
+      const allDealIdsForContacts = new Set<string>();
+      contactIdsForLatestCloser.forEach(contactId => {
+        const deals = contactToDealIds.get(contactId);
+        if (deals) deals.forEach(d => allDealIdsForContacts.add(d));
+      });
+
+      if (allDealIdsForContacts.size > 0) {
         const { data: latestAttendees } = await supabase
           .from('meeting_slot_attendees')
           .select(`
@@ -229,13 +238,10 @@ export function useR2PendingLeads() {
               closer:closers(id, name)
             )
           `)
-          .in('deal_id', dealIdsForLatestCloser)
+          .in('deal_id', Array.from(allDealIdsForContacts))
           .eq('meeting_slots.meeting_type', 'r1')
           .order('meeting_slots(scheduled_at)', { ascending: false });
 
-        // Create map: deal_id -> most recent closer
-        const latestCloserMap = new Map<string, { id: string; name: string } | null>();
-        
         // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
         const sortedAttendees = ((latestAttendees as any[]) || [])
           .map(att => {
@@ -252,15 +258,23 @@ export function useR2PendingLeads() {
             return new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime();
           });
 
+        // Create map: contact_id -> most recent closer (across all deals)
+        const latestCloserByContact = new Map<string, { id: string; name: string } | null>();
+
         sortedAttendees.forEach(att => {
-          if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
-            latestCloserMap.set(att.deal_id, att.closer || null);
+          if (!att.deal_id) return;
+          // Find which contact owns this deal
+          for (const [contactId, dealSet] of contactToDealIds.entries()) {
+            if (dealSet.has(att.deal_id) && !latestCloserByContact.has(contactId)) {
+              latestCloserByContact.set(contactId, att.closer || null);
+              break;
+            }
           }
         });
 
-        // Enrich pendingLeads with most recent closer
+        // Enrich pendingLeads with most recent closer (by contact)
         return pendingLeads.map(lead => {
-          const latestCloser = lead.deal_id ? latestCloserMap.get(lead.deal_id) : null;
+          const latestCloser = lead.contact_id ? latestCloserByContact.get(lead.contact_id) : null;
           if (latestCloser) {
             return {
               ...lead,
