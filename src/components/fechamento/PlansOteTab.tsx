@@ -20,7 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, Users, Target, RefreshCw, Edit, Star } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ChevronLeft, ChevronRight, Users, Target, RefreshCw, Edit, Star, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmployeesWithCargo } from '@/hooks/useEmployees';
 import { useFechamentoMetricas } from '@/hooks/useFechamentoMetricas';
@@ -90,6 +98,9 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
     open: boolean;
     employee: EmployeeWithPlan | null;
   }>({ open: false, employee: null });
+  
+  // Estado do dialog de sincronização
+  const [syncDialog, setSyncDialog] = useState(false);
 
   const anoMes = format(selectedDate, 'yyyy-MM');
   const queryClient = useQueryClient();
@@ -272,6 +283,48 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
       });
   }, [employees, compPlans, sdrs, selectedCargoId, selectedBU]);
 
+  // Calcular divergências entre planos e catálogo
+  const divergencias = useMemo(() => {
+    return employeesWithPlans.filter(emp => {
+      if (!emp.comp_plan || !emp.cargo_catalogo) return false;
+      
+      return (
+        emp.comp_plan.ote_total !== emp.cargo_catalogo.ote_total ||
+        emp.comp_plan.fixo_valor !== emp.cargo_catalogo.fixo_valor ||
+        emp.comp_plan.variavel_total !== emp.cargo_catalogo.variavel_valor
+      );
+    });
+  }, [employeesWithPlans]);
+
+  // Mutation para sincronizar planos com catálogo
+  const syncWithCatalog = useMutation({
+    mutationFn: async (empIds: string[]) => {
+      for (const emp of employeesWithPlans.filter(e => empIds.includes(e.id))) {
+        if (!emp.sdr_id || !emp.cargo_catalogo || !emp.comp_plan) continue;
+        
+        const { error } = await supabase
+          .from('sdr_comp_plan')
+          .update({
+            ote_total: emp.cargo_catalogo.ote_total,
+            fixo_valor: emp.cargo_catalogo.fixo_valor,
+            variavel_total: emp.cargo_catalogo.variavel_valor,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', emp.comp_plan.id);
+        
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sdr-comp-plans'] });
+      toast.success('Planos sincronizados com o catálogo');
+      setSyncDialog(false);
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao sincronizar: ${error.message}`);
+    },
+  });
+
   // Agrupar cargos por área
   const cargosByArea = useMemo(() => {
     if (!cargos) return {};
@@ -332,6 +385,19 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
               <Users className="h-5 w-5" />
               Planos OTE por Colaborador
             </CardTitle>
+            
+            {/* Botão de divergências */}
+            {divergencias.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSyncDialog(true)}
+                className="text-yellow-600 border-yellow-600 hover:bg-yellow-50"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                {divergencias.length} divergência(s)
+              </Button>
+            )}
           </div>
 
           {/* Filtros */}
@@ -564,6 +630,77 @@ export const PlansOteTab = ({ defaultBU, lockBU = false }: PlansOteTabProps) => 
           isSaving={saveCompPlan.isPending}
         />
       )}
+
+      {/* Dialog de Sincronização com Catálogo */}
+      <Dialog open={syncDialog} onOpenChange={setSyncDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-600" />
+              Sincronizar Planos com Catálogo
+            </DialogTitle>
+            <DialogDescription>
+              Os seguintes colaboradores possuem valores diferentes entre o plano individual e o catálogo de cargos do RH.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="max-h-[400px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Colaborador</TableHead>
+                  <TableHead>Cargo</TableHead>
+                  <TableHead className="text-right">Plano Atual</TableHead>
+                  <TableHead className="text-right">Catálogo RH</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {divergencias.map(emp => (
+                  <TableRow key={emp.id}>
+                    <TableCell className="font-medium">{emp.nome_completo}</TableCell>
+                    <TableCell>{emp.cargo_catalogo?.nome_exibicao || '-'}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-sm">
+                        <div>OTE: {formatCurrency(emp.comp_plan!.ote_total)}</div>
+                        <div className="text-muted-foreground text-xs">
+                          Fixo: {formatCurrency(emp.comp_plan!.fixo_valor)} | Var: {formatCurrency(emp.comp_plan!.variavel_total)}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="text-sm text-green-600">
+                        <div>OTE: {formatCurrency(emp.cargo_catalogo!.ote_total)}</div>
+                        <div className="text-xs">
+                          Fixo: {formatCurrency(emp.cargo_catalogo!.fixo_valor)} | Var: {formatCurrency(emp.cargo_catalogo!.variavel_valor)}
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setSyncDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => syncWithCatalog.mutate(divergencias.map(d => d.id))}
+              disabled={syncWithCatalog.isPending}
+            >
+              {syncWithCatalog.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Sincronizando...
+                </>
+              ) : (
+                <>Sincronizar Todos ({divergencias.length})</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
