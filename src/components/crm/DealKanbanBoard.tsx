@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,9 +10,10 @@ import { DealKanbanCard } from './DealKanbanCard';
 import { DealDetailsDrawer } from './DealDetailsDrawer';
 import { StageChangeModal } from './StageChangeModal';
 import { StageSelectionControls } from './StageSelectionControls';
+import { StageSortDropdown, SortOption } from './StageSortDropdown';
 import { useCreateDealActivity } from '@/hooks/useDealActivities';
 import { useAuth } from '@/contexts/AuthContext';
-import { useBatchDealActivitySummary } from '@/hooks/useDealActivitySummary';
+import { useBatchDealActivitySummary, ActivitySummary } from '@/hooks/useDealActivitySummary';
 import { SalesChannel } from '@/hooks/useBulkA010Check';
 import { Inbox, ChevronDown } from 'lucide-react';
 
@@ -66,6 +67,9 @@ export const DealKanbanBoard = ({
   // State para virtualização por coluna - quantos cards mostrar por estágio
   const [visibleCountByStage, setVisibleCountByStage] = useState<Record<string, number>>({});
   
+  // State para ordenação por coluna - default: mais novo primeiro
+  const [stageSorts, setStageSorts] = useState<Record<string, SortOption>>({});
+  
   // State para modal de mudança de estágio
   const [stageChangeModal, setStageChangeModal] = useState<{
     open: boolean;
@@ -90,16 +94,39 @@ export const DealKanbanBoard = ({
     return filteredByPermission;
   }, [stages, role, showLostDeals, canViewStage]);
   
-  // Memoize deals by stage para evitar recálculos
-  const dealsByStage = useMemo(() => {
-    const map: Record<string, typeof deals> = {};
-    visibleStages.forEach((stage: any) => {
-      map[stage.id] = deals.filter(deal => 
-        deal && deal.id && deal.name && deal.stage_id === stage.id
-      );
+  // Função de ordenação por critério selecionado
+  const sortDeals = useCallback((
+    stageDeals: Deal[], 
+    sort: SortOption, 
+    summaries?: Map<string, ActivitySummary>
+  ): Deal[] => {
+    return [...stageDeals].sort((a, b) => {
+      const summaryA = summaries?.get(a.id.toLowerCase().trim());
+      const summaryB = summaries?.get(b.id.toLowerCase().trim());
+      
+      switch (sort) {
+        case 'newest':
+          return new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime();
+        case 'oldest':
+          return new Date((a as any).created_at || 0).getTime() - new Date((b as any).created_at || 0).getTime();
+        case 'most_activities':
+          return (summaryB?.totalActivities || 0) - (summaryA?.totalActivities || 0);
+        case 'least_activities':
+          return (summaryA?.totalActivities || 0) - (summaryB?.totalActivities || 0);
+        case 'most_calls':
+          return (summaryB?.totalCalls || 0) - (summaryA?.totalCalls || 0);
+        case 'least_calls':
+          return (summaryA?.totalCalls || 0) - (summaryB?.totalCalls || 0);
+        default:
+          return 0;
+      }
     });
-    return map;
-  }, [deals, visibleStages]);
+  }, []);
+  
+  // Handler para mudar ordenação de um estágio
+  const handleSortChange = useCallback((stageId: string, sort: SortOption) => {
+    setStageSorts(prev => ({ ...prev, [stageId]: sort }));
+  }, []);
   
   // Buscar atividades de todos os deals de uma vez para performance
   // Incluir stageIds para buscar limites corretos por estágio
@@ -112,6 +139,19 @@ export const DealKanbanBoard = ({
     return map;
   }, [deals]);
   const { data: activitySummaries } = useBatchDealActivitySummary(dealIds, stageIdsMap);
+  
+  // Memoize deals por estágio COM ordenação aplicada
+  const dealsByStage = useMemo(() => {
+    const map: Record<string, typeof deals> = {};
+    visibleStages.forEach((stage: any) => {
+      const stageDeals = deals.filter(deal => 
+        deal && deal.id && deal.name && deal.stage_id === stage.id
+      );
+      const sortOption = stageSorts[stage.id] || 'newest'; // Default: mais novo primeiro
+      map[stage.id] = sortDeals(stageDeals, sortOption, activitySummaries);
+    });
+    return map;
+  }, [deals, visibleStages, stageSorts, activitySummaries, sortDeals]);
   
   const getVisibleCountForStage = (stageId: string) => 
     visibleCountByStage[stageId] || INITIAL_VISIBLE_COUNT;
@@ -234,7 +274,13 @@ export const DealKanbanBoard = ({
                     <CardTitle className="text-sm font-medium">
                       <div className="flex items-center justify-between">
                         <span>{stage.stage_name}</span>
-                        <Badge variant="secondary">{stageDeals.length}</Badge>
+                        <div className="flex items-center gap-1">
+                          <StageSortDropdown
+                            currentSort={stageSorts[stage.id] || 'newest'}
+                            onSortChange={(sort) => handleSortChange(stage.id, sort)}
+                          />
+                          <Badge variant="secondary">{stageDeals.length}</Badge>
+                        </div>
                       </div>
                       {/* Controles de seleção por estágio */}
                       {selectionEnabled && stageDeals.length > 0 && (
