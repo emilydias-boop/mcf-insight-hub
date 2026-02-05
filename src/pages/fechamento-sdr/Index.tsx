@@ -111,12 +111,26 @@ const FechamentoSDRList = () => {
   };
 
   const calculateGlobalPct = (payout: NonNullable<typeof payouts>[0]) => {
-    const pcts = [
-      payout.pct_reunioes_agendadas,
-      payout.pct_reunioes_realizadas,
-      payout.pct_tentativas,
-      payout.pct_organizacao,
-    ].filter((p) => p !== null) as number[];
+    const sdrData = payout.sdr as any;
+    const isCloser = sdrData?.role_type === 'closer';
+    
+    let pcts: number[];
+    
+    if (isCloser) {
+      // Para Closers: usar Contratos (armazenado em pct_reunioes_agendadas) e Organização
+      pcts = [
+        payout.pct_reunioes_agendadas, // % Contratos
+        payout.pct_organizacao,        // % Organização
+      ].filter((p) => p !== null && p !== undefined) as number[];
+    } else {
+      // Para SDRs: usar Agendamento, Realizadas, Tentativas, Organização
+      pcts = [
+        payout.pct_reunioes_agendadas,
+        payout.pct_reunioes_realizadas,
+        payout.pct_tentativas,
+        payout.pct_organizacao,
+      ].filter((p) => p !== null) as number[];
+    }
 
     if (pcts.length === 0) return 0;
     return pcts.reduce((a, b) => a + b, 0) / pcts.length;

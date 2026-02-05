@@ -977,7 +977,7 @@ serve(async (req) => {
           console.log(`   💰 Closer Total: Variável=R$ ${valorVariavelTotal.toFixed(2)}, Fixo=R$ ${fixoValor}, Total=R$ ${totalConta.toFixed(2)}`);
           
           calculatedValues = {
-            pct_reunioes_agendadas: 0,
+            pct_reunioes_agendadas: pctContratos, // Para Closers, armazena % de Contratos
             pct_reunioes_realizadas: pctRealizadas,
             pct_tentativas: 0,
             pct_organizacao: pctOrganizacao,
