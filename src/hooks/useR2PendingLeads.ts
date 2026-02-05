@@ -71,15 +71,29 @@ export function useR2PendingLeads() {
       if (paidError) throw paidError;
       if (!paidAttendees || paidAttendees.length === 0) return [];
 
-      // Step 2: Extract contact_ids from the paid attendees
+      // Step 2: Extract contact_ids, names, and phones from the paid attendees
       const contactIds = new Set<string>();
+      const normalizedNames = new Set<string>();
+      const normalizedPhones = new Set<string>();
+      
       const attendeesWithContact = (paidAttendees as any[]).map(a => {
         const deal = Array.isArray(a.deal) ? a.deal[0] : a.deal;
         const contactId = deal?.contact_id || deal?.contact?.id || null;
         if (contactId) contactIds.add(contactId);
+        
+        // Collect normalized name
+        const normalizedName = a.attendee_name?.toLowerCase().trim() || null;
+        if (normalizedName) normalizedNames.add(normalizedName);
+        
+        // Collect normalized phone (digits only, min 8 chars)
+        const normalizedPhone = a.attendee_phone?.replace(/\D/g, '') || null;
+        if (normalizedPhone && normalizedPhone.length >= 8) normalizedPhones.add(normalizedPhone);
+        
         return {
           ...a,
           contact_id: contactId,
+          normalized_name: normalizedName,
+          normalized_phone: normalizedPhone,
           meeting_slot: Array.isArray(a.meeting_slot) ? a.meeting_slot[0] : a.meeting_slot,
           deal: deal,
         };
@@ -142,6 +156,26 @@ export function useR2PendingLeads() {
         ((r2Attendees as any[]) || []).map(a => a.deal_id)
       );
 
+      // Step 4b: Get ALL R2 attendees by name/phone (fallback correlation)
+      const { data: r2ByNamePhone } = await supabase
+        .from('meeting_slot_attendees')
+        .select(`
+          attendee_name,
+          attendee_phone,
+          meeting_slot:meeting_slots!inner(meeting_type)
+        `)
+        .eq('meeting_slots.meeting_type', 'r2');
+
+      // Create sets of normalized names/phones with R2
+      const r2Names = new Set<string>();
+      const r2Phones = new Set<string>();
+      ((r2ByNamePhone as any[]) || []).forEach(a => {
+        const name = a.attendee_name?.toLowerCase().trim();
+        if (name) r2Names.add(name);
+        const phone = a.attendee_phone?.replace(/\D/g, '');
+        if (phone && phone.length >= 8) r2Phones.add(phone);
+      });
+
       // Step 5: Find which contacts already have R2 (via ANY of their deals)
       const contactsWithR2 = new Set<string>();
       contactToDealIds.forEach((dealSet, contactId) => {
@@ -153,15 +187,26 @@ export function useR2PendingLeads() {
         }
       });
 
-      // Step 6: Filter out leads whose contact already has R2
+      // Step 6: Filter out leads that already have R2 (by any correlation method)
       const pendingLeads = attendeesWithContact
         .filter(a => {
-          // If no contact_id, fall back to deal_id check
-          if (!a.contact_id) {
-            return !a.deal_id || !dealsWithR2.has(a.deal_id);
+          // 1. Check by contact_id
+          if (a.contact_id && contactsWithR2.has(a.contact_id)) {
+            return false;
           }
-          // Exclude if contact already has R2
-          return !contactsWithR2.has(a.contact_id);
+          // 2. Check by deal_id
+          if (a.deal_id && dealsWithR2.has(a.deal_id)) {
+            return false;
+          }
+          // 3. Check by normalized name (fallback)
+          if (a.normalized_name && r2Names.has(a.normalized_name)) {
+            return false;
+          }
+          // 4. Check by normalized phone (fallback)
+          if (a.normalized_phone && r2Phones.has(a.normalized_phone)) {
+            return false;
+          }
+          return true;
         })
         .map(a => ({
           ...a,
