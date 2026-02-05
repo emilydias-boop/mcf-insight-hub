@@ -683,8 +683,9 @@ serve(async (req) => {
               // Campos da RPC get_sdr_metrics_from_agenda
               // IMPORTANTE: usar agendamentos (criados NO período) ao invés de r1_agendada (marcadas PARA o período)
               reunioesAgendadas = metrics.agendamentos || 0;
-              noShows = metrics.no_shows || 0;
               reunioesRealizadas = metrics.r1_realizada || 0;
+              // NOVA LÓGICA: No-Show = Agendamentos - Realizadas (garantir conta sempre feche)
+              noShows = Math.max(0, reunioesAgendadas - reunioesRealizadas);
               taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
               
               console.log(`   📊 Métricas da Agenda para ${sdr.name}: Agendadas=${reunioesAgendadas}, No-Shows=${noShows}, Realizadas=${reunioesRealizadas}`);

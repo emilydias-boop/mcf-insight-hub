@@ -33,7 +33,8 @@ export const useMinhasReunioesFromAgenda = (startDate: Date | null, endDate: Dat
   // Calcular métricas derivadas
   const agendamentos = myMetrics?.agendamentos || 0;
   const r1Realizada = myMetrics?.r1_realizada || 0;
-  const noShows = myMetrics?.no_shows || 0;
+  // NOVA LÓGICA: No-Show = Agendamentos - Realizadas
+  const noShows = Math.max(0, agendamentos - r1Realizada);
   const contratos = myMetrics?.contratos || 0;
 
   // Taxa de conversão: realizadas / (realizadas + no_shows)
