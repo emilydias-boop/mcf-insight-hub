@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { SdrStatusBadge } from "@/components/sdr-fechamento/SdrStatusBadge";
 import { useSdrPayouts, useRecalculateAllPayouts } from "@/hooks/useSdrFechamento";
 import { formatCurrency } from "@/lib/formatters";
+import { TeamGoalsSummary } from "@/components/fechamento/TeamGoalsSummary";
 import {
   Calculator,
   Download,
@@ -402,6 +403,12 @@ const FechamentoSDRList = () => {
           )}
         </div>
       </div>
+
+      {/* Team Goals Summary */}
+      <TeamGoalsSummary 
+        anoMes={selectedMonth} 
+        bu={squadFilter !== 'all' ? squadFilter : 'incorporador'} 
+      />
 
       {/* Financial Summary Cards */}
       {payouts && payouts.length > 0 && financialSummary && (

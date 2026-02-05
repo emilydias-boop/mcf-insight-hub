@@ -429,6 +429,125 @@ serve(async (req) => {
     const calendarIfoodMensal = calendarData?.ifood_mensal_calculado ?? null;
     console.log(`📅 Calendário ${ano_mes}: iFood Mensal = ${calendarIfoodMensal ?? 'não definido'}`);
 
+    // ===== BUSCAR METAS DA EQUIPE =====
+    // Vamos buscar para todas as BUs e processar por SDR
+    const { data: teamGoals } = await supabase
+      .from('team_monthly_goals')
+      .select('*')
+      .eq('ano_mes', ano_mes);
+    
+    const teamGoalsByBU: Record<string, any> = {};
+    (teamGoals || []).forEach(goal => {
+      teamGoalsByBU[goal.bu] = goal;
+    });
+    
+    console.log(`📊 Metas de equipe carregadas: ${Object.keys(teamGoalsByBU).join(', ') || 'nenhuma'}`);
+
+    // ===== CALCULAR FATURAMENTO POR BU (mesma lógica do useUltrametaByBU) =====
+    const buRevenue: Record<string, number> = {};
+    
+    // Fetch first transaction IDs for deduplication
+    const { data: firstIdsData } = await supabase.rpc('get_first_transaction_ids');
+    const firstIdSet = new Set((firstIdsData || []).map((r: { id: string }) => r.id));
+    
+    // Date calculations for BU revenue
+    const [year, month] = ano_mes.split('-').map(Number);
+    const monthStartDate = new Date(year, month - 1, 1);
+    const monthEndDate = new Date(year, month, 0);
+    const monthStartStr = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = monthEndDate.getDate();
+    const monthEndStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    
+    // Format dates for RPC with timezone
+    const formatDateForRpc = (date: Date, isEndOfDay = false): string => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const time = isEndOfDay ? '23:59:59' : '00:00:00';
+      return `${y}-${m}-${d}T${time}-03:00`;
+    };
+    
+    // Incorporador revenue
+    const { data: incorporadorTxs } = await supabase.rpc('get_all_hubla_transactions', {
+      p_start_date: formatDateForRpc(monthStartDate),
+      p_end_date: formatDateForRpc(monthEndDate, true),
+      p_limit: 10000,
+      p_search: null,
+      p_products: null,
+    });
+    
+    // Calculate incorporador with deduplication
+    const getDeduplicatedGross = (tx: any, isFirst: boolean): number => {
+      if (tx.gross_override !== null && tx.gross_override !== undefined) {
+        return tx.gross_override;
+      }
+      const isInstallment = tx.installment_number && tx.installment_number > 1;
+      if (isInstallment) return tx.product_price || 0;
+      if (isFirst) return tx.product_price || 0;
+      return 0;
+    };
+    
+    buRevenue['incorporador'] = (incorporadorTxs || []).reduce((sum: number, t: any) => {
+      const isFirst = firstIdSet.has(t.id);
+      return sum + getDeduplicatedGross(t, isFirst);
+    }, 0);
+    
+    // Consórcio revenue (valor_credito from consortium_cards)
+    const { data: consorcioCards } = await supabase
+      .from('consortium_cards')
+      .select('valor_credito')
+      .gte('data_contratacao', monthStartStr)
+      .lte('data_contratacao', monthEndStr)
+      .not('valor_credito', 'is', null);
+    
+    buRevenue['consorcio'] = (consorcioCards || []).reduce((sum: number, row: any) => 
+      sum + (row.valor_credito || 0), 0);
+    
+    // Leilão revenue
+    const { data: leilaoTxs } = await supabase
+      .from('hubla_transactions')
+      .select('net_value, product_price, gross_override')
+      .eq('product_category', 'clube_arremate')
+      .gte('sale_date', monthStartDate.toISOString())
+      .lte('sale_date', monthEndDate.toISOString());
+    
+    buRevenue['leilao'] = (leilaoTxs || []).reduce((sum: number, row: any) => {
+      const value = row.gross_override ?? row.product_price ?? row.net_value ?? 0;
+      return sum + value;
+    }, 0);
+    
+    buRevenue['credito'] = 0; // No data source yet
+    buRevenue['projetos'] = 0;
+    
+    console.log(`💰 Faturamento por BU: Incorporador=${buRevenue['incorporador']?.toLocaleString()}, Consórcio=${buRevenue['consorcio']?.toLocaleString()}, Leilão=${buRevenue['leilao']?.toLocaleString()}`);
+    
+    // Check which BUs hit ultrameta/divina
+    const buUltrametaHit: Record<string, boolean> = {};
+    const buDivinaHit: Record<string, boolean> = {};
+    
+    Object.keys(teamGoalsByBU).forEach(bu => {
+      const goal = teamGoalsByBU[bu];
+      const revenue = buRevenue[bu] || 0;
+      buUltrametaHit[bu] = revenue >= goal.ultrameta_valor;
+      buDivinaHit[bu] = revenue >= goal.meta_divina_valor;
+      
+      if (buUltrametaHit[bu]) {
+        console.log(`🎯 BU ${bu}: ULTRAMETA BATIDA! (${revenue.toLocaleString()} >= ${goal.ultrameta_valor.toLocaleString()})`);
+      }
+      if (buDivinaHit[bu]) {
+        console.log(`🌟 BU ${bu}: META DIVINA BATIDA! (${revenue.toLocaleString()} >= ${goal.meta_divina_valor.toLocaleString()})`);
+      }
+    });
+
+    // Track payouts for Meta Divina winner calculation
+    const processedPayouts: Array<{
+      sdr_id: string;
+      sdr_name: string;
+      squad: string;
+      isCloser: boolean;
+      pct_media_global: number;
+    }> = [];
+
     // Get SDRs to process (with email and role_type for RPC call)
     let sdrsQuery = supabase.from('sdr').select('id, name, email, meta_diaria, role_type, squad').eq('active', true);
     if (sdr_id) {
@@ -968,10 +1087,25 @@ serve(async (req) => {
           const fixoValor = cargoInfo.fixo_valor;
           const totalConta = fixoValor + valorVariavelTotal;
           
-          // iFood para Closers
+          // iFood para Closers - AJUSTE: Usar ultrameta do time se batida
           const pctMediaGlobal = pctContratos; // Para Closers, usar contratos como principal métrica
           const ifoodMensal = calendarIfoodMensal ?? compPlan.ifood_mensal;
-          const ifoodUltrameta = pctMediaGlobal >= 100 ? compPlan.ifood_ultrameta : 0;
+          
+          // Verificar se a BU do SDR bateu ultrameta do time
+          const sdrSquad = sdr.squad || 'incorporador';
+          const teamGoal = teamGoalsByBU[sdrSquad];
+          const teamUltrametaHit = buUltrametaHit[sdrSquad] || false;
+          
+          // Se ultrameta do time foi batida, usar o prêmio configurado na meta do time
+          // Caso contrário, usar lógica individual (apenas se performance >= 100%)
+          let ifoodUltrameta = 0;
+          if (teamUltrametaHit && teamGoal) {
+            ifoodUltrameta = teamGoal.ultrameta_premio_ifood || 0;
+            console.log(`   🎁 Ultrameta do Time batida! iFood Ultrameta = R$ ${ifoodUltrameta}`);
+          } else if (pctMediaGlobal >= 100) {
+            ifoodUltrameta = compPlan.ifood_ultrameta || 0;
+          }
+          
           const totalIfood = ifoodMensal + ifoodUltrameta;
           
           console.log(`   💰 Closer Total: Variável=R$ ${valorVariavelTotal.toFixed(2)}, Fixo=R$ ${fixoValor}, Total=R$ ${totalConta.toFixed(2)}`);
@@ -1004,7 +1138,7 @@ serve(async (req) => {
           };
         } else {
           // Usar cálculo padrão para SDRs
-          calculatedValues = calculatePayoutValues(
+          const baseValues = calculatePayoutValues(
             compPlan as CompPlan, 
             kpi as Kpi, 
             sdr.meta_diaria || 0, 
@@ -1013,6 +1147,20 @@ serve(async (req) => {
             isCloser,
             metricasAtivas.length > 0 ? metricasAtivas : undefined
           );
+          
+          // AJUSTE: Verificar se a BU do SDR bateu ultrameta do time
+          const sdrSquad = sdr.squad || 'incorporador';
+          const teamGoal = teamGoalsByBU[sdrSquad];
+          const teamUltrametaHit = buUltrametaHit[sdrSquad] || false;
+          
+          if (teamUltrametaHit && teamGoal) {
+            // Substituir ifood_ultrameta pelo valor do prêmio do time
+            baseValues.ifood_ultrameta = teamGoal.ultrameta_premio_ifood || 0;
+            baseValues.total_ifood = baseValues.ifood_mensal + baseValues.ifood_ultrameta;
+            console.log(`   🎁 Ultrameta do Time batida para SDR! iFood Ultrameta = R$ ${baseValues.ifood_ultrameta}`);
+          }
+          
+          calculatedValues = baseValues;
         }
         
         console.log(`   💰 Valores calculados para ${sdr.name}:`, {
@@ -1066,6 +1214,22 @@ serve(async (req) => {
 
         results.push({ sdr_id: sdr.id, sdr_name: sdr.name, payout_id: payout.id });
         processed++;
+        
+        // Track for Meta Divina calculation
+        const sdrSquad = sdr.squad || 'incorporador';
+        const pctMediaGlobal = isCloser 
+          ? calculatedValues.pct_reunioes_agendadas // Para Closers, armazena % Contratos
+          : (calculatedValues.pct_reunioes_agendadas + calculatedValues.pct_reunioes_realizadas + 
+             calculatedValues.pct_tentativas + calculatedValues.pct_organizacao) / 4;
+        
+        processedPayouts.push({
+          sdr_id: sdr.id,
+          sdr_name: sdr.name,
+          squad: sdrSquad,
+          isCloser,
+          pct_media_global: pctMediaGlobal,
+        });
+        
         console.log(`   ✅ Sucesso para ${sdr.name}`);
       } catch (e: any) {
         console.error(`   ❌ Erro ao processar ${sdr.name}: ${e.message}`);
@@ -1075,6 +1239,101 @@ serve(async (req) => {
 
     console.log(`📊 Resultado: ${processed} processados, ${errors} erros`);
 
+    // ===== REGISTRAR VENCEDORES META DIVINA =====
+    for (const bu of Object.keys(buDivinaHit)) {
+      if (!buDivinaHit[bu]) continue;
+      
+      const teamGoal = teamGoalsByBU[bu];
+      if (!teamGoal) continue;
+      
+      console.log(`🌟 Processando vencedores Meta Divina para BU ${bu}...`);
+      
+      // Filtrar payouts por BU
+      const buPayouts = processedPayouts.filter(p => p.squad === bu);
+      const sdrPayouts = buPayouts.filter(p => !p.isCloser);
+      const closerPayouts = buPayouts.filter(p => p.isCloser);
+      
+      // Melhor SDR
+      if (sdrPayouts.length > 0) {
+        const bestSdr = sdrPayouts.reduce((max, p) => 
+          p.pct_media_global > max.pct_media_global ? p : max
+        );
+        
+        // Verificar se já existe registro
+        const { data: existingWinner } = await supabase
+          .from('team_monthly_goal_winners')
+          .select('id')
+          .eq('goal_id', teamGoal.id)
+          .eq('tipo_premio', 'divina_sdr')
+          .maybeSingle();
+        
+        if (!existingWinner) {
+          const { error: insertError } = await supabase
+            .from('team_monthly_goal_winners')
+            .insert({
+              goal_id: teamGoal.id,
+              tipo_premio: 'divina_sdr',
+              sdr_id: bestSdr.sdr_id,
+              valor_premio: teamGoal.meta_divina_premio_sdr,
+              autorizado: false,
+            });
+          
+          if (insertError) {
+            console.error(`   ❌ Erro ao registrar vencedor SDR: ${insertError.message}`);
+          } else {
+            console.log(`   🏆 Melhor SDR registrado: ${bestSdr.sdr_name} (${bestSdr.pct_media_global.toFixed(1)}%)`);
+          }
+        } else {
+          // Atualizar vencedor se mudou
+          await supabase
+            .from('team_monthly_goal_winners')
+            .update({ sdr_id: bestSdr.sdr_id })
+            .eq('id', existingWinner.id);
+          console.log(`   🔄 Vencedor SDR atualizado: ${bestSdr.sdr_name}`);
+        }
+      }
+      
+      // Melhor Closer
+      if (closerPayouts.length > 0) {
+        const bestCloser = closerPayouts.reduce((max, p) => 
+          p.pct_media_global > max.pct_media_global ? p : max
+        );
+        
+        // Verificar se já existe registro
+        const { data: existingWinner } = await supabase
+          .from('team_monthly_goal_winners')
+          .select('id')
+          .eq('goal_id', teamGoal.id)
+          .eq('tipo_premio', 'divina_closer')
+          .maybeSingle();
+        
+        if (!existingWinner) {
+          const { error: insertError } = await supabase
+            .from('team_monthly_goal_winners')
+            .insert({
+              goal_id: teamGoal.id,
+              tipo_premio: 'divina_closer',
+              sdr_id: bestCloser.sdr_id,
+              valor_premio: teamGoal.meta_divina_premio_closer,
+              autorizado: false,
+            });
+          
+          if (insertError) {
+            console.error(`   ❌ Erro ao registrar vencedor Closer: ${insertError.message}`);
+          } else {
+            console.log(`   🏆 Melhor Closer registrado: ${bestCloser.sdr_name} (${bestCloser.pct_media_global.toFixed(1)}%)`);
+          }
+        } else {
+          // Atualizar vencedor se mudou
+          await supabase
+            .from('team_monthly_goal_winners')
+            .update({ sdr_id: bestCloser.sdr_id })
+            .eq('id', existingWinner.id);
+          console.log(`   🔄 Vencedor Closer atualizado: ${bestCloser.sdr_name}`);
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -1083,6 +1342,9 @@ serve(async (req) => {
         total: sdrs.length,
         results,
         calendarIfoodMensal,
+        buRevenue,
+        ultrametaHit: buUltrametaHit,
+        divinaHit: buDivinaHit,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
