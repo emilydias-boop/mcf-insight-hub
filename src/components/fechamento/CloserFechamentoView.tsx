@@ -22,13 +22,11 @@ interface CloserFechamentoViewProps {
 }
 
 export function CloserFechamentoView({ payout, closerMetrics }: CloserFechamentoViewProps) {
-  // Calculate global percentage based on closer metrics (2 main indicators)
+  // Calculate global percentage based on closer metrics (Contratos + Organização)
   const calculateGlobalPct = () => {
     const pcts = [
-      payout.pct_reunioes_realizadas,
-      // For closers, we use contratos as the second key metric
-      // This is stored in pct_reunioes_agendadas field for now (reused)
-      payout.pct_reunioes_agendadas,
+      payout.pct_reunioes_agendadas, // = pct_contratos para Closers
+      payout.pct_organizacao,
     ].filter((p) => p !== null && p !== undefined) as number[];
 
     if (pcts.length === 0) return 0;
