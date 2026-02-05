@@ -41,6 +41,7 @@ interface CompPlan {
   ifood_mensal: number;
   ifood_ultrameta: number;
   dias_uteis: number;
+  variavel_total: number;
 }
 
 interface Kpi {
@@ -565,10 +566,8 @@ serve(async (req) => {
       );
     }
 
-    // Calculate date range for the month
-    const [year, month] = ano_mes.split('-').map(Number);
+    // Calculate date range for the month (reusing year/month from above)
     const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
     const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     console.log(`📅 Período: ${monthStart} até ${monthEnd}`);
