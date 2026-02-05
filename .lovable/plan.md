@@ -1,172 +1,101 @@
 
-# Corrigir Plano OTE da Carol Correa e Sincronização com Catálogo
+# Correção: Cálculo Incorreto do Variável na Edge Function
 
 ## Problema Identificado
 
-A Carol Correa (SDR N2) possui um plano de compensação (`sdr_comp_plan`) com valores desatualizados:
-
-| Campo | Plano Atual | Catálogo Correto |
-|-------|------------|------------------|
-| OTE Total | R$ 4.350 | R$ 4.500 |
-| Variável | R$ 1.200 | R$ 1.350 |
-| Fixo | R$ 3.150 | R$ 3.150 |
-
-O plano foi criado em 01/11/2025 e está vigente até hoje (`vigencia_fim = null`).
-
----
-
-## Parte 1: Correção Imediata (Carol Correa)
-
-### Opção A: Correção via SQL (mais rápida)
-
-Executar um UPDATE direto na tabela `sdr_comp_plan`:
-
-```sql
-UPDATE sdr_comp_plan
-SET 
-  ote_total = 4500,
-  variavel_total = 1350,
-  updated_at = NOW()
-WHERE id = '4cceabd7-4b98-46c6-a94d-3c8a4b5bbe8a';
-```
-
-### Opção B: Correção via Interface
-
-Usar o botão "Editar" na aba "Planos OTE" do Fechamento para ajustar os valores manualmente.
-
----
-
-## Parte 2: Funcionalidade de Sincronização em Massa
-
-### Objetivo
-
-Adicionar um botão "Sincronizar com Catálogo" na aba `PlansOteTab` que:
-
-1. Identifica colaboradores com divergência entre `sdr_comp_plan` e `cargos_catalogo`
-2. Exibe lista de divergências para revisão
-3. Permite sincronizar todos de uma vez ou individualmente
-
-### Mudanças Necessárias
-
-#### 2.1. Adicionar lógica de detecção de divergências em `PlansOteTab.tsx`
+A edge function `recalculate-sdr-payout` está calculando o valor variável de forma incorreta:
 
 ```typescript
-// Calcular divergências
-const divergencias = useMemo(() => {
-  return employeesWithPlans.filter(emp => {
-    if (!emp.comp_plan || !emp.cargo_catalogo) return false;
-    
-    return (
-      emp.comp_plan.ote_total !== emp.cargo_catalogo.ote_total ||
-      emp.comp_plan.fixo_valor !== emp.cargo_catalogo.fixo_valor ||
-      emp.comp_plan.variavel_total !== emp.cargo_catalogo.variavel_valor
-    );
-  });
-}, [employeesWithPlans]);
+// LINHA 317-318 (INCORRETO)
+const variavelTotal = compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
+                      compPlan.valor_tentativas + compPlan.valor_organizacao;
+// Resultado: 300 + 300 + 300 + 300 = R$ 1.200 ❌
 ```
 
-#### 2.2. Adicionar botão e dialog de sincronização
-
+Deveria usar:
 ```typescript
-// Estado do dialog
-const [syncDialog, setSyncDialog] = useState(false);
-
-// Mutation para sincronizar
-const syncWithCatalog = useMutation({
-  mutationFn: async (empIds: string[]) => {
-    for (const emp of employeesWithPlans.filter(e => empIds.includes(e.id))) {
-      if (!emp.sdr_id || !emp.cargo_catalogo || !emp.comp_plan) continue;
-      
-      await supabase
-        .from('sdr_comp_plan')
-        .update({
-          ote_total: emp.cargo_catalogo.ote_total,
-          fixo_valor: emp.cargo_catalogo.fixo_valor,
-          variavel_total: emp.cargo_catalogo.variavel_valor,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', emp.comp_plan.id);
-    }
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['sdr-comp-plans'] });
-    toast.success('Planos sincronizados com sucesso');
-    setSyncDialog(false);
-  },
-});
+// CORRETO
+const variavelTotal = compPlan.variavel_total;
+// Resultado: R$ 1.350 ✓
 ```
 
-#### 2.3. UI do Botão e Dialog
+### Dados da Carol Correa
 
-Na header do Card, adicionar:
+| Campo | Valor Atual | Esperado |
+|-------|------------|----------|
+| `variavel_total` | R$ 1.350 | ✓ Correto |
+| Soma dos valores individuais | R$ 1.200 | ❌ Desatualizado |
 
-```tsx
-{divergencias.length > 0 && (
-  <Button
-    variant="outline"
-    size="sm"
-    onClick={() => setSyncDialog(true)}
-    className="text-yellow-600 border-yellow-600"
-  >
-    <AlertTriangle className="h-4 w-4 mr-2" />
-    {divergencias.length} divergência(s)
-  </Button>
-)}
-```
+### Impacto nos Indicadores
 
-Dialog mostrando lista de divergências:
+Os cards estão mostrando inconsistências matemáticas:
 
-```tsx
-<Dialog open={syncDialog} onOpenChange={setSyncDialog}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Sincronizar Planos com Catálogo</DialogTitle>
-    </DialogHeader>
-    
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Colaborador</TableHead>
-          <TableHead>Plano Atual</TableHead>
-          <TableHead>Catálogo</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {divergencias.map(emp => (
-          <TableRow key={emp.id}>
-            <TableCell>{emp.nome_completo}</TableCell>
-            <TableCell>
-              OTE: {formatCurrency(emp.comp_plan!.ote_total)}
-            </TableCell>
-            <TableCell>
-              OTE: {formatCurrency(emp.cargo_catalogo!.ote_total)}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-    
-    <DialogFooter>
-      <Button onClick={() => syncWithCatalog.mutate(divergencias.map(d => d.id))}>
-        Sincronizar Todos
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-```
+| Indicador | Valor Base (exibido) | Valor Final (salvo) | Problema |
+|-----------|---------------------|---------------------|----------|
+| Agendamentos | R$ 475,07 × 1 = | R$ 422,28 | ❌ Não bate |
+| Realizadas | R$ 475,07 × 0.7 = | R$ 295,60 | ❌ Não bate |
+| Tentativas | R$ 199,94 × 0.5 = | R$ 88,86 | ❌ Não bate |
+| Organização | R$ 199,94 × 1 = | R$ 177,72 | ❌ Não bate |
 
 ---
 
-## Resumo das Mudanças
+## Solução
+
+### 1. Corrigir Edge Function (principal)
+
+Modificar `recalculate-sdr-payout/index.ts` para usar `variavel_total` diretamente:
+
+**Linha 317-318 - ANTES:**
+```typescript
+const variavelTotal = compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
+                      compPlan.valor_tentativas + compPlan.valor_organizacao;
+```
+
+**DEPOIS:**
+```typescript
+// Usar variavel_total do compPlan, com fallback para soma dos valores individuais
+const variavelTotal = compPlan.variavel_total || 
+  (compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
+   compPlan.valor_tentativas + compPlan.valor_organizacao);
+```
+
+### 2. Recalcular o Payout
+
+Após a correção, o usuário precisará:
+1. Clicar em **"Salvar e Recalcular"** na página de fechamento
+2. Os valores serão recalculados com o variável correto (R$ 1.350)
+
+---
+
+## Valores Esperados Após Correção
+
+Com variável = R$ 1.350 e os pesos configurados (35.19% / 35.19% / 14.81% / 14.81%):
+
+| Indicador | Valor Base | Mult | Valor Final |
+|-----------|-----------|------|-------------|
+| Agendamentos | R$ 475,07 | 1.0x | **R$ 475,07** |
+| Realizadas | R$ 475,07 | 0.7x | **R$ 332,55** |
+| Tentativas | R$ 199,94 | 0.5x | **R$ 99,97** |
+| Organização | R$ 199,94 | 1.0x | **R$ 199,94** |
+| **TOTAL** | | | **R$ 1.107,53** |
+
+Variável Total atual: R$ 984,46 → Esperado: **R$ 1.107,53**
+
+---
+
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| **SQL** | UPDATE para corrigir plano da Carol Correa |
-| `src/components/fechamento/PlansOteTab.tsx` | Adicionar detecção de divergências, botão de alerta e dialog de sincronização |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Usar `compPlan.variavel_total` ao invés da soma dos valores individuais |
 
 ---
 
-## Sequência de Implementação
+## Resumo Técnico
 
-1. **Corrigir Carol Correa** via SQL UPDATE (imediato)
-2. **Adicionar funcionalidade de sincronização** em `PlansOteTab.tsx` para futuras divergências
+O bug ocorre porque:
+1. O sistema permite atualizar `variavel_total` independentemente dos valores individuais
+2. A edge function soma os valores individuais ao invés de usar o `variavel_total`
+3. Isso causa discrepância quando o plano é atualizado parcialmente
+
+A correção garante que sempre use o `variavel_total` como fonte da verdade para os cálculos.
