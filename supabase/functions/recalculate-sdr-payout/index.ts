@@ -490,29 +490,61 @@ serve(async (req) => {
               if (slotsError) {
                 console.log(`   ⚠️ Erro ao buscar slots de Closer para ${sdr.name}: ${slotsError.message}`);
               } else if (closerSlots) {
-                // Para Closer: agendadas = total de reuniões alocadas, realizadas = status completed
+                // Para Closer: agendadas = total de reuniões alocadas
                 reunioesAgendadas = closerSlots.length;
-                reunioesRealizadas = closerSlots.filter(m => m.status === 'completed').length;
-                noShows = closerSlots.filter(m => m.status === 'no_show').length;
-                taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
                 
-                // Buscar contratos pagos (attendees com contract_paid_at no período)
-                const { data: attendeesData } = await supabase
-                  .from('meeting_slot_attendees')
-                  .select('id, contract_paid_at')
-                  .in('slot_id', closerSlots.map(s => s.id))
-                  .not('contract_paid_at', 'is', null);
+                // Buscar attendees para contar realizadas, no-shows e contratos
+                const slotIds = closerSlots.map(s => s.id);
                 
-                if (attendeesData) {
-                  // Filtrar por contratos pagos no período
-                  contratosPagos = attendeesData.filter(a => {
-                    if (!a.contract_paid_at) return false;
-                    const paidAt = a.contract_paid_at.substring(0, 10);
-                    return paidAt >= monthStart && paidAt <= monthEnd;
-                  }).length;
+                if (slotIds.length > 0) {
+                  // Buscar attendees desses slots
+                  const { data: attendeesData } = await supabase
+                    .from('meeting_slot_attendees')
+                    .select('id, status, contract_paid_at')
+                    .in('slot_id', slotIds);
+                  
+                  if (attendeesData) {
+                    // Realizadas = attendees com status completed, contract_paid ou refunded
+                    reunioesRealizadas = attendeesData.filter(a => 
+                      ['completed', 'contract_paid', 'refunded'].includes(a.status)
+                    ).length;
+                    
+                    // No-shows = attendees com status no_show
+                    noShows = attendeesData.filter(a => a.status === 'no_show').length;
+                  }
                 }
                 
-                console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}, Contratos=${contratosPagos}`);
+                taxaNoShow = reunioesAgendadas > 0 ? (noShows / reunioesAgendadas) * 100 : 0;
+                
+                // ===== CONTRATOS PAGOS: Buscar pela DATA DO PAGAMENTO (igual ao hook useCloserAgendaMetrics) =====
+                // Método 1: Contratos com contract_paid_at no período (nova lógica)
+                const { data: contractsByPaymentDate } = await supabase
+                  .from('meeting_slot_attendees')
+                  .select('id, status, contract_paid_at, meeting_slot:meeting_slots!inner(closer_id)')
+                  .eq('meeting_slot.closer_id', closerRecord.id)
+                  .in('status', ['contract_paid', 'refunded'])
+                  .not('contract_paid_at', 'is', null)
+                  .gte('contract_paid_at', `${monthStart}T00:00:00`)
+                  .lte('contract_paid_at', `${monthEnd}T23:59:59`);
+                
+                const contractsNewCount = contractsByPaymentDate?.length || 0;
+                
+                // Método 2: Fallback para contratos antigos sem contract_paid_at (usa scheduled_at)
+                const { data: contractsLegacy } = await supabase
+                  .from('meeting_slot_attendees')
+                  .select('id, status, meeting_slot:meeting_slots!inner(closer_id, scheduled_at)')
+                  .eq('meeting_slot.closer_id', closerRecord.id)
+                  .in('status', ['contract_paid', 'refunded'])
+                  .is('contract_paid_at', null)
+                  .gte('meeting_slot.scheduled_at', `${monthStart}T00:00:00`)
+                  .lte('meeting_slot.scheduled_at', `${monthEnd}T23:59:59`);
+                
+                const contractsLegacyCount = contractsLegacy?.length || 0;
+                
+                contratosPagos = contractsNewCount + contractsLegacyCount;
+                
+                console.log(`   📊 Métricas de Closer para ${sdr.name}: Alocadas=${reunioesAgendadas}, Realizadas=${reunioesRealizadas}, No-Shows=${noShows}`);
+                console.log(`   📊 Contratos para ${sdr.name}: Por data pagamento=${contractsNewCount}, Legacy=${contractsLegacyCount}, Total=${contratosPagos}`);
               }
             } else {
               console.log(`   ⚠️ Closer ${sdr.name} não encontrado na tabela closers`);
@@ -648,12 +680,27 @@ serve(async (req) => {
           console.log(`   ✅ Comp plan fallback criado para ${sdr.name} (Nível ${nivel}): OTE R$${fallbackValues.ote_total}`);
         }
 
-        // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FILTRO POR SQUAD E meta_percentual) =====
+        // ===== BUSCAR MÉTRICAS ATIVAS CONFIGURADAS (COM FALLBACK PARA meta_percentual) =====
         let metricasAtivas: MetricaAtiva[] = [];
         if (employeeData?.cargo_catalogo_id) {
           let metricas: MetricaAtiva[] | null = null;
+          let metricasGenericas: MetricaAtiva[] | null = null;
           
-          // Primeiro: buscar métricas específicas do squad
+          // Primeiro: buscar métricas genéricas (squad = null) - precisamos delas para fallback
+          const { data: genericData } = await supabase
+            .from('fechamento_metricas_mes')
+            .select('nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
+            .eq('ano_mes', ano_mes)
+            .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
+            .is('squad', null)
+            .eq('ativo', true);
+          
+          if (genericData && genericData.length > 0) {
+            metricasGenericas = genericData;
+            console.log(`   📋 Métricas genéricas encontradas: ${metricasGenericas.map(m => `${m.nome_metrica}(meta%=${m.meta_percentual || 'null'})`).join(', ')}`);
+          }
+          
+          // Segundo: buscar métricas específicas do squad
           if (sdr.squad) {
             const { data: metricasSquad } = await supabase
               .from('fechamento_metricas_mes')
@@ -666,22 +713,28 @@ serve(async (req) => {
             if (metricasSquad && metricasSquad.length > 0) {
               metricas = metricasSquad;
               console.log(`   📋 Métricas específicas do squad '${sdr.squad}' encontradas`);
+              
+              // ===== FALLBACK: Se métrica de contratos do squad não tem meta_percentual, usar da genérica =====
+              const metricaContratosSquad = metricas.find(m => m.nome_metrica === 'contratos');
+              if (metricaContratosSquad && !metricaContratosSquad.meta_percentual && metricasGenericas) {
+                const metricaContratosGenerica = metricasGenericas.find(m => m.nome_metrica === 'contratos');
+                if (metricaContratosGenerica?.meta_percentual) {
+                  console.log(`   🔄 Fallback: Usando meta_percentual=${metricaContratosGenerica.meta_percentual}% da métrica genérica para contratos`);
+                  metricas = metricas.map(m => 
+                    m.nome_metrica === 'contratos' 
+                      ? { ...m, meta_percentual: metricaContratosGenerica.meta_percentual }
+                      : m
+                  );
+                }
+              }
             }
           }
           
-          // Fallback: métricas genéricas (squad = null)
+          // Fallback: métricas genéricas se não encontrou específicas do squad
           if (!metricas || metricas.length === 0) {
-            const { data: metricasGerais } = await supabase
-              .from('fechamento_metricas_mes')
-              .select('nome_metrica, peso_percentual, meta_valor, meta_percentual, fonte_dados')
-              .eq('ano_mes', ano_mes)
-              .eq('cargo_catalogo_id', employeeData.cargo_catalogo_id)
-              .is('squad', null)
-              .eq('ativo', true);
-            
-            if (metricasGerais && metricasGerais.length > 0) {
-              metricas = metricasGerais;
-              console.log(`   📋 Métricas genéricas (sem squad) encontradas`);
+            if (metricasGenericas && metricasGenericas.length > 0) {
+              metricas = metricasGenericas;
+              console.log(`   📋 Usando métricas genéricas (sem squad)`);
             }
           }
           

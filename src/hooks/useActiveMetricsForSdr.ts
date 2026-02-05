@@ -83,29 +83,64 @@ export const useActiveMetricsForSdr = (sdrId: string | undefined, anoMes: string
       }
 
       // Step 3: Fetch active metrics from fechamento_metricas_mes
-      let query = supabase
+      // First, always fetch generic metrics (squad = null) for fallback
+      const { data: genericMetrics } = await supabase
         .from('fechamento_metricas_mes')
         .select('*')
         .eq('ano_mes', anoMes)
         .eq('cargo_catalogo_id', cargoId)
+        .is('squad', null)
         .eq('ativo', true)
         .order('created_at', { ascending: true });
-
-      // Add squad filter if present
+      
+      // If squad is specified, try to get squad-specific metrics
+      let metricas: ActiveMetric[] | null = null;
+      
       if (squad) {
-        query = query.eq('squad', squad);
+        const { data: squadMetrics, error: squadError } = await supabase
+          .from('fechamento_metricas_mes')
+          .select('*')
+          .eq('ano_mes', anoMes)
+          .eq('cargo_catalogo_id', cargoId)
+          .eq('squad', squad)
+          .eq('ativo', true)
+          .order('created_at', { ascending: true });
+        
+        if (squadError) {
+          console.error('Error fetching squad metrics:', squadError);
+        }
+        
+        if (squadMetrics && squadMetrics.length > 0) {
+          // Check if contratos metric has meta_percentual, if not, use from generic
+          const contratosMetrica = squadMetrics.find(m => m.nome_metrica === 'contratos');
+          if (contratosMetrica && !contratosMetrica.meta_percentual && genericMetrics) {
+            const genericContratos = genericMetrics.find(m => m.nome_metrica === 'contratos');
+            if (genericContratos?.meta_percentual) {
+              console.log(`Fallback: Using meta_percentual=${genericContratos.meta_percentual}% from generic metric for contratos`);
+              metricas = squadMetrics.map(m => 
+                m.nome_metrica === 'contratos' 
+                  ? { ...m, meta_percentual: genericContratos.meta_percentual }
+                  : m
+              ) as ActiveMetric[];
+            } else {
+              metricas = squadMetrics as ActiveMetric[];
+            }
+          } else {
+            metricas = squadMetrics as ActiveMetric[];
+          }
+        }
       }
-
-      const { data: metricas, error: metricasError } = await query;
-
-      if (metricasError) {
-        console.error('Error fetching metrics:', metricasError);
-        return { metricas: [], fonte: 'fallback' as const, roleType };
+      
+      // Fallback to generic metrics if no squad-specific found
+      if (!metricas || metricas.length === 0) {
+        if (genericMetrics && genericMetrics.length > 0) {
+          metricas = genericMetrics as ActiveMetric[];
+        }
       }
 
       if (metricas && metricas.length > 0) {
         return { 
-          metricas: metricas as ActiveMetric[], 
+          metricas: metricas, 
           fonte: 'configuradas' as const,
           roleType
         };
