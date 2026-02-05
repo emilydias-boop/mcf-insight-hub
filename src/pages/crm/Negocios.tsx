@@ -430,8 +430,14 @@ const Negocios = () => {
       // Filtro por tags selecionadas
       if (filters.selectedTags.length > 0) {
         const dealTags = deal.tags || [];
-        const hasMatchingTag = filters.selectedTags.some(tag => 
-          dealTags.includes(tag)
+        
+        // Normalizar para comparação segura (NFC + trim + lowercase)
+        const normalizeTag = (t: string) => t.normalize('NFC').trim().toLowerCase();
+        const normalizedSelectedTags = filters.selectedTags.map(normalizeTag);
+        const normalizedDealTags = dealTags.map((t: string) => normalizeTag(t));
+        
+        const hasMatchingTag = normalizedSelectedTags.some(selectedTag => 
+          normalizedDealTags.includes(selectedTag)
         );
         if (!hasMatchingTag) return false;
       }
