@@ -1,109 +1,62 @@
 
-# Plano: Corrigir Atribuição de Closer R1 para Leads Remanejados
+# Plano: Corrigir Ordenacao do Closer R1 Mais Recente
 
-## Problema Identificado
+## Problema
 
-Quando um lead com "Contrato Pago" é remanejado para outro closer, o sistema continua mostrando o closer original (onde o contrato foi pago) em vez do closer atual (para onde foi movido).
+A query do Supabase com `.order('meeting_slots(scheduled_at)')` nao esta ordenando corretamente os resultados aninhados. A ordenacao por campos de relacionamentos no Supabase client tem limitacoes.
 
-**Exemplo:** Eduardo Spadaro
-- Pagou contrato na R1 do Julio (29/01)
-- Foi remanejado para Cristiane Gomes (04/02)
-- Sistema mostra "Julio" como Closer R1, mas deveria mostrar "Cristiane Gomes"
+## Solucao
 
----
-
-## Solução
-
-Alterar a lógica do `useR2PendingLeads` para buscar o **closer mais recente** do lead, não apenas o closer da reunião onde o contrato foi pago.
+Ordenar os resultados no JavaScript apos recebe-los, em vez de confiar na ordenacao do Supabase.
 
 ---
 
-## Alterações Técnicas
+## Alteracao
 
 ### Arquivo: `src/hooks/useR2PendingLeads.ts`
 
-**Lógica atual:**
-```
-Busca attendee com status = 'contract_paid'
-     ↓
-Retorna closer desse attendee
-```
+Modificar o Step 7 para ordenar os dados localmente:
 
-**Nova lógica:**
-```
-Busca attendee com status = 'contract_paid'
-     ↓
-Busca TODOS attendees do mesmo contato/deal
-     ↓
-Identifica o mais recente (por scheduled_at)
-     ↓
-Retorna closer do attendee mais recente
-```
-
-**Alterações no código:**
-
-1. Após buscar os attendees com `contract_paid`, fazer uma segunda query para buscar o **attendee mais recente** de cada contato/deal
-
-2. Criar um mapa `contactId -> latestCloser` com o closer da reunião mais recente
-
-3. Enriquecer os dados retornados com `latest_closer` em vez de usar apenas `meeting_slot.closer`
-
-4. Atualizar a interface `R2PendingLead` para incluir o campo do closer mais recente
-
----
-
-## Código Proposto
-
+**Antes (linhas 236-243):**
 ```typescript
-// Após Step 6, antes de retornar pendingLeads:
-
-// Step 7: Para cada lead pendente, buscar o closer mais recente
-const dealIds = pendingLeads
-  .filter(a => a.deal_id)
-  .map(a => a.deal_id);
-
-const { data: latestAttendees } = await supabase
-  .from('meeting_slot_attendees')
-  .select(`
-    deal_id,
-    meeting_slot:meeting_slots!inner(
-      scheduled_at,
-      meeting_type,
-      closer:closers(id, name)
-    )
-  `)
-  .in('deal_id', dealIds)
-  .eq('meeting_slots.meeting_type', 'r1')
-  .order('meeting_slots.scheduled_at', { ascending: false });
-
-// Criar mapa: deal_id -> closer mais recente
-const latestCloserMap = new Map();
-latestAttendees?.forEach(att => {
-  if (!latestCloserMap.has(att.deal_id)) {
-    latestCloserMap.set(att.deal_id, att.meeting_slot?.closer);
+// Create map: deal_id -> most recent closer
+const latestCloserMap = new Map<string, { id: string; name: string } | null>();
+((latestAttendees as any[]) || []).forEach(att => {
+  if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
+    const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+    latestCloserMap.set(att.deal_id, slot?.closer || null);
   }
 });
+```
 
-// Enriquecer pendingLeads com closer mais recente
-return pendingLeads.map(lead => ({
-  ...lead,
-  meeting_slot: {
-    ...lead.meeting_slot,
-    closer: latestCloserMap.get(lead.deal_id) || lead.meeting_slot?.closer
+**Depois:**
+```typescript
+// Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
+const sortedAttendees = ((latestAttendees as any[]) || [])
+  .map(att => {
+    const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
+    return {
+      deal_id: att.deal_id,
+      scheduled_at: slot?.scheduled_at,
+      closer: slot?.closer
+    };
+  })
+  .sort((a, b) => {
+    if (!a.scheduled_at || !b.scheduled_at) return 0;
+    return new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime();
+  });
+
+// Create map: deal_id -> most recent closer
+const latestCloserMap = new Map<string, { id: string; name: string } | null>();
+sortedAttendees.forEach(att => {
+  if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
+    latestCloserMap.set(att.deal_id, att.closer || null);
   }
-}));
+});
 ```
 
 ---
 
 ## Resultado Esperado
 
-Após a alteração, o Eduardo Spadaro aparecerá com:
-- **Closer R1: Cristiane Gomes** (reunião mais recente em 04/02)
-- Em vez de Julio (reunião original com contrato pago em 29/01)
-
----
-
-## Impacto
-
-Esta alteração afeta apenas a **exibição** na aba "Pendentes". A atribuição do contrato e métricas financeiras continuam baseadas no registro original de `contract_paid`.
+Eduardo Spadaro aparecera com **Cristiane Gomes** como Closer R1 (reuniao mais recente em 04/02), em vez de Julio.
