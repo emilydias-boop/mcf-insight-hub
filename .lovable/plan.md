@@ -1,85 +1,69 @@
 
-# Correção: Cálculo Incorreto do Variável na Edge Function
+# Correção: Erro de Sintaxe na Edge Function
 
 ## Problema Identificado
 
-A edge function `recalculate-sdr-payout` está calculando o valor variável de forma incorreta:
+A edge function `recalculate-sdr-payout` não está carregando devido a dois erros:
 
-```typescript
-// LINHA 317-318 (INCORRETO)
-const variavelTotal = compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
-                      compPlan.valor_tentativas + compPlan.valor_organizacao;
-// Resultado: 300 + 300 + 300 + 300 = R$ 1.200 ❌
+### Erro 1: Declaração duplicada de variáveis
+```
+Uncaught SyntaxError: Identifier 'year' has already been declared
+at file:///var/tmp/sb-compile-edge-runtime/recalculate-sdr-payout/index.ts:416:12
 ```
 
-Deveria usar:
-```typescript
-// CORRETO
-const variavelTotal = compPlan.variavel_total;
-// Resultado: R$ 1.350 ✓
-```
+O código declara `const [year, month]` duas vezes no mesmo escopo:
 
-### Dados da Carol Correa
+| Linha | Código |
+|-------|--------|
+| 455 | `const [year, month] = ano_mes.split('-').map(Number);` |
+| 569 | `const [year, month] = ano_mes.split('-').map(Number);` (DUPLICADO) |
 
-| Campo | Valor Atual | Esperado |
-|-------|------------|----------|
-| `variavel_total` | R$ 1.350 | ✓ Correto |
-| Soma dos valores individuais | R$ 1.200 | ❌ Desatualizado |
-
-### Impacto nos Indicadores
-
-Os cards estão mostrando inconsistências matemáticas:
-
-| Indicador | Valor Base (exibido) | Valor Final (salvo) | Problema |
-|-----------|---------------------|---------------------|----------|
-| Agendamentos | R$ 475,07 × 1 = | R$ 422,28 | ❌ Não bate |
-| Realizadas | R$ 475,07 × 0.7 = | R$ 295,60 | ❌ Não bate |
-| Tentativas | R$ 199,94 × 0.5 = | R$ 88,86 | ❌ Não bate |
-| Organização | R$ 199,94 × 1 = | R$ 177,72 | ❌ Não bate |
+### Erro 2: Interface incompleta
+A interface `CompPlan` (linha 31-44) não inclui `variavel_total`, mas o código na linha 317 tenta acessar `compPlan.variavel_total`.
 
 ---
 
 ## Solução
 
-### 1. Corrigir Edge Function (principal)
+### 1. Adicionar `variavel_total` à interface `CompPlan`
 
-Modificar `recalculate-sdr-payout/index.ts` para usar `variavel_total` diretamente:
+**Arquivo**: `supabase/functions/recalculate-sdr-payout/index.ts`
+**Linhas**: 31-44
 
-**Linha 317-318 - ANTES:**
 ```typescript
-const variavelTotal = compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
-                      compPlan.valor_tentativas + compPlan.valor_organizacao;
+interface CompPlan {
+  meta_reunioes_agendadas: number;
+  meta_reunioes_realizadas: number;
+  meta_tentativas: number;
+  meta_organizacao: number;
+  valor_meta_rpg: number;
+  valor_docs_reuniao: number;
+  valor_tentativas: number;
+  valor_organizacao: number;
+  fixo_valor: number;
+  ifood_mensal: number;
+  ifood_ultrameta: number;
+  dias_uteis: number;
+  variavel_total: number; // ADICIONAR
+}
 ```
 
-**DEPOIS:**
+### 2. Remover declaração duplicada na linha 569
+
+**Arquivo**: `supabase/functions/recalculate-sdr-payout/index.ts`
+**Linha**: 569
+
+Remover a linha duplicada:
 ```typescript
-// Usar variavel_total do compPlan, com fallback para soma dos valores individuais
-const variavelTotal = compPlan.variavel_total || 
-  (compPlan.valor_meta_rpg + compPlan.valor_docs_reuniao + 
-   compPlan.valor_tentativas + compPlan.valor_organizacao);
+// REMOVER esta linha:
+const [year, month] = ano_mes.split('-').map(Number);
 ```
 
-### 2. Recalcular o Payout
+As variáveis `year`, `month`, `monthStart` e `monthEnd` já foram declaradas anteriormente na linha 455-460, então podem ser reutilizadas na linha 569-572.
 
-Após a correção, o usuário precisará:
-1. Clicar em **"Salvar e Recalcular"** na página de fechamento
-2. Os valores serão recalculados com o variável correto (R$ 1.350)
+### 3. Reimplantar a Edge Function
 
----
-
-## Valores Esperados Após Correção
-
-Com variável = R$ 1.350 e os pesos configurados (35.19% / 35.19% / 14.81% / 14.81%):
-
-| Indicador | Valor Base | Mult | Valor Final |
-|-----------|-----------|------|-------------|
-| Agendamentos | R$ 475,07 | 1.0x | **R$ 475,07** |
-| Realizadas | R$ 475,07 | 0.7x | **R$ 332,55** |
-| Tentativas | R$ 199,94 | 0.5x | **R$ 99,97** |
-| Organização | R$ 199,94 | 1.0x | **R$ 199,94** |
-| **TOTAL** | | | **R$ 1.107,53** |
-
-Variável Total atual: R$ 984,46 → Esperado: **R$ 1.107,53**
+Após as correções, reimplantar a função para que as mudanças entrem em vigor.
 
 ---
 
@@ -87,15 +71,14 @@ Variável Total atual: R$ 984,46 → Esperado: **R$ 1.107,53**
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/recalculate-sdr-payout/index.ts` | Usar `compPlan.variavel_total` ao invés da soma dos valores individuais |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Adicionar `variavel_total` na interface CompPlan (linha 43) |
+| `supabase/functions/recalculate-sdr-payout/index.ts` | Remover declaração duplicada de `[year, month]` (linha 569-572) |
 
 ---
 
-## Resumo Técnico
+## Resultado Esperado
 
-O bug ocorre porque:
-1. O sistema permite atualizar `variavel_total` independentemente dos valores individuais
-2. A edge function soma os valores individuais ao invés de usar o `variavel_total`
-3. Isso causa discrepância quando o plano é atualizado parcialmente
-
-A correção garante que sempre use o `variavel_total` como fonte da verdade para os cálculos.
+Após a correção:
+1. A edge function carregará sem erros de sintaxe
+2. O cálculo usará corretamente o `variavel_total` do plano de compensação
+3. O fechamento da Carol Correa exibirá os valores corretos (Variável R$ 1.350)
