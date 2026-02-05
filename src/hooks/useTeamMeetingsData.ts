@@ -71,7 +71,8 @@ export function useTeamMeetingsData({ startDate, endDate, sdrEmailFilter }: Team
           agendamentos: m.agendamentos,
           r1Agendada: m.r1_agendada,
           r1Realizada: m.r1_realizada,
-          noShows: m.no_shows,
+          // NOVA LÓGICA: No-Show = Agendamentos - Realizadas (garantir consistência)
+          noShows: Math.max(0, m.agendamentos - m.r1_realizada),
           contratos: m.contratos,
         };
       })
