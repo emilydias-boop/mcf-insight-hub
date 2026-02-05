@@ -1,109 +1,64 @@
 
-# Plano: Buscar Closer R1 Mais Recente por Contato (Nao por Deal)
+# Plano: Deduplicar Leads Pendentes por Contact ID
 
 ## Problema Identificado
 
-Eduardo Spadaro tem dois deals diferentes:
-- Deal A (Julio, 29/01): status `contract_paid`
-- Deal B (Cristiane, 04/02): status `no_show`
+Eduardo Spadaro aparece duas vezes na lista:
+- R1: 04/02 às 19:00 (Mateus Macedo) - registro mais recente
+- R1: 29/01 às 18:00 (Julio) - registro antigo
 
-O Step 7 atual busca reunioes apenas pelo `deal_id` do registro com `contract_paid`, ignorando outros deals do mesmo contato.
+Ambos os registros têm status `contract_paid`, mas representam o **mesmo contato**. A lista deveria mostrar apenas o mais recente.
 
-## Solucao
+## Solução
 
-Modificar o Step 7 para buscar a R1 mais recente por **contact_id** em vez de **deal_id**.
+Adicionar um passo de deduplicação por `contact_id` após o Step 6, antes de aplicar o Step 7.
 
 ---
 
-## Alteracoes
+## Alterações
 
 ### Arquivo: `src/hooks/useR2PendingLeads.ts`
 
-#### 1. Coletar todos os deal_ids de todos os contatos (linhas 216-219)
+#### Adicionar Step 6.5: Deduplicar por contact_id (após linha 214)
 
-**Antes:**
 ```typescript
-const dealIdsForLatestCloser = pendingLeads
-  .filter(a => a.deal_id)
-  .map(a => a.deal_id as string);
-```
+// Step 6.5: Deduplicate by contact_id, keeping the most recent meeting
+const seenContacts = new Map<string, R2PendingLead>();
+const deduplicatedLeads: R2PendingLead[] = [];
 
-**Depois:**
-```typescript
-// Collect all deal_ids for all contacts (to find meetings across all their deals)
-const contactIdsForLatestCloser = new Set<string>();
 pendingLeads.forEach(lead => {
-  if (lead.contact_id) contactIdsForLatestCloser.add(lead.contact_id);
-});
-
-// Get all deal_ids for these contacts (we already have this from Step 3)
-const allDealIdsForContacts = new Set<string>();
-contactIdsForLatestCloser.forEach(contactId => {
-  const deals = contactToDealIds.get(contactId);
-  if (deals) deals.forEach(d => allDealIdsForContacts.add(d));
-});
-```
-
-#### 2. Atualizar a query para usar todos os deals dos contatos (linhas 221-234)
-
-**Antes:**
-```typescript
-if (dealIdsForLatestCloser.length > 0) {
-  const { data: latestAttendees } = await supabase
-    ...
-    .in('deal_id', dealIdsForLatestCloser)
-```
-
-**Depois:**
-```typescript
-if (allDealIdsForContacts.size > 0) {
-  const { data: latestAttendees } = await supabase
-    ...
-    .in('deal_id', Array.from(allDealIdsForContacts))
-```
-
-#### 3. Criar mapeamento contact_id -> closer (em vez de deal_id -> closer)
-
-**Antes:**
-```typescript
-const latestCloserMap = new Map<string, { id: string; name: string } | null>();
-sortedAttendees.forEach(att => {
-  if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
-    latestCloserMap.set(att.deal_id, att.closer || null);
+  // Use contact_id as primary key, fallback to normalized_name or normalized_phone
+  const dedupeKey = lead.contact_id 
+    || lead.normalized_name 
+    || lead.normalized_phone 
+    || lead.id; // fallback to unique id if no correlation
+  
+  const existing = seenContacts.get(dedupeKey);
+  
+  if (!existing) {
+    seenContacts.set(dedupeKey, lead);
+    return;
+  }
+  
+  // Keep the one with the most recent meeting
+  const existingDate = existing.meeting_slot?.scheduled_at 
+    ? new Date(existing.meeting_slot.scheduled_at).getTime() 
+    : 0;
+  const currentDate = lead.meeting_slot?.scheduled_at 
+    ? new Date(lead.meeting_slot.scheduled_at).getTime() 
+    : 0;
+  
+  if (currentDate > existingDate) {
+    seenContacts.set(dedupeKey, lead);
   }
 });
+
+const uniquePendingLeads = Array.from(seenContacts.values());
 ```
 
-**Depois:**
-```typescript
-// Create map: contact_id -> most recent closer (across all deals)
-const latestCloserByContact = new Map<string, { id: string; name: string } | null>();
+#### Atualizar referências ao `pendingLeads` no Step 7
 
-sortedAttendees.forEach(att => {
-  if (!att.deal_id) return;
-  // Find which contact owns this deal
-  for (const [contactId, dealSet] of contactToDealIds.entries()) {
-    if (dealSet.has(att.deal_id) && !latestCloserByContact.has(contactId)) {
-      latestCloserByContact.set(contactId, att.closer || null);
-      break;
-    }
-  }
-});
-```
-
-#### 4. Atualizar o enriquecimento para usar contact_id (linhas 261-274)
-
-**Antes:**
-```typescript
-return pendingLeads.map(lead => {
-  const latestCloser = lead.deal_id ? latestCloserMap.get(lead.deal_id) : null;
-```
-
-**Depois:**
-```typescript
-return pendingLeads.map(lead => {
-  const latestCloser = lead.contact_id ? latestCloserByContact.get(lead.contact_id) : null;
-```
+Substituir todas as referências a `pendingLeads` por `uniquePendingLeads` no Step 7 e no retorno final.
 
 ---
 
@@ -112,24 +67,27 @@ return pendingLeads.map(lead => {
 ```text
 Eduardo Spadaro (contact_id: X)
     |
-    +-- Deal A (Julio, 29/01, contract_paid) <-- registro original
-    +-- Deal B (Cristiane, 04/02, no_show)   <-- reuniao mais recente
+    +-- R1 Julio (29/01, contract_paid)
+    +-- R1 Mateus (04/02, contract_paid)  <-- mais recente
     |
     V
-Step 7 busca R1s de TODOS os deals do contact X
+Step 6: Ambos passam (nenhum tem R2)
     |
     V
-Ordena por data DESC -> Cristiane (04/02) eh o mais recente
+Step 6.5 (NOVO): Deduplica por contact_id
+    - Mantém apenas Mateus (04/02) pois é mais recente
     |
     V
-Mapeia contact X -> Cristiane
+Step 7: Enriquece com closer mais recente
     |
     V
-Eduardo aparece com Cristiane como Closer R1
+Lista final: Eduardo aparece 1x com Mateus
 ```
 
 ---
 
 ## Resultado Esperado
 
-Eduardo Spadaro aparecera corretamente sob o filtro **Cristiane Gomes** (reuniao R1 mais recente em 04/02), independente de em qual deal o contrato foi pago.
+- Eduardo Spadaro aparecerá **apenas uma vez** na lista
+- Será mostrada a R1 mais recente (04/02 às 19:00 com Mateus Macedo)
+- O contador "46 pendentes" será atualizado para refletir leads únicos
