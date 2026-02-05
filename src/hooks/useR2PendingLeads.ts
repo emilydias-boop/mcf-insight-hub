@@ -235,10 +235,25 @@ export function useR2PendingLeads() {
 
         // Create map: deal_id -> most recent closer
         const latestCloserMap = new Map<string, { id: string; name: string } | null>();
-        ((latestAttendees as any[]) || []).forEach(att => {
-          if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
+        
+        // Sort attendees by scheduled_at DESC (client-side) since Supabase nested ordering is unreliable
+        const sortedAttendees = ((latestAttendees as any[]) || [])
+          .map(att => {
             const slot = Array.isArray(att.meeting_slot) ? att.meeting_slot[0] : att.meeting_slot;
-            latestCloserMap.set(att.deal_id, slot?.closer || null);
+            return {
+              deal_id: att.deal_id,
+              scheduled_at: slot?.scheduled_at,
+              closer: slot?.closer
+            };
+          })
+          .sort((a, b) => {
+            if (!a.scheduled_at || !b.scheduled_at) return 0;
+            return new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime();
+          });
+
+        sortedAttendees.forEach(att => {
+          if (att.deal_id && !latestCloserMap.has(att.deal_id)) {
+            latestCloserMap.set(att.deal_id, att.closer || null);
           }
         });
 
