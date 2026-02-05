@@ -7263,6 +7263,111 @@ export type Database = {
           },
         ]
       }
+      team_monthly_goal_winners: {
+        Row: {
+          autorizado: boolean | null
+          autorizado_em: string | null
+          autorizado_por: string | null
+          created_at: string | null
+          goal_id: string | null
+          id: string
+          sdr_id: string | null
+          tipo_premio: string
+          valor_premio: number
+        }
+        Insert: {
+          autorizado?: boolean | null
+          autorizado_em?: string | null
+          autorizado_por?: string | null
+          created_at?: string | null
+          goal_id?: string | null
+          id?: string
+          sdr_id?: string | null
+          tipo_premio: string
+          valor_premio: number
+        }
+        Update: {
+          autorizado?: boolean | null
+          autorizado_em?: string | null
+          autorizado_por?: string | null
+          created_at?: string | null
+          goal_id?: string | null
+          id?: string
+          sdr_id?: string | null
+          tipo_premio?: string
+          valor_premio?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_monthly_goal_winners_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "team_monthly_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_monthly_goal_winners_sdr_id_fkey"
+            columns: ["sdr_id"]
+            isOneToOne: false
+            referencedRelation: "sdr"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_monthly_goals: {
+        Row: {
+          ano_mes: string
+          bu: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          meta_divina_premio_closer: number | null
+          meta_divina_premio_sdr: number | null
+          meta_divina_valor: number | null
+          meta_premio_ifood: number | null
+          meta_valor: number | null
+          supermeta_premio_ifood: number | null
+          supermeta_valor: number | null
+          ultrameta_premio_ifood: number | null
+          ultrameta_valor: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          ano_mes: string
+          bu?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          meta_divina_premio_closer?: number | null
+          meta_divina_premio_sdr?: number | null
+          meta_divina_valor?: number | null
+          meta_premio_ifood?: number | null
+          meta_valor?: number | null
+          supermeta_premio_ifood?: number | null
+          supermeta_valor?: number | null
+          ultrameta_premio_ifood?: number | null
+          ultrameta_valor?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          ano_mes?: string
+          bu?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          meta_divina_premio_closer?: number | null
+          meta_divina_premio_sdr?: number | null
+          meta_divina_valor?: number | null
+          meta_premio_ifood?: number | null
+          meta_valor?: number | null
+          supermeta_premio_ifood?: number | null
+          supermeta_valor?: number | null
+          ultrameta_premio_ifood?: number | null
+          ultrameta_valor?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       team_targets: {
         Row: {
           created_at: string | null

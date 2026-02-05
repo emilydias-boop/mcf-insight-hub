@@ -54,6 +54,7 @@ import { toast } from 'sonner';
 import { WorkingDaysCalendar } from '@/components/sdr-fechamento/WorkingDaysCalendar';
 import { ActiveMetricsTab } from '@/components/fechamento/ActiveMetricsTab';
 import { PlansOteTab } from '@/components/fechamento/PlansOteTab';
+import { TeamMonthlyGoalsTab } from '@/components/fechamento/TeamMonthlyGoalsTab';
 
 // Mapeamento de BUs comerciais válidas
 const VALID_COMMERCIAL_DEPTS = ['BU - Incorporador 50K', 'BU - Consórcio', 'BU - Crédito'];
@@ -655,6 +656,10 @@ const ConfiguracoesSdr = () => {
             <Calendar className="h-4 w-4" />
             Dias Úteis
           </TabsTrigger>
+          <TabsTrigger value="metas-equipe" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Metas Equipe
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="equipe">
@@ -771,6 +776,10 @@ const ConfiguracoesSdr = () => {
 
         <TabsContent value="calendar">
           <WorkingDaysCalendar />
+        </TabsContent>
+
+        <TabsContent value="metas-equipe">
+          <TeamMonthlyGoalsTab />
         </TabsContent>
       </Tabs>
     </div>
