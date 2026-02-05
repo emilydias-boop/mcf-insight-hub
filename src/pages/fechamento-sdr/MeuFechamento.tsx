@@ -46,6 +46,9 @@ const MeuFechamento = () => {
   } = useOwnFechamento(selectedMonth);
   const { data: myEmployee } = useMyEmployee();
 
+  // Filter: only show payout if NOT in DRAFT status
+  const visiblePayout = payout?.status !== 'DRAFT' ? payout : null;
+
   // Generate last 12 months options
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const date = subMonths(new Date(), i);
@@ -143,7 +146,7 @@ const MeuFechamento = () => {
         </Select>
       </div>
 
-      {!payout ? (
+      {!visiblePayout ? (
         <Card>
           <CardContent className="py-10 text-center">
             <p className="text-sm text-muted-foreground">
@@ -163,12 +166,12 @@ const MeuFechamento = () => {
               <CardTitle className="flex items-center gap-3 text-sm font-medium">
                 Fechamento de{' '}
                 {monthOptions.find((o) => o.value === selectedMonth)?.label}
-                <SdrStatusBadge status={payout.status} />
+                <SdrStatusBadge status={visiblePayout.status} />
               </CardTitle>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/fechamento-sdr/${payout.id}`)}
+                onClick={() => navigate(`/fechamento-sdr/${visiblePayout.id}`)}
               >
                 <Eye className="h-4 w-4 mr-2" />
                 Ver Detalhes
@@ -177,7 +180,7 @@ const MeuFechamento = () => {
           </Card>
 
           {/* NFSe Card - Show when APPROVED */}
-          {payout.status === 'APPROVED' && !payout.nfse_id && myEmployee && (
+          {visiblePayout.status === 'APPROVED' && !visiblePayout.nfse_id && myEmployee && (
             <Card className="border-warning/50 bg-warning/10">
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3">
@@ -185,7 +188,7 @@ const MeuFechamento = () => {
                   <div>
                     <p className="font-medium">Fechamento Aprovado!</p>
                     <p className="text-sm text-muted-foreground">
-                      Envie sua NFSe no valor de {formatCurrency(payout.total_conta || 0)}
+                      Envie sua NFSe no valor de {formatCurrency(visiblePayout.total_conta || 0)}
                     </p>
                   </div>
                 </div>
@@ -198,7 +201,7 @@ const MeuFechamento = () => {
           )}
 
           {/* NFSe Sent Card */}
-          {payout.nfse_id && (
+          {visiblePayout.nfse_id && (
             <Card className="border-success/50 bg-success/10">
               <CardContent className="flex items-center justify-between py-4">
                 <div className="flex items-center gap-3">
@@ -219,22 +222,22 @@ const MeuFechamento = () => {
           )}
 
           {/* Render view based on user type */}
-          {userType === 'sdr' && <SdrFechamentoView payout={payout} />}
+          {userType === 'sdr' && <SdrFechamentoView payout={visiblePayout} />}
           {userType === 'closer' && (
-            <CloserFechamentoView payout={payout} closerMetrics={closerMetrics} />
+            <CloserFechamentoView payout={visiblePayout} closerMetrics={closerMetrics} />
           )}
         </>
       )}
 
       {/* NFSe Modal */}
-      {myEmployee && payout && (
+      {myEmployee && visiblePayout && (
         <EnviarNfseFechamentoModal
           open={showNfseModal}
           onOpenChange={setShowNfseModal}
-          payoutId={payout.id}
+          payoutId={visiblePayout.id}
           employeeId={myEmployee.id}
           anoMes={selectedMonth}
-          valorEsperado={payout.total_conta || 0}
+          valorEsperado={visiblePayout.total_conta || 0}
           onSuccess={handleNfseSuccess}
         />
       )}
