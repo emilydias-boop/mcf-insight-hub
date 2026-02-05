@@ -1,49 +1,89 @@
 
-# Diagnóstico: Métricas Ativas ESTÃO Funcionando Corretamente
+# Plano: Corrigir Valor Base dos Indicadores para Usar Pesos das Métricas Ativas
 
-## O que encontrei
+## Problema Identificado
 
-Após análise detalhada, confirmei que **os novos pesos das métricas ativas ESTÃO sendo aplicados corretamente** no fechamento da Carol Correa.
+Na tela de fechamento individual, o **valor base exibido** está mostrando R$ 300,00 (valor fixo antigo do `compPlan`) ao invés de calcular dinamicamente baseado nos **novos pesos** configurados nas Métricas Ativas.
 
-### Dados salvos nas Métricas Ativas (corretos)
+| Métrica | Peso Configurado | Base Esperado | Base Exibido |
+|---------|------------------|---------------|--------------|
+| Agendamentos | 35.19% | R$ 422,28 | R$ 300,00 ❌ |
+| Realizadas | 35.19% | R$ 422,28 | R$ 300,00 ❌ |
+| Tentativas | 14.81% | R$ 177,72 | R$ 300,00 ❌ |
+| Organização | 14.81% | R$ 177,72 | R$ 300,00 ❌ |
 
-| Métrica | Peso Configurado |
-|---------|------------------|
-| Agendamentos | 35.19% |
-| Realizadas | 35.19% |
-| Tentativas | 14.81% |
-| Organização | 14.81% |
+### Causa Raiz
 
-### Cálculo do Payout da Carol (Janeiro 2026)
+No arquivo `DynamicIndicatorCard.tsx`, linha 144:
+```typescript
+// CÓDIGO ATUAL (errado)
+const valorBase = compPlan ? (compPlan as any)[config.compPlanValueField] || 0 : 0;
+```
 
-| Métrica | % Atingimento | Multiplicador | Base (Variável × Peso) | Valor Final |
-|---------|---------------|---------------|------------------------|-------------|
-| Agendamentos | 100.56% | 1.0 | 1200 × 35.19% = 422.28 | R$ 422.28 |
-| Realizadas | 98.41% | 0.7 (faixa 86-99%) | 1200 × 35.19% = 422.28 | R$ 295.60 |
-| Tentativas | 76.49% | 0.5 (faixa 71-85%) | 1200 × 14.81% = 177.72 | R$ 88.86 |
-| Organização | 100% | 1.0 | 1200 × 14.81% = 177.72 | R$ 177.72 |
-| **TOTAL VARIÁVEL** | | | | **R$ 984.46** |
+O sistema busca valores fixos do `compPlan` (R$ 300 cada = 25% × R$ 1.200), **ignorando completamente** o `peso_percentual` configurado nas Métricas Ativas.
 
-### Por que parece diferente?
+## Solução
 
-O valor de "Realizadas" (R$ 295.60) é menor que "Agendamentos" (R$ 422.28) **não porque o peso está errado**, mas porque:
-- Carol atingiu 98.41% da meta de Realizadas
-- Isso coloca ela na faixa de multiplicador 0.7 (86-99%)
-- Então: `422.28 × 0.7 = 295.60`
+Alterar a lógica para calcular o `valorBase` dinamicamente usando o peso da métrica ativa, da mesma forma que já funciona para métricas com `isDynamicCalc` (como "Contratos"):
 
-Enquanto em Agendamentos:
-- Carol atingiu 100.56% 
-- Multiplicador 1.0 (faixa 100-119%)
-- Então: `422.28 × 1.0 = 422.28`
+```typescript
+// CÓDIGO CORRIGIDO
+const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+const pesoPercent = metrica.peso_percentual || 25;
+const valorBase = baseVariavel * (pesoPercent / 100);
+```
 
-## Não é necessária nenhuma correção técnica
+### Fórmula
 
-O sistema está funcionando conforme esperado:
-1. ✅ Métricas são salvas corretamente por cargo/BU
-2. ✅ Edge Function busca métricas específicas do squad (incorporador)
-3. ✅ Pesos são aplicados ao variável total
-4. ✅ Multiplicadores são aplicados conforme faixas de atingimento
+```text
+Valor Base = Variável Total × (Peso % ÷ 100)
+```
 
-## Sugestão de Melhoria (Opcional)
+Para Carol (Variável = R$ 1.200):
+- **Agendamentos**: 1200 × 35.19% = R$ 422,28 ✅
+- **Realizadas**: 1200 × 35.19% = R$ 422,28 ✅
+- **Tentativas**: 1200 × 14.81% = R$ 177,72 ✅
+- **Organização**: 1200 × 14.81% = R$ 177,72 ✅
 
-Para facilitar a visualização e evitar confusão futura, podemos adicionar uma coluna "Peso %" na tela de fechamento individual, mostrando claramente qual peso está sendo usado em cada métrica.
+## Arquivo a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/fechamento/DynamicIndicatorCard.tsx` | Alterar linhas 140-144 para calcular `valorBase` usando `metrica.peso_percentual` |
+
+## Mudança de Código
+
+**Antes (linhas 139-144):**
+```typescript
+// For metrics that use SdrIndicatorCard (have payout percentage fields)
+if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
+  const pct = (payout as any)[config.payoutPctField] || 0;
+  const mult = (payout as any)[config.payoutMultField] || 0;
+  const valorFinal = (payout as any)[config.payoutValueField] || 0;
+  const valorBase = compPlan ? (compPlan as any)[config.compPlanValueField] || 0 : 0;
+```
+
+**Depois:**
+```typescript
+// For metrics that use SdrIndicatorCard (have payout percentage fields)
+if (config.payoutPctField && config.payoutMultField && config.payoutValueField) {
+  const pct = (payout as any)[config.payoutPctField] || 0;
+  const mult = (payout as any)[config.payoutMultField] || 0;
+  const valorFinal = (payout as any)[config.payoutValueField] || 0;
+  
+  // Calculate valorBase dynamically from peso_percentual
+  const baseVariavel = variavelTotal || compPlan?.variavel_total || 1200;
+  const pesoPercent = metrica.peso_percentual || 25;
+  const valorBase = baseVariavel * (pesoPercent / 100);
+```
+
+## Resultado Esperado
+
+Após a correção, os cards de indicadores exibirão:
+
+| Métrica | Exibição |
+|---------|----------|
+| Agendamentos | "R$ 422,28 × 1" = R$ 422,28 |
+| Realizadas | "R$ 422,28 × 0.7" = R$ 295,60 |
+| Tentativas | "R$ 177,72 × 0.5" = R$ 88,86 |
+| Organização | "R$ 177,72 × 1" = R$ 177,72 |
