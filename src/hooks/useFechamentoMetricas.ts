@@ -233,6 +233,7 @@ export const useCopyMetricasFromPreviousMonth = () => {
         label_exibicao: m.label_exibicao,
         peso_percentual: m.peso_percentual,
         meta_valor: m.meta_valor,
+        meta_percentual: m.meta_percentual,
         fonte_dados: m.fonte_dados,
         ativo: m.ativo,
       }));

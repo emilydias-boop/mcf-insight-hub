@@ -32,6 +32,7 @@ interface MetricaLocal {
   ativo: boolean;
   peso_percentual: number;
   meta_valor: number | null;
+  meta_percentual: number | null; // % das Realizadas (para métricas como Contratos)
 }
 
 interface ActiveMetricsTabProps {
@@ -86,6 +87,7 @@ export const ActiveMetricsTab = ({ defaultBU, lockBU = false }: ActiveMetricsTab
         ativo: saved?.ativo ?? false,
         peso_percentual: saved?.peso_percentual ?? 25,
         meta_valor: saved?.meta_valor ?? null,
+        meta_percentual: saved?.meta_percentual ?? null,
       };
     });
     setLocalMetrics(novasMetricas);
@@ -120,6 +122,18 @@ export const ActiveMetricsTab = ({ defaultBU, lockBU = false }: ActiveMetricsTab
     setHasChanges(true);
   };
 
+  const handleChangeMetaPercentual = (nome: string, pct: number | null) => {
+    setLocalMetrics(prev => prev.map(m => 
+      m.nome_metrica === nome ? { ...m, meta_percentual: pct } : m
+    ));
+    setHasChanges(true);
+  };
+
+  // Métricas que suportam meta percentual (% das Realizadas)
+  const supportsPercentualMeta = (nome: string) => {
+    return ['contratos', 'vendas_parceria'].includes(nome);
+  };
+
   const handleSave = async () => {
     const cargoId = selectedCargoId === '__all__' ? null : selectedCargoId;
     const squad = selectedSquad === '__all__' ? null : selectedSquad;
@@ -145,6 +159,7 @@ export const ActiveMetricsTab = ({ defaultBU, lockBU = false }: ActiveMetricsTab
       label_exibicao: m.label_exibicao,
       peso_percentual: m.peso_percentual,
       meta_valor: m.meta_valor,
+      meta_percentual: m.meta_percentual,
       fonte_dados: m.fonte_dados,
       ativo: true,
       // Include delete config only on first item to trigger delete+insert
@@ -345,17 +360,37 @@ export const ActiveMetricsTab = ({ defaultBU, lockBU = false }: ActiveMetricsTab
 
                     <div className="flex items-center gap-2">
                       <Label className="text-sm text-muted-foreground">Meta:</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        className="w-[100px] h-8"
-                        placeholder="Opcional"
-                        value={metrica.meta_valor ?? ''}
-                        onChange={(e) => handleChangeMeta(
-                          metrica.nome_metrica, 
-                          e.target.value ? Number(e.target.value) : null
-                        )}
-                      />
+                      {supportsPercentualMeta(metrica.nome_metrica) ? (
+                        // Para métricas com meta percentual (Contratos, Vendas Parceria)
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            className="w-[80px] h-8"
+                            placeholder="% Realiz."
+                            value={metrica.meta_percentual ?? ''}
+                            onChange={(e) => handleChangeMetaPercentual(
+                              metrica.nome_metrica, 
+                              e.target.value ? Number(e.target.value) : null
+                            )}
+                          />
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">% das Realiz.</span>
+                        </div>
+                      ) : (
+                        // Para outras métricas, meta valor tradicional
+                        <Input
+                          type="number"
+                          min={0}
+                          className="w-[100px] h-8"
+                          placeholder="Opcional"
+                          value={metrica.meta_valor ?? ''}
+                          onChange={(e) => handleChangeMeta(
+                            metrica.nome_metrica, 
+                            e.target.value ? Number(e.target.value) : null
+                          )}
+                        />
+                      )}
                     </div>
                   </>
                 )}

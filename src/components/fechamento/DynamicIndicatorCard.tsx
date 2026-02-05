@@ -93,14 +93,31 @@ export const DynamicIndicatorCard = ({
     const pesoPercent = metrica.peso_percentual || 25;
     const valorBase = baseVariavel * (pesoPercent / 100);
     
-    // Meta = meta_valor (diária) × dias úteis
-    const metaDiaria = metrica.meta_valor || 1;
-    const metaAjustada = metaDiaria * diasUteisMes;
+    // NOVA LÓGICA: Se meta_percentual está definida, usar % das Realizadas
+    let metaAjustada: number;
+    let metaDiaria: number;
+    
+    if (metrica.meta_percentual && metrica.meta_percentual > 0) {
+      // Meta dinâmica: X% das Realizadas
+      const realizadas = kpi?.reunioes_realizadas || 0;
+      metaAjustada = Math.round((realizadas * metrica.meta_percentual) / 100);
+      metaDiaria = metrica.meta_percentual; // Exibir como %
+    } else {
+      // Meta fixa: valor diário × dias úteis (comportamento anterior)
+      metaDiaria = metrica.meta_valor || 1;
+      metaAjustada = metaDiaria * diasUteisMes;
+    }
     
     // Calcular percentual e multiplicador
     const pct = metaAjustada > 0 ? (kpiValue / metaAjustada) * 100 : 0;
     const mult = getMultiplier(pct);
     const valorFinal = valorBase * mult;
+
+    // Custom subtitle based on meta type
+    const isPercentualMeta = metrica.meta_percentual && metrica.meta_percentual > 0;
+    const metaSubtitle = isPercentualMeta 
+      ? `${metrica.meta_percentual}% de ${kpi?.reunioes_realizadas || 0} realiz. = ${metaAjustada}`
+      : undefined;
 
     return (
       <SdrIndicatorCard
@@ -114,6 +131,7 @@ export const DynamicIndicatorCard = ({
         valorFinal={valorFinal}
         isPercentage={false}
         isManual={false}
+        metaSubtitle={metaSubtitle}
       />
     );
   }
