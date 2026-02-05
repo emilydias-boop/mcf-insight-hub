@@ -1,114 +1,118 @@
 
-# Plano: Adicionar Outside ao KPI de Contratos
+# Plano: Persistência e Carregamento Instantâneo dos Relatórios
 
-## Contexto
+## Problemas Identificados
 
-O card "Contratos" na página de Reuniões de Equipe mostra apenas contratos pagos (vendas após a reunião). O usuário quer que também inclua **Outside** (vendas realizadas ANTES da reunião agendada).
+1. **Recarrega ao sair da página**: `refetchOnWindowFocus` está no default (`true`), causando refetch sempre que o usuário volta à aba
+2. **`staleTime` muito curto**: Apenas 2 minutos - dados são considerados "stale" rapidamente
+3. **Sem dados de placeholder**: Não usa `keepPreviousData`, então mostra loading spinner enquanto busca novos dados
 
 ## Solução
 
-Criar um novo hook para calcular "Outside" por SDR (similar ao que já existe para Closers no `useR1CloserMetrics`) e somar esse valor ao total de contratos no TeamKPICards.
+Atualizar os hooks de relatório para:
+- Desabilitar refetch ao focar janela
+- Aumentar tempo de cache
+- Mostrar dados anteriores enquanto atualiza em background
 
 ---
 
-## Alterações
+## Alterações Necessárias
 
-### 1. Criar Hook: `src/hooks/useSdrOutsideMetrics.ts`
+### 1. Hook: `src/hooks/useContractReport.ts`
 
-Hook que detecta leads cujo contrato foi pago ANTES da reunião R1 agendada, agrupando por SDR:
+Atualizar configuração do useQuery (linha 40-221):
 
 ```typescript
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { format, startOfDay, endOfDay } from "date-fns";
-import { SDR_LIST } from "@/constants/team";
-
-export const useSdrOutsideMetrics = (startDate: Date | null, endDate: Date | null) => {
-  return useQuery({
-    queryKey: ['sdr-outside-metrics', 
-      startDate ? format(startDate, 'yyyy-MM-dd') : null,
-      endDate ? format(endDate, 'yyyy-MM-dd') : null
-    ],
-    queryFn: async () => {
-      // 1. Buscar R1 meetings no período
-      // 2. Para cada attendee, verificar hubla_transactions com sale_date < scheduled_at
-      // 3. Agrupar por booked_by (SDR)
-      // 4. Retornar { totalOutside, outsideBySdr }
-    },
-    enabled: !!startDate && !!endDate,
-  });
-};
+return useQuery({
+  queryKey: ['contract-report', filters, allowedCloserIds],
+  queryFn: async (): Promise<ContractReportRow[]> => {
+    // ... queryFn existente (sem alterações)
+  },
+  enabled: filters.startDate instanceof Date && filters.endDate instanceof Date,
+  
+  // NOVAS CONFIGURAÇÕES:
+  staleTime: 10 * 60 * 1000,        // 10 minutos - dados não são refetchados automaticamente
+  gcTime: 30 * 60 * 1000,           // 30 minutos - mantém em cache mesmo após unmount
+  refetchOnWindowFocus: false,       // NÃO refetch ao voltar para a aba
+  refetchOnReconnect: false,         // NÃO refetch ao reconectar internet
+  placeholderData: (previousData) => previousData, // Mostra dados anteriores instantaneamente
+});
 ```
 
-### 2. Atualizar Interface: `src/hooks/useTeamMeetingsData.ts`
+### 2. Hook: `src/hooks/useHublaA000Contracts.ts`
 
-Adicionar campo `totalOutside` à interface `TeamKPIs`:
+Mesma atualização (linha 24-71):
 
 ```typescript
-export interface TeamKPIs {
-  sdrCount: number;
-  totalAgendamentos: number;
-  totalRealizadas: number;
-  totalNoShows: number;
-  totalContratos: number;
-  totalOutside: number;      // NOVO
-  taxaConversao: number;
-  taxaNoShow: number;
-}
+return useQuery({
+  queryKey: ['hubla-a000-contracts', filters],
+  queryFn: async (): Promise<HublaA000Transaction[]> => {
+    // ... queryFn existente (sem alterações)
+  },
+  enabled: filters.startDate instanceof Date && filters.endDate instanceof Date,
+  
+  // NOVAS CONFIGURAÇÕES:
+  staleTime: 10 * 60 * 1000,
+  gcTime: 30 * 60 * 1000,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  placeholderData: (previousData) => previousData,
+});
 ```
 
-### 3. Atualizar Cards: `src/components/sdr/TeamKPICards.tsx`
+### 3. Query de Origens em `ContractReportPanel.tsx`
 
-Modificar o card "Contratos" para exibir a soma de contratos + outside:
-
-```typescript
-{
-  title: "Contratos",
-  value: kpis.totalContratos + (kpis.totalOutside || 0),
-  icon: FileText,
-  color: "text-amber-500",
-  bgColor: "bg-amber-500/10",
-  tooltip: `Contratos: ${kpis.totalContratos} | Outside: ${kpis.totalOutside || 0}`
-}
-```
-
-### 4. Integrar na Página: `src/pages/crm/ReunioesEquipe.tsx`
-
-Consumir o novo hook e passar o valor de outside para os KPIs:
+Atualizar a query de origens (linha 70-83) para manter consistência:
 
 ```typescript
-// Adicionar o hook
-const { data: outsideData } = useSdrOutsideMetrics(startDate, endDate);
-
-// Combinar com teamKPIs
-const enrichedKPIs = {
-  ...teamKPIs,
-  totalOutside: outsideData?.totalOutside || 0
-};
-
-// Passar para TeamKPICards
-<TeamKPICards kpis={enrichedKPIs} ... />
+const { data: origins = [] } = useQuery<OriginOption[]>({
+  queryKey: ['crm-origins-simple'],
+  queryFn: async (): Promise<OriginOption[]> => {
+    // ... queryFn existente
+  },
+  staleTime: 30 * 60 * 1000,       // 30 minutos (origens mudam raramente)
+  gcTime: 60 * 60 * 1000,          // 1 hora
+  refetchOnWindowFocus: false,
+});
 ```
 
 ---
 
-## Lógica de Detecção Outside (Detalhada)
+## Comportamento Após Alterações
 
-A lógica já existe no `useR1CloserMetrics` e será replicada para SDRs:
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Sair da aba e voltar | Mostra loading, refetch | Mostra dados instantaneamente |
+| Mudar filtros | Loading completo | Mostra dados antigos + atualiza em background |
+| Fechar página e reabrir (< 30min) | Loading completo | Dados do cache + atualiza silenciosamente |
+| Dados com > 10min | Refetch automático | Mantém cache, só atualiza se usuário forçar |
 
-1. Buscar todos os `meeting_slot_attendees` de R1 no período
-2. Extrair `deal_id` → buscar email do contato via `crm_deals.contact`
-3. Buscar `hubla_transactions` com `product_name ILIKE '%Contrato%'` para esses emails
-4. Comparar `sale_date` (transação) com `scheduled_at` (reunião)
-5. Se `sale_date < scheduled_at` → é Outside
-6. Agrupar contagem por `booked_by` (SDR)
+---
+
+## Fluxo Visual
+
+```text
+Usuário abre relatório
+    |
+    V
+Cache existe? ─── SIM ─── Mostra instantaneamente
+    |                          |
+   NÃO                    Background: verifica se stale
+    |                          |
+    V                          V
+Mostra loading        Se stale (>10min): atualiza silenciosamente
+    |
+    V
+Busca dados
+    |
+    V
+Armazena em cache (30min)
+```
 
 ---
 
 ## Resultado Esperado
 
-| Card | Antes | Depois |
-|------|-------|--------|
-| Contratos | 15 | 18 (15 + 3 outside) |
-
-O tooltip mostrará o breakdown: "Contratos: 15 | Outside: 3"
+1. **Instantâneo**: Tabela aparece imediatamente ao entrar na página (sem spinner)
+2. **Persistente**: Dados mantidos ao trocar abas/apps
+3. **Background refresh**: Atualizações ocorrem silenciosamente sem bloquear a UI
