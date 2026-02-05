@@ -1,291 +1,183 @@
 
 
-# Sistema de Metas Mensais da Equipe com Premiações
+# Próximos Passos: Resumo de Metas da Equipe e Lógica de Premiação
 
-## Objetivo
-Criar um sistema para configurar **metas mensais coletivas da equipe** (Meta, Supermeta, Ultrameta, Meta Divina) com seus respectivos valores-alvo e premiações, incluindo:
+## 1. Criar Componente `TeamGoalsSummary.tsx`
 
-- **Ultrameta batida** → R$ 1.000 no iFood para **todos** da equipe (libera automaticamente)
-- **Meta Divina batida** → R$ 50.000 para o **melhor SDR** + R$ 50.000 para o **melhor Closer** (premiação individual)
+**Objetivo**: Exibir na página de Fechamento um resumo visual das metas da equipe e prêmios liberados.
+
+**Funcionalidades**:
+- Buscar configurações de metas da equipe (`team_monthly_goals`) para o mês/BU selecionado
+- Calcular faturamento total do time (usando `useUltrametaByBU`)
+- Comparar com Meta, Supermeta, Ultrameta e Meta Divina
+- Mostrar qual nível foi atingido com badge visual
+- Se **Ultrameta batida**: mostrar "iFood R$ 1.000 liberado para todos"
+- Se **Meta Divina batida**: identificar melhor SDR e melhor Closer e mostrar botões para autorizar premiações
+
+**Estrutura Visual**:
+```
+┌────────────────────────────────────────────────────────────────┐
+│ 📊 Metas do Time - Janeiro 2026                                │
+│ Faturamento: R$ 2.100.000                                       │
+│                                                                 │
+│ ✅ Meta    ✅ Supermeta  ✅ Ultrameta (iFood +R$ 1.000)  ✅ DIVINA! │
+│                                                                 │
+│ 🌟 Meta Divina Batida! Premiar:                                │
+│    SDR: João Silva (Meta Global 142%) [Autorizar R$ 50.000]   │
+│    Closer: Julio Caetano (% Contratos 102%) [Autorizar...]    │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Arquivo**: `src/components/fechamento/TeamGoalsSummary.tsx`
+
+**Props**:
+- `anoMes: string` - Mês selecionado (ex: "2026-01")
+- `bu?: string` - BU selecionada (fallback: primeira BU do payout)
 
 ---
 
-## Estrutura de Dados
+## 2. Integrar `TeamGoalsSummary` na Página Index
 
-### Nova Tabela: `team_monthly_goals`
+**Arquivo**: `src/pages/fechamento-sdr/Index.tsx`
 
-```text
-Colunas:
-├── id (uuid, PK)
-├── ano_mes (text) - formato "2026-01"
-├── bu (text) - "incorporador", "consorcio", etc.
-├── meta_valor (numeric) - ex: R$ 1.000.000
-├── meta_premio_ifood (numeric) - ex: R$ 0 (não libera iFood)
-├── supermeta_valor (numeric) - ex: R$ 1.300.000
-├── supermeta_premio_ifood (numeric) - ex: R$ 500
-├── ultrameta_valor (numeric) - ex: R$ 1.600.000
-├── ultrameta_premio_ifood (numeric) - R$ 1.000 (para todos)
-├── meta_divina_valor (numeric) - ex: R$ 2.000.000
-├── meta_divina_premio_sdr (numeric) - R$ 50.000 (melhor SDR)
-├── meta_divina_premio_closer (numeric) - R$ 50.000 (melhor Closer)
-├── ativo_mes_atual (boolean) - se é a configuração ativa
-├── created_by (uuid, FK)
-├── created_at / updated_at (timestamp)
-└── UNIQUE(ano_mes, bu)
+**Mudanças**:
+- Importar `TeamGoalsSummary`
+- Adicionar logo após a seção de filtros, antes do resumo financeiro
+- Passar `selectedMonth` e `squadFilter` (ou extrair BU do primeiro payout)
+
+**Posicionamento**:
 ```
-
-### Nova Tabela: `team_monthly_goal_winners` (para registrar vencedores)
-
-```text
-Colunas:
-├── id (uuid, PK)
-├── goal_id (uuid, FK → team_monthly_goals)
-├── tipo_premio (text) - 'ultrameta_ifood', 'divina_sdr', 'divina_closer'
-├── sdr_id (uuid) - vencedor
-├── valor_premio (numeric)
-├── autorizado (boolean)
-├── autorizado_por (uuid)
-├── autorizado_em (timestamp)
-└── created_at (timestamp)
-```
-
----
-
-## Alterações no Frontend
-
-### 1. Nova Aba "Metas da Equipe" em Configurações
-
-**Arquivo a modificar:** `src/pages/fechamento-sdr/Configuracoes.tsx`
-
-Nova aba ao lado das existentes:
-
-```text
-Abas: [SDRs] [Planos OTE] [Dias Úteis] [Métricas Ativas] [Metas Equipe] [Planos OTE (Novo)]
-                                                          ^^^^^^^^^^^^^ NOVA
-```
-
-### 2. Componente de Configuração
-
-**Novo arquivo:** `src/components/fechamento/TeamMonthlyGoalsTab.tsx`
-
-Interface visual:
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│ 🎯 Metas Mensais da Equipe                                                      │
-│                                                                                 │
-│ ← Janeiro 2026 →          BU: [Incorporador ▼]                                 │
-│                                                                                 │
-│ ┌─────────────────┬─────────────────┬─────────────────────────────────────────┐│
-│ │ Nível           │ Valor Meta      │ Premiação                               ││
-│ ├─────────────────┼─────────────────┼─────────────────────────────────────────┤│
-│ │ 🟡 Meta         │ R$ [1.000.000]  │ iFood: R$ [0]                           ││
-│ │ 🟠 Supermeta    │ R$ [1.300.000]  │ iFood: R$ [500]                         ││
-│ │ 🔴 Ultrameta    │ R$ [1.600.000]  │ iFood: R$ [1.000] (para todos)          ││
-│ │ 🌟 Meta Divina  │ R$ [2.000.000]  │ SDR: R$ [50.000] | Closer: R$ [50.000]  ││
-│ └─────────────────┴─────────────────┴─────────────────────────────────────────┘│
-│                                                                                 │
-│ [Copiar do Mês Anterior]                                         [💾 Salvar]   │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 3. Hook de Gerenciamento
-
-**Novo arquivo:** `src/hooks/useTeamMonthlyGoals.ts`
-
-```text
-Funções exportadas:
-├── useTeamMonthlyGoals(anoMes, bu) - buscar configuração
-├── useCreateTeamMonthlyGoals() - criar
-├── useUpdateTeamMonthlyGoals() - atualizar
-└── useCopyGoalsFromPreviousMonth() - copiar mês anterior
+┌─ Header com título e controles
+├─ Filtros (Search, Role, BU)
+├─ ⭐ NOVO: TeamGoalsSummary (aqui)
+├─ Resumo financeiro (4 cards)
+├─ Alertas
+└─ Tabela de payouts
 ```
 
 ---
 
-## Lógica de Premiação no Fechamento
+## 3. Implementar Lógica de Premiação na Edge Function
 
-### Fluxo de Liberação Automática
+**Arquivo**: `supabase/functions/recalculate-sdr-payout/index.ts`
 
-```text
-1. Sistema calcula faturamento do mês (useUltrametaByBU)
-   
-2. Compara com team_monthly_goals:
-   
-   Faturamento >= Ultrameta?
-   └─ SIM → Libera ifood_ultrameta para TODOS os payouts ativos
-           (altera o valor de ifood_ultrameta de R$ 50 para R$ 1.000)
-   
-   Faturamento >= Meta Divina?
-   └─ SIM → Identifica melhor SDR + melhor Closer (ranking do mês)
-           └─ Cria registro em team_monthly_goal_winners
-           └─ Admin visualiza e autoriza liberação
-```
+**Mudanças necessárias**:
 
-### Critério "Melhor Desempenho"
+### 3.1. Buscar Metas da Equipe e Faturamento
 
-Para Meta Divina, o sistema calculará:
-- **Melhor SDR**: Maior % Meta Global (média das métricas configuradas)
-- **Melhor Closer**: Maior % Meta Global (média de Contratos + Organização)
+Após calcular os payouts individuais, adicionar lógica que:
+1. Busca `team_monthly_goals` para o mês/BU
+2. Calcula faturamento total do BU (usando mesma lógica de `useUltrametaByBU`)
+3. Compara com `ultrameta_valor` e `meta_divina_valor`
 
-O ranking já existe em `useRankingMetrics.ts` e `useSdrDetailData.ts`.
+### 3.2. Se Ultrameta Batida
 
----
+Se `faturamento >= team_monthly_goals.ultrameta_valor`:
+- Ajustar `ifood_ultrameta` de cada payout para `team_monthly_goals.ultrameta_premio_ifood` (ex: R$ 1.000)
+- Em vez de manter o valor padrão do comp_plan (R$ 50)
 
-## Integração com Sistema Existente
-
-### 1. Modificar `useUltrametaByBU.ts`
-
-Atualmente usa valores fixos (`DEFAULT_TARGETS`). Alteração para buscar da nova tabela:
-
+**Lógica**:
 ```typescript
-// ANTES
-const DEFAULT_TARGETS = { ultrameta_incorporador: 2500000 };
-
-// DEPOIS
-const { data: monthlyGoals } = useTeamMonthlyGoals(currentMonth, 'incorporador');
-const ultrametaTarget = monthlyGoals?.ultrameta_valor || 1600000;
-```
-
-### 2. Modificar `recalculate-sdr-payout` Edge Function
-
-Adicionar lógica para verificar se a ultrameta do time foi batida e ajustar o valor do `ifood_ultrameta`:
-
-```typescript
-// Buscar meta do time
-const { data: teamGoal } = await supabase
-  .from('team_monthly_goals')
-  .select('*')
-  .eq('ano_mes', ano_mes)
-  .eq('bu', sdr.squad)
-  .single();
-
-// Calcular faturamento do mês
-const teamRevenue = await calculateTeamRevenue(ano_mes, sdr.squad);
-
-// Se bateu ultrameta, usar o valor do prêmio em vez do valor individual
 if (teamGoal && teamRevenue >= teamGoal.ultrameta_valor) {
   payoutFields.ifood_ultrameta = teamGoal.ultrameta_premio_ifood; // R$ 1.000
 } else {
-  payoutFields.ifood_ultrameta = compPlan.ifood_ultrameta; // R$ 50 padrão
+  payoutFields.ifood_ultrameta = compPlan.ifood_ultrameta; // R$ 50 (padrão)
 }
 ```
 
-### 3. Nova seção na página de Fechamento (Index)
+### 3.3. Se Meta Divina Batida
 
-Mostrar resumo das metas do time no topo:
+Se `faturamento >= team_monthly_goals.meta_divina_valor`:
+1. Identificar **melhor SDR**: maior % Meta Global entre SDRs
+2. Identificar **melhor Closer**: maior % Meta Global entre Closers
+3. Criar registros em `team_monthly_goal_winners` com `tipo_premio = 'divina_sdr'` e `'divina_closer'`
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 📊 Metas do Time - Janeiro 2026          Faturamento: R$ 2.100.000         │
-│                                                                             │
-│ ✅ Meta (R$ 1M)  ✅ Supermeta (R$ 1.3M)  ✅ Ultrameta (R$ 1.6M)  ✅ DIVINA! │
-│                                                                             │
-│ 🌟 Meta Divina batida! Premiar:                                            │
-│    SDR: João Silva (Meta Global 142%)     [Autorizar R$ 50.000]            │
-│    Closer: Julio Caetano (Conversão 41%)  [Autorizar R$ 50.000]            │
-└─────────────────────────────────────────────────────────────────────────────┘
+**Dados a registrar**:
+```typescript
+{
+  goal_id: team_monthly_goals.id,
+  tipo_premio: 'divina_sdr' | 'divina_closer',
+  sdr_id: best_sdr_id,
+  valor_premio: team_monthly_goals.meta_divina_premio_sdr (ou _closer),
+  autorizado: false, // Requer aprovação manual
+  autorizado_por: null,
+  autorizado_em: null,
+}
 ```
 
----
+### 3.4. Cálculo de "Melhor Desempenho"
 
-## Arquivos a Criar/Modificar
+Para identificar o vencedor, usar o **% Meta Global** já calculado no payout:
+- Para SDRs: média de (agendamento, realizadas, tentativas, organização)
+- Para Closers: % Contratos (armazenado em `pct_reunioes_agendadas`)
 
-| Arquivo | Ação | Descrição | Status |
-|---------|------|-----------|--------|
-| `src/hooks/useTeamMonthlyGoals.ts` | **Criar** | Hooks CRUD para metas mensais | ✅ Concluído |
-| `src/components/fechamento/TeamMonthlyGoalsTab.tsx` | **Criar** | Componente de configuração | ✅ Concluído |
-| `src/components/fechamento/TeamGoalsSummary.tsx` | **Criar** | Resumo de metas batidas | 🔜 Pendente |
-| `src/pages/fechamento-sdr/Configuracoes.tsx` | **Modificar** | Adicionar nova aba | ✅ Concluído |
-| `src/pages/fechamento-sdr/Index.tsx` | **Modificar** | Mostrar resumo das metas | 🔜 Pendente |
-| `src/hooks/useUltrametaByBU.ts` | **Modificar** | Buscar targets da nova tabela | ✅ Concluído |
-| `supabase/functions/recalculate-sdr-payout/index.ts` | **Modificar** | Lógica de premiação automática | 🔜 Pendente |
-| Migração SQL | **Criar** | Criar tabelas team_monthly_goals e team_monthly_goal_winners | ✅ Concluído |
+**Pseudocódigo**:
+```typescript
+// Após processar todos os payouts
+const sdrPayouts = payouts.filter(p => !p.isCloser);
+const closerPayouts = payouts.filter(p => p.isCloser);
 
----
-
-## Exemplo Janeiro 2026
-
-```text
-Configuração salva:
-├── Meta:       R$ 1.000.000 → iFood: R$ 0
-├── Supermeta:  R$ 1.300.000 → iFood: R$ 500
-├── Ultrameta:  R$ 1.600.000 → iFood: R$ 1.000 (todos)
-└── Meta Divina: R$ 2.000.000 → SDR: R$ 50k | Closer: R$ 50k
-
-Resultado: Faturamento R$ 2.100.000 (Meta Divina batida!)
-
-Efeitos:
-├── Todos os payouts: ifood_ultrameta = R$ 1.000 (em vez de R$ 50)
-├── Melhor SDR identificado: João Silva
-├── Melhor Closer identificado: Julio Caetano
-└── Admin autoriza premiações de R$ 50k para cada
-```
-
----
-
-## Migração SQL
-
-```sql
--- Tabela de metas mensais do time
-CREATE TABLE team_monthly_goals (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  ano_mes TEXT NOT NULL,
-  bu TEXT NOT NULL DEFAULT 'incorporador',
-  
-  -- Níveis de meta
-  meta_valor NUMERIC DEFAULT 0,
-  meta_premio_ifood NUMERIC DEFAULT 0,
-  
-  supermeta_valor NUMERIC DEFAULT 0,
-  supermeta_premio_ifood NUMERIC DEFAULT 0,
-  
-  ultrameta_valor NUMERIC DEFAULT 0,
-  ultrameta_premio_ifood NUMERIC DEFAULT 0,
-  
-  meta_divina_valor NUMERIC DEFAULT 0,
-  meta_divina_premio_sdr NUMERIC DEFAULT 0,
-  meta_divina_premio_closer NUMERIC DEFAULT 0,
-  
-  created_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  
-  UNIQUE(ano_mes, bu)
+const bestSdr = sdrPayouts.reduce((max, p) => 
+  p.pct_media_global > max.pct_media_global ? p : max
 );
 
--- Tabela de vencedores/autorizações
-CREATE TABLE team_monthly_goal_winners (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  goal_id UUID REFERENCES team_monthly_goals(id) ON DELETE CASCADE,
-  tipo_premio TEXT NOT NULL, -- 'ultrameta_ifood', 'divina_sdr', 'divina_closer'
-  sdr_id UUID REFERENCES sdr(id),
-  valor_premio NUMERIC NOT NULL,
-  autorizado BOOLEAN DEFAULT false,
-  autorizado_por UUID REFERENCES auth.users(id),
-  autorizado_em TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT now()
+const bestCloser = closerPayouts.reduce((max, p) => 
+  p.pct_reunioes_agendadas > max.pct_reunioes_agendadas ? p : max
 );
 
--- RLS
-ALTER TABLE team_monthly_goals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE team_monthly_goal_winners ENABLE ROW LEVEL SECURITY;
+// Criar registros de vencedores
+if (bestSdr) {
+  await supabase.from('team_monthly_goal_winners').insert({
+    goal_id: teamGoal.id,
+    tipo_premio: 'divina_sdr',
+    sdr_id: bestSdr.sdr_id,
+    valor_premio: teamGoal.meta_divina_premio_sdr,
+    autorizado: false,
+  });
+}
 
--- Políticas
-CREATE POLICY "Admins can manage team_monthly_goals"
-  ON team_monthly_goals FOR ALL
-  USING (auth.uid() IN (SELECT user_id FROM user_roles WHERE role = 'admin'));
-
-CREATE POLICY "All can view team_monthly_goals"
-  ON team_monthly_goals FOR SELECT
-  USING (auth.uid() IS NOT NULL);
-
-CREATE POLICY "Admins can manage team_monthly_goal_winners"
-  ON team_monthly_goal_winners FOR ALL
-  USING (auth.uid() IN (SELECT user_id FROM user_roles WHERE role = 'admin'));
-
-CREATE POLICY "All can view team_monthly_goal_winners"
-  ON team_monthly_goal_winners FOR SELECT
-  USING (auth.uid() IS NOT NULL);
+if (bestCloser) {
+  await supabase.from('team_monthly_goal_winners').insert({
+    goal_id: teamGoal.id,
+    tipo_premio: 'divina_closer',
+    sdr_id: bestCloser.sdr_id,
+    valor_premio: teamGoal.meta_divina_premio_closer,
+    autorizado: false,
+  });
+}
 ```
+
+---
+
+## Sequência de Implementação
+
+1. **Criar `TeamGoalsSummary.tsx`** com busca de dados e UI
+2. **Integrar em `Index.tsx`** e testar visualização
+3. **Modificar edge function** para:
+   - Buscar team_monthly_goals
+   - Calcular faturamento por BU
+   - Ajustar ifood_ultrameta se batido
+   - Registrar vencedores Meta Divina
+
+---
+
+## Dependências Entre Componentes
+
+```
+TeamGoalsSummary
+├── useTeamMonthlyGoals (já existe ✅)
+├── useUltrametaByBU (já existe, mas usaremos internamente)
+└── useTeamMonthlyGoalWinners (já existe ✅)
+
+recalculate-sdr-payout (edge function)
+└── Precisa do código de cálculo de faturamento + lógica Meta Divina
+```
+
+---
+
+## Impacto na Experiência
+
+- **Gestores**: Veem resumo das metas em tempo real na página de fechamento
+- **Admin**: Recebe notificação quando Meta Divina é batida e autoriza premiações
+- **SDRs/Closers**: iFood aumenta automaticamente se equipe atingir Ultrameta
 
